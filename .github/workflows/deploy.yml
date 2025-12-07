@@ -1,0 +1,86 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      S3_KEY_PREFIX: backend
+      CODEDEPLOY_APP: ${{ vars.CODEDEPLOY_APPLICATION }}
+      CODEDEPLOY_GROUP: ${{ vars.CODEDEPLOY_DG_BACKEND }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          node -v
+          yarn -v || true
+          (YARN_ENABLE_IMMUTABLE_INSTALLS=1 yarn install --immutable) || yarn install --frozen-lockfile
+
+      - name: Lint & Build
+        run: |
+          yarn lint
+          yarn build
+
+      - name: Create deployment zip (bundle + node_modules)
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          ARTIFACT="backend-${SHORT_SHA}.zip"
+          echo "ARTIFACT=${ARTIFACT}" >> $GITHUB_ENV
+
+          # 필수 파일 확인
+          test -f appspec.yml
+          test -d scripts
+
+          rm -rf bundle
+          mkdir -p bundle
+
+          cp -r dist bundle/dist
+          cp -r scripts bundle/scripts
+          cp ecosystem.config.js bundle/
+          cp package.json yarn.lock bundle/
+          cp appspec.yml bundle/
+          cp -r node_modules bundle/node_modules
+
+          chmod +x bundle/scripts/*.sh bundle/scripts/function/*.sh
+          (cd bundle && zip -r "../$ARTIFACT" .)
+
+      - name: Configure AWS credentials (Access Key)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to S3
+        run: |
+          S3_KEY="${S3_KEY_PREFIX}/${ARTIFACT}"
+          echo "S3_KEY=$S3_KEY" >> $GITHUB_ENV
+          aws s3 cp "$ARTIFACT" "s3://${S3_BUCKET}/${S3_KEY}"
+
+      - name: Create CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name "$CODEDEPLOY_APP" \
+            --deployment-group-name "$CODEDEPLOY_GROUP" \
+            --s3-location bucket="$S3_BUCKET",bundleType=zip,key="$S3_KEY"
