@@ -1,22 +1,37 @@
 import 'reflect-metadata';
 
-import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
 
-async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+import { HttpExceptionFilter } from 'src/global/filters/global-exception.filter';
+import { ApiResponseInterceptor } from 'src/global/interceptors/api-response.interceptor';
+import { GqlLoggingInterceptor } from 'src/global/interceptors/gql-logging.interceptor';
+import { HttpLoggingInterceptor } from 'src/global/interceptors/http-logging.interceptor';
+import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
 
-  const isProd = process.env.NODE_ENV === 'production';
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  const configService = app.get(ConfigService);
+  const isProd = configService.get<string>('NODE_ENV') === 'production';
+  const frontendFromEnv =
+    configService
+      .get<string>('FRONTEND_BASE_URL')
+      ?.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean) ?? [];
   const allowedOrigins: string[] = isProd
     ? [
         'https://www.caquick.site',
         'https://caquick.site',
         'https://caquick-fe.vercel.app',
       ]
-    : process.env.FRONTEND_BASE_URL
-      ? [process.env.FRONTEND_BASE_URL]
-      : [];
+    : frontendFromEnv.length > 0
+      ? frontendFromEnv
+      : ['http://localhost:3000'];
 
   // CORS 설정
   app.enableCors({
@@ -24,7 +39,35 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
-  await app.listen(process.env.PORT ? Number(process.env.PORT) : 4000);
+  const logger = app.get(CustomLoggerService);
+  const httpAdapterHost = app.get(HttpAdapterHost);
+
+  app.useLogger(logger);
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  app.useGlobalInterceptors(
+    new HttpLoggingInterceptor(logger),
+    new GqlLoggingInterceptor(logger),
+    new ApiResponseInterceptor(),
+  );
+
+  app.useGlobalFilters(
+    new HttpExceptionFilter(httpAdapterHost.httpAdapter, logger),
+  );
+
+  const portFromEnv = configService.get<string>('PORT');
+  const port = Number.isFinite(Number(portFromEnv))
+    ? Number(portFromEnv)
+    : 4000;
+
+  await app.listen(port);
 }
 
 bootstrap();
