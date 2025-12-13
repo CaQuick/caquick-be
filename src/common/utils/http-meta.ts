@@ -10,7 +10,7 @@ export function apiVersionOf(req: Request): string | undefined {
 }
 
 /**
- * 클라이언트 IP 추출(X-Real-IP 우선)
+ * 클라이언트 IP 추출(X-Forwarded-For 우선)
  */
 export function clientIpOf(req: Request): string {
   const forwardedFor = req.headers['x-forwarded-for'];

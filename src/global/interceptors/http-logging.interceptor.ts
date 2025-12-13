@@ -29,9 +29,6 @@ export class HttpLoggingInterceptor implements NestInterceptor {
 
   /**
    * 요청 메타데이터를 수집하고, 응답 시점에 트랜잭션 로그를 남긴다.
-   *
-   * @param context 실행 컨텍스트
-   * @param next 다음 핸들러
    */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType<'http'>() !== 'http') {
@@ -51,7 +48,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         next: () => {
           const duration = calculateDuration(startTime);
 
-          this.logger.log({
+          this.logger.tx({
             userId,
             requestId,
             request: requestMeta,

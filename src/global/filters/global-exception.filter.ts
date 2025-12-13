@@ -33,13 +33,11 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
 
   /**
    * 발생한 예외를 가로채어 구조화 로그를 기록하고, 표준 API 응답 포맷으로 변환한다.
-   *
-   * @param exception 발생한 예외 객체
-   * @param host 실행 컨텍스트
    */
   override catch(exception: unknown, host: ArgumentsHost): void {
     if (host.getType() !== 'http') {
-      throw exception;
+      super.catch(exception, host);
+      return;
     }
 
     const ctx = host.switchToHttp();
@@ -55,7 +53,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
     const stack = exception instanceof Error ? exception.stack : undefined;
     const duration = calculateDuration(startTime);
 
-    this.logger.error({
+    this.logger.txError({
       userId,
       requestId,
       request,

@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import type { ValidationError } from 'class-validator';
 
 import { AppModule } from './app.module';
 
@@ -49,13 +50,20 @@ async function bootstrap(): Promise<void> {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: (errors: ValidationError[]) =>
+        new BadRequestException({
+          message: errors.map((e) => ({
+            property: e.property,
+            constraints: e.constraints ?? {},
+          })),
+        }),
     }),
   );
 
   app.useGlobalInterceptors(
     new HttpLoggingInterceptor(logger),
     new GqlLoggingInterceptor(logger),
-    new ApiResponseInterceptor(),
+    new ApiResponseInterceptor(new Set(['/health', '/health/profiles'])),
   );
 
   app.useGlobalFilters(

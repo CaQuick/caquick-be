@@ -23,7 +23,7 @@ import { LogContext } from 'src/global/types/log.type';
 
 /**
  * GraphQL 요청/응답을 로깅하는 인터셉터.
- * - Resolver 단위로 operation/field 정보를 수집한다.
+ * - 루트(Query/Mutation) 레벨만 로깅한다.
  */
 @Injectable()
 export class GqlLoggingInterceptor implements NestInterceptor {
@@ -32,9 +32,6 @@ export class GqlLoggingInterceptor implements NestInterceptor {
   /**
    * GraphQL 실행 컨텍스트에서 메타데이터를 수집하고,
    * 성공/에러 모두에 대해 트랜잭션 로그를 남긴다.
-   *
-   * @param context 실행 컨텍스트
-   * @param next 다음 핸들러
    */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const type = context.getType<GqlContextType>();
@@ -47,8 +44,13 @@ export class GqlLoggingInterceptor implements NestInterceptor {
     const { req, res } = gqlCtx.getContext<{ req: Request; res?: Response }>();
     const info = gqlCtx.getInfo<GraphQLResolveInfo>();
 
+    const parentType = info.parentType?.toString();
+    if (parentType !== 'Query' && parentType !== 'Mutation') {
+      return next.handle();
+    }
+
     const { requestId, startTime } = ensureRequestTracking(req, res);
-    const userId = resolveUserId(req); // JWT 연동 시 req.user에서 채워넣을 수 있다.
+    const userId = resolveUserId(req);
     const gqlRequest = buildGraphqlRequestMeta(info, req);
 
     const baseLog = {
@@ -63,7 +65,7 @@ export class GqlLoggingInterceptor implements NestInterceptor {
         next: () => {
           const duration = calculateDuration(startTime);
 
-          this.logger.log({
+          this.logger.tx({
             ...baseLog,
             processingTimeInMs: duration,
           });
@@ -73,7 +75,7 @@ export class GqlLoggingInterceptor implements NestInterceptor {
         error: (error: unknown) => {
           const duration = calculateDuration(startTime);
 
-          this.logger.error({
+          this.logger.txError({
             ...baseLog,
             processingTimeInMs: duration,
             error: {
@@ -81,6 +83,8 @@ export class GqlLoggingInterceptor implements NestInterceptor {
               stack: error instanceof Error ? error.stack : undefined,
             },
           });
+
+          setResponseTimeHeader(res, duration);
         },
       }),
     );

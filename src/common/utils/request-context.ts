@@ -39,16 +39,35 @@ export interface GraphqlRequestMeta {
 }
 
 /**
+ * 요청 헤더에서 단일 문자열 헤더 값을 안전하게 꺼낸다.
+ */
+function readSingleHeader(
+  req: Request,
+  headerName: string,
+): string | undefined {
+  const raw = req.headers[headerName];
+  if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim();
+  if (Array.isArray(raw)) {
+    const first = raw.find((v) => typeof v === 'string' && v.trim().length > 0);
+    return typeof first === 'string' ? first.trim() : undefined;
+  }
+  return undefined;
+}
+
+/**
  * requestId/startTime을 보장하고 헤더에 반영한다.
+ * - 들어온 x-request-id가 있으면 그 값을 우선 사용한다.
  */
 export function ensureRequestTracking(
   req: Request,
   res?: Response,
 ): RequestTracking {
   if (!req.requestId) {
-    req.requestId = uuid();
-    res?.setHeader(REQUEST_ID_HEADER, req.requestId);
+    const incoming = readSingleHeader(req, REQUEST_ID_HEADER);
+    req.requestId = incoming ?? uuid();
   }
+
+  res?.setHeader(REQUEST_ID_HEADER, req.requestId);
 
   if (typeof req.startTime !== 'number') {
     req.startTime = Date.now();
@@ -57,11 +76,17 @@ export function ensureRequestTracking(
   return { requestId: req.requestId, startTime: req.startTime };
 }
 
+/**
+ * 시작 시간 기준 처리 시간을 계산한다.
+ */
 export function calculateDuration(startTime?: number): number | undefined {
   if (typeof startTime !== 'number') return undefined;
   return Date.now() - startTime;
 }
 
+/**
+ * 응답 헤더에 처리 시간을 기록한다.
+ */
 export function setResponseTimeHeader(
   res: Response | undefined,
   duration?: number,
@@ -70,6 +95,9 @@ export function setResponseTimeHeader(
   res.setHeader(RESPONSE_TIME_HEADER, String(duration));
 }
 
+/**
+ * HTTP 요청 메타데이터를 구성한다.
+ */
 export function buildHttpRequestMeta(
   req: Request,
   options?: { defaultVersion?: string },
@@ -88,6 +116,9 @@ export function buildHttpRequestMeta(
   };
 }
 
+/**
+ * GraphQL 요청 메타데이터를 구성한다.
+ */
 export function buildGraphqlRequestMeta(
   info: GraphQLResolveInfo,
   req: Request,
@@ -113,5 +144,16 @@ export function buildGraphqlRequestMeta(
 export function resolveUserId(req: Request): number | null {
   const user = (req as { user?: { id?: unknown; sub?: unknown } }).user;
   const candidate = user?.id ?? user?.sub;
-  return typeof candidate === 'number' ? candidate : null;
+
+  if (typeof candidate === 'number') return candidate;
+
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    if (trimmed.length === 0) return null;
+
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  return null;
 }
