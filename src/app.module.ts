@@ -5,6 +5,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import type { Request, Response } from 'express';
 
 import appConfig from 'src/config/app.config';
+import { PingResolver } from 'src/graphql/ping.resolver';
 import { LoggerModule } from 'src/global/logger/logger.module';
 import { HealthModule } from 'src/health/health.module';
 
@@ -41,6 +42,6 @@ import { HealthModule } from 'src/health/health.module';
     HealthModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [PingResolver],
 })
 export class AppModule {}
