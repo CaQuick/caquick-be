@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 
 import { HealthController } from './health.controller';
+import { PingResolver } from './ping.resolver';
 
 /**
- * 헬스 체크 모듈.
+ * 시스템 관련 기능을 묶는 모듈.
  */
 @Module({
   controllers: [HealthController],
+  providers: [PingResolver],
 })
-export class HealthModule {}
+export class SystemModule {}

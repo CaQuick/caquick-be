@@ -4,18 +4,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import type { Request, Response } from 'express';
 
-import appConfig from 'src/config/app.config';
-import { PingResolver } from 'src/graphql/ping.resolver';
+import authConfig from 'src/config/auth.config';
+import databaseConfig from 'src/config/database.config';
+import { SystemModule } from 'src/features/system/system.module';
 import { LoggerModule } from 'src/global/logger/logger.module';
-import { HealthModule } from 'src/health/health.module';
+import { PrismaModule } from 'src/prisma';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [appConfig],
+      load: [authConfig, databaseConfig],
     }),
+    PrismaModule,
     LoggerModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
@@ -39,9 +41,9 @@ import { HealthModule } from 'src/health/health.module';
         };
       },
     }),
-    HealthModule,
+    SystemModule,
   ],
   controllers: [],
-  providers: [PingResolver],
+  providers: [],
 })
 export class AppModule {}

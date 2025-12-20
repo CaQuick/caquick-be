@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Request, Response } from 'express';
 import type { GraphQLResolveInfo } from 'graphql';
-import { v4 as uuid } from 'uuid';
 
 import {
   buildQueryString,
@@ -64,7 +65,7 @@ export function ensureRequestTracking(
 ): RequestTracking {
   if (!req.requestId) {
     const incoming = readSingleHeader(req, REQUEST_ID_HEADER);
-    req.requestId = incoming ?? uuid();
+    req.requestId = incoming ?? randomUUID();
   }
 
   res?.setHeader(REQUEST_ID_HEADER, req.requestId);
