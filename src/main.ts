@@ -15,6 +15,7 @@ import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);
   const isProd = configService.get<string>('NODE_ENV') === 'production';
