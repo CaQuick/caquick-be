@@ -25,7 +25,7 @@ import { PrismaModule } from 'src/prisma';
       useFactory: (configService: ConfigService) => {
         const isProd = configService.get<string>('NODE_ENV') === 'production';
         return {
-          autoSchemaFile: true,
+          autoSchemaFile: 'src/graphql/schema.gql',
           sortSchema: true,
           playground: !isProd,
           context: ({
