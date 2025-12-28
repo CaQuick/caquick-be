@@ -2,7 +2,6 @@
  * 인증 쿠키 이름 모음
  */
 export const AUTH_COOKIE = {
-  ACCESS: 'caquick_at',
   REFRESH: 'caquick_rt',
 
   OIDC_STATE: 'caquick_oidc_state',

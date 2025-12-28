@@ -8,17 +8,15 @@ import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '../constants/auth.constants';
  */
 export class AuthCookie {
   /**
-   * Access/Refresh 쿠키를 세팅한다.
+   * Refresh 쿠키를 세팅한다.
    *
    * @param res express Response
    * @param args 토큰/만료/옵션
    */
-  static setAuthCookies(
+  static setRefreshCookie(
     res: Response,
     args: {
-      accessToken: string;
       refreshToken: string;
-      accessMaxAgeMs: number;
       refreshMaxAgeMs: number;
       cookieDomain?: string;
       secure: boolean;
@@ -32,11 +30,6 @@ export class AuthCookie {
       domain: args.cookieDomain,
     };
 
-    res.cookie(AUTH_COOKIE.ACCESS, args.accessToken, {
-      ...base,
-      maxAge: args.accessMaxAgeMs,
-    });
-
     res.cookie(AUTH_COOKIE.REFRESH, args.refreshToken, {
       ...base,
       maxAge: args.refreshMaxAgeMs,
@@ -44,13 +37,13 @@ export class AuthCookie {
   }
 
   /**
-   * Access/Refresh 쿠키를 삭제한다.
+   * Refresh 쿠키를 삭제한다.
    *
    * @param res express Response
    * @param cookieDomain 쿠키 도메인
    * @param secure secure 여부(옵션 일치 필요)
    */
-  static clearAuthCookies(
+  static clearRefreshCookie(
     res: Response,
     cookieDomain: string | undefined,
     secure: boolean,
@@ -63,7 +56,6 @@ export class AuthCookie {
       domain: cookieDomain,
     };
 
-    res.clearCookie(AUTH_COOKIE.ACCESS, base);
     res.clearCookie(AUTH_COOKIE.REFRESH, base);
   }
 

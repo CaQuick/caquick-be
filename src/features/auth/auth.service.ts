@@ -74,7 +74,7 @@ export class AuthService {
    * - state/nonce 검증
    * - code 교환
    * - Account/Identity upsert
-   * - access/refresh 쿠키 발급
+   * - refresh 쿠키 발급 및 access token 반환
    *
    * @param rawProvider provider param
    * @param req Request
@@ -84,7 +84,7 @@ export class AuthService {
     rawProvider: string,
     req: Request,
     res: Response,
-  ): Promise<{ returnTo: string }> {
+  ): Promise<{ returnTo: string; accessToken: string }> {
     const provider = parseOidcProvider(rawProvider);
 
     // 1. OIDC 임시 쿠키 검증 및 추출
@@ -106,8 +106,8 @@ export class AuthService {
     // 4. 계정 생성/업데이트
     const account = await this.upsertAccountFromOidc(provider, userInfo);
 
-    // 5. 인증 쿠키 발급
-    await this.issueAuthCookies({
+    // 5. refresh 쿠키 발급 + access token 생성
+    const { accessToken } = await this.issueAuthTokens({
       accountId: account.id,
       req,
       res,
@@ -120,16 +120,16 @@ export class AuthService {
       this.isCookieSecure(),
     );
 
-    return { returnTo };
+    return { returnTo, accessToken };
   }
 
   /**
-   * Refresh 토큰으로 access/refresh를 재발급한다(회전).
+   * Refresh 토큰으로 access를 재발급하고 refresh를 회전한다.
    *
    * @param req Request
    * @param res Response
    */
-  async refresh(req: Request, res: Response): Promise<void> {
+  async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
       | string
       | undefined;
@@ -159,20 +159,20 @@ export class AuthService {
 
     const accessToken = this.signAccessToken(session.account_id);
 
-    AuthCookie.setAuthCookies(res, {
-      accessToken,
+    AuthCookie.setRefreshCookie(res, {
       refreshToken: newRefreshToken,
-      accessMaxAgeMs: this.getAccessExpiresSeconds() * 1000,
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: this.getCookieDomain(),
       secure: this.isCookieSecure(),
     });
+
+    return { accessToken };
   }
 
   /**
    * 로그아웃:
    * - refresh 세션 revoke
-   * - 쿠키 삭제
+   * - refresh 쿠키 삭제
    *
    * @param req Request
    * @param res Response
@@ -188,7 +188,7 @@ export class AuthService {
       if (session) await this.repo.revokeRefreshSession(session.id);
     }
 
-    AuthCookie.clearAuthCookies(
+    AuthCookie.clearRefreshCookie(
       res,
       this.getCookieDomain(),
       this.isCookieSecure(),
@@ -426,15 +426,15 @@ export class AuthService {
   }
 
   /**
-   * access/refresh 쿠키를 발급하고 refresh 세션을 저장한다.
+   * refresh 쿠키를 발급하고 refresh 세션을 저장한다.
    *
    * @param args 발급 파라미터
    */
-  private async issueAuthCookies(args: {
+  private async issueAuthTokens(args: {
     accountId: bigint;
     req: Request;
     res: Response;
-  }): Promise<void> {
+  }): Promise<{ accessToken: string }> {
     const accessToken = this.signAccessToken(args.accountId);
 
     const refreshToken = this.generateRefreshToken();
@@ -451,14 +451,14 @@ export class AuthService {
       expiresAt,
     });
 
-    AuthCookie.setAuthCookies(args.res, {
-      accessToken,
+    AuthCookie.setRefreshCookie(args.res, {
       refreshToken,
-      accessMaxAgeMs: this.getAccessExpiresSeconds() * 1000,
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: this.getCookieDomain(),
       secure: this.isCookieSecure(),
     });
+
+    return { accessToken };
   }
 
   /**

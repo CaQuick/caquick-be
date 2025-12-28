@@ -4,7 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { JwtCookieStrategy } from './strategies/jwt.strategy';
+import { JwtBearerStrategy } from './strategies/jwt-bearer.strategy';
 
 /**
  * 전역 인증 인프라 모듈
@@ -27,7 +27,7 @@ import { JwtCookieStrategy } from './strategies/jwt.strategy';
       },
     }),
   ],
-  providers: [JwtCookieStrategy, JwtAuthGuard],
+  providers: [JwtBearerStrategy, JwtAuthGuard],
   exports: [JwtAuthGuard, PassportModule, JwtModule],
 })
 export class AuthGlobalModule {}

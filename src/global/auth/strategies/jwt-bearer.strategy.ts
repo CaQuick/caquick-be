@@ -1,19 +1,15 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
-import type { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { AUTH_COOKIE } from '../constants/auth-cookie.constants';
 import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
 
 /**
- * 쿠키 기반 JWT 인증 전략
- *
- * - 우선순위: Cookie -> Authorization Bearer
+ * Bearer 기반 JWT 인증 전략
  */
 @Injectable()
-export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt') {
+export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   /**
    * @param config ConfigService
    */
@@ -24,20 +20,7 @@ export class JwtCookieStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        (req: Request | undefined) => {
-          const cookies: unknown = req?.cookies;
-
-          if (!cookies || typeof cookies !== 'object') return null;
-
-          const token = (cookies as Record<string, unknown>)[
-            AUTH_COOKIE.ACCESS
-          ];
-          return typeof token === 'string' ? token : null;
-        },
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ]),
-
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

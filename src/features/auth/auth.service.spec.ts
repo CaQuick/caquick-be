@@ -4,6 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
+
 import { AuthService } from './auth.service';
 import { AuthRepository } from './repositories/auth.repository';
 import { OidcClientService } from './services/oidc-client.service';
@@ -187,6 +189,7 @@ describe('AuthService', () => {
       // Assert
       expect(result).toEqual({
         returnTo: 'http://localhost:3000/dashboard',
+        accessToken: 'mock-access-token',
       });
       expect(mockOidc.exchangeCode).toHaveBeenCalled();
       expect(mockRepo.upsertUserByOidcIdentity).toHaveBeenCalledWith({
@@ -198,8 +201,8 @@ describe('AuthService', () => {
         providerProfileImageUrl: 'https://example.com/photo.jpg',
       });
       expect(mockRes.cookie).toHaveBeenCalledWith(
-        'caquick_at',
-        'mock-access-token',
+        AUTH_COOKIE.REFRESH,
+        expect.any(String),
         expect.any(Object),
       );
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(4); // OIDC 임시 쿠키 4개
@@ -284,14 +287,15 @@ describe('AuthService', () => {
       mockJwt.sign.mockReturnValue('new-access-token');
 
       // Act
-      await service.refresh(mockReq, mockRes);
+      const result = await service.refresh(mockReq, mockRes);
 
       // Assert
       expect(mockRepo.findActiveRefreshSessionByHash).toHaveBeenCalled();
       expect(mockRepo.rotateRefreshSession).toHaveBeenCalled();
+      expect(result).toEqual({ accessToken: 'new-access-token' });
       expect(mockRes.cookie).toHaveBeenCalledWith(
-        'caquick_at',
-        'new-access-token',
+        AUTH_COOKIE.REFRESH,
+        expect.any(String),
         expect.any(Object),
       );
     });
@@ -360,7 +364,7 @@ describe('AuthService', () => {
 
       // Assert
       expect(mockRepo.revokeRefreshSession).toHaveBeenCalledWith(BigInt(1));
-      expect(mockRes.clearCookie).toHaveBeenCalledTimes(2); // access, refresh
+      expect(mockRes.clearCookie).toHaveBeenCalledTimes(1); // refresh
     });
 
     it('refresh 토큰이 없어도 쿠키를 삭제해야 한다', async () => {
@@ -380,7 +384,7 @@ describe('AuthService', () => {
 
       // Assert
       expect(mockRepo.revokeRefreshSession).not.toHaveBeenCalled();
-      expect(mockRes.clearCookie).toHaveBeenCalledTimes(2);
+      expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
     });
   });
 

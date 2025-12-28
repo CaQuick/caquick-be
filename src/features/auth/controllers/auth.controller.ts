@@ -7,7 +7,7 @@ import { parseOidcProvider } from '../types/oidc-provider.type';
 /**
  * 인증 관련 REST 컨트롤러
  *
- * - 토큰은 HttpOnly Cookie로만 전달
+ * - refresh 토큰은 HttpOnly Cookie, access 토큰은 Bearer로 전달
  */
 @Controller('auth')
 export class AuthController {
@@ -57,8 +57,12 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { returnTo } = await this.auth.handleOidcCallback(provider, req, res);
-    res.redirect(returnTo);
+    const { returnTo, accessToken } = await this.auth.handleOidcCallback(
+      provider,
+      req,
+      res,
+    );
+    res.status(200).json({ returnTo, accessToken, tokenType: 'Bearer' });
   }
 
   /**
@@ -71,8 +75,8 @@ export class AuthController {
    */
   @Post('refresh')
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
-    await this.auth.refresh(req, res);
-    res.status(204).send();
+    const { accessToken } = await this.auth.refresh(req, res);
+    res.status(200).json({ accessToken, tokenType: 'Bearer' });
   }
 
   /**

@@ -16,7 +16,7 @@ declare module 'express-serve-static-core' {
 
     /**
      * JWT 인증된 사용자 정보
-     * - JwtCookieStrategy에서 validate 후 주입됨
+     * - JwtBearerStrategy에서 validate 후 주입됨
      */
     user?: JwtUser;
   }
