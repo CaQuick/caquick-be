@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { IdentityProvider } from '@prisma/client';
 import { Issuer, generators, type Client, type TokenSet } from 'openid-client';
 
+import { mustGetEnv } from '../../../common/helpers/config.helper';
 import type { OidcProvider } from '../types/oidc-provider.type';
 
 /**
@@ -141,10 +142,6 @@ export class OidcClientService {
    * @param key env key
    */
   private mustGet(key: string): string {
-    const v = this.config.get<string>(key);
-    if (!v || v.trim().length === 0) {
-      throw new Error(`Missing required env: ${key}`);
-    }
-    return v.trim();
+    return mustGetEnv(this.config, key);
   }
 }

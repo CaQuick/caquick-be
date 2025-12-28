@@ -5,12 +5,17 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
+import {
+  getEnvAsBoolean,
+  getEnvAsNumber,
+} from '../../common/helpers/config.helper';
 import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
 import type { AccessTokenPayload } from '../../global/auth/types/jwt-payload.type';
 
-import { AuthCookie } from './auth.cookie';
-import { OidcClientService } from './oidc/oidc-client.service';
+import { ALLOWED_RETURN_TO_DOMAINS } from './constants/auth.constants';
+import { AuthCookie } from './helpers/auth-cookie.helper';
 import { AuthRepository } from './repositories/auth.repository';
+import { OidcClientService } from './services/oidc-client.service';
 import {
   parseOidcProvider,
   type OidcProvider,
@@ -81,71 +86,34 @@ export class AuthService {
     res: Response,
   ): Promise<{ returnTo: string }> {
     const provider = parseOidcProvider(rawProvider);
-    const expectedState = req.cookies?.[AUTH_COOKIE.OIDC_STATE] as
-      | string
-      | undefined;
-    const expectedNonce = req.cookies?.[AUTH_COOKIE.OIDC_NONCE] as
-      | string
-      | undefined;
-    const codeVerifier = req.cookies?.[AUTH_COOKIE.OIDC_CODE_VERIFIER] as
-      | string
-      | undefined;
-    const returnTo =
-      (req.cookies?.[AUTH_COOKIE.OIDC_RETURN_TO] as string | undefined) ??
-      this.normalizeReturnTo(undefined);
 
-    if (!expectedState || !expectedNonce || !codeVerifier) {
-      throw new UnauthorizedException('OIDC session is missing.');
-    }
+    // 1. OIDC 임시 쿠키 검증 및 추출
+    const { expectedState, expectedNonce, codeVerifier, returnTo } =
+      this.extractOidcTempCookies(req);
 
-    const callbackParams = this.pickCallbackParams(req);
-
-    const redirectUri = this.getCallbackRedirectUri(provider);
-
-    const tokenSet = await this.oidc.exchangeCode(provider, {
-      redirectUri,
-      callbackParams,
-      state: expectedState,
-      nonce: expectedNonce,
+    // 2. code를 token으로 교환
+    const tokenSet = await this.exchangeOidcCode(
+      provider,
+      req,
+      expectedState,
+      expectedNonce,
       codeVerifier,
-    });
+    );
 
-    const claims = tokenSet.claims();
+    // 3. claims에서 사용자 정보 추출
+    const userInfo = this.extractUserInfoFromClaims(tokenSet.claims());
 
-    const subject = typeof claims.sub === 'string' ? claims.sub : null;
-    if (!subject) throw new UnauthorizedException('OIDC subject is missing.');
+    // 4. 계정 생성/업데이트
+    const account = await this.upsertAccountFromOidc(provider, userInfo);
 
-    const email = typeof claims.email === 'string' ? claims.email : undefined;
-    const emailVerified = claims.email_verified === true;
-
-    const displayName =
-      (typeof claims.name === 'string' ? claims.name : undefined) ??
-      (typeof (claims as Record<string, unknown>).nickname === 'string'
-        ? ((claims as Record<string, unknown>).nickname as string)
-        : undefined);
-
-    const picture =
-      typeof claims.picture === 'string' ? claims.picture : undefined;
-
-    const identityProvider = this.oidc.toIdentityProvider(provider);
-
-    const { account } = await this.repo.upsertUserByOidcIdentity({
-      provider: identityProvider,
-      providerSubject: subject,
-      providerEmail: email,
-      emailVerified,
-      providerDisplayName: displayName,
-      providerProfileImageUrl: picture,
-    });
-
-    if (!account) throw new UnauthorizedException('Account upsert failed.');
-
+    // 5. 인증 쿠키 발급
     await this.issueAuthCookies({
       accountId: account.id,
       req,
       res,
     });
 
+    // 6. OIDC 임시 쿠키 삭제
     AuthCookie.clearOidcTempCookies(
       res,
       this.getCookieDomain(),
@@ -256,6 +224,125 @@ export class AuthService {
   }
 
   /**
+   * OIDC 임시 쿠키를 추출하고 검증한다.
+   *
+   * @param req Request
+   */
+  private extractOidcTempCookies(req: Request): {
+    expectedState: string;
+    expectedNonce: string;
+    codeVerifier: string;
+    returnTo: string;
+  } {
+    const expectedState = req.cookies?.[AUTH_COOKIE.OIDC_STATE] as
+      | string
+      | undefined;
+    const expectedNonce = req.cookies?.[AUTH_COOKIE.OIDC_NONCE] as
+      | string
+      | undefined;
+    const codeVerifier = req.cookies?.[AUTH_COOKIE.OIDC_CODE_VERIFIER] as
+      | string
+      | undefined;
+    const returnTo =
+      (req.cookies?.[AUTH_COOKIE.OIDC_RETURN_TO] as string | undefined) ??
+      this.normalizeReturnTo(undefined);
+
+    if (!expectedState || !expectedNonce || !codeVerifier) {
+      throw new UnauthorizedException('OIDC session is missing.');
+    }
+
+    return { expectedState, expectedNonce, codeVerifier, returnTo };
+  }
+
+  /**
+   * OIDC code를 token으로 교환한다.
+   *
+   * @param provider provider
+   * @param req Request
+   * @param expectedState state
+   * @param expectedNonce nonce
+   * @param codeVerifier code verifier
+   */
+  private async exchangeOidcCode(
+    provider: OidcProvider,
+    req: Request,
+    expectedState: string,
+    expectedNonce: string,
+    codeVerifier: string,
+  ) {
+    const callbackParams = this.pickCallbackParams(req);
+    const redirectUri = this.getCallbackRedirectUri(provider);
+
+    return this.oidc.exchangeCode(provider, {
+      redirectUri,
+      callbackParams,
+      state: expectedState,
+      nonce: expectedNonce,
+      codeVerifier,
+    });
+  }
+
+  /**
+   * OIDC claims에서 사용자 정보를 추출한다.
+   *
+   * @param claims OIDC claims
+   */
+  private extractUserInfoFromClaims(claims: Record<string, unknown>): {
+    subject: string;
+    email?: string;
+    emailVerified: boolean;
+    displayName?: string;
+    picture?: string;
+  } {
+    const subject = typeof claims.sub === 'string' ? claims.sub : null;
+    if (!subject) throw new UnauthorizedException('OIDC subject is missing.');
+
+    const email = typeof claims.email === 'string' ? claims.email : undefined;
+    const emailVerified = claims.email_verified === true;
+
+    const displayName =
+      (typeof claims.name === 'string' ? claims.name : undefined) ??
+      (typeof claims.nickname === 'string' ? claims.nickname : undefined);
+
+    const picture =
+      typeof claims.picture === 'string' ? claims.picture : undefined;
+
+    return { subject, email, emailVerified, displayName, picture };
+  }
+
+  /**
+   * OIDC 사용자 정보로 계정을 생성/업데이트한다.
+   *
+   * @param provider provider
+   * @param userInfo 사용자 정보
+   */
+  private async upsertAccountFromOidc(
+    provider: OidcProvider,
+    userInfo: {
+      subject: string;
+      email?: string;
+      emailVerified: boolean;
+      displayName?: string;
+      picture?: string;
+    },
+  ) {
+    const identityProvider = this.oidc.toIdentityProvider(provider);
+
+    const { account } = await this.repo.upsertUserByOidcIdentity({
+      provider: identityProvider,
+      providerSubject: userInfo.subject,
+      providerEmail: userInfo.email,
+      emailVerified: userInfo.emailVerified,
+      providerDisplayName: userInfo.displayName,
+      providerProfileImageUrl: userInfo.picture,
+    });
+
+    if (!account) throw new UnauthorizedException('Account upsert failed.');
+
+    return account;
+  }
+
+  /**
    * returnTo 값을 안전하게 정규화한다(오픈리다이렉트 방지).
    *
    * @param raw returnTo
@@ -268,12 +355,7 @@ export class AuthService {
     if (!raw || raw.trim().length === 0) return frontend;
 
     // 같은 site로만 허용(정확히는 prefix 기반)
-    const allowed = [
-      frontend,
-      'https://www.caquick.site',
-      'https://caquick.site',
-      'http://localhost:3000',
-    ];
+    const allowed = [frontend, ...ALLOWED_RETURN_TO_DOMAINS];
     const ok = allowed.some((prefix) => raw.startsWith(prefix));
     return ok ? raw : frontend;
   }
@@ -400,18 +482,14 @@ export class AuthService {
    * Access Token 만료(초)를 반환한다.
    */
   private getAccessExpiresSeconds(): number {
-    const v = this.config.get<string>('JWT_ACCESS_EXPIRES_SECONDS') ?? '900';
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : 900;
+    return getEnvAsNumber(this.config, 'JWT_ACCESS_EXPIRES_SECONDS', 900);
   }
 
   /**
    * Refresh 만료(일)를 반환한다.
    */
   private getRefreshDays(): number {
-    const v = this.config.get<string>('AUTH_REFRESH_EXPIRES_DAYS') ?? '30';
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : 30;
+    return getEnvAsNumber(this.config, 'AUTH_REFRESH_EXPIRES_DAYS', 30);
   }
 
   /**
@@ -427,11 +505,10 @@ export class AuthService {
    * 쿠키 secure 옵션을 반환한다.
    */
   private isCookieSecure(): boolean {
-    const v = (this.config.get<string>('AUTH_COOKIE_SECURE') ?? '')
-      .trim()
-      .toLowerCase();
-    if (v === 'true') return true;
-    if (v === 'false') return false;
+    const envValue = this.config.get<string>('AUTH_COOKIE_SECURE');
+    if (envValue !== undefined) {
+      return getEnvAsBoolean(this.config, 'AUTH_COOKIE_SECURE', false);
+    }
     // 기본값: production이면 true
     return (this.config.get<string>('NODE_ENV') ?? '') === 'production';
   }

@@ -4,8 +4,8 @@ import { AuthGlobalModule } from '../../global/auth/auth-global.module';
 
 import { AuthService } from './auth.service';
 import { AuthController } from './controllers/auth.controller';
-import { OidcClientService } from './oidc/oidc-client.service';
 import { AuthRepository } from './repositories/auth.repository';
+import { OidcClientService } from './services/oidc-client.service';
 
 /**
  * Auth 도메인 모듈

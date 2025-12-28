@@ -1,6 +1,7 @@
 import type { CookieOptions, Response } from 'express';
 
-import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
+import { AUTH_COOKIE } from '../../../global/auth/constants/auth-cookie.constants';
+import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '../constants/auth.constants';
 
 /**
  * Auth Cookie 설정을 생성한다.
@@ -89,7 +90,7 @@ export class AuthCookie {
       sameSite: 'lax',
       path: '/',
       domain: args.cookieDomain,
-      maxAge: 10 * 60 * 1000, // 10m
+      maxAge: OIDC_TEMP_COOKIE_MAX_AGE_MS,
     };
 
     res.cookie(AUTH_COOKIE.OIDC_STATE, args.state, base);

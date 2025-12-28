@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AccountType, IdentityProvider } from '@prisma/client';
 
-import { PrismaService } from 'src/prisma';
+import { PrismaService } from '../../../prisma';
 
 /**
  * 인증 Repository
@@ -70,6 +70,7 @@ export class AuthRepository {
     providerProfileImageUrl?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
+      // 기존 Identity 조회
       const found = await tx.accountIdentity.findFirst({
         where: {
           provider: args.provider,
@@ -85,103 +86,184 @@ export class AuthRepository {
 
       const now = new Date();
 
+      // 기존 Identity가 있으면 업데이트
       if (found) {
-        await tx.accountIdentity.update({
-          where: { id: found.id },
-          data: {
-            provider_email: args.providerEmail,
-            provider_display_name: args.providerDisplayName,
-            provider_profile_image_url: args.providerProfileImageUrl,
-            last_login_at: now,
-            updated_at: now,
-          },
-        });
-
-        // account email/name은 null일 때만 채움(변경 불가 정책)
-        await tx.account.update({
-          where: { id: found.account_id },
-          data: {
-            email: found.account.email ?? args.providerEmail ?? null,
-            name: found.account.name ?? args.providerDisplayName ?? null,
-          },
-        });
-
-        // profile이 없으면 최소 nickname으로 생성
-        if (!found.account.user_profile) {
-          await tx.userProfile.create({
-            data: {
-              account_id: found.account_id,
-              nickname:
-                args.providerDisplayName?.trim() ||
-                (args.providerEmail
-                  ? args.providerEmail.split('@')[0]
-                  : 'user'),
-              profile_image_url: args.providerProfileImageUrl ?? null,
-            },
-          });
-        }
-
-        const account = await tx.account.findUnique({
-          where: { id: found.account_id },
-          include: { user_profile: true },
-        });
-
-        return { account };
+        return this.updateExistingIdentity(tx, found, args, now);
       }
 
-      // 신규 identity: email로 기존 계정 연결(verified만)
-      let accountId: bigint | null = null;
+      // 신규 Identity 생성
+      return this.createNewIdentity(tx, args, now);
+    });
+  }
 
-      if (args.providerEmail && args.emailVerified) {
-        const existingByEmail = await tx.account.findFirst({
-          where: { email: args.providerEmail, deleted_at: null },
-        });
-        if (existingByEmail) accountId = existingByEmail.id;
-      }
+  /**
+   * 기존 Identity와 연결된 계정을 업데이트한다.
+   */
+  private async updateExistingIdentity(
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+    found: {
+      id: bigint;
+      account_id: bigint;
+      account: {
+        id: bigint;
+        email: string | null;
+        name: string | null;
+        user_profile: { nickname: string } | null;
+      };
+    },
+    args: {
+      providerEmail?: string;
+      providerDisplayName?: string;
+      providerProfileImageUrl?: string;
+    },
+    now: Date,
+  ) {
+    // Identity 정보 업데이트
+    await tx.accountIdentity.update({
+      where: { id: found.id },
+      data: {
+        provider_email: args.providerEmail,
+        provider_display_name: args.providerDisplayName,
+        provider_profile_image_url: args.providerProfileImageUrl,
+        last_login_at: now,
+        updated_at: now,
+      },
+    });
 
-      if (!accountId) {
-        const createdAccount = await tx.account.create({
-          data: {
-            account_type: AccountType.USER,
-            status: 'ACTIVE',
-            email:
-              args.providerEmail && args.emailVerified
-                ? args.providerEmail
-                : null,
-            name: args.providerDisplayName ?? null,
-          },
-        });
-        accountId = createdAccount.id;
+    // account email/name은 null일 때만 채움(변경 불가 정책)
+    await tx.account.update({
+      where: { id: found.account_id },
+      data: {
+        email: found.account.email ?? args.providerEmail ?? null,
+        name: found.account.name ?? args.providerDisplayName ?? null,
+      },
+    });
 
-        await tx.userProfile.create({
-          data: {
-            account_id: accountId,
-            nickname:
-              args.providerDisplayName?.trim() ||
-              (args.providerEmail ? args.providerEmail.split('@')[0] : 'user'),
-            profile_image_url: args.providerProfileImageUrl ?? null,
-          },
-        });
-      }
+    // profile이 없으면 최소 nickname으로 생성
+    if (!found.account.user_profile) {
+      await this.createUserProfile(
+        tx,
+        found.account_id,
+        args.providerDisplayName,
+        args.providerEmail,
+        args.providerProfileImageUrl,
+      );
+    }
 
-      await tx.accountIdentity.create({
-        data: {
-          account_id: accountId,
-          provider: args.provider,
-          provider_subject: args.providerSubject,
-          provider_email: args.providerEmail,
-          provider_display_name: args.providerDisplayName,
-          provider_profile_image_url: args.providerProfileImageUrl,
-          last_login_at: now,
-        },
+    const account = await tx.account.findUnique({
+      where: { id: found.account_id },
+      include: { user_profile: true },
+    });
+
+    return { account };
+  }
+
+  /**
+   * 신규 Identity를 생성하고 계정에 연결한다.
+   */
+  private async createNewIdentity(
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+    args: {
+      provider: IdentityProvider;
+      providerSubject: string;
+      providerEmail?: string;
+      emailVerified: boolean;
+      providerDisplayName?: string;
+      providerProfileImageUrl?: string;
+    },
+    now: Date,
+  ) {
+    // email로 기존 계정 찾기(verified만)
+    let accountId: bigint | null = null;
+
+    if (args.providerEmail && args.emailVerified) {
+      const existingByEmail = await tx.account.findFirst({
+        where: { email: args.providerEmail, deleted_at: null },
       });
+      if (existingByEmail) accountId = existingByEmail.id;
+    }
 
-      const account = await tx.account.findUnique({
-        where: { id: accountId },
-        include: { user_profile: true },
-      });
+    // 기존 계정이 없으면 신규 생성
+    if (!accountId) {
+      accountId = await this.createNewAccount(
+        tx,
+        args.providerEmail,
+        args.emailVerified,
+        args.providerDisplayName,
+        args.providerProfileImageUrl,
+      );
+    }
 
-      return { account };
+    // Identity 생성
+    await tx.accountIdentity.create({
+      data: {
+        account_id: accountId,
+        provider: args.provider,
+        provider_subject: args.providerSubject,
+        provider_email: args.providerEmail,
+        provider_display_name: args.providerDisplayName,
+        provider_profile_image_url: args.providerProfileImageUrl,
+        last_login_at: now,
+      },
+    });
+
+    const account = await tx.account.findUnique({
+      where: { id: accountId },
+      include: { user_profile: true },
+    });
+
+    return { account };
+  }
+
+  /**
+   * 신규 계정을 생성한다.
+   */
+  private async createNewAccount(
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+    email?: string,
+    emailVerified?: boolean,
+    displayName?: string,
+    profileImageUrl?: string,
+  ): Promise<bigint> {
+    const createdAccount = await tx.account.create({
+      data: {
+        account_type: AccountType.USER,
+        status: 'ACTIVE',
+        email: email && emailVerified ? email : null,
+        name: displayName ?? null,
+      },
+    });
+
+    await this.createUserProfile(
+      tx,
+      createdAccount.id,
+      displayName,
+      email,
+      profileImageUrl,
+    );
+
+    return createdAccount.id;
+  }
+
+  /**
+   * UserProfile을 생성한다.
+   */
+  private async createUserProfile(
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+    accountId: bigint,
+    displayName?: string,
+    email?: string,
+    profileImageUrl?: string,
+  ): Promise<void> {
+    const nickname =
+      displayName?.trim() || (email ? email.split('@')[0] : 'user');
+
+    await tx.userProfile.create({
+      data: {
+        account_id: accountId,
+        nickname,
+        profile_image_url: profileImageUrl ?? null,
+      },
     });
   }
 
