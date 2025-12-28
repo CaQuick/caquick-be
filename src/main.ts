@@ -1,8 +1,12 @@
 import 'reflect-metadata';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { ValidationError } from 'class-validator';
 import cookieParser from 'cookie-parser';
 
@@ -17,6 +21,10 @@ import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.enableShutdownHooks();
+
+  const pkg = JSON.parse(
+    readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+  ) as { version?: string };
 
   const configService = app.get(ConfigService);
   const isProd = configService.get<string>('NODE_ENV') === 'production';
@@ -73,6 +81,28 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(
     new HttpExceptionFilter(httpAdapterHost.httpAdapter, logger),
   );
+
+  if (!isProd) {
+    const documentConfig = new DocumentBuilder()
+      .setTitle('CaQuick API')
+      .setDescription('CaQuick API Documentation')
+      .setVersion(pkg.version ?? '0.0.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'access-token',
+      )
+      .addCookieAuth(
+        'caquick_rt',
+        { type: 'apiKey', in: 'cookie' },
+        'refresh-cookie',
+      )
+      .build();
+
+    const document = SwaggerModule.createDocument(app, documentConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   const portFromEnv = configService.get<string>('PORT');
   const port = Number.isFinite(Number(portFromEnv))

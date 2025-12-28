@@ -1,3 +1,5 @@
+import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/disabled';
+import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -31,7 +33,12 @@ import { PrismaModule } from 'src/prisma';
         return {
           autoSchemaFile: 'src/graphql/schema.gql',
           sortSchema: true,
-          playground: !isProd,
+          playground: false,
+          plugins: [
+            isProd
+              ? ApolloServerPluginLandingPageDisabled()
+              : ApolloServerPluginLandingPageLocalDefault({ embed: true }),
+          ],
           context: ({
             req,
             res,
