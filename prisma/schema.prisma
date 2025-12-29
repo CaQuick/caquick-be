@@ -8,4 +8,1076 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 추가예정
+/* =========================
+   Enums
+   ========================= */
+
+enum AccountType {
+  USER
+  SELLER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum IdentityProvider {
+  GOOGLE
+  KAKAO
+}
+
+enum StoreMapProvider {
+  NAVER
+  KAKAO
+  NONE
+}
+
+enum CategoryType {
+  EVENT
+  STYLE
+  OTHER
+}
+
+enum CustomDraftStatus {
+  IN_PROGRESS
+  READY_FOR_ORDER
+}
+
+enum OrderStatus {
+  SUBMITTED
+  CONFIRMED
+  MADE
+  PICKED_UP
+  CANCELED
+}
+
+enum NotificationType {
+  ORDER
+  SYSTEM
+  MARKETING
+}
+
+enum SearchContext {
+  GLOBAL
+  NEIGHBORHOOD
+  CATEGORY
+}
+
+enum BannerPlacement {
+  HOME_MAIN
+  HOME_SUB
+  CATEGORY
+  STORE
+}
+
+enum BannerLinkType {
+  NONE
+  URL
+  PRODUCT
+  STORE
+  CATEGORY
+}
+
+/* =========================
+   1) Accounts / Auth
+   ========================= */
+
+model Account {
+  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  account_type AccountType
+  status       AccountStatus @default(ACTIVE)
+
+  email String? @unique @db.VarChar(320)
+  name  String? @db.VarChar(100)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  user_profile        UserProfile?
+  seller_profile      SellerProfile?
+  seller_credential   SellerCredential?
+  account_identities  AccountIdentity[]
+  refresh_sessions    AuthRefreshSession[]
+  stores              Store[]            @relation("StoreSellerAccount")
+  wishlist_items      WishlistItem[]
+  cart                Cart?
+  custom_drafts       CustomDraft[]
+  orders              Order[]
+  reviews             Review[]
+  notifications       Notification[]
+  search_histories    SearchHistory[]
+  search_events       SearchEvent[]
+
+  @@index([account_type, status], map: "idx_account_type_status")
+  @@index([deleted_at], map: "idx_account_deleted_at")
+  @@map("account")
+}
+
+model UserProfile {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @unique @db.UnsignedBigInt
+
+  nickname      String   @db.VarChar(50)
+  birth_date    DateTime? @db.Date
+  phone_number  String?  @db.VarChar(30)
+  profile_image_url String? @db.VarChar(2048)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@index([nickname], map: "idx_user_profile_nickname")
+  @@index([deleted_at], map: "idx_user_profile_deleted_at")
+  @@map("user_profile")
+}
+
+model SellerProfile {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @unique @db.UnsignedBigInt
+
+  business_name  String  @db.VarChar(200)
+  business_phone String  @db.VarChar(30)
+  website_url    String? @db.VarChar(2048)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@index([business_name], map: "idx_seller_profile_business_name")
+  @@index([deleted_at], map: "idx_seller_profile_deleted_at")
+  @@map("seller_profile")
+}
+
+model SellerCredential {
+  id                 BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  seller_account_id  BigInt @unique @db.UnsignedBigInt
+
+  username          String   @unique @db.VarChar(80)
+  password_hash     String   @db.VarChar(255)
+  password_updated_at DateTime? @db.DateTime(3)
+  last_login_at     DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  seller_account Account @relation(fields: [seller_account_id], references: [id])
+
+  @@index([deleted_at], map: "idx_seller_credential_deleted_at")
+  @@map("seller_credential")
+}
+
+model AccountIdentity {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  provider         IdentityProvider
+  provider_subject String @db.VarChar(255)
+
+  provider_email             String? @db.VarChar(320)
+  provider_display_name      String? @db.VarChar(200)
+  provider_profile_image_url String? @db.VarChar(2048)
+
+  last_login_at DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@unique([provider, provider_subject], map: "uk_account_identity_provider_sub")
+  @@index([account_id], map: "idx_account_identity_account_id")
+  @@index([deleted_at], map: "idx_account_identity_deleted_at")
+  @@map("account_identity")
+}
+
+model AuthRefreshSession {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  token_hash String @unique @db.Char(64)
+  user_agent String? @db.VarChar(512)
+  ip_address String? @db.VarChar(64)
+
+  expires_at DateTime  @db.DateTime(3)
+  revoked_at DateTime? @db.DateTime(3)
+
+  replaced_by_session_id BigInt? @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  replaced_by  AuthRefreshSession? @relation("RefreshSessionReplace", fields: [replaced_by_session_id], references: [id])
+  replaces     AuthRefreshSession[] @relation("RefreshSessionReplace")
+
+  @@index([account_id], map: "idx_auth_refresh_session_account_id")
+  @@index([expires_at], map: "idx_auth_refresh_session_expires_at")
+  @@index([revoked_at], map: "idx_auth_refresh_session_revoked_at")
+  @@index([deleted_at], map: "idx_auth_refresh_session_deleted_at")
+  @@map("auth_refresh_session")
+}
+
+/* =========================
+   2) Store
+   ========================= */
+
+model Store {
+  id               BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  seller_account_id BigInt @db.UnsignedBigInt
+
+  store_name  String @db.VarChar(200)
+  store_phone String @db.VarChar(30)
+
+  address_full         String  @db.VarChar(500)
+  address_city         String? @db.VarChar(50)
+  address_district     String? @db.VarChar(80)
+  address_neighborhood String? @db.VarChar(80)
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  map_provider StoreMapProvider @default(NONE)
+
+  business_hours_text String? @db.VarChar(500)
+
+  pickup_slot_interval_minutes Int @default(30) @db.UnsignedSmallInt
+  min_lead_time_minutes        Int @default(180) @db.UnsignedInt
+  max_days_ahead               Int @default(30) @db.UnsignedSmallInt
+
+  website_url String? @db.VarChar(2048)
+  is_active   Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  seller_account Account @relation("StoreSellerAccount", fields: [seller_account_id], references: [id])
+
+  business_hours     StoreBusinessHour[]
+  special_closures   StoreSpecialClosure[]
+  products           Product[]
+  order_items        OrderItem[]
+  reviews            Review[]
+  banners            Banner[] @relation("BannerStoreLink")
+
+  @@index([seller_account_id], map: "idx_store_seller")
+  @@index([store_name], map: "idx_store_name")
+  @@index([address_city, address_district, address_neighborhood], map: "idx_store_region")
+  @@index([deleted_at], map: "idx_store_deleted_at")
+  @@map("store")
+}
+
+model StoreBusinessHour {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  day_of_week Int @db.UnsignedTinyInt
+  is_closed   Boolean @default(false) @db.TinyInt
+
+  open_time  DateTime? @db.Time(0)
+  close_time DateTime? @db.Time(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@unique([store_id, day_of_week], map: "uk_store_business_hour")
+  @@index([deleted_at], map: "idx_store_business_hour_deleted_at")
+  @@map("store_business_hour")
+}
+
+model StoreSpecialClosure {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  closure_date DateTime @db.Date
+  reason       String?  @db.VarChar(200)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@unique([store_id, closure_date], map: "uk_store_special_closure")
+  @@index([deleted_at], map: "idx_store_special_closure_deleted_at")
+  @@map("store_special_closure")
+}
+
+/* =========================
+   3) Catalog
+   ========================= */
+
+model Category {
+  id            BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  category_type CategoryType @default(OTHER)
+
+  name        String  @db.VarChar(100)
+  description String? @db.VarChar(255)
+
+  sort_order Int @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product_categories ProductCategory[]
+  search_events      SearchEvent[]
+  banners            Banner[] @relation("BannerCategoryLink")
+
+  @@unique([category_type, name], map: "uk_category_type_name")
+  @@index([category_type, sort_order], map: "idx_category_sort")
+  @@index([deleted_at], map: "idx_category_deleted_at")
+  @@map("category")
+}
+
+model Tag {
+  id   BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  name String @unique @db.VarChar(80)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product_tags ProductTag[]
+
+  @@index([deleted_at], map: "idx_tag_deleted_at")
+  @@map("tag")
+}
+
+model Product {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  name        String  @db.VarChar(200)
+  description String? @db.Text
+  purchase_notice String? @db.Text
+
+  regular_price Int @db.UnsignedInt
+  sale_price    Int? @db.UnsignedInt
+
+  currency String @default("KRW") @db.Char(3)
+
+  base_design_image_url String? @db.VarChar(2048)
+  preparation_time_minutes Int @default(180) @db.UnsignedInt
+
+  is_active Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  images             ProductImage[]
+  product_categories ProductCategory[]
+  product_tags       ProductTag[]
+
+  option_groups      ProductOptionGroup[]
+  custom_template    ProductCustomTemplate?
+
+  cart_items         CartItem[]
+  wishlist_items     WishlistItem[]
+  custom_drafts      CustomDraft[]
+  order_items        OrderItem[]
+  reviews            Review[]
+  banners            Banner[] @relation("BannerProductLink")
+
+  @@index([store_id], map: "idx_product_store")
+  @@index([name], map: "idx_product_name")
+  @@index([is_active], map: "idx_product_active")
+  @@index([deleted_at], map: "idx_product_deleted_at")
+  @@map("product")
+}
+
+model ProductImage {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  image_url  String @db.VarChar(2048)
+  sort_order Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([product_id, sort_order], map: "idx_product_image_product")
+  @@index([deleted_at], map: "idx_product_image_deleted_at")
+  @@map("product_image")
+}
+
+model ProductCategory {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  product_id  BigInt @db.UnsignedBigInt
+  category_id BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product  Product  @relation(fields: [product_id], references: [id])
+  category Category @relation(fields: [category_id], references: [id])
+
+  @@unique([product_id, category_id], map: "uk_product_category")
+  @@index([deleted_at], map: "idx_product_category_deleted_at")
+  @@map("product_category")
+}
+
+model ProductTag {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+  tag_id     BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product Product @relation(fields: [product_id], references: [id])
+  tag     Tag     @relation(fields: [tag_id], references: [id])
+
+  @@unique([product_id, tag_id], map: "uk_product_tag")
+  @@index([deleted_at], map: "idx_product_tag_deleted_at")
+  @@map("product_tag")
+}
+
+/* =========================
+   4) Product Options
+   ========================= */
+
+model ProductOptionGroup {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  name        String @db.VarChar(120)
+  is_required Boolean @default(true) @db.TinyInt
+  min_select  Int @default(1) @db.UnsignedSmallInt
+  max_select  Int @default(1) @db.UnsignedSmallInt
+
+  option_requires_description Boolean @default(false) @db.TinyInt
+  option_requires_image       Boolean @default(false) @db.TinyInt
+
+  sort_order Int @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product Product @relation(fields: [product_id], references: [id])
+
+  option_items            ProductOptionItem[]
+  order_item_option_items OrderItemOptionItem[]
+
+  @@index([product_id, sort_order], map: "idx_product_option_group_product")
+  @@index([deleted_at], map: "idx_product_option_group_deleted_at")
+  @@map("product_option_group")
+}
+
+model ProductOptionItem {
+  id              BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  option_group_id BigInt @db.UnsignedBigInt
+
+  title       String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+  image_url   String? @db.VarChar(2048)
+
+  price_delta Int @default(0)
+  sort_order  Int @default(0)
+  is_active   Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  option_group ProductOptionGroup @relation(fields: [option_group_id], references: [id])
+
+  cart_item_option_items  CartItemOptionItem[]
+  order_item_option_items OrderItemOptionItem[]
+
+  @@index([option_group_id, sort_order], map: "idx_product_option_item_group")
+  @@index([deleted_at], map: "idx_product_option_item_deleted_at")
+  @@map("product_option_item")
+}
+
+/* =========================
+   5) Product Custom Template
+   ========================= */
+
+model ProductCustomTemplate {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  product_id BigInt @unique @db.UnsignedBigInt
+
+  base_image_url String @db.VarChar(2048)
+  is_active      Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  product Product @relation(fields: [product_id], references: [id])
+
+  text_tokens   ProductCustomTextToken[]
+  custom_drafts CustomDraft[]
+
+  @@index([deleted_at], map: "idx_product_custom_template_deleted_at")
+  @@map("product_custom_template")
+}
+
+model ProductCustomTextToken {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  template_id BigInt @db.UnsignedBigInt
+
+  token_key     String @db.VarChar(60)
+  default_text  String @db.VarChar(200)
+  max_length    Int    @default(30) @db.UnsignedSmallInt
+  sort_order    Int    @default(0)
+  is_required   Boolean @default(true) @db.TinyInt
+
+  pos_x  Int?
+  pos_y  Int?
+  width  Int?
+  height Int?
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  template ProductCustomTemplate @relation(fields: [template_id], references: [id])
+
+  draft_text_values CustomDraftTextValue[]
+
+  @@unique([template_id, token_key], map: "uk_product_custom_text_token")
+  @@index([deleted_at], map: "idx_product_custom_text_token_deleted_at")
+  @@map("product_custom_text_token")
+}
+
+/* =========================
+   6) Wishlist / Cart
+   ========================= */
+
+model WishlistItem {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@unique([account_id, product_id], map: "uk_wishlist")
+  @@index([deleted_at], map: "idx_wishlist_deleted_at")
+  @@map("wishlist_item")
+}
+
+model Cart {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @unique @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  items CartItem[]
+
+  @@index([deleted_at], map: "idx_cart_deleted_at")
+  @@map("cart")
+}
+
+model CartItem {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  cart_id  BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  quantity Int @default(1) @db.UnsignedSmallInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  cart    Cart    @relation(fields: [cart_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  option_items CartItemOptionItem[]
+
+  @@index([cart_id], map: "idx_cart_item_cart")
+  @@index([product_id], map: "idx_cart_item_product")
+  @@index([deleted_at], map: "idx_cart_item_deleted_at")
+  @@map("cart_item")
+}
+
+model CartItemOptionItem {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  cart_item_id BigInt @db.UnsignedBigInt
+  option_item_id BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  cart_item   CartItem          @relation(fields: [cart_item_id], references: [id])
+  option_item ProductOptionItem @relation(fields: [option_item_id], references: [id])
+
+  @@unique([cart_item_id, option_item_id], map: "uk_cart_item_option_item")
+  @@index([deleted_at], map: "idx_cart_item_option_item_deleted_at")
+  @@map("cart_item_option_item")
+}
+
+/* =========================
+   7) Custom Draft (temporary)
+   ========================= */
+
+model CustomDraft {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+  template_id BigInt? @db.UnsignedBigInt
+
+  status CustomDraftStatus @default(IN_PROGRESS)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account  Account @relation(fields: [account_id], references: [id])
+  product  Product @relation(fields: [product_id], references: [id])
+  template ProductCustomTemplate? @relation(fields: [template_id], references: [id])
+
+  text_values  CustomDraftTextValue[]
+  free_edits   CustomDraftFreeEdit[]
+
+  order_items OrderItem[]
+
+  @@index([account_id], map: "idx_custom_draft_account")
+  @@index([product_id], map: "idx_custom_draft_product")
+  @@index([deleted_at], map: "idx_custom_draft_deleted_at")
+  @@map("custom_draft")
+}
+
+model CustomDraftTextValue {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  draft_id BigInt @db.UnsignedBigInt
+  token_id BigInt @db.UnsignedBigInt
+
+  value_text String @db.VarChar(200)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  draft CustomDraft @relation(fields: [draft_id], references: [id])
+  token ProductCustomTextToken @relation(fields: [token_id], references: [id])
+
+  @@unique([draft_id, token_id], map: "uk_custom_draft_text_value")
+  @@index([deleted_at], map: "idx_custom_draft_text_value_deleted_at")
+  @@map("custom_draft_text_value")
+}
+
+model CustomDraftFreeEdit {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  draft_id BigInt @db.UnsignedBigInt
+
+  crop_image_url   String @db.VarChar(2048)
+  description_text String @db.VarChar(2000)
+
+  sort_order Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  draft CustomDraft @relation(fields: [draft_id], references: [id])
+
+  attachments CustomDraftFreeEditAttachment[]
+
+  @@index([draft_id, sort_order], map: "idx_custom_draft_free_edit_draft")
+  @@index([deleted_at], map: "idx_custom_draft_free_edit_deleted_at")
+  @@map("custom_draft_free_edit")
+}
+
+model CustomDraftFreeEditAttachment {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  free_edit_id BigInt @db.UnsignedBigInt
+
+  image_url  String @db.VarChar(2048)
+  sort_order Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  free_edit CustomDraftFreeEdit @relation(fields: [free_edit_id], references: [id])
+
+  @@index([free_edit_id, sort_order], map: "idx_custom_draft_free_edit_attachment")
+  @@index([deleted_at], map: "idx_custom_draft_free_edit_attachment_deleted_at")
+  @@map("custom_draft_free_edit_attachment")
+}
+
+/* =========================
+   8) Order
+   ========================= */
+
+model Order {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_number String @unique @db.VarChar(30)
+
+  account_id BigInt @db.UnsignedBigInt
+
+  status   OrderStatus @default(SUBMITTED)
+  pickup_at DateTime   @db.DateTime(3)
+
+  buyer_name  String @db.VarChar(100)
+  buyer_phone String @db.VarChar(30)
+
+  subtotal_price Int @default(0) @db.UnsignedInt
+  discount_price Int @default(0) @db.UnsignedInt
+  total_price    Int @default(0) @db.UnsignedInt
+
+  submitted_at DateTime? @db.DateTime(3)
+  confirmed_at DateTime? @db.DateTime(3)
+  made_at      DateTime? @db.DateTime(3)
+  picked_up_at DateTime? @db.DateTime(3)
+  canceled_at  DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  status_histories OrderStatusHistory[]
+  items            OrderItem[]
+
+  @@index([account_id], map: "idx_order_account")
+  @@index([status, created_at], map: "idx_order_status")
+  @@index([pickup_at], map: "idx_order_pickup_at")
+  @@index([deleted_at], map: "idx_order_deleted_at")
+  @@map("order")
+}
+
+model OrderStatusHistory {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id BigInt @db.UnsignedBigInt
+
+  from_status OrderStatus?
+  to_status   OrderStatus
+  changed_at  DateTime @default(now()) @db.DateTime(3)
+
+  note String? @db.VarChar(500)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order Order @relation(fields: [order_id], references: [id])
+
+  @@index([order_id, changed_at], map: "idx_order_status_history_order")
+  @@index([deleted_at], map: "idx_order_status_history_deleted_at")
+  @@map("order_status_history")
+}
+
+model OrderItem {
+  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id  BigInt @db.UnsignedBigInt
+  store_id  BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  product_name_snapshot   String @db.VarChar(200)
+  regular_price_snapshot  Int    @db.UnsignedInt
+  sale_price_snapshot     Int?   @db.UnsignedInt
+
+  quantity           Int @default(1) @db.UnsignedSmallInt
+  item_subtotal_price Int @default(0) @db.UnsignedInt
+
+  custom_draft_id BigInt? @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order       Order   @relation(fields: [order_id], references: [id])
+  store       Store   @relation(fields: [store_id], references: [id])
+  product     Product @relation(fields: [product_id], references: [id])
+  custom_draft CustomDraft? @relation(fields: [custom_draft_id], references: [id])
+
+  option_items   OrderItemOptionItem[]
+  custom_texts   OrderItemCustomText[]
+  free_edits     OrderItemCustomFreeEdit[]
+
+  review Review?
+
+  @@index([order_id], map: "idx_order_item_order")
+  @@index([store_id], map: "idx_order_item_store")
+  @@index([product_id], map: "idx_order_item_product")
+  @@index([deleted_at], map: "idx_order_item_deleted_at")
+  @@map("order_item")
+}
+
+model OrderItemOptionItem {
+  id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt @db.UnsignedBigInt
+  option_group_id BigInt @db.UnsignedBigInt
+  option_item_id  BigInt @db.UnsignedBigInt
+
+  group_name_snapshot      String @db.VarChar(120)
+  option_title_snapshot    String @db.VarChar(120)
+  option_price_delta_snapshot Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order_item   OrderItem         @relation(fields: [order_item_id], references: [id])
+  option_group ProductOptionGroup @relation(fields: [option_group_id], references: [id])
+  option_item  ProductOptionItem  @relation(fields: [option_item_id], references: [id])
+
+  @@index([order_item_id], map: "idx_order_item_option_item_order_item")
+  @@index([deleted_at], map: "idx_order_item_option_item_deleted_at")
+  @@map("order_item_option_item")
+}
+
+model OrderItemCustomText {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt @db.UnsignedBigInt
+
+  token_key_snapshot    String @db.VarChar(60)
+  default_text_snapshot String @db.VarChar(200)
+  value_text            String @db.VarChar(200)
+  sort_order            Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+
+  @@index([order_item_id, sort_order], map: "idx_order_item_custom_text_order_item")
+  @@index([deleted_at], map: "idx_order_item_custom_text_deleted_at")
+  @@map("order_item_custom_text")
+}
+
+model OrderItemCustomFreeEdit {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt @db.UnsignedBigInt
+
+  crop_image_url   String @db.VarChar(2048)
+  description_text String @db.VarChar(2000)
+  sort_order       Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+  attachments OrderItemCustomFreeEditAttachment[]
+
+  @@index([order_item_id, sort_order], map: "idx_order_item_custom_free_edit")
+  @@index([deleted_at], map: "idx_order_item_custom_free_edit_deleted_at")
+  @@map("order_item_custom_free_edit")
+}
+
+model OrderItemCustomFreeEditAttachment {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  free_edit_id BigInt @db.UnsignedBigInt
+
+  image_url  String @db.VarChar(2048)
+  sort_order Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  free_edit OrderItemCustomFreeEdit @relation(fields: [free_edit_id], references: [id])
+
+  @@index([free_edit_id, sort_order], map: "idx_order_item_custom_free_edit_attachment")
+  @@index([deleted_at], map: "idx_order_item_custom_free_edit_attachment_deleted_at")
+  @@map("order_item_custom_free_edit_attachment")
+}
+
+/* =========================
+   9) Review
+   ========================= */
+
+model Review {
+  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt @unique @db.UnsignedBigInt
+
+  account_id BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  rating  Decimal @db.Decimal(2, 1)
+  content String? @db.Text
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+  account    Account   @relation(fields: [account_id], references: [id])
+  store      Store     @relation(fields: [store_id], references: [id])
+  product    Product   @relation(fields: [product_id], references: [id])
+
+  images ReviewImage[]
+
+  @@index([store_id, created_at], map: "idx_review_store")
+  @@index([product_id, created_at], map: "idx_review_product")
+  @@index([account_id, created_at], map: "idx_review_account")
+  @@index([deleted_at], map: "idx_review_deleted_at")
+  @@map("review")
+}
+
+model ReviewImage {
+  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  review_id BigInt @db.UnsignedBigInt
+
+  image_url  String @db.VarChar(2048)
+  sort_order Int @default(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  review Review @relation(fields: [review_id], references: [id])
+
+  @@index([review_id, sort_order], map: "idx_review_image_review")
+  @@index([deleted_at], map: "idx_review_image_deleted_at")
+  @@map("review_image")
+}
+
+/* =========================
+   10) Notification
+   ========================= */
+
+model Notification {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  type  NotificationType @default(SYSTEM)
+  title String @db.VarChar(200)
+  body  String @db.VarChar(2000)
+  data_json Json?
+
+  read_at DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@index([account_id, created_at], map: "idx_notification_account")
+  @@index([account_id, read_at], map: "idx_notification_unread")
+  @@index([deleted_at], map: "idx_notification_deleted_at")
+  @@map("notification")
+}
+
+/* =========================
+   11) Search
+   ========================= */
+
+model SearchHistory {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  keyword      String   @db.VarChar(200)
+  last_used_at DateTime @default(now()) @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@unique([account_id, keyword], map: "uk_search_history")
+  @@index([account_id, last_used_at], map: "idx_search_history_account_last_used")
+  @@index([deleted_at], map: "idx_search_history_deleted_at")
+  @@map("search_history")
+}
+
+model SearchEvent {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt? @db.UnsignedBigInt
+
+  keyword  String @db.VarChar(200)
+
+  context SearchContext @default(GLOBAL)
+  address_city         String? @db.VarChar(50)
+  address_district     String? @db.VarChar(80)
+  address_neighborhood String? @db.VarChar(80)
+
+  category_id BigInt? @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account  Account?  @relation(fields: [account_id], references: [id])
+  category Category? @relation(fields: [category_id], references: [id])
+
+  @@index([keyword, created_at], map: "idx_search_event_keyword_created")
+  @@index([context, created_at], map: "idx_search_event_context_created")
+  @@index([address_city, address_district, address_neighborhood, created_at], map: "idx_search_event_region_created")
+  @@index([category_id, created_at], map: "idx_search_event_category_created")
+  @@index([deleted_at], map: "idx_search_event_deleted_at")
+  @@map("search_event")
+}
+
+/* =========================
+   12) Banner
+   ========================= */
+
+model Banner {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  placement BannerPlacement @default(HOME_MAIN)
+
+  title     String? @db.VarChar(200)
+  image_url String  @db.VarChar(2048)
+
+  link_type BannerLinkType @default(NONE)
+  link_url  String? @db.VarChar(2048)
+
+  link_product_id  BigInt? @db.UnsignedBigInt
+  link_store_id    BigInt? @db.UnsignedBigInt
+  link_category_id BigInt? @db.UnsignedBigInt
+
+  starts_at DateTime? @db.DateTime(3)
+  ends_at   DateTime? @db.DateTime(3)
+
+  sort_order Int @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  link_product  Product?  @relation("BannerProductLink", fields: [link_product_id], references: [id])
+  link_store    Store?    @relation("BannerStoreLink", fields: [link_store_id], references: [id])
+  link_category Category? @relation("BannerCategoryLink", fields: [link_category_id], references: [id])
+
+  @@index([placement, is_active, sort_order], map: "idx_banner_placement_active")
+  @@index([starts_at, ends_at], map: "idx_banner_time")
+  @@index([deleted_at], map: "idx_banner_deleted_at")
+  @@map("banner")
+}
