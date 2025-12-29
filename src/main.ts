@@ -4,6 +4,7 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import type { ValidationError } from 'class-validator';
+import cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
 
@@ -40,6 +41,8 @@ async function bootstrap(): Promise<void> {
     origin: allowedOrigins,
     credentials: true,
   });
+
+  app.use(cookieParser());
 
   const logger = app.get(CustomLoggerService);
   const httpAdapterHost = app.get(HttpAdapterHost);

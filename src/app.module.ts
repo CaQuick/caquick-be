@@ -6,6 +6,7 @@ import type { Request, Response } from 'express';
 
 import authConfig from 'src/config/auth.config';
 import databaseConfig from 'src/config/database.config';
+import { AuthModule } from 'src/features/auth/auth.module';
 import { SystemModule } from 'src/features/system/system.module';
 import { LoggerModule } from 'src/global/logger/logger.module';
 import { PrismaModule } from 'src/prisma';
@@ -42,6 +43,7 @@ import { PrismaModule } from 'src/prisma';
       },
     }),
     SystemModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],
