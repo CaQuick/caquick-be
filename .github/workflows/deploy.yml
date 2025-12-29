@@ -57,6 +57,7 @@ jobs:
 
           cp -r dist bundle/dist
           cp -r scripts bundle/scripts
+          cp -r prisma bundle/prisma
           cp ecosystem.config.js bundle/
           cp package.json yarn.lock bundle/
           cp appspec.yml bundle/
