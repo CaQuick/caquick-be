@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/disabled';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -31,8 +33,13 @@ import { PrismaModule } from 'src/prisma';
       useFactory: (configService: ConfigService) => {
         const isProd = configService.get<string>('NODE_ENV') === 'production';
         return {
-          autoSchemaFile: 'src/graphql/schema.gql',
-          sortSchema: true,
+          typePaths: [join(__dirname, 'features/**/*.graphql')],
+          definitions: isProd
+            ? undefined
+            : {
+                path: join(process.cwd(), 'src/graphql/graphql.schema.ts'),
+                outputAs: 'interface',
+              },
           playground: false,
           plugins: [
             isProd

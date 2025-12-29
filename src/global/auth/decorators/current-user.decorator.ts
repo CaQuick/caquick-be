@@ -20,7 +20,8 @@ import type { JwtUser } from '../types/jwt-payload.type';
  *
  * @example
  * // GraphQL Resolver
- * @Query(() => User)
+ * @Resolver('Query')
+ * @Query('me')
  * @UseGuards(JwtAuthGuard)
  * me(@CurrentUser() user: JwtUser) {
  *   return this.userService.findOne(user.accountId);
