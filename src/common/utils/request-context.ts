@@ -68,7 +68,9 @@ export function ensureRequestTracking(
     req.requestId = incoming ?? randomUUID();
   }
 
-  res?.setHeader(REQUEST_ID_HEADER, req.requestId);
+  if (res && !res.headersSent) {
+    res.setHeader(REQUEST_ID_HEADER, req.requestId);
+  }
 
   if (typeof req.startTime !== 'number') {
     req.startTime = Date.now();
@@ -92,7 +94,7 @@ export function setResponseTimeHeader(
   res: Response | undefined,
   duration?: number,
 ): void {
-  if (!res || typeof duration !== 'number') return;
+  if (!res || typeof duration !== 'number' || res.headersSent) return;
   res.setHeader(RESPONSE_TIME_HEADER, String(duration));
 }
 
