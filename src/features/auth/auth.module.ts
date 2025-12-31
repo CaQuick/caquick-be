@@ -1,38 +1,22 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
+
+import { AuthGlobalModule } from '../../global/auth/auth-global.module';
 
 import { AuthService } from './auth.service';
 import { AuthController } from './controllers/auth.controller';
 import { OidcClientService } from './oidc/oidc-client.service';
 import { AuthRepository } from './repositories/auth.repository';
-import { JwtCookieStrategy } from './strategies/jwt.strategy';
 
 /**
- * Auth 모듈
+ * Auth 도메인 모듈
+ *
+ * - OIDC 인증, 토큰 발급/갱신, 로그아웃 비즈니스 로직
+ * - JWT 인증 인프라는 global/auth/auth-global.module.ts에 위치
  */
 @Module({
-  imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_ACCESS_SECRET');
-        if (!secret || secret.trim().length === 0) {
-          throw new Error('Missing JWT_ACCESS_SECRET');
-        }
-        return { secret };
-      },
-    }),
-  ],
+  imports: [AuthGlobalModule],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    OidcClientService,
-    AuthRepository,
-    JwtCookieStrategy,
-  ],
+  providers: [AuthService, OidcClientService, AuthRepository],
   exports: [AuthService],
 })
 export class AuthModule {}
