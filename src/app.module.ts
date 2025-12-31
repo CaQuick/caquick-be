@@ -6,6 +6,7 @@ import type { Request, Response } from 'express';
 
 import authConfig from 'src/config/auth.config';
 import databaseConfig from 'src/config/database.config';
+import oidcConfig from 'src/config/oidc.config';
 import { AuthModule } from 'src/features/auth/auth.module';
 import { SystemModule } from 'src/features/system/system.module';
 import { AuthGlobalModule } from 'src/global/auth/auth-global.module';
@@ -17,7 +18,7 @@ import { PrismaModule } from 'src/prisma';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [authConfig, databaseConfig],
+      load: [authConfig, databaseConfig, oidcConfig],
     }),
     PrismaModule,
     LoggerModule,

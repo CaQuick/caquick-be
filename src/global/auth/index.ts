@@ -6,3 +6,4 @@ export * from './guards/jwt-auth.guard';
 export * from './decorators/current-user.decorator';
 export * from './decorators/public.decorator';
 export * from './types/jwt-payload.type';
+export * from './constants/auth-cookie.constants';

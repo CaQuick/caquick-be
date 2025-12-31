@@ -5,9 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
+import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
 import type { AccessTokenPayload } from '../../global/auth/types/jwt-payload.type';
 
-import { AUTH_COOKIE } from './auth.constants';
 import { AuthCookie } from './auth.cookie';
 import { OidcClientService } from './oidc/oidc-client.service';
 import { AuthRepository } from './repositories/auth.repository';

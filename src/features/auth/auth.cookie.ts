@@ -1,6 +1,6 @@
 import type { CookieOptions, Response } from 'express';
 
-import { AUTH_COOKIE } from './auth.constants';
+import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
 
 /**
  * Auth Cookie 설정을 생성한다.
