@@ -34,12 +34,6 @@ import { PrismaModule } from 'src/prisma';
         const isProd = configService.get<string>('NODE_ENV') === 'production';
         return {
           typePaths: [join(__dirname, 'features/**/*.graphql')],
-          definitions: isProd
-            ? undefined
-            : {
-                path: join(process.cwd(), 'src/graphql/graphql.schema.ts'),
-                outputAs: 'interface',
-              },
           playground: false,
           plugins: [
             isProd

@@ -39,6 +39,7 @@ jobs:
       - name: Lint & Build
         run: |
           yarn lint
+          yarn graphql:codegen
           yarn build
 
       - name: Create deployment zip (bundle + node_modules)
