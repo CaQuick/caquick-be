@@ -21,7 +21,6 @@ enum AccountType {
 enum AccountStatus {
   ACTIVE
   SUSPENDED
-  WITHDRAWN
 }
 
 enum IdentityProvider {
@@ -121,7 +120,7 @@ model UserProfile {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   account_id BigInt @unique @db.UnsignedBigInt
 
-  nickname      String   @db.VarChar(50)
+  nickname      String   @unique @db.VarChar(50)
   birth_date    DateTime? @db.Date
   phone_number  String?  @db.VarChar(30)
   profile_image_url String? @db.VarChar(2048)
