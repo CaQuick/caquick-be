@@ -1,9 +1,15 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
+
+import { PrismaService } from 'src/prisma/prisma.service';
 
 /**
  * Bearer 기반 JWT 인증 전략
@@ -12,8 +18,12 @@ import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   /**
    * @param config ConfigService
+   * @param prisma PrismaService
    */
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     const secret = config.get<string>('JWT_ACCESS_SECRET');
     if (!secret || secret.trim().length === 0) {
       throw new Error('Missing JWT_ACCESS_SECRET');
@@ -29,12 +39,43 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   /**
    * payload 검증 후 req.user로 주입할 값을 반환한다.
    *
+   * - 토큰 형식 검증
+   * - DB에서 계정 존재/상태/탈퇴(deleted_at) 여부 검증
+   *
    * @param payload AccessTokenPayload
    */
-  validate(payload: AccessTokenPayload): JwtUser {
+  async validate(payload: AccessTokenPayload): Promise<JwtUser> {
     if (!payload?.sub || payload.typ !== 'access') {
       throw new UnauthorizedException('Invalid access token.');
     }
-    return { accountId: payload.sub };
+
+    let accountId: bigint;
+    try {
+      accountId = BigInt(payload.sub);
+    } catch {
+      throw new UnauthorizedException('Invalid access token.');
+    }
+
+    const account = await this.prisma.account.findFirst({
+      where: {
+        id: accountId,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    // 존재하지 않거나 deleted_at이 찍힌 경우
+    if (!account) {
+      throw new UnauthorizedException('Account not found.');
+    }
+
+    if (account.status !== 'ACTIVE') {
+      throw new ForbiddenException('Account is not active.');
+    }
+
+    return { accountId: account.id.toString() };
   }
 }

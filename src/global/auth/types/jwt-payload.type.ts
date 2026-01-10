@@ -20,4 +20,5 @@ export interface AccessTokenPayload {
  */
 export interface JwtUser {
   accountId: string;
+  accountType?: 'USER' | 'SELLER' | 'ADMIN';
 }
