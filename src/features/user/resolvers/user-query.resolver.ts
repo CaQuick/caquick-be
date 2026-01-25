@@ -25,13 +25,13 @@ export class UserQueryResolver {
 
   @Query('me')
   me(@CurrentUser() user: JwtUser): Promise<MePayload> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.me(accountId);
   }
 
   @Query('viewerCounts')
   viewerCounts(@CurrentUser() user: JwtUser): Promise<ViewerCounts> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.viewerCounts(accountId);
   }
 
@@ -40,7 +40,7 @@ export class UserQueryResolver {
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: MyNotificationsInput,
   ): Promise<NotificationConnection> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.myNotifications(accountId, input);
   }
 
@@ -49,15 +49,18 @@ export class UserQueryResolver {
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: MySearchHistoriesInput,
   ): Promise<SearchHistoryConnection> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.mySearchHistories(accountId, input);
   }
+}
 
-  private parseAccountId(user: JwtUser): bigint {
-    try {
-      return BigInt(user.accountId);
-    } catch {
-      throw new BadRequestException('Invalid account id.');
-    }
+/**
+ * JWT 사용자 정보에서 accountId를 추출한다.
+ */
+function parseAccountId(user: JwtUser): bigint {
+  try {
+    return BigInt(user.accountId);
+  } catch {
+    throw new BadRequestException('Invalid account id.');
   }
 }

@@ -23,7 +23,8 @@
     "prisma:migrate:create": "prisma migrate dev --create-only",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "graphql:codegen": "graphql-codegen --config codegen.yml"
+    "graphql:codegen": "graphql-codegen --config codegen.yml",
+    "graphql:docs": "spectaql -c spectaql.yml"
   },
   "dependencies": {
     "@apollo/server": "^5.2.0",
@@ -36,6 +37,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "11.1.10",
+    "@nestjs/serve-static": "^5.0.4",
     "@nestjs/swagger": "^11.2.3",
     "@prisma/client": "^6.2.0",
     "argon2": "^0.44.0",
@@ -81,6 +83,7 @@
     "prettier": "^3.4.2",
     "prisma": "^6.2.0",
     "source-map-support": "^0.5.21",
+    "spectaql": "^3.0.6",
     "supertest": "^7.0.0",
     "ts-jest": "^29",
     "ts-loader": "^9.5.2",

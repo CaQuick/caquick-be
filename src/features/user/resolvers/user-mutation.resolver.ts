@@ -24,7 +24,7 @@ export class UserMutationResolver {
     @CurrentUser() user: JwtUser,
     @Args('input') input: CompleteOnboardingInput,
   ): Promise<MePayload> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.completeOnboarding(accountId, input);
   }
 
@@ -33,7 +33,7 @@ export class UserMutationResolver {
     @CurrentUser() user: JwtUser,
     @Args('input') input: UpdateMyProfileInput,
   ): Promise<MePayload> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.updateMyProfile(accountId, input);
   }
 
@@ -42,13 +42,13 @@ export class UserMutationResolver {
     @CurrentUser() user: JwtUser,
     @Args('input') input: UpdateMyProfileImageInput,
   ): Promise<MePayload> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.updateMyProfileImage(accountId, input);
   }
 
   @Mutation('deleteMyAccount')
   deleteMyAccount(@CurrentUser() user: JwtUser): Promise<boolean> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.deleteMyAccount(accountId);
   }
 
@@ -57,14 +57,14 @@ export class UserMutationResolver {
     @CurrentUser() user: JwtUser,
     @Args('notificationId') notificationId: string,
   ): Promise<boolean> {
-    const accountId = this.parseAccountId(user);
-    const id = this.parseId(notificationId);
+    const accountId = parseAccountId(user);
+    const id = parseId(notificationId);
     return this.userService.markNotificationRead(accountId, id);
   }
 
   @Mutation('markAllNotificationsRead')
   markAllNotificationsRead(@CurrentUser() user: JwtUser): Promise<boolean> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.markAllNotificationsRead(accountId);
   }
 
@@ -73,30 +73,36 @@ export class UserMutationResolver {
     @CurrentUser() user: JwtUser,
     @Args('id') id: string,
   ): Promise<boolean> {
-    const accountId = this.parseAccountId(user);
-    const parsedId = this.parseId(id);
+    const accountId = parseAccountId(user);
+    const parsedId = parseId(id);
     return this.userService.deleteSearchHistory(accountId, parsedId);
   }
 
   @Mutation('clearSearchHistories')
   clearSearchHistories(@CurrentUser() user: JwtUser): Promise<boolean> {
-    const accountId = this.parseAccountId(user);
+    const accountId = parseAccountId(user);
     return this.userService.clearSearchHistories(accountId);
   }
+}
 
-  private parseAccountId(user: JwtUser): bigint {
-    try {
-      return BigInt(user.accountId);
-    } catch {
-      throw new BadRequestException('Invalid account id.');
-    }
+/**
+ * JWT 사용자 정보에서 accountId를 추출한다.
+ */
+function parseAccountId(user: JwtUser): bigint {
+  try {
+    return BigInt(user.accountId);
+  } catch {
+    throw new BadRequestException('Invalid account id.');
   }
+}
 
-  private parseId(raw: string): bigint {
-    try {
-      return BigInt(raw);
-    } catch {
-      throw new BadRequestException('Invalid id.');
-    }
+/**
+ * GraphQL ID를 BigInt로 파싱한다.
+ */
+function parseId(raw: string): bigint {
+  try {
+    return BigInt(raw);
+  } catch {
+    throw new BadRequestException('Invalid id.');
   }
 }

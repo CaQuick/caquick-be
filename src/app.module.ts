@@ -6,6 +6,7 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import type { Request, Response } from 'express';
 
 import authConfig from 'src/config/auth.config';
@@ -26,6 +27,9 @@ import { PrismaModule } from 'src/prisma';
       cache: true,
       load: [authConfig, databaseConfig, oidcConfig],
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'public'),
+    }),
     PrismaModule,
     LoggerModule,
     AuthGlobalModule,
@@ -36,7 +40,11 @@ import { PrismaModule } from 'src/prisma';
       useFactory: (configService: ConfigService) => {
         const isProd = configService.get<string>('NODE_ENV') === 'production';
         return {
-          typePaths: [join(__dirname, 'features/**/*.graphql')],
+          typePaths: [
+            isProd
+              ? join(process.cwd(), 'dist/features/**/*.graphql')
+              : join(process.cwd(), 'src/features/**/*.graphql'),
+          ],
           playground: false,
           plugins: [
             isProd
