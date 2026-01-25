@@ -13,7 +13,9 @@ import databaseConfig from 'src/config/database.config';
 import oidcConfig from 'src/config/oidc.config';
 import { AuthModule } from 'src/features/auth/auth.module';
 import { SystemModule } from 'src/features/system/system.module';
+import { UserModule } from 'src/features/user/user.module';
 import { AuthGlobalModule } from 'src/global/auth/auth-global.module';
+import { GraphqlGlobalModule } from 'src/global/graphql/graphql.module';
 import { LoggerModule } from 'src/global/logger/logger.module';
 import { PrismaModule } from 'src/prisma';
 
@@ -27,6 +29,7 @@ import { PrismaModule } from 'src/prisma';
     PrismaModule,
     LoggerModule,
     AuthGlobalModule,
+    GraphqlGlobalModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
@@ -55,6 +58,7 @@ import { PrismaModule } from 'src/prisma';
     }),
     SystemModule,
     AuthModule,
+    UserModule,
   ],
   controllers: [],
   providers: [],

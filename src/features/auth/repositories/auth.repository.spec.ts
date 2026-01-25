@@ -158,45 +158,39 @@ describe('AuthRepository', () => {
       });
     });
 
-    it('신규 Identity이고 이메일로 기존 계정을 찾으면 연결해야 한다', async () => {
+    it('신규 Identity는 이메일과 무관하게 새 계정을 생성해야 한다', async () => {
       // Arrange
       mockPrisma.accountIdentity.findFirst.mockResolvedValue(null); // 신규
 
-      const existingAccount = {
-        id: BigInt(20),
-        email: 'existing@example.com',
-      };
-      mockPrisma.account.findFirst.mockResolvedValue(existingAccount);
-
       mockPrisma.accountIdentity.create.mockResolvedValue({});
+      mockPrisma.account.create.mockResolvedValue({ id: BigInt(30) } as never);
+      mockPrisma.userProfile.create.mockResolvedValue({});
       mockPrisma.account.findUnique.mockResolvedValue({
-        id: BigInt(20),
-        user_profile: { nickname: 'existing' },
+        id: BigInt(30),
+        user_profile: { nickname: 'new' },
       });
 
       const args = {
         provider: IdentityProvider.GOOGLE,
         providerSubject: 'google-new-user',
         providerEmail: 'existing@example.com',
-        emailVerified: true, // verified여야 연결
-        providerDisplayName: 'Existing User',
+        emailVerified: true,
+        providerDisplayName: 'New User',
       };
 
       // Act
       await repository.upsertUserByOidcIdentity(args);
 
       // Assert
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { email: 'existing@example.com', deleted_at: null },
-      });
+      expect(mockPrisma.account.findFirst).not.toHaveBeenCalled();
       expect(mockPrisma.accountIdentity.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          account_id: BigInt(20),
+          account_id: BigInt(30),
           provider: IdentityProvider.GOOGLE,
           provider_subject: 'google-new-user',
         }),
       });
-      expect(mockPrisma.account.create).not.toHaveBeenCalled(); // 신규 계정 생성 안 함
+      expect(mockPrisma.account.create).toHaveBeenCalled(); // 신규 계정 생성
     });
 
     it('신규 Identity이고 기존 계정이 없으면 새 계정을 생성해야 한다', async () => {
@@ -256,13 +250,9 @@ describe('AuthRepository', () => {
       expect(result.account?.id).toBe(BigInt(30));
     });
 
-    it('이메일이 verified가 아니면 기존 계정에 연결하지 않아야 한다', async () => {
+    it('이메일이 verified 여부와 관계없이 기존 계정을 조회하지 않아야 한다', async () => {
       // Arrange
       mockPrisma.accountIdentity.findFirst.mockResolvedValue(null);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(40),
-        email: 'test@example.com',
-      });
 
       const newAccount = { id: BigInt(50) };
       mockPrisma.account.create.mockResolvedValue(newAccount as never);

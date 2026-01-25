@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
+import { PrismaModule } from '../../prisma';
+
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtBearerStrategy } from './strategies/jwt-bearer.strategy';
-
-import { PrismaModule } from 'src/prisma';
 
 /**
  * 전역 인증 인프라 모듈

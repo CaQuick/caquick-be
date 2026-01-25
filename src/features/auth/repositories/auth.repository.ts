@@ -56,7 +56,6 @@ export class AuthRepository {
    *
    * 정책:
    * - (provider, subject)로 우선 식별
-   * - 없으면 email이 있고 검증 가능하면(emailVerified=true) email로 기존 계정에 연결 시도
    * - 없으면 신규 계정 생성
    *
    * @param args 생성/연결 정보
@@ -173,26 +172,14 @@ export class AuthRepository {
     },
     now: Date,
   ) {
-    // email로 기존 계정 찾기(verified만)
-    let accountId: bigint | null = null;
-
-    if (args.providerEmail && args.emailVerified) {
-      const existingByEmail = await tx.account.findFirst({
-        where: { email: args.providerEmail, deleted_at: null },
-      });
-      if (existingByEmail) accountId = existingByEmail.id;
-    }
-
-    // 기존 계정이 없으면 신규 생성
-    if (!accountId) {
-      accountId = await this.createNewAccount(
-        tx,
-        args.providerEmail,
-        args.emailVerified,
-        args.providerDisplayName,
-        args.providerProfileImageUrl,
-      );
-    }
+    // 신규 계정을 생성한다.
+    const accountId = await this.createNewAccount(
+      tx,
+      args.providerEmail,
+      args.emailVerified,
+      args.providerDisplayName,
+      args.providerProfileImageUrl,
+    );
 
     // Identity 생성
     await tx.accountIdentity.create({

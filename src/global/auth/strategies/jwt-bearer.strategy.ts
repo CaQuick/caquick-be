@@ -7,9 +7,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import { PrismaService } from '../../../prisma';
 import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
-
-import { PrismaService } from 'src/prisma/prisma.service';
 
 /**
  * Bearer 기반 JWT 인증 전략

@@ -1,0 +1,106 @@
+extend type Query {
+  me: MePayload!
+  viewerCounts: ViewerCounts!
+  myNotifications(input: MyNotificationsInput): NotificationConnection!
+  mySearchHistories(input: MySearchHistoriesInput): SearchHistoryConnection!
+}
+
+extend type Mutation {
+  completeOnboarding(input: CompleteOnboardingInput!): MePayload!
+  updateMyProfile(input: UpdateMyProfileInput!): MePayload!
+  updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
+  deleteMyAccount: Boolean!
+  markNotificationRead(notificationId: ID!): Boolean!
+  markAllNotificationsRead: Boolean!
+  deleteSearchHistory(id: ID!): Boolean!
+  clearSearchHistories: Boolean!
+}
+
+enum AccountType {
+  USER
+  SELLER
+  ADMIN
+}
+
+enum NotificationType {
+  ORDER
+  SYSTEM
+  MARKETING
+}
+
+type MePayload {
+  accountId: ID!
+  email: String
+  name: String
+  accountType: AccountType!
+  profile: UserProfile!
+}
+
+type UserProfile {
+  nickname: String!
+  birthDate: DateTime
+  phoneNumber: String
+  profileImageUrl: String
+  onboardingCompletedAt: DateTime
+}
+
+type ViewerCounts {
+  unreadNotificationCount: Int!
+  cartItemCount: Int!
+  wishlistCount: Int!
+}
+
+input CompleteOnboardingInput {
+  name: String
+  nickname: String!
+  birthDate: DateTime
+  phoneNumber: String
+}
+
+input UpdateMyProfileInput {
+  nickname: String
+  birthDate: DateTime
+  phoneNumber: String
+}
+
+input UpdateMyProfileImageInput {
+  profileImageUrl: String!
+}
+
+input MyNotificationsInput {
+  unreadOnly: Boolean = false
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type NotificationConnection {
+  items: [NotificationItem!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+type NotificationItem {
+  id: ID!
+  type: NotificationType!
+  title: String!
+  body: String!
+  readAt: DateTime
+  createdAt: DateTime!
+}
+
+input MySearchHistoriesInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type SearchHistoryConnection {
+  items: [SearchHistoryItem!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+type SearchHistoryItem {
+  id: ID!
+  keyword: String!
+  lastUsedAt: DateTime!
+}

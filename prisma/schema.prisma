@@ -124,6 +124,7 @@ model UserProfile {
   birth_date    DateTime? @db.Date
   phone_number  String?  @db.VarChar(30)
   profile_image_url String? @db.VarChar(2048)
+  onboarding_completed_at DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
