@@ -29,6 +29,7 @@ import { PrismaModule } from 'src/prisma';
     }),
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public'),
+      serveRoot: '/gql-docs',
     }),
     PrismaModule,
     LoggerModule,

@@ -1,7 +1,5 @@
 introspection:
-  url: http://localhost:4000/graphql
-  headers:
-    Authorization: "Bearer ${SPECTAQL_ACCESS_TOKEN}"
+  schemaFile: ./src/features/**/*.graphql
 
 info:
   title: CaQuick GraphQL API
@@ -11,7 +9,14 @@ info:
 servers:
   - url: http://localhost:4000/graphql
     description: Local
+    headers:
+      - name: Authorization
+        example: Bearer <ACCESS_TOKEN>
+        comment: JWT Access Token
+      - name: Cookie
+        example: caquick_rt=<REFRESH_TOKEN>
+        comment: Refresh Token Cookie
 
 output:
-  dir: docs/graphql
+  dir: public
   reportFileName: index.html

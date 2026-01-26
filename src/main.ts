@@ -82,27 +82,28 @@ async function bootstrap(): Promise<void> {
     new HttpExceptionFilter(httpAdapterHost.httpAdapter, logger),
   );
 
-  if (!isProd) {
-    const documentConfig = new DocumentBuilder()
-      .setTitle('CaQuick API')
-      .setDescription('CaQuick API Documentation')
-      .setVersion(pkg.version ?? '0.0.0')
-      .addBearerAuth(
-        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-        'access-token',
-      )
-      .addCookieAuth(
-        'caquick_rt',
-        { type: 'apiKey', in: 'cookie' },
-        'refresh-cookie',
-      )
-      .build();
+  // 임시 해제
+  // if (!isProd) {
+  const documentConfig = new DocumentBuilder()
+    .setTitle('CaQuick REST API')
+    .setDescription('CaQuick REST API 문서')
+    .setVersion(pkg.version ?? '0.0.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
+    .addCookieAuth(
+      'caquick_rt',
+      { type: 'apiKey', in: 'cookie' },
+      'refresh-cookie',
+    )
+    .build();
 
-    const document = SwaggerModule.createDocument(app, documentConfig);
-    SwaggerModule.setup('docs', app, document, {
-      swaggerOptions: { persistAuthorization: true },
-    });
-  }
+  const document = SwaggerModule.createDocument(app, documentConfig);
+  SwaggerModule.setup('rest-docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+  // }
 
   const portFromEnv = configService.get<string>('PORT');
   const port = Number.isFinite(Number(portFromEnv))

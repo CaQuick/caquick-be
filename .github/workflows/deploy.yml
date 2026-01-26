@@ -40,6 +40,7 @@ jobs:
         run: |
           yarn lint
           yarn graphql:codegen
+          yarn graphql:docs
           yarn build
 
       - name: Create deployment zip (bundle + node_modules)
@@ -57,6 +58,7 @@ jobs:
           mkdir -p bundle
 
           cp -r dist bundle/dist
+          cp -r public bundle/public
           cp -r scripts bundle/scripts
           cp -r prisma bundle/prisma
           cp ecosystem.config.js bundle/
