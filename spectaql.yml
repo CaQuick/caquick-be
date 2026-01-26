@@ -1,0 +1,22 @@
+introspection:
+  schemaFile: ./src/features/**/*.graphql
+
+info:
+  title: CaQuick GraphQL API
+  description: CaQuick GraphQL API 문서
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:4000/graphql
+    description: Local
+    headers:
+      - name: Authorization
+        example: Bearer <ACCESS_TOKEN>
+        comment: JWT Access Token
+      - name: Cookie
+        example: caquick_rt=<REFRESH_TOKEN>
+        comment: Refresh Token Cookie
+
+output:
+  dir: public
+  reportFileName: index.html

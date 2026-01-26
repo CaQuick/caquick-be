@@ -17,7 +17,8 @@ export default defineConfig(
       'dist/**',
       'node_modules/**',
       'coverage/**',
-      '.yarn/**'
+      '.yarn/**',
+      'src/graphql/graphql.types.ts'
     ]
   },
 
@@ -63,6 +64,19 @@ export default defineConfig(
       'import/resolver': {
         typescript: { project: path.join(__dirname, 'tsconfig.json') },
       },
+    },
+  },
+
+  // 테스트 파일에 대한 특별 규칙
+  {
+    files: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 

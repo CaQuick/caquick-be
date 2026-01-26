@@ -1,0 +1,14 @@
+"""
+ISO 8601 DateTime 스칼라
+"""
+scalar DateTime
+
+type Query {
+  """서버 상태 확인용 핑"""
+  ping: String!
+}
+
+type Mutation {
+  """스키마 루트 유지를 위한 no-op 필드"""
+  _noop: Boolean
+}

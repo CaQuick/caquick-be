@@ -1,9 +1,14 @@
 import 'reflect-metadata';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { ValidationError } from 'class-validator';
+import cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
 
@@ -16,6 +21,10 @@ import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.enableShutdownHooks();
+
+  const pkg = JSON.parse(
+    readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+  ) as { version?: string };
 
   const configService = app.get(ConfigService);
   const isProd = configService.get<string>('NODE_ENV') === 'production';
@@ -40,6 +49,8 @@ async function bootstrap(): Promise<void> {
     origin: allowedOrigins,
     credentials: true,
   });
+
+  app.use(cookieParser());
 
   const logger = app.get(CustomLoggerService);
   const httpAdapterHost = app.get(HttpAdapterHost);
@@ -70,6 +81,29 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(
     new HttpExceptionFilter(httpAdapterHost.httpAdapter, logger),
   );
+
+  // 임시 해제
+  // if (!isProd) {
+  const documentConfig = new DocumentBuilder()
+    .setTitle('CaQuick REST API')
+    .setDescription('CaQuick REST API 문서')
+    .setVersion(pkg.version ?? '0.0.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
+    .addCookieAuth(
+      'caquick_rt',
+      { type: 'apiKey', in: 'cookie' },
+      'refresh-cookie',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, documentConfig);
+  SwaggerModule.setup('rest-docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+  // }
 
   const portFromEnv = configService.get<string>('PORT');
   const port = Number.isFinite(Number(portFromEnv))

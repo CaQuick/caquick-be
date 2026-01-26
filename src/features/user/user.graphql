@@ -1,0 +1,171 @@
+extend type Query {
+  """현재 로그인한 유저 정보 조회"""
+  me: MePayload!
+  """상단/하단 공통 UI용 카운트 정보 조회"""
+  viewerCounts: ViewerCounts!
+  """알림 목록 조회"""
+  myNotifications(input: MyNotificationsInput): NotificationConnection!
+  """최근 검색어 목록 조회"""
+  mySearchHistories(input: MySearchHistoriesInput): SearchHistoryConnection!
+}
+
+extend type Mutation {
+  """온보딩 완료 처리(필수 정보 입력)"""
+  completeOnboarding(input: CompleteOnboardingInput!): MePayload!
+  """프로필 정보 수정"""
+  updateMyProfile(input: UpdateMyProfileInput!): MePayload!
+  """프로필 이미지 URL 업데이트"""
+  updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
+  """회원 탈퇴(soft delete)"""
+  deleteMyAccount: Boolean!
+  """특정 알림 읽음 처리"""
+  markNotificationRead(notificationId: ID!): Boolean!
+  """전체 알림 읽음 처리"""
+  markAllNotificationsRead: Boolean!
+  """특정 검색어 기록 삭제"""
+  deleteSearchHistory(id: ID!): Boolean!
+  """검색어 기록 전체 삭제"""
+  clearSearchHistories: Boolean!
+}
+
+enum AccountType {
+  USER
+  SELLER
+  ADMIN
+}
+
+enum NotificationType {
+  ORDER
+  SYSTEM
+  MARKETING
+}
+
+"""현재 로그인한 유저 정보"""
+type MePayload {
+  """계정 ID"""
+  accountId: ID!
+  """이메일(없을 수 있음)"""
+  email: String
+  """이름(없을 수 있음)"""
+  name: String
+  """계정 타입"""
+  accountType: AccountType!
+  """프로필 정보"""
+  profile: UserProfile!
+}
+
+"""유저 프로필"""
+type UserProfile {
+  """닉네임(유니크)"""
+  nickname: String!
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+  """프로필 이미지 URL"""
+  profileImageUrl: String
+  """온보딩 완료 시각"""
+  onboardingCompletedAt: DateTime
+}
+
+"""뷰어 카운트 정보"""
+type ViewerCounts {
+  """읽지 않은 알림 수"""
+  unreadNotificationCount: Int!
+  """장바구니 아이템 수"""
+  cartItemCount: Int!
+  """위시리스트 아이템 수"""
+  wishlistCount: Int!
+}
+
+"""온보딩 완료 입력"""
+input CompleteOnboardingInput {
+  """이름(계정에 없을 때만 저장)"""
+  name: String
+  """닉네임(필수)"""
+  nickname: String!
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+}
+
+"""프로필 수정 입력"""
+input UpdateMyProfileInput {
+  """닉네임"""
+  nickname: String
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+}
+
+"""프로필 이미지 수정 입력"""
+input UpdateMyProfileImageInput {
+  """프로필 이미지 URL"""
+  profileImageUrl: String!
+}
+
+"""알림 목록 조회 입력"""
+input MyNotificationsInput {
+  """읽지 않은 알림만 조회"""
+  unreadOnly: Boolean = false
+  """오프셋"""
+  offset: Int = 0
+  """조회 개수(최대 50)"""
+  limit: Int = 20
+}
+
+"""알림 목록 응답"""
+type NotificationConnection {
+  """알림 아이템 목록"""
+  items: [NotificationItem!]!
+  """전체 개수"""
+  totalCount: Int!
+  """다음 페이지 존재 여부"""
+  hasMore: Boolean!
+}
+
+"""알림 아이템"""
+type NotificationItem {
+  """알림 ID"""
+  id: ID!
+  """알림 타입"""
+  type: NotificationType!
+  """제목"""
+  title: String!
+  """내용"""
+  body: String!
+  """읽음 처리 시각"""
+  readAt: DateTime
+  """생성 시각"""
+  createdAt: DateTime!
+}
+
+"""검색어 목록 조회 입력"""
+input MySearchHistoriesInput {
+  """오프셋"""
+  offset: Int = 0
+  """조회 개수(최대 50)"""
+  limit: Int = 20
+}
+
+"""검색어 목록 응답"""
+type SearchHistoryConnection {
+  """검색어 아이템 목록"""
+  items: [SearchHistoryItem!]!
+  """전체 개수"""
+  totalCount: Int!
+  """다음 페이지 존재 여부"""
+  hasMore: Boolean!
+}
+
+"""검색어 아이템"""
+type SearchHistoryItem {
+  """검색 기록 ID"""
+  id: ID!
+  """검색어"""
+  keyword: String!
+  """마지막 사용 시각"""
+  lastUsedAt: DateTime!
+}
