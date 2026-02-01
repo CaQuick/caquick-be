@@ -55,7 +55,8 @@ async function bootstrap(): Promise<void> {
   const logger = app.get(CustomLoggerService);
   const httpAdapterHost = app.get(HttpAdapterHost);
 
-  app.useLogger(logger);
+  // 커스텀 로거 설정
+  // app.useLogger(logger);
 
   app.useGlobalPipes(
     new ValidationPipe({
