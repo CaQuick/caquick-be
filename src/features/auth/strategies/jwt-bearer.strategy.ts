@@ -7,8 +7,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { PrismaService } from '../../../prisma';
-import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
+import type { AccessTokenPayload, JwtUser } from '../../../global/auth';
+import { AuthRepository } from '../repositories/auth.repository';
 
 /**
  * Bearer 기반 JWT 인증 전략
@@ -17,11 +17,11 @@ import type { AccessTokenPayload, JwtUser } from '../types/jwt-payload.type';
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   /**
    * @param config ConfigService
-   * @param prisma PrismaService
+   * @param repo AuthRepository
    */
   constructor(
     config: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly repo: AuthRepository,
   ) {
     const secret = config.get<string>('JWT_ACCESS_SECRET');
     if (!secret || secret.trim().length === 0) {
@@ -55,16 +55,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid access token.');
     }
 
-    const account = await this.prisma.account.findFirst({
-      where: {
-        id: accountId,
-        deleted_at: null,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
+    const account = await this.repo.findAccountForJwt(accountId);
 
     // 존재하지 않거나 deleted_at이 찍힌 경우
     if (!account) {

@@ -370,7 +370,6 @@ describe('AuthRepository', () => {
       expect(mockPrisma.authRefreshSession.findFirst).toHaveBeenCalledWith({
         where: {
           token_hash: 'valid-hash',
-          deleted_at: null,
           revoked_at: null,
           expires_at: { gt: expect.any(Date) },
         },
@@ -469,7 +468,7 @@ describe('AuthRepository', () => {
       // Assert
       expect(result).toEqual(account);
       expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(1), deleted_at: null },
+        where: { id: BigInt(1) },
         include: { user_profile: true },
       });
     });
@@ -483,6 +482,28 @@ describe('AuthRepository', () => {
 
       // Assert
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findAccountForJwt', () => {
+    it('account id와 status만 조회해야 한다', async () => {
+      // Arrange
+      const account = {
+        id: BigInt(1),
+        status: 'ACTIVE',
+      };
+
+      mockPrisma.account.findFirst.mockResolvedValue(account);
+
+      // Act
+      const result = await repository.findAccountForJwt(BigInt(1));
+
+      // Assert
+      expect(result).toEqual(account);
+      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+        where: { id: BigInt(1) },
+        select: { id: true, status: true },
+      });
     });
   });
 });

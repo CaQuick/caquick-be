@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
+import { softDeleteExtension } from './soft-delete.middleware';
+
 /**
  * Prisma 클라이언트를 NestJS DI 컨테이너에 제공하는 서비스
  */
@@ -13,6 +15,13 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  constructor() {
+    super();
+    const extended = this.$extends(softDeleteExtension);
+    Object.setPrototypeOf(extended, PrismaService.prototype);
+    return extended as PrismaService;
+  }
+
   /**
    * 모듈 초기화 시 Prisma 클라이언트 연결
    */
