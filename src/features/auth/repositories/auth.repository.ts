@@ -147,7 +147,7 @@ export class AuthRepository {
       );
     }
 
-    const account = await tx.account.findUnique({
+    const account = await tx.account.findFirst({
       where: { id: found.account_id },
       include: { user_profile: true },
     });
@@ -192,7 +192,7 @@ export class AuthRepository {
       },
     });
 
-    const account = await tx.account.findUnique({
+    const account = await tx.account.findFirst({
       where: { id: accountId },
       include: { user_profile: true },
     });

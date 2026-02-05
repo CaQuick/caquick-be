@@ -23,6 +23,12 @@ export interface UserAccountWithProfile {
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private activeRelationWhere<T extends Record<string, unknown>>(
+    where: T,
+  ): T & { deleted_at: null } {
+    return { ...where, deleted_at: null };
+  }
+
   async findAccountWithProfile(
     accountId: bigint,
     options?: { withDeleted?: boolean },
@@ -161,10 +167,7 @@ export class UserRepository {
         }),
         this.prisma.cartItem.count({
           where: {
-            cart: {
-              account_id: accountId,
-              deleted_at: null,
-            },
+            cart: this.activeRelationWhere({ account_id: accountId }),
           },
         }),
         this.prisma.wishlistItem.count({

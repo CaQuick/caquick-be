@@ -17,9 +17,14 @@ export class PrismaService
 {
   constructor() {
     super();
-    const extended = this.$extends(softDeleteExtension);
-    Object.setPrototypeOf(extended, PrismaService.prototype);
-    return extended as PrismaService;
+    const extended = this.$extends(softDeleteExtension) as PrismaService;
+    extended.onModuleInit = async () => {
+      await extended.$connect();
+    };
+    extended.onModuleDestroy = async () => {
+      await extended.$disconnect();
+    };
+    return extended;
   }
 
   /**
