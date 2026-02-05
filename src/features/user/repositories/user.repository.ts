@@ -23,15 +23,27 @@ export interface UserAccountWithProfile {
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private activeRelationWhere<T extends Record<string, unknown>>(
+    where: T,
+  ): T & { deleted_at: null } {
+    return { ...where, deleted_at: null };
+  }
+
   async findAccountWithProfile(
     accountId: bigint,
+    options?: { withDeleted?: boolean },
   ): Promise<UserAccountWithProfile | null> {
-    return this.prisma.account.findFirst({
-      where: { id: accountId },
+    const where = {
+      id: accountId,
+      ...(options?.withDeleted ? { deleted_at: undefined } : {}),
+    };
+    const args = {
+      where,
       include: {
         user_profile: true,
       },
-    });
+    };
+    return this.prisma.account.findFirst(args);
   }
 
   async isNicknameTaken(
@@ -41,7 +53,6 @@ export class UserRepository {
     const found = await this.prisma.userProfile.findFirst({
       where: {
         nickname,
-        deleted_at: null,
         ...(excludeAccountId ? { account_id: { not: excludeAccountId } } : {}),
       },
       select: { id: true },
@@ -152,22 +163,16 @@ export class UserRepository {
           where: {
             account_id: accountId,
             read_at: null,
-            deleted_at: null,
           },
         }),
         this.prisma.cartItem.count({
           where: {
-            deleted_at: null,
-            cart: {
-              account_id: accountId,
-              deleted_at: null,
-            },
+            cart: this.activeRelationWhere({ account_id: accountId }),
           },
         }),
         this.prisma.wishlistItem.count({
           where: {
             account_id: accountId,
-            deleted_at: null,
           },
         }),
       ]);
@@ -193,7 +198,6 @@ export class UserRepository {
   }> {
     const where = {
       account_id: args.accountId,
-      deleted_at: null,
       ...(args.unreadOnly ? { read_at: null } : {}),
     };
 
@@ -227,7 +231,6 @@ export class UserRepository {
       where: {
         id: args.notificationId,
         account_id: args.accountId,
-        deleted_at: null,
       },
     });
 
@@ -273,7 +276,6 @@ export class UserRepository {
   }> {
     const where = {
       account_id: args.accountId,
-      deleted_at: null,
     };
 
     const [items, totalCount] = await this.prisma.$transaction([

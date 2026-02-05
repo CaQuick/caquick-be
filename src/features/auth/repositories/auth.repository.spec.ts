@@ -15,7 +15,6 @@ describe('AuthRepository', () => {
     };
     account: {
       findFirst: jest.Mock;
-      findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
     };
@@ -39,7 +38,6 @@ describe('AuthRepository', () => {
       },
       account: {
         findFirst: jest.fn(),
-        findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -85,7 +83,7 @@ describe('AuthRepository', () => {
       mockPrisma.accountIdentity.findFirst.mockResolvedValue(existingIdentity);
       mockPrisma.accountIdentity.update.mockResolvedValue({});
       mockPrisma.account.update.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(10),
         email: 'new@example.com',
         user_profile: { nickname: 'olduser' },
@@ -132,7 +130,7 @@ describe('AuthRepository', () => {
       mockPrisma.accountIdentity.update.mockResolvedValue({});
       mockPrisma.account.update.mockResolvedValue({});
       mockPrisma.userProfile.create.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(10),
         user_profile: { nickname: 'test' },
       });
@@ -165,7 +163,7 @@ describe('AuthRepository', () => {
       mockPrisma.accountIdentity.create.mockResolvedValue({});
       mockPrisma.account.create.mockResolvedValue({ id: BigInt(30) } as never);
       mockPrisma.userProfile.create.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(30),
         user_profile: { nickname: 'new' },
       });
@@ -208,7 +206,7 @@ describe('AuthRepository', () => {
       mockPrisma.account.create.mockResolvedValue(newAccount);
       mockPrisma.userProfile.create.mockResolvedValue({});
       mockPrisma.accountIdentity.create.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(30),
         user_profile: { nickname: 'new' },
       });
@@ -258,7 +256,7 @@ describe('AuthRepository', () => {
       mockPrisma.account.create.mockResolvedValue(newAccount as never);
       mockPrisma.userProfile.create.mockResolvedValue({});
       mockPrisma.accountIdentity.create.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(50),
         user_profile: {},
       });
@@ -289,7 +287,7 @@ describe('AuthRepository', () => {
       mockPrisma.account.create.mockResolvedValue(newAccount as never);
       mockPrisma.userProfile.create.mockResolvedValue({});
       mockPrisma.accountIdentity.create.mockResolvedValue({});
-      mockPrisma.account.findUnique.mockResolvedValue({
+      mockPrisma.account.findFirst.mockResolvedValue({
         id: BigInt(60),
         user_profile: {},
       });
@@ -370,7 +368,6 @@ describe('AuthRepository', () => {
       expect(mockPrisma.authRefreshSession.findFirst).toHaveBeenCalledWith({
         where: {
           token_hash: 'valid-hash',
-          deleted_at: null,
           revoked_at: null,
           expires_at: { gt: expect.any(Date) },
         },
@@ -469,7 +466,7 @@ describe('AuthRepository', () => {
       // Assert
       expect(result).toEqual(account);
       expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(1), deleted_at: null },
+        where: { id: BigInt(1) },
         include: { user_profile: true },
       });
     });
@@ -483,6 +480,28 @@ describe('AuthRepository', () => {
 
       // Assert
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findAccountForJwt', () => {
+    it('account id와 status만 조회해야 한다', async () => {
+      // Arrange
+      const account = {
+        id: BigInt(1),
+        status: 'ACTIVE',
+      };
+
+      mockPrisma.account.findFirst.mockResolvedValue(account);
+
+      // Act
+      const result = await repository.findAccountForJwt(BigInt(1));
+
+      // Assert
+      expect(result).toEqual(account);
+      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+        where: { id: BigInt(1) },
+        select: { id: true, status: true },
+      });
     });
   });
 });

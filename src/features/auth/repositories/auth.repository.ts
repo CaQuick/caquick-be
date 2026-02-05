@@ -27,7 +27,6 @@ export class AuthRepository {
       where: {
         provider,
         provider_subject: providerSubject,
-        deleted_at: null,
       },
       include: {
         account: {
@@ -46,7 +45,7 @@ export class AuthRepository {
    */
   async findAccountByEmail(email: string) {
     return this.prisma.account.findFirst({
-      where: { email, deleted_at: null },
+      where: { email },
       include: { user_profile: true },
     });
   }
@@ -74,7 +73,6 @@ export class AuthRepository {
         where: {
           provider: args.provider,
           provider_subject: args.providerSubject,
-          deleted_at: null,
         },
         include: {
           account: {
@@ -149,7 +147,7 @@ export class AuthRepository {
       );
     }
 
-    const account = await tx.account.findUnique({
+    const account = await tx.account.findFirst({
       where: { id: found.account_id },
       include: { user_profile: true },
     });
@@ -194,7 +192,7 @@ export class AuthRepository {
       },
     });
 
-    const account = await tx.account.findUnique({
+    const account = await tx.account.findFirst({
       where: { id: accountId },
       include: { user_profile: true },
     });
@@ -287,7 +285,6 @@ export class AuthRepository {
     return this.prisma.authRefreshSession.findFirst({
       where: {
         token_hash: tokenHash,
-        deleted_at: null,
         revoked_at: null,
         expires_at: { gt: now },
       },
@@ -351,13 +348,28 @@ export class AuthRepository {
   }
 
   /**
+   * access token 검증용으로 계정을 조회한다.
+   *
+   * @param accountId account id
+   */
+  async findAccountForJwt(accountId: bigint) {
+    return this.prisma.account.findFirst({
+      where: { id: accountId },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+  }
+
+  /**
    * accountId 기준으로 유저를 조회한다(soft-delete 제외).
    *
    * @param accountId account id
    */
   async findAccountForMe(accountId: bigint) {
     return this.prisma.account.findFirst({
-      where: { id: accountId, deleted_at: null },
+      where: { id: accountId },
       include: { user_profile: true },
     });
   }

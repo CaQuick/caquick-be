@@ -3,21 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
-import { PrismaModule } from '../../prisma';
-
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { JwtBearerStrategy } from './strategies/jwt-bearer.strategy';
 
 /**
  * 전역 인증 인프라 모듈
  *
- * - JWT 인증 전략, 가드, 데코레이터 제공
+ * - JWT 가드, 데코레이터, 모듈 설정 제공
  * - 모든 도메인에서 인증 기능 사용 가능
  */
 @Global()
 @Module({
   imports: [
-    PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -30,7 +26,7 @@ import { JwtBearerStrategy } from './strategies/jwt-bearer.strategy';
       },
     }),
   ],
-  providers: [JwtBearerStrategy, JwtAuthGuard],
+  providers: [JwtAuthGuard],
   exports: [JwtAuthGuard, PassportModule, JwtModule],
 })
 export class AuthGlobalModule {}

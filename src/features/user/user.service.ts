@@ -246,7 +246,9 @@ export class UserService {
   private async requireActiveUser(
     accountId: bigint,
   ): Promise<ActiveUserAccount> {
-    const account = await this.repo.findAccountWithProfile(accountId);
+    const account = await this.repo.findAccountWithProfile(accountId, {
+      withDeleted: true,
+    });
     if (!account) throw new UnauthorizedException('Account not found.');
     if (account.deleted_at) {
       throw new UnauthorizedException('Account is deleted.');
