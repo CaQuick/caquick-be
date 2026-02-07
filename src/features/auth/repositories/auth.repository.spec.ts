@@ -180,7 +180,16 @@ describe('AuthRepository', () => {
       await repository.upsertUserByOidcIdentity(args);
 
       // Assert
-      expect(mockPrisma.account.findFirst).not.toHaveBeenCalled();
+      // 이메일로 기존 계정을 찾지 않아야 함 (id 재조회는 허용)
+      expect(mockPrisma.account.findFirst).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { email: 'existing@example.com' },
+        }),
+      );
+      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+        where: { id: BigInt(30) },
+        include: { user_profile: true },
+      });
       expect(mockPrisma.accountIdentity.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           account_id: BigInt(30),
@@ -273,7 +282,15 @@ describe('AuthRepository', () => {
 
       // Assert
       // 이메일로 기존 계정을 찾지 않아야 함
-      expect(mockPrisma.account.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.account.findFirst).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { email: 'test@example.com' },
+        }),
+      );
+      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+        where: { id: BigInt(50) },
+        include: { user_profile: true },
+      });
       // 신규 계정 생성
       expect(mockPrisma.account.create).toHaveBeenCalled();
     });
