@@ -3,7 +3,12 @@ import { join } from 'node:path';
 import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/disabled';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -11,6 +16,7 @@ import type { Request, Response } from 'express';
 
 import authConfig from 'src/config/auth.config';
 import databaseConfig from 'src/config/database.config';
+import docsConfig from 'src/config/docs.config';
 import oidcConfig from 'src/config/oidc.config';
 import { AuthModule } from 'src/features/auth/auth.module';
 import { SystemModule } from 'src/features/system/system.module';
@@ -18,6 +24,7 @@ import { UserModule } from 'src/features/user/user.module';
 import { AuthGlobalModule } from 'src/global/auth/auth-global.module';
 import { GraphqlGlobalModule } from 'src/global/graphql/graphql.module';
 import { LoggerModule } from 'src/global/logger/logger.module';
+import { DocsAccessMiddleware } from 'src/global/middlewares/docs-access.middleware';
 import { PrismaModule } from 'src/prisma';
 
 @Module({
@@ -25,7 +32,7 @@ import { PrismaModule } from 'src/prisma';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [authConfig, databaseConfig, oidcConfig],
+      load: [authConfig, databaseConfig, docsConfig, oidcConfig],
     }),
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public'),
@@ -72,4 +79,16 @@ import { PrismaModule } from 'src/prisma';
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer
+      .apply(DocsAccessMiddleware)
+      .forRoutes(
+        { path: 'rest-docs', method: RequestMethod.ALL },
+        { path: 'rest-docs/(.*)', method: RequestMethod.ALL },
+        { path: 'rest-docs-json', method: RequestMethod.ALL },
+        { path: 'gql-docs', method: RequestMethod.ALL },
+        { path: 'gql-docs/(.*)', method: RequestMethod.ALL },
+      );
+  }
+}
