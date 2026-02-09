@@ -85,10 +85,10 @@ export class AppModule implements NestModule {
       .apply(DocsAccessMiddleware)
       .forRoutes(
         { path: 'rest-docs', method: RequestMethod.ALL },
-        { path: 'rest-docs/(.*)', method: RequestMethod.ALL },
+        { path: 'rest-docs/*path', method: RequestMethod.ALL },
         { path: 'rest-docs-json', method: RequestMethod.ALL },
         { path: 'gql-docs', method: RequestMethod.ALL },
-        { path: 'gql-docs/(.*)', method: RequestMethod.ALL },
+        { path: 'gql-docs/*path', method: RequestMethod.ALL },
       );
   }
 }
