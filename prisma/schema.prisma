@@ -54,9 +54,21 @@ enum OrderStatus {
 }
 
 enum NotificationType {
-  ORDER
+  ORDER_STATUS
+  REVIEW_LIKE
   SYSTEM
   MARKETING
+}
+
+enum ConversationSenderType {
+  USER
+  SELLER
+  SYSTEM
+}
+
+enum ConversationBodyFormat {
+  TEXT
+  HTML
 }
 
 enum SearchContext {
@@ -110,6 +122,11 @@ model Account {
   notifications       Notification[]
   search_histories    SearchHistory[]
   search_events       SearchEvent[]
+
+  store_wishlist_items StoreWishlistItem[]
+  review_likes         ReviewLike[]
+  store_conversations  StoreConversation[]
+  sent_conversation_messages StoreConversationMessage[] @relation("ConversationMessageSender")
 
   @@index([account_type, status], map: "idx_account_type_status")
   @@index([deleted_at], map: "idx_account_deleted_at")
@@ -272,6 +289,11 @@ model Store {
   reviews            Review[]
   banners            Banner[] @relation("BannerStoreLink")
 
+  store_wishlist_items StoreWishlistItem[]
+  notifications        Notification[]
+  conversations        StoreConversation[]
+  help_topics          StoreHelpTopic[]
+
   @@index([seller_account_id], map: "idx_store_seller")
   @@index([store_name], map: "idx_store_name")
   @@index([address_city, address_district, address_neighborhood], map: "idx_store_region")
@@ -397,6 +419,8 @@ model Product {
   order_items        OrderItem[]
   reviews            Review[]
   banners            Banner[] @relation("BannerProductLink")
+
+  notifications Notification[]
 
   @@index([store_id], map: "idx_product_store")
   @@index([name], map: "idx_product_name")
@@ -768,6 +792,7 @@ model Order {
 
   status_histories OrderStatusHistory[]
   items            OrderItem[]
+  notifications    Notification[]
 
   @@index([account_id], map: "idx_order_account")
   @@index([status, created_at], map: "idx_order_status")
@@ -824,6 +849,7 @@ model OrderItem {
   option_items   OrderItemOptionItem[]
   custom_texts   OrderItemCustomText[]
   free_edits     OrderItemCustomFreeEdit[]
+  notifications  Notification[]
 
   review Review?
 
@@ -941,6 +967,9 @@ model Review {
 
   images ReviewImage[]
 
+  likes ReviewLike[]
+  notifications Notification[]
+
   @@index([store_id, created_at], map: "idx_review_store")
   @@index([product_id, created_at], map: "idx_review_product")
   @@index([account_id, created_at], map: "idx_review_account")
@@ -979,6 +1008,12 @@ model Notification {
   body  String @db.VarChar(2000)
   data_json Json?
 
+  store_id      BigInt? @db.UnsignedBigInt
+  product_id    BigInt? @db.UnsignedBigInt
+  order_id      BigInt? @db.UnsignedBigInt
+  order_item_id BigInt? @db.UnsignedBigInt
+  review_id     BigInt? @db.UnsignedBigInt
+
   read_at DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -987,8 +1022,19 @@ model Notification {
 
   account Account @relation(fields: [account_id], references: [id])
 
+  store     Store?    @relation(fields: [store_id], references: [id])
+  product   Product?  @relation(fields: [product_id], references: [id])
+  order     Order?    @relation(fields: [order_id], references: [id])
+  order_item OrderItem? @relation(fields: [order_item_id], references: [id])
+  review    Review?   @relation(fields: [review_id], references: [id])
+
   @@index([account_id, created_at], map: "idx_notification_account")
   @@index([account_id, read_at], map: "idx_notification_unread")
+  @@index([store_id], map: "idx_notification_store")
+  @@index([product_id], map: "idx_notification_product")
+  @@index([order_id], map: "idx_notification_order")
+  @@index([order_item_id], map: "idx_notification_order_item")
+  @@index([review_id], map: "idx_notification_review")
   @@index([deleted_at], map: "idx_notification_deleted_at")
   @@map("notification")
 }
@@ -1080,4 +1126,124 @@ model Banner {
   @@index([starts_at, ends_at], map: "idx_banner_time")
   @@index([deleted_at], map: "idx_banner_deleted_at")
   @@map("banner")
+}
+
+/* =========================
+   13) Store wishlist
+   ========================= */
+
+model StoreWishlistItem {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  store   Store   @relation(fields: [store_id], references: [id])
+
+  @@unique([account_id, store_id], map: "uk_store_wishlist")
+  @@index([store_id], map: "idx_store_wishlist_store")
+  @@index([deleted_at], map: "idx_store_wishlist_deleted_at")
+  @@map("store_wishlist_item")
+}
+
+/* =========================
+   14) Review like
+   ========================= */
+
+model ReviewLike {
+  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  review_id BigInt @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  review  Review  @relation(fields: [review_id], references: [id])
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@unique([review_id, account_id], map: "uk_review_like")
+  @@index([review_id], map: "idx_review_like_review")
+  @@index([account_id], map: "idx_review_like_account")
+  @@index([deleted_at], map: "idx_review_like_deleted_at")
+  @@map("review_like")
+}
+
+/* =========================
+   15) Notification center - conversations (store per user)
+   ========================= */
+
+model StoreConversation {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
+
+  last_message_at DateTime? @db.DateTime(3)
+  last_read_at    DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  store   Store   @relation(fields: [store_id], references: [id])
+
+  messages StoreConversationMessage[]
+
+  @@unique([account_id, store_id], map: "uk_store_conversation")
+  @@index([account_id, updated_at], map: "idx_store_conversation_account_updated")
+  @@index([store_id, updated_at], map: "idx_store_conversation_store_updated")
+  @@index([deleted_at], map: "idx_store_conversation_deleted_at")
+  @@map("store_conversation")
+}
+
+model StoreConversationMessage {
+  id              BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  conversation_id BigInt @db.UnsignedBigInt
+
+  sender_type      ConversationSenderType
+  sender_account_id BigInt? @db.UnsignedBigInt
+
+  body_format ConversationBodyFormat @default(TEXT)
+  body_text   String? @db.Text
+  body_html   String? @db.Text
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  conversation StoreConversation @relation(fields: [conversation_id], references: [id])
+  sender_account Account? @relation("ConversationMessageSender", fields: [sender_account_id], references: [id])
+
+  @@index([conversation_id, created_at], map: "idx_store_conversation_message_conv_created")
+  @@index([sender_account_id], map: "idx_store_conversation_message_sender")
+  @@index([deleted_at], map: "idx_store_conversation_message_deleted_at")
+  @@map("store_conversation_message")
+}
+
+/* =========================
+   16) Store FAQ topics (badge -> HTML answer)
+   ========================= */
+
+model StoreHelpTopic {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  title       String @db.VarChar(120)
+  answer_html String @db.Text
+
+  sort_order Int @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id, is_active, sort_order], map: "idx_store_help_topic_store")
+  @@index([deleted_at], map: "idx_store_help_topic_deleted_at")
+  @@map("store_help_topic")
 }
