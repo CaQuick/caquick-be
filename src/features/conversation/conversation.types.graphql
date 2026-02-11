@@ -1,0 +1,6 @@
+"""공용 대화 발신자 타입(향후 user/seller 공용으로 사용)"""
+enum ConversationSenderType {
+  USER
+  STORE
+  SYSTEM
+}

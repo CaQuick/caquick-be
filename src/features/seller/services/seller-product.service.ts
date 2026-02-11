@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
+import { ProductRepository } from '../../product';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -44,7 +45,10 @@ import { SellerBaseService } from './seller-base.service';
 
 @Injectable()
 export class SellerProductService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
+  constructor(
+    repo: SellerRepository,
+    private readonly productRepository: ProductRepository,
+  ) {
     super(repo);
   }
   async sellerProducts(
@@ -58,7 +62,7 @@ export class SellerProductService extends SellerBaseService {
       cursor: input?.cursor ? this.parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listProductsByStore({
+    const rows = await this.productRepository.listProductsByStore({
       storeId: ctx.storeId,
       limit: normalized.limit,
       cursor: normalized.cursor,
@@ -81,7 +85,7 @@ export class SellerProductService extends SellerBaseService {
     productId: bigint,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const row = await this.repo.findProductById({
+    const row = await this.productRepository.findProductById({
       productId,
       storeId: ctx.storeId,
     });
@@ -111,7 +115,7 @@ export class SellerProductService extends SellerBaseService {
       }
     }
 
-    const created = await this.repo.createProduct({
+    const created = await this.productRepository.createProduct({
       storeId: ctx.storeId,
       data: {
         name: this.cleanRequiredText(input.name, 200),
@@ -129,7 +133,7 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    await this.repo.addProductImage({
+    await this.productRepository.addProductImage({
       productId: created.id,
       imageUrl: this.cleanRequiredText(input.initialImageUrl, 2048),
       sortOrder: 0,
@@ -147,10 +151,11 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    const detail = await this.repo.findProductByIdIncludingInactive({
-      productId: created.id,
-      storeId: ctx.storeId,
-    });
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId: created.id,
+        storeId: ctx.storeId,
+      });
     if (!detail) throw new NotFoundException('Product not found.');
     return this.toProductOutput(detail);
   }
@@ -162,10 +167,11 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const current = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const current =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!current) throw new NotFoundException('Product not found.');
 
     const data: Prisma.ProductUpdateInput = {
@@ -222,7 +228,7 @@ export class SellerProductService extends SellerBaseService {
       );
     }
 
-    const updated = await this.repo.updateProduct({
+    const updated = await this.productRepository.updateProduct({
       productId,
       data,
     });
@@ -241,10 +247,11 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    const detail = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!detail) throw new NotFoundException('Product not found.');
 
     return this.toProductOutput(detail);
@@ -255,13 +262,14 @@ export class SellerProductService extends SellerBaseService {
     productId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireSellerContext(accountId);
-    const current = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const current =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!current) throw new NotFoundException('Product not found.');
 
-    await this.repo.softDeleteProduct(productId);
+    await this.productRepository.softDeleteProduct(productId);
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
@@ -282,13 +290,14 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const current = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const current =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!current) throw new NotFoundException('Product not found.');
 
-    await this.repo.updateProduct({
+    await this.productRepository.updateProduct({
       productId,
       data: {
         is_active: input.isActive,
@@ -309,10 +318,11 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    const detail = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!detail) throw new NotFoundException('Product not found.');
     return this.toProductOutput(detail);
   }
@@ -324,18 +334,19 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
-    const count = await this.repo.countProductImages(productId);
+    const count = await this.productRepository.countProductImages(productId);
     if (count >= 5) {
       throw new BadRequestException('Product images can be up to 5.');
     }
 
-    const row = await this.repo.addProductImage({
+    const row = await this.productRepository.addProductImage({
       productId,
       imageUrl: this.cleanRequiredText(input.imageUrl, 2048),
       sortOrder: input.sortOrder ?? count,
@@ -360,17 +371,19 @@ export class SellerProductService extends SellerBaseService {
     imageId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireSellerContext(accountId);
-    const image = await this.repo.findProductImageById(imageId);
+    const image = await this.productRepository.findProductImageById(imageId);
     if (!image || image.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Product image not found.');
     }
 
-    const count = await this.repo.countProductImages(image.product_id);
+    const count = await this.productRepository.countProductImages(
+      image.product_id,
+    );
     if (count <= 1) {
       throw new BadRequestException('At least one product image is required.');
     }
 
-    await this.repo.softDeleteProductImage(imageId);
+    await this.productRepository.softDeleteProductImage(imageId);
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
@@ -393,13 +406,14 @@ export class SellerProductService extends SellerBaseService {
     const productId = this.parseId(input.productId);
     const imageIds = this.parseIdList(input.imageIds);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
-    const existing = await this.repo.listProductImages(productId);
+    const existing = await this.productRepository.listProductImages(productId);
     if (existing.length !== imageIds.length) {
       throw new BadRequestException('imageIds length mismatch.');
     }
@@ -411,7 +425,7 @@ export class SellerProductService extends SellerBaseService {
       }
     }
 
-    const rows = await this.repo.reorderProductImages({
+    const rows = await this.productRepository.reorderProductImages({
       productId,
       imageIds,
     });
@@ -437,19 +451,21 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
     const categoryIds = this.parseIdList(input.categoryIds);
-    const categories = await this.repo.findCategoryIds(categoryIds);
+    const categories =
+      await this.productRepository.findCategoryIds(categoryIds);
     if (categories.length !== categoryIds.length) {
       throw new BadRequestException('Invalid category ids.');
     }
 
-    await this.repo.replaceProductCategories({
+    await this.productRepository.replaceProductCategories({
       productId,
       categoryIds,
     });
@@ -465,10 +481,11 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    const detail = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!detail) throw new NotFoundException('Product not found.');
 
     return this.toProductOutput(detail);
@@ -481,19 +498,20 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
     const tagIds = this.parseIdList(input.tagIds);
-    const tags = await this.repo.findTagIds(tagIds);
+    const tags = await this.productRepository.findTagIds(tagIds);
     if (tags.length !== tagIds.length) {
       throw new BadRequestException('Invalid tag ids.');
     }
 
-    await this.repo.replaceProductTags({
+    await this.productRepository.replaceProductTags({
       productId,
       tagIds,
     });
@@ -509,10 +527,11 @@ export class SellerProductService extends SellerBaseService {
       },
     });
 
-    const detail = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!detail) throw new NotFoundException('Product not found.');
 
     return this.toProductOutput(detail);
@@ -525,10 +544,11 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
     const minSelect = input.minSelect ?? 1;
@@ -537,7 +557,7 @@ export class SellerProductService extends SellerBaseService {
       throw new BadRequestException('Invalid minSelect/maxSelect.');
     }
 
-    const row = await this.repo.createOptionGroup({
+    const row = await this.productRepository.createOptionGroup({
       productId,
       data: {
         name: this.cleanRequiredText(input.name, 120),
@@ -572,7 +592,8 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const optionGroupId = this.parseId(input.optionGroupId);
 
-    const current = await this.repo.findOptionGroupById(optionGroupId);
+    const current =
+      await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option group not found.');
     }
@@ -585,7 +606,7 @@ export class SellerProductService extends SellerBaseService {
       throw new BadRequestException('maxSelect must be >= minSelect.');
     }
 
-    const row = await this.repo.updateOptionGroup({
+    const row = await this.productRepository.updateOptionGroup({
       optionGroupId,
       data: {
         ...(input.name !== undefined
@@ -632,12 +653,13 @@ export class SellerProductService extends SellerBaseService {
     optionGroupId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireSellerContext(accountId);
-    const current = await this.repo.findOptionGroupById(optionGroupId);
+    const current =
+      await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option group not found.');
     }
 
-    await this.repo.softDeleteOptionGroup(optionGroupId);
+    await this.productRepository.softDeleteOptionGroup(optionGroupId);
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
@@ -660,13 +682,15 @@ export class SellerProductService extends SellerBaseService {
     const productId = this.parseId(input.productId);
     const optionGroupIds = this.parseIdList(input.optionGroupIds);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
-    const groups = await this.repo.listOptionGroupsByProduct(productId);
+    const groups =
+      await this.productRepository.listOptionGroupsByProduct(productId);
     if (groups.length !== optionGroupIds.length) {
       throw new BadRequestException('optionGroupIds length mismatch.');
     }
@@ -678,7 +702,7 @@ export class SellerProductService extends SellerBaseService {
       }
     }
 
-    const rows = await this.repo.reorderOptionGroups({
+    const rows = await this.productRepository.reorderOptionGroups({
       productId,
       optionGroupIds,
     });
@@ -703,13 +727,14 @@ export class SellerProductService extends SellerBaseService {
   ): Promise<SellerOptionItemOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const optionGroupId = this.parseId(input.optionGroupId);
-    const group = await this.repo.findOptionGroupById(optionGroupId);
+    const group =
+      await this.productRepository.findOptionGroupById(optionGroupId);
 
     if (!group || group.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option group not found.');
     }
 
-    const row = await this.repo.createOptionItem({
+    const row = await this.productRepository.createOptionItem({
       optionGroupId,
       data: {
         title: this.cleanRequiredText(input.title, 120),
@@ -742,12 +767,13 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const optionItemId = this.parseId(input.optionItemId);
 
-    const current = await this.repo.findOptionItemById(optionItemId);
+    const current =
+      await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option item not found.');
     }
 
-    const row = await this.repo.updateOptionItem({
+    const row = await this.productRepository.updateOptionItem({
       optionItemId,
       data: {
         ...(input.title !== undefined
@@ -788,12 +814,13 @@ export class SellerProductService extends SellerBaseService {
     optionItemId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireSellerContext(accountId);
-    const current = await this.repo.findOptionItemById(optionItemId);
+    const current =
+      await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option item not found.');
     }
 
-    await this.repo.softDeleteOptionItem(optionItemId);
+    await this.productRepository.softDeleteOptionItem(optionItemId);
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
@@ -816,12 +843,14 @@ export class SellerProductService extends SellerBaseService {
     const optionGroupId = this.parseId(input.optionGroupId);
     const optionItemIds = this.parseIdList(input.optionItemIds);
 
-    const group = await this.repo.findOptionGroupById(optionGroupId);
+    const group =
+      await this.productRepository.findOptionGroupById(optionGroupId);
     if (!group || group.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Option group not found.');
     }
 
-    const items = await this.repo.listOptionItemsByGroup(optionGroupId);
+    const items =
+      await this.productRepository.listOptionItemsByGroup(optionGroupId);
     if (items.length !== optionItemIds.length) {
       throw new BadRequestException('optionItemIds length mismatch.');
     }
@@ -833,7 +862,7 @@ export class SellerProductService extends SellerBaseService {
       }
     }
 
-    const rows = await this.repo.reorderOptionItems({
+    const rows = await this.productRepository.reorderOptionItems({
       optionGroupId,
       optionItemIds,
     });
@@ -859,13 +888,14 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const productId = this.parseId(input.productId);
 
-    const product = await this.repo.findProductByIdIncludingInactive({
-      productId,
-      storeId: ctx.storeId,
-    });
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
     if (!product) throw new NotFoundException('Product not found.');
 
-    const row = await this.repo.upsertProductCustomTemplate({
+    const row = await this.productRepository.upsertProductCustomTemplate({
       productId,
       baseImageUrl: this.cleanRequiredText(input.baseImageUrl, 2048),
       isActive: input.isActive ?? true,
@@ -892,12 +922,13 @@ export class SellerProductService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const templateId = this.parseId(input.templateId);
 
-    const template = await this.repo.findCustomTemplateById(templateId);
+    const template =
+      await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Custom template not found.');
     }
 
-    const row = await this.repo.setCustomTemplateActive(
+    const row = await this.productRepository.setCustomTemplateActive(
       templateId,
       input.isActive,
     );
@@ -925,19 +956,21 @@ export class SellerProductService extends SellerBaseService {
     const templateId = this.parseId(input.templateId);
     const tokenId = input.tokenId ? this.parseId(input.tokenId) : undefined;
 
-    const template = await this.repo.findCustomTemplateById(templateId);
+    const template =
+      await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Custom template not found.');
     }
 
     if (tokenId) {
-      const token = await this.repo.findCustomTextTokenById(tokenId);
+      const token =
+        await this.productRepository.findCustomTextTokenById(tokenId);
       if (!token || token.template.product.store_id !== ctx.storeId) {
         throw new NotFoundException('Custom text token not found.');
       }
     }
 
-    const row = await this.repo.upsertCustomTextToken({
+    const row = await this.productRepository.upsertCustomTextToken({
       tokenId,
       templateId,
       tokenKey: this.cleanRequiredText(input.tokenKey, 60),
@@ -971,12 +1004,12 @@ export class SellerProductService extends SellerBaseService {
     tokenId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireSellerContext(accountId);
-    const token = await this.repo.findCustomTextTokenById(tokenId);
+    const token = await this.productRepository.findCustomTextTokenById(tokenId);
     if (!token || token.template.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Custom text token not found.');
     }
 
-    await this.repo.softDeleteCustomTextToken(tokenId);
+    await this.productRepository.softDeleteCustomTextToken(tokenId);
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
@@ -1000,12 +1033,14 @@ export class SellerProductService extends SellerBaseService {
     const templateId = this.parseId(input.templateId);
     const tokenIds = this.parseIdList(input.tokenIds);
 
-    const template = await this.repo.findCustomTemplateById(templateId);
+    const template =
+      await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
       throw new NotFoundException('Custom template not found.');
     }
 
-    const tokens = await this.repo.listCustomTextTokens(templateId);
+    const tokens =
+      await this.productRepository.listCustomTextTokens(templateId);
     if (tokens.length !== tokenIds.length) {
       throw new BadRequestException('tokenIds length mismatch.');
     }
@@ -1017,7 +1052,7 @@ export class SellerProductService extends SellerBaseService {
       }
     }
 
-    const rows = await this.repo.reorderCustomTextTokens({
+    const rows = await this.productRepository.reorderCustomTextTokens({
       templateId,
       tokenIds,
     });

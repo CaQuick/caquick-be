@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 
-import { OrderStatusPolicy } from './policies/order-status.policy';
+import { OrderStatusTransitionPolicy } from './policies/order-status-transition.policy';
 import { OrderRepository } from './repositories/order.repository';
+import { OrderDomainService } from './services/order-domain.service';
 
 @Module({
-  providers: [OrderRepository, OrderStatusPolicy],
-  exports: [OrderRepository, OrderStatusPolicy],
+  providers: [OrderRepository, OrderStatusTransitionPolicy, OrderDomainService],
+  exports: [OrderRepository, OrderStatusTransitionPolicy, OrderDomainService],
 })
 export class OrderModule {}

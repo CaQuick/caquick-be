@@ -1,0 +1,4 @@
+"""유저 주문 도메인 확장을 위한 placeholder 타입"""
+type UserOrderPlaceholder {
+  id: ID
+}

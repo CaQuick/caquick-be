@@ -9,6 +9,7 @@ import {
   ConversationBodyFormat,
 } from '@prisma/client';
 
+import { ConversationRepository } from '../../conversation';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -28,7 +29,10 @@ import { SellerBaseService } from './seller-base.service';
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
+  constructor(
+    repo: SellerRepository,
+    private readonly conversationRepository: ConversationRepository,
+  ) {
     super(repo);
   }
   async sellerConversations(
@@ -41,7 +45,7 @@ export class SellerConversationService extends SellerBaseService {
       cursor: input?.cursor ? this.parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listConversationsByStore({
+    const rows = await this.conversationRepository.listConversationsByStore({
       storeId: ctx.storeId,
       limit: normalized.limit,
       cursor: normalized.cursor,
@@ -60,10 +64,11 @@ export class SellerConversationService extends SellerBaseService {
     input?: SellerCursorInput,
   ): Promise<SellerCursorConnection<SellerConversationMessageOutput>> {
     const ctx = await this.requireSellerContext(accountId);
-    const conversation = await this.repo.findConversationByIdAndStore({
-      conversationId,
-      storeId: ctx.storeId,
-    });
+    const conversation =
+      await this.conversationRepository.findConversationByIdAndStore({
+        conversationId,
+        storeId: ctx.storeId,
+      });
     if (!conversation) throw new NotFoundException('Conversation not found.');
 
     const normalized = normalizeCursorInput({
@@ -71,7 +76,7 @@ export class SellerConversationService extends SellerBaseService {
       cursor: input?.cursor ? this.parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listConversationMessages({
+    const rows = await this.conversationRepository.listConversationMessages({
       conversationId,
       limit: normalized.limit,
       cursor: normalized.cursor,
@@ -91,10 +96,11 @@ export class SellerConversationService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const conversationId = this.parseId(input.conversationId);
 
-    const conversation = await this.repo.findConversationByIdAndStore({
-      conversationId,
-      storeId: ctx.storeId,
-    });
+    const conversation =
+      await this.conversationRepository.findConversationByIdAndStore({
+        conversationId,
+        storeId: ctx.storeId,
+      });
     if (!conversation) throw new NotFoundException('Conversation not found.');
 
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
@@ -108,14 +114,15 @@ export class SellerConversationService extends SellerBaseService {
       throw new BadRequestException('bodyHtml is required for HTML format.');
     }
 
-    const row = await this.repo.createSellerConversationMessage({
-      conversationId,
-      sellerAccountId: ctx.accountId,
-      bodyFormat,
-      bodyText,
-      bodyHtml,
-      now: new Date(),
-    });
+    const row =
+      await this.conversationRepository.createSellerConversationMessage({
+        conversationId,
+        sellerAccountId: ctx.accountId,
+        bodyFormat,
+        bodyText,
+        bodyHtml,
+        now: new Date(),
+      });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,

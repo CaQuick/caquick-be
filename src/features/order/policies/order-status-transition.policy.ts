@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 @Injectable()
-export class OrderStatusPolicy {
+export class OrderStatusTransitionPolicy {
   parse(raw: string): OrderStatus {
     if (raw === 'SUBMITTED') return OrderStatus.SUBMITTED;
     if (raw === 'CONFIRMED') return OrderStatus.CONFIRMED;

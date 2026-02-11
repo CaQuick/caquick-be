@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
-import { OrderModule } from '../order/order.module';
+import { ConversationModule } from '../conversation';
+import { OrderModule } from '../order';
+import { ProductModule } from '../product';
 
 import { SellerRepository } from './repositories/seller.repository';
 import { SellerContentMutationResolver } from './resolvers/seller-content-mutation.resolver';
@@ -21,7 +23,7 @@ import { SellerProductService } from './services/seller-product.service';
 import { SellerStoreService } from './services/seller-store.service';
 
 @Module({
-  imports: [OrderModule],
+  imports: [OrderModule, ProductModule, ConversationModule],
   providers: [
     SellerService,
     SellerStoreService,

@@ -1,0 +1,4 @@
+"""유저 장바구니 도메인 확장을 위한 placeholder 타입"""
+type UserCartPlaceholder {
+  id: ID
+}

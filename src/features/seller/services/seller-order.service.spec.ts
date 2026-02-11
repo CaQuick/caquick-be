@@ -6,8 +6,11 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus } from '@prisma/client';
 
-import { OrderStatusPolicy } from '../../order/policies/order-status.policy';
-import { OrderRepository } from '../../order/repositories/order.repository';
+import {
+  OrderDomainService,
+  OrderRepository,
+  OrderStatusTransitionPolicy,
+} from '../../order';
 import { SellerRepository } from '../repositories/seller.repository';
 
 import { SellerOrderService } from './seller-order.service';
@@ -29,7 +32,8 @@ describe('SellerOrderService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SellerOrderService,
-        OrderStatusPolicy,
+        OrderStatusTransitionPolicy,
+        OrderDomainService,
         {
           provide: SellerRepository,
           useValue: repo,

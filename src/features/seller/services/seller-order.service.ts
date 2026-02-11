@@ -4,8 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { OrderStatusPolicy } from '../../order/policies/order-status.policy';
-import { OrderRepository } from '../../order/repositories/order.repository';
+import { OrderDomainService, OrderRepository } from '../../order';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -28,7 +27,7 @@ export class SellerOrderService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     private readonly orderRepository: OrderRepository,
-    private readonly orderStatusPolicy: OrderStatusPolicy,
+    private readonly orderDomainService: OrderDomainService,
   ) {
     super(repo);
   }
@@ -48,7 +47,7 @@ export class SellerOrderService extends SellerBaseService {
       limit: normalized.limit,
       cursor: normalized.cursor,
       status: input?.status
-        ? this.orderStatusPolicy.parse(input.status)
+        ? this.orderDomainService.parseStatus(input.status)
         : undefined,
       fromCreatedAt: this.toDate(input?.fromCreatedAt),
       toCreatedAt: this.toDate(input?.toCreatedAt),
@@ -83,7 +82,7 @@ export class SellerOrderService extends SellerBaseService {
   ): Promise<SellerOrderSummaryOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const orderId = this.parseId(input.orderId);
-    const toStatus = this.orderStatusPolicy.parse(input.toStatus);
+    const toStatus = this.orderDomainService.parseStatus(input.toStatus);
 
     const current = await this.orderRepository.findOrderDetailByStore({
       orderId,
@@ -91,9 +90,9 @@ export class SellerOrderService extends SellerBaseService {
     });
     if (!current) throw new NotFoundException('Order not found.');
 
-    this.orderStatusPolicy.assertSellerTransition(current.status, toStatus);
+    this.orderDomainService.assertSellerTransition(current.status, toStatus);
 
-    if (this.orderStatusPolicy.requiresCancellationNote(toStatus)) {
+    if (this.orderDomainService.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
         throw new BadRequestException('Cancellation note is required.');
       }
