@@ -94,24 +94,16 @@ export class AuthController {
    */
   @ApiOperation({
     summary: 'OIDC 콜백 처리',
-    description: 'OIDC 인증 결과를 처리하고 access token을 발급한다.',
+    description:
+      'OIDC 인증 결과를 처리하고 세션 쿠키를 발급한 뒤 리다이렉트한다.',
   })
   @ApiParam({
     name: 'provider',
     description: 'OIDC provider',
     enum: ['google', 'kakao'],
   })
-  @ApiOkResponse({
-    description: 'OIDC 로그인 결과',
-    schema: {
-      type: 'object',
-      properties: {
-        returnTo: { type: 'string', nullable: true },
-        accessToken: { type: 'string' },
-        tokenType: { type: 'string', example: 'Bearer' },
-      },
-      required: ['accessToken', 'tokenType'],
-    },
+  @ApiFoundResponse({
+    description: '로그인 완료 후 returnTo로 리다이렉트',
   })
   @Get('oidc/:provider/callback')
   async callback(
@@ -119,12 +111,8 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { returnTo, accessToken } = await this.auth.handleOidcCallback(
-      provider,
-      req,
-      res,
-    );
-    res.status(200).json({ returnTo, accessToken, tokenType: 'Bearer' });
+    const { returnTo } = await this.auth.handleOidcCallback(provider, req, res);
+    res.redirect(returnTo);
   }
 
   /**
