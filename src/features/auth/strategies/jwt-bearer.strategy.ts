@@ -66,6 +66,9 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new ForbiddenException('Account is not active.');
     }
 
-    return { accountId: account.id.toString() };
+    return {
+      accountId: account.id.toString(),
+      accountType: account.account_type,
+    };
   }
 }

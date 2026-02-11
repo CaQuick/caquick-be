@@ -1,5 +1,17 @@
-import { Controller, Get, Post, Query, Param, Req, Res } from '@nestjs/common';
 import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
   ApiCookieAuth,
   ApiFoundResponse,
   ApiNoContentResponse,
@@ -11,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
+import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
 import { AuthService } from '../auth.service';
 import { parseOidcProvider } from '../types/oidc-provider.type';
 
@@ -162,5 +175,160 @@ export class AuthController {
   async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.auth.logout(req, res);
     res.status(204).send();
+  }
+
+  /**
+   * 판매자 로그인
+   *
+   * POST /auth/seller/login
+   */
+  @ApiOperation({
+    summary: '판매자 로그인',
+    description: '판매자 username/password로 로그인한다.',
+  })
+  @ApiOkResponse({
+    description: '판매자 로그인 결과',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string' },
+        tokenType: { type: 'string', example: 'Bearer' },
+        accountStatus: {
+          type: 'string',
+          enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
+        },
+      },
+      required: ['accessToken', 'tokenType', 'accountStatus'],
+    },
+  })
+  @Post('seller/login')
+  async sellerLogin(
+    @Body() body: SellerLoginBody,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { accessToken, accountStatus } = await this.auth.sellerLogin({
+      username: body.username,
+      password: body.password,
+      req,
+      res,
+    });
+    res.status(200).json({
+      accessToken,
+      tokenType: 'Bearer',
+      accountStatus,
+    });
+  }
+
+  /**
+   * 판매자 refresh 재발급
+   *
+   * POST /auth/seller/refresh
+   */
+  @ApiOperation({
+    summary: '판매자 Access/Refresh 재발급',
+    description: '판매자 refresh 쿠키를 사용해 access token을 재발급한다.',
+  })
+  @ApiCookieAuth('refresh-cookie')
+  @ApiOkResponse({
+    description: '판매자 재발급 결과',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string' },
+        tokenType: { type: 'string', example: 'Bearer' },
+        accountStatus: {
+          type: 'string',
+          enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
+        },
+      },
+      required: ['accessToken', 'tokenType', 'accountStatus'],
+    },
+  })
+  @Post('seller/refresh')
+  async sellerRefresh(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { accessToken, accountStatus } = await this.auth.refreshSeller(
+      req,
+      res,
+    );
+    res.status(200).json({
+      accessToken,
+      tokenType: 'Bearer',
+      accountStatus,
+    });
+  }
+
+  /**
+   * 판매자 로그아웃
+   *
+   * POST /auth/seller/logout
+   */
+  @ApiOperation({
+    summary: '판매자 로그아웃',
+    description: '판매자 refresh 세션을 폐기하고 쿠키를 제거한다.',
+  })
+  @ApiCookieAuth('refresh-cookie')
+  @ApiNoContentResponse({ description: '판매자 로그아웃 완료' })
+  @Post('seller/logout')
+  async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.auth.logoutSeller(req, res);
+    res.status(204).send();
+  }
+
+  /**
+   * 판매자 비밀번호 변경
+   *
+   * POST /auth/seller/change-password
+   */
+  @ApiOperation({
+    summary: '판매자 비밀번호 변경',
+    description: '현재 비밀번호를 검증하고 새 비밀번호로 변경한다.',
+  })
+  @ApiBearerAuth('access-token')
+  @ApiOkResponse({
+    description: '비밀번호 변경 완료',
+    schema: {
+      type: 'object',
+      properties: { ok: { type: 'boolean' } },
+      required: ['ok'],
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Post('seller/change-password')
+  async sellerChangePassword(
+    @CurrentUser() user: JwtUser,
+    @Body() body: SellerChangePasswordBody,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const accountId = parseAccountId(user);
+    await this.auth.changeSellerPassword({
+      accountId,
+      currentPassword: body.currentPassword,
+      newPassword: body.newPassword,
+      req,
+    });
+    res.status(200).json({ ok: true });
+  }
+}
+
+interface SellerLoginBody {
+  username: string;
+  password: string;
+}
+
+interface SellerChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+}
+
+function parseAccountId(user: JwtUser): bigint {
+  try {
+    return BigInt(user.accountId);
+  } catch {
+    throw new BadRequestException('Invalid account id.');
   }
 }

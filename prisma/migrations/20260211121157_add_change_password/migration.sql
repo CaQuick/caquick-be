@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `audit_log` MODIFY `target_type` ENUM('STORE', 'PRODUCT', 'ORDER', 'CONVERSATION', 'CHANGE_PASSWORD') NOT NULL;

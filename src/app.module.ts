@@ -19,6 +19,7 @@ import databaseConfig from 'src/config/database.config';
 import docsConfig from 'src/config/docs.config';
 import oidcConfig from 'src/config/oidc.config';
 import { AuthModule } from 'src/features/auth/auth.module';
+import { SellerModule } from 'src/features/seller/seller.module';
 import { SystemModule } from 'src/features/system/system.module';
 import { UserModule } from 'src/features/user/user.module';
 import { AuthGlobalModule } from 'src/global/auth/auth-global.module';
@@ -75,6 +76,7 @@ import { PrismaModule } from 'src/prisma';
     SystemModule,
     AuthModule,
     UserModule,
+    SellerModule,
   ],
   controllers: [],
   providers: [],

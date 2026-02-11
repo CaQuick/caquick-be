@@ -517,7 +517,7 @@ describe('AuthRepository', () => {
       expect(result).toEqual(account);
       expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
         where: { id: BigInt(1) },
-        select: { id: true, status: true },
+        select: { id: true, status: true, account_type: true },
       });
     });
   });

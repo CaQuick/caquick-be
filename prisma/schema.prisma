@@ -8,9 +8,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* =========================
-   Enums
-   ========================= */
+/**
+ * =========================
+ * Enums
+ * =========================
+ */
 
 enum AccountType {
   USER
@@ -19,6 +21,7 @@ enum AccountType {
 }
 
 enum AccountStatus {
+  PENDING
   ACTIVE
   SUSPENDED
 }
@@ -54,9 +57,21 @@ enum OrderStatus {
 }
 
 enum NotificationType {
-  ORDER
+  ORDER_STATUS
+  REVIEW_LIKE
   SYSTEM
   MARKETING
+}
+
+enum ConversationSenderType {
+  USER
+  STORE
+  SYSTEM
+}
+
+enum ConversationBodyFormat {
+  TEXT
+  HTML
 }
 
 enum SearchContext {
@@ -80,9 +95,33 @@ enum BannerLinkType {
   CATEGORY
 }
 
-/* =========================
-   1) Accounts / Auth
-   ========================= */
+enum NotificationEvent {
+  REVIEW_LIKED
+  ORDER_CONFIRMED
+  ORDER_MADE
+  ORDER_PICKED_UP
+}
+
+enum AuditTargetType {
+  STORE
+  PRODUCT
+  ORDER
+  CONVERSATION
+  CHANGE_PASSWORD
+}
+
+enum AuditActionType {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+}
+
+/**
+ * =========================
+ * 1) Accounts / Auth
+ * =========================
+ */
 
 model Account {
   id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
@@ -96,20 +135,25 @@ model Account {
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  user_profile        UserProfile?
-  seller_profile      SellerProfile?
-  seller_credential   SellerCredential?
-  account_identities  AccountIdentity[]
-  refresh_sessions    AuthRefreshSession[]
-  stores              Store[]            @relation("StoreSellerAccount")
-  wishlist_items      WishlistItem[]
-  cart                Cart?
-  custom_drafts       CustomDraft[]
-  orders              Order[]
-  reviews             Review[]
-  notifications       Notification[]
-  search_histories    SearchHistory[]
-  search_events       SearchEvent[]
+  user_profile       UserProfile?
+  seller_profile     SellerProfile?
+  seller_credential  SellerCredential?
+  account_identities AccountIdentity[]
+  refresh_sessions   AuthRefreshSession[]
+  wishlist_items     WishlistItem[]
+  cart               Cart?
+  custom_drafts      CustomDraft[]
+  orders             Order[]
+  reviews            Review[]
+  notifications      Notification[]
+  search_histories   SearchHistory[]
+  search_events      SearchEvent[]
+
+  store_wishlist_items       StoreWishlistItem[]
+  review_likes               ReviewLike[]
+  store_conversations        StoreConversation[]
+  sent_conversation_messages StoreConversationMessage[] @relation("ConversationMessageSender")
+  store                      Store?                     @relation("StoreSellerAccount")
 
   @@index([account_type, status], map: "idx_account_type_status")
   @@index([deleted_at], map: "idx_account_deleted_at")
@@ -120,10 +164,10 @@ model UserProfile {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   account_id BigInt @unique @db.UnsignedBigInt
 
-  nickname      String   @unique @db.VarChar(50)
-  birth_date    DateTime? @db.Date
-  phone_number  String?  @db.VarChar(30)
-  profile_image_url String? @db.VarChar(2048)
+  nickname                String    @unique @db.VarChar(50)
+  birth_date              DateTime? @db.Date
+  phone_number            String?   @db.VarChar(30)
+  profile_image_url       String?   @db.VarChar(2048)
   onboarding_completed_at DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -157,13 +201,13 @@ model SellerProfile {
 }
 
 model SellerCredential {
-  id                 BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  seller_account_id  BigInt @unique @db.UnsignedBigInt
+  id                BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  seller_account_id BigInt @unique @db.UnsignedBigInt
 
-  username          String   @unique @db.VarChar(80)
-  password_hash     String   @db.VarChar(255)
+  username            String    @unique @db.VarChar(80)
+  password_hash       String    @db.VarChar(255)
   password_updated_at DateTime? @db.DateTime(3)
-  last_login_at     DateTime? @db.DateTime(3)
+  last_login_at       DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -180,7 +224,7 @@ model AccountIdentity {
   account_id BigInt @db.UnsignedBigInt
 
   provider         IdentityProvider
-  provider_subject String @db.VarChar(255)
+  provider_subject String           @db.VarChar(255)
 
   provider_email             String? @db.VarChar(320)
   provider_display_name      String? @db.VarChar(200)
@@ -204,7 +248,7 @@ model AuthRefreshSession {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   account_id BigInt @db.UnsignedBigInt
 
-  token_hash String @unique @db.Char(64)
+  token_hash String  @unique @db.Char(64)
   user_agent String? @db.VarChar(512)
   ip_address String? @db.VarChar(64)
 
@@ -219,8 +263,8 @@ model AuthRefreshSession {
 
   account Account @relation(fields: [account_id], references: [id])
 
-  replaced_by  AuthRefreshSession? @relation("RefreshSessionReplace", fields: [replaced_by_session_id], references: [id])
-  replaces     AuthRefreshSession[] @relation("RefreshSessionReplace")
+  replaced_by AuthRefreshSession?  @relation("RefreshSessionReplace", fields: [replaced_by_session_id], references: [id])
+  replaces    AuthRefreshSession[] @relation("RefreshSessionReplace")
 
   @@index([account_id], map: "idx_auth_refresh_session_account_id")
   @@index([expires_at], map: "idx_auth_refresh_session_expires_at")
@@ -229,13 +273,15 @@ model AuthRefreshSession {
   @@map("auth_refresh_session")
 }
 
-/* =========================
-   2) Store
-   ========================= */
+/**
+ * =========================
+ * 2) Store
+ * =========================
+ */
 
 model Store {
-  id               BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  seller_account_id BigInt @db.UnsignedBigInt
+  id                BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  seller_account_id BigInt @unique @db.UnsignedBigInt
 
   store_name  String @db.VarChar(200)
   store_phone String @db.VarChar(30)
@@ -253,7 +299,7 @@ model Store {
   business_hours_text String? @db.VarChar(500)
 
   pickup_slot_interval_minutes Int @default(30) @db.UnsignedSmallInt
-  min_lead_time_minutes        Int @default(180) @db.UnsignedInt
+  min_lead_time_minutes        Int @default(30) @db.UnsignedInt
   max_days_ahead               Int @default(30) @db.UnsignedSmallInt
 
   website_url String? @db.VarChar(2048)
@@ -265,12 +311,18 @@ model Store {
 
   seller_account Account @relation("StoreSellerAccount", fields: [seller_account_id], references: [id])
 
-  business_hours     StoreBusinessHour[]
-  special_closures   StoreSpecialClosure[]
-  products           Product[]
-  order_items        OrderItem[]
-  reviews            Review[]
-  banners            Banner[] @relation("BannerStoreLink")
+  business_hours   StoreBusinessHour[]
+  special_closures StoreSpecialClosure[]
+  products         Product[]
+  order_items      OrderItem[]
+  reviews          Review[]
+  banners          Banner[]              @relation("BannerStoreLink")
+
+  store_wishlist_items StoreWishlistItem[]
+  notifications        Notification[]
+  conversations        StoreConversation[]
+  faq_topics           StoreFaqTopic[]
+  daily_capacities     StoreDailyCapacity[]
 
   @@index([seller_account_id], map: "idx_store_seller")
   @@index([store_name], map: "idx_store_name")
@@ -283,7 +335,7 @@ model StoreBusinessHour {
   id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   store_id BigInt @db.UnsignedBigInt
 
-  day_of_week Int @db.UnsignedTinyInt
+  day_of_week Int     @db.UnsignedTinyInt
   is_closed   Boolean @default(false) @db.TinyInt
 
   open_time  DateTime? @db.Time(0)
@@ -318,18 +370,20 @@ model StoreSpecialClosure {
   @@map("store_special_closure")
 }
 
-/* =========================
-   3) Catalog
-   ========================= */
+/**
+ * =========================
+ * 3) Catalog
+ * =========================
+ */
 
 model Category {
-  id            BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  id            BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
   category_type CategoryType @default(OTHER)
 
   name        String  @db.VarChar(100)
   description String? @db.VarChar(255)
 
-  sort_order Int @default(0)
+  sort_order Int     @default(0)
   is_active  Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -338,7 +392,7 @@ model Category {
 
   product_categories ProductCategory[]
   search_events      SearchEvent[]
-  banners            Banner[] @relation("BannerCategoryLink")
+  banners            Banner[]          @relation("BannerCategoryLink")
 
   @@unique([category_type, name], map: "uk_category_type_name")
   @@index([category_type, sort_order], map: "idx_category_sort")
@@ -364,17 +418,17 @@ model Product {
   id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   store_id BigInt @db.UnsignedBigInt
 
-  name        String  @db.VarChar(200)
-  description String? @db.Text
+  name            String  @db.VarChar(200)
+  description     String? @db.Text
   purchase_notice String? @db.Text
 
-  regular_price Int @db.UnsignedInt
+  regular_price Int  @db.UnsignedInt
   sale_price    Int? @db.UnsignedInt
 
   currency String @default("KRW") @db.Char(3)
 
-  base_design_image_url String? @db.VarChar(2048)
-  preparation_time_minutes Int @default(180) @db.UnsignedInt
+  base_design_image_url    String? @db.VarChar(2048)
+  preparation_time_minutes Int     @default(180) @db.UnsignedInt
 
   is_active Boolean @default(true) @db.TinyInt
 
@@ -388,15 +442,17 @@ model Product {
   product_categories ProductCategory[]
   product_tags       ProductTag[]
 
-  option_groups      ProductOptionGroup[]
-  custom_template    ProductCustomTemplate?
+  option_groups   ProductOptionGroup[]
+  custom_template ProductCustomTemplate?
 
-  cart_items         CartItem[]
-  wishlist_items     WishlistItem[]
-  custom_drafts      CustomDraft[]
-  order_items        OrderItem[]
-  reviews            Review[]
-  banners            Banner[] @relation("BannerProductLink")
+  cart_items     CartItem[]
+  wishlist_items WishlistItem[]
+  custom_drafts  CustomDraft[]
+  order_items    OrderItem[]
+  reviews        Review[]
+  banners        Banner[]       @relation("BannerProductLink")
+
+  notifications Notification[]
 
   @@index([store_id], map: "idx_product_store")
   @@index([name], map: "idx_product_name")
@@ -410,7 +466,7 @@ model ProductImage {
   product_id BigInt @db.UnsignedBigInt
 
   image_url  String @db.VarChar(2048)
-  sort_order Int @default(0)
+  sort_order Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -457,23 +513,25 @@ model ProductTag {
   @@map("product_tag")
 }
 
-/* =========================
-   4) Product Options
-   ========================= */
+/**
+ * =========================
+ * 4) Product Options
+ * =========================
+ */
 
 model ProductOptionGroup {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   product_id BigInt @db.UnsignedBigInt
 
-  name        String @db.VarChar(120)
+  name        String  @db.VarChar(120)
   is_required Boolean @default(true) @db.TinyInt
-  min_select  Int @default(1) @db.UnsignedSmallInt
-  max_select  Int @default(1) @db.UnsignedSmallInt
+  min_select  Int     @default(1) @db.UnsignedSmallInt
+  max_select  Int     @default(1) @db.UnsignedSmallInt
 
   option_requires_description Boolean @default(false) @db.TinyInt
   option_requires_image       Boolean @default(false) @db.TinyInt
 
-  sort_order Int @default(0)
+  sort_order Int     @default(0)
   is_active  Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -498,8 +556,8 @@ model ProductOptionItem {
   description String? @db.VarChar(500)
   image_url   String? @db.VarChar(2048)
 
-  price_delta Int @default(0)
-  sort_order  Int @default(0)
+  price_delta Int     @default(0)
+  sort_order  Int     @default(0)
   is_active   Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -516,15 +574,17 @@ model ProductOptionItem {
   @@map("product_option_item")
 }
 
-/* =========================
-   5) Product Custom Template
-   ========================= */
+/**
+ * =========================
+ * 5) Product Custom Template
+ * =========================
+ */
 
 model ProductCustomTemplate {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   product_id BigInt @unique @db.UnsignedBigInt
 
-  base_image_url String @db.VarChar(2048)
+  base_image_url String  @db.VarChar(2048)
   is_active      Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -544,11 +604,11 @@ model ProductCustomTextToken {
   id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   template_id BigInt @db.UnsignedBigInt
 
-  token_key     String @db.VarChar(60)
-  default_text  String @db.VarChar(200)
-  max_length    Int    @default(30) @db.UnsignedSmallInt
-  sort_order    Int    @default(0)
-  is_required   Boolean @default(true) @db.TinyInt
+  token_key    String  @db.VarChar(60)
+  default_text String  @db.VarChar(200)
+  max_length   Int     @default(30) @db.UnsignedSmallInt
+  sort_order   Int     @default(0)
+  is_required  Boolean @default(true) @db.TinyInt
 
   pos_x  Int?
   pos_y  Int?
@@ -568,9 +628,11 @@ model ProductCustomTextToken {
   @@map("product_custom_text_token")
 }
 
-/* =========================
-   6) Wishlist / Cart
-   ========================= */
+/**
+ * =========================
+ * 6) Wishlist / Cart
+ * =========================
+ */
 
 model WishlistItem {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
@@ -606,8 +668,8 @@ model Cart {
 }
 
 model CartItem {
-  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  cart_id  BigInt @db.UnsignedBigInt
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  cart_id    BigInt @db.UnsignedBigInt
   product_id BigInt @db.UnsignedBigInt
 
   quantity Int @default(1) @db.UnsignedSmallInt
@@ -628,8 +690,8 @@ model CartItem {
 }
 
 model CartItemOptionItem {
-  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  cart_item_id BigInt @db.UnsignedBigInt
+  id             BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  cart_item_id   BigInt @db.UnsignedBigInt
   option_item_id BigInt @db.UnsignedBigInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -644,14 +706,16 @@ model CartItemOptionItem {
   @@map("cart_item_option_item")
 }
 
-/* =========================
-   7) Custom Draft (temporary)
-   ========================= */
+/**
+ * =========================
+ * 7) Custom Draft (temporary)
+ * =========================
+ */
 
 model CustomDraft {
-  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  account_id BigInt @db.UnsignedBigInt
-  product_id BigInt @db.UnsignedBigInt
+  id          BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id  BigInt  @db.UnsignedBigInt
+  product_id  BigInt  @db.UnsignedBigInt
   template_id BigInt? @db.UnsignedBigInt
 
   status CustomDraftStatus @default(IN_PROGRESS)
@@ -660,12 +724,12 @@ model CustomDraft {
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  account  Account @relation(fields: [account_id], references: [id])
-  product  Product @relation(fields: [product_id], references: [id])
+  account  Account                @relation(fields: [account_id], references: [id])
+  product  Product                @relation(fields: [product_id], references: [id])
   template ProductCustomTemplate? @relation(fields: [template_id], references: [id])
 
-  text_values  CustomDraftTextValue[]
-  free_edits   CustomDraftFreeEdit[]
+  text_values CustomDraftTextValue[]
+  free_edits  CustomDraftFreeEdit[]
 
   order_items OrderItem[]
 
@@ -686,7 +750,7 @@ model CustomDraftTextValue {
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  draft CustomDraft @relation(fields: [draft_id], references: [id])
+  draft CustomDraft            @relation(fields: [draft_id], references: [id])
   token ProductCustomTextToken @relation(fields: [token_id], references: [id])
 
   @@unique([draft_id, token_id], map: "uk_custom_draft_text_value")
@@ -717,11 +781,11 @@ model CustomDraftFreeEdit {
 }
 
 model CustomDraftFreeEditAttachment {
-  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   free_edit_id BigInt @db.UnsignedBigInt
 
   image_url  String @db.VarChar(2048)
-  sort_order Int @default(0)
+  sort_order Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -734,9 +798,11 @@ model CustomDraftFreeEditAttachment {
   @@map("custom_draft_free_edit_attachment")
 }
 
-/* =========================
-   8) Order
-   ========================= */
+/**
+ * =========================
+ * 8) Order
+ * =========================
+ */
 
 model Order {
   id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
@@ -744,8 +810,8 @@ model Order {
 
   account_id BigInt @db.UnsignedBigInt
 
-  status   OrderStatus @default(SUBMITTED)
-  pickup_at DateTime   @db.DateTime(3)
+  status    OrderStatus @default(SUBMITTED)
+  pickup_at DateTime    @db.DateTime(3)
 
   buyer_name  String @db.VarChar(100)
   buyer_phone String @db.VarChar(30)
@@ -768,6 +834,7 @@ model Order {
 
   status_histories OrderStatusHistory[]
   items            OrderItem[]
+  notifications    Notification[]
 
   @@index([account_id], map: "idx_order_account")
   @@index([status, created_at], map: "idx_order_status")
@@ -782,7 +849,7 @@ model OrderStatusHistory {
 
   from_status OrderStatus?
   to_status   OrderStatus
-  changed_at  DateTime @default(now()) @db.DateTime(3)
+  changed_at  DateTime     @default(now()) @db.DateTime(3)
 
   note String? @db.VarChar(500)
 
@@ -798,16 +865,16 @@ model OrderStatusHistory {
 }
 
 model OrderItem {
-  id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  order_id  BigInt @db.UnsignedBigInt
-  store_id  BigInt @db.UnsignedBigInt
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id   BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
   product_id BigInt @db.UnsignedBigInt
 
-  product_name_snapshot   String @db.VarChar(200)
-  regular_price_snapshot  Int    @db.UnsignedInt
-  sale_price_snapshot     Int?   @db.UnsignedInt
+  product_name_snapshot  String @db.VarChar(200)
+  regular_price_snapshot Int    @db.UnsignedInt
+  sale_price_snapshot    Int?   @db.UnsignedInt
 
-  quantity           Int @default(1) @db.UnsignedSmallInt
+  quantity            Int @default(1) @db.UnsignedSmallInt
   item_subtotal_price Int @default(0) @db.UnsignedInt
 
   custom_draft_id BigInt? @db.UnsignedBigInt
@@ -816,14 +883,15 @@ model OrderItem {
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  order       Order   @relation(fields: [order_id], references: [id])
-  store       Store   @relation(fields: [store_id], references: [id])
-  product     Product @relation(fields: [product_id], references: [id])
+  order        Order        @relation(fields: [order_id], references: [id])
+  store        Store        @relation(fields: [store_id], references: [id])
+  product      Product      @relation(fields: [product_id], references: [id])
   custom_draft CustomDraft? @relation(fields: [custom_draft_id], references: [id])
 
-  option_items   OrderItemOptionItem[]
-  custom_texts   OrderItemCustomText[]
-  free_edits     OrderItemCustomFreeEdit[]
+  option_items  OrderItemOptionItem[]
+  custom_texts  OrderItemCustomText[]
+  free_edits    OrderItemCustomFreeEdit[]
+  notifications Notification[]
 
   review Review?
 
@@ -835,20 +903,20 @@ model OrderItem {
 }
 
 model OrderItemOptionItem {
-  id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  order_item_id BigInt @db.UnsignedBigInt
+  id              BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id   BigInt @db.UnsignedBigInt
   option_group_id BigInt @db.UnsignedBigInt
   option_item_id  BigInt @db.UnsignedBigInt
 
-  group_name_snapshot      String @db.VarChar(120)
-  option_title_snapshot    String @db.VarChar(120)
-  option_price_delta_snapshot Int @default(0)
+  group_name_snapshot         String @db.VarChar(120)
+  option_title_snapshot       String @db.VarChar(120)
+  option_price_delta_snapshot Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  order_item   OrderItem         @relation(fields: [order_item_id], references: [id])
+  order_item   OrderItem          @relation(fields: [order_item_id], references: [id])
   option_group ProductOptionGroup @relation(fields: [option_group_id], references: [id])
   option_item  ProductOptionItem  @relation(fields: [option_item_id], references: [id])
 
@@ -858,13 +926,13 @@ model OrderItemOptionItem {
 }
 
 model OrderItemCustomText {
-  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
   token_key_snapshot    String @db.VarChar(60)
   default_text_snapshot String @db.VarChar(200)
   value_text            String @db.VarChar(200)
-  sort_order            Int @default(0)
+  sort_order            Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -878,18 +946,18 @@ model OrderItemCustomText {
 }
 
 model OrderItemCustomFreeEdit {
-  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
   crop_image_url   String @db.VarChar(2048)
   description_text String @db.VarChar(2000)
-  sort_order       Int @default(0)
+  sort_order       Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+  order_item  OrderItem                           @relation(fields: [order_item_id], references: [id])
   attachments OrderItemCustomFreeEditAttachment[]
 
   @@index([order_item_id, sort_order], map: "idx_order_item_custom_free_edit")
@@ -898,11 +966,11 @@ model OrderItemCustomFreeEdit {
 }
 
 model OrderItemCustomFreeEditAttachment {
-  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   free_edit_id BigInt @db.UnsignedBigInt
 
   image_url  String @db.VarChar(2048)
-  sort_order Int @default(0)
+  sort_order Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -915,12 +983,14 @@ model OrderItemCustomFreeEditAttachment {
   @@map("order_item_custom_free_edit_attachment")
 }
 
-/* =========================
-   9) Review
-   ========================= */
+/**
+ * =========================
+ * 9) Review
+ * =========================
+ */
 
 model Review {
-  id          BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @unique @db.UnsignedBigInt
 
   account_id BigInt @db.UnsignedBigInt
@@ -941,6 +1011,9 @@ model Review {
 
   images ReviewImage[]
 
+  likes         ReviewLike[]
+  notifications Notification[]
+
   @@index([store_id, created_at], map: "idx_review_store")
   @@index([product_id, created_at], map: "idx_review_product")
   @@index([account_id, created_at], map: "idx_review_account")
@@ -953,7 +1026,7 @@ model ReviewImage {
   review_id BigInt @db.UnsignedBigInt
 
   image_url  String @db.VarChar(2048)
-  sort_order Int @default(0)
+  sort_order Int    @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -966,18 +1039,27 @@ model ReviewImage {
   @@map("review_image")
 }
 
-/* =========================
-   10) Notification
-   ========================= */
+/**
+ * =========================
+ * 10) Notification
+ * =========================
+ */
 
 model Notification {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   account_id BigInt @db.UnsignedBigInt
 
-  type  NotificationType @default(SYSTEM)
-  title String @db.VarChar(200)
-  body  String @db.VarChar(2000)
+  type      NotificationType   @default(SYSTEM)
+  title     String             @db.VarChar(200)
+  body      String             @db.VarChar(2000)
   data_json Json?
+  event     NotificationEvent?
+
+  store_id      BigInt? @db.UnsignedBigInt
+  product_id    BigInt? @db.UnsignedBigInt
+  order_id      BigInt? @db.UnsignedBigInt
+  order_item_id BigInt? @db.UnsignedBigInt
+  review_id     BigInt? @db.UnsignedBigInt
 
   read_at DateTime? @db.DateTime(3)
 
@@ -987,15 +1069,28 @@ model Notification {
 
   account Account @relation(fields: [account_id], references: [id])
 
+  store      Store?     @relation(fields: [store_id], references: [id])
+  product    Product?   @relation(fields: [product_id], references: [id])
+  order      Order?     @relation(fields: [order_id], references: [id])
+  order_item OrderItem? @relation(fields: [order_item_id], references: [id])
+  review     Review?    @relation(fields: [review_id], references: [id])
+
   @@index([account_id, created_at], map: "idx_notification_account")
   @@index([account_id, read_at], map: "idx_notification_unread")
+  @@index([store_id], map: "idx_notification_store")
+  @@index([product_id], map: "idx_notification_product")
+  @@index([order_id], map: "idx_notification_order")
+  @@index([order_item_id], map: "idx_notification_order_item")
+  @@index([review_id], map: "idx_notification_review")
   @@index([deleted_at], map: "idx_notification_deleted_at")
   @@map("notification")
 }
 
-/* =========================
-   11) Search
-   ========================= */
+/**
+ * =========================
+ * 11) Search
+ * =========================
+ */
 
 model SearchHistory {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
@@ -1017,15 +1112,15 @@ model SearchHistory {
 }
 
 model SearchEvent {
-  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id         BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
   account_id BigInt? @db.UnsignedBigInt
 
-  keyword  String @db.VarChar(200)
+  keyword String @db.VarChar(200)
 
-  context SearchContext @default(GLOBAL)
-  address_city         String? @db.VarChar(50)
-  address_district     String? @db.VarChar(80)
-  address_neighborhood String? @db.VarChar(80)
+  context              SearchContext @default(GLOBAL)
+  address_city         String?       @db.VarChar(50)
+  address_district     String?       @db.VarChar(80)
+  address_neighborhood String?       @db.VarChar(80)
 
   category_id BigInt? @db.UnsignedBigInt
 
@@ -1043,9 +1138,11 @@ model SearchEvent {
   @@map("search_event")
 }
 
-/* =========================
-   12) Banner
-   ========================= */
+/**
+ * =========================
+ * 12) Banner
+ * =========================
+ */
 
 model Banner {
   id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
@@ -1056,7 +1153,7 @@ model Banner {
   image_url String  @db.VarChar(2048)
 
   link_type BannerLinkType @default(NONE)
-  link_url  String? @db.VarChar(2048)
+  link_url  String?        @db.VarChar(2048)
 
   link_product_id  BigInt? @db.UnsignedBigInt
   link_store_id    BigInt? @db.UnsignedBigInt
@@ -1065,7 +1162,7 @@ model Banner {
   starts_at DateTime? @db.DateTime(3)
   ends_at   DateTime? @db.DateTime(3)
 
-  sort_order Int @default(0)
+  sort_order Int     @default(0)
   is_active  Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -1080,4 +1177,174 @@ model Banner {
   @@index([starts_at, ends_at], map: "idx_banner_time")
   @@index([deleted_at], map: "idx_banner_deleted_at")
   @@map("banner")
+}
+
+/**
+ * =========================
+ * 13) Store wishlist
+ * =========================
+ */
+
+model StoreWishlistItem {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  store   Store   @relation(fields: [store_id], references: [id])
+
+  @@unique([account_id, store_id], map: "uk_store_wishlist")
+  @@index([store_id], map: "idx_store_wishlist_store")
+  @@index([deleted_at], map: "idx_store_wishlist_deleted_at")
+  @@map("store_wishlist_item")
+}
+
+/**
+ * =========================
+ * 14) Review like
+ * =========================
+ */
+
+model ReviewLike {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  review_id  BigInt @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  review  Review  @relation(fields: [review_id], references: [id])
+  account Account @relation(fields: [account_id], references: [id])
+
+  @@unique([review_id, account_id], map: "uk_review_like")
+  @@index([review_id], map: "idx_review_like_review")
+  @@index([account_id], map: "idx_review_like_account")
+  @@index([deleted_at], map: "idx_review_like_deleted_at")
+  @@map("review_like")
+}
+
+/**
+ * =========================
+ * 15) Notification center - conversations (store per user)
+ * =========================
+ */
+
+model StoreConversation {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  store_id   BigInt @db.UnsignedBigInt
+
+  last_message_at DateTime? @db.DateTime(3)
+  last_read_at    DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  store   Store   @relation(fields: [store_id], references: [id])
+
+  messages StoreConversationMessage[]
+
+  @@unique([account_id, store_id], map: "uk_store_conversation")
+  @@index([account_id, updated_at], map: "idx_store_conversation_account_updated")
+  @@index([store_id, updated_at], map: "idx_store_conversation_store_updated")
+  @@index([deleted_at], map: "idx_store_conversation_deleted_at")
+  @@map("store_conversation")
+}
+
+model StoreConversationMessage {
+  id              BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  conversation_id BigInt @db.UnsignedBigInt
+
+  sender_type       ConversationSenderType
+  sender_account_id BigInt?                @db.UnsignedBigInt
+
+  body_format ConversationBodyFormat @default(TEXT)
+  body_text   String?                @db.Text
+  body_html   String?                @db.Text
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  conversation   StoreConversation @relation(fields: [conversation_id], references: [id])
+  sender_account Account?          @relation("ConversationMessageSender", fields: [sender_account_id], references: [id])
+
+  @@index([conversation_id, created_at], map: "idx_store_conversation_message_conv_created")
+  @@index([sender_account_id], map: "idx_store_conversation_message_sender")
+  @@index([deleted_at], map: "idx_store_conversation_message_deleted_at")
+  @@map("store_conversation_message")
+}
+
+/**
+ * =========================
+ * 16) Store FAQ topics (badge -> HTML answer)
+ * =========================
+ */
+
+model StoreFaqTopic {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  title       String @db.VarChar(120)
+  answer_html String @db.Text
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@index([store_id, is_active, sort_order], map: "idx_store_faq_store_active_sort")
+  @@index([deleted_at], map: "idx_store_faq_deleted_at")
+  @@map("store_faq_topic")
+}
+
+model StoreDailyCapacity {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id BigInt @db.UnsignedBigInt
+
+  capacity_date DateTime @db.Date
+  capacity      Int      @db.UnsignedSmallInt
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@unique([store_id, capacity_date], map: "uk_store_daily_capacity")
+  @@index([deleted_at], map: "idx_store_daily_capacity_deleted_at")
+  @@map("store_daily_capacity")
+}
+
+model AuditLog {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  actor_account_id BigInt  @db.UnsignedBigInt
+  store_id         BigInt? @db.UnsignedBigInt
+
+  target_type AuditTargetType
+  target_id   BigInt          @db.UnsignedBigInt
+  action      AuditActionType
+
+  before_json Json?
+  after_json  Json?
+
+  ip_address String? @db.VarChar(64)
+  user_agent String? @db.VarChar(512)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@index([actor_account_id, created_at], map: "idx_audit_actor_time")
+  @@index([store_id, created_at], map: "idx_audit_store_time")
+  @@index([target_type, target_id, created_at], map: "idx_audit_target_time")
+  @@map("audit_log")
 }
