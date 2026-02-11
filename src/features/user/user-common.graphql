@@ -1,0 +1,12 @@
+enum AccountType {
+  USER
+  SELLER
+  ADMIN
+}
+
+enum NotificationType {
+  ORDER_STATUS
+  REVIEW_LIKE
+  SYSTEM
+  MARKETING
+}

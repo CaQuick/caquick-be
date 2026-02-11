@@ -1,0 +1,4 @@
+extend type Mutation {
+  """리뷰 좋아요"""
+  likeReview(reviewId: ID!): Boolean!
+}

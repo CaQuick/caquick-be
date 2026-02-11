@@ -6,6 +6,8 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus } from '@prisma/client';
 
+import { OrderStatusPolicy } from '../../order/policies/order-status.policy';
+import { OrderRepository } from '../../order/repositories/order.repository';
 import { SellerRepository } from '../repositories/seller.repository';
 
 import { SellerOrderService } from './seller-order.service';
@@ -13,20 +15,28 @@ import { SellerOrderService } from './seller-order.service';
 describe('SellerOrderService', () => {
   let service: SellerOrderService;
   let repo: jest.Mocked<SellerRepository>;
+  let orderRepo: jest.Mocked<OrderRepository>;
 
   beforeEach(async () => {
     repo = {
       findSellerAccountContext: jest.fn(),
+    } as unknown as jest.Mocked<SellerRepository>;
+    orderRepo = {
       findOrderDetailByStore: jest.fn(),
       updateOrderStatusBySeller: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
+    } as unknown as jest.Mocked<OrderRepository>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SellerOrderService,
+        OrderStatusPolicy,
         {
           provide: SellerRepository,
           useValue: repo,
+        },
+        {
+          provide: OrderRepository,
+          useValue: orderRepo,
         },
       ],
     }).compile();
@@ -55,7 +65,7 @@ describe('SellerOrderService', () => {
       store: { id: BigInt(100) },
     } as never);
 
-    repo.findOrderDetailByStore.mockResolvedValue({
+    orderRepo.findOrderDetailByStore.mockResolvedValue({
       id: BigInt(10),
       status: OrderStatus.SUBMITTED,
       order_number: 'O-1',
@@ -94,7 +104,7 @@ describe('SellerOrderService', () => {
       store: { id: BigInt(100) },
     } as never);
 
-    repo.findOrderDetailByStore.mockResolvedValue(null);
+    orderRepo.findOrderDetailByStore.mockResolvedValue(null);
 
     await expect(service.sellerOrder(BigInt(1), BigInt(9999))).rejects.toThrow(
       NotFoundException,

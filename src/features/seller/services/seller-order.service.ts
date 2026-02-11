@@ -3,8 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 
+import { OrderStatusPolicy } from '../../order/policies/order-status.policy';
+import { OrderRepository } from '../../order/repositories/order.repository';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -24,7 +25,11 @@ import { SellerBaseService } from './seller-base.service';
 
 @Injectable()
 export class SellerOrderService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
+  constructor(
+    repo: SellerRepository,
+    private readonly orderRepository: OrderRepository,
+    private readonly orderStatusPolicy: OrderStatusPolicy,
+  ) {
     super(repo);
   }
   async sellerOrderList(
@@ -38,11 +43,13 @@ export class SellerOrderService extends SellerBaseService {
       cursor: input?.cursor ? this.parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listOrdersByStore({
+    const rows = await this.orderRepository.listOrdersByStore({
       storeId: ctx.storeId,
       limit: normalized.limit,
       cursor: normalized.cursor,
-      status: input?.status ? this.toOrderStatus(input.status) : undefined,
+      status: input?.status
+        ? this.orderStatusPolicy.parse(input.status)
+        : undefined,
       fromCreatedAt: this.toDate(input?.fromCreatedAt),
       toCreatedAt: this.toDate(input?.toCreatedAt),
       fromPickupAt: this.toDate(input?.fromPickupAt),
@@ -62,7 +69,7 @@ export class SellerOrderService extends SellerBaseService {
     orderId: bigint,
   ): Promise<SellerOrderDetailOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const row = await this.repo.findOrderDetailByStore({
+    const row = await this.orderRepository.findOrderDetailByStore({
       orderId,
       storeId: ctx.storeId,
     });
@@ -76,23 +83,23 @@ export class SellerOrderService extends SellerBaseService {
   ): Promise<SellerOrderSummaryOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const orderId = this.parseId(input.orderId);
-    const toStatus = this.toOrderStatus(input.toStatus);
+    const toStatus = this.orderStatusPolicy.parse(input.toStatus);
 
-    const current = await this.repo.findOrderDetailByStore({
+    const current = await this.orderRepository.findOrderDetailByStore({
       orderId,
       storeId: ctx.storeId,
     });
     if (!current) throw new NotFoundException('Order not found.');
 
-    this.assertOrderStatusTransition(current.status, toStatus);
+    this.orderStatusPolicy.assertSellerTransition(current.status, toStatus);
 
-    if (toStatus === OrderStatus.CANCELED) {
+    if (this.orderStatusPolicy.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
         throw new BadRequestException('Cancellation note is required.');
       }
     }
 
-    const updated = await this.repo.updateOrderStatusBySeller({
+    const updated = await this.orderRepository.updateOrderStatusBySeller({
       orderId,
       storeId: ctx.storeId,
       actorAccountId: ctx.accountId,

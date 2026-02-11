@@ -2,12 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { UserService } from '../user.service';
 
-import { UserMutationResolver } from './user-mutation.resolver';
-import { UserQueryResolver } from './user-query.resolver';
+import { UserNotificationMutationResolver } from './user-notification-mutation.resolver';
+import { UserProfileQueryResolver } from './user-profile-query.resolver';
 
 describe('UserResolvers', () => {
-  let queryResolver: UserQueryResolver;
-  let mutationResolver: UserMutationResolver;
+  let queryResolver: UserProfileQueryResolver;
+  let mutationResolver: UserNotificationMutationResolver;
   let service: jest.Mocked<UserService>;
 
   beforeEach(async () => {
@@ -29,14 +29,18 @@ describe('UserResolvers', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        UserQueryResolver,
-        UserMutationResolver,
+        UserProfileQueryResolver,
+        UserNotificationMutationResolver,
         { provide: UserService, useValue: service },
       ],
     }).compile();
 
-    queryResolver = module.get<UserQueryResolver>(UserQueryResolver);
-    mutationResolver = module.get<UserMutationResolver>(UserMutationResolver);
+    queryResolver = module.get<UserProfileQueryResolver>(
+      UserProfileQueryResolver,
+    );
+    mutationResolver = module.get<UserNotificationMutationResolver>(
+      UserNotificationMutationResolver,
+    );
   });
 
   it('me는 서비스 호출로 연결되어야 한다', async () => {
@@ -54,9 +58,9 @@ describe('UserResolvers', () => {
     );
   });
 
-  it('likeReview는 reviewId를 BigInt로 전달해야 한다', async () => {
+  it('markAllNotificationsRead는 accountId를 전달해야 한다', async () => {
     const user = { accountId: '1' };
-    await mutationResolver.likeReview(user, '10');
-    expect(service.likeReview).toHaveBeenCalledWith(BigInt(1), BigInt(10));
+    await mutationResolver.markAllNotificationsRead(user);
+    expect(service.markAllNotificationsRead).toHaveBeenCalledWith(BigInt(1));
   });
 });
