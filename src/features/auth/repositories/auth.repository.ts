@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType, IdentityProvider } from '@prisma/client';
+import {
+  AccountType,
+  AuditActionType,
+  AuditTargetType,
+  IdentityProvider,
+  Prisma,
+} from '@prisma/client';
 
 import { PrismaService } from '../../../prisma';
 
@@ -348,6 +354,25 @@ export class AuthRepository {
   }
 
   /**
+   * 특정 계정의 활성 refresh session을 모두 revoke 처리한다.
+   *
+   * @param accountId account id
+   * @param now 기준 시각
+   */
+  async revokeAllRefreshSessions(accountId: bigint, now: Date): Promise<void> {
+    await this.prisma.authRefreshSession.updateMany({
+      where: {
+        account_id: accountId,
+        revoked_at: null,
+      },
+      data: {
+        revoked_at: now,
+        updated_at: now,
+      },
+    });
+  }
+
+  /**
    * access token 검증용으로 계정을 조회한다.
    *
    * @param accountId account id
@@ -358,6 +383,7 @@ export class AuthRepository {
       select: {
         id: true,
         status: true,
+        account_type: true,
       },
     });
   }
@@ -371,6 +397,129 @@ export class AuthRepository {
     return this.prisma.account.findFirst({
       where: { id: accountId },
       include: { user_profile: true },
+    });
+  }
+
+  /**
+   * username 기준 판매자 자격정보를 조회한다.
+   *
+   * @param username 판매자 username
+   */
+  async findSellerCredentialByUsername(username: string) {
+    return this.prisma.sellerCredential.findFirst({
+      where: { username },
+      include: {
+        seller_account: {
+          select: {
+            id: true,
+            account_type: true,
+            status: true,
+            store: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * 계정 ID 기준 판매자 자격정보를 조회한다.
+   *
+   * @param accountId account id
+   */
+  async findSellerCredentialByAccountId(accountId: bigint) {
+    return this.prisma.sellerCredential.findFirst({
+      where: {
+        seller_account_id: accountId,
+      },
+      include: {
+        seller_account: {
+          select: {
+            id: true,
+            account_type: true,
+            status: true,
+            store: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * 판매자 최근 로그인 시각을 갱신한다.
+   *
+   * @param sellerAccountId seller account id
+   * @param now 기준 시각
+   */
+  async updateSellerLastLogin(
+    sellerAccountId: bigint,
+    now: Date,
+  ): Promise<void> {
+    await this.prisma.sellerCredential.update({
+      where: { seller_account_id: sellerAccountId },
+      data: {
+        last_login_at: now,
+        updated_at: now,
+      },
+    });
+  }
+
+  /**
+   * 판매자 비밀번호 해시를 갱신한다.
+   *
+   * @param sellerAccountId seller account id
+   * @param passwordHash 새 비밀번호 해시
+   * @param now 기준 시각
+   */
+  async updateSellerPasswordHash(args: {
+    sellerAccountId: bigint;
+    passwordHash: string;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.sellerCredential.update({
+      where: { seller_account_id: args.sellerAccountId },
+      data: {
+        password_hash: args.passwordHash,
+        password_updated_at: args.now,
+        updated_at: args.now,
+      },
+    });
+  }
+
+  /**
+   * 감사 로그를 생성한다.
+   */
+  async createAuditLog(args: {
+    actorAccountId: bigint;
+    storeId?: bigint | null;
+    targetType: AuditTargetType;
+    targetId: bigint;
+    action: AuditActionType;
+    beforeJson?: Prisma.InputJsonValue | null;
+    afterJson?: Prisma.InputJsonValue | null;
+    ipAddress?: string;
+    userAgent?: string;
+  }): Promise<void> {
+    await this.prisma.auditLog.create({
+      data: {
+        actor_account_id: args.actorAccountId,
+        store_id: args.storeId ?? null,
+        target_type: args.targetType,
+        target_id: args.targetId,
+        action: args.action,
+        before_json:
+          args.beforeJson === null ? Prisma.JsonNull : args.beforeJson,
+        after_json: args.afterJson === null ? Prisma.JsonNull : args.afterJson,
+        ip_address: args.ipAddress ?? null,
+        user_agent: args.userAgent ?? null,
+      },
     });
   }
 }

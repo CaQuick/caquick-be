@@ -225,6 +225,24 @@ export class UserService {
     return true;
   }
 
+  async likeReview(accountId: bigint, reviewId: bigint): Promise<boolean> {
+    await this.requireActiveUser(accountId);
+
+    const result = await this.repo.likeReview({
+      accountId,
+      reviewId,
+    });
+
+    if (result === 'not-found') {
+      throw new NotFoundException('Review not found.');
+    }
+    if (result === 'self-like') {
+      throw new BadRequestException('Cannot like your own review.');
+    }
+
+    return true;
+  }
+
   async deleteSearchHistory(accountId: bigint, id: bigint): Promise<boolean> {
     await this.requireActiveUser(accountId);
 

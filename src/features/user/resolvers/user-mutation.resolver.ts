@@ -68,6 +68,16 @@ export class UserMutationResolver {
     return this.userService.markAllNotificationsRead(accountId);
   }
 
+  @Mutation('likeReview')
+  likeReview(
+    @CurrentUser() user: JwtUser,
+    @Args('reviewId') reviewId: string,
+  ): Promise<boolean> {
+    const accountId = parseAccountId(user);
+    const id = parseId(reviewId);
+    return this.userService.likeReview(accountId, id);
+  }
+
   @Mutation('deleteSearchHistory')
   deleteSearchHistory(
     @CurrentUser() user: JwtUser,

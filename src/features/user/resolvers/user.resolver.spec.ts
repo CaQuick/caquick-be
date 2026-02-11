@@ -22,6 +22,7 @@ describe('UserResolvers', () => {
       deleteMyAccount: jest.fn(),
       markNotificationRead: jest.fn(),
       markAllNotificationsRead: jest.fn(),
+      likeReview: jest.fn(),
       deleteSearchHistory: jest.fn(),
       clearSearchHistories: jest.fn(),
     } as unknown as jest.Mocked<UserService>;
@@ -51,5 +52,11 @@ describe('UserResolvers', () => {
       BigInt(1),
       BigInt(5),
     );
+  });
+
+  it('likeReview는 reviewId를 BigInt로 전달해야 한다', async () => {
+    const user = { accountId: '1' };
+    await mutationResolver.likeReview(user, '10');
+    expect(service.likeReview).toHaveBeenCalledWith(BigInt(1), BigInt(10));
   });
 });

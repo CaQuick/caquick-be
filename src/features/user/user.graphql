@@ -22,6 +22,8 @@ extend type Mutation {
   markNotificationRead(notificationId: ID!): Boolean!
   """전체 알림 읽음 처리"""
   markAllNotificationsRead: Boolean!
+  """리뷰 좋아요"""
+  likeReview(reviewId: ID!): Boolean!
   """특정 검색어 기록 삭제"""
   deleteSearchHistory(id: ID!): Boolean!
   """검색어 기록 전체 삭제"""
@@ -35,7 +37,8 @@ enum AccountType {
 }
 
 enum NotificationType {
-  ORDER
+  ORDER_STATUS
+  REVIEW_LIKE
   SYSTEM
   MARKETING
 }

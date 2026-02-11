@@ -41,6 +41,12 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'SearchHistory',
   'SearchEvent',
   'Banner',
+  'StoreWishlistItem',
+  'ReviewLike',
+  'StoreConversation',
+  'StoreConversationMessage',
+  'StoreFaqTopic',
+  'StoreDailyCapacity',
 ]);
 
 const READ_ACTIONS = new Set<Prisma.PrismaAction>([

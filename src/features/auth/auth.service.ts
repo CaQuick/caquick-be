@@ -1,8 +1,20 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import {
+  AccountType,
+  AuditActionType,
+  AuditTargetType,
+  type AccountStatus,
+} from '@prisma/client';
+import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
 import {
@@ -124,12 +136,97 @@ export class AuthService {
   }
 
   /**
+   * 판매자 username/password 로그인
+   *
+   * @param username 판매자 username
+   * @param password 판매자 password
+   * @param req Request
+   * @param res Response
+   */
+  async sellerLogin(args: {
+    username: string;
+    password: string;
+    req: Request;
+    res: Response;
+  }): Promise<{ accessToken: string; accountStatus: AccountStatus }> {
+    const username = args.username.trim();
+    const password = args.password;
+
+    if (!username || !password) {
+      throw new UnauthorizedException('Invalid seller credentials.');
+    }
+
+    const credential = await this.repo.findSellerCredentialByUsername(username);
+    if (!credential)
+      throw new UnauthorizedException('Invalid seller credentials.');
+
+    if (credential.seller_account.account_type !== AccountType.SELLER) {
+      throw new UnauthorizedException('Invalid seller credentials.');
+    }
+
+    const isPasswordValid = await argon2.verify(
+      credential.password_hash,
+      password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid seller credentials.');
+    }
+
+    const now = new Date();
+    await this.repo.updateSellerLastLogin(credential.seller_account_id, now);
+
+    const { accessToken } = await this.issueAuthTokens({
+      accountId: credential.seller_account_id,
+      req: args.req,
+      res: args.res,
+    });
+
+    return {
+      accessToken,
+      accountStatus: credential.seller_account.status,
+    };
+  }
+
+  /**
    * Refresh 토큰으로 access를 재발급하고 refresh를 회전한다.
    *
    * @param req Request
    * @param res Response
    */
   async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
+    const { accessToken } = await this.rotateRefresh(req, res);
+    return { accessToken };
+  }
+
+  /**
+   * 판매자 refresh 재발급
+   *
+   * @param req Request
+   * @param res Response
+   */
+  async refreshSeller(
+    req: Request,
+    res: Response,
+  ): Promise<{ accessToken: string; accountStatus: AccountStatus }> {
+    const { accessToken, accountId } = await this.rotateRefresh(req, res);
+    const seller = await this.repo.findSellerCredentialByAccountId(accountId);
+    if (!seller || seller.seller_account.account_type !== AccountType.SELLER) {
+      throw new UnauthorizedException('Invalid seller refresh token.');
+    }
+
+    return {
+      accessToken,
+      accountStatus: seller.seller_account.status,
+    };
+  }
+
+  /**
+   * 판매자 로그아웃
+   *
+   * @param req Request
+   * @param res Response
+   */
+  async logoutSeller(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
       | string
       | undefined;
@@ -139,34 +236,22 @@ export class AuthService {
 
     const tokenHash = this.sha256Hex(refreshToken);
     const session = await this.repo.findActiveRefreshSessionByHash(tokenHash);
-
     if (!session) throw new UnauthorizedException('Invalid refresh token.');
 
-    const newRefreshToken = this.generateRefreshToken();
-    const newTokenHash = this.sha256Hex(newRefreshToken);
+    const seller = await this.repo.findSellerCredentialByAccountId(
+      session.account_id,
+    );
+    if (!seller || seller.seller_account.account_type !== AccountType.SELLER) {
+      throw new UnauthorizedException('Invalid seller refresh token.');
+    }
 
-    const refreshDays = this.getRefreshDays();
-    const newExpiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
+    await this.repo.revokeRefreshSession(session.id);
 
-    await this.repo.rotateRefreshSession({
-      currentSessionId: session.id,
-      accountId: session.account_id,
-      newTokenHash,
-      userAgent: this.getUserAgent(req),
-      ipAddress: this.getIp(req),
-      newExpiresAt,
-    });
-
-    const accessToken = this.signAccessToken(session.account_id);
-
-    AuthCookie.setRefreshCookie(res, {
-      refreshToken: newRefreshToken,
-      refreshMaxAgeMs: refreshDays * 86400 * 1000,
-      cookieDomain: this.getCookieDomain(),
-      secure: this.isCookieSecure(),
-    });
-
-    return { accessToken };
+    AuthCookie.clearRefreshCookie(
+      res,
+      this.getCookieDomain(),
+      this.isCookieSecure(),
+    );
   }
 
   /**
@@ -193,6 +278,77 @@ export class AuthService {
       this.getCookieDomain(),
       this.isCookieSecure(),
     );
+  }
+
+  /**
+   * 판매자 비밀번호를 변경한다.
+   *
+   * @param args 변경 파라미터
+   */
+  async changeSellerPassword(args: {
+    accountId: bigint;
+    currentPassword: string;
+    newPassword: string;
+    req: Request;
+  }): Promise<void> {
+    const credential = await this.repo.findSellerCredentialByAccountId(
+      args.accountId,
+    );
+    if (!credential) throw new UnauthorizedException('Seller not found.');
+    if (credential.seller_account.account_type !== AccountType.SELLER) {
+      throw new ForbiddenException('Only SELLER account is allowed.');
+    }
+
+    const currentPassword = args.currentPassword;
+    const newPassword = args.newPassword;
+    if (!currentPassword || !newPassword) {
+      throw new BadRequestException('Current and new password are required.');
+    }
+
+    const isCurrentPasswordValid = await argon2.verify(
+      credential.password_hash,
+      currentPassword,
+    );
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Current password is invalid.');
+    }
+
+    this.assertStrongPassword(newPassword);
+
+    const isSamePassword = await argon2.verify(
+      credential.password_hash,
+      newPassword,
+    );
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'New password must be different from current password.',
+      );
+    }
+
+    const now = new Date();
+    const newHash = await argon2.hash(newPassword, {
+      type: argon2.argon2id,
+    });
+
+    await this.repo.updateSellerPasswordHash({
+      sellerAccountId: args.accountId,
+      passwordHash: newHash,
+      now,
+    });
+    await this.repo.revokeAllRefreshSessions(args.accountId, now);
+
+    await this.repo.createAuditLog({
+      actorAccountId: args.accountId,
+      storeId: credential.seller_account.store?.id ?? null,
+      targetType: AuditTargetType.CHANGE_PASSWORD,
+      targetId: args.accountId,
+      action: AuditActionType.UPDATE,
+      afterJson: {
+        changedAt: now.toISOString(),
+      },
+      ipAddress: this.getIp(args.req),
+      userAgent: this.getUserAgent(args.req),
+    });
   }
 
   /**
@@ -404,6 +560,81 @@ export class AuthService {
       'http://localhost:4000';
 
     return `${backendBase}/auth/oidc/${provider}/callback`;
+  }
+
+  /**
+   * refresh 토큰을 회전하고 access token을 재발급한다.
+   *
+   * @param req Request
+   * @param res Response
+   */
+  private async rotateRefresh(
+    req: Request,
+    res: Response,
+  ): Promise<{ accessToken: string; accountId: bigint }> {
+    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
+      | string
+      | undefined;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Missing refresh token.');
+    }
+
+    const tokenHash = this.sha256Hex(refreshToken);
+    const session = await this.repo.findActiveRefreshSessionByHash(tokenHash);
+    if (!session) throw new UnauthorizedException('Invalid refresh token.');
+
+    const newRefreshToken = this.generateRefreshToken();
+    const newTokenHash = this.sha256Hex(newRefreshToken);
+
+    const refreshDays = this.getRefreshDays();
+    const newExpiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
+
+    await this.repo.rotateRefreshSession({
+      currentSessionId: session.id,
+      accountId: session.account_id,
+      newTokenHash,
+      userAgent: this.getUserAgent(req),
+      ipAddress: this.getIp(req),
+      newExpiresAt,
+    });
+
+    const accessToken = this.signAccessToken(session.account_id);
+
+    AuthCookie.setRefreshCookie(res, {
+      refreshToken: newRefreshToken,
+      refreshMaxAgeMs: refreshDays * 86400 * 1000,
+      cookieDomain: this.getCookieDomain(),
+      secure: this.isCookieSecure(),
+    });
+
+    return {
+      accessToken,
+      accountId: session.account_id,
+    };
+  }
+
+  /**
+   * 판매자 비밀번호 정책을 검증한다.
+   *
+   * @param rawPassword 입력 비밀번호
+   */
+  private assertStrongPassword(rawPassword: string): void {
+    const password = rawPassword.trim();
+    if (password.length < 8 || password.length > 64) {
+      throw new BadRequestException('Password length must be 8~64.');
+    }
+
+    const hasLower = /[a-z]/.test(password);
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+      throw new BadRequestException(
+        'Password must include upper/lower case, number, and special character.',
+      );
+    }
   }
 
   /**

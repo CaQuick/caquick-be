@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType, NotificationType } from '@prisma/client';
+import {
+  AccountType,
+  NotificationEvent,
+  NotificationType,
+} from '@prisma/client';
 
 import { PrismaService } from '../../../prisma';
 
@@ -324,5 +328,59 @@ export class UserRepository {
       data: { deleted_at: args.now },
     });
     return result.count;
+  }
+
+  async likeReview(args: {
+    accountId: bigint;
+    reviewId: bigint;
+  }): Promise<'liked' | 'already-liked' | 'not-found' | 'self-like'> {
+    return this.prisma.$transaction(async (tx) => {
+      const review = await tx.review.findFirst({
+        where: {
+          id: args.reviewId,
+        },
+        select: {
+          id: true,
+          account_id: true,
+          store_id: true,
+          product_id: true,
+        },
+      });
+
+      if (!review) return 'not-found';
+      if (review.account_id === args.accountId) return 'self-like';
+
+      const existing = await tx.reviewLike.findFirst({
+        where: {
+          review_id: review.id,
+          account_id: args.accountId,
+        },
+        select: { id: true },
+      });
+
+      if (existing) return 'already-liked';
+
+      await tx.reviewLike.create({
+        data: {
+          review_id: review.id,
+          account_id: args.accountId,
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          account_id: review.account_id,
+          type: NotificationType.REVIEW_LIKE,
+          event: NotificationEvent.REVIEW_LIKED,
+          title: '리뷰에 좋아요가 추가되었습니다',
+          body: '회원님의 리뷰를 다른 사용자가 좋아합니다.',
+          review_id: review.id,
+          store_id: review.store_id,
+          product_id: review.product_id,
+        },
+      });
+
+      return 'liked';
+    });
   }
 }
