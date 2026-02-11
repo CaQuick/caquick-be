@@ -107,6 +107,7 @@ enum AuditTargetType {
   PRODUCT
   ORDER
   CONVERSATION
+  CHANGE_PASSWORD
 }
 
 enum AuditActionType {
