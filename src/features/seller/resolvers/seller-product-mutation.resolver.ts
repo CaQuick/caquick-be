@@ -1,12 +1,10 @@
-import { BadRequestException, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
 import { SellerService } from '../seller.service';
 import type {
   SellerAddProductImageInput,
-  SellerCreateBannerInput,
-  SellerCreateFaqTopicInput,
   SellerCreateOptionGroupInput,
   SellerCreateOptionItemInput,
   SellerCreateProductInput,
@@ -14,115 +12,31 @@ import type {
   SellerReorderOptionItemsInput,
   SellerReorderProductCustomTextTokensInput,
   SellerReorderProductImagesInput,
-  SellerSendConversationMessageInput,
   SellerSetProductActiveInput,
   SellerSetProductCategoriesInput,
   SellerSetProductCustomTemplateActiveInput,
   SellerSetProductTagsInput,
-  SellerUpdateBannerInput,
-  SellerUpdateFaqTopicInput,
   SellerUpdateOptionGroupInput,
   SellerUpdateOptionItemInput,
-  SellerUpdateOrderStatusInput,
-  SellerUpdatePickupPolicyInput,
   SellerUpdateProductInput,
-  SellerUpdateStoreBasicInfoInput,
   SellerUpsertProductCustomTemplateInput,
   SellerUpsertProductCustomTextTokenInput,
-  SellerUpsertStoreBusinessHourInput,
-  SellerUpsertStoreDailyCapacityInput,
-  SellerUpsertStoreSpecialClosureInput,
 } from '../types/seller-input.type';
 import type {
-  SellerBannerOutput,
-  SellerConversationMessageOutput,
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
-  SellerFaqTopicOutput,
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
-  SellerOrderSummaryOutput,
   SellerProductImageOutput,
   SellerProductOutput,
-  SellerStoreBusinessHourOutput,
-  SellerStoreDailyCapacityOutput,
-  SellerStoreOutput,
-  SellerStoreSpecialClosureOutput,
 } from '../types/seller-output.type';
+
+import { parseAccountId, parseId } from './seller-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
-export class SellerMutationResolver {
+export class SellerProductMutationResolver {
   constructor(private readonly sellerService: SellerService) {}
-
-  @Mutation('sellerUpdateStoreBasicInfo')
-  sellerUpdateStoreBasicInfo(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpdateStoreBasicInfoInput,
-  ): Promise<SellerStoreOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateStoreBasicInfo(accountId, input);
-  }
-
-  @Mutation('sellerUpsertStoreBusinessHour')
-  sellerUpsertStoreBusinessHour(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpsertStoreBusinessHourInput,
-  ): Promise<SellerStoreBusinessHourOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpsertStoreBusinessHour(accountId, input);
-  }
-
-  @Mutation('sellerUpsertStoreSpecialClosure')
-  sellerUpsertStoreSpecialClosure(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpsertStoreSpecialClosureInput,
-  ): Promise<SellerStoreSpecialClosureOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpsertStoreSpecialClosure(accountId, input);
-  }
-
-  @Mutation('sellerDeleteStoreSpecialClosure')
-  sellerDeleteStoreSpecialClosure(
-    @CurrentUser() user: JwtUser,
-    @Args('closureId') closureId: string,
-  ): Promise<boolean> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteStoreSpecialClosure(
-      accountId,
-      parseId(closureId),
-    );
-  }
-
-  @Mutation('sellerUpdatePickupPolicy')
-  sellerUpdatePickupPolicy(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpdatePickupPolicyInput,
-  ): Promise<SellerStoreOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdatePickupPolicy(accountId, input);
-  }
-
-  @Mutation('sellerUpsertStoreDailyCapacity')
-  sellerUpsertStoreDailyCapacity(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpsertStoreDailyCapacityInput,
-  ): Promise<SellerStoreDailyCapacityOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpsertStoreDailyCapacity(accountId, input);
-  }
-
-  @Mutation('sellerDeleteStoreDailyCapacity')
-  sellerDeleteStoreDailyCapacity(
-    @CurrentUser() user: JwtUser,
-    @Args('capacityId') capacityId: string,
-  ): Promise<boolean> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteStoreDailyCapacity(
-      accountId,
-      parseId(capacityId),
-    );
-  }
 
   @Mutation('sellerCreateProduct')
   sellerCreateProduct(
@@ -347,93 +261,5 @@ export class SellerMutationResolver {
       accountId,
       input,
     );
-  }
-
-  @Mutation('sellerUpdateOrderStatus')
-  sellerUpdateOrderStatus(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpdateOrderStatusInput,
-  ): Promise<SellerOrderSummaryOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateOrderStatus(accountId, input);
-  }
-
-  @Mutation('sellerSendConversationMessage')
-  sellerSendConversationMessage(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerSendConversationMessageInput,
-  ): Promise<SellerConversationMessageOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerSendConversationMessage(accountId, input);
-  }
-
-  @Mutation('sellerCreateFaqTopic')
-  sellerCreateFaqTopic(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerCreateFaqTopicInput,
-  ): Promise<SellerFaqTopicOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerCreateFaqTopic(accountId, input);
-  }
-
-  @Mutation('sellerUpdateFaqTopic')
-  sellerUpdateFaqTopic(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpdateFaqTopicInput,
-  ): Promise<SellerFaqTopicOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateFaqTopic(accountId, input);
-  }
-
-  @Mutation('sellerDeleteFaqTopic')
-  sellerDeleteFaqTopic(
-    @CurrentUser() user: JwtUser,
-    @Args('topicId') topicId: string,
-  ): Promise<boolean> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteFaqTopic(accountId, parseId(topicId));
-  }
-
-  @Mutation('sellerCreateBanner')
-  sellerCreateBanner(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerCreateBannerInput,
-  ): Promise<SellerBannerOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerCreateBanner(accountId, input);
-  }
-
-  @Mutation('sellerUpdateBanner')
-  sellerUpdateBanner(
-    @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerUpdateBannerInput,
-  ): Promise<SellerBannerOutput> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateBanner(accountId, input);
-  }
-
-  @Mutation('sellerDeleteBanner')
-  sellerDeleteBanner(
-    @CurrentUser() user: JwtUser,
-    @Args('bannerId') bannerId: string,
-  ): Promise<boolean> {
-    const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteBanner(accountId, parseId(bannerId));
-  }
-}
-
-function parseAccountId(user: JwtUser): bigint {
-  try {
-    return BigInt(user.accountId);
-  } catch {
-    throw new BadRequestException('Invalid account id.');
-  }
-}
-
-function parseId(raw: string): bigint {
-  try {
-    return BigInt(raw);
-  } catch {
-    throw new BadRequestException('Invalid id.');
   }
 }

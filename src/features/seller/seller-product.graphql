@@ -1,0 +1,317 @@
+extend type Query {
+  """내 매장 상품 목록을 조회한다."""
+  sellerProducts(input: SellerProductListInput): SellerProductConnection!
+  """내 매장 상품 상세를 조회한다."""
+  sellerProduct(productId: ID!): SellerProduct!
+}
+
+extend type Mutation {
+  """내 매장 상품을 생성한다."""
+  sellerCreateProduct(input: SellerCreateProductInput!): SellerProduct!
+  """내 매장 상품을 수정한다."""
+  sellerUpdateProduct(input: SellerUpdateProductInput!): SellerProduct!
+  """내 매장 상품을 삭제한다."""
+  sellerDeleteProduct(productId: ID!): Boolean!
+  """내 매장 상품 활성 상태를 변경한다."""
+  sellerSetProductActive(input: SellerSetProductActiveInput!): SellerProduct!
+
+  """상품 이미지를 추가한다."""
+  sellerAddProductImage(input: SellerAddProductImageInput!): SellerProductImage!
+  """상품 이미지를 삭제한다."""
+  sellerDeleteProductImage(imageId: ID!): Boolean!
+  """상품 이미지 순서를 변경한다."""
+  sellerReorderProductImages(input: SellerReorderProductImagesInput!): [SellerProductImage!]!
+
+  """상품 카테고리 연결을 설정한다."""
+  sellerSetProductCategories(input: SellerSetProductCategoriesInput!): SellerProduct!
+  """상품 태그 연결을 설정한다."""
+  sellerSetProductTags(input: SellerSetProductTagsInput!): SellerProduct!
+
+  """상품 옵션 그룹을 생성한다."""
+  sellerCreateOptionGroup(input: SellerCreateOptionGroupInput!): SellerOptionGroup!
+  """상품 옵션 그룹을 수정한다."""
+  sellerUpdateOptionGroup(input: SellerUpdateOptionGroupInput!): SellerOptionGroup!
+  """상품 옵션 그룹을 삭제한다."""
+  sellerDeleteOptionGroup(optionGroupId: ID!): Boolean!
+  """상품 옵션 그룹 순서를 변경한다."""
+  sellerReorderOptionGroups(input: SellerReorderOptionGroupsInput!): [SellerOptionGroup!]!
+
+  """상품 옵션 아이템을 생성한다."""
+  sellerCreateOptionItem(input: SellerCreateOptionItemInput!): SellerOptionItem!
+  """상품 옵션 아이템을 수정한다."""
+  sellerUpdateOptionItem(input: SellerUpdateOptionItemInput!): SellerOptionItem!
+  """상품 옵션 아이템을 삭제한다."""
+  sellerDeleteOptionItem(optionItemId: ID!): Boolean!
+  """상품 옵션 아이템 순서를 변경한다."""
+  sellerReorderOptionItems(input: SellerReorderOptionItemsInput!): [SellerOptionItem!]!
+
+  """상품 커스텀 템플릿을 등록 또는 수정한다."""
+  sellerUpsertProductCustomTemplate(input: SellerUpsertProductCustomTemplateInput!): SellerCustomTemplate!
+  """상품 커스텀 템플릿 활성 상태를 변경한다."""
+  sellerSetProductCustomTemplateActive(input: SellerSetProductCustomTemplateActiveInput!): SellerCustomTemplate!
+  """커스텀 텍스트 토큰을 등록 또는 수정한다."""
+  sellerUpsertProductCustomTextToken(input: SellerUpsertProductCustomTextTokenInput!): SellerCustomTextToken!
+  """커스텀 텍스트 토큰을 삭제한다."""
+  sellerDeleteProductCustomTextToken(tokenId: ID!): Boolean!
+  """커스텀 텍스트 토큰 순서를 변경한다."""
+  sellerReorderProductCustomTextTokens(input: SellerReorderProductCustomTextTokensInput!): [SellerCustomTextToken!]!
+}
+
+type SellerCategory {
+  id: ID!
+  name: String!
+}
+
+"""SellerTag 타입"""
+type SellerTag {
+  id: ID!
+  name: String!
+}
+
+"""SellerProductImage 타입"""
+type SellerProductImage {
+  id: ID!
+  imageUrl: String!
+  sortOrder: Int!
+}
+
+"""SellerOptionItem 타입"""
+type SellerOptionItem {
+  id: ID!
+  optionGroupId: ID!
+  title: String!
+  description: String
+  imageUrl: String
+  priceDelta: Int!
+  sortOrder: Int!
+  isActive: Boolean!
+}
+
+"""SellerOptionGroup 타입"""
+type SellerOptionGroup {
+  id: ID!
+  productId: ID!
+  name: String!
+  isRequired: Boolean!
+  minSelect: Int!
+  maxSelect: Int!
+  optionRequiresDescription: Boolean!
+  optionRequiresImage: Boolean!
+  sortOrder: Int!
+  isActive: Boolean!
+  optionItems: [SellerOptionItem!]!
+}
+
+"""SellerCustomTextToken 타입"""
+type SellerCustomTextToken {
+  id: ID!
+  templateId: ID!
+  tokenKey: String!
+  defaultText: String!
+  maxLength: Int!
+  sortOrder: Int!
+  isRequired: Boolean!
+  posX: Int
+  posY: Int
+  width: Int
+  height: Int
+}
+
+"""SellerCustomTemplate 타입"""
+type SellerCustomTemplate {
+  id: ID!
+  productId: ID!
+  baseImageUrl: String!
+  isActive: Boolean!
+  textTokens: [SellerCustomTextToken!]!
+}
+
+"""SellerProduct 타입"""
+type SellerProduct {
+  id: ID!
+  storeId: ID!
+  name: String!
+  description: String
+  purchaseNotice: String
+  regularPrice: Int!
+  salePrice: Int
+  currency: String!
+  baseDesignImageUrl: String
+  preparationTimeMinutes: Int!
+  isActive: Boolean!
+  images: [SellerProductImage!]!
+  categories: [SellerCategory!]!
+  tags: [SellerTag!]!
+  optionGroups: [SellerOptionGroup!]!
+  customTemplate: SellerCustomTemplate
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerProductConnection 타입"""
+type SellerProductConnection {
+  items: [SellerProduct!]!
+  nextCursor: ID
+}
+
+"""SellerProductListInput 입력 타입"""
+input SellerProductListInput {
+  limit: Int = 20
+  cursor: ID
+  isActive: Boolean
+  categoryId: ID
+  search: String
+}
+
+"""SellerCreateProductInput 입력 타입"""
+input SellerCreateProductInput {
+  name: String!
+  initialImageUrl: String!
+  description: String
+  purchaseNotice: String
+  regularPrice: Int!
+  salePrice: Int
+  currency: String = "KRW"
+  baseDesignImageUrl: String
+  preparationTimeMinutes: Int = 180
+  isActive: Boolean = true
+}
+
+"""SellerUpdateProductInput 입력 타입"""
+input SellerUpdateProductInput {
+  productId: ID!
+  name: String
+  description: String
+  purchaseNotice: String
+  regularPrice: Int
+  salePrice: Int
+  currency: String
+  baseDesignImageUrl: String
+  preparationTimeMinutes: Int
+}
+
+"""SellerSetProductActiveInput 입력 타입"""
+input SellerSetProductActiveInput {
+  productId: ID!
+  isActive: Boolean!
+}
+
+"""SellerAddProductImageInput 입력 타입"""
+input SellerAddProductImageInput {
+  productId: ID!
+  imageUrl: String!
+  sortOrder: Int
+}
+
+"""SellerReorderProductImagesInput 입력 타입"""
+input SellerReorderProductImagesInput {
+  productId: ID!
+  imageIds: [ID!]!
+}
+
+"""SellerSetProductCategoriesInput 입력 타입"""
+input SellerSetProductCategoriesInput {
+  productId: ID!
+  categoryIds: [ID!]!
+}
+
+"""SellerSetProductTagsInput 입력 타입"""
+input SellerSetProductTagsInput {
+  productId: ID!
+  tagIds: [ID!]!
+}
+
+"""SellerCreateOptionGroupInput 입력 타입"""
+input SellerCreateOptionGroupInput {
+  productId: ID!
+  name: String!
+  isRequired: Boolean = true
+  minSelect: Int = 1
+  maxSelect: Int = 1
+  optionRequiresDescription: Boolean = false
+  optionRequiresImage: Boolean = false
+  sortOrder: Int
+  isActive: Boolean = true
+}
+
+"""SellerUpdateOptionGroupInput 입력 타입"""
+input SellerUpdateOptionGroupInput {
+  optionGroupId: ID!
+  name: String
+  isRequired: Boolean
+  minSelect: Int
+  maxSelect: Int
+  optionRequiresDescription: Boolean
+  optionRequiresImage: Boolean
+  sortOrder: Int
+  isActive: Boolean
+}
+
+"""SellerReorderOptionGroupsInput 입력 타입"""
+input SellerReorderOptionGroupsInput {
+  productId: ID!
+  optionGroupIds: [ID!]!
+}
+
+"""SellerCreateOptionItemInput 입력 타입"""
+input SellerCreateOptionItemInput {
+  optionGroupId: ID!
+  title: String!
+  description: String
+  imageUrl: String
+  priceDelta: Int = 0
+  sortOrder: Int
+  isActive: Boolean = true
+}
+
+"""SellerUpdateOptionItemInput 입력 타입"""
+input SellerUpdateOptionItemInput {
+  optionItemId: ID!
+  title: String
+  description: String
+  imageUrl: String
+  priceDelta: Int
+  sortOrder: Int
+  isActive: Boolean
+}
+
+"""SellerReorderOptionItemsInput 입력 타입"""
+input SellerReorderOptionItemsInput {
+  optionGroupId: ID!
+  optionItemIds: [ID!]!
+}
+
+"""SellerUpsertProductCustomTemplateInput 입력 타입"""
+input SellerUpsertProductCustomTemplateInput {
+  productId: ID!
+  baseImageUrl: String!
+  isActive: Boolean = true
+}
+
+"""SellerSetProductCustomTemplateActiveInput 입력 타입"""
+input SellerSetProductCustomTemplateActiveInput {
+  templateId: ID!
+  isActive: Boolean!
+}
+
+"""SellerUpsertProductCustomTextTokenInput 입력 타입"""
+input SellerUpsertProductCustomTextTokenInput {
+  tokenId: ID
+  templateId: ID!
+  tokenKey: String!
+  defaultText: String!
+  maxLength: Int = 30
+  sortOrder: Int
+  isRequired: Boolean = true
+  posX: Int
+  posY: Int
+  width: Int
+  height: Int
+}
+
+"""SellerReorderProductCustomTextTokensInput 입력 타입"""
+input SellerReorderProductCustomTextTokensInput {
+  templateId: ID!
+  tokenIds: [ID!]!
+}
+

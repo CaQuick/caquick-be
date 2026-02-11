@@ -1,0 +1,172 @@
+extend type Query {
+  """내 매장 FAQ 목록을 조회한다."""
+  sellerFaqTopics: [SellerFaqTopic!]!
+  """내 매장 배너 목록을 조회한다."""
+  sellerBanners(input: SellerCursorInput): SellerBannerConnection!
+  """내 매장 감사 로그 목록을 조회한다."""
+  sellerAuditLogs(input: SellerAuditLogListInput): SellerAuditLogConnection!
+}
+
+extend type Mutation {
+  """FAQ 항목을 생성한다."""
+  sellerCreateFaqTopic(input: SellerCreateFaqTopicInput!): SellerFaqTopic!
+  """FAQ 항목을 수정한다."""
+  sellerUpdateFaqTopic(input: SellerUpdateFaqTopicInput!): SellerFaqTopic!
+  """FAQ 항목을 삭제한다."""
+  sellerDeleteFaqTopic(topicId: ID!): Boolean!
+
+  """배너를 생성한다."""
+  sellerCreateBanner(input: SellerCreateBannerInput!): SellerBanner!
+  """배너를 수정한다."""
+  sellerUpdateBanner(input: SellerUpdateBannerInput!): SellerBanner!
+  """배너를 삭제한다."""
+  sellerDeleteBanner(bannerId: ID!): Boolean!
+}
+
+type SellerFaqTopic {
+  id: ID!
+  storeId: ID!
+  title: String!
+  answerHtml: String!
+  sortOrder: Int!
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerCreateFaqTopicInput 입력 타입"""
+input SellerCreateFaqTopicInput {
+  title: String!
+  answerHtml: String!
+  sortOrder: Int
+  isActive: Boolean = true
+}
+
+"""SellerUpdateFaqTopicInput 입력 타입"""
+input SellerUpdateFaqTopicInput {
+  topicId: ID!
+  title: String
+  answerHtml: String
+  sortOrder: Int
+  isActive: Boolean
+}
+
+"""SellerBannerPlacement 열거형"""
+enum SellerBannerPlacement {
+  HOME_MAIN
+  HOME_SUB
+  CATEGORY
+  STORE
+}
+
+"""SellerBannerLinkType 열거형"""
+enum SellerBannerLinkType {
+  NONE
+  URL
+  PRODUCT
+  STORE
+  CATEGORY
+}
+
+"""SellerBanner 타입"""
+type SellerBanner {
+  id: ID!
+  placement: SellerBannerPlacement!
+  title: String
+  imageUrl: String!
+  linkType: SellerBannerLinkType!
+  linkUrl: String
+  linkProductId: ID
+  linkStoreId: ID
+  linkCategoryId: ID
+  startsAt: DateTime
+  endsAt: DateTime
+  sortOrder: Int!
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerBannerConnection 타입"""
+type SellerBannerConnection {
+  items: [SellerBanner!]!
+  nextCursor: ID
+}
+
+"""SellerCreateBannerInput 입력 타입"""
+input SellerCreateBannerInput {
+  placement: SellerBannerPlacement!
+  title: String
+  imageUrl: String!
+  linkType: SellerBannerLinkType = NONE
+  linkUrl: String
+  linkProductId: ID
+  linkStoreId: ID
+  linkCategoryId: ID
+  startsAt: DateTime
+  endsAt: DateTime
+  sortOrder: Int
+  isActive: Boolean = true
+}
+
+"""SellerUpdateBannerInput 입력 타입"""
+input SellerUpdateBannerInput {
+  bannerId: ID!
+  placement: SellerBannerPlacement
+  title: String
+  imageUrl: String
+  linkType: SellerBannerLinkType
+  linkUrl: String
+  linkProductId: ID
+  linkStoreId: ID
+  linkCategoryId: ID
+  startsAt: DateTime
+  endsAt: DateTime
+  sortOrder: Int
+  isActive: Boolean
+}
+
+"""SellerAuditTargetType 열거형"""
+enum SellerAuditTargetType {
+  STORE
+  PRODUCT
+  ORDER
+  CONVERSATION
+  CHANGE_PASSWORD
+}
+
+"""SellerAuditActionType 열거형"""
+enum SellerAuditActionType {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+}
+
+"""SellerAuditLog 타입"""
+type SellerAuditLog {
+  id: ID!
+  actorAccountId: ID!
+  storeId: ID
+  targetType: SellerAuditTargetType!
+  targetId: ID!
+  action: SellerAuditActionType!
+  beforeJson: String
+  afterJson: String
+  ipAddress: String
+  userAgent: String
+  createdAt: DateTime!
+}
+
+"""SellerAuditLogConnection 타입"""
+type SellerAuditLogConnection {
+  items: [SellerAuditLog!]!
+  nextCursor: ID
+}
+
+"""SellerAuditLogListInput 입력 타입"""
+input SellerAuditLogListInput {
+  limit: Int = 20
+  cursor: ID
+  targetType: SellerAuditTargetType
+}

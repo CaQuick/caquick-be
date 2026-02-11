@@ -2,12 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { SellerService } from '../seller.service';
 
-import { SellerMutationResolver } from './seller-mutation.resolver';
-import { SellerQueryResolver } from './seller-query.resolver';
+import { SellerContentMutationResolver } from './seller-content-mutation.resolver';
+import { SellerProductQueryResolver } from './seller-product-query.resolver';
 
 describe('SellerResolvers', () => {
-  let queryResolver: SellerQueryResolver;
-  let mutationResolver: SellerMutationResolver;
+  let queryResolver: SellerProductQueryResolver;
+  let mutationResolver: SellerContentMutationResolver;
   let service: jest.Mocked<SellerService>;
 
   beforeEach(async () => {
@@ -18,8 +18,8 @@ describe('SellerResolvers', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        SellerQueryResolver,
-        SellerMutationResolver,
+        SellerProductQueryResolver,
+        SellerContentMutationResolver,
         {
           provide: SellerService,
           useValue: service,
@@ -27,9 +27,11 @@ describe('SellerResolvers', () => {
       ],
     }).compile();
 
-    queryResolver = module.get<SellerQueryResolver>(SellerQueryResolver);
-    mutationResolver = module.get<SellerMutationResolver>(
-      SellerMutationResolver,
+    queryResolver = module.get<SellerProductQueryResolver>(
+      SellerProductQueryResolver,
+    );
+    mutationResolver = module.get<SellerContentMutationResolver>(
+      SellerContentMutationResolver,
     );
   });
 
