@@ -27,7 +27,7 @@ const IMPACT_KEYS = [
 export const AI_RESPONSE_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'summary', 'changes', 'impact', 'checklist', 'risks'],
+  required: ['title', 'summary', 'changes', 'impact', 'checklist', 'risks', 'labels'],
   properties: {
     title: { type: 'string' },
     summary: { type: 'string' },
@@ -546,11 +546,7 @@ export function validateAiSummaryJson(payload) {
   const checklist = validateStringArray(payload.checklist, 'checklist');
   const risks = validateStringArray(payload.risks, 'risks');
 
-  let labels = [];
-
-  if (payload.labels !== undefined) {
-    labels = validateStringArray(payload.labels, 'labels');
-  }
+  const labels = validateStringArray(payload.labels, 'labels');
 
   return {
     title,
