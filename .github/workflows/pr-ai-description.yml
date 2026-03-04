@@ -1,0 +1,45 @@
+name: PR AI Description
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-ai-description-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-ai-description:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js (24.x)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Run PR AI helper unit tests
+        run: node --test .github/scripts/__tests__/*.spec.mjs
+
+      - name: Generate AI PR description
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          PR_AI_MAX_DIFF_BYTES: ${{ vars.PR_AI_MAX_DIFF_BYTES }}
+          PR_AI_APPLY_TITLE: ${{ vars.PR_AI_APPLY_TITLE }}
+          PR_AI_EXCLUDE_GLOBS: ${{ vars.PR_AI_EXCLUDE_GLOBS }}
+          PR_AI_MAX_FILES: ${{ vars.PR_AI_MAX_FILES }}
+        run: node .github/scripts/pr-ai-description.mjs
