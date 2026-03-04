@@ -66,6 +66,18 @@ function parseIntegerEnv(rawValue, defaultValue) {
   return defaultValue;
 }
 
+function truncateText(value, maxLength = 2000) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}...(truncated)`;
+}
+
 function ensureEnv(name) {
   const value = process.env[name];
 
@@ -459,6 +471,7 @@ async function requestOpenAiSummary({
     if (!response.ok) {
       const rawBody = await response.text();
       const error = new Error(`openai-api-error:${response.status}`);
+      error.status = response.status;
       error.response = rawBody;
       throw error;
     }
@@ -967,13 +980,30 @@ async function run() {
 }
 
 run().catch(async (error) => {
+  const rawResponse =
+    typeof error?.response === 'string' && error.response.length > 0
+      ? error.response
+      : null;
+  const safeResponse = rawResponse
+    ? truncateText(maskSensitiveContent(rawResponse), 4000)
+    : null;
+
   logWarn('PR AI description workflow failed', {
     message: error?.message ?? 'unknown-error',
     status: error?.status,
+    openAiErrorResponse: safeResponse ?? undefined,
   });
 
   await writeStepSummary('## PR AI Summary Failed');
   await writeStepSummary(`- Error: ${error?.message ?? 'unknown-error'}`);
+  await writeStepSummary(`- Status: ${error?.status ?? 'unknown'}`);
+
+  if (safeResponse) {
+    await writeStepSummary('- OpenAI Error Response:');
+    await writeStepSummary('```json');
+    await writeStepSummary(safeResponse);
+    await writeStepSummary('```');
+  }
 
   process.exit(1);
 });
