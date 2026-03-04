@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
+import { Client } from 'langsmith';
 
 const DEFAULT_LANGSMITH_ENDPOINT = 'https://api.smith.langchain.com';
 const DEFAULT_LANGSMITH_PROJECT = 'caquick-pr-ai-description';
-const REQUEST_TIMEOUT_MS = 10000;
-
 function parseBoolean(rawValue, defaultValue) {
   if (rawValue === undefined || rawValue === null || rawValue === '') {
     return defaultValue;
@@ -97,63 +96,63 @@ export function resolveLangSmithTraceConfig(env = process.env) {
 
 export function createLangSmithTracer({
   env = process.env,
-  fetchImpl = fetch,
   logger,
+  client,
+  clientFactory,
 } = {}) {
   const config = resolveLangSmithTraceConfig(env);
   const log = typeof logger === 'function' ? logger : () => {};
+  const tracingClient =
+    config.enabled &&
+    (client ??
+      (typeof clientFactory === 'function'
+        ? clientFactory({
+            apiKey: config.apiKey,
+            apiUrl: config.endpoint,
+            workspaceId: config.workspaceId ?? undefined,
+            autoBatchTracing: false,
+          })
+        : new Client({
+            apiKey: config.apiKey,
+            apiUrl: config.endpoint,
+            workspaceId: config.workspaceId ?? undefined,
+            autoBatchTracing: false,
+          })));
 
-  async function requestLangSmith(method, path, payload) {
-    if (!config.enabled) {
-      return null;
+  function toKvMap(value) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const headers = {
-      'Content-Type': 'application/json',
-      'x-api-key': config.apiKey,
-    };
+    if (value === undefined) {
+      return {};
+    }
 
-    if (config.workspaceId) {
-      headers['x-tenant-id'] = config.workspaceId;
+    return {
+      value,
+    };
+  }
+
+  async function requestLangSmith(action, execute) {
+    if (!config.enabled || !tracingClient) {
+      return null;
     }
 
     try {
-      const response = await fetchImpl(`${config.endpoint}${path}`, {
-        method,
-        headers,
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const rawBody = await response.text();
-        throw new Error(
-          `langsmith-api-error:${response.status}:${path}:${rawBody.slice(0, 200)}`,
-        );
-      }
-
+      await execute();
       return null;
     } catch (error) {
-      if (error.name === 'AbortError') {
-        log('warn', 'langsmith request timed out', { method, path });
-      } else {
-        log('warn', 'langsmith request failed', {
-          method,
-          path,
-          error: error?.message ?? 'unknown-error',
-        });
-      }
+      log('warn', 'langsmith sdk request failed', {
+        action,
+        error: error?.message ?? 'unknown-error',
+      });
 
       return null;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
   async function startRun({ name, runType = 'chain', inputs = {}, parentRunId, extra } = {}) {
-    if (!config.enabled) {
+    if (!config.enabled || !tracingClient) {
       return null;
     }
 
@@ -162,9 +161,9 @@ export function createLangSmithTracer({
       id: runId,
       name: typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'unnamed-run',
       run_type: runType,
-      inputs,
+      inputs: toKvMap(inputs),
       start_time: nowIsoString(),
-      session_name: config.projectName,
+      project_name: config.projectName,
     };
 
     if (typeof parentRunId === 'string' && parentRunId.trim().length > 0) {
@@ -175,7 +174,9 @@ export function createLangSmithTracer({
       payload.extra = extra;
     }
 
-    await requestLangSmith('POST', '/runs', payload);
+    await requestLangSmith('createRun', async () => {
+      await tracingClient.createRun(payload);
+    });
 
     return {
       id: runId,
@@ -185,25 +186,29 @@ export function createLangSmithTracer({
   }
 
   async function endRun(run, outputs = {}) {
-    if (!run || typeof run.id !== 'string') {
+    if (!run || typeof run.id !== 'string' || !tracingClient) {
       return;
     }
 
-    await requestLangSmith('PATCH', `/runs/${run.id}`, {
-      outputs,
-      end_time: nowIsoString(),
+    await requestLangSmith('updateRun', async () => {
+      await tracingClient.updateRun(run.id, {
+        outputs: toKvMap(outputs),
+        end_time: nowIsoString(),
+      });
     });
   }
 
   async function failRun(run, error, outputs = {}) {
-    if (!run || typeof run.id !== 'string') {
+    if (!run || typeof run.id !== 'string' || !tracingClient) {
       return;
     }
 
-    await requestLangSmith('PATCH', `/runs/${run.id}`, {
-      outputs,
-      error: toTraceError(error),
-      end_time: nowIsoString(),
+    await requestLangSmith('updateRun', async () => {
+      await tracingClient.updateRun(run.id, {
+        outputs: toKvMap(outputs),
+        error: toTraceError(error),
+        end_time: nowIsoString(),
+      });
     });
   }
 

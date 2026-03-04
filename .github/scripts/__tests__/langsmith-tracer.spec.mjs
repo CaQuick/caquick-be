@@ -6,37 +6,36 @@ import {
   resolveLangSmithTraceConfig,
 } from '../langsmith-tracer.mjs';
 
-function createFetchRecorder() {
-  const calls = [];
+function createClientRecorder(options = {}) {
+  const createCalls = [];
+  const updateCalls = [];
+  const createErrorMessage = options.createErrorMessage;
+  const updateErrorMessage = options.updateErrorMessage;
 
-  const fetchImpl = async (url, options = {}) => {
-    let body = null;
+  const client = {
+    async createRun(payload) {
+      createCalls.push(payload);
 
-    if (typeof options.body === 'string' && options.body.length > 0) {
-      body = JSON.parse(options.body);
-    }
+      if (typeof createErrorMessage === 'string') {
+        throw new Error(createErrorMessage);
+      }
+    },
+    async updateRun(runId, payload) {
+      updateCalls.push({
+        runId,
+        payload,
+      });
 
-    calls.push({
-      url,
-      options,
-      body,
-    });
-
-    return {
-      ok: true,
-      status: 200,
-      async text() {
-        return '';
-      },
-      async json() {
-        return {};
-      },
-    };
+      if (typeof updateErrorMessage === 'string') {
+        throw new Error(updateErrorMessage);
+      }
+    },
   };
 
   return {
-    calls,
-    fetchImpl,
+    client,
+    createCalls,
+    updateCalls,
   };
 }
 
@@ -70,14 +69,14 @@ test('설정값이 없으면 endpoint/project 기본값을 사용한다', () => 
   assert.equal(config.workspaceId, null);
 });
 
-test('withRun 성공 시 /runs POST 후 PATCH가 호출된다', async () => {
-  const { calls, fetchImpl } = createFetchRecorder();
+test('withRun 성공 시 SDK createRun/updateRun이 호출된다', async () => {
+  const { client, createCalls, updateCalls } = createClientRecorder();
   const tracer = createLangSmithTracer({
     env: {
       LANGSMITH_API_KEY: 'lsv2_xxx',
       LANGSMITH_PROJECT: 'caquick-ci',
     },
-    fetchImpl,
+    client,
   });
 
   const result = await tracer.withRun(
@@ -96,24 +95,24 @@ test('withRun 성공 시 /runs POST 후 PATCH가 호출된다', async () => {
   );
 
   assert.equal(result.title, '요약 제목');
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, 'https://api.smith.langchain.com/runs');
-  assert.equal(calls[0].body.session_name, 'caquick-ci');
-  assert.equal(calls[0].body.run_type, 'llm');
+  assert.equal(createCalls.length, 1);
+  assert.equal(createCalls[0].project_name, 'caquick-ci');
+  assert.equal(createCalls[0].run_type, 'llm');
 
-  const runId = calls[0].body.id;
+  const runId = createCalls[0].id;
   assert.ok(typeof runId === 'string' && runId.length > 0);
-  assert.equal(calls[1].url, `https://api.smith.langchain.com/runs/${runId}`);
-  assert.equal(calls[1].body.outputs.title, '요약 제목');
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0].runId, runId);
+  assert.equal(updateCalls[0].payload.outputs.title, '요약 제목');
 });
 
 test('withRun 실패 시 에러를 PATCH로 기록하고 예외를 다시 던진다', async () => {
-  const { calls, fetchImpl } = createFetchRecorder();
+  const { client, createCalls, updateCalls } = createClientRecorder();
   const tracer = createLangSmithTracer({
     env: {
       LANGSMITH_API_KEY: 'lsv2_xxx',
     },
-    fetchImpl,
+    client,
   });
 
   await assert.rejects(
@@ -131,26 +130,64 @@ test('withRun 실패 시 에러를 PATCH로 기록하고 예외를 다시 던진
     /intentional-failure/,
   );
 
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1].body.outputs.constructor, Object);
-  assert.match(calls[1].body.error, /intentional-failure/);
+  assert.equal(createCalls.length, 1);
+  assert.equal(updateCalls.length, 1);
+  assert.equal(updateCalls[0].payload.outputs.constructor, Object);
+  assert.match(updateCalls[0].payload.error, /intentional-failure/);
 });
 
-test('workspace id가 있으면 x-tenant-id 헤더가 포함된다', async () => {
-  const { calls, fetchImpl } = createFetchRecorder();
-  const tracer = createLangSmithTracer({
+test('workspace id는 SDK Client 초기화 옵션으로 전달된다', () => {
+  let capturedClientConfig = null;
+
+  createLangSmithTracer({
     env: {
       LANGSMITH_API_KEY: 'lsv2_xxx',
       LANGSMITH_WORKSPACE_ID: 'workspace-123',
+      LANGSMITH_ENDPOINT: 'https://api.eu.smith.langchain.com',
     },
-    fetchImpl,
+    clientFactory: (clientConfig) => {
+      capturedClientConfig = clientConfig;
+      return {
+        async createRun() {},
+        async updateRun() {},
+      };
+    },
   });
 
-  await tracer.startRun({
-    name: 'root-run',
-    runType: 'chain',
+  assert.ok(capturedClientConfig);
+  assert.equal(capturedClientConfig.workspaceId, 'workspace-123');
+  assert.equal(capturedClientConfig.apiUrl, 'https://api.eu.smith.langchain.com');
+  assert.equal(capturedClientConfig.autoBatchTracing, false);
+});
+
+test('SDK 호출 실패는 경고 로그만 남기고 작업을 중단하지 않는다', async () => {
+  const { client, createCalls, updateCalls } = createClientRecorder({
+    createErrorMessage: 'create-failed',
+    updateErrorMessage: 'update-failed',
+  });
+  const logs = [];
+  const tracer = createLangSmithTracer({
+    env: {
+      LANGSMITH_API_KEY: 'lsv2_xxx',
+    },
+    client,
+    logger: (level, message, payload) => {
+      logs.push({ level, message, payload });
+    },
   });
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.headers['x-tenant-id'], 'workspace-123');
+  const result = await tracer.withRun(
+    {
+      name: 'resilient-run',
+      runType: 'chain',
+    },
+    async () => ({
+      ok: true,
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(createCalls.length, 1);
+  assert.equal(updateCalls.length, 1);
+  assert.ok(logs.some((entry) => entry.level === 'warn'));
 });

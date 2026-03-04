@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: '24.x'
 
+      - name: Install dependencies
+        run: yarn install --immutable
+
       - name: Run PR AI helper unit tests
         run: node --test .github/scripts/__tests__/*.spec.mjs
 
