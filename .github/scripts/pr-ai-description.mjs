@@ -52,24 +52,6 @@ async function writeStepSummary(line) {
   await fs.appendFile(stepSummaryPath, `${line}\n`, 'utf8');
 }
 
-function parseBooleanEnv(rawValue, defaultValue) {
-  if (rawValue === undefined || rawValue === null || rawValue === '') {
-    return defaultValue;
-  }
-
-  const normalized = String(rawValue).trim().toLowerCase();
-
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
-    return true;
-  }
-
-  if (['0', 'false', 'no', 'off'].includes(normalized)) {
-    return false;
-  }
-
-  return defaultValue;
-}
-
 function parseIntegerEnv(rawValue, defaultValue) {
   if (rawValue === undefined || rawValue === null || rawValue === '') {
     return defaultValue;
@@ -648,8 +630,8 @@ async function run() {
     DEFAULT_MAX_DIFF_BYTES,
   );
   const maxFiles = parseIntegerEnv(process.env.PR_AI_MAX_FILES, DEFAULT_MAX_FILES);
-  const applyTitle = parseBooleanEnv(process.env.PR_AI_APPLY_TITLE, true);
-  const excludeGlobs = buildExcludeGlobs(process.env.PR_AI_EXCLUDE_GLOBS);
+  const applyTitle = true;
+  const excludeGlobs = buildExcludeGlobs();
   const tracer = createLangSmithTracer({
     logger: (level, message, payload) => {
       if (level === 'warn') {

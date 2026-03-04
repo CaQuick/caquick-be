@@ -42,8 +42,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           PR_AI_MAX_DIFF_BYTES: ${{ vars.PR_AI_MAX_DIFF_BYTES }}
-          PR_AI_APPLY_TITLE: ${{ vars.PR_AI_APPLY_TITLE }}
-          PR_AI_EXCLUDE_GLOBS: ${{ vars.PR_AI_EXCLUDE_GLOBS }}
           PR_AI_MAX_FILES: ${{ vars.PR_AI_MAX_FILES }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
