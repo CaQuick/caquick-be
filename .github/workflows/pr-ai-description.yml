@@ -42,4 +42,9 @@ jobs:
           PR_AI_APPLY_TITLE: ${{ vars.PR_AI_APPLY_TITLE }}
           PR_AI_EXCLUDE_GLOBS: ${{ vars.PR_AI_EXCLUDE_GLOBS }}
           PR_AI_MAX_FILES: ${{ vars.PR_AI_MAX_FILES }}
+          LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_ENDPOINT: ${{ vars.LANGSMITH_ENDPOINT }}
+          LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT }}
+          LANGSMITH_WORKSPACE_ID: ${{ vars.LANGSMITH_WORKSPACE_ID }}
         run: node .github/scripts/pr-ai-description.mjs

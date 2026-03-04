@@ -17,6 +17,7 @@ import {
   upsertSummaryBlock,
   validateAiSummaryJson,
 } from './pr-ai-description-lib.mjs';
+import { createLangSmithTracer } from './langsmith-tracer.mjs';
 
 const TARGET_ASSIGNEE = 'chanwoo7';
 const DEFAULT_MAX_DIFF_BYTES = 102400;
@@ -630,6 +631,14 @@ function uniqueStringList(values) {
   return result;
 }
 
+function shortenSha(sha) {
+  if (typeof sha !== 'string') {
+    return 'unknown';
+  }
+
+  return sha.slice(0, 12);
+}
+
 async function run() {
   const githubToken = ensureEnv('GITHUB_TOKEN');
   const openAiApiKey = ensureEnv('OPENAI_API_KEY');
@@ -641,197 +650,338 @@ async function run() {
   const maxFiles = parseIntegerEnv(process.env.PR_AI_MAX_FILES, DEFAULT_MAX_FILES);
   const applyTitle = parseBooleanEnv(process.env.PR_AI_APPLY_TITLE, true);
   const excludeGlobs = buildExcludeGlobs(process.env.PR_AI_EXCLUDE_GLOBS);
+  const tracer = createLangSmithTracer({
+    logger: (level, message, payload) => {
+      if (level === 'warn') {
+        logWarn(message, payload);
+        return;
+      }
 
-  const payload = await readEventPayload();
-  const pullRequest = payload.pull_request;
+      logInfo(message, payload);
+    },
+  });
 
-  if (!pullRequest) {
-    throw new Error('pull_request payload not found');
+  if (tracer.isEnabled()) {
+    logInfo('LangSmith tracing enabled', {
+      endpoint: tracer.config.endpoint,
+      projectName: tracer.config.projectName,
+    });
+  } else {
+    logInfo('LangSmith tracing disabled', {
+      reason: tracer.reason,
+    });
   }
 
-  const isFork = pullRequest.head?.repo?.full_name !== payload.repository?.full_name;
-
-  if (isFork) {
-    logInfo('fork PR detected. skip by policy.');
-    await writeStepSummary('- Fork PR detected: skipped by policy.');
-    return;
-  }
-
-  const { owner, repo } = parseRepository();
-  const githubRequest = createGitHubRequest({ githubToken });
-  const prNumber = pullRequest.number;
-  const baseSha = pullRequest.base?.sha;
-  const headSha = pullRequest.head?.sha;
-
-  if (typeof baseSha !== 'string' || typeof headSha !== 'string') {
-    throw new Error('base/head sha missing from payload');
-  }
-
-  let repositoryLabels = [];
+  const workflowRun = await tracer.startRun({
+    name: 'pr-ai-description',
+    runType: 'chain',
+    inputs: {
+      repository: process.env.GITHUB_REPOSITORY ?? 'unknown',
+      eventName: process.env.GITHUB_EVENT_NAME ?? 'unknown',
+      actor: process.env.GITHUB_ACTOR ?? 'unknown',
+      model: openAiModel,
+      maxDiffBytes,
+      maxFiles,
+      applyTitle,
+    },
+  });
 
   try {
-    repositoryLabels = await fetchRepositoryLabels(githubRequest, owner, repo);
-  } catch (error) {
-    if (isPermissionError(error)) {
-      logWarn('failed to read repository labels due to permission issue', {
-        status: error.status,
-      });
-      await writeStepSummary(
-        '- Repository labels could not be loaded (permission issue).',
-      );
-      repositoryLabels = [];
-    } else {
-      throw error;
+    const payload = await readEventPayload();
+    const pullRequest = payload.pull_request;
+
+    if (!pullRequest) {
+      throw new Error('pull_request payload not found');
     }
-  }
 
-  const compareResult = await tryCompareDiff({
-    githubRequest,
-    owner,
-    repo,
-    baseSha,
-    headSha,
-    excludeGlobs,
-    maxFiles,
-  });
+    const isFork = pullRequest.head?.repo?.full_name !== payload.repository?.full_name;
 
-  let diffSource = 'compare';
-  let diffEntries = compareResult.entries;
-  let excludedFilesCount = compareResult.excludedFilesCount;
+    if (isFork) {
+      logInfo('fork PR detected. skip by policy.');
+      await writeStepSummary('- Fork PR detected: skipped by policy.');
+      await tracer.endRun(workflowRun, {
+        status: 'skipped',
+        reason: 'fork-pr',
+      });
+      return;
+    }
 
-  if (compareResult.useFallback) {
-    logWarn('compare diff unavailable. fallback to git diff.', {
-      reason: compareResult.reason,
+    const { owner, repo } = parseRepository();
+    const githubRequest = createGitHubRequest({ githubToken });
+    const prNumber = pullRequest.number;
+    const baseSha = pullRequest.base?.sha;
+    const headSha = pullRequest.head?.sha;
+
+    if (typeof baseSha !== 'string' || typeof headSha !== 'string') {
+      throw new Error('base/head sha missing from payload');
+    }
+
+    let repositoryLabels = [];
+
+    try {
+      repositoryLabels = await fetchRepositoryLabels(githubRequest, owner, repo);
+    } catch (error) {
+      if (isPermissionError(error)) {
+        logWarn('failed to read repository labels due to permission issue', {
+          status: error.status,
+        });
+        await writeStepSummary(
+          '- Repository labels could not be loaded (permission issue).',
+        );
+        repositoryLabels = [];
+      } else {
+        throw error;
+      }
+    }
+
+    const diffContext = await tracer.withRun(
+      {
+        name: 'collect-diff',
+        runType: 'chain',
+        parentRunId: workflowRun?.id,
+        inputs: {
+          baseSha: shortenSha(baseSha),
+          headSha: shortenSha(headSha),
+          maxFiles,
+          excludeGlobsCount: excludeGlobs.length,
+        },
+        mapOutput: (value) => ({
+          diffSource: value.diffSource,
+          diffEntriesCount: value.diffEntries.length,
+          excludedFilesCount: value.excludedFilesCount,
+          fallbackReason: value.fallbackReason ?? 'none',
+        }),
+      },
+      async () => {
+        const compareResult = await tryCompareDiff({
+          githubRequest,
+          owner,
+          repo,
+          baseSha,
+          headSha,
+          excludeGlobs,
+          maxFiles,
+        });
+
+        let diffSource = 'compare';
+        let diffEntries = compareResult.entries;
+        let excludedFilesCount = compareResult.excludedFilesCount;
+        let fallbackReason = null;
+
+        if (compareResult.useFallback) {
+          logWarn('compare diff unavailable. fallback to git diff.', {
+            reason: compareResult.reason,
+          });
+
+          const gitResult = collectDiffFromGit({
+            baseSha,
+            headSha,
+            excludeGlobs,
+            maxFiles,
+          });
+
+          diffSource = 'git';
+          diffEntries = gitResult.entries;
+          excludedFilesCount = gitResult.excludedFilesCount;
+          fallbackReason = compareResult.reason;
+        }
+
+        return {
+          diffSource,
+          diffEntries,
+          excludedFilesCount,
+          fallbackReason,
+        };
+      },
+    );
+
+    const { diffSource, diffEntries, excludedFilesCount } = diffContext;
+
+    if (diffEntries.length === 0) {
+      throw new Error('no-diff-entries-for-ai');
+    }
+
+    const maskedEntries = diffEntries.map((entry) => ({
+      ...entry,
+      patch: maskSensitiveContent(entry.patch),
+    }));
+
+    const limitedDiff = buildLimitedDiff(maskedEntries, maxDiffBytes);
+    const maskedDiff = limitedDiff.diffText;
+
+    if (maskedDiff.trim().length === 0) {
+      throw new Error('masked-diff-is-empty');
+    }
+
+    const prompt = buildOpenAiPrompt({
+      pr: pullRequest,
+      repositoryLabels,
+      diffText: maskedDiff,
     });
 
-    const gitResult = collectDiffFromGit({
-      baseSha,
-      headSha,
-      excludeGlobs,
-      maxFiles,
+    const aiSummary = await tracer.withRun(
+      {
+        name: 'generate-ai-summary',
+        runType: 'llm',
+        parentRunId: workflowRun?.id,
+        inputs: {
+          model: openAiModel,
+          diffSource,
+          diffBytes: limitedDiff.meta.finalBytes,
+          truncated: limitedDiff.meta.truncated,
+        },
+        mapOutput: (summary) => ({
+          title: summary.title,
+          labels: summary.labels,
+          changesCount: summary.changes.length,
+          checklistCount: summary.checklist.length,
+          risksCount: summary.risks.length,
+        }),
+      },
+      async () =>
+        requestOpenAiSummary({
+          openAiApiKey,
+          model: openAiModel,
+          prompt,
+        }),
+    );
+
+    const currentAssignees = uniqueStringList(
+      Array.isArray(pullRequest.assignees)
+        ? pullRequest.assignees.map((assignee) => assignee?.login)
+        : [],
+    );
+
+    const currentLabels = uniqueStringList(
+      Array.isArray(pullRequest.labels)
+        ? pullRequest.labels.map((label) => label?.name)
+        : [],
+    );
+
+    const updateResult = await tracer.withRun(
+      {
+        name: 'apply-pr-updates',
+        runType: 'tool',
+        parentRunId: workflowRun?.id,
+        inputs: {
+          prNumber,
+          applyTitle,
+        },
+        mapOutput: (value) => ({
+          assigneesAddedCount: value.assigneesAdded.length,
+          labelsAddedCount: value.labelsAdded.length,
+          unknownLabelsIgnoredCount: value.unknownLabelsIgnoredCount,
+          titleUpdated: value.titleUpdated,
+          bodyUpdated: value.bodyUpdated,
+        }),
+      },
+      async () => {
+        const assigneesAdded = await addAssignee({
+          githubRequest,
+          owner,
+          repo,
+          number: prNumber,
+          currentAssignees,
+        });
+
+        const aiLabelCandidates = uniqueStringList(aiSummary.labels);
+        const { applicableLabels, unknownLabelsIgnoredCount } = filterKnownLabels(
+          aiLabelCandidates,
+          repositoryLabels,
+        );
+
+        const labelsToAdd = applicableLabels.filter(
+          (labelName) =>
+            !currentLabels.some((current) => current.toLowerCase() === labelName.toLowerCase()),
+        );
+
+        const labelsAdded = await addLabels({
+          githubRequest,
+          owner,
+          repo,
+          number: prNumber,
+          labelsToAdd,
+        });
+
+        const block = renderSummaryBlock(aiSummary, {
+          diffSource,
+          finalBytes: limitedDiff.meta.finalBytes,
+          excludedFilesCount,
+          truncated: limitedDiff.meta.truncated,
+          assigneesAdded,
+          labelsAdded,
+          unknownLabelsIgnoredCount,
+        });
+
+        const updatedBody = upsertSummaryBlock(pullRequest.body ?? '', block);
+
+        const titleShouldChange = shouldApplyTitle({
+          applyTitle,
+          aiTitle: aiSummary.title,
+          existingTitle: pullRequest.title,
+          labelNames: currentLabels,
+        });
+
+        const nextTitle = titleShouldChange ? aiSummary.title : undefined;
+        const bodyUpdated = updatedBody !== (pullRequest.body ?? '');
+
+        if (bodyUpdated || typeof nextTitle === 'string') {
+          await patchPullRequest({
+            githubRequest,
+            owner,
+            repo,
+            number: prNumber,
+            title: nextTitle,
+            body: updatedBody,
+          });
+        }
+
+        return {
+          assigneesAdded,
+          labelsAdded,
+          unknownLabelsIgnoredCount,
+          titleUpdated: typeof nextTitle === 'string',
+          bodyUpdated,
+        };
+      },
+    );
+
+    const { labelsAdded, unknownLabelsIgnoredCount } = updateResult;
+
+    logInfo('PR AI description update completed', {
+      diffSource,
+      finalBytes: limitedDiff.meta.finalBytes,
+      excludedFilesCount,
+      truncated: limitedDiff.meta.truncated,
+      labelsAppliedCount: labelsAdded.length,
+      unknownLabelsIgnoredCount,
     });
 
-    diffSource = 'git';
-    diffEntries = gitResult.entries;
-    excludedFilesCount = gitResult.excludedFilesCount;
-  }
+    await writeStepSummary('## PR AI Summary Result');
+    await writeStepSummary(`- Diff Source: ${diffSource}`);
+    await writeStepSummary(`- Diff Bytes: ${limitedDiff.meta.finalBytes}`);
+    await writeStepSummary(`- Excluded Files: ${excludedFilesCount}`);
+    await writeStepSummary(`- Truncated: ${String(limitedDiff.meta.truncated)}`);
+    await writeStepSummary(`- Labels Added: ${labelsAdded.join(', ') || 'none'}`);
+    await writeStepSummary(
+      `- Unknown Labels Ignored: ${unknownLabelsIgnoredCount}`,
+    );
 
-  if (diffEntries.length === 0) {
-    throw new Error('no-diff-entries-for-ai');
-  }
-
-  const maskedEntries = diffEntries.map((entry) => ({
-    ...entry,
-    patch: maskSensitiveContent(entry.patch),
-  }));
-
-  const limitedDiff = buildLimitedDiff(maskedEntries, maxDiffBytes);
-  const maskedDiff = limitedDiff.diffText;
-
-  if (maskedDiff.trim().length === 0) {
-    throw new Error('masked-diff-is-empty');
-  }
-
-  const prompt = buildOpenAiPrompt({
-    pr: pullRequest,
-    repositoryLabels,
-    diffText: maskedDiff,
-  });
-
-  const aiSummary = await requestOpenAiSummary({
-    openAiApiKey,
-    model: openAiModel,
-    prompt,
-  });
-
-  const currentAssignees = uniqueStringList(
-    Array.isArray(pullRequest.assignees)
-      ? pullRequest.assignees.map((assignee) => assignee?.login)
-      : [],
-  );
-
-  const currentLabels = uniqueStringList(
-    Array.isArray(pullRequest.labels)
-      ? pullRequest.labels.map((label) => label?.name)
-      : [],
-  );
-
-  const assigneesAdded = await addAssignee({
-    githubRequest,
-    owner,
-    repo,
-    number: prNumber,
-    currentAssignees,
-  });
-
-  const aiLabelCandidates = uniqueStringList(aiSummary.labels);
-  const { applicableLabels, unknownLabelsIgnoredCount } = filterKnownLabels(
-    aiLabelCandidates,
-    repositoryLabels,
-  );
-
-  const labelsToAdd = applicableLabels.filter(
-    (labelName) => !currentLabels.some((current) => current.toLowerCase() === labelName.toLowerCase()),
-  );
-
-  const labelsAdded = await addLabels({
-    githubRequest,
-    owner,
-    repo,
-    number: prNumber,
-    labelsToAdd,
-  });
-
-  const block = renderSummaryBlock(aiSummary, {
-    diffSource,
-    finalBytes: limitedDiff.meta.finalBytes,
-    excludedFilesCount,
-    truncated: limitedDiff.meta.truncated,
-    assigneesAdded,
-    labelsAdded,
-    unknownLabelsIgnoredCount,
-  });
-
-  const updatedBody = upsertSummaryBlock(pullRequest.body ?? '', block);
-
-  const titleShouldChange = shouldApplyTitle({
-    applyTitle,
-    aiTitle: aiSummary.title,
-    existingTitle: pullRequest.title,
-    labelNames: currentLabels,
-  });
-
-  const nextTitle = titleShouldChange ? aiSummary.title : undefined;
-
-  if (updatedBody !== (pullRequest.body ?? '') || typeof nextTitle === 'string') {
-    await patchPullRequest({
-      githubRequest,
-      owner,
-      repo,
-      number: prNumber,
-      title: nextTitle,
-      body: updatedBody,
+    await tracer.endRun(workflowRun, {
+      status: 'success',
+      prNumber,
+      diffSource,
+      diffBytes: limitedDiff.meta.finalBytes,
+      truncated: limitedDiff.meta.truncated,
+      labelsAddedCount: labelsAdded.length,
+      unknownLabelsIgnoredCount,
     });
+  } catch (error) {
+    await tracer.failRun(workflowRun, error, {
+      status: 'failed',
+    });
+    throw error;
   }
-
-  logInfo('PR AI description update completed', {
-    diffSource,
-    finalBytes: limitedDiff.meta.finalBytes,
-    excludedFilesCount,
-    truncated: limitedDiff.meta.truncated,
-    labelsAppliedCount: labelsAdded.length,
-    unknownLabelsIgnoredCount,
-  });
-
-  await writeStepSummary('## PR AI Summary Result');
-  await writeStepSummary(`- Diff Source: ${diffSource}`);
-  await writeStepSummary(`- Diff Bytes: ${limitedDiff.meta.finalBytes}`);
-  await writeStepSummary(`- Excluded Files: ${excludedFilesCount}`);
-  await writeStepSummary(`- Truncated: ${String(limitedDiff.meta.truncated)}`);
-  await writeStepSummary(`- Labels Added: ${labelsAdded.join(', ') || 'none'}`);
-  await writeStepSummary(
-    `- Unknown Labels Ignored: ${unknownLabelsIgnoredCount}`,
-  );
 }
 
 run().catch(async (error) => {
