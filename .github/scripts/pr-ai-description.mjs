@@ -430,7 +430,7 @@ function extractChatCompletionContent(responseData) {
 async function requestOpenAiSummary({
   openAiApiKey,
   model,
-  prompt,
+  messages,
 }) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -445,17 +445,7 @@ async function requestOpenAiSummary({
       body: JSON.stringify({
         model,
         temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a senior backend engineer. Return only JSON that matches the schema.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+        messages,
         response_format: {
           type: 'json_schema',
           json_schema: {
@@ -814,30 +804,50 @@ async function run() {
       diffText: maskedDiff,
     });
 
+    const openAiMessages = [
+      {
+        role: 'system',
+        content:
+          'You are a senior backend engineer. Return only JSON that matches the schema.',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ];
+
     const aiSummary = await tracer.withRun(
       {
         name: 'generate-ai-summary',
         runType: 'llm',
         parentRunId: workflowRun?.id,
         inputs: {
-          model: openAiModel,
-          diffSource,
-          diffBytes: limitedDiff.meta.finalBytes,
-          truncated: limitedDiff.meta.truncated,
+          messages: openAiMessages,
+        },
+        extra: {
+          metadata: {
+            model: openAiModel,
+            diffSource,
+            diffBytes: limitedDiff.meta.finalBytes,
+            truncated: limitedDiff.meta.truncated,
+          },
         },
         mapOutput: (summary) => ({
-          title: summary.title,
-          labels: summary.labels,
-          changesCount: summary.changes.length,
-          checklistCount: summary.checklist.length,
-          risksCount: summary.risks.length,
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: JSON.stringify(summary, null, 2),
+              },
+            },
+          ],
         }),
       },
       async () =>
         requestOpenAiSummary({
           openAiApiKey,
           model: openAiModel,
-          prompt,
+          messages: openAiMessages,
         }),
     );
 
