@@ -13,58 +13,57 @@ export const DEFAULT_EXCLUDE_GLOBS = [
   '**/*.map',
 ];
 
-const IMPORTANCE_VALUES = new Set(['low', 'medium', 'high']);
-const IMPACT_VALUES = new Set(['low', 'medium', 'high']);
-const IMPACT_KEYS = [
-  'api',
-  'db',
-  'security',
-  'performance',
-  'operations',
-  'tests',
-];
-
 export const AI_RESPONSE_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'summary', 'changes', 'impact', 'checklist', 'risks', 'labels'],
+  required: [
+    'title',
+    'summary',
+    'summaryBullets',
+    'changes',
+    'impact',
+    'checklist',
+    'breakingChanges',
+    'relatedIssues',
+    'dependencies',
+    'labels',
+  ],
   properties: {
     title: { type: 'string' },
     summary: { type: 'string' },
+    summaryBullets: {
+      type: 'array',
+      items: { type: 'string' },
+    },
     changes: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['area', 'description', 'importance'],
+        required: ['file', 'description'],
         properties: {
-          area: { type: 'string' },
+          file: { type: 'string' },
           description: { type: 'string' },
-          importance: {
-            type: 'string',
-            enum: ['low', 'medium', 'high'],
-          },
         },
       },
     },
     impact: {
-      type: 'object',
-      additionalProperties: false,
-      required: IMPACT_KEYS,
-      properties: {
-        api: { type: 'string', enum: ['low', 'medium', 'high'] },
-        db: { type: 'string', enum: ['low', 'medium', 'high'] },
-        security: { type: 'string', enum: ['low', 'medium', 'high'] },
-        performance: { type: 'string', enum: ['low', 'medium', 'high'] },
-        operations: { type: 'string', enum: ['low', 'medium', 'high'] },
-        tests: { type: 'string', enum: ['low', 'medium', 'high'] },
-      },
+      type: 'array',
+      items: { type: 'string' },
     },
     checklist: {
       type: 'array',
       items: { type: 'string' },
     },
-    risks: {
+    breakingChanges: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    relatedIssues: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    dependencies: {
       type: 'array',
       items: { type: 'string' },
     },
@@ -451,6 +450,20 @@ function validateStringArray(value, keyName) {
   });
 }
 
+function validateChangeEntry(change, index) {
+  if (!change || typeof change !== 'object' || Array.isArray(change)) {
+    throw new Error(`invalid-changes-${index}-type`);
+  }
+
+  const file = asNonEmptyString(change.file, `changes-${index}-file`);
+  const description = asNonEmptyString(
+    change.description,
+    `changes-${index}-description`,
+  );
+
+  return { file, description };
+}
+
 export function validateAiSummaryJson(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('invalid-root-object');
@@ -459,10 +472,13 @@ export function validateAiSummaryJson(payload) {
   const rootAllowedKeys = new Set([
     'title',
     'summary',
+    'summaryBullets',
     'changes',
     'impact',
     'checklist',
-    'risks',
+    'breakingChanges',
+    'relatedIssues',
+    'dependencies',
     'labels',
   ]);
 
@@ -474,155 +490,99 @@ export function validateAiSummaryJson(payload) {
 
   const title = asNonEmptyString(payload.title, 'title');
   const summary = asNonEmptyString(payload.summary, 'summary');
+  const summaryBullets = validateStringArray(payload.summaryBullets, 'summaryBullets');
 
   if (!Array.isArray(payload.changes)) {
     throw new Error('invalid-changes-type');
   }
 
-  const changes = payload.changes.map((change, index) => {
-    if (!change || typeof change !== 'object' || Array.isArray(change)) {
-      throw new Error(`invalid-changes-${index}-type`);
-    }
+  const changes = payload.changes.map((change, index) =>
+    validateChangeEntry(change, index),
+  );
 
-    const changeAllowedKeys = new Set(['area', 'description', 'importance']);
-
-    for (const key of Object.keys(change)) {
-      if (!changeAllowedKeys.has(key)) {
-        throw new Error(`invalid-changes-${index}-additional-property:${key}`);
-      }
-    }
-
-    const area = asNonEmptyString(change.area, `changes-${index}-area`);
-    const description = asNonEmptyString(
-      change.description,
-      `changes-${index}-description`,
-    );
-
-    if (typeof change.importance !== 'string') {
-      throw new Error(`invalid-changes-${index}-importance-type`);
-    }
-
-    const importance = change.importance.trim();
-
-    if (!IMPORTANCE_VALUES.has(importance)) {
-      throw new Error(`invalid-changes-${index}-importance-value`);
-    }
-
-    return {
-      area,
-      description,
-      importance,
-    };
-  });
-
-  const impact = payload.impact;
-
-  if (!impact || typeof impact !== 'object' || Array.isArray(impact)) {
-    throw new Error('invalid-impact-type');
-  }
-
-  for (const key of Object.keys(impact)) {
-    if (!IMPACT_KEYS.includes(key)) {
-      throw new Error(`invalid-impact-additional-property:${key}`);
-    }
-  }
-
-  const normalizedImpact = {};
-
-  for (const key of IMPACT_KEYS) {
-    if (typeof impact[key] !== 'string') {
-      throw new Error(`invalid-impact-${key}-type`);
-    }
-
-    const value = impact[key].trim();
-
-    if (!IMPACT_VALUES.has(value)) {
-      throw new Error(`invalid-impact-${key}-value`);
-    }
-
-    normalizedImpact[key] = value;
-  }
-
+  const impact = validateStringArray(payload.impact, 'impact');
   const checklist = validateStringArray(payload.checklist, 'checklist');
-  const risks = validateStringArray(payload.risks, 'risks');
-
+  const breakingChanges = validateStringArray(payload.breakingChanges, 'breakingChanges');
+  const relatedIssues = validateStringArray(payload.relatedIssues, 'relatedIssues');
+  const dependencies = validateStringArray(payload.dependencies, 'dependencies');
   const labels = validateStringArray(payload.labels, 'labels');
 
   return {
     title,
     summary,
+    summaryBullets,
     changes,
-    impact: normalizedImpact,
+    impact,
     checklist,
-    risks,
+    breakingChanges,
+    relatedIssues,
+    dependencies,
     labels,
   };
 }
 
-function joinList(values, fallbackValue) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return fallbackValue;
+function renderOptionalSection(heading, items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
   }
 
-  return values.join(', ');
+  return [
+    '',
+    `### ${heading}`,
+    ...items.map((item) => `- ${item}`),
+  ];
 }
 
-export function renderSummaryBlock(summary, meta) {
-  const changeLines =
-    summary.changes.length > 0
-      ? summary.changes.map(
-          (change) =>
-            `- [${change.importance}] ${change.area}: ${change.description}`,
-        )
-      : ['- [low] general: 변경사항 정보가 없습니다.'];
+export function renderSummaryBlock(summary) {
+  const lines = [MARKER_START];
 
-  const checklistLines =
-    summary.checklist.length > 0
-      ? summary.checklist.map((item) => `- ${item}`)
-      : ['- 없음'];
+  // Summary
+  lines.push('### PR Summary');
+  lines.push(summary.summary);
+  if (summary.summaryBullets.length > 0) {
+    lines.push('');
+    for (const bullet of summary.summaryBullets) {
+      lines.push(`- ${bullet}`);
+    }
+  }
 
-  const riskLines =
-    summary.risks.length > 0
-      ? summary.risks.map((item) => `- ${item}`)
-      : ['- 없음'];
+  // Changes (테이블)
+  lines.push('');
+  lines.push('### Changes');
+  lines.push(`> ${summary.changes.length} files changed`);
+  lines.push('');
+  lines.push('| File | Changes |');
+  lines.push('|------|---------|');
+  for (const change of summary.changes) {
+    const escapedDesc = change.description.replaceAll('|', '\\|');
+    lines.push(`| \`${change.file}\` | ${escapedDesc} |`);
+  }
 
-  return [
-    MARKER_START,
-    '## AI PR 요약',
-    '',
-    '### 제목 제안',
-    summary.title,
-    '',
-    '### 요약',
-    summary.summary,
-    '',
-    '### 변경사항',
-    ...changeLines,
-    '',
-    '### 영향도',
-    `- API: ${summary.impact.api}`,
-    `- DB: ${summary.impact.db}`,
-    `- Security: ${summary.impact.security}`,
-    `- Performance: ${summary.impact.performance}`,
-    `- Operations: ${summary.impact.operations}`,
-    `- Tests: ${summary.impact.tests}`,
-    '',
-    '### 체크리스트',
-    ...checklistLines,
-    '',
-    '### 리스크',
-    ...riskLines,
-    '',
-    '### 메타',
-    `- Diff Source: ${meta.diffSource}`,
-    `- Diff Bytes: ${meta.finalBytes}`,
-    `- Excluded Files: ${meta.excludedFilesCount}`,
-    `- Truncated: ${String(meta.truncated)}`,
-    `- Assignees Added: ${joinList(meta.assigneesAdded, 'none')}`,
-    `- Labels Added: ${joinList(meta.labelsAdded, 'none')}`,
-    `- Unknown Labels Ignored: ${meta.unknownLabelsIgnoredCount}`,
-    MARKER_END,
-  ].join('\n');
+  // Impact
+  if (summary.impact.length > 0) {
+    lines.push('');
+    lines.push('### Impact');
+    for (const item of summary.impact) {
+      lines.push(`- ${item}`);
+    }
+  }
+
+  // Checklist (체크박스)
+  if (summary.checklist.length > 0) {
+    lines.push('');
+    lines.push('### Checklist');
+    for (const item of summary.checklist) {
+      lines.push(`- [ ] ${item}`);
+    }
+  }
+
+  // 선택적 섹션들
+  lines.push(...renderOptionalSection('Breaking Changes', summary.breakingChanges));
+  lines.push(...renderOptionalSection('Related Issues', summary.relatedIssues));
+  lines.push(...renderOptionalSection('Dependencies', summary.dependencies));
+
+  lines.push(MARKER_END);
+  return lines.join('\n');
 }
 
 export function upsertSummaryBlock(prBody, block) {

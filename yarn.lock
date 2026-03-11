@@ -5308,6 +5308,7 @@ __metadata:
     jest: "npm:^29"
     langsmith: "npm:^0.5.7"
     logform: "npm:^2.7.0"
+    openai: "npm:^6.27.0"
     openid-client: "npm:5.7.1"
     passport: "npm:^0.7.0"
     passport-jwt: "npm:^4.0.1"
@@ -11328,6 +11329,23 @@ __metadata:
     is-docker: "npm:^2.1.1"
     is-wsl: "npm:^2.2.0"
   checksum: 10c0/bb6b3a58401dacdb0aad14360626faf3fb7fba4b77816b373495988b724fb48941cad80c1b65d62bb31a17609b2cd91c41a181602caea597ca80dfbcc27e84c9
+  languageName: node
+  linkType: hard
+
+"openai@npm:^6.27.0":
+  version: 6.27.0
+  resolution: "openai@npm:6.27.0"
+  peerDependencies:
+    ws: ^8.18.0
+    zod: ^3.25 || ^4.0
+  peerDependenciesMeta:
+    ws:
+      optional: true
+    zod:
+      optional: true
+  bin:
+    openai: bin/cli
+  checksum: 10c0/88f9205eb1bd6c86c3d7fdab3e3d171c0d03c1e491903084aef35bfeb34fd33b86cb91b4d0eef9068e5bd5406f9dedb74a9a8b9c7c01e3a348a7edf117cbf78e
   languageName: node
   linkType: hard
 
