@@ -209,6 +209,34 @@ async function fetchRepositoryLabels(githubRequest, owner, repo) {
   return labels;
 }
 
+async function fetchPullRequest(githubRequest, owner, repo, number) {
+  return githubRequest('GET', `/repos/${owner}/${repo}/pulls/${number}`);
+}
+
+export async function loadCurrentPullRequest({
+  githubRequest,
+  owner,
+  repo,
+  number,
+  fallbackPullRequest,
+  onWarn = logWarn,
+}) {
+  try {
+    const latestPullRequest = await fetchPullRequest(githubRequest, owner, repo, number);
+
+    if (latestPullRequest && typeof latestPullRequest === 'object') {
+      return latestPullRequest;
+    }
+  } catch (error) {
+    onWarn('failed to fetch latest pull request. fallback to event payload.', {
+      status: error?.status,
+      message: error?.message ?? 'unknown-error',
+    });
+  }
+
+  return fallbackPullRequest;
+}
+
 async function tryCompareDiff({
   githubRequest,
   owner,
@@ -680,6 +708,56 @@ function shortenSha(sha) {
   return sha.slice(0, 12);
 }
 
+function extractLabelNames(pullRequest) {
+  return uniqueStringList(
+    Array.isArray(pullRequest?.labels)
+      ? pullRequest.labels.map((label) => label?.name)
+      : [],
+  );
+}
+
+export function buildPrUpdatePayload({
+  currentPullRequest,
+  fallbackPullRequest,
+  block,
+  applyTitle,
+  aiTitle,
+}) {
+  const effectivePullRequest =
+    currentPullRequest && typeof currentPullRequest === 'object'
+      ? currentPullRequest
+      : fallbackPullRequest;
+
+  const currentBody =
+    typeof effectivePullRequest?.body === 'string' ? effectivePullRequest.body : '';
+  const currentTitle =
+    typeof effectivePullRequest?.title === 'string'
+      ? effectivePullRequest.title
+      : fallbackPullRequest?.title;
+  const effectiveLabelNames = extractLabelNames(effectivePullRequest);
+  const fallbackLabelNames = extractLabelNames(fallbackPullRequest);
+  const currentLabelNames =
+    effectiveLabelNames.length > 0 ? effectiveLabelNames : fallbackLabelNames;
+
+  const updatedBody = upsertSummaryBlock(currentBody, block);
+  const titleShouldChange = shouldApplyTitle({
+    applyTitle,
+    aiTitle,
+    existingTitle: currentTitle,
+    labelNames: currentLabelNames,
+  });
+  const nextTitle = titleShouldChange ? aiTitle : undefined;
+
+  return {
+    currentBody,
+    currentLabelNames,
+    currentTitle,
+    updatedBody,
+    nextTitle,
+    bodyUpdated: updatedBody !== currentBody,
+  };
+}
+
 async function run() {
   const githubToken = ensureEnv('GITHUB_TOKEN');
   const openAiApiKey = ensureEnv('OPENAI_API_KEY');
@@ -879,11 +957,7 @@ async function run() {
           : [],
       );
 
-      const currentLabels = uniqueStringList(
-        Array.isArray(pullRequest.labels)
-          ? pullRequest.labels.map((label) => label?.name)
-          : [],
-      );
+      const currentLabels = extractLabelNames(pullRequest);
 
       const applyPrUpdates = traceable(
         async () => {
@@ -915,18 +989,20 @@ async function run() {
           });
 
           const block = renderSummaryBlock(aiSummary);
-
-          const updatedBody = upsertSummaryBlock(pullRequest.body ?? '', block);
-
-          const titleShouldChange = shouldApplyTitle({
+          const latestPullRequest = await loadCurrentPullRequest({
+            githubRequest,
+            owner,
+            repo,
+            number: prNumber,
+            fallbackPullRequest: pullRequest,
+          });
+          const { updatedBody, nextTitle, bodyUpdated } = buildPrUpdatePayload({
+            currentPullRequest: latestPullRequest,
+            fallbackPullRequest: pullRequest,
+            block,
             applyTitle,
             aiTitle: aiSummary.title,
-            existingTitle: pullRequest.title,
-            labelNames: currentLabels,
           });
-
-          const nextTitle = titleShouldChange ? aiSummary.title : undefined;
-          const bodyUpdated = updatedBody !== (pullRequest.body ?? '');
 
           if (bodyUpdated || typeof nextTitle === 'string') {
             await patchPullRequest({

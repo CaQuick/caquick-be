@@ -126,6 +126,36 @@ test('마커 블록이 있으면 교체하고 없으면 하단에 추가한다',
   assert.doesNotMatch(replaced, /\nold\n/);
 });
 
+test('CodeRabbit summary가 이미 있으면 그 앞에 PR AI 블록을 끼워 넣는다', () => {
+  const summary = {
+    title: 'docs: PR 요약 포맷 조정',
+    summary: '요약',
+    summaryBullets: [],
+    changes: [{ file: '.github/scripts/pr-ai-description-lib.mjs', description: '삽입 순서 조정' }],
+    impact: [],
+    checklist: [],
+    breakingChanges: [],
+    relatedIssues: [],
+    dependencies: [],
+    labels: [],
+  };
+
+  const block = renderSummaryBlock(summary);
+  const body = [
+    '기존 본문',
+    '',
+    '## Summary by CodeRabbit',
+    '기존 CodeRabbit summary',
+  ].join('\n');
+
+  const updated = upsertSummaryBlock(body, block);
+
+  assert.match(updated, /기존 본문/);
+  assert.match(updated, /<!-- pr-ai-summary:start -->/);
+  assert.match(updated, /## Summary by CodeRabbit/);
+  assert.ok(updated.indexOf('<!-- pr-ai-summary:end -->') < updated.indexOf('## Summary by CodeRabbit'));
+});
+
 test('Compare API fallback 조건에서 patch 누락 1개만 있어도 fallback 된다', () => {
   const files = [
     { filename: 'src/a.ts', status: 'modified', patch: '@@ -1 +1 @@' },

@@ -590,6 +590,7 @@ export function upsertSummaryBlock(prBody, block) {
   const escapedStart = MARKER_START.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedEnd = MARKER_END.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const blockPattern = new RegExp(`${escapedStart}[\\s\\S]*?${escapedEnd}`, 'm');
+  const codeRabbitSummaryPattern = /^## Summary by CodeRabbit\b/m;
 
   if (blockPattern.test(existingBody)) {
     return existingBody.replace(blockPattern, block);
@@ -597,6 +598,19 @@ export function upsertSummaryBlock(prBody, block) {
 
   if (existingBody.trim().length === 0) {
     return block;
+  }
+
+  const codeRabbitMatch = codeRabbitSummaryPattern.exec(existingBody);
+
+  if (codeRabbitMatch && typeof codeRabbitMatch.index === 'number') {
+    const beforeSummary = existingBody.slice(0, codeRabbitMatch.index).trimEnd();
+    const summarySection = existingBody.slice(codeRabbitMatch.index).trimStart();
+
+    if (beforeSummary.length === 0) {
+      return `${block}\n\n${summarySection}`;
+    }
+
+    return `${beforeSummary}\n\n${block}\n\n${summarySection}`;
   }
 
   return `${existingBody.trimEnd()}\n\n${block}`;

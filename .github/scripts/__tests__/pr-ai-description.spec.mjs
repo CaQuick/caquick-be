@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { requestOpenAiSummary } from '../pr-ai-description.mjs';
+import {
+  buildPrUpdatePayload,
+  loadCurrentPullRequest,
+  requestOpenAiSummary,
+} from '../pr-ai-description.mjs';
 
 function createFakeOpenAiClient(createImpl) {
   return {
@@ -202,7 +206,68 @@ test('abort 계열 에러를 openai-timeout 으로 변환한다', async () => {
         openAiClient,
         model: 'gpt-4.1-mini',
         messages: [{ role: 'user', content: 'test' }],
-      }),
+    }),
     /openai-timeout/,
   );
+});
+
+test('최신 PR body를 기준으로 PR AI 블록을 갱신해 CodeRabbit summary를 보존한다', () => {
+  const block = [
+    '<!-- pr-ai-summary:start -->',
+    'new summary',
+    '<!-- pr-ai-summary:end -->',
+  ].join('\n');
+  const fallbackPullRequest = {
+    title: '기존 제목',
+    body: 'stale body',
+    labels: [],
+  };
+  const currentPullRequest = {
+    title: '기존 제목',
+    body: [
+      '기존 본문',
+      '',
+      '## Summary by CodeRabbit',
+      'CodeRabbit summary',
+    ].join('\n'),
+    labels: [],
+  };
+
+  const result = buildPrUpdatePayload({
+    currentPullRequest,
+    fallbackPullRequest,
+    block,
+    applyTitle: true,
+    aiTitle: 'feat: 새 제목',
+  });
+
+  assert.match(result.updatedBody, /기존 본문/);
+  assert.match(result.updatedBody, /## Summary by CodeRabbit/);
+  assert.ok(
+    result.updatedBody.indexOf('<!-- pr-ai-summary:end -->') <
+      result.updatedBody.indexOf('## Summary by CodeRabbit'),
+  );
+  assert.equal(result.currentBody, currentPullRequest.body);
+});
+
+test('최신 PR 재조회가 실패하면 이벤트 payload를 fallback으로 사용한다', async () => {
+  const fallbackPullRequest = {
+    title: 'payload title',
+    body: 'payload body',
+  };
+
+  const pullRequest = await loadCurrentPullRequest({
+    githubRequest: async () => {
+      const error = new Error('boom');
+      error.status = 500;
+      throw error;
+    },
+    owner: 'caquick',
+    repo: 'caquick-be',
+    number: 10,
+    fallbackPullRequest,
+    onWarn: () => {},
+  });
+
+  assert.deepEqual(pullRequest, fallbackPullRequest);
 });
