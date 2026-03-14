@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "ko-KR"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  commit_status: true
+  fail_commit_status: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: false
+  poem: false
+  in_progress_fortune: false
+  suggested_labels: false
+  auto_apply_labels: false
+  suggested_reviewers: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+
+  path_filters:
+    - "!src/graphql/graphql.types.ts"
+    - "!public/**"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+
+  path_instructions:
+    - path: "src/**/*.ts"
+      instructions: |
+        NestJS feature-first 구조를 기준으로 리뷰하세요.
+        - Resolver는 I/O 조립만 담당해야 하고 비즈니스 로직은 Service로 이동해야 합니다.
+        - Service/Resolver가 PrismaService 또는 PrismaClient에 직접 접근하면 안 됩니다. Repository를 통해서만 DB 접근해야 합니다.
+        - export 되는 함수/클래스는 입력/출력 타입이 명확해야 하며 any 사용은 허용하지 않습니다.
+        - 인증/로깅/에러 처리에서 민감정보가 노출되지 않는지 확인하세요.
+        - 기능 변경에는 테스트가 함께 추가되었는지 확인하세요.
+
+    - path: "src/features/**/*.graphql"
+      instructions: |
+        Schema-first GraphQL 규칙을 기준으로 리뷰하세요.
+        - 각 도메인은 extend type Query / Mutation 패턴을 사용해야 합니다.
+        - SDL 변경이 Resolver 이름, 입력/출력 타입과 일관되는지 확인하세요.
+
+    - path: "prisma/**"
+      instructions: |
+        Prisma 스키마와 마이그레이션은 데이터 안전성을 중심으로 리뷰하세요.
+        - nullable/default/index/unique/관계 변경이 기존 데이터와 호환되는지 확인하세요.
+        - 파괴적 변경이나 운영 반영 시 위험한 변경은 명확히 지적하세요.
+
+    - path: ".github/workflows/**/*.yml"
+      instructions: |
+        GitHub Actions는 최소 권한, 시크릿 노출 방지, fork 안전성, idempotency를 중심으로 리뷰하세요.
+
+    - path: "test/**/*.ts"
+      instructions: |
+        테스트는 시간/uuid/네트워크/DB 의존성을 mock 또는 stub으로 통제하는지,
+        정상 흐름뿐 아니라 주요 예외/분기 케이스가 포함되는지 확인하세요.
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: "PR 제목은 변경 내용을 간결하게 설명해야 합니다."
+    description:
+      mode: off
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
+  web_search:
+    enabled: true
+
+chat:
+  auto_reply: false
