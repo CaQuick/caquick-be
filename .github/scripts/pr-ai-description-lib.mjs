@@ -528,7 +528,7 @@ function renderOptionalSection(heading, items) {
 
   return [
     '',
-    `### ${heading}`,
+    `## ${heading}`,
     ...items.map((item) => `- ${item}`),
   ];
 }
@@ -537,7 +537,7 @@ export function renderSummaryBlock(summary) {
   const lines = [MARKER_START];
 
   // Summary
-  lines.push('### PR Summary');
+  lines.push('## PR Summary');
   lines.push(summary.summary);
   if (summary.summaryBullets.length > 0) {
     lines.push('');
@@ -548,7 +548,7 @@ export function renderSummaryBlock(summary) {
 
   // Changes (테이블)
   lines.push('');
-  lines.push('### Changes');
+  lines.push('## Changes');
   lines.push(`> ${summary.changes.length} files changed`);
   lines.push('');
   lines.push('| File | Changes |');
@@ -561,7 +561,7 @@ export function renderSummaryBlock(summary) {
   // Impact
   if (summary.impact.length > 0) {
     lines.push('');
-    lines.push('### Impact');
+    lines.push('## Impact');
     for (const item of summary.impact) {
       lines.push(`- ${item}`);
     }
@@ -570,7 +570,7 @@ export function renderSummaryBlock(summary) {
   // Checklist (체크박스)
   if (summary.checklist.length > 0) {
     lines.push('');
-    lines.push('### Checklist');
+    lines.push('## Checklist');
     for (const item of summary.checklist) {
       lines.push(`- [ ] ${item}`);
     }
