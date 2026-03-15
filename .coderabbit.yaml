@@ -51,10 +51,21 @@ reviews:
       instructions: |
         GitHub Actions는 최소 권한, 시크릿 노출 방지, fork 안전성, idempotency를 중심으로 리뷰하세요.
 
-    - path: "test/**/*.ts"
+    - path: "src/**/*.spec.ts"
       instructions: |
         테스트는 시간/uuid/네트워크/DB 의존성을 mock 또는 stub으로 통제하는지,
         정상 흐름뿐 아니라 주요 예외/분기 케이스가 포함되는지 확인하세요.
+
+    - path: "test/**/*.ts"
+      instructions: |
+        E2E 테스트는 실제 요청 흐름과 통합 시나리오를 검증하는지,
+        테스트 환경 설정(DB, 서버 기동 등)이 올바르게 구성되어 있는지 확인하세요.
+
+    - path: ".github/scripts/**"
+      instructions: |
+        CI 스크립트는 GitHub Actions 환경에서 실행되는 코드입니다.
+        - 환경 변수/시크릿 사용이 안전한지, 민감정보가 로그에 노출되지 않는지 확인하세요.
+        - 외부 API 호출 시 타임아웃과 에러 처리가 적절한지 확인하세요.
 
   pre_merge_checks:
     title:
