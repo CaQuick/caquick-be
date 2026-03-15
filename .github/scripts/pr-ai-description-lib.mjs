@@ -250,7 +250,9 @@ export function normalizeDiffEntries(files) {
     filename: file.filename,
     status: file.status ?? 'modified',
     previousFilename:
-      typeof file.previous_filename === 'string' ? file.previous_filename : undefined,
+      typeof file.previous_filename === 'string'
+        ? file.previous_filename
+        : undefined,
     patch:
       typeof file.patch === 'string' && file.patch.trim().length > 0
         ? file.patch
@@ -260,7 +262,8 @@ export function normalizeDiffEntries(files) {
 
 export function formatDiffEntry(entry) {
   const sourceText =
-    typeof entry.previousFilename === 'string' && entry.previousFilename.length > 0
+    typeof entry.previousFilename === 'string' &&
+    entry.previousFilename.length > 0
       ? ` (from ${entry.previousFilename})`
       : '';
 
@@ -359,7 +362,8 @@ function composeDiff(chunks, totalFiles, forceTruncated) {
 }
 
 export function buildLimitedDiff(entries, maxBytes) {
-  const safeMaxBytes = Number.isInteger(maxBytes) && maxBytes > 0 ? maxBytes : 102400;
+  const safeMaxBytes =
+    Number.isInteger(maxBytes) && maxBytes > 0 ? maxBytes : 102400;
   const chunks = entries.map((entry) => formatDiffEntry(entry));
   const selected = [];
 
@@ -373,7 +377,11 @@ export function buildLimitedDiff(entries, maxBytes) {
     selected.push(chunk);
   }
 
-  let composed = composeDiff(selected, chunks.length, selected.length < chunks.length);
+  let composed = composeDiff(
+    selected,
+    chunks.length,
+    selected.length < chunks.length,
+  );
 
   while (composed.meta.finalBytes > safeMaxBytes && selected.length > 0) {
     selected.pop();
@@ -490,7 +498,10 @@ export function validateAiSummaryJson(payload) {
 
   const title = asNonEmptyString(payload.title, 'title');
   const summary = asNonEmptyString(payload.summary, 'summary');
-  const summaryBullets = validateStringArray(payload.summaryBullets, 'summaryBullets');
+  const summaryBullets = validateStringArray(
+    payload.summaryBullets,
+    'summaryBullets',
+  );
 
   if (!Array.isArray(payload.changes)) {
     throw new Error('invalid-changes-type');
@@ -502,9 +513,18 @@ export function validateAiSummaryJson(payload) {
 
   const impact = validateStringArray(payload.impact, 'impact');
   const checklist = validateStringArray(payload.checklist, 'checklist');
-  const breakingChanges = validateStringArray(payload.breakingChanges, 'breakingChanges');
-  const relatedIssues = validateStringArray(payload.relatedIssues, 'relatedIssues');
-  const dependencies = validateStringArray(payload.dependencies, 'dependencies');
+  const breakingChanges = validateStringArray(
+    payload.breakingChanges,
+    'breakingChanges',
+  );
+  const relatedIssues = validateStringArray(
+    payload.relatedIssues,
+    'relatedIssues',
+  );
+  const dependencies = validateStringArray(
+    payload.dependencies,
+    'dependencies',
+  );
   const labels = validateStringArray(payload.labels, 'labels');
 
   return {
@@ -526,11 +546,7 @@ function renderOptionalSection(heading, items) {
     return [];
   }
 
-  return [
-    '',
-    `## ${heading}`,
-    ...items.map((item) => `- ${item}`),
-  ];
+  return ['', `## ${heading}`, ...items.map((item) => `- ${item}`)];
 }
 
 export function renderSummaryBlock(summary) {
@@ -554,7 +570,10 @@ export function renderSummaryBlock(summary) {
   lines.push('| File | Changes |');
   lines.push('|------|---------|');
   for (const change of summary.changes) {
-    const escapedDesc = change.description.replaceAll('|', '\\|');
+    const escapedDesc = change.description
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\n', '<br>')
+      .replaceAll('|', '\\|');
     lines.push(`| \`${change.file}\` | ${escapedDesc} |`);
   }
 
@@ -577,7 +596,9 @@ export function renderSummaryBlock(summary) {
   }
 
   // 선택적 섹션들
-  lines.push(...renderOptionalSection('Breaking Changes', summary.breakingChanges));
+  lines.push(
+    ...renderOptionalSection('Breaking Changes', summary.breakingChanges),
+  );
   lines.push(...renderOptionalSection('Related Issues', summary.relatedIssues));
   lines.push(...renderOptionalSection('Dependencies', summary.dependencies));
 
@@ -589,7 +610,10 @@ export function upsertSummaryBlock(prBody, block) {
   const existingBody = typeof prBody === 'string' ? prBody : '';
   const escapedStart = MARKER_START.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapedEnd = MARKER_END.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const blockPattern = new RegExp(`${escapedStart}[\\s\\S]*?${escapedEnd}`, 'm');
+  const blockPattern = new RegExp(
+    `${escapedStart}[\\s\\S]*?${escapedEnd}`,
+    'm',
+  );
   const codeRabbitSummaryPattern = /^## Summary by CodeRabbit\b/m;
 
   if (blockPattern.test(existingBody)) {
@@ -603,8 +627,12 @@ export function upsertSummaryBlock(prBody, block) {
   const codeRabbitMatch = codeRabbitSummaryPattern.exec(existingBody);
 
   if (codeRabbitMatch && typeof codeRabbitMatch.index === 'number') {
-    const beforeSummary = existingBody.slice(0, codeRabbitMatch.index).trimEnd();
-    const summarySection = existingBody.slice(codeRabbitMatch.index).trimStart();
+    const beforeSummary = existingBody
+      .slice(0, codeRabbitMatch.index)
+      .trimEnd();
+    const summarySection = existingBody
+      .slice(codeRabbitMatch.index)
+      .trimStart();
 
     if (beforeSummary.length === 0) {
       return `${block}\n\n${summarySection}`;
@@ -671,13 +699,20 @@ export function filterKnownLabels(aiLabels, repoLabelNames) {
   };
 }
 
-export function shouldApplyTitle({ applyTitle, aiTitle, existingTitle, labelNames }) {
+export function shouldApplyTitle({
+  applyTitle,
+  aiTitle,
+  existingTitle,
+  labelNames,
+}) {
   if (!applyTitle) {
     return false;
   }
 
   const hasTitleLock = labelNames.some(
-    (labelName) => typeof labelName === 'string' && labelName.toLowerCase() === 'ai-title-lock',
+    (labelName) =>
+      typeof labelName === 'string' &&
+      labelName.toLowerCase() === 'ai-title-lock',
   );
 
   if (hasTitleLock) {

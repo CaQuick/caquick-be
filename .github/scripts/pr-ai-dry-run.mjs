@@ -201,7 +201,9 @@ async function runWithBranch(options) {
   const parsedFiles = parseNameStatus(nameStatus);
 
   if (parsedFiles.length > options.maxFiles) {
-    throw new Error(`파일 수 초과: ${parsedFiles.length} > ${options.maxFiles}`);
+    throw new Error(
+      `파일 수 초과: ${parsedFiles.length} > ${options.maxFiles}`,
+    );
   }
 
   const excludeGlobs = buildExcludeGlobs();
@@ -229,7 +231,15 @@ async function runWithBranch(options) {
   const pr = {
     number: 0,
     title: currentBranch,
-    user: { login: runGit(['config', 'user.name']) || 'local' },
+    user: {
+      login: (() => {
+        try {
+          return runGit(['config', 'user.name']) || 'local';
+        } catch {
+          return 'local';
+        }
+      })(),
+    },
     base: { ref: baseBranch },
     head: { ref: currentBranch },
     commits: parseInt(runGit(['rev-list', '--count', range]), 10) || 0,
@@ -293,7 +303,8 @@ async function generateAndPrint({
       const openAiMessages = [
         {
           role: 'system',
-          content: 'You are a senior backend engineer. Return only JSON that matches the schema.',
+          content:
+            'You are a senior backend engineer. Return only JSON that matches the schema.',
         },
         {
           role: 'user',
@@ -353,9 +364,13 @@ async function generateAndPrint({
       console.log('='.repeat(60));
       console.log('  적용될 라벨');
       console.log('='.repeat(60));
-      console.log(applicableLabels.length > 0 ? applicableLabels.join(', ') : '(없음)');
+      console.log(
+        applicableLabels.length > 0 ? applicableLabels.join(', ') : '(없음)',
+      );
       if (unknownLabelsIgnoredCount > 0) {
-        console.log(`  (레포에 없는 라벨 ${unknownLabelsIgnoredCount}개 무시됨)`);
+        console.log(
+          `  (레포에 없는 라벨 ${unknownLabelsIgnoredCount}개 무시됨)`,
+        );
       }
       console.log();
       console.log('='.repeat(60));
@@ -413,8 +428,10 @@ async function main() {
 
   const options = {
     openAiClient,
-    openAiModel: values.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
-    maxDiffBytes: parseInt(values['max-diff-bytes'] ?? '', 10) || DEFAULT_MAX_DIFF_BYTES,
+    openAiModel:
+      values.model || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    maxDiffBytes:
+      parseInt(values['max-diff-bytes'] ?? '', 10) || DEFAULT_MAX_DIFF_BYTES,
     maxFiles: parseInt(values['max-files'] ?? '', 10) || DEFAULT_MAX_FILES,
     baseBranch: values.base || DEFAULT_BASE_BRANCH,
   };
