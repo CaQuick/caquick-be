@@ -74,8 +74,8 @@ test('PR 머지 Embed가 올바른 색상과 필드를 갖는다', () => {
   assert.equal(embed.color, 0x6f42c1);
   assert.equal(embed.url, 'https://github.com/CaQuick/caquick-be/pull/42');
   assert.equal(embed.fields.length, 3);
-  assert.equal(embed.fields[0].value, 'CaQuick/caquick-be');
-  assert.equal(embed.fields[1].value, '@chado');
+  assert.equal(embed.fields[0].value, '[CaQuick/caquick-be](https://github.com/CaQuick/caquick-be)');
+  assert.equal(embed.fields[1].value, '[@chado](https://github.com/chado)');
   assert.equal(embed.fields[2].value, '`feature/login` → `main`');
 });
 

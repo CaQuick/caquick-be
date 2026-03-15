@@ -92,8 +92,8 @@ export function buildPrMergedEmbed(payload, meta) {
     color: COLORS.PR_MERGED,
     url: prUrl,
     fields: [
-      { name: 'Repository', value: meta.repository, inline: true },
-      { name: 'Author', value: `@${author}`, inline: true },
+      { name: 'Repository', value: repoLink(meta.repository, meta.serverUrl), inline: true },
+      { name: 'Author', value: authorLink(author, meta.serverUrl), inline: true },
       { name: 'Branch', value: `\`${headBranch}\` → \`${baseBranch}\``, inline: false },
     ],
     timestamp: new Date().toISOString(),
@@ -114,8 +114,8 @@ export function buildBranchCreatedEmbed(payload, meta) {
     color: COLORS.BRANCH_CREATED,
     url: branchUrl,
     fields: [
-      { name: 'Repository', value: meta.repository, inline: true },
-      { name: 'Author', value: `@${author}`, inline: true },
+      { name: 'Repository', value: repoLink(meta.repository, meta.serverUrl), inline: true },
+      { name: 'Author', value: authorLink(author, meta.serverUrl), inline: true },
     ],
     timestamp: new Date().toISOString(),
   };
@@ -147,8 +147,8 @@ export function buildBranchPushEmbed(payload, meta) {
   }
 
   const fields = [
-    { name: 'Repository', value: meta.repository, inline: true },
-    { name: 'Author', value: `@${author}`, inline: true },
+    { name: 'Repository', value: repoLink(meta.repository, meta.serverUrl), inline: true },
+    { name: 'Author', value: authorLink(author, meta.serverUrl), inline: true },
   ];
 
   if (commitLines.length > 0) {
@@ -177,8 +177,8 @@ export function buildIssueOpenedEmbed(payload, meta) {
   const labels = Array.isArray(issue.labels) ? issue.labels : [];
 
   const fields = [
-    { name: 'Repository', value: meta.repository, inline: true },
-    { name: 'Author', value: `@${author}`, inline: true },
+    { name: 'Repository', value: repoLink(meta.repository, meta.serverUrl), inline: true },
+    { name: 'Author', value: authorLink(author, meta.serverUrl), inline: true },
   ];
 
   if (labels.length > 0) {
@@ -211,6 +211,28 @@ export function buildWebhookBody(embed) {
 }
 
 // ── 유틸 ──
+
+/**
+ * Repository 필드용 마크다운 링크를 생성한다.
+ *
+ * @param {string} repository - 'owner/repo' 형태
+ * @param {string} serverUrl
+ * @returns {string}
+ */
+function repoLink(repository, serverUrl) {
+  return `[${repository}](${serverUrl}/${repository})`;
+}
+
+/**
+ * Author 필드용 마크다운 링크를 생성한다.
+ *
+ * @param {string} login - GitHub 사용자 login
+ * @param {string} serverUrl
+ * @returns {string}
+ */
+function authorLink(login, serverUrl) {
+  return `[@${login}](${serverUrl}/${login})`;
+}
 
 /**
  * 문자열을 최대 길이로 자른다.
