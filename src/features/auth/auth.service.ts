@@ -25,7 +25,7 @@ import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
 import type { AccessTokenPayload } from '../../global/auth/types/jwt-payload.type';
 
 import { ALLOWED_RETURN_TO_DOMAINS } from './constants/auth.constants';
-import { AuthCookie } from './helpers/auth-cookie.helper';
+import { AuthCookie, type CookieSameSite } from './helpers/auth-cookie.helper';
 import { AuthRepository } from './repositories/auth.repository';
 import { OidcClientService } from './services/oidc-client.service';
 import {
@@ -76,6 +76,7 @@ export class AuthService {
       returnTo: safeReturnTo,
       cookieDomain: this.getCookieDomain(),
       secure: this.isCookieSecure(),
+      sameSite: this.getCookieSameSite(),
     });
 
     return { redirectUrl: authorizationUrl };
@@ -130,6 +131,7 @@ export class AuthService {
       res,
       this.getCookieDomain(),
       this.isCookieSecure(),
+      this.getCookieSameSite(),
     );
 
     return { returnTo, accessToken };
@@ -251,6 +253,7 @@ export class AuthService {
       res,
       this.getCookieDomain(),
       this.isCookieSecure(),
+      this.getCookieSameSite(),
     );
   }
 
@@ -277,6 +280,7 @@ export class AuthService {
       res,
       this.getCookieDomain(),
       this.isCookieSecure(),
+      this.getCookieSameSite(),
     );
   }
 
@@ -606,6 +610,7 @@ export class AuthService {
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: this.getCookieDomain(),
       secure: this.isCookieSecure(),
+      sameSite: this.getCookieSameSite(),
     });
 
     return {
@@ -687,6 +692,7 @@ export class AuthService {
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: this.getCookieDomain(),
       secure: this.isCookieSecure(),
+      sameSite: this.getCookieSameSite(),
     });
 
     return { accessToken };
@@ -742,6 +748,22 @@ export class AuthService {
     }
     // 기본값: production이면 true
     return (this.config.get<string>('NODE_ENV') ?? '') === 'production';
+  }
+
+  /**
+   * 쿠키 sameSite 옵션을 반환한다.
+   * 환경변수 AUTH_COOKIE_SAMESITE로 설정 가능 (lax | strict | none).
+   * 기본값: 'lax'
+   */
+  private getCookieSameSite(): CookieSameSite {
+    const v = this.config
+      .get<string>('AUTH_COOKIE_SAMESITE')
+      ?.trim()
+      .toLowerCase();
+    if (v === 'none' || v === 'strict' || v === 'lax') {
+      return v;
+    }
+    return 'lax';
   }
 
   /**

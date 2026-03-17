@@ -3,6 +3,8 @@ import type { CookieOptions, Response } from 'express';
 import { AUTH_COOKIE } from '../../../global/auth/constants/auth-cookie.constants';
 import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '../constants/auth.constants';
 
+export type CookieSameSite = 'lax' | 'strict' | 'none';
+
 /**
  * Auth Cookie 설정을 생성한다.
  */
@@ -20,12 +22,13 @@ export class AuthCookie {
       refreshMaxAgeMs: number;
       cookieDomain?: string;
       secure: boolean;
+      sameSite: CookieSameSite;
     },
   ): void {
     const base: CookieOptions = {
       httpOnly: true,
       secure: args.secure,
-      sameSite: 'lax',
+      sameSite: args.sameSite,
       path: '/',
       domain: args.cookieDomain,
     };
@@ -47,11 +50,12 @@ export class AuthCookie {
     res: Response,
     cookieDomain: string | undefined,
     secure: boolean,
+    sameSite: CookieSameSite = 'lax',
   ): void {
     const base: CookieOptions = {
       httpOnly: true,
       secure,
-      sameSite: 'lax',
+      sameSite,
       path: '/',
       domain: cookieDomain,
     };
@@ -74,12 +78,13 @@ export class AuthCookie {
       returnTo: string;
       cookieDomain?: string;
       secure: boolean;
+      sameSite: CookieSameSite;
     },
   ): void {
     const base: CookieOptions = {
       httpOnly: true,
       secure: args.secure,
-      sameSite: 'lax',
+      sameSite: args.sameSite,
       path: '/',
       domain: args.cookieDomain,
       maxAge: OIDC_TEMP_COOKIE_MAX_AGE_MS,
@@ -102,11 +107,12 @@ export class AuthCookie {
     res: Response,
     cookieDomain: string | undefined,
     secure: boolean,
+    sameSite: CookieSameSite = 'lax',
   ): void {
     const base: CookieOptions = {
       httpOnly: true,
       secure,
-      sameSite: 'lax',
+      sameSite,
       path: '/',
       domain: cookieDomain,
     };
