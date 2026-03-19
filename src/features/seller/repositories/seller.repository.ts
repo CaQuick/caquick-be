@@ -368,18 +368,6 @@ export class SellerRepository {
     });
   }
 
-  async findProductOwnership(args: { productId: bigint; storeId: bigint }) {
-    return this.prisma.product.findFirst({
-      where: {
-        id: args.productId,
-        store_id: args.storeId,
-      },
-      select: {
-        id: true,
-      },
-    });
-  }
-
   async findStoreOwnership(storeId: bigint) {
     return this.prisma.store.findFirst({
       where: {

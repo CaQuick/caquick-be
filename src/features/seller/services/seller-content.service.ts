@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { ProductRepository } from '../../product';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -35,7 +37,10 @@ import { SellerBaseService } from './seller-base.service';
 
 @Injectable()
 export class SellerContentService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
+  constructor(
+    repo: SellerRepository,
+    private readonly productRepository: ProductRepository,
+  ) {
     super(repo);
   }
   async sellerFaqTopics(accountId: bigint): Promise<SellerFaqTopicOutput[]> {
@@ -373,6 +378,57 @@ export class SellerContentService extends SellerBaseService {
       items: paged.items.map((row) => this.toAuditLogOutput(row)),
       nextCursor: paged.nextCursor,
     };
+  }
+
+  private async validateBannerOwnership(
+    ctx: { accountId: bigint; storeId: bigint },
+    args: {
+      linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+      linkProductId: bigint | null;
+      linkStoreId: bigint | null;
+      linkCategoryId: bigint | null;
+      linkUrl: string | null;
+    },
+  ): Promise<void> {
+    if (
+      args.linkType === 'URL' &&
+      (!args.linkUrl || args.linkUrl.trim().length === 0)
+    ) {
+      throw new BadRequestException(
+        'linkUrl is required when linkType is URL.',
+      );
+    }
+
+    if (args.linkType === 'PRODUCT') {
+      if (!args.linkProductId) {
+        throw new BadRequestException(
+          'linkProductId is required when linkType is PRODUCT.',
+        );
+      }
+      const product = await this.productRepository.findProductOwnership({
+        productId: args.linkProductId,
+        storeId: ctx.storeId,
+      });
+      if (!product)
+        throw new ForbiddenException('Cannot link product outside your store.');
+    }
+
+    if (args.linkType === 'STORE') {
+      if (!args.linkStoreId) {
+        throw new BadRequestException(
+          'linkStoreId is required when linkType is STORE.',
+        );
+      }
+      if (args.linkStoreId !== ctx.storeId) {
+        throw new ForbiddenException('Cannot link another store.');
+      }
+    }
+
+    if (args.linkType === 'CATEGORY' && !args.linkCategoryId) {
+      throw new BadRequestException(
+        'linkCategoryId is required when linkType is CATEGORY.',
+      );
+    }
   }
 
   private toBannerPlacement(raw: string): BannerPlacement {

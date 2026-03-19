@@ -36,57 +36,6 @@ export abstract class SellerBaseService {
     };
   }
 
-  protected async validateBannerOwnership(
-    ctx: SellerContext,
-    args: {
-      linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
-      linkProductId: bigint | null;
-      linkStoreId: bigint | null;
-      linkCategoryId: bigint | null;
-      linkUrl: string | null;
-    },
-  ): Promise<void> {
-    if (
-      args.linkType === 'URL' &&
-      (!args.linkUrl || args.linkUrl.trim().length === 0)
-    ) {
-      throw new BadRequestException(
-        'linkUrl is required when linkType is URL.',
-      );
-    }
-
-    if (args.linkType === 'PRODUCT') {
-      if (!args.linkProductId) {
-        throw new BadRequestException(
-          'linkProductId is required when linkType is PRODUCT.',
-        );
-      }
-      const product = await this.repo.findProductOwnership({
-        productId: args.linkProductId,
-        storeId: ctx.storeId,
-      });
-      if (!product)
-        throw new ForbiddenException('Cannot link product outside your store.');
-    }
-
-    if (args.linkType === 'STORE') {
-      if (!args.linkStoreId) {
-        throw new BadRequestException(
-          'linkStoreId is required when linkType is STORE.',
-        );
-      }
-      if (args.linkStoreId !== ctx.storeId) {
-        throw new ForbiddenException('Cannot link another store.');
-      }
-    }
-
-    if (args.linkType === 'CATEGORY' && !args.linkCategoryId) {
-      throw new BadRequestException(
-        'linkCategoryId is required when linkType is CATEGORY.',
-      );
-    }
-  }
-
   protected parseId(raw: string): bigint {
     try {
       return BigInt(raw);
