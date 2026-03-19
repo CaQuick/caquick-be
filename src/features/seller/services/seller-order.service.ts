@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
 
 import { OrderDomainService, OrderRepository } from '../../order';
 import {
@@ -110,5 +111,145 @@ export class SellerOrderService extends SellerBaseService {
     if (!updated) throw new NotFoundException('Order not found.');
 
     return this.toOrderSummaryOutput(updated);
+  }
+
+  private toOrderSummaryOutput(row: {
+    id: bigint;
+    order_number: string;
+    status: OrderStatus;
+    pickup_at: Date;
+    buyer_name: string;
+    buyer_phone: string;
+    total_price: number;
+    created_at: Date;
+  }): SellerOrderSummaryOutput {
+    return {
+      id: row.id.toString(),
+      orderNumber: row.order_number,
+      status: row.status,
+      pickupAt: row.pickup_at,
+      buyerName: row.buyer_name,
+      buyerPhone: row.buyer_phone,
+      totalPrice: row.total_price,
+      createdAt: row.created_at,
+    };
+  }
+
+  private toOrderDetailOutput(row: {
+    id: bigint;
+    order_number: string;
+    account_id: bigint;
+    status: OrderStatus;
+    pickup_at: Date;
+    buyer_name: string;
+    buyer_phone: string;
+    subtotal_price: number;
+    discount_price: number;
+    total_price: number;
+    submitted_at: Date | null;
+    confirmed_at: Date | null;
+    made_at: Date | null;
+    picked_up_at: Date | null;
+    canceled_at: Date | null;
+    created_at: Date;
+    updated_at: Date;
+    status_histories: {
+      id: bigint;
+      from_status: OrderStatus | null;
+      to_status: OrderStatus;
+      changed_at: Date;
+      note: string | null;
+    }[];
+    items: {
+      id: bigint;
+      store_id: bigint;
+      product_id: bigint;
+      product_name_snapshot: string;
+      regular_price_snapshot: number;
+      sale_price_snapshot: number | null;
+      quantity: number;
+      item_subtotal_price: number;
+      option_items: {
+        id: bigint;
+        group_name_snapshot: string;
+        option_title_snapshot: string;
+        option_price_delta_snapshot: number;
+      }[];
+      custom_texts: {
+        id: bigint;
+        token_key_snapshot: string;
+        default_text_snapshot: string;
+        value_text: string;
+        sort_order: number;
+      }[];
+      free_edits: {
+        id: bigint;
+        crop_image_url: string;
+        description_text: string;
+        sort_order: number;
+        attachments: { id: bigint; image_url: string; sort_order: number }[];
+      }[];
+    }[];
+  }): SellerOrderDetailOutput {
+    return {
+      id: row.id.toString(),
+      orderNumber: row.order_number,
+      accountId: row.account_id.toString(),
+      status: row.status,
+      pickupAt: row.pickup_at,
+      buyerName: row.buyer_name,
+      buyerPhone: row.buyer_phone,
+      subtotalPrice: row.subtotal_price,
+      discountPrice: row.discount_price,
+      totalPrice: row.total_price,
+      submittedAt: row.submitted_at,
+      confirmedAt: row.confirmed_at,
+      madeAt: row.made_at,
+      pickedUpAt: row.picked_up_at,
+      canceledAt: row.canceled_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      items: row.items.map((item) => ({
+        id: item.id.toString(),
+        storeId: item.store_id.toString(),
+        productId: item.product_id.toString(),
+        productNameSnapshot: item.product_name_snapshot,
+        regularPriceSnapshot: item.regular_price_snapshot,
+        salePriceSnapshot: item.sale_price_snapshot,
+        quantity: item.quantity,
+        itemSubtotalPrice: item.item_subtotal_price,
+        optionItems: item.option_items.map((opt) => ({
+          id: opt.id.toString(),
+          groupNameSnapshot: opt.group_name_snapshot,
+          optionTitleSnapshot: opt.option_title_snapshot,
+          optionPriceDeltaSnapshot: opt.option_price_delta_snapshot,
+        })),
+        customTexts: item.custom_texts.map((text) => ({
+          id: text.id.toString(),
+          tokenKeySnapshot: text.token_key_snapshot,
+          defaultTextSnapshot: text.default_text_snapshot,
+          valueText: text.value_text,
+          sortOrder: text.sort_order,
+        })),
+        freeEdits: item.free_edits.map((edit) => ({
+          id: edit.id.toString(),
+          cropImageUrl: edit.crop_image_url,
+          descriptionText: edit.description_text,
+          sortOrder: edit.sort_order,
+          attachments: edit.attachments.map((attachment) => ({
+            id: attachment.id.toString(),
+            imageUrl: attachment.image_url,
+            sortOrder: attachment.sort_order,
+          })),
+        })),
+      })),
+      statusHistories: row.status_histories.map((history) => ({
+        id: history.id.toString(),
+        fromStatus: history.from_status,
+        toStatus: history.to_status,
+        changedAt: history.changed_at,
+        note: history.note,
+      })),
+    };
   }
 }

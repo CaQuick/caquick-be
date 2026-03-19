@@ -404,4 +404,100 @@ export class SellerStoreService extends SellerBaseService {
     });
     return true;
   }
+
+  private toStoreOutput(row: {
+    id: bigint;
+    seller_account_id: bigint;
+    store_name: string;
+    store_phone: string;
+    address_full: string;
+    address_city: string | null;
+    address_district: string | null;
+    address_neighborhood: string | null;
+    latitude: Prisma.Decimal | null;
+    longitude: Prisma.Decimal | null;
+    map_provider: 'NAVER' | 'KAKAO' | 'NONE';
+    website_url: string | null;
+    business_hours_text: string | null;
+    pickup_slot_interval_minutes: number;
+    min_lead_time_minutes: number;
+    max_days_ahead: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerStoreOutput {
+    return {
+      id: row.id.toString(),
+      sellerAccountId: row.seller_account_id.toString(),
+      storeName: row.store_name,
+      storePhone: row.store_phone,
+      addressFull: row.address_full,
+      addressCity: row.address_city,
+      addressDistrict: row.address_district,
+      addressNeighborhood: row.address_neighborhood,
+      latitude: row.latitude?.toString() ?? null,
+      longitude: row.longitude?.toString() ?? null,
+      mapProvider: row.map_provider,
+      websiteUrl: row.website_url,
+      businessHoursText: row.business_hours_text,
+      pickupSlotIntervalMinutes: row.pickup_slot_interval_minutes,
+      minLeadTimeMinutes: row.min_lead_time_minutes,
+      maxDaysAhead: row.max_days_ahead,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toStoreBusinessHourOutput(row: {
+    id: bigint;
+    day_of_week: number;
+    is_closed: boolean;
+    open_time: Date | null;
+    close_time: Date | null;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerStoreBusinessHourOutput {
+    return {
+      id: row.id.toString(),
+      dayOfWeek: row.day_of_week,
+      isClosed: row.is_closed,
+      openTime: row.open_time,
+      closeTime: row.close_time,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toStoreSpecialClosureOutput(row: {
+    id: bigint;
+    closure_date: Date;
+    reason: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerStoreSpecialClosureOutput {
+    return {
+      id: row.id.toString(),
+      closureDate: row.closure_date,
+      reason: row.reason,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toStoreDailyCapacityOutput(row: {
+    id: bigint;
+    capacity_date: Date;
+    capacity: number;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerStoreDailyCapacityOutput {
+    return {
+      id: row.id.toString(),
+      capacityDate: row.capacity_date,
+      capacity: row.capacity,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
 }

@@ -1,5 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  AuditActionType,
+  AuditTargetType,
+  BannerLinkType,
+  BannerPlacement,
+  Prisma,
+} from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -362,6 +372,123 @@ export class SellerContentService extends SellerBaseService {
     return {
       items: paged.items.map((row) => this.toAuditLogOutput(row)),
       nextCursor: paged.nextCursor,
+    };
+  }
+
+  private toBannerPlacement(raw: string): BannerPlacement {
+    if (raw === 'HOME_MAIN') return BannerPlacement.HOME_MAIN;
+    if (raw === 'HOME_SUB') return BannerPlacement.HOME_SUB;
+    if (raw === 'CATEGORY') return BannerPlacement.CATEGORY;
+    if (raw === 'STORE') return BannerPlacement.STORE;
+    throw new BadRequestException('Invalid banner placement.');
+  }
+
+  private toBannerLinkType(raw: string): BannerLinkType {
+    if (raw === 'NONE') return BannerLinkType.NONE;
+    if (raw === 'URL') return BannerLinkType.URL;
+    if (raw === 'PRODUCT') return BannerLinkType.PRODUCT;
+    if (raw === 'STORE') return BannerLinkType.STORE;
+    if (raw === 'CATEGORY') return BannerLinkType.CATEGORY;
+    throw new BadRequestException('Invalid banner link type.');
+  }
+
+  private toAuditTargetType(raw: string): AuditTargetType {
+    if (raw === 'STORE') return AuditTargetType.STORE;
+    if (raw === 'PRODUCT') return AuditTargetType.PRODUCT;
+    if (raw === 'ORDER') return AuditTargetType.ORDER;
+    if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
+    if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
+    throw new BadRequestException('Invalid audit target type.');
+  }
+
+  private toFaqTopicOutput(row: {
+    id: bigint;
+    store_id: bigint;
+    title: string;
+    answer_html: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerFaqTopicOutput {
+    return {
+      id: row.id.toString(),
+      storeId: row.store_id.toString(),
+      title: row.title,
+      answerHtml: row.answer_html,
+      sortOrder: row.sort_order,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toBannerOutput(row: {
+    id: bigint;
+    placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE';
+    title: string | null;
+    image_url: string;
+    link_type: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+    link_url: string | null;
+    link_product_id: bigint | null;
+    link_store_id: bigint | null;
+    link_category_id: bigint | null;
+    starts_at: Date | null;
+    ends_at: Date | null;
+    sort_order: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+  }): SellerBannerOutput {
+    return {
+      id: row.id.toString(),
+      placement: row.placement,
+      title: row.title,
+      imageUrl: row.image_url,
+      linkType: row.link_type,
+      linkUrl: row.link_url,
+      linkProductId: row.link_product_id?.toString() ?? null,
+      linkStoreId: row.link_store_id?.toString() ?? null,
+      linkCategoryId: row.link_category_id?.toString() ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      sortOrder: row.sort_order,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toAuditLogOutput(row: {
+    id: bigint;
+    actor_account_id: bigint;
+    store_id: bigint | null;
+    target_type:
+      | 'STORE'
+      | 'PRODUCT'
+      | 'ORDER'
+      | 'CONVERSATION'
+      | 'CHANGE_PASSWORD';
+    target_id: bigint;
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
+    before_json: Prisma.JsonValue | null;
+    after_json: Prisma.JsonValue | null;
+    ip_address: string | null;
+    user_agent: string | null;
+    created_at: Date;
+  }): SellerAuditLogOutput {
+    return {
+      id: row.id.toString(),
+      actorAccountId: row.actor_account_id.toString(),
+      storeId: row.store_id?.toString() ?? null,
+      targetType: row.target_type,
+      targetId: row.target_id.toString(),
+      action: row.action,
+      beforeJson: row.before_json ? JSON.stringify(row.before_json) : null,
+      afterJson: row.after_json ? JSON.stringify(row.after_json) : null,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      createdAt: row.created_at,
     };
   }
 }

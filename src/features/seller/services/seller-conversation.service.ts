@@ -137,4 +137,50 @@ export class SellerConversationService extends SellerBaseService {
 
     return this.toConversationMessageOutput(row);
   }
+
+  private toConversationBodyFormat(raw: string): ConversationBodyFormat {
+    if (raw === 'TEXT') return ConversationBodyFormat.TEXT;
+    if (raw === 'HTML') return ConversationBodyFormat.HTML;
+    throw new BadRequestException('Invalid body format.');
+  }
+
+  private toConversationOutput(row: {
+    id: bigint;
+    account_id: bigint;
+    store_id: bigint;
+    last_message_at: Date | null;
+    last_read_at: Date | null;
+    updated_at: Date;
+  }): SellerConversationOutput {
+    return {
+      id: row.id.toString(),
+      accountId: row.account_id.toString(),
+      storeId: row.store_id.toString(),
+      lastMessageAt: row.last_message_at,
+      lastReadAt: row.last_read_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toConversationMessageOutput(row: {
+    id: bigint;
+    conversation_id: bigint;
+    sender_type: 'USER' | 'STORE' | 'SYSTEM';
+    sender_account_id: bigint | null;
+    body_format: 'TEXT' | 'HTML';
+    body_text: string | null;
+    body_html: string | null;
+    created_at: Date;
+  }): SellerConversationMessageOutput {
+    return {
+      id: row.id.toString(),
+      conversationId: row.conversation_id.toString(),
+      senderType: row.sender_type,
+      senderAccountId: row.sender_account_id?.toString() ?? null,
+      bodyFormat: row.body_format,
+      bodyText: row.body_text,
+      bodyHtml: row.body_html,
+      createdAt: row.created_at,
+    };
+  }
 }

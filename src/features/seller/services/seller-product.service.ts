@@ -1070,4 +1070,224 @@ export class SellerProductService extends SellerBaseService {
 
     return rows.map((row) => this.toCustomTextTokenOutput(row));
   }
+
+  private toProductOutput(row: {
+    id: bigint;
+    store_id: bigint;
+    name: string;
+    description: string | null;
+    purchase_notice: string | null;
+    regular_price: number;
+    sale_price: number | null;
+    currency: string;
+    base_design_image_url: string | null;
+    preparation_time_minutes: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+    images: { id: bigint; image_url: string; sort_order: number }[];
+    product_categories: { category: { id: bigint; name: string } }[];
+    product_tags: { tag: { id: bigint; name: string } }[];
+    option_groups: {
+      id: bigint;
+      product_id: bigint;
+      name: string;
+      is_required: boolean;
+      min_select: number;
+      max_select: number;
+      option_requires_description: boolean;
+      option_requires_image: boolean;
+      sort_order: number;
+      is_active: boolean;
+      option_items: {
+        id: bigint;
+        option_group_id: bigint;
+        title: string;
+        description: string | null;
+        image_url: string | null;
+        price_delta: number;
+        sort_order: number;
+        is_active: boolean;
+      }[];
+    }[];
+    custom_template: {
+      id: bigint;
+      product_id: bigint;
+      base_image_url: string;
+      is_active: boolean;
+      text_tokens: {
+        id: bigint;
+        template_id: bigint;
+        token_key: string;
+        default_text: string;
+        max_length: number;
+        sort_order: number;
+        is_required: boolean;
+        pos_x: number | null;
+        pos_y: number | null;
+        width: number | null;
+        height: number | null;
+      }[];
+    } | null;
+  }): SellerProductOutput {
+    return {
+      id: row.id.toString(),
+      storeId: row.store_id.toString(),
+      name: row.name,
+      description: row.description,
+      purchaseNotice: row.purchase_notice,
+      regularPrice: row.regular_price,
+      salePrice: row.sale_price,
+      currency: row.currency,
+      baseDesignImageUrl: row.base_design_image_url,
+      preparationTimeMinutes: row.preparation_time_minutes,
+      isActive: row.is_active,
+      images: row.images.map((image) => this.toProductImageOutput(image)),
+      categories: row.product_categories.map((c) => ({
+        id: c.category.id.toString(),
+        name: c.category.name,
+      })),
+      tags: row.product_tags.map((t) => ({
+        id: t.tag.id.toString(),
+        name: t.tag.name,
+      })),
+      optionGroups: row.option_groups.map((g) => this.toOptionGroupOutput(g)),
+      customTemplate: row.custom_template
+        ? this.toCustomTemplateOutput(row.custom_template)
+        : null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private toProductImageOutput(row: {
+    id: bigint;
+    image_url: string;
+    sort_order: number;
+  }): SellerProductImageOutput {
+    return {
+      id: row.id.toString(),
+      imageUrl: row.image_url,
+      sortOrder: row.sort_order,
+    };
+  }
+
+  private toOptionGroupOutput(row: {
+    id: bigint;
+    product_id: bigint;
+    name: string;
+    is_required: boolean;
+    min_select: number;
+    max_select: number;
+    option_requires_description: boolean;
+    option_requires_image: boolean;
+    sort_order: number;
+    is_active: boolean;
+    option_items: {
+      id: bigint;
+      option_group_id: bigint;
+      title: string;
+      description: string | null;
+      image_url: string | null;
+      price_delta: number;
+      sort_order: number;
+      is_active: boolean;
+    }[];
+  }): SellerOptionGroupOutput {
+    return {
+      id: row.id.toString(),
+      productId: row.product_id.toString(),
+      name: row.name,
+      isRequired: row.is_required,
+      minSelect: row.min_select,
+      maxSelect: row.max_select,
+      optionRequiresDescription: row.option_requires_description,
+      optionRequiresImage: row.option_requires_image,
+      sortOrder: row.sort_order,
+      isActive: row.is_active,
+      optionItems: row.option_items.map((item) =>
+        this.toOptionItemOutput(item),
+      ),
+    };
+  }
+
+  private toOptionItemOutput(row: {
+    id: bigint;
+    option_group_id: bigint;
+    title: string;
+    description: string | null;
+    image_url: string | null;
+    price_delta: number;
+    sort_order: number;
+    is_active: boolean;
+  }): SellerOptionItemOutput {
+    return {
+      id: row.id.toString(),
+      optionGroupId: row.option_group_id.toString(),
+      title: row.title,
+      description: row.description,
+      imageUrl: row.image_url,
+      priceDelta: row.price_delta,
+      sortOrder: row.sort_order,
+      isActive: row.is_active,
+    };
+  }
+
+  private toCustomTemplateOutput(row: {
+    id: bigint;
+    product_id: bigint;
+    base_image_url: string;
+    is_active: boolean;
+    text_tokens: {
+      id: bigint;
+      template_id: bigint;
+      token_key: string;
+      default_text: string;
+      max_length: number;
+      sort_order: number;
+      is_required: boolean;
+      pos_x: number | null;
+      pos_y: number | null;
+      width: number | null;
+      height: number | null;
+    }[];
+  }): SellerCustomTemplateOutput {
+    return {
+      id: row.id.toString(),
+      productId: row.product_id.toString(),
+      baseImageUrl: row.base_image_url,
+      isActive: row.is_active,
+      textTokens: row.text_tokens.map((token) =>
+        this.toCustomTextTokenOutput(token),
+      ),
+    };
+  }
+
+  private toCustomTextTokenOutput(row: {
+    id: bigint;
+    template_id: bigint;
+    token_key: string;
+    default_text: string;
+    max_length: number;
+    sort_order: number;
+    is_required: boolean;
+    pos_x: number | null;
+    pos_y: number | null;
+    width: number | null;
+    height: number | null;
+  }): SellerCustomTextTokenOutput {
+    return {
+      id: row.id.toString(),
+      templateId: row.template_id.toString(),
+      tokenKey: row.token_key,
+      defaultText: row.default_text,
+      maxLength: row.max_length,
+      sortOrder: row.sort_order,
+      isRequired: row.is_required,
+      posX: row.pos_x,
+      posY: row.pos_y,
+      width: row.width,
+      height: row.height,
+    };
+  }
 }
