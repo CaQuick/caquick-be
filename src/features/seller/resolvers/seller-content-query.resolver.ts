@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerContentService } from '../services/seller-content.service';
 import type {
   SellerAuditLogListInput,
   SellerCursorInput,
@@ -19,14 +19,14 @@ import { parseAccountId } from './seller-resolver.utils';
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerContentQueryResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(private readonly contentService: SellerContentService) {}
 
   @Query('sellerFaqTopics')
   sellerFaqTopics(
     @CurrentUser() user: JwtUser,
   ): Promise<SellerFaqTopicOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerFaqTopics(accountId);
+    return this.contentService.sellerFaqTopics(accountId);
   }
 
   @Query('sellerBanners')
@@ -35,7 +35,7 @@ export class SellerContentQueryResolver {
     @Args('input', { nullable: true }) input?: SellerCursorInput,
   ): Promise<SellerCursorConnection<SellerBannerOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerBanners(accountId, input);
+    return this.contentService.sellerBanners(accountId, input);
   }
 
   @Query('sellerAuditLogs')
@@ -44,6 +44,6 @@ export class SellerContentQueryResolver {
     @Args('input', { nullable: true }) input?: SellerAuditLogListInput,
   ): Promise<SellerCursorConnection<SellerAuditLogOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerAuditLogs(accountId, input);
+    return this.contentService.sellerAuditLogs(accountId, input);
   }
 }

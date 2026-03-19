@@ -3,14 +3,14 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard } from '../../../global/auth';
 import type { JwtUser } from '../../../global/auth';
-import { UserService } from '../user.service';
+import { UserEngagementService } from '../services/user-engagement.service';
 
 import { parseAccountId, parseId } from './user-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class UserEngagementMutationResolver {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly engagementService: UserEngagementService) {}
 
   @Mutation('likeReview')
   likeReview(
@@ -19,6 +19,6 @@ export class UserEngagementMutationResolver {
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
     const id = parseId(reviewId);
-    return this.userService.likeReview(accountId, id);
+    return this.engagementService.likeReview(accountId, id);
   }
 }

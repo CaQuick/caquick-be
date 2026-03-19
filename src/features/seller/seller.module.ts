@@ -15,7 +15,6 @@ import { SellerProductMutationResolver } from './resolvers/seller-product-mutati
 import { SellerProductQueryResolver } from './resolvers/seller-product-query.resolver';
 import { SellerStoreMutationResolver } from './resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from './resolvers/seller-store-query.resolver';
-import { SellerService } from './seller.service';
 import { SellerContentService } from './services/seller-content.service';
 import { SellerConversationService } from './services/seller-conversation.service';
 import { SellerOrderService } from './services/seller-order.service';
@@ -25,7 +24,6 @@ import { SellerStoreService } from './services/seller-store.service';
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule],
   providers: [
-    SellerService,
     SellerStoreService,
     SellerProductService,
     SellerOrderService,
@@ -43,6 +41,5 @@ import { SellerStoreService } from './services/seller-store.service';
     SellerConversationMutationResolver,
     SellerContentMutationResolver,
   ],
-  exports: [SellerService],
 })
 export class SellerModule {}

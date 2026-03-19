@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { SellerService } from '../seller.service';
+import { SellerContentService } from '../services/seller-content.service';
+import { SellerProductService } from '../services/seller-product.service';
 
 import { SellerContentMutationResolver } from './seller-content-mutation.resolver';
 import { SellerProductQueryResolver } from './seller-product-query.resolver';
@@ -8,21 +9,29 @@ import { SellerProductQueryResolver } from './seller-product-query.resolver';
 describe('SellerResolvers', () => {
   let queryResolver: SellerProductQueryResolver;
   let mutationResolver: SellerContentMutationResolver;
-  let service: jest.Mocked<SellerService>;
+  let productService: jest.Mocked<SellerProductService>;
+  let contentService: jest.Mocked<SellerContentService>;
 
   beforeEach(async () => {
-    service = {
+    productService = {
       sellerProduct: jest.fn(),
+    } as unknown as jest.Mocked<SellerProductService>;
+
+    contentService = {
       sellerDeleteBanner: jest.fn(),
-    } as unknown as jest.Mocked<SellerService>;
+    } as unknown as jest.Mocked<SellerContentService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SellerProductQueryResolver,
         SellerContentMutationResolver,
         {
-          provide: SellerService,
-          useValue: service,
+          provide: SellerProductService,
+          useValue: productService,
+        },
+        {
+          provide: SellerContentService,
+          useValue: contentService,
         },
       ],
     }).compile();
@@ -40,7 +49,10 @@ describe('SellerResolvers', () => {
 
     await queryResolver.sellerProduct(user, '123');
 
-    expect(service.sellerProduct).toHaveBeenCalledWith(BigInt(11), BigInt(123));
+    expect(productService.sellerProduct).toHaveBeenCalledWith(
+      BigInt(11),
+      BigInt(123),
+    );
   });
 
   it('sellerDeleteBanner는 bannerId를 BigInt로 전달해야 한다', async () => {
@@ -48,7 +60,7 @@ describe('SellerResolvers', () => {
 
     await mutationResolver.sellerDeleteBanner(user, '77');
 
-    expect(service.sellerDeleteBanner).toHaveBeenCalledWith(
+    expect(contentService.sellerDeleteBanner).toHaveBeenCalledWith(
       BigInt(11),
       BigInt(77),
     );

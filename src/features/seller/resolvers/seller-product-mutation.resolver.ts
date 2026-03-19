@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerProductService } from '../services/seller-product.service';
 import type {
   SellerAddProductImageInput,
   SellerCreateOptionGroupInput,
@@ -36,7 +36,7 @@ import { parseAccountId, parseId } from './seller-resolver.utils';
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class SellerProductMutationResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(private readonly productService: SellerProductService) {}
 
   @Mutation('sellerCreateProduct')
   sellerCreateProduct(
@@ -44,7 +44,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerCreateProductInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerCreateProduct(accountId, input);
+    return this.productService.sellerCreateProduct(accountId, input);
   }
 
   @Mutation('sellerUpdateProduct')
@@ -53,7 +53,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpdateProductInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateProduct(accountId, input);
+    return this.productService.sellerUpdateProduct(accountId, input);
   }
 
   @Mutation('sellerDeleteProduct')
@@ -62,7 +62,7 @@ export class SellerProductMutationResolver {
     @Args('productId') productId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteProduct(
+    return this.productService.sellerDeleteProduct(
       accountId,
       parseId(productId),
     );
@@ -74,7 +74,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductActiveInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerSetProductActive(accountId, input);
+    return this.productService.sellerSetProductActive(accountId, input);
   }
 
   @Mutation('sellerAddProductImage')
@@ -83,7 +83,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerAddProductImageInput,
   ): Promise<SellerProductImageOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerAddProductImage(accountId, input);
+    return this.productService.sellerAddProductImage(accountId, input);
   }
 
   @Mutation('sellerDeleteProductImage')
@@ -92,7 +92,7 @@ export class SellerProductMutationResolver {
     @Args('imageId') imageId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteProductImage(
+    return this.productService.sellerDeleteProductImage(
       accountId,
       parseId(imageId),
     );
@@ -104,7 +104,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerReorderProductImagesInput,
   ): Promise<SellerProductImageOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerReorderProductImages(accountId, input);
+    return this.productService.sellerReorderProductImages(accountId, input);
   }
 
   @Mutation('sellerSetProductCategories')
@@ -113,7 +113,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductCategoriesInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerSetProductCategories(accountId, input);
+    return this.productService.sellerSetProductCategories(accountId, input);
   }
 
   @Mutation('sellerSetProductTags')
@@ -122,7 +122,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductTagsInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerSetProductTags(accountId, input);
+    return this.productService.sellerSetProductTags(accountId, input);
   }
 
   @Mutation('sellerCreateOptionGroup')
@@ -131,7 +131,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerCreateOptionGroupInput,
   ): Promise<SellerOptionGroupOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerCreateOptionGroup(accountId, input);
+    return this.productService.sellerCreateOptionGroup(accountId, input);
   }
 
   @Mutation('sellerUpdateOptionGroup')
@@ -140,7 +140,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpdateOptionGroupInput,
   ): Promise<SellerOptionGroupOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateOptionGroup(accountId, input);
+    return this.productService.sellerUpdateOptionGroup(accountId, input);
   }
 
   @Mutation('sellerDeleteOptionGroup')
@@ -149,7 +149,7 @@ export class SellerProductMutationResolver {
     @Args('optionGroupId') optionGroupId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteOptionGroup(
+    return this.productService.sellerDeleteOptionGroup(
       accountId,
       parseId(optionGroupId),
     );
@@ -161,7 +161,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerReorderOptionGroupsInput,
   ): Promise<SellerOptionGroupOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerReorderOptionGroups(accountId, input);
+    return this.productService.sellerReorderOptionGroups(accountId, input);
   }
 
   @Mutation('sellerCreateOptionItem')
@@ -170,7 +170,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerCreateOptionItemInput,
   ): Promise<SellerOptionItemOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerCreateOptionItem(accountId, input);
+    return this.productService.sellerCreateOptionItem(accountId, input);
   }
 
   @Mutation('sellerUpdateOptionItem')
@@ -179,7 +179,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpdateOptionItemInput,
   ): Promise<SellerOptionItemOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpdateOptionItem(accountId, input);
+    return this.productService.sellerUpdateOptionItem(accountId, input);
   }
 
   @Mutation('sellerDeleteOptionItem')
@@ -188,7 +188,7 @@ export class SellerProductMutationResolver {
     @Args('optionItemId') optionItemId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteOptionItem(
+    return this.productService.sellerDeleteOptionItem(
       accountId,
       parseId(optionItemId),
     );
@@ -200,7 +200,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerReorderOptionItemsInput,
   ): Promise<SellerOptionItemOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerReorderOptionItems(accountId, input);
+    return this.productService.sellerReorderOptionItems(accountId, input);
   }
 
   @Mutation('sellerUpsertProductCustomTemplate')
@@ -209,7 +209,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpsertProductCustomTemplateInput,
   ): Promise<SellerCustomTemplateOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpsertProductCustomTemplate(
+    return this.productService.sellerUpsertProductCustomTemplate(
       accountId,
       input,
     );
@@ -221,7 +221,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductCustomTemplateActiveInput,
   ): Promise<SellerCustomTemplateOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerSetProductCustomTemplateActive(
+    return this.productService.sellerSetProductCustomTemplateActive(
       accountId,
       input,
     );
@@ -233,7 +233,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpsertProductCustomTextTokenInput,
   ): Promise<SellerCustomTextTokenOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerUpsertProductCustomTextToken(
+    return this.productService.sellerUpsertProductCustomTextToken(
       accountId,
       input,
     );
@@ -245,7 +245,7 @@ export class SellerProductMutationResolver {
     @Args('tokenId') tokenId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerDeleteProductCustomTextToken(
+    return this.productService.sellerDeleteProductCustomTextToken(
       accountId,
       parseId(tokenId),
     );
@@ -257,7 +257,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerReorderProductCustomTextTokensInput,
   ): Promise<SellerCustomTextTokenOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerReorderProductCustomTextTokens(
+    return this.productService.sellerReorderProductCustomTextTokens(
       accountId,
       input,
     );

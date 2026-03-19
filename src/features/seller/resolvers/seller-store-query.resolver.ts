@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerStoreService } from '../services/seller-store.service';
 import type {
   SellerCursorInput,
   SellerDateCursorInput,
@@ -20,12 +20,12 @@ import { parseAccountId } from './seller-resolver.utils';
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerStoreQueryResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(private readonly storeService: SellerStoreService) {}
 
   @Query('sellerMyStore')
   sellerMyStore(@CurrentUser() user: JwtUser): Promise<SellerStoreOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerMyStore(accountId);
+    return this.storeService.sellerMyStore(accountId);
   }
 
   @Query('sellerStoreBusinessHours')
@@ -33,7 +33,7 @@ export class SellerStoreQueryResolver {
     @CurrentUser() user: JwtUser,
   ): Promise<SellerStoreBusinessHourOutput[]> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerStoreBusinessHours(accountId);
+    return this.storeService.sellerStoreBusinessHours(accountId);
   }
 
   @Query('sellerStoreSpecialClosures')
@@ -42,7 +42,7 @@ export class SellerStoreQueryResolver {
     @Args('input', { nullable: true }) input?: SellerCursorInput,
   ): Promise<SellerCursorConnection<SellerStoreSpecialClosureOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerStoreSpecialClosures(accountId, input);
+    return this.storeService.sellerStoreSpecialClosures(accountId, input);
   }
 
   @Query('sellerStoreDailyCapacities')
@@ -51,6 +51,6 @@ export class SellerStoreQueryResolver {
     @Args('input', { nullable: true }) input?: SellerDateCursorInput,
   ): Promise<SellerCursorConnection<SellerStoreDailyCapacityOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerStoreDailyCapacities(accountId, input);
+    return this.storeService.sellerStoreDailyCapacities(accountId, input);
   }
 }

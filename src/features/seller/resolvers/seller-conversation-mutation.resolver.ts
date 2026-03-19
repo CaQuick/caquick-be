@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerConversationService } from '../services/seller-conversation.service';
 import type { SellerSendConversationMessageInput } from '../types/seller-input.type';
 import type { SellerConversationMessageOutput } from '../types/seller-output.type';
 
@@ -11,7 +11,9 @@ import { parseAccountId } from './seller-resolver.utils';
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class SellerConversationMutationResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(
+    private readonly conversationService: SellerConversationService,
+  ) {}
 
   @Mutation('sellerSendConversationMessage')
   sellerSendConversationMessage(
@@ -19,6 +21,9 @@ export class SellerConversationMutationResolver {
     @Args('input') input: SellerSendConversationMessageInput,
   ): Promise<SellerConversationMessageOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerSendConversationMessage(accountId, input);
+    return this.conversationService.sellerSendConversationMessage(
+      accountId,
+      input,
+    );
   }
 }

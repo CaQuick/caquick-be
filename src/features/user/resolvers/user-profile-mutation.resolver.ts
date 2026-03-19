@@ -3,20 +3,20 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard } from '../../../global/auth';
 import type { JwtUser } from '../../../global/auth';
+import { UserProfileService } from '../services/user-profile.service';
 import type {
   CompleteOnboardingInput,
   UpdateMyProfileImageInput,
   UpdateMyProfileInput,
 } from '../types/user-input.type';
 import type { MePayload } from '../types/user-output.type';
-import { UserService } from '../user.service';
 
 import { parseAccountId } from './user-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class UserProfileMutationResolver {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly profileService: UserProfileService) {}
 
   @Mutation('completeOnboarding')
   completeOnboarding(
@@ -24,7 +24,7 @@ export class UserProfileMutationResolver {
     @Args('input') input: CompleteOnboardingInput,
   ): Promise<MePayload> {
     const accountId = parseAccountId(user);
-    return this.userService.completeOnboarding(accountId, input);
+    return this.profileService.completeOnboarding(accountId, input);
   }
 
   @Mutation('updateMyProfile')
@@ -33,7 +33,7 @@ export class UserProfileMutationResolver {
     @Args('input') input: UpdateMyProfileInput,
   ): Promise<MePayload> {
     const accountId = parseAccountId(user);
-    return this.userService.updateMyProfile(accountId, input);
+    return this.profileService.updateMyProfile(accountId, input);
   }
 
   @Mutation('updateMyProfileImage')
@@ -42,12 +42,12 @@ export class UserProfileMutationResolver {
     @Args('input') input: UpdateMyProfileImageInput,
   ): Promise<MePayload> {
     const accountId = parseAccountId(user);
-    return this.userService.updateMyProfileImage(accountId, input);
+    return this.profileService.updateMyProfileImage(accountId, input);
   }
 
   @Mutation('deleteMyAccount')
   deleteMyAccount(@CurrentUser() user: JwtUser): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.userService.deleteMyAccount(accountId);
+    return this.profileService.deleteMyAccount(accountId);
   }
 }

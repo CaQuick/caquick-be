@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { UserService } from '../user.service';
+import { UserNotificationService } from '../services/user-notification.service';
+import { UserProfileService } from '../services/user-profile.service';
 
 import { UserNotificationMutationResolver } from './user-notification-mutation.resolver';
 import { UserProfileQueryResolver } from './user-profile-query.resolver';
@@ -8,30 +9,25 @@ import { UserProfileQueryResolver } from './user-profile-query.resolver';
 describe('UserResolvers', () => {
   let queryResolver: UserProfileQueryResolver;
   let mutationResolver: UserNotificationMutationResolver;
-  let service: jest.Mocked<UserService>;
+  let profileService: jest.Mocked<UserProfileService>;
+  let notificationService: jest.Mocked<UserNotificationService>;
 
   beforeEach(async () => {
-    service = {
+    profileService = {
       me: jest.fn(),
-      viewerCounts: jest.fn(),
-      myNotifications: jest.fn(),
-      mySearchHistories: jest.fn(),
-      completeOnboarding: jest.fn(),
-      updateMyProfile: jest.fn(),
-      updateMyProfileImage: jest.fn(),
-      deleteMyAccount: jest.fn(),
+    } as unknown as jest.Mocked<UserProfileService>;
+
+    notificationService = {
       markNotificationRead: jest.fn(),
       markAllNotificationsRead: jest.fn(),
-      likeReview: jest.fn(),
-      deleteSearchHistory: jest.fn(),
-      clearSearchHistories: jest.fn(),
-    } as unknown as jest.Mocked<UserService>;
+    } as unknown as jest.Mocked<UserNotificationService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserProfileQueryResolver,
         UserNotificationMutationResolver,
-        { provide: UserService, useValue: service },
+        { provide: UserProfileService, useValue: profileService },
+        { provide: UserNotificationService, useValue: notificationService },
       ],
     }).compile();
 
@@ -46,13 +42,13 @@ describe('UserResolvers', () => {
   it('me는 서비스 호출로 연결되어야 한다', async () => {
     const user = { accountId: '1' };
     await queryResolver.me(user);
-    expect(service.me).toHaveBeenCalledWith(BigInt(1));
+    expect(profileService.me).toHaveBeenCalledWith(BigInt(1));
   });
 
   it('markNotificationRead는 notificationId를 BigInt로 전달해야 한다', async () => {
     const user = { accountId: '1' };
     await mutationResolver.markNotificationRead(user, '5');
-    expect(service.markNotificationRead).toHaveBeenCalledWith(
+    expect(notificationService.markNotificationRead).toHaveBeenCalledWith(
       BigInt(1),
       BigInt(5),
     );
@@ -61,6 +57,8 @@ describe('UserResolvers', () => {
   it('markAllNotificationsRead는 accountId를 전달해야 한다', async () => {
     const user = { accountId: '1' };
     await mutationResolver.markAllNotificationsRead(user);
-    expect(service.markAllNotificationsRead).toHaveBeenCalledWith(BigInt(1));
+    expect(notificationService.markAllNotificationsRead).toHaveBeenCalledWith(
+      BigInt(1),
+    );
   });
 });

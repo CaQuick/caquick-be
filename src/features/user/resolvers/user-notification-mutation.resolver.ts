@@ -3,14 +3,14 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard } from '../../../global/auth';
 import type { JwtUser } from '../../../global/auth';
-import { UserService } from '../user.service';
+import { UserNotificationService } from '../services/user-notification.service';
 
 import { parseAccountId, parseId } from './user-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class UserNotificationMutationResolver {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly notificationService: UserNotificationService) {}
 
   @Mutation('markNotificationRead')
   markNotificationRead(
@@ -19,12 +19,12 @@ export class UserNotificationMutationResolver {
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
     const id = parseId(notificationId);
-    return this.userService.markNotificationRead(accountId, id);
+    return this.notificationService.markNotificationRead(accountId, id);
   }
 
   @Mutation('markAllNotificationsRead')
   markAllNotificationsRead(@CurrentUser() user: JwtUser): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.userService.markAllNotificationsRead(accountId);
+    return this.notificationService.markAllNotificationsRead(accountId);
   }
 }

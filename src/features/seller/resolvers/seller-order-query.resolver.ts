@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerOrderService } from '../services/seller-order.service';
 import type { SellerOrderListInput } from '../types/seller-input.type';
 import type {
   SellerCursorConnection,
@@ -15,7 +15,7 @@ import { parseAccountId, parseId } from './seller-resolver.utils';
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerOrderQueryResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(private readonly orderService: SellerOrderService) {}
 
   @Query('sellerOrderList')
   sellerOrderList(
@@ -23,7 +23,7 @@ export class SellerOrderQueryResolver {
     @Args('input', { nullable: true }) input?: SellerOrderListInput,
   ): Promise<SellerCursorConnection<SellerOrderSummaryOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerOrderList(accountId, input);
+    return this.orderService.sellerOrderList(accountId, input);
   }
 
   @Query('sellerOrder')
@@ -32,6 +32,6 @@ export class SellerOrderQueryResolver {
     @Args('orderId') orderId: string,
   ): Promise<SellerOrderDetailOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerOrder(accountId, parseId(orderId));
+    return this.orderService.sellerOrder(accountId, parseId(orderId));
   }
 }

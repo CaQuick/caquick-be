@@ -14,14 +14,11 @@ import { UserNotificationService } from './services/user-notification.service';
 import { UserOrderService } from './services/user-order.service';
 import { UserProfileService } from './services/user-profile.service';
 import { UserSearchService } from './services/user-search.service';
-import { UserService } from './user.service';
-
 /**
  * User 도메인 모듈
  */
 @Module({
   providers: [
-    UserService,
     UserProfileService,
     UserNotificationService,
     UserSearchService,

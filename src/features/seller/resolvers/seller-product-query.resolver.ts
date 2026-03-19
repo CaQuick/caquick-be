@@ -2,7 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { SellerService } from '../seller.service';
+import { SellerProductService } from '../services/seller-product.service';
 import type { SellerProductListInput } from '../types/seller-input.type';
 import type {
   SellerCursorConnection,
@@ -14,7 +14,7 @@ import { parseAccountId, parseId } from './seller-resolver.utils';
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerProductQueryResolver {
-  constructor(private readonly sellerService: SellerService) {}
+  constructor(private readonly productService: SellerProductService) {}
 
   @Query('sellerProducts')
   sellerProducts(
@@ -22,7 +22,7 @@ export class SellerProductQueryResolver {
     @Args('input', { nullable: true }) input?: SellerProductListInput,
   ): Promise<SellerCursorConnection<SellerProductOutput>> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerProducts(accountId, input);
+    return this.productService.sellerProducts(accountId, input);
   }
 
   @Query('sellerProduct')
@@ -31,6 +31,6 @@ export class SellerProductQueryResolver {
     @Args('productId') productId: string,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.sellerService.sellerProduct(accountId, parseId(productId));
+    return this.productService.sellerProduct(accountId, parseId(productId));
   }
 }
