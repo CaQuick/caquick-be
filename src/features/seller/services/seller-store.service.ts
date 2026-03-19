@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -56,7 +57,7 @@ export class SellerStoreService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.repo.listStoreSpecialClosures({
@@ -79,7 +80,7 @@ export class SellerStoreService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.repo.listStoreDailyCapacities({
@@ -226,9 +227,7 @@ export class SellerStoreService extends SellerBaseService {
     input: SellerUpsertStoreSpecialClosureInput,
   ): Promise<SellerStoreSpecialClosureOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const closureId = input.closureId
-      ? this.parseId(input.closureId)
-      : undefined;
+    const closureId = input.closureId ? parseId(input.closureId) : undefined;
 
     if (closureId) {
       const found = await this.repo.findStoreSpecialClosureById(
@@ -343,9 +342,7 @@ export class SellerStoreService extends SellerBaseService {
     input: SellerUpsertStoreDailyCapacityInput,
   ): Promise<SellerStoreDailyCapacityOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const capacityId = input.capacityId
-      ? this.parseId(input.capacityId)
-      : undefined;
+    const capacityId = input.capacityId ? parseId(input.capacityId) : undefined;
 
     if (capacityId) {
       const found = await this.repo.findStoreDailyCapacityById(

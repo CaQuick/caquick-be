@@ -9,6 +9,7 @@ import {
   ConversationBodyFormat,
 } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import { ConversationRepository } from '../../conversation';
 import {
   nextCursorOf,
@@ -42,7 +43,7 @@ export class SellerConversationService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.conversationRepository.listConversationsByStore({
@@ -73,7 +74,7 @@ export class SellerConversationService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.conversationRepository.listConversationMessages({
@@ -94,7 +95,7 @@ export class SellerConversationService extends SellerBaseService {
     input: SellerSendConversationMessageInput,
   ): Promise<SellerConversationMessageOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const conversationId = this.parseId(input.conversationId);
+    const conversationId = parseId(input.conversationId);
 
     const conversation =
       await this.conversationRepository.findConversationByIdAndStore({

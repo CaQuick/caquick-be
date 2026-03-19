@@ -12,6 +12,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import { ProductRepository } from '../../product';
 import {
   nextCursorOf,
@@ -81,7 +82,7 @@ export class SellerContentService extends SellerBaseService {
     input: SellerUpdateFaqTopicInput,
   ): Promise<SellerFaqTopicOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const topicId = this.parseId(input.topicId);
+    const topicId = parseId(input.topicId);
 
     const current = await this.repo.findFaqTopicById({
       topicId,
@@ -152,7 +153,7 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.repo.listBannersByStore({
@@ -175,12 +176,10 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     await this.validateBannerOwnership(ctx, {
       linkType: input.linkType ?? 'NONE',
-      linkProductId: input.linkProductId
-        ? this.parseId(input.linkProductId)
-        : null,
-      linkStoreId: input.linkStoreId ? this.parseId(input.linkStoreId) : null,
+      linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
+      linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
-        ? this.parseId(input.linkCategoryId)
+        ? parseId(input.linkCategoryId)
         : null,
       linkUrl: input.linkUrl ?? null,
     });
@@ -191,12 +190,10 @@ export class SellerContentService extends SellerBaseService {
       imageUrl: this.cleanRequiredText(input.imageUrl, 2048),
       linkType: this.toBannerLinkType(input.linkType ?? 'NONE'),
       linkUrl: this.cleanNullableText(input.linkUrl, 2048),
-      linkProductId: input.linkProductId
-        ? this.parseId(input.linkProductId)
-        : null,
-      linkStoreId: input.linkStoreId ? this.parseId(input.linkStoreId) : null,
+      linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
+      linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
-        ? this.parseId(input.linkCategoryId)
+        ? parseId(input.linkCategoryId)
         : null,
       startsAt: this.toDate(input.startsAt) ?? null,
       endsAt: this.toDate(input.endsAt) ?? null,
@@ -223,7 +220,7 @@ export class SellerContentService extends SellerBaseService {
     input: SellerUpdateBannerInput,
   ): Promise<SellerBannerOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const bannerId = this.parseId(input.bannerId);
+    const bannerId = parseId(input.bannerId);
 
     const current = await this.repo.findBannerByIdForStore({
       bannerId,
@@ -235,19 +232,19 @@ export class SellerContentService extends SellerBaseService {
     const nextLinkProductId =
       input.linkProductId !== undefined
         ? input.linkProductId
-          ? this.parseId(input.linkProductId)
+          ? parseId(input.linkProductId)
           : null
         : current.link_product_id;
     const nextLinkStoreId =
       input.linkStoreId !== undefined
         ? input.linkStoreId
-          ? this.parseId(input.linkStoreId)
+          ? parseId(input.linkStoreId)
           : null
         : current.link_store_id;
     const nextLinkCategoryId =
       input.linkCategoryId !== undefined
         ? input.linkCategoryId
-          ? this.parseId(input.linkCategoryId)
+          ? parseId(input.linkCategoryId)
           : null
         : current.link_category_id;
     const nextLinkUrl =
@@ -282,21 +279,21 @@ export class SellerContentService extends SellerBaseService {
         ...(input.linkProductId !== undefined
           ? {
               link_product_id: input.linkProductId
-                ? this.parseId(input.linkProductId)
+                ? parseId(input.linkProductId)
                 : null,
             }
           : {}),
         ...(input.linkStoreId !== undefined
           ? {
               link_store_id: input.linkStoreId
-                ? this.parseId(input.linkStoreId)
+                ? parseId(input.linkStoreId)
                 : null,
             }
           : {}),
         ...(input.linkCategoryId !== undefined
           ? {
               link_category_id: input.linkCategoryId
-                ? this.parseId(input.linkCategoryId)
+                ? parseId(input.linkCategoryId)
                 : null,
             }
           : {}),
@@ -360,7 +357,7 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.repo.listAuditLogsBySeller({

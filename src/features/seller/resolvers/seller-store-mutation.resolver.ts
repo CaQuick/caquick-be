@@ -1,7 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
+import { parseId } from '../../../common/utils/id-parser';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '../../../global/auth';
 import { SellerStoreService } from '../services/seller-store.service';
 import type {
   SellerUpdatePickupPolicyInput,
@@ -16,8 +22,6 @@ import type {
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
 } from '../types/seller-output.type';
-
-import { parseAccountId, parseId } from './seller-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

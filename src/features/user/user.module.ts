@@ -8,10 +8,8 @@ import { UserProfileMutationResolver } from './resolvers/user-profile-mutation.r
 import { UserProfileQueryResolver } from './resolvers/user-profile-query.resolver';
 import { UserSearchMutationResolver } from './resolvers/user-search-mutation.resolver';
 import { UserSearchQueryResolver } from './resolvers/user-search-query.resolver';
-import { UserCartService } from './services/user-cart.service';
 import { UserEngagementService } from './services/user-engagement.service';
 import { UserNotificationService } from './services/user-notification.service';
-import { UserOrderService } from './services/user-order.service';
 import { UserProfileService } from './services/user-profile.service';
 import { UserSearchService } from './services/user-search.service';
 /**
@@ -23,8 +21,6 @@ import { UserSearchService } from './services/user-search.service';
     UserNotificationService,
     UserSearchService,
     UserEngagementService,
-    UserOrderService,
-    UserCartService,
     UserRepository,
     UserProfileQueryResolver,
     UserNotificationQueryResolver,

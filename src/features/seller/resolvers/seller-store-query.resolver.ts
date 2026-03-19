@@ -1,7 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '../../../global/auth';
 import { SellerStoreService } from '../services/seller-store.service';
 import type {
   SellerCursorInput,
@@ -14,8 +19,6 @@ import type {
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
 } from '../types/seller-output.type';
-
-import { parseAccountId } from './seller-resolver.utils';
 
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)

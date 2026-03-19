@@ -1,7 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
+import { parseId } from '../../../common/utils/id-parser';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '../../../global/auth';
 import { SellerProductService } from '../services/seller-product.service';
 import type {
   SellerAddProductImageInput,
@@ -30,8 +36,6 @@ import type {
   SellerProductImageOutput,
   SellerProductOutput,
 } from '../types/seller-output.type';
-
-import { parseAccountId, parseId } from './seller-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

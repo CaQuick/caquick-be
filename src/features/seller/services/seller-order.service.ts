@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import { OrderDomainService, OrderRepository } from '../../order';
 import {
   nextCursorOf,
@@ -40,7 +41,7 @@ export class SellerOrderService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.orderRepository.listOrdersByStore({
@@ -82,7 +83,7 @@ export class SellerOrderService extends SellerBaseService {
     input: SellerUpdateOrderStatusInput,
   ): Promise<SellerOrderSummaryOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const orderId = this.parseId(input.orderId);
+    const orderId = parseId(input.orderId);
     const toStatus = this.orderDomainService.parseStatus(input.toStatus);
 
     const current = await this.orderRepository.findOrderDetailByStore({

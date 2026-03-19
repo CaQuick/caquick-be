@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import {
   isSellerAccount,
   SellerRepository,
@@ -36,16 +37,8 @@ export abstract class SellerBaseService {
     };
   }
 
-  protected parseId(raw: string): bigint {
-    try {
-      return BigInt(raw);
-    } catch {
-      throw new BadRequestException('Invalid id.');
-    }
-  }
-
   protected parseIdList(rawIds: string[]): bigint[] {
-    const parsed = rawIds.map((id) => this.parseId(id));
+    const parsed = rawIds.map((id) => parseId(id));
     const set = new Set(parsed.map((id) => id.toString()));
     if (set.size !== parsed.length) {
       throw new BadRequestException('Duplicate ids are not allowed.');

@@ -1,8 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { CurrentUser, JwtAuthGuard } from '../../../global/auth';
-import type { JwtUser } from '../../../global/auth';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '../../../global/auth';
 import { UserProfileService } from '../services/user-profile.service';
 import type {
   CompleteOnboardingInput,
@@ -10,8 +14,6 @@ import type {
   UpdateMyProfileInput,
 } from '../types/user-input.type';
 import type { MePayload } from '../types/user-output.type';
-
-import { parseAccountId } from './user-resolver.utils';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

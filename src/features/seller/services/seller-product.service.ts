@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
+import { parseId } from '../../../common/utils/id-parser';
 import { ProductRepository } from '../../product';
 import {
   nextCursorOf,
@@ -59,7 +60,7 @@ export class SellerProductService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? this.parseId(input.cursor) : null,
+      cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
     const rows = await this.productRepository.listProductsByStore({
@@ -67,9 +68,7 @@ export class SellerProductService extends SellerBaseService {
       limit: normalized.limit,
       cursor: normalized.cursor,
       isActive: input?.isActive ?? true,
-      categoryId: input?.categoryId
-        ? this.parseId(input.categoryId)
-        : undefined,
+      categoryId: input?.categoryId ? parseId(input.categoryId) : undefined,
       search: input?.search?.trim() || undefined,
     });
 
@@ -165,7 +164,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerUpdateProductInput,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const current =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -288,7 +287,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerSetProductActiveInput,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const current =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -332,7 +331,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerAddProductImageInput,
   ): Promise<SellerProductImageOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -403,7 +402,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerReorderProductImagesInput,
   ): Promise<SellerProductImageOutput[]> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
     const imageIds = this.parseIdList(input.imageIds);
 
     const product =
@@ -449,7 +448,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerSetProductCategoriesInput,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -496,7 +495,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerSetProductTagsInput,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -542,7 +541,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerCreateOptionGroupInput,
   ): Promise<SellerOptionGroupOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -590,7 +589,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerUpdateOptionGroupInput,
   ): Promise<SellerOptionGroupOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const optionGroupId = this.parseId(input.optionGroupId);
+    const optionGroupId = parseId(input.optionGroupId);
 
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
@@ -679,7 +678,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerReorderOptionGroupsInput,
   ): Promise<SellerOptionGroupOutput[]> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
     const optionGroupIds = this.parseIdList(input.optionGroupIds);
 
     const product =
@@ -726,7 +725,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerCreateOptionItemInput,
   ): Promise<SellerOptionItemOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const optionGroupId = this.parseId(input.optionGroupId);
+    const optionGroupId = parseId(input.optionGroupId);
     const group =
       await this.productRepository.findOptionGroupById(optionGroupId);
 
@@ -765,7 +764,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerUpdateOptionItemInput,
   ): Promise<SellerOptionItemOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const optionItemId = this.parseId(input.optionItemId);
+    const optionItemId = parseId(input.optionItemId);
 
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
@@ -840,7 +839,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerReorderOptionItemsInput,
   ): Promise<SellerOptionItemOutput[]> {
     const ctx = await this.requireSellerContext(accountId);
-    const optionGroupId = this.parseId(input.optionGroupId);
+    const optionGroupId = parseId(input.optionGroupId);
     const optionItemIds = this.parseIdList(input.optionItemIds);
 
     const group =
@@ -886,7 +885,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerUpsertProductCustomTemplateInput,
   ): Promise<SellerCustomTemplateOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const productId = this.parseId(input.productId);
+    const productId = parseId(input.productId);
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -920,7 +919,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerSetProductCustomTemplateActiveInput,
   ): Promise<SellerCustomTemplateOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const templateId = this.parseId(input.templateId);
+    const templateId = parseId(input.templateId);
 
     const template =
       await this.productRepository.findCustomTemplateById(templateId);
@@ -953,8 +952,8 @@ export class SellerProductService extends SellerBaseService {
     input: SellerUpsertProductCustomTextTokenInput,
   ): Promise<SellerCustomTextTokenOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const templateId = this.parseId(input.templateId);
-    const tokenId = input.tokenId ? this.parseId(input.tokenId) : undefined;
+    const templateId = parseId(input.templateId);
+    const tokenId = input.tokenId ? parseId(input.tokenId) : undefined;
 
     const template =
       await this.productRepository.findCustomTemplateById(templateId);
@@ -1030,7 +1029,7 @@ export class SellerProductService extends SellerBaseService {
     input: SellerReorderProductCustomTextTokensInput,
   ): Promise<SellerCustomTextTokenOutput[]> {
     const ctx = await this.requireSellerContext(accountId);
-    const templateId = this.parseId(input.templateId);
+    const templateId = parseId(input.templateId);
     const tokenIds = this.parseIdList(input.tokenIds);
 
     const template =
