@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: pr-check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -56,11 +59,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js (24.x) & Yarn cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+
       - name: Coverage Report
         uses: ArtiomTr/jest-coverage-report-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          test-script: npx jest --coverage --ci
+          test-script: yarn jest --coverage --ci
           skip-step: install
 
   pr-title:
