@@ -9,35 +9,34 @@ import {
   ConversationBodyFormat,
 } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
-import { cleanNullableText } from '../../../common/utils/text-cleaner';
-import { ConversationRepository } from '../../conversation';
+import { parseId } from '@/common/utils/id-parser';
+import { cleanNullableText } from '@/common/utils/text-cleaner';
+import { ConversationRepository } from '@/features/conversation';
 import {
   BODY_HTML_REQUIRED,
   BODY_TEXT_REQUIRED,
   CONVERSATION_NOT_FOUND,
   INVALID_BODY_FORMAT,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
-} from '../constants/seller.constants';
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCursorInput,
   SellerSendConversationMessageInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
   SellerCursorConnection,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {

@@ -10,8 +10,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { ValidationError } from 'class-validator';
 import cookieParser from 'cookie-parser';
 
-import { AppModule } from './app.module';
-
+import { AppModule } from '@/app.module';
 import { HttpExceptionFilter } from 'src/global/filters/global-exception.filter';
 import { ApiResponseInterceptor } from 'src/global/interceptors/api-response.interceptor';
 import { GqlLoggingInterceptor } from 'src/global/interceptors/gql-logging.interceptor';

@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 
-import { AuthGlobalModule } from '../../global/auth/auth-global.module';
-
-import { AuthService } from './auth.service';
-import { AuthController } from './controllers/auth.controller';
-import { AuthRepository } from './repositories/auth.repository';
-import { OidcClientService } from './services/oidc-client.service';
-import { JwtBearerStrategy } from './strategies/jwt-bearer.strategy';
+import { AuthService } from '@/features/auth/auth.service';
+import { AuthController } from '@/features/auth/controllers/auth.controller';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
+import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 
 /**
  * Auth 도메인 모듈

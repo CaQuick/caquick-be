@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { ConversationRepository } from './repositories/conversation.repository';
+import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 
 @Module({
   providers: [ConversationRepository],

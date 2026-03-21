@@ -2,7 +2,7 @@ import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import type { Request } from 'express';
 
-import type { JwtUser } from '../types/jwt-payload.type';
+import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
 /**
  * 현재 인증된 사용자 정보를 가져오는 데코레이터

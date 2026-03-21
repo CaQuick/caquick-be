@@ -1,4 +1,4 @@
-import { MAX_PRODUCT_IMAGES } from './seller.constants';
+import { MAX_PRODUCT_IMAGES } from '@/features/seller/constants/seller.constants';
 
 // ── 공통 ──
 

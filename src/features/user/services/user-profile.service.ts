@@ -4,15 +4,14 @@ import {
   Injectable,
 } from '@nestjs/common';
 
-import { UserRepository } from '../repositories/user.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserBaseService } from '@/features/user/services/user-base.service';
 import type {
   CompleteOnboardingInput,
   UpdateMyProfileImageInput,
   UpdateMyProfileInput,
-} from '../types/user-input.type';
-import type { MePayload } from '../types/user-output.type';
-
-import { UserBaseService } from './user-base.service';
+} from '@/features/user/types/user-input.type';
+import type { MePayload } from '@/features/user/types/user-output.type';
 
 @Injectable()
 export class UserProfileService extends UserBaseService {

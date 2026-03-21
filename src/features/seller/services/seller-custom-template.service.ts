@@ -5,35 +5,34 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
-import { cleanRequiredText } from '../../../common/utils/text-cleaner';
-import { ProductRepository } from '../../product';
+import { parseId } from '@/common/utils/id-parser';
+import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { ProductRepository } from '@/features/product';
 import {
   CUSTOM_TEMPLATE_NOT_FOUND,
   CUSTOM_TEXT_TOKEN_NOT_FOUND,
   idsMismatchError,
   invalidIdsError,
   PRODUCT_NOT_FOUND,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   DEFAULT_TOKEN_MAX_LENGTH,
   MAX_TOKEN_DEFAULT_TEXT_LENGTH,
   MAX_TOKEN_KEY_LENGTH,
   MAX_URL_LENGTH,
-} from '../constants/seller.constants';
-import { SellerRepository } from '../repositories/seller.repository';
+} from '@/features/seller/constants/seller.constants';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerReorderProductCustomTextTokensInput,
   SellerSetProductCustomTemplateActiveInput,
   SellerUpsertProductCustomTemplateInput,
   SellerUpsertProductCustomTextTokenInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerCustomTemplateService extends SellerBaseService {

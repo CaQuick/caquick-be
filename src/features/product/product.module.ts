@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { ProductRepository } from './repositories/product.repository';
+import { ProductRepository } from '@/features/product/repositories/product.repository';
 
 @Module({
   providers: [ProductRepository],

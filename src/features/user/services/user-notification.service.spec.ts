@@ -2,9 +2,8 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountType } from '@prisma/client';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserNotificationService } from './user-notification.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserNotificationService } from '@/features/user/services/user-notification.service';
 
 describe('UserNotificationService', () => {
   let service: UserNotificationService;

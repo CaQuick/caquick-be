@@ -4,9 +4,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerBaseService } from './seller-base.service';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 
 /** SellerBaseService는 abstract이므로 테스트용 concrete 클래스를 만든다 */
 class TestableSellerBaseService extends SellerBaseService {

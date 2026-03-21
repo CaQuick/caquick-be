@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
 
-import { PrismaService } from '../../../prisma';
+import { PrismaService } from '@/prisma';
 
 @Injectable()
 export class ConversationRepository {

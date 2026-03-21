@@ -5,9 +5,8 @@ import {
 } from '@nestjs/common';
 import { AccountType } from '@prisma/client';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserBaseService } from './user-base.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserBaseService } from '@/features/user/services/user-base.service';
 
 /** UserBaseService는 abstract이므로 테스트용 concrete 클래스를 만든다 */
 class TestableUserBaseService extends UserBaseService {

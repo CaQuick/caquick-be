@@ -1,10 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { ConversationRepository } from '../../conversation';
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerConversationService } from './seller-conversation.service';
+import { ConversationRepository } from '@/features/conversation';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
 
 const SELLER_CONTEXT = {
   id: BigInt(1),
@@ -114,7 +113,7 @@ describe('SellerConversationService', () => {
       await expect(
         service.sellerSendConversationMessage(BigInt(1), {
           conversationId: '10',
-          bodyFormat: 'INVALID',
+          bodyFormat: 'INVALID' as never,
           bodyText: '테스트',
           bodyHtml: null,
         }),

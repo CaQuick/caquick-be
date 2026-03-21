@@ -1,13 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { UserRepository } from '../repositories/user.repository';
-import type { MyNotificationsInput } from '../types/user-input.type';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserBaseService } from '@/features/user/services/user-base.service';
+import type { MyNotificationsInput } from '@/features/user/types/user-input.type';
 import type {
   NotificationConnection,
   ViewerCounts,
-} from '../types/user-output.type';
-
-import { UserBaseService } from './user-base.service';
+} from '@/features/user/types/user-output.type';
 
 @Injectable()
 export class UserNotificationService extends UserBaseService {

@@ -1,16 +1,10 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { parseId } from '../../../common/utils/id-parser';
-import {
-  CurrentUser,
-  JwtAuthGuard,
-  parseAccountId,
-  type JwtUser,
-} from '../../../global/auth';
-import { SellerCustomTemplateService } from '../services/seller-custom-template.service';
-import { SellerOptionService } from '../services/seller-option.service';
-import { SellerProductCrudService } from '../services/seller-product-crud.service';
+import { parseId } from '@/common/utils/id-parser';
+import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
+import { SellerOptionService } from '@/features/seller/services/seller-option.service';
+import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
 import type {
   SellerAddProductImageInput,
   SellerCreateOptionGroupInput,
@@ -29,7 +23,7 @@ import type {
   SellerUpdateProductInput,
   SellerUpsertProductCustomTemplateInput,
   SellerUpsertProductCustomTextTokenInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
@@ -37,7 +31,13 @@ import type {
   SellerOptionItemOutput,
   SellerProductImageOutput,
   SellerProductOutput,
-} from '../types/seller-output.type';
+} from '@/features/seller/types/seller-output.type';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '@/global/auth';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

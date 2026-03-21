@@ -7,7 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import { PrismaService } from '../../../prisma';
+import { PrismaService } from '@/prisma';
 
 /**
  * 인증 Repository

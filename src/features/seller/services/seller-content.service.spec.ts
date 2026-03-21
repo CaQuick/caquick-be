@@ -5,10 +5,9 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { ProductRepository } from '../../product';
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerContentService } from './seller-content.service';
+import { ProductRepository } from '@/features/product';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerContentService } from '@/features/seller/services/seller-content.service';
 
 describe('SellerContentService', () => {
   let service: SellerContentService;
@@ -187,7 +186,7 @@ describe('SellerContentService', () => {
     it('유효하지 않은 배너 placement이면 BadRequestException을 던져야 한다', async () => {
       await expect(
         service.sellerCreateBanner(BigInt(1), {
-          placement: 'INVALID_PLACEMENT',
+          placement: 'INVALID_PLACEMENT' as never,
           imageUrl: 'https://img.example.com/a.png',
         }),
       ).rejects.toThrow(BadRequestException);
@@ -198,7 +197,7 @@ describe('SellerContentService', () => {
         service.sellerCreateBanner(BigInt(1), {
           placement: 'HOME_MAIN',
           imageUrl: 'https://img.example.com/a.png',
-          linkType: 'INVALID_LINK_TYPE',
+          linkType: 'INVALID_LINK_TYPE' as never,
         }),
       ).rejects.toThrow(BadRequestException);
     });

@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
-import { toDate, toDateRequired } from '../../../common/utils/date-parser';
-import { parseId } from '../../../common/utils/id-parser';
+import { toDate, toDateRequired } from '@/common/utils/date-parser';
+import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
   cleanRequiredText,
-} from '../../../common/utils/text-cleaner';
+} from '@/common/utils/text-cleaner';
 import {
   CLOSE_BEFORE_OPEN,
   DAILY_CAPACITY_NOT_FOUND,
@@ -18,7 +18,7 @@ import {
   OPEN_CLOSE_TIME_REQUIRED,
   SPECIAL_CLOSURE_NOT_FOUND,
   STORE_NOT_FOUND,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -39,12 +39,13 @@ import {
   MIN_DAY_OF_WEEK,
   MIN_LEAD_TIME_MINUTES,
   MIN_PICKUP_SLOT_INTERVAL_MINUTES,
-} from '../constants/seller.constants';
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCursorInput,
   SellerDateCursorInput,
@@ -53,16 +54,14 @@ import type {
   SellerUpsertStoreBusinessHourInput,
   SellerUpsertStoreDailyCapacityInput,
   SellerUpsertStoreSpecialClosureInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerStoreService extends SellerBaseService {

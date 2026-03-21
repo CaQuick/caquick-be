@@ -5,12 +5,12 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
   cleanRequiredText,
-} from '../../../common/utils/text-cleaner';
-import { ProductRepository } from '../../product';
+} from '@/common/utils/text-cleaner';
+import { ProductRepository } from '@/features/product';
 import {
   idsMismatchError,
   INVALID_SELECT_RANGE,
@@ -19,14 +19,15 @@ import {
   OPTION_GROUP_NOT_FOUND,
   OPTION_ITEM_NOT_FOUND,
   PRODUCT_NOT_FOUND,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_OPTION_GROUP_NAME_LENGTH,
   MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
   MAX_OPTION_ITEM_TITLE_LENGTH,
   MAX_URL_LENGTH,
-} from '../constants/seller.constants';
-import { SellerRepository } from '../repositories/seller.repository';
+} from '@/features/seller/constants/seller.constants';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCreateOptionGroupInput,
   SellerCreateOptionItemInput,
@@ -34,13 +35,11 @@ import type {
   SellerReorderOptionItemsInput,
   SellerUpdateOptionGroupInput,
   SellerUpdateOptionItemInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerOptionService extends SellerBaseService {

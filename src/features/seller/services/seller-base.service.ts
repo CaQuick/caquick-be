@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { parseId } from '@/common/utils/id-parser';
 import {
   ACCOUNT_NOT_FOUND,
   DUPLICATE_IDS,
@@ -16,11 +16,11 @@ import {
   INVALID_TIME_VALUE,
   SELLER_ONLY,
   STORE_NOT_FOUND,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   isSellerAccount,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
 
 export interface SellerContext {
   accountId: bigint;

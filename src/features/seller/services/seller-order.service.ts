@@ -5,30 +5,29 @@ import {
 } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
-import { toDate } from '../../../common/utils/date-parser';
-import { parseId } from '../../../common/utils/id-parser';
-import { cleanNullableText } from '../../../common/utils/text-cleaner';
-import { OrderDomainService, OrderRepository } from '../../order';
+import { toDate } from '@/common/utils/date-parser';
+import { parseId } from '@/common/utils/id-parser';
+import { cleanNullableText } from '@/common/utils/text-cleaner';
+import { OrderDomainService, OrderRepository } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerOrderListInput,
   SellerUpdateOrderStatusInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 interface OrderFreeEditRow {
   id: bigint;

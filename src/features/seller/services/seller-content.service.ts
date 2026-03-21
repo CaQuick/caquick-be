@@ -12,13 +12,13 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import { toDate } from '../../../common/utils/date-parser';
-import { parseId } from '../../../common/utils/id-parser';
+import { toDate } from '@/common/utils/date-parser';
+import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
   cleanRequiredText,
-} from '../../../common/utils/text-cleaner';
-import { ProductRepository } from '../../product';
+} from '@/common/utils/text-cleaner';
+import { ProductRepository } from '@/features/product';
 import {
   BANNER_NOT_FOUND,
   FAQ_TOPIC_NOT_FOUND,
@@ -31,18 +31,19 @@ import {
   LINK_STORE_MISMATCH,
   LINK_STORE_REQUIRED,
   LINK_URL_REQUIRED,
-} from '../constants/seller-error-messages';
+} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_BANNER_TITLE_LENGTH,
   MAX_FAQ_ANSWER_HTML_LENGTH,
   MAX_FAQ_TITLE_LENGTH,
   MAX_URL_LENGTH,
-} from '../constants/seller.constants';
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerAuditLogListInput,
   SellerCreateBannerInput,
@@ -50,15 +51,13 @@ import type {
   SellerCursorInput,
   SellerUpdateBannerInput,
   SellerUpdateFaqTopicInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,
   SellerCursorConnection,
   SellerFaqTopicOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerContentService extends SellerBaseService {

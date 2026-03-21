@@ -1,9 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserEngagementService } from './user-engagement.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 
 const USER_CONTEXT = {
   id: BigInt(1),
@@ -64,7 +63,7 @@ describe('UserEngagementService', () => {
 
     it('정상적으로 좋아요하면 true를 반환해야 한다', async () => {
       repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.likeReview.mockResolvedValue('ok');
+      repo.likeReview.mockResolvedValue('ok' as never);
 
       const result = await service.likeReview(BigInt(1), BigInt(10));
       expect(result).toBe(true);

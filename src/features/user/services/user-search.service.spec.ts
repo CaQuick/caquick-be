@@ -1,9 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserSearchService } from './user-search.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserSearchService } from '@/features/user/services/user-search.service';
 
 const USER_CONTEXT = {
   id: BigInt(1),

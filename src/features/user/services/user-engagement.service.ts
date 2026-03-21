@@ -4,9 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserBaseService } from './user-base.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserBaseService } from '@/features/user/services/user-base.service';
 
 @Injectable()
 export class UserEngagementService extends UserBaseService {

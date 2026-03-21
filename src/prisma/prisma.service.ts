@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
-import { softDeleteExtension } from './soft-delete.middleware';
+import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
 
 /**
  * Prisma 클라이언트를 NestJS DI 컨테이너에 제공하는 서비스

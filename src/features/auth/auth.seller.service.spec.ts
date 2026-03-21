@@ -4,9 +4,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
-import { AuthService } from './auth.service';
-import { AuthRepository } from './repositories/auth.repository';
-import { OidcClientService } from './services/oidc-client.service';
+import { AuthService } from '@/features/auth/auth.service';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 
 describe('AuthService (seller)', () => {
   let service: AuthService;

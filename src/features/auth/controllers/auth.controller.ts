@@ -23,9 +23,9 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
-import { CurrentUser, JwtAuthGuard, type JwtUser } from '../../../global/auth';
-import { AuthService } from '../auth.service';
-import { parseOidcProvider } from '../types/oidc-provider.type';
+import { AuthService } from '@/features/auth/auth.service';
+import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
+import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 
 /**
  * 인증 관련 REST 컨트롤러

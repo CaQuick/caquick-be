@@ -12,10 +12,10 @@ import {
   MAX_PHONE_LENGTH,
   MIN_NICKNAME_LENGTH,
   MIN_PHONE_LENGTH,
-} from '../constants/user.constants';
-import type { UserAccountWithProfile } from '../repositories/user.repository';
-import { UserRepository } from '../repositories/user.repository';
-import type { MePayload } from '../types/user-output.type';
+} from '@/features/user/constants/user.constants';
+import type { UserAccountWithProfile } from '@/features/user/repositories/user.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import type { MePayload } from '@/features/user/types/user-output.type';
 
 export type ActiveUserAccount = UserAccountWithProfile & {
   deleted_at: null;

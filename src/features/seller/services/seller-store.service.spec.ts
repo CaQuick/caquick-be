@@ -5,9 +5,8 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerStoreService } from './seller-store.service';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerStoreService } from '@/features/seller/services/seller-store.service';
 
 const SELLER_CONTEXT = {
   id: BigInt(1),

@@ -20,18 +20,20 @@ import type { Request, Response } from 'express';
 import {
   getEnvAsBoolean,
   getEnvAsNumber,
-} from '../../common/helpers/config.helper';
-import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
-import type { AccessTokenPayload } from '../../global/auth/types/jwt-payload.type';
-
-import { ALLOWED_RETURN_TO_DOMAINS } from './constants/auth.constants';
-import { AuthCookie, type CookieSameSite } from './helpers/auth-cookie.helper';
-import { AuthRepository } from './repositories/auth.repository';
-import { OidcClientService } from './services/oidc-client.service';
+} from '@/common/helpers/config.helper';
+import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
+import {
+  AuthCookie,
+  type CookieSameSite,
+} from '@/features/auth/helpers/auth-cookie.helper';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import {
   parseOidcProvider,
   type OidcProvider,
-} from './types/oidc-provider.type';
+} from '@/features/auth/types/oidc-provider.type';
+import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
 
 /**
  * 인증/로그인/토큰 발급/갱신 비즈니스 로직

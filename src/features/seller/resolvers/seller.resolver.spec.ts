@@ -1,13 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { SellerContentService } from '../services/seller-content.service';
-import { SellerCustomTemplateService } from '../services/seller-custom-template.service';
-import { SellerOptionService } from '../services/seller-option.service';
-import { SellerProductCrudService } from '../services/seller-product-crud.service';
-
-import { SellerContentMutationResolver } from './seller-content-mutation.resolver';
-import { SellerProductMutationResolver } from './seller-product-mutation.resolver';
-import { SellerProductQueryResolver } from './seller-product-query.resolver';
+import { SellerContentMutationResolver } from '@/features/seller/resolvers/seller-content-mutation.resolver';
+import { SellerProductMutationResolver } from '@/features/seller/resolvers/seller-product-mutation.resolver';
+import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-product-query.resolver';
+import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
+import { SellerOptionService } from '@/features/seller/services/seller-option.service';
+import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
 
 describe('SellerResolvers', () => {
   let queryResolver: SellerProductQueryResolver;

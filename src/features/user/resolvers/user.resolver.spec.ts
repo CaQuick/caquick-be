@@ -1,10 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { UserNotificationService } from '../services/user-notification.service';
-import { UserProfileService } from '../services/user-profile.service';
-
-import { UserNotificationMutationResolver } from './user-notification-mutation.resolver';
-import { UserProfileQueryResolver } from './user-profile-query.resolver';
+import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
+import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
+import { UserNotificationService } from '@/features/user/services/user-notification.service';
+import { UserProfileService } from '@/features/user/services/user-profile.service';
 
 describe('UserResolvers', () => {
   let queryResolver: UserProfileQueryResolver;

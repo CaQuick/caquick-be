@@ -1,10 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { ProductRepository } from '../../product';
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerOptionService } from './seller-option.service';
+import { ProductRepository } from '@/features/product';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 
 const SELLER_CONTEXT = {
   id: BigInt(1),

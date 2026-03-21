@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { toDate, toDateRequired } from './date-parser';
+import { toDate, toDateRequired } from '@/common/utils/date-parser';
 
 describe('date-parser', () => {
   describe('toDate', () => {

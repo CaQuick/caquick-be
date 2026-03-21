@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { cleanNullableText, cleanRequiredText } from './text-cleaner';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '@/common/utils/text-cleaner';
 
 describe('text-cleaner', () => {
   describe('cleanRequiredText', () => {

@@ -1,8 +1,16 @@
-import { applySoftDeleteArgs } from './soft-delete.middleware';
+import { Prisma } from '@prisma/client';
+
+import { applySoftDeleteArgs } from '@/prisma/soft-delete.middleware';
+
+type SoftDeleteInput = {
+  model?: Prisma.ModelName;
+  operation: Prisma.PrismaAction;
+  args?: unknown;
+};
 
 describe('soft delete extension', () => {
   it('findFirst에 deleted_at 필터를 자동으로 추가해야 한다', () => {
-    const params = {
+    const params: SoftDeleteInput = {
       model: 'Account',
       operation: 'findFirst',
       args: {
@@ -18,7 +26,7 @@ describe('soft delete extension', () => {
   });
 
   it('deleted_at 조건이 있으면 필터를 우회해야 한다', () => {
-    const params = {
+    const params: SoftDeleteInput = {
       model: 'Account',
       operation: 'findFirst',
       args: {
@@ -34,7 +42,7 @@ describe('soft delete extension', () => {
   });
 
   it('findUnique에는 필터를 추가하지 않아야 한다', () => {
-    const params = {
+    const params: SoftDeleteInput = {
       model: 'Account',
       operation: 'findUnique',
       args: {
