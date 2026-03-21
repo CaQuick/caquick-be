@@ -127,7 +127,35 @@ export class SellerStoreService extends SellerBaseService {
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
     if (!current) throw new NotFoundException('Store not found.');
 
-    const data: Prisma.StoreUpdateInput = {
+    const data = this.buildStoreBasicInfoUpdateData(input);
+    const updated = await this.repo.updateStore({
+      storeId: ctx.storeId,
+      data,
+    });
+
+    await this.repo.createAuditLog({
+      actorAccountId: ctx.accountId,
+      storeId: ctx.storeId,
+      targetType: AuditTargetType.STORE,
+      targetId: ctx.storeId,
+      action: AuditActionType.UPDATE,
+      beforeJson: {
+        storeName: current.store_name,
+        storePhone: current.store_phone,
+      },
+      afterJson: {
+        storeName: updated.store_name,
+        storePhone: updated.store_phone,
+      },
+    });
+
+    return this.toStoreOutput(updated);
+  }
+
+  private buildStoreBasicInfoUpdateData(
+    input: SellerUpdateStoreBasicInfoInput,
+  ): Prisma.StoreUpdateInput {
+    return {
       ...(input.storeName !== undefined
         ? {
             store_name: this.cleanRequiredText(
@@ -202,29 +230,6 @@ export class SellerStoreService extends SellerBaseService {
           }
         : {}),
     };
-
-    const updated = await this.repo.updateStore({
-      storeId: ctx.storeId,
-      data,
-    });
-
-    await this.repo.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      beforeJson: {
-        storeName: current.store_name,
-        storePhone: current.store_phone,
-      },
-      afterJson: {
-        storeName: updated.store_name,
-        storePhone: updated.store_phone,
-      },
-    });
-
-    return this.toStoreOutput(updated);
   }
 
   async sellerUpsertStoreBusinessHour(

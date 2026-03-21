@@ -242,94 +242,11 @@ export class SellerContentService extends SellerBaseService {
     });
     if (!current) throw new NotFoundException('Banner not found.');
 
-    const nextLinkType = input.linkType ?? current.link_type;
-    const nextLinkProductId =
-      input.linkProductId !== undefined
-        ? input.linkProductId
-          ? parseId(input.linkProductId)
-          : null
-        : current.link_product_id;
-    const nextLinkStoreId =
-      input.linkStoreId !== undefined
-        ? input.linkStoreId
-          ? parseId(input.linkStoreId)
-          : null
-        : current.link_store_id;
-    const nextLinkCategoryId =
-      input.linkCategoryId !== undefined
-        ? input.linkCategoryId
-          ? parseId(input.linkCategoryId)
-          : null
-        : current.link_category_id;
-    const nextLinkUrl =
-      input.linkUrl !== undefined ? input.linkUrl : current.link_url;
+    const resolved = this.resolveNextBannerLinkValues(input, current);
+    await this.validateBannerOwnership(ctx, resolved);
 
-    await this.validateBannerOwnership(ctx, {
-      linkType: nextLinkType,
-      linkProductId: nextLinkProductId,
-      linkStoreId: nextLinkStoreId,
-      linkCategoryId: nextLinkCategoryId,
-      linkUrl: nextLinkUrl,
-    });
-
-    const row = await this.repo.updateBanner({
-      bannerId,
-      data: {
-        ...(input.placement !== undefined
-          ? { placement: this.toBannerPlacement(input.placement) }
-          : {}),
-        ...(input.title !== undefined
-          ? {
-              title: this.cleanNullableText(
-                input.title,
-                MAX_BANNER_TITLE_LENGTH,
-              ),
-            }
-          : {}),
-        ...(input.imageUrl !== undefined
-          ? {
-              image_url: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
-            }
-          : {}),
-        ...(input.linkType !== undefined
-          ? { link_type: this.toBannerLinkType(input.linkType) }
-          : {}),
-        ...(input.linkUrl !== undefined
-          ? { link_url: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
-          : {}),
-        ...(input.linkProductId !== undefined
-          ? {
-              link_product_id: input.linkProductId
-                ? parseId(input.linkProductId)
-                : null,
-            }
-          : {}),
-        ...(input.linkStoreId !== undefined
-          ? {
-              link_store_id: input.linkStoreId
-                ? parseId(input.linkStoreId)
-                : null,
-            }
-          : {}),
-        ...(input.linkCategoryId !== undefined
-          ? {
-              link_category_id: input.linkCategoryId
-                ? parseId(input.linkCategoryId)
-                : null,
-            }
-          : {}),
-        ...(input.startsAt !== undefined
-          ? { starts_at: this.toDate(input.startsAt) ?? null }
-          : {}),
-        ...(input.endsAt !== undefined
-          ? { ends_at: this.toDate(input.endsAt) ?? null }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
-      },
-    });
+    const data = this.buildBannerUpdateData(input);
+    const row = await this.repo.updateBanner({ bannerId, data });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
@@ -343,6 +260,98 @@ export class SellerContentService extends SellerBaseService {
     });
 
     return this.toBannerOutput(row);
+  }
+
+  private resolveNextBannerLinkValues(
+    input: SellerUpdateBannerInput,
+    current: {
+      link_type: string;
+      link_product_id: bigint | null;
+      link_store_id: bigint | null;
+      link_category_id: bigint | null;
+      link_url: string | null;
+    },
+  ) {
+    return {
+      linkType: (input.linkType ?? current.link_type) as
+        | 'NONE'
+        | 'URL'
+        | 'PRODUCT'
+        | 'STORE'
+        | 'CATEGORY',
+      linkProductId:
+        input.linkProductId !== undefined
+          ? input.linkProductId
+            ? parseId(input.linkProductId)
+            : null
+          : current.link_product_id,
+      linkStoreId:
+        input.linkStoreId !== undefined
+          ? input.linkStoreId
+            ? parseId(input.linkStoreId)
+            : null
+          : current.link_store_id,
+      linkCategoryId:
+        input.linkCategoryId !== undefined
+          ? input.linkCategoryId
+            ? parseId(input.linkCategoryId)
+            : null
+          : current.link_category_id,
+      linkUrl: input.linkUrl !== undefined ? input.linkUrl : current.link_url,
+    };
+  }
+
+  private buildBannerUpdateData(input: SellerUpdateBannerInput) {
+    return {
+      ...(input.placement !== undefined
+        ? { placement: this.toBannerPlacement(input.placement) }
+        : {}),
+      ...(input.title !== undefined
+        ? {
+            title: this.cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+          }
+        : {}),
+      ...(input.imageUrl !== undefined
+        ? {
+            image_url: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+          }
+        : {}),
+      ...(input.linkType !== undefined
+        ? { link_type: this.toBannerLinkType(input.linkType) }
+        : {}),
+      ...(input.linkUrl !== undefined
+        ? { link_url: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
+        : {}),
+      ...(input.linkProductId !== undefined
+        ? {
+            link_product_id: input.linkProductId
+              ? parseId(input.linkProductId)
+              : null,
+          }
+        : {}),
+      ...(input.linkStoreId !== undefined
+        ? {
+            link_store_id: input.linkStoreId
+              ? parseId(input.linkStoreId)
+              : null,
+          }
+        : {}),
+      ...(input.linkCategoryId !== undefined
+        ? {
+            link_category_id: input.linkCategoryId
+              ? parseId(input.linkCategoryId)
+              : null,
+          }
+        : {}),
+      ...(input.startsAt !== undefined
+        ? { starts_at: this.toDate(input.startsAt) ?? null }
+        : {}),
+      ...(input.endsAt !== undefined
+        ? { ends_at: this.toDate(input.endsAt) ?? null }
+        : {}),
+      ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
+      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    };
   }
 
   async sellerDeleteBanner(

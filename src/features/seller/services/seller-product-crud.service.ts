@@ -42,6 +42,70 @@ import type {
 
 import { SellerBaseService } from './seller-base.service';
 
+interface ProductOptionGroupRow {
+  id: bigint;
+  product_id: bigint;
+  name: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  option_requires_description: boolean;
+  option_requires_image: boolean;
+  sort_order: number;
+  is_active: boolean;
+  option_items: {
+    id: bigint;
+    option_group_id: bigint;
+    title: string;
+    description: string | null;
+    image_url: string | null;
+    price_delta: number;
+    sort_order: number;
+    is_active: boolean;
+  }[];
+}
+
+interface ProductCustomTemplateRow {
+  id: bigint;
+  product_id: bigint;
+  base_image_url: string;
+  is_active: boolean;
+  text_tokens: {
+    id: bigint;
+    template_id: bigint;
+    token_key: string;
+    default_text: string;
+    max_length: number;
+    sort_order: number;
+    is_required: boolean;
+    pos_x: number | null;
+    pos_y: number | null;
+    width: number | null;
+    height: number | null;
+  }[];
+}
+
+interface ProductDetailRow {
+  id: bigint;
+  store_id: bigint;
+  name: string;
+  description: string | null;
+  purchase_notice: string | null;
+  regular_price: number;
+  sale_price: number | null;
+  currency: string;
+  base_design_image_url: string | null;
+  preparation_time_minutes: number;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  images: { id: bigint; image_url: string; sort_order: number }[];
+  product_categories: { category: { id: bigint; name: string } }[];
+  product_tags: { tag: { id: bigint; name: string } }[];
+  option_groups: ProductOptionGroupRow[];
+  custom_template: ProductCustomTemplateRow | null;
+}
+
 @Injectable()
 export class SellerProductCrudService extends SellerBaseService {
   constructor(
@@ -98,25 +162,7 @@ export class SellerProductCrudService extends SellerBaseService {
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
 
-    this.assertPositiveRange(
-      input.regularPrice,
-      MIN_PRODUCT_PRICE,
-      MAX_PRODUCT_PRICE,
-      'regularPrice',
-    );
-    if (input.salePrice !== undefined && input.salePrice !== null) {
-      this.assertPositiveRange(
-        input.salePrice,
-        MIN_SALE_PRICE,
-        MAX_PRODUCT_PRICE,
-        'salePrice',
-      );
-      if (input.salePrice > input.regularPrice) {
-        throw new BadRequestException(
-          'salePrice must be less than or equal to regularPrice.',
-        );
-      }
-    }
+    this.validateProductPrices(input.regularPrice, input.salePrice);
 
     const created = await this.productRepository.createProduct({
       storeId: ctx.storeId,
@@ -184,64 +230,11 @@ export class SellerProductCrudService extends SellerBaseService {
       });
     if (!current) throw new NotFoundException('Product not found.');
 
-    const data: Prisma.ProductUpdateInput = {
-      ...(input.name !== undefined
-        ? { name: this.cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH) }
-        : {}),
-      ...(input.description !== undefined
-        ? {
-            description: this.cleanNullableText(
-              input.description,
-              MAX_PRODUCT_DESCRIPTION_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.purchaseNotice !== undefined
-        ? {
-            purchase_notice: this.cleanNullableText(
-              input.purchaseNotice,
-              MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.regularPrice !== undefined && input.regularPrice !== null
-        ? { regular_price: input.regularPrice }
-        : {}),
-      ...(input.salePrice !== undefined ? { sale_price: input.salePrice } : {}),
-      ...(input.currency !== undefined
-        ? { currency: this.cleanCurrency(input.currency) }
-        : {}),
-      ...(input.baseDesignImageUrl !== undefined
-        ? {
-            base_design_image_url: this.cleanNullableText(
-              input.baseDesignImageUrl,
-              MAX_URL_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.preparationTimeMinutes !== undefined &&
-      input.preparationTimeMinutes !== null
-        ? { preparation_time_minutes: input.preparationTimeMinutes }
-        : {}),
-    };
-
-    if (data.regular_price !== undefined) {
-      this.assertPositiveRange(
-        data.regular_price as number,
-        MIN_PRODUCT_PRICE,
-        MAX_PRODUCT_PRICE,
-        'regularPrice',
-      );
-    }
-
-    if (data.sale_price !== undefined && data.sale_price !== null) {
-      this.assertPositiveRange(
-        data.sale_price as number,
-        MIN_SALE_PRICE,
-        MAX_PRODUCT_PRICE,
-        'salePrice',
-      );
-    }
+    const data = this.buildProductUpdateData(input);
+    this.validateProductPrices(
+      data.regular_price as number | undefined,
+      data.sale_price as number | null | undefined,
+    );
 
     const updated = await this.productRepository.updateProduct({
       productId,
@@ -554,65 +547,7 @@ export class SellerProductCrudService extends SellerBaseService {
     return this.toProductOutput(detail);
   }
 
-  private toProductOutput(row: {
-    id: bigint;
-    store_id: bigint;
-    name: string;
-    description: string | null;
-    purchase_notice: string | null;
-    regular_price: number;
-    sale_price: number | null;
-    currency: string;
-    base_design_image_url: string | null;
-    preparation_time_minutes: number;
-    is_active: boolean;
-    created_at: Date;
-    updated_at: Date;
-    images: { id: bigint; image_url: string; sort_order: number }[];
-    product_categories: { category: { id: bigint; name: string } }[];
-    product_tags: { tag: { id: bigint; name: string } }[];
-    option_groups: {
-      id: bigint;
-      product_id: bigint;
-      name: string;
-      is_required: boolean;
-      min_select: number;
-      max_select: number;
-      option_requires_description: boolean;
-      option_requires_image: boolean;
-      sort_order: number;
-      is_active: boolean;
-      option_items: {
-        id: bigint;
-        option_group_id: bigint;
-        title: string;
-        description: string | null;
-        image_url: string | null;
-        price_delta: number;
-        sort_order: number;
-        is_active: boolean;
-      }[];
-    }[];
-    custom_template: {
-      id: bigint;
-      product_id: bigint;
-      base_image_url: string;
-      is_active: boolean;
-      text_tokens: {
-        id: bigint;
-        template_id: bigint;
-        token_key: string;
-        default_text: string;
-        max_length: number;
-        sort_order: number;
-        is_required: boolean;
-        pos_x: number | null;
-        pos_y: number | null;
-        width: number | null;
-        height: number | null;
-      }[];
-    } | null;
-  }): SellerProductOutput {
+  private toProductOutput(row: ProductDetailRow): SellerProductOutput {
     return {
       id: row.id.toString(),
       storeId: row.store_id.toString(),
@@ -634,51 +569,59 @@ export class SellerProductCrudService extends SellerBaseService {
         id: t.tag.id.toString(),
         name: t.tag.name,
       })),
-      optionGroups: row.option_groups.map((g) => ({
-        id: g.id.toString(),
-        productId: g.product_id.toString(),
-        name: g.name,
-        isRequired: g.is_required,
-        minSelect: g.min_select,
-        maxSelect: g.max_select,
-        optionRequiresDescription: g.option_requires_description,
-        optionRequiresImage: g.option_requires_image,
-        sortOrder: g.sort_order,
-        isActive: g.is_active,
-        optionItems: g.option_items.map((item) => ({
-          id: item.id.toString(),
-          optionGroupId: item.option_group_id.toString(),
-          title: item.title,
-          description: item.description,
-          imageUrl: item.image_url,
-          priceDelta: item.price_delta,
-          sortOrder: item.sort_order,
-          isActive: item.is_active,
-        })),
-      })),
+      optionGroups: row.option_groups.map((g) => this.toOptionGroupOutput(g)),
       customTemplate: row.custom_template
-        ? {
-            id: row.custom_template.id.toString(),
-            productId: row.custom_template.product_id.toString(),
-            baseImageUrl: row.custom_template.base_image_url,
-            isActive: row.custom_template.is_active,
-            textTokens: row.custom_template.text_tokens.map((token) => ({
-              id: token.id.toString(),
-              templateId: token.template_id.toString(),
-              tokenKey: token.token_key,
-              defaultText: token.default_text,
-              maxLength: token.max_length,
-              sortOrder: token.sort_order,
-              isRequired: token.is_required,
-              posX: token.pos_x,
-              posY: token.pos_y,
-              width: token.width,
-              height: token.height,
-            })),
-          }
+        ? this.toCustomTemplateOutput(row.custom_template)
         : null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+    };
+  }
+
+  private toOptionGroupOutput(g: ProductOptionGroupRow) {
+    return {
+      id: g.id.toString(),
+      productId: g.product_id.toString(),
+      name: g.name,
+      isRequired: g.is_required,
+      minSelect: g.min_select,
+      maxSelect: g.max_select,
+      optionRequiresDescription: g.option_requires_description,
+      optionRequiresImage: g.option_requires_image,
+      sortOrder: g.sort_order,
+      isActive: g.is_active,
+      optionItems: g.option_items.map((item) => ({
+        id: item.id.toString(),
+        optionGroupId: item.option_group_id.toString(),
+        title: item.title,
+        description: item.description,
+        imageUrl: item.image_url,
+        priceDelta: item.price_delta,
+        sortOrder: item.sort_order,
+        isActive: item.is_active,
+      })),
+    };
+  }
+
+  private toCustomTemplateOutput(t: ProductCustomTemplateRow) {
+    return {
+      id: t.id.toString(),
+      productId: t.product_id.toString(),
+      baseImageUrl: t.base_image_url,
+      isActive: t.is_active,
+      textTokens: t.text_tokens.map((token) => ({
+        id: token.id.toString(),
+        templateId: token.template_id.toString(),
+        tokenKey: token.token_key,
+        defaultText: token.default_text,
+        maxLength: token.max_length,
+        sortOrder: token.sort_order,
+        isRequired: token.is_required,
+        posX: token.pos_x,
+        posY: token.pos_y,
+        width: token.width,
+        height: token.height,
+      })),
     };
   }
 
@@ -691,6 +634,79 @@ export class SellerProductCrudService extends SellerBaseService {
       id: row.id.toString(),
       imageUrl: row.image_url,
       sortOrder: row.sort_order,
+    };
+  }
+
+  private validateProductPrices(
+    regularPrice?: number,
+    salePrice?: number | null,
+  ): void {
+    if (regularPrice !== undefined) {
+      this.assertPositiveRange(
+        regularPrice,
+        MIN_PRODUCT_PRICE,
+        MAX_PRODUCT_PRICE,
+        'regularPrice',
+      );
+    }
+
+    if (salePrice !== undefined && salePrice !== null) {
+      this.assertPositiveRange(
+        salePrice,
+        MIN_SALE_PRICE,
+        MAX_PRODUCT_PRICE,
+        'salePrice',
+      );
+      if (regularPrice !== undefined && salePrice > regularPrice) {
+        throw new BadRequestException(
+          'salePrice must be less than or equal to regularPrice.',
+        );
+      }
+    }
+  }
+
+  private buildProductUpdateData(
+    input: SellerUpdateProductInput,
+  ): Prisma.ProductUpdateInput {
+    return {
+      ...(input.name !== undefined
+        ? { name: this.cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH) }
+        : {}),
+      ...(input.description !== undefined
+        ? {
+            description: this.cleanNullableText(
+              input.description,
+              MAX_PRODUCT_DESCRIPTION_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.purchaseNotice !== undefined
+        ? {
+            purchase_notice: this.cleanNullableText(
+              input.purchaseNotice,
+              MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.regularPrice !== undefined && input.regularPrice !== null
+        ? { regular_price: input.regularPrice }
+        : {}),
+      ...(input.salePrice !== undefined ? { sale_price: input.salePrice } : {}),
+      ...(input.currency !== undefined
+        ? { currency: this.cleanCurrency(input.currency) }
+        : {}),
+      ...(input.baseDesignImageUrl !== undefined
+        ? {
+            base_design_image_url: this.cleanNullableText(
+              input.baseDesignImageUrl,
+              MAX_URL_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.preparationTimeMinutes !== undefined &&
+      input.preparationTimeMinutes !== null
+        ? { preparation_time_minutes: input.preparationTimeMinutes }
+        : {}),
     };
   }
 }
