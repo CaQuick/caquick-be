@@ -22,31 +22,12 @@ class TestableSellerBaseService extends SellerBaseService {
     return this.parseIdList(rawIds);
   }
 
-  public testToDate(raw?: Date | string | null) {
-    return this.toDate(raw);
-  }
-
-  public testToDateRequired(raw: Date | string, field: string) {
-    return this.toDateRequired(raw, field);
-  }
-
   public testToTime(raw?: Date | string | null) {
     return this.toTime(raw);
   }
 
   public testToDecimal(raw?: string | null) {
     return this.toDecimal(raw);
-  }
-
-  public testCleanRequiredText(raw: string, maxLength: number) {
-    return this.cleanRequiredText(raw, maxLength);
-  }
-
-  public testCleanNullableText(
-    raw: string | null | undefined,
-    maxLength: number,
-  ) {
-    return this.cleanNullableText(raw, maxLength);
   }
 
   public testCleanCurrency(raw?: string | null) {
@@ -108,17 +89,6 @@ describe('SellerBaseService', () => {
     });
   });
 
-  describe('toDate', () => {
-    it('유효하지 않은 날짜면 BadRequestException을 던져야 한다', () => {
-      expect(() => service.testToDate('invalid')).toThrow(BadRequestException);
-    });
-
-    it('null/undefined이면 undefined를 반환해야 한다', () => {
-      expect(service.testToDate(null)).toBeUndefined();
-      expect(service.testToDate(undefined)).toBeUndefined();
-    });
-  });
-
   describe('toDecimal', () => {
     it('유효하지 않은 값이면 BadRequestException을 던져야 한다', () => {
       expect(() => service.testToDecimal('not-a-number')).toThrow(
@@ -134,46 +104,6 @@ describe('SellerBaseService', () => {
     it('빈 문자열이면 null을 반환해야 한다', () => {
       expect(service.testToDecimal('')).toBeNull();
       expect(service.testToDecimal('  ')).toBeNull();
-    });
-  });
-
-  describe('cleanRequiredText', () => {
-    it('빈 문자열이면 BadRequestException을 던져야 한다', () => {
-      expect(() => service.testCleanRequiredText('', 100)).toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('공백만 있으면 BadRequestException을 던져야 한다', () => {
-      expect(() => service.testCleanRequiredText('   ', 100)).toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('최대 길이를 초과하면 BadRequestException을 던져야 한다', () => {
-      expect(() => service.testCleanRequiredText('abcdef', 5)).toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('유효한 텍스트를 트림하여 반환해야 한다', () => {
-      expect(service.testCleanRequiredText('  hello  ', 100)).toBe('hello');
-    });
-  });
-
-  describe('cleanNullableText', () => {
-    it('null이면 null을 반환해야 한다', () => {
-      expect(service.testCleanNullableText(null, 100)).toBeNull();
-    });
-
-    it('빈 문자열이면 null을 반환해야 한다', () => {
-      expect(service.testCleanNullableText('', 100)).toBeNull();
-    });
-
-    it('최대 길이를 초과하면 BadRequestException을 던져야 한다', () => {
-      expect(() => service.testCleanNullableText('abcdef', 5)).toThrow(
-        BadRequestException,
-      );
     });
   });
 

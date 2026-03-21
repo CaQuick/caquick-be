@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
+import { toDate } from '../../../common/utils/date-parser';
 import { parseId } from '../../../common/utils/id-parser';
+import { cleanNullableText } from '../../../common/utils/text-cleaner';
 import { OrderDomainService, OrderRepository } from '../../order';
 import {
   nextCursorOf,
@@ -84,10 +86,10 @@ export class SellerOrderService extends SellerBaseService {
       status: input?.status
         ? this.orderDomainService.parseStatus(input.status)
         : undefined,
-      fromCreatedAt: this.toDate(input?.fromCreatedAt),
-      toCreatedAt: this.toDate(input?.toCreatedAt),
-      fromPickupAt: this.toDate(input?.fromPickupAt),
-      toPickupAt: this.toDate(input?.toPickupAt),
+      fromCreatedAt: toDate(input?.fromCreatedAt),
+      toCreatedAt: toDate(input?.toCreatedAt),
+      fromPickupAt: toDate(input?.fromPickupAt),
+      toPickupAt: toDate(input?.toPickupAt),
       search: input?.search?.trim() || undefined,
     });
 
@@ -138,7 +140,7 @@ export class SellerOrderService extends SellerBaseService {
       storeId: ctx.storeId,
       actorAccountId: ctx.accountId,
       toStatus,
-      note: this.cleanNullableText(input.note, 500),
+      note: cleanNullableText(input.note, 500),
       now: new Date(),
     });
 

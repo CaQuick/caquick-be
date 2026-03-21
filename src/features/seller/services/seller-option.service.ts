@@ -6,6 +6,10 @@ import {
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '../../../common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
   MAX_OPTION_GROUP_NAME_LENGTH,
@@ -61,7 +65,7 @@ export class SellerOptionService extends SellerBaseService {
     const row = await this.productRepository.createOptionGroup({
       productId,
       data: {
-        name: this.cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
+        name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
         is_required: input.isRequired ?? true,
         min_select: minSelect,
         max_select: maxSelect,
@@ -112,10 +116,7 @@ export class SellerOptionService extends SellerBaseService {
       data: {
         ...(input.name !== undefined
           ? {
-              name: this.cleanRequiredText(
-                input.name,
-                MAX_OPTION_GROUP_NAME_LENGTH,
-              ),
+              name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
             }
           : {}),
         ...(input.isRequired !== undefined
@@ -243,15 +244,12 @@ export class SellerOptionService extends SellerBaseService {
     const row = await this.productRepository.createOptionItem({
       optionGroupId,
       data: {
-        title: this.cleanRequiredText(
-          input.title,
-          MAX_OPTION_ITEM_TITLE_LENGTH,
-        ),
-        description: this.cleanNullableText(
+        title: cleanRequiredText(input.title, MAX_OPTION_ITEM_TITLE_LENGTH),
+        description: cleanNullableText(
           input.description,
           MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
         ),
-        image_url: this.cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
+        image_url: cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
         price_delta: input.priceDelta ?? 0,
         sort_order: input.sortOrder ?? 0,
         is_active: input.isActive ?? true,
@@ -290,7 +288,7 @@ export class SellerOptionService extends SellerBaseService {
       data: {
         ...(input.title !== undefined
           ? {
-              title: this.cleanRequiredText(
+              title: cleanRequiredText(
                 input.title,
                 MAX_OPTION_ITEM_TITLE_LENGTH,
               ),
@@ -298,7 +296,7 @@ export class SellerOptionService extends SellerBaseService {
           : {}),
         ...(input.description !== undefined
           ? {
-              description: this.cleanNullableText(
+              description: cleanNullableText(
                 input.description,
                 MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
               ),
@@ -306,7 +304,7 @@ export class SellerOptionService extends SellerBaseService {
           : {}),
         ...(input.imageUrl !== undefined
           ? {
-              image_url: this.cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
+              image_url: cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
             }
           : {}),
         ...(input.priceDelta !== undefined

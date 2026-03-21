@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 
 import { parseId } from '../../../common/utils/id-parser';
+import { cleanNullableText } from '../../../common/utils/text-cleaner';
 import { ConversationRepository } from '../../conversation';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
@@ -109,11 +110,11 @@ export class SellerConversationService extends SellerBaseService {
     if (!conversation) throw new NotFoundException('Conversation not found.');
 
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
-    const bodyText = this.cleanNullableText(
+    const bodyText = cleanNullableText(
       input.bodyText,
       MAX_CONVERSATION_BODY_TEXT_LENGTH,
     );
-    const bodyHtml = this.cleanNullableText(
+    const bodyHtml = cleanNullableText(
       input.bodyHtml,
       MAX_CONVERSATION_BODY_HTML_LENGTH,
     );

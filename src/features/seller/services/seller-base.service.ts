@@ -19,6 +19,7 @@ export interface SellerContext {
 
 export abstract class SellerBaseService {
   protected constructor(protected readonly repo: SellerRepository) {}
+
   protected async requireSellerContext(
     accountId: bigint,
   ): Promise<SellerContext> {
@@ -46,21 +47,6 @@ export abstract class SellerBaseService {
     return parsed;
   }
 
-  protected toDate(raw?: Date | string | null): Date | undefined {
-    if (raw === undefined || raw === null) return undefined;
-    const date = raw instanceof Date ? raw : new Date(raw);
-    if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException('Invalid date value.');
-    }
-    return date;
-  }
-
-  protected toDateRequired(raw: Date | string, field: string): Date {
-    const date = this.toDate(raw);
-    if (!date) throw new BadRequestException(`${field} is required.`);
-    return date;
-  }
-
   protected toTime(raw?: Date | string | null): Date | null {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
@@ -79,30 +65,6 @@ export abstract class SellerBaseService {
     } catch {
       throw new BadRequestException('Invalid decimal value.');
     }
-  }
-
-  protected cleanRequiredText(raw: string, maxLength: number): string {
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) {
-      throw new BadRequestException('Required text is empty.');
-    }
-    if (trimmed.length > maxLength) {
-      throw new BadRequestException(`Text exceeds ${maxLength} length.`);
-    }
-    return trimmed;
-  }
-
-  protected cleanNullableText(
-    raw: string | null | undefined,
-    maxLength: number,
-  ): string | null {
-    if (raw === undefined || raw === null) return null;
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) return null;
-    if (trimmed.length > maxLength) {
-      throw new BadRequestException(`Text exceeds ${maxLength} length.`);
-    }
-    return trimmed;
   }
 
   protected cleanCurrency(raw?: string | null): string {

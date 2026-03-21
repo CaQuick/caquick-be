@@ -6,6 +6,10 @@ import {
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
 import { parseId } from '../../../common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
   DEFAULT_PREPARATION_TIME_MINUTES,
@@ -167,19 +171,19 @@ export class SellerProductCrudService extends SellerBaseService {
     const created = await this.productRepository.createProduct({
       storeId: ctx.storeId,
       data: {
-        name: this.cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH),
-        description: this.cleanNullableText(
+        name: cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH),
+        description: cleanNullableText(
           input.description,
           MAX_PRODUCT_DESCRIPTION_LENGTH,
         ),
-        purchase_notice: this.cleanNullableText(
+        purchase_notice: cleanNullableText(
           input.purchaseNotice,
           MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
         ),
         regular_price: input.regularPrice,
         sale_price: input.salePrice ?? null,
         currency: this.cleanCurrency(input.currency),
-        base_design_image_url: this.cleanNullableText(
+        base_design_image_url: cleanNullableText(
           input.baseDesignImageUrl,
           MAX_URL_LENGTH,
         ),
@@ -191,7 +195,7 @@ export class SellerProductCrudService extends SellerBaseService {
 
     await this.productRepository.addProductImage({
       productId: created.id,
-      imageUrl: this.cleanRequiredText(input.initialImageUrl, MAX_URL_LENGTH),
+      imageUrl: cleanRequiredText(input.initialImageUrl, MAX_URL_LENGTH),
       sortOrder: 0,
     });
 
@@ -358,7 +362,7 @@ export class SellerProductCrudService extends SellerBaseService {
 
     const row = await this.productRepository.addProductImage({
       productId,
-      imageUrl: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+      imageUrl: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
       sortOrder: input.sortOrder ?? count,
     });
 
@@ -670,11 +674,11 @@ export class SellerProductCrudService extends SellerBaseService {
   ): Prisma.ProductUpdateInput {
     return {
       ...(input.name !== undefined
-        ? { name: this.cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH) }
+        ? { name: cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH) }
         : {}),
       ...(input.description !== undefined
         ? {
-            description: this.cleanNullableText(
+            description: cleanNullableText(
               input.description,
               MAX_PRODUCT_DESCRIPTION_LENGTH,
             ),
@@ -682,7 +686,7 @@ export class SellerProductCrudService extends SellerBaseService {
         : {}),
       ...(input.purchaseNotice !== undefined
         ? {
-            purchase_notice: this.cleanNullableText(
+            purchase_notice: cleanNullableText(
               input.purchaseNotice,
               MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
             ),
@@ -697,7 +701,7 @@ export class SellerProductCrudService extends SellerBaseService {
         : {}),
       ...(input.baseDesignImageUrl !== undefined
         ? {
-            base_design_image_url: this.cleanNullableText(
+            base_design_image_url: cleanNullableText(
               input.baseDesignImageUrl,
               MAX_URL_LENGTH,
             ),

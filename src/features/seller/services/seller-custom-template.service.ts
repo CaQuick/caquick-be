@@ -6,6 +6,7 @@ import {
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '../../../common/utils/id-parser';
+import { cleanRequiredText } from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
   DEFAULT_TOKEN_MAX_LENGTH,
@@ -52,7 +53,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
 
     const row = await this.productRepository.upsertProductCustomTemplate({
       productId,
-      baseImageUrl: this.cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH),
+      baseImageUrl: cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH),
       isActive: input.isActive ?? true,
     });
 
@@ -128,8 +129,8 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const row = await this.productRepository.upsertCustomTextToken({
       tokenId,
       templateId,
-      tokenKey: this.cleanRequiredText(input.tokenKey, MAX_TOKEN_KEY_LENGTH),
-      defaultText: this.cleanRequiredText(
+      tokenKey: cleanRequiredText(input.tokenKey, MAX_TOKEN_KEY_LENGTH),
+      defaultText: cleanRequiredText(
         input.defaultText,
         MAX_TOKEN_DEFAULT_TEXT_LENGTH,
       ),

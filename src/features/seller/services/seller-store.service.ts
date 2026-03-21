@@ -5,7 +5,12 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
+import { toDate, toDateRequired } from '../../../common/utils/date-parser';
 import { parseId } from '../../../common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '../../../common/utils/text-cleaner';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -108,8 +113,8 @@ export class SellerStoreService extends SellerBaseService {
       storeId: ctx.storeId,
       limit: normalized.limit,
       cursor: normalized.cursor,
-      fromDate: this.toDate(input?.fromDate),
-      toDate: this.toDate(input?.toDate),
+      fromDate: toDate(input?.fromDate),
+      toDate: toDate(input?.toDate),
     });
 
     const paged = nextCursorOf(rows, normalized.limit);
@@ -158,7 +163,7 @@ export class SellerStoreService extends SellerBaseService {
     return {
       ...(input.storeName !== undefined
         ? {
-            store_name: this.cleanRequiredText(
+            store_name: cleanRequiredText(
               input.storeName,
               MAX_STORE_NAME_LENGTH,
             ),
@@ -166,7 +171,7 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.storePhone !== undefined
         ? {
-            store_phone: this.cleanRequiredText(
+            store_phone: cleanRequiredText(
               input.storePhone,
               MAX_STORE_PHONE_LENGTH,
             ),
@@ -174,7 +179,7 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.addressFull !== undefined
         ? {
-            address_full: this.cleanRequiredText(
+            address_full: cleanRequiredText(
               input.addressFull,
               MAX_ADDRESS_FULL_LENGTH,
             ),
@@ -182,7 +187,7 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.addressCity !== undefined
         ? {
-            address_city: this.cleanNullableText(
+            address_city: cleanNullableText(
               input.addressCity,
               MAX_ADDRESS_CITY_LENGTH,
             ),
@@ -190,7 +195,7 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.addressDistrict !== undefined
         ? {
-            address_district: this.cleanNullableText(
+            address_district: cleanNullableText(
               input.addressDistrict,
               MAX_ADDRESS_DISTRICT_LENGTH,
             ),
@@ -198,7 +203,7 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.addressNeighborhood !== undefined
         ? {
-            address_neighborhood: this.cleanNullableText(
+            address_neighborhood: cleanNullableText(
               input.addressNeighborhood,
               MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
             ),
@@ -215,15 +220,12 @@ export class SellerStoreService extends SellerBaseService {
         : {}),
       ...(input.websiteUrl !== undefined
         ? {
-            website_url: this.cleanNullableText(
-              input.websiteUrl,
-              MAX_URL_LENGTH,
-            ),
+            website_url: cleanNullableText(input.websiteUrl, MAX_URL_LENGTH),
           }
         : {}),
       ...(input.businessHoursText !== undefined
         ? {
-            business_hours_text: this.cleanNullableText(
+            business_hours_text: cleanNullableText(
               input.businessHoursText,
               MAX_BUSINESS_HOURS_TEXT_LENGTH,
             ),
@@ -297,8 +299,8 @@ export class SellerStoreService extends SellerBaseService {
     const row = await this.repo.upsertStoreSpecialClosure({
       storeId: ctx.storeId,
       closureId,
-      closureDate: this.toDateRequired(input.closureDate, 'closureDate'),
-      reason: this.cleanNullableText(
+      closureDate: toDateRequired(input.closureDate, 'closureDate'),
+      reason: cleanNullableText(
         input.reason,
         MAX_SPECIAL_CLOSURE_REASON_LENGTH,
       ),
@@ -427,7 +429,7 @@ export class SellerStoreService extends SellerBaseService {
     const row = await this.repo.upsertStoreDailyCapacity({
       storeId: ctx.storeId,
       capacityId,
-      capacityDate: this.toDateRequired(input.capacityDate, 'capacityDate'),
+      capacityDate: toDateRequired(input.capacityDate, 'capacityDate'),
       capacity: input.capacity,
     });
 

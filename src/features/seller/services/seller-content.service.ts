@@ -12,7 +12,12 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { toDate } from '../../../common/utils/date-parser';
 import { parseId } from '../../../common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
   MAX_BANNER_TITLE_LENGTH,
@@ -63,8 +68,8 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const row = await this.repo.createFaqTopic({
       storeId: ctx.storeId,
-      title: this.cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
-      answerHtml: this.cleanRequiredText(
+      title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
+      answerHtml: cleanRequiredText(
         input.answerHtml,
         MAX_FAQ_ANSWER_HTML_LENGTH,
       ),
@@ -103,11 +108,11 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       data: {
         ...(input.title !== undefined
-          ? { title: this.cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
+          ? { title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
           : {}),
         ...(input.answerHtml !== undefined
           ? {
-              answer_html: this.cleanRequiredText(
+              answer_html: cleanRequiredText(
                 input.answerHtml,
                 MAX_FAQ_ANSWER_HTML_LENGTH,
               ),
@@ -200,17 +205,17 @@ export class SellerContentService extends SellerBaseService {
 
     const row = await this.repo.createBanner({
       placement: this.toBannerPlacement(input.placement),
-      title: this.cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
-      imageUrl: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+      title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+      imageUrl: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
       linkType: this.toBannerLinkType(input.linkType ?? 'NONE'),
-      linkUrl: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
+      linkUrl: cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
       linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
       linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
         ? parseId(input.linkCategoryId)
         : null,
-      startsAt: this.toDate(input.startsAt) ?? null,
-      endsAt: this.toDate(input.endsAt) ?? null,
+      startsAt: toDate(input.startsAt) ?? null,
+      endsAt: toDate(input.endsAt) ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     });
@@ -308,19 +313,19 @@ export class SellerContentService extends SellerBaseService {
         : {}),
       ...(input.title !== undefined
         ? {
-            title: this.cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+            title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
           }
         : {}),
       ...(input.imageUrl !== undefined
         ? {
-            image_url: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+            image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
           }
         : {}),
       ...(input.linkType !== undefined
         ? { link_type: this.toBannerLinkType(input.linkType) }
         : {}),
       ...(input.linkUrl !== undefined
-        ? { link_url: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
+        ? { link_url: cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
         : {}),
       ...(input.linkProductId !== undefined
         ? {
@@ -344,10 +349,10 @@ export class SellerContentService extends SellerBaseService {
           }
         : {}),
       ...(input.startsAt !== undefined
-        ? { starts_at: this.toDate(input.startsAt) ?? null }
+        ? { starts_at: toDate(input.startsAt) ?? null }
         : {}),
       ...(input.endsAt !== undefined
-        ? { ends_at: this.toDate(input.endsAt) ?? null }
+        ? { ends_at: toDate(input.endsAt) ?? null }
         : {}),
       ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
       ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
