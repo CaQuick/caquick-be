@@ -1,37 +1,54 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { SellerContentService } from '../services/seller-content.service';
-import { SellerProductService } from '../services/seller-product.service';
+import { SellerCustomTemplateService } from '../services/seller-custom-template.service';
+import { SellerOptionService } from '../services/seller-option.service';
+import { SellerProductCrudService } from '../services/seller-product-crud.service';
 
 import { SellerContentMutationResolver } from './seller-content-mutation.resolver';
+import { SellerProductMutationResolver } from './seller-product-mutation.resolver';
 import { SellerProductQueryResolver } from './seller-product-query.resolver';
 
 describe('SellerResolvers', () => {
   let queryResolver: SellerProductQueryResolver;
   let mutationResolver: SellerContentMutationResolver;
-  let productService: jest.Mocked<SellerProductService>;
+  let productService: jest.Mocked<SellerProductCrudService>;
   let contentService: jest.Mocked<SellerContentService>;
+  let optionService: jest.Mocked<SellerOptionService>;
+  let templateService: jest.Mocked<SellerCustomTemplateService>;
 
   beforeEach(async () => {
     productService = {
       sellerProduct: jest.fn(),
-    } as unknown as jest.Mocked<SellerProductService>;
+    } as unknown as jest.Mocked<SellerProductCrudService>;
 
     contentService = {
       sellerDeleteBanner: jest.fn(),
     } as unknown as jest.Mocked<SellerContentService>;
 
+    optionService = {} as unknown as jest.Mocked<SellerOptionService>;
+    templateService = {} as unknown as jest.Mocked<SellerCustomTemplateService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SellerProductQueryResolver,
+        SellerProductMutationResolver,
         SellerContentMutationResolver,
         {
-          provide: SellerProductService,
+          provide: SellerProductCrudService,
           useValue: productService,
         },
         {
           provide: SellerContentService,
           useValue: contentService,
+        },
+        {
+          provide: SellerOptionService,
+          useValue: optionService,
+        },
+        {
+          provide: SellerCustomTemplateService,
+          useValue: templateService,
         },
       ],
     }).compile();

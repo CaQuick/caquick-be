@@ -15,6 +15,12 @@ import {
 import { parseId } from '../../../common/utils/id-parser';
 import { ProductRepository } from '../../product';
 import {
+  MAX_BANNER_TITLE_LENGTH,
+  MAX_FAQ_ANSWER_HTML_LENGTH,
+  MAX_FAQ_TITLE_LENGTH,
+  MAX_URL_LENGTH,
+} from '../constants/seller.constants';
+import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
@@ -57,8 +63,11 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const row = await this.repo.createFaqTopic({
       storeId: ctx.storeId,
-      title: this.cleanRequiredText(input.title, 120),
-      answerHtml: this.cleanRequiredText(input.answerHtml, 100000),
+      title: this.cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
+      answerHtml: this.cleanRequiredText(
+        input.answerHtml,
+        MAX_FAQ_ANSWER_HTML_LENGTH,
+      ),
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     });
@@ -94,10 +103,15 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       data: {
         ...(input.title !== undefined
-          ? { title: this.cleanRequiredText(input.title, 120) }
+          ? { title: this.cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
           : {}),
         ...(input.answerHtml !== undefined
-          ? { answer_html: this.cleanRequiredText(input.answerHtml, 100000) }
+          ? {
+              answer_html: this.cleanRequiredText(
+                input.answerHtml,
+                MAX_FAQ_ANSWER_HTML_LENGTH,
+              ),
+            }
           : {}),
         ...(input.sortOrder !== undefined
           ? { sort_order: input.sortOrder }
@@ -186,10 +200,10 @@ export class SellerContentService extends SellerBaseService {
 
     const row = await this.repo.createBanner({
       placement: this.toBannerPlacement(input.placement),
-      title: this.cleanNullableText(input.title, 200),
-      imageUrl: this.cleanRequiredText(input.imageUrl, 2048),
+      title: this.cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+      imageUrl: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
       linkType: this.toBannerLinkType(input.linkType ?? 'NONE'),
-      linkUrl: this.cleanNullableText(input.linkUrl, 2048),
+      linkUrl: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
       linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
       linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
@@ -265,16 +279,23 @@ export class SellerContentService extends SellerBaseService {
           ? { placement: this.toBannerPlacement(input.placement) }
           : {}),
         ...(input.title !== undefined
-          ? { title: this.cleanNullableText(input.title, 200) }
+          ? {
+              title: this.cleanNullableText(
+                input.title,
+                MAX_BANNER_TITLE_LENGTH,
+              ),
+            }
           : {}),
         ...(input.imageUrl !== undefined
-          ? { image_url: this.cleanRequiredText(input.imageUrl, 2048) }
+          ? {
+              image_url: this.cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+            }
           : {}),
         ...(input.linkType !== undefined
           ? { link_type: this.toBannerLinkType(input.linkType) }
           : {}),
         ...(input.linkUrl !== undefined
-          ? { link_url: this.cleanNullableText(input.linkUrl, 2048) }
+          ? { link_url: this.cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
           : {}),
         ...(input.linkProductId !== undefined
           ? {

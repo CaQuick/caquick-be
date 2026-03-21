@@ -12,6 +12,10 @@ import {
 import { parseId } from '../../../common/utils/id-parser';
 import { ConversationRepository } from '../../conversation';
 import {
+  MAX_CONVERSATION_BODY_HTML_LENGTH,
+  MAX_CONVERSATION_BODY_TEXT_LENGTH,
+} from '../constants/seller.constants';
+import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
@@ -105,8 +109,14 @@ export class SellerConversationService extends SellerBaseService {
     if (!conversation) throw new NotFoundException('Conversation not found.');
 
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
-    const bodyText = this.cleanNullableText(input.bodyText, 2000);
-    const bodyHtml = this.cleanNullableText(input.bodyHtml, 100000);
+    const bodyText = this.cleanNullableText(
+      input.bodyText,
+      MAX_CONVERSATION_BODY_TEXT_LENGTH,
+    );
+    const bodyHtml = this.cleanNullableText(
+      input.bodyHtml,
+      MAX_CONVERSATION_BODY_HTML_LENGTH,
+    );
 
     if (bodyFormat === ConversationBodyFormat.TEXT && !bodyText) {
       throw new BadRequestException('bodyText is required for TEXT format.');

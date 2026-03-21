@@ -7,6 +7,27 @@ import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
 import { parseId } from '../../../common/utils/id-parser';
 import {
+  MAX_ADDRESS_CITY_LENGTH,
+  MAX_ADDRESS_DISTRICT_LENGTH,
+  MAX_ADDRESS_FULL_LENGTH,
+  MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
+  MAX_BUSINESS_HOURS_TEXT_LENGTH,
+  MAX_DAILY_CAPACITY,
+  MAX_DAYS_AHEAD,
+  MAX_DAY_OF_WEEK,
+  MAX_LEAD_TIME_MINUTES,
+  MAX_PICKUP_SLOT_INTERVAL_MINUTES,
+  MAX_SPECIAL_CLOSURE_REASON_LENGTH,
+  MAX_STORE_NAME_LENGTH,
+  MAX_STORE_PHONE_LENGTH,
+  MAX_URL_LENGTH,
+  MIN_DAILY_CAPACITY,
+  MIN_DAYS_AHEAD,
+  MIN_DAY_OF_WEEK,
+  MIN_LEAD_TIME_MINUTES,
+  MIN_PICKUP_SLOT_INTERVAL_MINUTES,
+} from '../constants/seller.constants';
+import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
@@ -108,27 +129,50 @@ export class SellerStoreService extends SellerBaseService {
 
     const data: Prisma.StoreUpdateInput = {
       ...(input.storeName !== undefined
-        ? { store_name: this.cleanRequiredText(input.storeName, 200) }
+        ? {
+            store_name: this.cleanRequiredText(
+              input.storeName,
+              MAX_STORE_NAME_LENGTH,
+            ),
+          }
         : {}),
       ...(input.storePhone !== undefined
-        ? { store_phone: this.cleanRequiredText(input.storePhone, 30) }
+        ? {
+            store_phone: this.cleanRequiredText(
+              input.storePhone,
+              MAX_STORE_PHONE_LENGTH,
+            ),
+          }
         : {}),
       ...(input.addressFull !== undefined
-        ? { address_full: this.cleanRequiredText(input.addressFull, 500) }
+        ? {
+            address_full: this.cleanRequiredText(
+              input.addressFull,
+              MAX_ADDRESS_FULL_LENGTH,
+            ),
+          }
         : {}),
       ...(input.addressCity !== undefined
-        ? { address_city: this.cleanNullableText(input.addressCity, 50) }
+        ? {
+            address_city: this.cleanNullableText(
+              input.addressCity,
+              MAX_ADDRESS_CITY_LENGTH,
+            ),
+          }
         : {}),
       ...(input.addressDistrict !== undefined
         ? {
-            address_district: this.cleanNullableText(input.addressDistrict, 80),
+            address_district: this.cleanNullableText(
+              input.addressDistrict,
+              MAX_ADDRESS_DISTRICT_LENGTH,
+            ),
           }
         : {}),
       ...(input.addressNeighborhood !== undefined
         ? {
             address_neighborhood: this.cleanNullableText(
               input.addressNeighborhood,
-              80,
+              MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
             ),
           }
         : {}),
@@ -142,13 +186,18 @@ export class SellerStoreService extends SellerBaseService {
         ? { map_provider: input.mapProvider }
         : {}),
       ...(input.websiteUrl !== undefined
-        ? { website_url: this.cleanNullableText(input.websiteUrl, 2048) }
+        ? {
+            website_url: this.cleanNullableText(
+              input.websiteUrl,
+              MAX_URL_LENGTH,
+            ),
+          }
         : {}),
       ...(input.businessHoursText !== undefined
         ? {
             business_hours_text: this.cleanNullableText(
               input.businessHoursText,
-              500,
+              MAX_BUSINESS_HOURS_TEXT_LENGTH,
             ),
           }
         : {}),
@@ -184,7 +233,10 @@ export class SellerStoreService extends SellerBaseService {
   ): Promise<SellerStoreBusinessHourOutput> {
     const ctx = await this.requireSellerContext(accountId);
 
-    if (input.dayOfWeek < 0 || input.dayOfWeek > 6) {
+    if (
+      input.dayOfWeek < MIN_DAY_OF_WEEK ||
+      input.dayOfWeek > MAX_DAY_OF_WEEK
+    ) {
       throw new BadRequestException('dayOfWeek must be 0~6.');
     }
 
@@ -241,7 +293,10 @@ export class SellerStoreService extends SellerBaseService {
       storeId: ctx.storeId,
       closureId,
       closureDate: this.toDateRequired(input.closureDate, 'closureDate'),
-      reason: this.cleanNullableText(input.reason, 200),
+      reason: this.cleanNullableText(
+        input.reason,
+        MAX_SPECIAL_CLOSURE_REASON_LENGTH,
+      ),
     });
 
     await this.repo.createAuditLog({
@@ -295,17 +350,22 @@ export class SellerStoreService extends SellerBaseService {
 
     this.assertPositiveRange(
       input.pickupSlotIntervalMinutes,
-      5,
-      180,
+      MIN_PICKUP_SLOT_INTERVAL_MINUTES,
+      MAX_PICKUP_SLOT_INTERVAL_MINUTES,
       'pickupSlotIntervalMinutes',
     );
     this.assertPositiveRange(
       input.minLeadTimeMinutes,
-      0,
-      7 * 24 * 60,
+      MIN_LEAD_TIME_MINUTES,
+      MAX_LEAD_TIME_MINUTES,
       'minLeadTimeMinutes',
     );
-    this.assertPositiveRange(input.maxDaysAhead, 1, 365, 'maxDaysAhead');
+    this.assertPositiveRange(
+      input.maxDaysAhead,
+      MIN_DAYS_AHEAD,
+      MAX_DAYS_AHEAD,
+      'maxDaysAhead',
+    );
 
     const updated = await this.repo.updateStore({
       storeId: ctx.storeId,
@@ -352,7 +412,12 @@ export class SellerStoreService extends SellerBaseService {
       if (!found) throw new NotFoundException('Daily capacity not found.');
     }
 
-    this.assertPositiveRange(input.capacity, 1, 5000, 'capacity');
+    this.assertPositiveRange(
+      input.capacity,
+      MIN_DAILY_CAPACITY,
+      MAX_DAILY_CAPACITY,
+      'capacity',
+    );
 
     const row = await this.repo.upsertStoreDailyCapacity({
       storeId: ctx.storeId,

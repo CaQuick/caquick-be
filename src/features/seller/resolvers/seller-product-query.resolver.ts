@@ -8,7 +8,7 @@ import {
   parseAccountId,
   type JwtUser,
 } from '../../../global/auth';
-import { SellerProductService } from '../services/seller-product.service';
+import { SellerProductCrudService } from '../services/seller-product-crud.service';
 import type { SellerProductListInput } from '../types/seller-input.type';
 import type {
   SellerCursorConnection,
@@ -18,7 +18,7 @@ import type {
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerProductQueryResolver {
-  constructor(private readonly productService: SellerProductService) {}
+  constructor(private readonly productService: SellerProductCrudService) {}
 
   @Query('sellerProducts')
   sellerProducts(

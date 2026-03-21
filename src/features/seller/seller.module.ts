@@ -17,15 +17,19 @@ import { SellerStoreMutationResolver } from './resolvers/seller-store-mutation.r
 import { SellerStoreQueryResolver } from './resolvers/seller-store-query.resolver';
 import { SellerContentService } from './services/seller-content.service';
 import { SellerConversationService } from './services/seller-conversation.service';
+import { SellerCustomTemplateService } from './services/seller-custom-template.service';
+import { SellerOptionService } from './services/seller-option.service';
 import { SellerOrderService } from './services/seller-order.service';
-import { SellerProductService } from './services/seller-product.service';
+import { SellerProductCrudService } from './services/seller-product-crud.service';
 import { SellerStoreService } from './services/seller-store.service';
 
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule],
   providers: [
     SellerStoreService,
-    SellerProductService,
+    SellerProductCrudService,
+    SellerOptionService,
+    SellerCustomTemplateService,
     SellerOrderService,
     SellerConversationService,
     SellerContentService,
