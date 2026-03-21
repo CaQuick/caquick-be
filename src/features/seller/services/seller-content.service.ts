@@ -20,6 +20,19 @@ import {
 } from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
+  BANNER_NOT_FOUND,
+  FAQ_TOPIC_NOT_FOUND,
+  INVALID_AUDIT_TARGET_TYPE,
+  INVALID_BANNER_LINK_TYPE,
+  INVALID_BANNER_PLACEMENT,
+  LINK_CATEGORY_REQUIRED,
+  LINK_PRODUCT_MISMATCH,
+  LINK_PRODUCT_REQUIRED,
+  LINK_STORE_MISMATCH,
+  LINK_STORE_REQUIRED,
+  LINK_URL_REQUIRED,
+} from '../constants/seller-error-messages';
+import {
   MAX_BANNER_TITLE_LENGTH,
   MAX_FAQ_ANSWER_HTML_LENGTH,
   MAX_FAQ_TITLE_LENGTH,
@@ -102,7 +115,7 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('FAQ topic not found.');
+    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
 
     const row = await this.repo.updateFaqTopic({
       topicId,
@@ -148,7 +161,7 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('FAQ topic not found.');
+    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
 
     await this.repo.softDeleteFaqTopic(topicId);
     await this.repo.createAuditLog({
@@ -245,7 +258,7 @@ export class SellerContentService extends SellerBaseService {
       bannerId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('Banner not found.');
+    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
     const resolved = this.resolveNextBannerLinkValues(input, current);
     await this.validateBannerOwnership(ctx, resolved);
@@ -368,7 +381,7 @@ export class SellerContentService extends SellerBaseService {
       bannerId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('Banner not found.');
+    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
     await this.repo.softDeleteBanner(bannerId);
     await this.repo.createAuditLog({
@@ -426,40 +439,31 @@ export class SellerContentService extends SellerBaseService {
       args.linkType === 'URL' &&
       (!args.linkUrl || args.linkUrl.trim().length === 0)
     ) {
-      throw new BadRequestException(
-        'linkUrl is required when linkType is URL.',
-      );
+      throw new BadRequestException(LINK_URL_REQUIRED);
     }
 
     if (args.linkType === 'PRODUCT') {
       if (!args.linkProductId) {
-        throw new BadRequestException(
-          'linkProductId is required when linkType is PRODUCT.',
-        );
+        throw new BadRequestException(LINK_PRODUCT_REQUIRED);
       }
       const product = await this.productRepository.findProductOwnership({
         productId: args.linkProductId,
         storeId: ctx.storeId,
       });
-      if (!product)
-        throw new ForbiddenException('Cannot link product outside your store.');
+      if (!product) throw new ForbiddenException(LINK_PRODUCT_MISMATCH);
     }
 
     if (args.linkType === 'STORE') {
       if (!args.linkStoreId) {
-        throw new BadRequestException(
-          'linkStoreId is required when linkType is STORE.',
-        );
+        throw new BadRequestException(LINK_STORE_REQUIRED);
       }
       if (args.linkStoreId !== ctx.storeId) {
-        throw new ForbiddenException('Cannot link another store.');
+        throw new ForbiddenException(LINK_STORE_MISMATCH);
       }
     }
 
     if (args.linkType === 'CATEGORY' && !args.linkCategoryId) {
-      throw new BadRequestException(
-        'linkCategoryId is required when linkType is CATEGORY.',
-      );
+      throw new BadRequestException(LINK_CATEGORY_REQUIRED);
     }
   }
 
@@ -468,7 +472,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'HOME_SUB') return BannerPlacement.HOME_SUB;
     if (raw === 'CATEGORY') return BannerPlacement.CATEGORY;
     if (raw === 'STORE') return BannerPlacement.STORE;
-    throw new BadRequestException('Invalid banner placement.');
+    throw new BadRequestException(INVALID_BANNER_PLACEMENT);
   }
 
   private toBannerLinkType(raw: string): BannerLinkType {
@@ -477,7 +481,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'PRODUCT') return BannerLinkType.PRODUCT;
     if (raw === 'STORE') return BannerLinkType.STORE;
     if (raw === 'CATEGORY') return BannerLinkType.CATEGORY;
-    throw new BadRequestException('Invalid banner link type.');
+    throw new BadRequestException(INVALID_BANNER_LINK_TYPE);
   }
 
   private toAuditTargetType(raw: string): AuditTargetType {
@@ -486,7 +490,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'ORDER') return AuditTargetType.ORDER;
     if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
     if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
-    throw new BadRequestException('Invalid audit target type.');
+    throw new BadRequestException(INVALID_AUDIT_TARGET_TYPE);
   }
 
   private toFaqTopicOutput(row: {

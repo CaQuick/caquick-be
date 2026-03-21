@@ -12,6 +12,15 @@ import {
 } from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
+  idsMismatchError,
+  INVALID_SELECT_RANGE,
+  invalidIdsError,
+  MAX_SELECT_BELOW_MIN,
+  OPTION_GROUP_NOT_FOUND,
+  OPTION_ITEM_NOT_FOUND,
+  PRODUCT_NOT_FOUND,
+} from '../constants/seller-error-messages';
+import {
   MAX_OPTION_GROUP_NAME_LENGTH,
   MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
   MAX_OPTION_ITEM_TITLE_LENGTH,
@@ -54,12 +63,12 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const minSelect = input.minSelect ?? 1;
     const maxSelect = input.maxSelect ?? 1;
     if (minSelect < 0 || maxSelect < minSelect) {
-      throw new BadRequestException('Invalid minSelect/maxSelect.');
+      throw new BadRequestException(INVALID_SELECT_RANGE);
     }
 
     const row = await this.productRepository.createOptionGroup({
@@ -100,7 +109,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option group not found.');
+      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
     if (
@@ -108,7 +117,7 @@ export class SellerOptionService extends SellerBaseService {
       input.maxSelect !== undefined &&
       input.maxSelect < input.minSelect
     ) {
-      throw new BadRequestException('maxSelect must be >= minSelect.');
+      throw new BadRequestException(MAX_SELECT_BELOW_MIN);
     }
 
     const row = await this.productRepository.updateOptionGroup({
@@ -163,7 +172,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option group not found.');
+      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
     await this.productRepository.softDeleteOptionGroup(optionGroupId);
@@ -194,18 +203,18 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const groups =
       await this.productRepository.listOptionGroupsByProduct(productId);
     if (groups.length !== optionGroupIds.length) {
-      throw new BadRequestException('optionGroupIds length mismatch.');
+      throw new BadRequestException(idsMismatchError('optionGroupIds'));
     }
 
     const idSet = new Set(groups.map((g) => g.id.toString()));
     for (const id of optionGroupIds) {
       if (!idSet.has(id.toString())) {
-        throw new BadRequestException('Invalid optionGroupIds.');
+        throw new BadRequestException(invalidIdsError('optionGroupIds'));
       }
     }
 
@@ -238,7 +247,7 @@ export class SellerOptionService extends SellerBaseService {
       await this.productRepository.findOptionGroupById(optionGroupId);
 
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option group not found.');
+      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
     const row = await this.productRepository.createOptionItem({
@@ -280,7 +289,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option item not found.');
+      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
     }
 
     const row = await this.productRepository.updateOptionItem({
@@ -339,7 +348,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option item not found.');
+      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
     }
 
     await this.productRepository.softDeleteOptionItem(optionItemId);
@@ -368,19 +377,19 @@ export class SellerOptionService extends SellerBaseService {
     const group =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Option group not found.');
+      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
     const items =
       await this.productRepository.listOptionItemsByGroup(optionGroupId);
     if (items.length !== optionItemIds.length) {
-      throw new BadRequestException('optionItemIds length mismatch.');
+      throw new BadRequestException(idsMismatchError('optionItemIds'));
     }
 
     const idSet = new Set(items.map((item) => item.id.toString()));
     for (const id of optionItemIds) {
       if (!idSet.has(id.toString())) {
-        throw new BadRequestException('Invalid optionItemIds.');
+        throw new BadRequestException(invalidIdsError('optionItemIds'));
       }
     }
 

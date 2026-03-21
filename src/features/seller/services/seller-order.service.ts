@@ -10,6 +10,10 @@ import { parseId } from '../../../common/utils/id-parser';
 import { cleanNullableText } from '../../../common/utils/text-cleaner';
 import { OrderDomainService, OrderRepository } from '../../order';
 import {
+  CANCELLATION_NOTE_REQUIRED,
+  ORDER_NOT_FOUND,
+} from '../constants/seller-error-messages';
+import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
@@ -109,7 +113,7 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!row) throw new NotFoundException('Order not found.');
+    if (!row) throw new NotFoundException(ORDER_NOT_FOUND);
     return this.toOrderDetailOutput(row);
   }
 
@@ -125,13 +129,13 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('Order not found.');
+    if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
 
     this.orderDomainService.assertSellerTransition(current.status, toStatus);
 
     if (this.orderDomainService.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
-        throw new BadRequestException('Cancellation note is required.');
+        throw new BadRequestException(CANCELLATION_NOTE_REQUIRED);
       }
     }
 
@@ -144,7 +148,7 @@ export class SellerOrderService extends SellerBaseService {
       now: new Date(),
     });
 
-    if (!updated) throw new NotFoundException('Order not found.');
+    if (!updated) throw new NotFoundException(ORDER_NOT_FOUND);
 
     return this.toOrderSummaryOutput(updated);
   }

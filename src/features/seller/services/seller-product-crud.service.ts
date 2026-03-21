@@ -12,6 +12,15 @@ import {
 } from '../../../common/utils/text-cleaner';
 import { ProductRepository } from '../../product';
 import {
+  IMAGE_LIMIT_EXCEEDED,
+  IMAGE_MIN_REQUIRED,
+  idsMismatchError,
+  invalidIdsError,
+  PRODUCT_IMAGE_NOT_FOUND,
+  PRODUCT_NOT_FOUND,
+  SALE_PRICE_EXCEEDS_REGULAR,
+} from '../constants/seller-error-messages';
+import {
   DEFAULT_PREPARATION_TIME_MINUTES,
   MAX_PRODUCT_DESCRIPTION_LENGTH,
   MAX_PRODUCT_IMAGES,
@@ -156,7 +165,7 @@ export class SellerProductCrudService extends SellerBaseService {
       storeId: ctx.storeId,
     });
 
-    if (!row) throw new NotFoundException('Product not found.');
+    if (!row) throw new NotFoundException(PRODUCT_NOT_FOUND);
     return this.toProductOutput(row);
   }
 
@@ -216,7 +225,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId: created.id,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException('Product not found.');
+    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
     return this.toProductOutput(detail);
   }
 
@@ -232,7 +241,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException('Product not found.');
+    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const data = this.buildProductUpdateData(input);
     this.validateProductPrices(
@@ -264,7 +273,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException('Product not found.');
+    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     return this.toProductOutput(detail);
   }
@@ -279,7 +288,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException('Product not found.');
+    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     await this.productRepository.softDeleteProduct(productId);
     await this.repo.createAuditLog({
@@ -307,7 +316,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException('Product not found.');
+    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     await this.productRepository.updateProduct({
       productId,
@@ -335,7 +344,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException('Product not found.');
+    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
     return this.toProductOutput(detail);
   }
 
@@ -351,13 +360,11 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const count = await this.productRepository.countProductImages(productId);
     if (count >= MAX_PRODUCT_IMAGES) {
-      throw new BadRequestException(
-        `Product images can be up to ${MAX_PRODUCT_IMAGES}.`,
-      );
+      throw new BadRequestException(IMAGE_LIMIT_EXCEEDED);
     }
 
     const row = await this.productRepository.addProductImage({
@@ -387,14 +394,14 @@ export class SellerProductCrudService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const image = await this.productRepository.findProductImageById(imageId);
     if (!image || image.product.store_id !== ctx.storeId) {
-      throw new NotFoundException('Product image not found.');
+      throw new NotFoundException(PRODUCT_IMAGE_NOT_FOUND);
     }
 
     const count = await this.productRepository.countProductImages(
       image.product_id,
     );
     if (count <= MIN_PRODUCT_IMAGES) {
-      throw new BadRequestException('At least one product image is required.');
+      throw new BadRequestException(IMAGE_MIN_REQUIRED);
     }
 
     await this.productRepository.softDeleteProductImage(imageId);
@@ -425,17 +432,17 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const existing = await this.productRepository.listProductImages(productId);
     if (existing.length !== imageIds.length) {
-      throw new BadRequestException('imageIds length mismatch.');
+      throw new BadRequestException(idsMismatchError('imageIds'));
     }
 
     const existingSet = new Set(existing.map((row) => row.id.toString()));
     for (const id of imageIds) {
       if (!existingSet.has(id.toString())) {
-        throw new BadRequestException('Invalid image id in imageIds.');
+        throw new BadRequestException(invalidIdsError('imageIds'));
       }
     }
 
@@ -470,13 +477,13 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const categoryIds = this.parseIdList(input.categoryIds);
     const categories =
       await this.productRepository.findCategoryIds(categoryIds);
     if (categories.length !== categoryIds.length) {
-      throw new BadRequestException('Invalid category ids.');
+      throw new BadRequestException(invalidIdsError('categoryIds'));
     }
 
     await this.productRepository.replaceProductCategories({
@@ -500,7 +507,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException('Product not found.');
+    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     return this.toProductOutput(detail);
   }
@@ -517,12 +524,12 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException('Product not found.');
+    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const tagIds = this.parseIdList(input.tagIds);
     const tags = await this.productRepository.findTagIds(tagIds);
     if (tags.length !== tagIds.length) {
-      throw new BadRequestException('Invalid tag ids.');
+      throw new BadRequestException(invalidIdsError('tagIds'));
     }
 
     await this.productRepository.replaceProductTags({
@@ -546,7 +553,7 @@ export class SellerProductCrudService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException('Product not found.');
+    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     return this.toProductOutput(detail);
   }
@@ -662,9 +669,7 @@ export class SellerProductCrudService extends SellerBaseService {
         'salePrice',
       );
       if (regularPrice !== undefined && salePrice > regularPrice) {
-        throw new BadRequestException(
-          'salePrice must be less than or equal to regularPrice.',
-        );
+        throw new BadRequestException(SALE_PRICE_EXCEEDS_REGULAR);
       }
     }
   }

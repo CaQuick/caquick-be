@@ -12,6 +12,14 @@ import {
   cleanRequiredText,
 } from '../../../common/utils/text-cleaner';
 import {
+  CLOSE_BEFORE_OPEN,
+  DAILY_CAPACITY_NOT_FOUND,
+  INVALID_DAY_OF_WEEK,
+  OPEN_CLOSE_TIME_REQUIRED,
+  SPECIAL_CLOSURE_NOT_FOUND,
+  STORE_NOT_FOUND,
+} from '../constants/seller-error-messages';
+import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
   MAX_ADDRESS_FULL_LENGTH,
@@ -64,7 +72,7 @@ export class SellerStoreService extends SellerBaseService {
   async sellerMyStore(accountId: bigint): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const store = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!store) throw new NotFoundException('Store not found.');
+    if (!store) throw new NotFoundException(STORE_NOT_FOUND);
     return this.toStoreOutput(store);
   }
 
@@ -130,7 +138,7 @@ export class SellerStoreService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException('Store not found.');
+    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
 
     const data = this.buildStoreBasicInfoUpdateData(input);
     const updated = await this.repo.updateStore({
@@ -244,18 +252,18 @@ export class SellerStoreService extends SellerBaseService {
       input.dayOfWeek < MIN_DAY_OF_WEEK ||
       input.dayOfWeek > MAX_DAY_OF_WEEK
     ) {
-      throw new BadRequestException('dayOfWeek must be 0~6.');
+      throw new BadRequestException(INVALID_DAY_OF_WEEK);
     }
 
     const openTime = input.isClosed ? null : this.toTime(input.openTime);
     const closeTime = input.isClosed ? null : this.toTime(input.closeTime);
 
     if (!input.isClosed && (!openTime || !closeTime)) {
-      throw new BadRequestException('openTime and closeTime are required.');
+      throw new BadRequestException(OPEN_CLOSE_TIME_REQUIRED);
     }
 
     if (openTime && closeTime && openTime >= closeTime) {
-      throw new BadRequestException('closeTime must be after openTime.');
+      throw new BadRequestException(CLOSE_BEFORE_OPEN);
     }
 
     const row = await this.repo.upsertStoreBusinessHour({
@@ -293,7 +301,7 @@ export class SellerStoreService extends SellerBaseService {
         closureId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException('Special closure not found.');
+      if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
     }
 
     const closureDate = toDateRequired(input.closureDate, 'closureDate');
@@ -337,7 +345,7 @@ export class SellerStoreService extends SellerBaseService {
       closureId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException('Special closure not found.');
+    if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
 
     await this.repo.softDeleteStoreSpecialClosure(closureId);
     await this.repo.createAuditLog({
@@ -360,7 +368,7 @@ export class SellerStoreService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException('Store not found.');
+    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
 
     this.assertPositiveRange(
       input.pickupSlotIntervalMinutes,
@@ -423,7 +431,7 @@ export class SellerStoreService extends SellerBaseService {
         capacityId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException('Daily capacity not found.');
+      if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
     }
 
     this.assertPositiveRange(
@@ -470,7 +478,7 @@ export class SellerStoreService extends SellerBaseService {
       capacityId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException('Daily capacity not found.');
+    if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
 
     await this.repo.softDeleteStoreDailyCapacity(capacityId);
     await this.repo.createAuditLog({
