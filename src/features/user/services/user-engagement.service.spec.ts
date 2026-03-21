@@ -63,7 +63,7 @@ describe('UserEngagementService', () => {
 
     it('정상적으로 좋아요하면 true를 반환해야 한다', async () => {
       repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.likeReview.mockResolvedValue('ok' as never);
+      repo.likeReview.mockResolvedValue('liked');
 
       const result = await service.likeReview(BigInt(1), BigInt(10));
       expect(result).toBe(true);

@@ -42,12 +42,14 @@ describe('SellerStoreService', () => {
       upsertStoreBusinessHour: jest.fn(),
       listStoreSpecialClosures: jest.fn(),
       findStoreSpecialClosureById: jest.fn(),
-      upsertStoreSpecialClosure: jest.fn(),
+      createStoreSpecialClosure: jest.fn(),
+      updateStoreSpecialClosure: jest.fn(),
       softDeleteStoreSpecialClosure: jest.fn(),
       updateStore: jest.fn(),
       listStoreDailyCapacities: jest.fn(),
       findStoreDailyCapacityById: jest.fn(),
-      upsertStoreDailyCapacity: jest.fn(),
+      createStoreDailyCapacity: jest.fn(),
+      updateStoreDailyCapacity: jest.fn(),
       softDeleteStoreDailyCapacity: jest.fn(),
     } as unknown as jest.Mocked<SellerRepository>;
 
@@ -171,6 +173,52 @@ describe('SellerStoreService', () => {
         }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('closureId가 없으면 create 경로를 타야 한다', async () => {
+      const closureRow = {
+        id: BigInt(10),
+        closure_date: new Date('2026-04-01'),
+        reason: '정기 휴무',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      repo.createStoreSpecialClosure.mockResolvedValue(closureRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreSpecialClosure(BigInt(1), {
+        closureDate: new Date('2026-04-01'),
+        reason: '정기 휴무',
+      });
+
+      expect(result.id).toBe('10');
+      expect(repo.createStoreSpecialClosure).toHaveBeenCalled();
+      expect(repo.updateStoreSpecialClosure).not.toHaveBeenCalled();
+    });
+
+    it('closureId가 있으면 update 경로를 타야 한다', async () => {
+      repo.findStoreSpecialClosureById.mockResolvedValue({
+        id: BigInt(10),
+      } as never);
+      const closureRow = {
+        id: BigInt(10),
+        closure_date: new Date('2026-04-02'),
+        reason: '변경된 사유',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      repo.updateStoreSpecialClosure.mockResolvedValue(closureRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreSpecialClosure(BigInt(1), {
+        closureId: '10',
+        closureDate: new Date('2026-04-02'),
+        reason: '변경된 사유',
+      });
+
+      expect(result.id).toBe('10');
+      expect(repo.updateStoreSpecialClosure).toHaveBeenCalled();
+      expect(repo.createStoreSpecialClosure).not.toHaveBeenCalled();
+    });
   });
 
   // ─── sellerDeleteStoreSpecialClosure ───
@@ -281,6 +329,52 @@ describe('SellerStoreService', () => {
         ).rejects.toThrow(BadRequestException);
       },
     );
+
+    it('capacityId가 없으면 create 경로를 타야 한다', async () => {
+      const capacityRow = {
+        id: BigInt(20),
+        capacity_date: new Date('2026-04-01'),
+        capacity: 100,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      repo.createStoreDailyCapacity.mockResolvedValue(capacityRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreDailyCapacity(BigInt(1), {
+        capacityDate: new Date('2026-04-01'),
+        capacity: 100,
+      });
+
+      expect(result.id).toBe('20');
+      expect(repo.createStoreDailyCapacity).toHaveBeenCalled();
+      expect(repo.updateStoreDailyCapacity).not.toHaveBeenCalled();
+    });
+
+    it('capacityId가 있으면 update 경로를 타야 한다', async () => {
+      repo.findStoreDailyCapacityById.mockResolvedValue({
+        id: BigInt(20),
+      } as never);
+      const capacityRow = {
+        id: BigInt(20),
+        capacity_date: new Date('2026-04-02'),
+        capacity: 200,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      repo.updateStoreDailyCapacity.mockResolvedValue(capacityRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreDailyCapacity(BigInt(1), {
+        capacityId: '20',
+        capacityDate: new Date('2026-04-02'),
+        capacity: 200,
+      });
+
+      expect(result.id).toBe('20');
+      expect(repo.updateStoreDailyCapacity).toHaveBeenCalled();
+      expect(repo.createStoreDailyCapacity).not.toHaveBeenCalled();
+    });
   });
 
   // ─── sellerDeleteStoreDailyCapacity ───

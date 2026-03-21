@@ -56,6 +56,23 @@ describe('UserBaseService', () => {
   });
 
   describe('requireActiveUser', () => {
+    it('활성 USER 계정이면 계정 정보를 반환해야 한다', async () => {
+      const activeAccount = {
+        id: BigInt(1),
+        deleted_at: null,
+        account_type: AccountType.USER,
+        user_profile: {
+          deleted_at: null,
+          nickname: 'test',
+        },
+      };
+      repo.findAccountWithProfile.mockResolvedValue(activeAccount as never);
+
+      const result = await service.testRequireActiveUser(BigInt(1));
+      expect(result.id).toBe(BigInt(1));
+      expect(result.account_type).toBe(AccountType.USER);
+    });
+
     it('계정이 없으면 UnauthorizedException을 던져야 한다', async () => {
       repo.findAccountWithProfile.mockResolvedValue(null);
       await expect(service.testRequireActiveUser(BigInt(1))).rejects.toThrow(
