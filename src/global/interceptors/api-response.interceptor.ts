@@ -2,7 +2,7 @@ import { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
 import type { Request } from 'express';
 import { Observable, map } from 'rxjs';
 
-import { ApiResponseTemplate } from 'src/global/types/response';
+import { ApiResponseTemplate } from '@/global/types/response';
 
 const DEFAULT_EXCLUDE_PATHS = new Set<string>();
 

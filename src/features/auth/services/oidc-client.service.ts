@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { IdentityProvider } from '@prisma/client';
 import { Issuer, generators, type Client, type TokenSet } from 'openid-client';
 
-import { mustGetEnv } from '../../../common/helpers/config.helper';
-import type { OidcProvider } from '../types/oidc-provider.type';
+import { mustGetEnv } from '@/common/helpers/config.helper';
+import type { OidcProvider } from '@/features/auth/types/oidc-provider.type';
 
 /**
  * OIDC Client를 생성/캐싱하고, 인증 URL 생성 및 콜백 처리까지 담당한다.

@@ -1,14 +1,14 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { parseId } from '@/common/utils/id-parser';
+import { UserSearchService } from '@/features/user/services/user-search.service';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { UserSearchService } from '../services/user-search.service';
+} from '@/global/auth';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

@@ -5,9 +5,17 @@ import {
 } from '@nestjs/common';
 import { AccountType } from '@prisma/client';
 
-import type { UserAccountWithProfile } from '../repositories/user.repository';
-import { UserRepository } from '../repositories/user.repository';
-import type { MePayload } from '../types/user-output.type';
+import {
+  DEFAULT_PAGINATION_LIMIT,
+  MAX_NICKNAME_LENGTH,
+  MAX_PAGINATION_LIMIT,
+  MAX_PHONE_LENGTH,
+  MIN_NICKNAME_LENGTH,
+  MIN_PHONE_LENGTH,
+} from '@/features/user/constants/user.constants';
+import type { UserAccountWithProfile } from '@/features/user/repositories/user.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import type { MePayload } from '@/features/user/types/user-output.type';
 
 export type ActiveUserAccount = UserAccountWithProfile & {
   deleted_at: null;
@@ -56,8 +64,13 @@ export abstract class UserBaseService {
 
   protected normalizeNickname(raw: string): string {
     const trimmed = raw.trim();
-    if (trimmed.length < 2 || trimmed.length > 20) {
-      throw new BadRequestException('Nickname length must be 2~20.');
+    if (
+      trimmed.length < MIN_NICKNAME_LENGTH ||
+      trimmed.length > MAX_NICKNAME_LENGTH
+    ) {
+      throw new BadRequestException(
+        `Nickname length must be ${MIN_NICKNAME_LENGTH}~${MAX_NICKNAME_LENGTH}.`,
+      );
     }
     const nicknameRegex = /^[A-Za-z0-9가-힣_]+$/;
     if (!nicknameRegex.test(trimmed)) {
@@ -76,7 +89,10 @@ export abstract class UserBaseService {
     if (raw === undefined || raw === null) return null;
     const trimmed = raw.trim();
     if (trimmed.length === 0) return null;
-    if (trimmed.length < 7 || trimmed.length > 20) {
+    if (
+      trimmed.length < MIN_PHONE_LENGTH ||
+      trimmed.length > MAX_PHONE_LENGTH
+    ) {
       throw new BadRequestException('Invalid phone number length.');
     }
     if (!/^[0-9-]+$/.test(trimmed)) {
@@ -107,14 +123,18 @@ export abstract class UserBaseService {
     unreadOnly?: boolean | null;
   }): { offset: number; limit: number; unreadOnly: boolean } {
     const offset = Number.isFinite(input?.offset) ? Number(input?.offset) : 0;
-    const limit = Number.isFinite(input?.limit) ? Number(input?.limit) : 20;
+    const limit = Number.isFinite(input?.limit)
+      ? Number(input?.limit)
+      : DEFAULT_PAGINATION_LIMIT;
     const unreadOnly = Boolean(input?.unreadOnly);
 
     if (offset < 0) {
       throw new BadRequestException('Offset must be >= 0.');
     }
-    if (limit <= 0 || limit > 50) {
-      throw new BadRequestException('Limit must be between 1 and 50.');
+    if (limit <= 0 || limit > MAX_PAGINATION_LIMIT) {
+      throw new BadRequestException(
+        `Limit must be between 1 and ${MAX_PAGINATION_LIMIT}.`,
+      );
     }
 
     return { offset, limit, unreadOnly };

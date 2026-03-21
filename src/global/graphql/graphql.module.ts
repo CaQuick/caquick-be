@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 
-import { DateTimeScalar } from './scalars/date-time.scalar';
+import { DateTimeScalar } from '@/global/graphql/scalars/date-time.scalar';
 
 /**
  * GraphQL 전역 모듈

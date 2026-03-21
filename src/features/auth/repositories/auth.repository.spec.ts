@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountType, IdentityProvider } from '@prisma/client';
 
-import { PrismaService } from '../../../prisma';
-
-import { AuthRepository } from './auth.repository';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { PrismaService } from '@/prisma';
 
 describe('AuthRepository', () => {
   let repository: AuthRepository;

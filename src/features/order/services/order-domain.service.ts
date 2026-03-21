@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
-import { OrderStatusTransitionPolicy } from '../policies/order-status-transition.policy';
+import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 
 @Injectable()
 export class OrderDomainService {

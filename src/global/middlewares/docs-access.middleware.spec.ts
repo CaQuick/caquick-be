@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { NextFunction, Request, Response } from 'express';
 
-import { DocsAccessMiddleware } from './docs-access.middleware';
+import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
 
 type MockResponse = Pick<Response, 'status' | 'json' | 'setHeader'> & {
   status: jest.Mock;

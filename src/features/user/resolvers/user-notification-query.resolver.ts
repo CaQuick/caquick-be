@@ -1,18 +1,18 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { UserNotificationService } from '@/features/user/services/user-notification.service';
+import type { MyNotificationsInput } from '@/features/user/types/user-input.type';
+import type {
+  NotificationConnection,
+  ViewerCounts,
+} from '@/features/user/types/user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { UserNotificationService } from '../services/user-notification.service';
-import type { MyNotificationsInput } from '../types/user-input.type';
-import type {
-  NotificationConnection,
-  ViewerCounts,
-} from '../types/user-output.type';
+} from '@/global/auth';
 
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)

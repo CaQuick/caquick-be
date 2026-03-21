@@ -10,10 +10,9 @@ import {
   OrderDomainService,
   OrderRepository,
   OrderStatusTransitionPolicy,
-} from '../../order';
-import { SellerRepository } from '../repositories/seller.repository';
-
-import { SellerOrderService } from './seller-order.service';
+} from '@/features/order';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
+import { SellerOrderService } from '@/features/seller/services/seller-order.service';
 
 describe('SellerOrderService', () => {
   let service: SellerOrderService;

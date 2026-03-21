@@ -2,9 +2,8 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountType } from '@prisma/client';
 
-import { UserRepository } from '../repositories/user.repository';
-
-import { UserProfileService } from './user-profile.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserProfileService } from '@/features/user/services/user-profile.service';
 
 describe('UserProfileService', () => {
   let service: UserProfileService;

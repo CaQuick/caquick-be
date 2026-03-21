@@ -1,15 +1,15 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
+import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import type { SellerSendConversationMessageInput } from '@/features/seller/types/seller-input.type';
+import type { SellerConversationMessageOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { SellerConversationService } from '../services/seller-conversation.service';
-import type { SellerSendConversationMessageInput } from '../types/seller-input.type';
-import type { SellerConversationMessageOutput } from '../types/seller-output.type';
+} from '@/global/auth';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

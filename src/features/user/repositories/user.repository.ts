@@ -5,7 +5,7 @@ import {
   NotificationType,
 } from '@prisma/client';
 
-import { PrismaService } from '../../../prisma';
+import { PrismaService } from '@/prisma';
 
 export interface UserAccountWithProfile {
   id: bigint;

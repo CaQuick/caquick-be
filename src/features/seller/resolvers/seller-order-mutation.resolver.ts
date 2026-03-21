@@ -1,15 +1,15 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
+import { SellerOrderService } from '@/features/seller/services/seller-order.service';
+import type { SellerUpdateOrderStatusInput } from '@/features/seller/types/seller-input.type';
+import type { SellerOrderSummaryOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { SellerOrderService } from '../services/seller-order.service';
-import type { SellerUpdateOrderStatusInput } from '../types/seller-input.type';
-import type { SellerOrderSummaryOutput } from '../types/seller-output.type';
+} from '@/global/auth';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)

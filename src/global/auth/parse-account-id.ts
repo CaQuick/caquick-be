@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import type { JwtUser } from './types/jwt-payload.type';
+import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
 export function parseAccountId(user: JwtUser): bigint {
   try {

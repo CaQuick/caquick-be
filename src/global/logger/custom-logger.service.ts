@@ -1,11 +1,11 @@
 import { Injectable, LoggerService } from '@nestjs/common';
 
-import { customLogger } from 'src/global/logger/logger';
+import { customLogger } from '@/global/logger/logger';
 import {
   LogContext,
   TransactionErrorPayload,
   TransactionLogPayload,
-} from 'src/global/types/log.type';
+} from '@/global/types/log.type';
 
 @Injectable()
 export class CustomLoggerService implements LoggerService {

@@ -1,15 +1,15 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { UserSearchService } from '@/features/user/services/user-search.service';
+import type { MySearchHistoriesInput } from '@/features/user/types/user-input.type';
+import type { SearchHistoryConnection } from '@/features/user/types/user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { UserSearchService } from '../services/user-search.service';
-import type { MySearchHistoriesInput } from '../types/user-input.type';
-import type { SearchHistoryConnection } from '../types/user-output.type';
+} from '@/global/auth';
 
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)

@@ -1,6 +1,6 @@
 import 'express-serve-static-core';
 
-import type { JwtUser } from '../auth/types/jwt-payload.type';
+import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
 declare module 'express-serve-static-core' {
   interface Request {

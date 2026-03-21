@@ -4,11 +4,10 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
-import { AUTH_COOKIE } from '../../global/auth/constants/auth-cookie.constants';
-
-import { AuthService } from './auth.service';
-import { AuthRepository } from './repositories/auth.repository';
-import { OidcClientService } from './services/oidc-client.service';
+import { AuthService } from '@/features/auth/auth.service';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 describe('AuthService', () => {
   let service: AuthService;

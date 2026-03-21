@@ -9,24 +9,34 @@ import {
   ConversationBodyFormat,
 } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
-import { ConversationRepository } from '../../conversation';
+import { parseId } from '@/common/utils/id-parser';
+import { cleanNullableText } from '@/common/utils/text-cleaner';
+import { ConversationRepository } from '@/features/conversation';
+import {
+  BODY_HTML_REQUIRED,
+  BODY_TEXT_REQUIRED,
+  CONVERSATION_NOT_FOUND,
+  INVALID_BODY_FORMAT,
+} from '@/features/seller/constants/seller-error-messages';
+import {
+  MAX_CONVERSATION_BODY_HTML_LENGTH,
+  MAX_CONVERSATION_BODY_TEXT_LENGTH,
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCursorInput,
   SellerSendConversationMessageInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
   SellerCursorConnection,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {
@@ -70,7 +80,7 @@ export class SellerConversationService extends SellerBaseService {
         conversationId,
         storeId: ctx.storeId,
       });
-    if (!conversation) throw new NotFoundException('Conversation not found.');
+    if (!conversation) throw new NotFoundException(CONVERSATION_NOT_FOUND);
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -102,17 +112,23 @@ export class SellerConversationService extends SellerBaseService {
         conversationId,
         storeId: ctx.storeId,
       });
-    if (!conversation) throw new NotFoundException('Conversation not found.');
+    if (!conversation) throw new NotFoundException(CONVERSATION_NOT_FOUND);
 
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
-    const bodyText = this.cleanNullableText(input.bodyText, 2000);
-    const bodyHtml = this.cleanNullableText(input.bodyHtml, 100000);
+    const bodyText = cleanNullableText(
+      input.bodyText,
+      MAX_CONVERSATION_BODY_TEXT_LENGTH,
+    );
+    const bodyHtml = cleanNullableText(
+      input.bodyHtml,
+      MAX_CONVERSATION_BODY_HTML_LENGTH,
+    );
 
     if (bodyFormat === ConversationBodyFormat.TEXT && !bodyText) {
-      throw new BadRequestException('bodyText is required for TEXT format.');
+      throw new BadRequestException(BODY_TEXT_REQUIRED);
     }
     if (bodyFormat === ConversationBodyFormat.HTML && !bodyHtml) {
-      throw new BadRequestException('bodyHtml is required for HTML format.');
+      throw new BadRequestException(BODY_HTML_REQUIRED);
     }
 
     const row =
@@ -142,7 +158,7 @@ export class SellerConversationService extends SellerBaseService {
   private toConversationBodyFormat(raw: string): ConversationBodyFormat {
     if (raw === 'TEXT') return ConversationBodyFormat.TEXT;
     if (raw === 'HTML') return ConversationBodyFormat.HTML;
-    throw new BadRequestException('Invalid body format.');
+    throw new BadRequestException(INVALID_BODY_FORMAT);
   }
 
   private toConversationOutput(row: {

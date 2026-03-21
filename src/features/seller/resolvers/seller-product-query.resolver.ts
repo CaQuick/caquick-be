@@ -1,24 +1,24 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { parseId } from '@/common/utils/id-parser';
+import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
+import type { SellerProductListInput } from '@/features/seller/types/seller-input.type';
+import type {
+  SellerCursorConnection,
+  SellerProductOutput,
+} from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { SellerProductService } from '../services/seller-product.service';
-import type { SellerProductListInput } from '../types/seller-input.type';
-import type {
-  SellerCursorConnection,
-  SellerProductOutput,
-} from '../types/seller-output.type';
+} from '@/global/auth';
 
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerProductQueryResolver {
-  constructor(private readonly productService: SellerProductService) {}
+  constructor(private readonly productService: SellerProductCrudService) {}
 
   @Query('sellerProducts')
   sellerProducts(

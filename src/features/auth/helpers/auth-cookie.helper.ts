@@ -1,7 +1,7 @@
 import type { CookieOptions, Response } from 'express';
 
-import { AUTH_COOKIE } from '../../../global/auth/constants/auth-cookie.constants';
-import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '../constants/auth.constants';
+import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '@/features/auth/constants/auth.constants';
+import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
 

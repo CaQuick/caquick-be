@@ -6,11 +6,21 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { parseId } from '@/common/utils/id-parser';
+import {
+  ACCOUNT_NOT_FOUND,
+  DUPLICATE_IDS,
+  fieldRangeError,
+  INVALID_CURRENCY_FORMAT,
+  INVALID_DECIMAL_VALUE,
+  INVALID_TIME_VALUE,
+  SELLER_ONLY,
+  STORE_NOT_FOUND,
+} from '@/features/seller/constants/seller-error-messages';
 import {
   isSellerAccount,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
 
 export interface SellerContext {
   accountId: bigint;
@@ -19,16 +29,17 @@ export interface SellerContext {
 
 export abstract class SellerBaseService {
   protected constructor(protected readonly repo: SellerRepository) {}
+
   protected async requireSellerContext(
     accountId: bigint,
   ): Promise<SellerContext> {
     const account = await this.repo.findSellerAccountContext(accountId);
-    if (!account) throw new UnauthorizedException('Account not found.');
+    if (!account) throw new UnauthorizedException(ACCOUNT_NOT_FOUND);
     if (!isSellerAccount(account.account_type)) {
-      throw new ForbiddenException('Only SELLER account is allowed.');
+      throw new ForbiddenException(SELLER_ONLY);
     }
     if (!account.store) {
-      throw new NotFoundException('Store not found.');
+      throw new NotFoundException(STORE_NOT_FOUND);
     }
 
     return {
@@ -41,31 +52,16 @@ export abstract class SellerBaseService {
     const parsed = rawIds.map((id) => parseId(id));
     const set = new Set(parsed.map((id) => id.toString()));
     if (set.size !== parsed.length) {
-      throw new BadRequestException('Duplicate ids are not allowed.');
+      throw new BadRequestException(DUPLICATE_IDS);
     }
     return parsed;
-  }
-
-  protected toDate(raw?: Date | string | null): Date | undefined {
-    if (raw === undefined || raw === null) return undefined;
-    const date = raw instanceof Date ? raw : new Date(raw);
-    if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException('Invalid date value.');
-    }
-    return date;
-  }
-
-  protected toDateRequired(raw: Date | string, field: string): Date {
-    const date = this.toDate(raw);
-    if (!date) throw new BadRequestException(`${field} is required.`);
-    return date;
   }
 
   protected toTime(raw?: Date | string | null): Date | null {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException('Invalid time value.');
+      throw new BadRequestException(INVALID_TIME_VALUE);
     }
     return date;
   }
@@ -77,38 +73,14 @@ export abstract class SellerBaseService {
     try {
       return new Prisma.Decimal(trimmed);
     } catch {
-      throw new BadRequestException('Invalid decimal value.');
+      throw new BadRequestException(INVALID_DECIMAL_VALUE);
     }
-  }
-
-  protected cleanRequiredText(raw: string, maxLength: number): string {
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) {
-      throw new BadRequestException('Required text is empty.');
-    }
-    if (trimmed.length > maxLength) {
-      throw new BadRequestException(`Text exceeds ${maxLength} length.`);
-    }
-    return trimmed;
-  }
-
-  protected cleanNullableText(
-    raw: string | null | undefined,
-    maxLength: number,
-  ): string | null {
-    if (raw === undefined || raw === null) return null;
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) return null;
-    if (trimmed.length > maxLength) {
-      throw new BadRequestException(`Text exceeds ${maxLength} length.`);
-    }
-    return trimmed;
   }
 
   protected cleanCurrency(raw?: string | null): string {
     const value = (raw ?? 'KRW').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(value)) {
-      throw new BadRequestException('Invalid currency format.');
+      throw new BadRequestException(INVALID_CURRENCY_FORMAT);
     }
     return value;
   }
@@ -120,7 +92,7 @@ export abstract class SellerBaseService {
     field: string,
   ): void {
     if (!Number.isInteger(value) || value < min || value > max) {
-      throw new BadRequestException(`${field} must be ${min}~${max}.`);
+      throw new BadRequestException(fieldRangeError(field, min, max));
     }
   }
 }

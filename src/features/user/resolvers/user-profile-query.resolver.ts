@@ -1,14 +1,14 @@
 import { UseGuards } from '@nestjs/common';
 import { Query, Resolver } from '@nestjs/graphql';
 
+import { UserProfileService } from '@/features/user/services/user-profile.service';
+import type { MePayload } from '@/features/user/types/user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
-} from '../../../global/auth';
-import { UserProfileService } from '../services/user-profile.service';
-import type { MePayload } from '../types/user-output.type';
+} from '@/global/auth';
 
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)

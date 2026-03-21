@@ -10,13 +10,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { ValidationError } from 'class-validator';
 import cookieParser from 'cookie-parser';
 
-import { AppModule } from './app.module';
-
-import { HttpExceptionFilter } from 'src/global/filters/global-exception.filter';
-import { ApiResponseInterceptor } from 'src/global/interceptors/api-response.interceptor';
-import { GqlLoggingInterceptor } from 'src/global/interceptors/gql-logging.interceptor';
-import { HttpLoggingInterceptor } from 'src/global/interceptors/http-logging.interceptor';
-import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
+import { AppModule } from '@/app.module';
+import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
+import { ApiResponseInterceptor } from '@/global/interceptors/api-response.interceptor';
+import { GqlLoggingInterceptor } from '@/global/interceptors/gql-logging.interceptor';
+import { HttpLoggingInterceptor } from '@/global/interceptors/http-logging.interceptor';
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });

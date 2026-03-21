@@ -12,13 +12,38 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
-import { ProductRepository } from '../../product';
+import { toDate } from '@/common/utils/date-parser';
+import { parseId } from '@/common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '@/common/utils/text-cleaner';
+import { ProductRepository } from '@/features/product';
+import {
+  BANNER_NOT_FOUND,
+  FAQ_TOPIC_NOT_FOUND,
+  INVALID_AUDIT_TARGET_TYPE,
+  INVALID_BANNER_LINK_TYPE,
+  INVALID_BANNER_PLACEMENT,
+  LINK_CATEGORY_REQUIRED,
+  LINK_PRODUCT_MISMATCH,
+  LINK_PRODUCT_REQUIRED,
+  LINK_STORE_MISMATCH,
+  LINK_STORE_REQUIRED,
+  LINK_URL_REQUIRED,
+} from '@/features/seller/constants/seller-error-messages';
+import {
+  MAX_BANNER_TITLE_LENGTH,
+  MAX_FAQ_ANSWER_HTML_LENGTH,
+  MAX_FAQ_TITLE_LENGTH,
+  MAX_URL_LENGTH,
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerAuditLogListInput,
   SellerCreateBannerInput,
@@ -26,15 +51,13 @@ import type {
   SellerCursorInput,
   SellerUpdateBannerInput,
   SellerUpdateFaqTopicInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,
   SellerCursorConnection,
   SellerFaqTopicOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerContentService extends SellerBaseService {
@@ -57,8 +80,11 @@ export class SellerContentService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const row = await this.repo.createFaqTopic({
       storeId: ctx.storeId,
-      title: this.cleanRequiredText(input.title, 120),
-      answerHtml: this.cleanRequiredText(input.answerHtml, 100000),
+      title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
+      answerHtml: cleanRequiredText(
+        input.answerHtml,
+        MAX_FAQ_ANSWER_HTML_LENGTH,
+      ),
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     });
@@ -88,16 +114,21 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('FAQ topic not found.');
+    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
 
     const row = await this.repo.updateFaqTopic({
       topicId,
       data: {
         ...(input.title !== undefined
-          ? { title: this.cleanRequiredText(input.title, 120) }
+          ? { title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
           : {}),
         ...(input.answerHtml !== undefined
-          ? { answer_html: this.cleanRequiredText(input.answerHtml, 100000) }
+          ? {
+              answer_html: cleanRequiredText(
+                input.answerHtml,
+                MAX_FAQ_ANSWER_HTML_LENGTH,
+              ),
+            }
           : {}),
         ...(input.sortOrder !== undefined
           ? { sort_order: input.sortOrder }
@@ -129,7 +160,7 @@ export class SellerContentService extends SellerBaseService {
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('FAQ topic not found.');
+    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
 
     await this.repo.softDeleteFaqTopic(topicId);
     await this.repo.createAuditLog({
@@ -186,17 +217,17 @@ export class SellerContentService extends SellerBaseService {
 
     const row = await this.repo.createBanner({
       placement: this.toBannerPlacement(input.placement),
-      title: this.cleanNullableText(input.title, 200),
-      imageUrl: this.cleanRequiredText(input.imageUrl, 2048),
+      title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+      imageUrl: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
       linkType: this.toBannerLinkType(input.linkType ?? 'NONE'),
-      linkUrl: this.cleanNullableText(input.linkUrl, 2048),
+      linkUrl: cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
       linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
       linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
         ? parseId(input.linkCategoryId)
         : null,
-      startsAt: this.toDate(input.startsAt) ?? null,
-      endsAt: this.toDate(input.endsAt) ?? null,
+      startsAt: toDate(input.startsAt) ?? null,
+      endsAt: toDate(input.endsAt) ?? null,
       sortOrder: input.sortOrder ?? 0,
       isActive: input.isActive ?? true,
     });
@@ -226,89 +257,13 @@ export class SellerContentService extends SellerBaseService {
       bannerId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('Banner not found.');
+    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
-    const nextLinkType = input.linkType ?? current.link_type;
-    const nextLinkProductId =
-      input.linkProductId !== undefined
-        ? input.linkProductId
-          ? parseId(input.linkProductId)
-          : null
-        : current.link_product_id;
-    const nextLinkStoreId =
-      input.linkStoreId !== undefined
-        ? input.linkStoreId
-          ? parseId(input.linkStoreId)
-          : null
-        : current.link_store_id;
-    const nextLinkCategoryId =
-      input.linkCategoryId !== undefined
-        ? input.linkCategoryId
-          ? parseId(input.linkCategoryId)
-          : null
-        : current.link_category_id;
-    const nextLinkUrl =
-      input.linkUrl !== undefined ? input.linkUrl : current.link_url;
+    const resolved = this.resolveNextBannerLinkValues(input, current);
+    await this.validateBannerOwnership(ctx, resolved);
 
-    await this.validateBannerOwnership(ctx, {
-      linkType: nextLinkType,
-      linkProductId: nextLinkProductId,
-      linkStoreId: nextLinkStoreId,
-      linkCategoryId: nextLinkCategoryId,
-      linkUrl: nextLinkUrl,
-    });
-
-    const row = await this.repo.updateBanner({
-      bannerId,
-      data: {
-        ...(input.placement !== undefined
-          ? { placement: this.toBannerPlacement(input.placement) }
-          : {}),
-        ...(input.title !== undefined
-          ? { title: this.cleanNullableText(input.title, 200) }
-          : {}),
-        ...(input.imageUrl !== undefined
-          ? { image_url: this.cleanRequiredText(input.imageUrl, 2048) }
-          : {}),
-        ...(input.linkType !== undefined
-          ? { link_type: this.toBannerLinkType(input.linkType) }
-          : {}),
-        ...(input.linkUrl !== undefined
-          ? { link_url: this.cleanNullableText(input.linkUrl, 2048) }
-          : {}),
-        ...(input.linkProductId !== undefined
-          ? {
-              link_product_id: input.linkProductId
-                ? parseId(input.linkProductId)
-                : null,
-            }
-          : {}),
-        ...(input.linkStoreId !== undefined
-          ? {
-              link_store_id: input.linkStoreId
-                ? parseId(input.linkStoreId)
-                : null,
-            }
-          : {}),
-        ...(input.linkCategoryId !== undefined
-          ? {
-              link_category_id: input.linkCategoryId
-                ? parseId(input.linkCategoryId)
-                : null,
-            }
-          : {}),
-        ...(input.startsAt !== undefined
-          ? { starts_at: this.toDate(input.startsAt) ?? null }
-          : {}),
-        ...(input.endsAt !== undefined
-          ? { ends_at: this.toDate(input.endsAt) ?? null }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
-      },
-    });
+    const data = this.buildBannerUpdateData(input, resolved);
+    const row = await this.repo.updateBanner({ bannerId, data });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
@@ -324,6 +279,158 @@ export class SellerContentService extends SellerBaseService {
     return this.toBannerOutput(row);
   }
 
+  private resolveNextBannerLinkValues(
+    input: SellerUpdateBannerInput,
+    current: {
+      link_type: string;
+      link_product_id: bigint | null;
+      link_store_id: bigint | null;
+      link_category_id: bigint | null;
+      link_url: string | null;
+    },
+  ) {
+    return {
+      linkType: (input.linkType ?? current.link_type) as
+        | 'NONE'
+        | 'URL'
+        | 'PRODUCT'
+        | 'STORE'
+        | 'CATEGORY',
+      linkProductId:
+        input.linkProductId !== undefined
+          ? input.linkProductId
+            ? parseId(input.linkProductId)
+            : null
+          : current.link_product_id,
+      linkStoreId:
+        input.linkStoreId !== undefined
+          ? input.linkStoreId
+            ? parseId(input.linkStoreId)
+            : null
+          : current.link_store_id,
+      linkCategoryId:
+        input.linkCategoryId !== undefined
+          ? input.linkCategoryId
+            ? parseId(input.linkCategoryId)
+            : null
+          : current.link_category_id,
+      linkUrl: input.linkUrl !== undefined ? input.linkUrl : current.link_url,
+    };
+  }
+
+  private buildBannerUpdateData(
+    input: SellerUpdateBannerInput,
+    resolved: ReturnType<typeof this.resolveNextBannerLinkValues>,
+  ) {
+    const linkFieldsForType = this.buildBannerLinkFields(resolved);
+
+    return {
+      ...(input.placement !== undefined
+        ? { placement: this.toBannerPlacement(input.placement) }
+        : {}),
+      ...(input.title !== undefined
+        ? {
+            title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+          }
+        : {}),
+      ...(input.imageUrl !== undefined
+        ? {
+            image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+          }
+        : {}),
+      // linkType이 변경되면 resolved 기반으로 비활성 링크 필드를 null 처리
+      ...(input.linkType !== undefined
+        ? {
+            link_type: this.toBannerLinkType(input.linkType),
+            ...linkFieldsForType,
+          }
+        : {
+            // linkType 미변경 시 input에 명시된 필드만 반영
+            ...(input.linkUrl !== undefined
+              ? {
+                  link_url: cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
+                }
+              : {}),
+            ...(input.linkProductId !== undefined
+              ? {
+                  link_product_id: input.linkProductId
+                    ? parseId(input.linkProductId)
+                    : null,
+                }
+              : {}),
+            ...(input.linkStoreId !== undefined
+              ? {
+                  link_store_id: input.linkStoreId
+                    ? parseId(input.linkStoreId)
+                    : null,
+                }
+              : {}),
+            ...(input.linkCategoryId !== undefined
+              ? {
+                  link_category_id: input.linkCategoryId
+                    ? parseId(input.linkCategoryId)
+                    : null,
+                }
+              : {}),
+          }),
+      ...(input.startsAt !== undefined
+        ? { starts_at: toDate(input.startsAt) ?? null }
+        : {}),
+      ...(input.endsAt !== undefined
+        ? { ends_at: toDate(input.endsAt) ?? null }
+        : {}),
+      ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
+      ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    };
+  }
+
+  /** linkType에 따라 활성 링크 필드만 유지하고, 비활성 필드는 null로 정리 */
+  private buildBannerLinkFields(resolved: {
+    linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+    linkProductId: bigint | null;
+    linkStoreId: bigint | null;
+    linkCategoryId: bigint | null;
+    linkUrl: string | null;
+  }) {
+    switch (resolved.linkType) {
+      case 'NONE':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'URL':
+        return {
+          link_url: cleanNullableText(resolved.linkUrl, MAX_URL_LENGTH),
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'PRODUCT':
+        return {
+          link_url: null,
+          link_product_id: resolved.linkProductId,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'STORE':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: resolved.linkStoreId,
+          link_category_id: null,
+        };
+      case 'CATEGORY':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: resolved.linkCategoryId,
+        };
+    }
+  }
+
   async sellerDeleteBanner(
     accountId: bigint,
     bannerId: bigint,
@@ -333,7 +440,7 @@ export class SellerContentService extends SellerBaseService {
       bannerId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException('Banner not found.');
+    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
     await this.repo.softDeleteBanner(bannerId);
     await this.repo.createAuditLog({
@@ -391,40 +498,31 @@ export class SellerContentService extends SellerBaseService {
       args.linkType === 'URL' &&
       (!args.linkUrl || args.linkUrl.trim().length === 0)
     ) {
-      throw new BadRequestException(
-        'linkUrl is required when linkType is URL.',
-      );
+      throw new BadRequestException(LINK_URL_REQUIRED);
     }
 
     if (args.linkType === 'PRODUCT') {
       if (!args.linkProductId) {
-        throw new BadRequestException(
-          'linkProductId is required when linkType is PRODUCT.',
-        );
+        throw new BadRequestException(LINK_PRODUCT_REQUIRED);
       }
       const product = await this.productRepository.findProductOwnership({
         productId: args.linkProductId,
         storeId: ctx.storeId,
       });
-      if (!product)
-        throw new ForbiddenException('Cannot link product outside your store.');
+      if (!product) throw new ForbiddenException(LINK_PRODUCT_MISMATCH);
     }
 
     if (args.linkType === 'STORE') {
       if (!args.linkStoreId) {
-        throw new BadRequestException(
-          'linkStoreId is required when linkType is STORE.',
-        );
+        throw new BadRequestException(LINK_STORE_REQUIRED);
       }
       if (args.linkStoreId !== ctx.storeId) {
-        throw new ForbiddenException('Cannot link another store.');
+        throw new ForbiddenException(LINK_STORE_MISMATCH);
       }
     }
 
     if (args.linkType === 'CATEGORY' && !args.linkCategoryId) {
-      throw new BadRequestException(
-        'linkCategoryId is required when linkType is CATEGORY.',
-      );
+      throw new BadRequestException(LINK_CATEGORY_REQUIRED);
     }
   }
 
@@ -433,7 +531,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'HOME_SUB') return BannerPlacement.HOME_SUB;
     if (raw === 'CATEGORY') return BannerPlacement.CATEGORY;
     if (raw === 'STORE') return BannerPlacement.STORE;
-    throw new BadRequestException('Invalid banner placement.');
+    throw new BadRequestException(INVALID_BANNER_PLACEMENT);
   }
 
   private toBannerLinkType(raw: string): BannerLinkType {
@@ -442,7 +540,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'PRODUCT') return BannerLinkType.PRODUCT;
     if (raw === 'STORE') return BannerLinkType.STORE;
     if (raw === 'CATEGORY') return BannerLinkType.CATEGORY;
-    throw new BadRequestException('Invalid banner link type.');
+    throw new BadRequestException(INVALID_BANNER_LINK_TYPE);
   }
 
   private toAuditTargetType(raw: string): AuditTargetType {
@@ -451,7 +549,7 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'ORDER') return AuditTargetType.ORDER;
     if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
     if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
-    throw new BadRequestException('Invalid audit target type.');
+    throw new BadRequestException(INVALID_AUDIT_TARGET_TYPE);
   }
 
   private toFaqTopicOutput(row: {

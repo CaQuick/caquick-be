@@ -5,12 +5,47 @@ import {
 } from '@nestjs/common';
 import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
-import { parseId } from '../../../common/utils/id-parser';
+import { toDate, toDateRequired } from '@/common/utils/date-parser';
+import { parseId } from '@/common/utils/id-parser';
+import {
+  cleanNullableText,
+  cleanRequiredText,
+} from '@/common/utils/text-cleaner';
+import {
+  CLOSE_BEFORE_OPEN,
+  DAILY_CAPACITY_NOT_FOUND,
+  INVALID_DAY_OF_WEEK,
+  OPEN_CLOSE_TIME_REQUIRED,
+  SPECIAL_CLOSURE_NOT_FOUND,
+  STORE_NOT_FOUND,
+} from '@/features/seller/constants/seller-error-messages';
+import {
+  MAX_ADDRESS_CITY_LENGTH,
+  MAX_ADDRESS_DISTRICT_LENGTH,
+  MAX_ADDRESS_FULL_LENGTH,
+  MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
+  MAX_BUSINESS_HOURS_TEXT_LENGTH,
+  MAX_DAILY_CAPACITY,
+  MAX_DAYS_AHEAD,
+  MAX_DAY_OF_WEEK,
+  MAX_LEAD_TIME_MINUTES,
+  MAX_PICKUP_SLOT_INTERVAL_MINUTES,
+  MAX_SPECIAL_CLOSURE_REASON_LENGTH,
+  MAX_STORE_NAME_LENGTH,
+  MAX_STORE_PHONE_LENGTH,
+  MAX_URL_LENGTH,
+  MIN_DAILY_CAPACITY,
+  MIN_DAYS_AHEAD,
+  MIN_DAY_OF_WEEK,
+  MIN_LEAD_TIME_MINUTES,
+  MIN_PICKUP_SLOT_INTERVAL_MINUTES,
+} from '@/features/seller/constants/seller.constants';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
-} from '../repositories/seller.repository';
+} from '@/features/seller/repositories/seller.repository';
+import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCursorInput,
   SellerDateCursorInput,
@@ -19,16 +54,14 @@ import type {
   SellerUpsertStoreBusinessHourInput,
   SellerUpsertStoreDailyCapacityInput,
   SellerUpsertStoreSpecialClosureInput,
-} from '../types/seller-input.type';
+} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
-} from '../types/seller-output.type';
-
-import { SellerBaseService } from './seller-base.service';
+} from '@/features/seller/types/seller-output.type';
 
 @Injectable()
 export class SellerStoreService extends SellerBaseService {
@@ -38,7 +71,7 @@ export class SellerStoreService extends SellerBaseService {
   async sellerMyStore(accountId: bigint): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const store = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!store) throw new NotFoundException('Store not found.');
+    if (!store) throw new NotFoundException(STORE_NOT_FOUND);
     return this.toStoreOutput(store);
   }
 
@@ -87,8 +120,8 @@ export class SellerStoreService extends SellerBaseService {
       storeId: ctx.storeId,
       limit: normalized.limit,
       cursor: normalized.cursor,
-      fromDate: this.toDate(input?.fromDate),
-      toDate: this.toDate(input?.toDate),
+      fromDate: toDate(input?.fromDate),
+      toDate: toDate(input?.toDate),
     });
 
     const paged = nextCursorOf(rows, normalized.limit);
@@ -104,56 +137,9 @@ export class SellerStoreService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException('Store not found.');
+    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
 
-    const data: Prisma.StoreUpdateInput = {
-      ...(input.storeName !== undefined
-        ? { store_name: this.cleanRequiredText(input.storeName, 200) }
-        : {}),
-      ...(input.storePhone !== undefined
-        ? { store_phone: this.cleanRequiredText(input.storePhone, 30) }
-        : {}),
-      ...(input.addressFull !== undefined
-        ? { address_full: this.cleanRequiredText(input.addressFull, 500) }
-        : {}),
-      ...(input.addressCity !== undefined
-        ? { address_city: this.cleanNullableText(input.addressCity, 50) }
-        : {}),
-      ...(input.addressDistrict !== undefined
-        ? {
-            address_district: this.cleanNullableText(input.addressDistrict, 80),
-          }
-        : {}),
-      ...(input.addressNeighborhood !== undefined
-        ? {
-            address_neighborhood: this.cleanNullableText(
-              input.addressNeighborhood,
-              80,
-            ),
-          }
-        : {}),
-      ...(input.latitude !== undefined
-        ? { latitude: this.toDecimal(input.latitude) }
-        : {}),
-      ...(input.longitude !== undefined
-        ? { longitude: this.toDecimal(input.longitude) }
-        : {}),
-      ...(input.mapProvider !== undefined && input.mapProvider !== null
-        ? { map_provider: input.mapProvider }
-        : {}),
-      ...(input.websiteUrl !== undefined
-        ? { website_url: this.cleanNullableText(input.websiteUrl, 2048) }
-        : {}),
-      ...(input.businessHoursText !== undefined
-        ? {
-            business_hours_text: this.cleanNullableText(
-              input.businessHoursText,
-              500,
-            ),
-          }
-        : {}),
-    };
-
+    const data = this.buildStoreBasicInfoUpdateData(input);
     const updated = await this.repo.updateStore({
       storeId: ctx.storeId,
       data,
@@ -178,25 +164,105 @@ export class SellerStoreService extends SellerBaseService {
     return this.toStoreOutput(updated);
   }
 
+  private buildStoreBasicInfoUpdateData(
+    input: SellerUpdateStoreBasicInfoInput,
+  ): Prisma.StoreUpdateInput {
+    return {
+      ...(input.storeName !== undefined
+        ? {
+            store_name: cleanRequiredText(
+              input.storeName,
+              MAX_STORE_NAME_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.storePhone !== undefined
+        ? {
+            store_phone: cleanRequiredText(
+              input.storePhone,
+              MAX_STORE_PHONE_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.addressFull !== undefined
+        ? {
+            address_full: cleanRequiredText(
+              input.addressFull,
+              MAX_ADDRESS_FULL_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.addressCity !== undefined
+        ? {
+            address_city: cleanNullableText(
+              input.addressCity,
+              MAX_ADDRESS_CITY_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.addressDistrict !== undefined
+        ? {
+            address_district: cleanNullableText(
+              input.addressDistrict,
+              MAX_ADDRESS_DISTRICT_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.addressNeighborhood !== undefined
+        ? {
+            address_neighborhood: cleanNullableText(
+              input.addressNeighborhood,
+              MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
+            ),
+          }
+        : {}),
+      ...(input.latitude !== undefined
+        ? { latitude: this.toDecimal(input.latitude) }
+        : {}),
+      ...(input.longitude !== undefined
+        ? { longitude: this.toDecimal(input.longitude) }
+        : {}),
+      ...(input.mapProvider !== undefined && input.mapProvider !== null
+        ? { map_provider: input.mapProvider }
+        : {}),
+      ...(input.websiteUrl !== undefined
+        ? {
+            website_url: cleanNullableText(input.websiteUrl, MAX_URL_LENGTH),
+          }
+        : {}),
+      ...(input.businessHoursText !== undefined
+        ? {
+            business_hours_text: cleanNullableText(
+              input.businessHoursText,
+              MAX_BUSINESS_HOURS_TEXT_LENGTH,
+            ),
+          }
+        : {}),
+    };
+  }
+
   async sellerUpsertStoreBusinessHour(
     accountId: bigint,
     input: SellerUpsertStoreBusinessHourInput,
   ): Promise<SellerStoreBusinessHourOutput> {
     const ctx = await this.requireSellerContext(accountId);
 
-    if (input.dayOfWeek < 0 || input.dayOfWeek > 6) {
-      throw new BadRequestException('dayOfWeek must be 0~6.');
+    if (
+      input.dayOfWeek < MIN_DAY_OF_WEEK ||
+      input.dayOfWeek > MAX_DAY_OF_WEEK
+    ) {
+      throw new BadRequestException(INVALID_DAY_OF_WEEK);
     }
 
     const openTime = input.isClosed ? null : this.toTime(input.openTime);
     const closeTime = input.isClosed ? null : this.toTime(input.closeTime);
 
     if (!input.isClosed && (!openTime || !closeTime)) {
-      throw new BadRequestException('openTime and closeTime are required.');
+      throw new BadRequestException(OPEN_CLOSE_TIME_REQUIRED);
     }
 
     if (openTime && closeTime && openTime >= closeTime) {
-      throw new BadRequestException('closeTime must be after openTime.');
+      throw new BadRequestException(CLOSE_BEFORE_OPEN);
     }
 
     const row = await this.repo.upsertStoreBusinessHour({
@@ -234,15 +300,25 @@ export class SellerStoreService extends SellerBaseService {
         closureId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException('Special closure not found.');
+      if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
     }
 
-    const row = await this.repo.upsertStoreSpecialClosure({
-      storeId: ctx.storeId,
-      closureId,
-      closureDate: this.toDateRequired(input.closureDate, 'closureDate'),
-      reason: this.cleanNullableText(input.reason, 200),
-    });
+    const closureDate = toDateRequired(input.closureDate, 'closureDate');
+    const reason = cleanNullableText(
+      input.reason,
+      MAX_SPECIAL_CLOSURE_REASON_LENGTH,
+    );
+
+    const row = closureId
+      ? await this.repo.updateStoreSpecialClosure(closureId, {
+          closureDate,
+          reason,
+        })
+      : await this.repo.createStoreSpecialClosure({
+          storeId: ctx.storeId,
+          closureDate,
+          reason,
+        });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
@@ -268,7 +344,7 @@ export class SellerStoreService extends SellerBaseService {
       closureId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException('Special closure not found.');
+    if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
 
     await this.repo.softDeleteStoreSpecialClosure(closureId);
     await this.repo.createAuditLog({
@@ -291,21 +367,26 @@ export class SellerStoreService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException('Store not found.');
+    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
 
     this.assertPositiveRange(
       input.pickupSlotIntervalMinutes,
-      5,
-      180,
+      MIN_PICKUP_SLOT_INTERVAL_MINUTES,
+      MAX_PICKUP_SLOT_INTERVAL_MINUTES,
       'pickupSlotIntervalMinutes',
     );
     this.assertPositiveRange(
       input.minLeadTimeMinutes,
-      0,
-      7 * 24 * 60,
+      MIN_LEAD_TIME_MINUTES,
+      MAX_LEAD_TIME_MINUTES,
       'minLeadTimeMinutes',
     );
-    this.assertPositiveRange(input.maxDaysAhead, 1, 365, 'maxDaysAhead');
+    this.assertPositiveRange(
+      input.maxDaysAhead,
+      MIN_DAYS_AHEAD,
+      MAX_DAYS_AHEAD,
+      'maxDaysAhead',
+    );
 
     const updated = await this.repo.updateStore({
       storeId: ctx.storeId,
@@ -349,17 +430,28 @@ export class SellerStoreService extends SellerBaseService {
         capacityId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException('Daily capacity not found.');
+      if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
     }
 
-    this.assertPositiveRange(input.capacity, 1, 5000, 'capacity');
+    this.assertPositiveRange(
+      input.capacity,
+      MIN_DAILY_CAPACITY,
+      MAX_DAILY_CAPACITY,
+      'capacity',
+    );
 
-    const row = await this.repo.upsertStoreDailyCapacity({
-      storeId: ctx.storeId,
-      capacityId,
-      capacityDate: this.toDateRequired(input.capacityDate, 'capacityDate'),
-      capacity: input.capacity,
-    });
+    const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
+
+    const row = capacityId
+      ? await this.repo.updateStoreDailyCapacity(capacityId, {
+          capacityDate,
+          capacity: input.capacity,
+        })
+      : await this.repo.createStoreDailyCapacity({
+          storeId: ctx.storeId,
+          capacityDate,
+          capacity: input.capacity,
+        });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
@@ -385,7 +477,7 @@ export class SellerStoreService extends SellerBaseService {
       capacityId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException('Daily capacity not found.');
+    if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
 
     await this.repo.softDeleteStoreDailyCapacity(capacityId);
     await this.repo.createAuditLog({

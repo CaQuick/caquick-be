@@ -1,4 +1,4 @@
-import { isRecord, isStringRecord } from 'src/common/utils/type-guards';
+import { isRecord, isStringRecord } from '@/common/utils/type-guards';
 
 /**
  * class-validator ValidationError와 호환되는 형태

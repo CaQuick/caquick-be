@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
 
-import { UserRepository } from './repositories/user.repository';
-import { UserEngagementMutationResolver } from './resolvers/user-engagement-mutation.resolver';
-import { UserNotificationMutationResolver } from './resolvers/user-notification-mutation.resolver';
-import { UserNotificationQueryResolver } from './resolvers/user-notification-query.resolver';
-import { UserProfileMutationResolver } from './resolvers/user-profile-mutation.resolver';
-import { UserProfileQueryResolver } from './resolvers/user-profile-query.resolver';
-import { UserSearchMutationResolver } from './resolvers/user-search-mutation.resolver';
-import { UserSearchQueryResolver } from './resolvers/user-search-query.resolver';
-import { UserEngagementService } from './services/user-engagement.service';
-import { UserNotificationService } from './services/user-notification.service';
-import { UserProfileService } from './services/user-profile.service';
-import { UserSearchService } from './services/user-search.service';
+import { UserRepository } from '@/features/user/repositories/user.repository';
+import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
+import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
+import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
+import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
+import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
+import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
+import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-query.resolver';
+import { UserEngagementService } from '@/features/user/services/user-engagement.service';
+import { UserNotificationService } from '@/features/user/services/user-notification.service';
+import { UserProfileService } from '@/features/user/services/user-profile.service';
+import { UserSearchService } from '@/features/user/services/user-search.service';
 /**
  * User 도메인 모듈
  */

@@ -7,8 +7,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import type { AccessTokenPayload, JwtUser } from '../../../global/auth';
-import { AuthRepository } from '../repositories/auth.repository';
+import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 
 /**
  * Bearer 기반 JWT 인증 전략

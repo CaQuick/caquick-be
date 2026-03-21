@@ -15,9 +15,9 @@ import {
   ensureRequestTracking,
   resolveUserId,
   setResponseTimeHeader,
-} from 'src/common/utils/request-context';
-import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
-import { LogContext } from 'src/global/types/log.type';
+} from '@/common/utils/request-context';
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { LogContext } from '@/global/types/log.type';
 
 /**
  * REST HTTP 요청/응답을 로깅하는 인터셉터.
