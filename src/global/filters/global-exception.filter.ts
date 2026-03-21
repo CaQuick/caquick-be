@@ -2,21 +2,21 @@ import { ArgumentsHost, BadRequestException, Catch } from '@nestjs/common';
 import { AbstractHttpAdapter, BaseExceptionFilter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
-import { resolveMessage, resolveStatus } from 'src/common/helpers/error.helper';
+import { resolveMessage, resolveStatus } from '@/common/helpers/error.helper';
 import {
   buildHttpRequestMeta,
   calculateDuration,
   ensureRequestTracking,
   resolveUserId,
   setResponseTimeHeader,
-} from 'src/common/utils/request-context';
+} from '@/common/utils/request-context';
 import {
   formatValidationError,
   isValidationErrorLike,
-} from 'src/common/utils/validation';
-import { CustomLoggerService } from 'src/global/logger/custom-logger.service';
-import { LogContext } from 'src/global/types/log.type';
-import { ApiResponseTemplate } from 'src/global/types/response';
+} from '@/common/utils/validation';
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { LogContext } from '@/global/types/log.type';
+import { ApiResponseTemplate } from '@/global/types/response';
 
 /**
  * REST HTTP 요청에 대한 전역 예외 필터.

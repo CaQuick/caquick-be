@@ -6,12 +6,12 @@ import type { GraphQLResolveInfo } from 'graphql';
 import {
   buildQueryString,
   toQueryParams,
-} from 'src/common/helpers/url-query.helper';
+} from '@/common/helpers/url-query.helper';
 import {
   apiVersionOf,
   clientIpOf,
   userAgentOf,
-} from 'src/common/utils/http-meta';
+} from '@/common/utils/http-meta';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const RESPONSE_TIME_HEADER = 'x-response-time-ms';

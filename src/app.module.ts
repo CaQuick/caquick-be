@@ -14,19 +14,19 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import type { Request, Response } from 'express';
 
-import authConfig from 'src/config/auth.config';
-import databaseConfig from 'src/config/database.config';
-import docsConfig from 'src/config/docs.config';
-import oidcConfig from 'src/config/oidc.config';
-import { AuthModule } from 'src/features/auth/auth.module';
-import { SellerModule } from 'src/features/seller/seller.module';
-import { SystemModule } from 'src/features/system/system.module';
-import { UserModule } from 'src/features/user/user.module';
-import { AuthGlobalModule } from 'src/global/auth/auth-global.module';
-import { GraphqlGlobalModule } from 'src/global/graphql/graphql.module';
-import { LoggerModule } from 'src/global/logger/logger.module';
-import { DocsAccessMiddleware } from 'src/global/middlewares/docs-access.middleware';
-import { PrismaModule } from 'src/prisma';
+import authConfig from '@/config/auth.config';
+import databaseConfig from '@/config/database.config';
+import docsConfig from '@/config/docs.config';
+import oidcConfig from '@/config/oidc.config';
+import { AuthModule } from '@/features/auth/auth.module';
+import { SellerModule } from '@/features/seller/seller.module';
+import { SystemModule } from '@/features/system/system.module';
+import { UserModule } from '@/features/user/user.module';
+import { AuthGlobalModule } from '@/global/auth/auth-global.module';
+import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
+import { LoggerModule } from '@/global/logger/logger.module';
+import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
+import { PrismaModule } from '@/prisma';
 
 @Module({
   imports: [
