@@ -111,7 +111,9 @@ describe('SellerConversationService', () => {
 
       expect(result.id).toBe('77');
       expect(result.bodyText).toBe('테스트 메시지');
-      expect(conversationRepo.createSellerConversationMessage).toHaveBeenCalled();
+      expect(
+        conversationRepo.createSellerConversationMessage,
+      ).toHaveBeenCalled();
       expect(repo.createAuditLog).toHaveBeenCalled();
     });
 

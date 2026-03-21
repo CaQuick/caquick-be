@@ -36,10 +36,20 @@ jobs:
           yarn -v || true
           (YARN_ENABLE_IMMUTABLE_INSTALLS=1 yarn install --immutable) || yarn install --frozen-lockfile
 
-      - name: Lint & Build
+      - name: GraphQL codegen
+        run: yarn graphql:codegen
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Test
+        run: yarn test
+
+      - name: Build
         run: |
-          yarn lint
-          yarn graphql:codegen
           yarn graphql:docs
           yarn build
 

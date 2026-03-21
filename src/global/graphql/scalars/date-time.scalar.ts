@@ -11,7 +11,10 @@ export class DateTimeScalar implements CustomScalar<string, Date> {
   /**
    * 클라이언트 입력 값을 Date로 변환한다.
    */
-  parseValue(value: string): Date {
+  parseValue(value: unknown): Date {
+    if (typeof value !== 'string') {
+      throw new TypeError('Invalid DateTime value.');
+    }
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
       throw new TypeError('Invalid DateTime value.');
