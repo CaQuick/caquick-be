@@ -243,10 +243,10 @@ export class SellerProductCrudService extends SellerBaseService {
     if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const data = this.buildProductUpdateData(input);
-    this.validateProductPrices(
-      data.regular_price as number | undefined,
-      data.sale_price as number | null | undefined,
-    );
+    const nextRegularPrice = input.regularPrice ?? current.regular_price;
+    const nextSalePrice =
+      input.salePrice !== undefined ? input.salePrice : current.sale_price;
+    this.validateProductPrices(nextRegularPrice, nextSalePrice);
 
     const updated = await this.productRepository.updateProduct({
       productId,

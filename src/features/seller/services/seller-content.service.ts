@@ -262,7 +262,7 @@ export class SellerContentService extends SellerBaseService {
     const resolved = this.resolveNextBannerLinkValues(input, current);
     await this.validateBannerOwnership(ctx, resolved);
 
-    const data = this.buildBannerUpdateData(input);
+    const data = this.buildBannerUpdateData(input, resolved);
     const row = await this.repo.updateBanner({ bannerId, data });
 
     await this.repo.createAuditLog({
@@ -318,7 +318,12 @@ export class SellerContentService extends SellerBaseService {
     };
   }
 
-  private buildBannerUpdateData(input: SellerUpdateBannerInput) {
+  private buildBannerUpdateData(
+    input: SellerUpdateBannerInput,
+    resolved: ReturnType<typeof this.resolveNextBannerLinkValues>,
+  ) {
+    const linkFieldsForType = this.buildBannerLinkFields(resolved);
+
     return {
       ...(input.placement !== undefined
         ? { placement: this.toBannerPlacement(input.placement) }
@@ -333,33 +338,41 @@ export class SellerContentService extends SellerBaseService {
             image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
           }
         : {}),
+      // linkType이 변경되면 resolved 기반으로 비활성 링크 필드를 null 처리
       ...(input.linkType !== undefined
-        ? { link_type: this.toBannerLinkType(input.linkType) }
-        : {}),
-      ...(input.linkUrl !== undefined
-        ? { link_url: cleanNullableText(input.linkUrl, MAX_URL_LENGTH) }
-        : {}),
-      ...(input.linkProductId !== undefined
         ? {
-            link_product_id: input.linkProductId
-              ? parseId(input.linkProductId)
-              : null,
+            link_type: this.toBannerLinkType(input.linkType),
+            ...linkFieldsForType,
           }
-        : {}),
-      ...(input.linkStoreId !== undefined
-        ? {
-            link_store_id: input.linkStoreId
-              ? parseId(input.linkStoreId)
-              : null,
-          }
-        : {}),
-      ...(input.linkCategoryId !== undefined
-        ? {
-            link_category_id: input.linkCategoryId
-              ? parseId(input.linkCategoryId)
-              : null,
-          }
-        : {}),
+        : {
+            // linkType 미변경 시 input에 명시된 필드만 반영
+            ...(input.linkUrl !== undefined
+              ? {
+                  link_url: cleanNullableText(input.linkUrl, MAX_URL_LENGTH),
+                }
+              : {}),
+            ...(input.linkProductId !== undefined
+              ? {
+                  link_product_id: input.linkProductId
+                    ? parseId(input.linkProductId)
+                    : null,
+                }
+              : {}),
+            ...(input.linkStoreId !== undefined
+              ? {
+                  link_store_id: input.linkStoreId
+                    ? parseId(input.linkStoreId)
+                    : null,
+                }
+              : {}),
+            ...(input.linkCategoryId !== undefined
+              ? {
+                  link_category_id: input.linkCategoryId
+                    ? parseId(input.linkCategoryId)
+                    : null,
+                }
+              : {}),
+          }),
       ...(input.startsAt !== undefined
         ? { starts_at: toDate(input.startsAt) ?? null }
         : {}),
@@ -369,6 +382,53 @@ export class SellerContentService extends SellerBaseService {
       ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
       ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
     };
+  }
+
+  /** linkType에 따라 활성 링크 필드만 유지하고, 비활성 필드는 null로 정리 */
+  private buildBannerLinkFields(resolved: {
+    linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+    linkProductId: bigint | null;
+    linkStoreId: bigint | null;
+    linkCategoryId: bigint | null;
+    linkUrl: string | null;
+  }) {
+    switch (resolved.linkType) {
+      case 'NONE':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'URL':
+        return {
+          link_url: resolved.linkUrl,
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'PRODUCT':
+        return {
+          link_url: null,
+          link_product_id: resolved.linkProductId,
+          link_store_id: null,
+          link_category_id: null,
+        };
+      case 'STORE':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: resolved.linkStoreId,
+          link_category_id: null,
+        };
+      case 'CATEGORY':
+        return {
+          link_url: null,
+          link_product_id: null,
+          link_store_id: null,
+          link_category_id: resolved.linkCategoryId,
+        };
+    }
   }
 
   async sellerDeleteBanner(

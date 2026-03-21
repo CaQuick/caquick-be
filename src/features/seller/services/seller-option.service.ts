@@ -111,11 +111,9 @@ export class SellerOptionService extends SellerBaseService {
       throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
-    if (
-      input.minSelect !== undefined &&
-      input.maxSelect !== undefined &&
-      input.maxSelect < input.minSelect
-    ) {
+    const finalMin = input.minSelect ?? current.min_select;
+    const finalMax = input.maxSelect ?? current.max_select;
+    if (finalMax < finalMin) {
       throw new BadRequestException(MAX_SELECT_BELOW_MIN);
     }
 

@@ -127,7 +127,11 @@ export class SellerCustomTemplateService extends SellerBaseService {
     if (tokenId) {
       const token =
         await this.productRepository.findCustomTextTokenById(tokenId);
-      if (!token || token.template.product.store_id !== ctx.storeId) {
+      if (
+        !token ||
+        token.template.product.store_id !== ctx.storeId ||
+        token.template.id !== templateId
+      ) {
         throw new NotFoundException(CUSTOM_TEXT_TOKEN_NOT_FOUND);
       }
     }

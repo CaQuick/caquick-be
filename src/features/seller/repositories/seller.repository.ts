@@ -111,6 +111,7 @@ export class SellerRepository {
         reason: args.reason,
       },
       update: {
+        deleted_at: null,
         reason: args.reason,
       },
     });
@@ -178,6 +179,7 @@ export class SellerRepository {
         capacity: args.capacity,
       },
       update: {
+        deleted_at: null,
         capacity: args.capacity,
       },
     });
