@@ -6,5 +6,5 @@ generates:
       - "typescript"
       - "typescript-resolvers"
     config:
-      contextType: "src/global/types/graphql-context.type#GraphqlContext"
+      contextType: "@/global/types/graphql-context.type#GraphqlContext"
       useIndexSignature: true
