@@ -1,0 +1,66 @@
+extend type Query {
+  """내 매장 대화방 목록을 조회한다."""
+  sellerConversations(input: SellerCursorInput): SellerConversationConnection!
+  """대화방 메시지 목록을 조회한다."""
+  sellerConversationMessages(conversationId: ID!, input: SellerCursorInput): SellerConversationMessageConnection!
+}
+
+extend type Mutation {
+  """판매자 메시지를 발송한다."""
+  sellerSendConversationMessage(input: SellerSendConversationMessageInput!): SellerConversationMessage!
+}
+
+enum SellerConversationSenderType {
+  USER
+  STORE
+  SYSTEM
+}
+
+"""SellerConversationBodyFormat 열거형"""
+enum SellerConversationBodyFormat {
+  TEXT
+  HTML
+}
+
+"""SellerConversation 타입"""
+type SellerConversation {
+  id: ID!
+  accountId: ID!
+  storeId: ID!
+  lastMessageAt: DateTime
+  lastReadAt: DateTime
+  updatedAt: DateTime!
+}
+
+"""SellerConversationConnection 타입"""
+type SellerConversationConnection {
+  items: [SellerConversation!]!
+  nextCursor: ID
+}
+
+"""SellerConversationMessage 타입"""
+type SellerConversationMessage {
+  id: ID!
+  conversationId: ID!
+  senderType: SellerConversationSenderType!
+  senderAccountId: ID
+  bodyFormat: SellerConversationBodyFormat!
+  bodyText: String
+  bodyHtml: String
+  createdAt: DateTime!
+}
+
+"""SellerConversationMessageConnection 타입"""
+type SellerConversationMessageConnection {
+  items: [SellerConversationMessage!]!
+  nextCursor: ID
+}
+
+"""SellerSendConversationMessageInput 입력 타입"""
+input SellerSendConversationMessageInput {
+  conversationId: ID!
+  bodyFormat: SellerConversationBodyFormat!
+  bodyText: String
+  bodyHtml: String
+}
+

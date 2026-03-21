@@ -1,0 +1,71 @@
+extend type Query {
+  """현재 로그인한 유저 정보 조회"""
+  me: MePayload!
+}
+
+extend type Mutation {
+  """온보딩 완료 처리(필수 정보 입력)"""
+  completeOnboarding(input: CompleteOnboardingInput!): MePayload!
+  """프로필 정보 수정"""
+  updateMyProfile(input: UpdateMyProfileInput!): MePayload!
+  """프로필 이미지 URL 업데이트"""
+  updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
+  """회원 탈퇴(soft delete)"""
+  deleteMyAccount: Boolean!
+}
+
+"""현재 로그인한 유저 정보"""
+type MePayload {
+  """계정 ID"""
+  accountId: ID!
+  """이메일(없을 수 있음)"""
+  email: String
+  """이름(없을 수 있음)"""
+  name: String
+  """계정 타입"""
+  accountType: AccountType!
+  """프로필 정보"""
+  profile: UserProfile!
+}
+
+"""유저 프로필"""
+type UserProfile {
+  """닉네임(유니크)"""
+  nickname: String!
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+  """프로필 이미지 URL"""
+  profileImageUrl: String
+  """온보딩 완료 시각"""
+  onboardingCompletedAt: DateTime
+}
+
+"""온보딩 완료 입력"""
+input CompleteOnboardingInput {
+  """이름(계정에 없을 때만 저장)"""
+  name: String
+  """닉네임(필수)"""
+  nickname: String!
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+}
+
+"""프로필 수정 입력"""
+input UpdateMyProfileInput {
+  """닉네임"""
+  nickname: String
+  """생년월일"""
+  birthDate: DateTime
+  """전화번호"""
+  phoneNumber: String
+}
+
+"""프로필 이미지 수정 입력"""
+input UpdateMyProfileImageInput {
+  """프로필 이미지 URL"""
+  profileImageUrl: String!
+}

@@ -1,0 +1,5 @@
+"""SellerCursorInput 입력 타입"""
+input SellerCursorInput {
+  limit: Int = 20
+  cursor: ID
+}

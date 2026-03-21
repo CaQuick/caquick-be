@@ -1,0 +1,137 @@
+extend type Query {
+  """내 매장 주문 목록을 조회한다."""
+  sellerOrderList(input: SellerOrderListInput): SellerOrderConnection!
+  """내 매장 주문 상세를 조회한다."""
+  sellerOrder(orderId: ID!): SellerOrderDetail!
+}
+
+extend type Mutation {
+  """주문 상태를 변경한다."""
+  sellerUpdateOrderStatus(input: SellerUpdateOrderStatusInput!): SellerOrderSummary!
+}
+
+enum SellerOrderStatus {
+  SUBMITTED
+  CONFIRMED
+  MADE
+  PICKED_UP
+  CANCELED
+}
+
+"""SellerOrderSummary 타입"""
+type SellerOrderSummary {
+  id: ID!
+  orderNumber: String!
+  status: SellerOrderStatus!
+  pickupAt: DateTime!
+  buyerName: String!
+  buyerPhone: String!
+  totalPrice: Int!
+  createdAt: DateTime!
+}
+
+"""SellerOrderConnection 타입"""
+type SellerOrderConnection {
+  items: [SellerOrderSummary!]!
+  nextCursor: ID
+}
+
+"""SellerOrderListInput 입력 타입"""
+input SellerOrderListInput {
+  limit: Int = 20
+  cursor: ID
+  status: SellerOrderStatus
+  fromCreatedAt: DateTime
+  toCreatedAt: DateTime
+  fromPickupAt: DateTime
+  toPickupAt: DateTime
+  search: String
+}
+
+"""SellerOrderStatusHistory 타입"""
+type SellerOrderStatusHistory {
+  id: ID!
+  fromStatus: SellerOrderStatus
+  toStatus: SellerOrderStatus!
+  changedAt: DateTime!
+  note: String
+}
+
+"""SellerOrderItemOptionSnapshot 타입"""
+type SellerOrderItemOptionSnapshot {
+  id: ID!
+  groupNameSnapshot: String!
+  optionTitleSnapshot: String!
+  optionPriceDeltaSnapshot: Int!
+}
+
+"""SellerOrderItemCustomTextSnapshot 타입"""
+type SellerOrderItemCustomTextSnapshot {
+  id: ID!
+  tokenKeySnapshot: String!
+  defaultTextSnapshot: String!
+  valueText: String!
+  sortOrder: Int!
+}
+
+"""SellerOrderItemCustomFreeEditAttachment 타입"""
+type SellerOrderItemCustomFreeEditAttachment {
+  id: ID!
+  imageUrl: String!
+  sortOrder: Int!
+}
+
+"""SellerOrderItemCustomFreeEditSnapshot 타입"""
+type SellerOrderItemCustomFreeEditSnapshot {
+  id: ID!
+  cropImageUrl: String!
+  descriptionText: String!
+  sortOrder: Int!
+  attachments: [SellerOrderItemCustomFreeEditAttachment!]!
+}
+
+"""SellerOrderItemDetail 타입"""
+type SellerOrderItemDetail {
+  id: ID!
+  storeId: ID!
+  productId: ID!
+  productNameSnapshot: String!
+  regularPriceSnapshot: Int!
+  salePriceSnapshot: Int
+  quantity: Int!
+  itemSubtotalPrice: Int!
+  optionItems: [SellerOrderItemOptionSnapshot!]!
+  customTexts: [SellerOrderItemCustomTextSnapshot!]!
+  freeEdits: [SellerOrderItemCustomFreeEditSnapshot!]!
+}
+
+"""SellerOrderDetail 타입"""
+type SellerOrderDetail {
+  id: ID!
+  orderNumber: String!
+  accountId: ID!
+  status: SellerOrderStatus!
+  pickupAt: DateTime!
+  buyerName: String!
+  buyerPhone: String!
+  subtotalPrice: Int!
+  discountPrice: Int!
+  totalPrice: Int!
+  submittedAt: DateTime
+  confirmedAt: DateTime
+  madeAt: DateTime
+  pickedUpAt: DateTime
+  canceledAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  items: [SellerOrderItemDetail!]!
+  statusHistories: [SellerOrderStatusHistory!]!
+}
+
+"""SellerUpdateOrderStatusInput 입력 타입"""
+input SellerUpdateOrderStatusInput {
+  orderId: ID!
+  toStatus: SellerOrderStatus!
+  note: String
+}
+

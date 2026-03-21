@@ -1,0 +1,5 @@
+"""공용 주문 상태 타입(향후 user/seller 공용으로 사용)"""
+enum ProductVisibility {
+  PUBLIC
+  HIDDEN
+}

@@ -213,6 +213,55 @@ async function fetchPullRequest(githubRequest, owner, repo, number) {
   return githubRequest('GET', `/repos/${owner}/${repo}/pulls/${number}`);
 }
 
+async function fetchPrCommitMessages(githubRequest, owner, repo, number) {
+  const commits = [];
+  let page = 1;
+
+  while (true) {
+    const response = await githubRequest(
+      'GET',
+      `/repos/${owner}/${repo}/pulls/${number}/commits?per_page=100&page=${page}`,
+    );
+
+    if (!Array.isArray(response) || response.length === 0) {
+      break;
+    }
+
+    for (const item of response) {
+      const sha = typeof item?.sha === 'string' ? item.sha.slice(0, 7) : '?';
+      const message =
+        typeof item?.commit?.message === 'string'
+          ? item.commit.message.split('\n')[0]
+          : '';
+
+      if (message.length > 0) {
+        commits.push(`${sha} ${message}`);
+      }
+    }
+
+    if (response.length < 100) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return commits;
+}
+
+function collectCommitMessagesFromGit(baseSha, headSha) {
+  const output = runGitCommand([
+    'log',
+    '--format=%h %s',
+    `${baseSha}...${headSha}`,
+  ]);
+
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export async function loadCurrentPullRequest({
   githubRequest,
   owner,
@@ -412,6 +461,7 @@ export function buildOpenAiPrompt({
   pr,
   repositoryLabels,
   diffText,
+  commitMessages = [],
 }) {
   const prMeta = {
     number: pr.number,
@@ -440,10 +490,13 @@ export function buildOpenAiPrompt({
     '- dependencies는 추가/제거/업데이트된 패키지 의존성을 작성하세요. 없으면 빈 배열로 두세요.',
     '- labels는 아래 제공된 레포 라벨 목록에서만 선택하세요. 최대 3개까지 선택할 수 있으나, 꼭 필요한 경우가 아니면 1-2개로 제한하는 것을 권장합니다.',
     '- 코드 식별자/파일 경로/에러 메시지는 원문을 유지하고, 마크다운 백틱(`)으로 감싸세요. 예: `src/features/auth/auth.service.ts`, `package.json`, `PrismaService`',
+    '- 커밋 메시지를 참고하여 변경 의도를 파악하되, 실제 변경 내용은 diff를 기준으로 작성하세요.',
     '',
     `PR Meta:\n${JSON.stringify(prMeta, null, 2)}`,
     '',
     `Repository Labels:\n${JSON.stringify(repositoryLabels, null, 2)}`,
+    '',
+    `Commits:\n${commitMessages.length > 0 ? commitMessages.join('\n') : '(no commits available)'}`,
     '',
     `Diff:\n${diffText}`,
   ].join('\n');
@@ -887,6 +940,31 @@ async function run() {
         throw new Error('no-diff-entries-for-ai');
       }
 
+      let commitMessages = [];
+
+      try {
+        commitMessages = await fetchPrCommitMessages(
+          githubRequest,
+          owner,
+          repo,
+          prNumber,
+        );
+        logInfo(`fetched ${commitMessages.length} commit messages from API.`);
+      } catch (error) {
+        logWarn('commit messages API failed. fallback to git log.', {
+          message: error?.message ?? 'unknown-error',
+        });
+
+        try {
+          commitMessages = collectCommitMessagesFromGit(baseSha, headSha);
+          logInfo(`collected ${commitMessages.length} commit messages from git.`);
+        } catch (gitError) {
+          logWarn('git log fallback also failed. proceeding without commit messages.', {
+            message: gitError?.message ?? 'unknown-error',
+          });
+        }
+      }
+
       const maskedEntries = diffEntries.map((entry) => ({
         ...entry,
         patch: maskSensitiveContent(entry.patch),
@@ -903,6 +981,7 @@ async function run() {
         pr: pullRequest,
         repositoryLabels,
         diffText: maskedDiff,
+        commitMessages,
       });
 
       const openAiMessages = [

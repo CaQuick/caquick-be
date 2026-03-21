@@ -6,31 +6,46 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus } from '@prisma/client';
 
-import { SellerRepository } from './repositories/seller.repository';
-import { SellerService } from './seller.service';
+import {
+  OrderDomainService,
+  OrderRepository,
+  OrderStatusTransitionPolicy,
+} from '../../order';
+import { SellerRepository } from '../repositories/seller.repository';
 
-describe('SellerService', () => {
-  let service: SellerService;
+import { SellerOrderService } from './seller-order.service';
+
+describe('SellerOrderService', () => {
+  let service: SellerOrderService;
   let repo: jest.Mocked<SellerRepository>;
+  let orderRepo: jest.Mocked<OrderRepository>;
 
   beforeEach(async () => {
     repo = {
       findSellerAccountContext: jest.fn(),
+    } as unknown as jest.Mocked<SellerRepository>;
+    orderRepo = {
       findOrderDetailByStore: jest.fn(),
       updateOrderStatusBySeller: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
+    } as unknown as jest.Mocked<OrderRepository>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        SellerService,
+        SellerOrderService,
+        OrderStatusTransitionPolicy,
+        OrderDomainService,
         {
           provide: SellerRepository,
           useValue: repo,
         },
+        {
+          provide: OrderRepository,
+          useValue: orderRepo,
+        },
       ],
     }).compile();
 
-    service = module.get<SellerService>(SellerService);
+    service = module.get<SellerOrderService>(SellerOrderService);
   });
 
   it('판매자 계정이 아니면 ForbiddenException을 던져야 한다', async () => {
@@ -41,7 +56,7 @@ describe('SellerService', () => {
       store: { id: BigInt(100) },
     } as never);
 
-    await expect(service.sellerMyStore(BigInt(1))).rejects.toThrow(
+    await expect(service.sellerOrder(BigInt(1), BigInt(10))).rejects.toThrow(
       ForbiddenException,
     );
   });
@@ -54,7 +69,7 @@ describe('SellerService', () => {
       store: { id: BigInt(100) },
     } as never);
 
-    repo.findOrderDetailByStore.mockResolvedValue({
+    orderRepo.findOrderDetailByStore.mockResolvedValue({
       id: BigInt(10),
       status: OrderStatus.SUBMITTED,
       order_number: 'O-1',
@@ -93,7 +108,7 @@ describe('SellerService', () => {
       store: { id: BigInt(100) },
     } as never);
 
-    repo.findOrderDetailByStore.mockResolvedValue(null);
+    orderRepo.findOrderDetailByStore.mockResolvedValue(null);
 
     await expect(service.sellerOrder(BigInt(1), BigInt(9999))).rejects.toThrow(
       NotFoundException,

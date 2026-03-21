@@ -1,0 +1,150 @@
+extend type Query {
+  """내 매장 정보를 조회한다."""
+  sellerMyStore: SellerStore!
+  """내 매장 요일별 영업시간 목록을 조회한다."""
+  sellerStoreBusinessHours: [SellerStoreBusinessHour!]!
+  """내 매장 특별휴무 목록을 조회한다."""
+  sellerStoreSpecialClosures(input: SellerCursorInput): SellerStoreSpecialClosureConnection!
+  """내 매장 일별 생산 가능 수량 목록을 조회한다."""
+  sellerStoreDailyCapacities(input: SellerDateCursorInput): SellerStoreDailyCapacityConnection!
+}
+
+extend type Mutation {
+  """내 매장 기본 정보를 수정한다."""
+  sellerUpdateStoreBasicInfo(input: SellerUpdateStoreBasicInfoInput!): SellerStore!
+  """내 매장 영업시간을 등록 또는 수정한다."""
+  sellerUpsertStoreBusinessHour(input: SellerUpsertStoreBusinessHourInput!): SellerStoreBusinessHour!
+  """내 매장 특별휴무를 등록 또는 수정한다."""
+  sellerUpsertStoreSpecialClosure(input: SellerUpsertStoreSpecialClosureInput!): SellerStoreSpecialClosure!
+  """내 매장 특별휴무를 삭제한다."""
+  sellerDeleteStoreSpecialClosure(closureId: ID!): Boolean!
+  """내 매장 픽업 정책을 수정한다."""
+  sellerUpdatePickupPolicy(input: SellerUpdatePickupPolicyInput!): SellerStore!
+  """내 매장 일별 생산 가능 수량을 등록 또는 수정한다."""
+  sellerUpsertStoreDailyCapacity(input: SellerUpsertStoreDailyCapacityInput!): SellerStoreDailyCapacity!
+  """내 매장 일별 생산 가능 수량을 삭제한다."""
+  sellerDeleteStoreDailyCapacity(capacityId: ID!): Boolean!
+}
+
+"""SellerDateCursorInput 입력 타입"""
+input SellerDateCursorInput {
+  limit: Int = 20
+  cursor: ID
+  fromDate: DateTime
+  toDate: DateTime
+}
+
+"""SellerStoreMapProvider 열거형"""
+enum SellerStoreMapProvider {
+  NAVER
+  KAKAO
+  NONE
+}
+
+"""SellerStore 타입"""
+type SellerStore {
+  id: ID!
+  sellerAccountId: ID!
+  storeName: String!
+  storePhone: String!
+  addressFull: String!
+  addressCity: String
+  addressDistrict: String
+  addressNeighborhood: String
+  latitude: String
+  longitude: String
+  mapProvider: SellerStoreMapProvider!
+  websiteUrl: String
+  businessHoursText: String
+  pickupSlotIntervalMinutes: Int!
+  minLeadTimeMinutes: Int!
+  maxDaysAhead: Int!
+  isActive: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerStoreBusinessHour 타입"""
+type SellerStoreBusinessHour {
+  id: ID!
+  dayOfWeek: Int!
+  isClosed: Boolean!
+  openTime: DateTime
+  closeTime: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerStoreSpecialClosure 타입"""
+type SellerStoreSpecialClosure {
+  id: ID!
+  closureDate: DateTime!
+  reason: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerStoreSpecialClosureConnection 타입"""
+type SellerStoreSpecialClosureConnection {
+  items: [SellerStoreSpecialClosure!]!
+  nextCursor: ID
+}
+
+"""SellerStoreDailyCapacity 타입"""
+type SellerStoreDailyCapacity {
+  id: ID!
+  capacityDate: DateTime!
+  capacity: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""SellerStoreDailyCapacityConnection 타입"""
+type SellerStoreDailyCapacityConnection {
+  items: [SellerStoreDailyCapacity!]!
+  nextCursor: ID
+}
+
+"""SellerUpdateStoreBasicInfoInput 입력 타입"""
+input SellerUpdateStoreBasicInfoInput {
+  storeName: String
+  storePhone: String
+  addressFull: String
+  addressCity: String
+  addressDistrict: String
+  addressNeighborhood: String
+  latitude: String
+  longitude: String
+  mapProvider: SellerStoreMapProvider
+  websiteUrl: String
+  businessHoursText: String
+}
+
+"""SellerUpsertStoreBusinessHourInput 입력 타입"""
+input SellerUpsertStoreBusinessHourInput {
+  dayOfWeek: Int!
+  isClosed: Boolean!
+  openTime: DateTime
+  closeTime: DateTime
+}
+
+"""SellerUpsertStoreSpecialClosureInput 입력 타입"""
+input SellerUpsertStoreSpecialClosureInput {
+  closureId: ID
+  closureDate: DateTime!
+  reason: String
+}
+
+"""SellerUpdatePickupPolicyInput 입력 타입"""
+input SellerUpdatePickupPolicyInput {
+  pickupSlotIntervalMinutes: Int!
+  minLeadTimeMinutes: Int!
+  maxDaysAhead: Int!
+}
+
+"""SellerUpsertStoreDailyCapacityInput 입력 타입"""
+input SellerUpsertStoreDailyCapacityInput {
+  capacityId: ID
+  capacityDate: DateTime!
+  capacity: Int!
+}
