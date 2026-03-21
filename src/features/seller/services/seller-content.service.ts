@@ -402,7 +402,7 @@ export class SellerContentService extends SellerBaseService {
         };
       case 'URL':
         return {
-          link_url: resolved.linkUrl,
+          link_url: cleanNullableText(resolved.linkUrl, MAX_URL_LENGTH),
           link_product_id: null,
           link_store_id: null,
           link_category_id: null,
