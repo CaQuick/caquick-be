@@ -1,0 +1,74 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: GraphQL codegen
+        run: yarn graphql:codegen
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Test with coverage
+        run: yarn test:cov
+
+      - name: Build
+        run: |
+          yarn graphql:docs
+          yarn build
+
+  coverage-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Coverage Report
+        uses: ArtiomTr/jest-coverage-report-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          test-script: npx jest --coverage --ci
+          skip-step: install
+
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@v5
+        with:
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            PR 제목이 Conventional Commits 형식이 아닙니다.
+            예: "feat: 새 기능 추가", "fix: 버그 수정"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
