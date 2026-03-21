@@ -296,15 +296,22 @@ export class SellerStoreService extends SellerBaseService {
       if (!found) throw new NotFoundException('Special closure not found.');
     }
 
-    const row = await this.repo.upsertStoreSpecialClosure({
-      storeId: ctx.storeId,
-      closureId,
-      closureDate: toDateRequired(input.closureDate, 'closureDate'),
-      reason: cleanNullableText(
-        input.reason,
-        MAX_SPECIAL_CLOSURE_REASON_LENGTH,
-      ),
-    });
+    const closureDate = toDateRequired(input.closureDate, 'closureDate');
+    const reason = cleanNullableText(
+      input.reason,
+      MAX_SPECIAL_CLOSURE_REASON_LENGTH,
+    );
+
+    const row = closureId
+      ? await this.repo.updateStoreSpecialClosure(closureId, {
+          closureDate,
+          reason,
+        })
+      : await this.repo.createStoreSpecialClosure({
+          storeId: ctx.storeId,
+          closureDate,
+          reason,
+        });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,
@@ -426,12 +433,18 @@ export class SellerStoreService extends SellerBaseService {
       'capacity',
     );
 
-    const row = await this.repo.upsertStoreDailyCapacity({
-      storeId: ctx.storeId,
-      capacityId,
-      capacityDate: toDateRequired(input.capacityDate, 'capacityDate'),
-      capacity: input.capacity,
-    });
+    const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
+
+    const row = capacityId
+      ? await this.repo.updateStoreDailyCapacity(capacityId, {
+          capacityDate,
+          capacity: input.capacity,
+        })
+      : await this.repo.createStoreDailyCapacity({
+          storeId: ctx.storeId,
+          capacityDate,
+          capacity: input.capacity,
+        });
 
     await this.repo.createAuditLog({
       actorAccountId: ctx.accountId,

@@ -80,22 +80,24 @@ export class SellerRepository {
     });
   }
 
-  async upsertStoreSpecialClosure(args: {
+  async updateStoreSpecialClosure(
+    closureId: bigint,
+    data: { closureDate: Date; reason: string | null },
+  ) {
+    return this.prisma.storeSpecialClosure.update({
+      where: { id: closureId },
+      data: {
+        closure_date: data.closureDate,
+        reason: data.reason,
+      },
+    });
+  }
+
+  async createStoreSpecialClosure(args: {
     storeId: bigint;
-    closureId?: bigint;
     closureDate: Date;
     reason: string | null;
   }) {
-    if (args.closureId) {
-      return this.prisma.storeSpecialClosure.update({
-        where: { id: args.closureId },
-        data: {
-          closure_date: args.closureDate,
-          reason: args.reason,
-        },
-      });
-    }
-
     return this.prisma.storeSpecialClosure.upsert({
       where: {
         store_id_closure_date: {
@@ -145,22 +147,24 @@ export class SellerRepository {
     });
   }
 
-  async upsertStoreDailyCapacity(args: {
+  async updateStoreDailyCapacity(
+    capacityId: bigint,
+    data: { capacityDate: Date; capacity: number },
+  ) {
+    return this.prisma.storeDailyCapacity.update({
+      where: { id: capacityId },
+      data: {
+        capacity_date: data.capacityDate,
+        capacity: data.capacity,
+      },
+    });
+  }
+
+  async createStoreDailyCapacity(args: {
     storeId: bigint;
-    capacityId?: bigint;
     capacityDate: Date;
     capacity: number;
   }) {
-    if (args.capacityId) {
-      return this.prisma.storeDailyCapacity.update({
-        where: { id: args.capacityId },
-        data: {
-          capacity_date: args.capacityDate,
-          capacity: args.capacity,
-        },
-      });
-    }
-
     return this.prisma.storeDailyCapacity.upsert({
       where: {
         store_id_capacity_date: {
