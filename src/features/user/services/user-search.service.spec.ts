@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -70,6 +70,15 @@ describe('UserSearchService', () => {
 
       const result = await service.clearSearchHistories(BigInt(1));
       expect(result).toBe(true);
+    });
+
+    it('계정이 유효하지 않으면 UnauthorizedException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(null);
+
+      await expect(service.clearSearchHistories(BigInt(1))).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(repo.clearSearchHistories).not.toHaveBeenCalled();
     });
   });
 });

@@ -170,11 +170,9 @@ describe('UserBaseService', () => {
     });
 
     it('미래 날짜면 BadRequestException을 던져야 한다', () => {
-      const futureDate = new Date();
-      futureDate.setFullYear(futureDate.getFullYear() + 1);
-      expect(() => service.testNormalizeBirthDate(futureDate)).toThrow(
-        BadRequestException,
-      );
+      expect(() =>
+        service.testNormalizeBirthDate(new Date('2099-01-01')),
+      ).toThrow(BadRequestException);
     });
 
     it('null/undefined이면 null을 반환해야 한다', () => {

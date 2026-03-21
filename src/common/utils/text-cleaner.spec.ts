@@ -37,6 +37,10 @@ describe('text-cleaner', () => {
       expect(cleanNullableText('', 100)).toBeNull();
     });
 
+    it('공백만 있으면 null을 반환해야 한다', () => {
+      expect(cleanNullableText('   ', 100)).toBeNull();
+    });
+
     it('최대 길이를 초과하면 BadRequestException을 던져야 한다', () => {
       expect(() => cleanNullableText('abcdef', 5)).toThrow(BadRequestException);
     });
