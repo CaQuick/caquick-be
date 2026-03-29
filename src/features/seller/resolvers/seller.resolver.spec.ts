@@ -161,7 +161,7 @@ describe('SellerResolvers', () => {
   describe('SellerProductQueryResolver', () => {
     describe('sellerProducts', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 10 };
+        const input = { limit: 10 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         productService.sellerProducts.mockResolvedValue(expected as never);
 
@@ -723,7 +723,7 @@ describe('SellerResolvers', () => {
 
     describe('sellerBanners', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 5 };
+        const input = { limit: 5 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         contentService.sellerBanners.mockResolvedValue(expected as never);
 
@@ -751,7 +751,7 @@ describe('SellerResolvers', () => {
 
     describe('sellerAuditLogs', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 20 };
+        const input = { limit: 20 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         contentService.sellerAuditLogs.mockResolvedValue(expected as never);
 
@@ -951,7 +951,7 @@ describe('SellerResolvers', () => {
 
     describe('sellerStoreSpecialClosures', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 10 };
+        const input = { limit: 10 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         storeService.sellerStoreSpecialClosures.mockResolvedValue(
           expected as never,
@@ -986,7 +986,7 @@ describe('SellerResolvers', () => {
 
     describe('sellerStoreDailyCapacities', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 10 };
+        const input = { limit: 10 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         storeService.sellerStoreDailyCapacities.mockResolvedValue(
           expected as never,
@@ -1185,7 +1185,7 @@ describe('SellerResolvers', () => {
   describe('SellerConversationQueryResolver', () => {
     describe('sellerConversations', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 10 };
+        const input = { limit: 10 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         conversationService.sellerConversations.mockResolvedValue(
           expected as never,
@@ -1230,7 +1230,7 @@ describe('SellerResolvers', () => {
 
     describe('sellerConversationMessages', () => {
       it('conversationId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 20 };
+        const input = { limit: 20 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         conversationService.sellerConversationMessages.mockResolvedValue(
           expected as never,
@@ -1309,7 +1309,7 @@ describe('SellerResolvers', () => {
   describe('SellerOrderQueryResolver', () => {
     describe('sellerOrderList', () => {
       it('accountId를 BigInt로 변환하여 서비스에 전달해야 한다', async () => {
-        const input = { first: 10 };
+        const input = { limit: 10 };
         const expected = { edges: [], pageInfo: { hasNextPage: false } };
         orderService.sellerOrderList.mockResolvedValue(expected as never);
 

@@ -70,3 +70,17 @@ src/graphql/graphql.types.ts
 /public/index.html
 /public/javascripts/
 /public/stylesheets/
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Codex
+AGENTS.md
+
+docs/*
+!docs/guide/
+
+.env.example
+caquick_ddl.sql
+src/features/example/*

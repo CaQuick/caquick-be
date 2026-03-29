@@ -31,7 +31,7 @@ const mockMePayload: MePayload = {
   accountId: '1',
   email: 'test@example.com',
   name: 'Test User',
-  accountType: 'CONSUMER',
+  accountType: 'USER',
   profile: {
     nickname: 'tester',
     birthDate: null,
