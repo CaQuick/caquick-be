@@ -156,7 +156,7 @@ export class AuthService {
     const username = args.username.trim();
     const password = args.password;
 
-    if (!username || !password) {
+    if (!username || !password.trim()) {
       throw new UnauthorizedException('Invalid seller credentials.');
     }
 

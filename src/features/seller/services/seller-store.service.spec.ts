@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
 
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreService } from '@/features/seller/services/seller-store.service';
@@ -27,6 +28,30 @@ const NO_STORE_CONTEXT = {
   account_type: 'SELLER',
   status: 'ACTIVE',
   store: null,
+};
+
+const NOW = new Date('2026-03-30T12:00:00Z');
+
+const STORE_ROW = {
+  id: BigInt(100),
+  seller_account_id: BigInt(1),
+  store_name: '카퀵 베이커리',
+  store_phone: '02-1234-5678',
+  address_full: '서울시 강남구 역삼동 123-45',
+  address_city: '서울시',
+  address_district: '강남구',
+  address_neighborhood: '역삼동',
+  latitude: new Prisma.Decimal('37.4979'),
+  longitude: new Prisma.Decimal('127.0276'),
+  map_provider: 'NAVER' as const,
+  website_url: 'https://caquick.kr',
+  business_hours_text: '매일 09:00~18:00',
+  pickup_slot_interval_minutes: 30,
+  min_lead_time_minutes: 60,
+  max_days_ahead: 7,
+  is_active: true,
+  created_at: NOW,
+  updated_at: NOW,
 };
 
 describe('SellerStoreService', () => {
@@ -101,6 +126,224 @@ describe('SellerStoreService', () => {
         NotFoundException,
       );
     });
+
+    it('정상 조회 시 매장 정보를 변환하여 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      repo.findStoreBySellerAccountId.mockResolvedValue(STORE_ROW as never);
+
+      const result = await service.sellerMyStore(BigInt(1));
+
+      expect(result.id).toBe('100');
+      expect(result.sellerAccountId).toBe('1');
+      expect(result.storeName).toBe('카퀵 베이커리');
+      expect(result.storePhone).toBe('02-1234-5678');
+      expect(result.addressFull).toBe('서울시 강남구 역삼동 123-45');
+      expect(result.addressCity).toBe('서울시');
+      expect(result.latitude).toBe('37.4979');
+      expect(result.longitude).toBe('127.0276');
+      expect(result.mapProvider).toBe('NAVER');
+      expect(result.isActive).toBe(true);
+      expect(repo.findStoreBySellerAccountId).toHaveBeenCalledWith(BigInt(1));
+    });
+  });
+
+  // ─── sellerStoreBusinessHours ───
+
+  describe('sellerStoreBusinessHours', () => {
+    it('정상 조회 시 영업시간 목록을 변환하여 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      const rows = [
+        {
+          id: BigInt(1),
+          day_of_week: 0,
+          is_closed: true,
+          open_time: null,
+          close_time: null,
+          created_at: NOW,
+          updated_at: NOW,
+        },
+        {
+          id: BigInt(2),
+          day_of_week: 1,
+          is_closed: false,
+          open_time: new Date('1970-01-01T09:00:00Z'),
+          close_time: new Date('1970-01-01T18:00:00Z'),
+          created_at: NOW,
+          updated_at: NOW,
+        },
+      ];
+      repo.listStoreBusinessHours.mockResolvedValue(rows as never);
+
+      const result = await service.sellerStoreBusinessHours(BigInt(1));
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('1');
+      expect(result[0].dayOfWeek).toBe(0);
+      expect(result[0].isClosed).toBe(true);
+      expect(result[0].openTime).toBeNull();
+      expect(result[1].id).toBe('2');
+      expect(result[1].dayOfWeek).toBe(1);
+      expect(result[1].isClosed).toBe(false);
+      expect(result[1].openTime).toEqual(new Date('1970-01-01T09:00:00Z'));
+      expect(result[1].closeTime).toEqual(new Date('1970-01-01T18:00:00Z'));
+      expect(repo.listStoreBusinessHours).toHaveBeenCalledWith(BigInt(100));
+    });
+  });
+
+  // ─── sellerStoreSpecialClosures ───
+
+  describe('sellerStoreSpecialClosures', () => {
+    it('정상 조회 시 특별 휴무 목록과 nextCursor를 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      const rows = [
+        {
+          id: BigInt(10),
+          closure_date: new Date('2026-04-01'),
+          reason: '정기 휴무',
+          created_at: NOW,
+          updated_at: NOW,
+        },
+      ];
+      repo.listStoreSpecialClosures.mockResolvedValue(rows as never);
+
+      const result = await service.sellerStoreSpecialClosures(BigInt(1));
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('10');
+      expect(result.items[0].closureDate).toEqual(new Date('2026-04-01'));
+      expect(result.items[0].reason).toBe('정기 휴무');
+      expect(result.nextCursor).toBeNull();
+      expect(repo.listStoreSpecialClosures).toHaveBeenCalledWith(
+        expect.objectContaining({ storeId: BigInt(100) }),
+      );
+    });
+
+    it('cursor와 limit을 전달하면 정규화된 값으로 repository를 호출해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      repo.listStoreSpecialClosures.mockResolvedValue([] as never);
+
+      await service.sellerStoreSpecialClosures(BigInt(1), {
+        limit: 5,
+        cursor: '50',
+      });
+
+      expect(repo.listStoreSpecialClosures).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        limit: 5,
+        cursor: BigInt(50),
+      });
+    });
+  });
+
+  // ─── sellerStoreDailyCapacities ───
+
+  describe('sellerStoreDailyCapacities', () => {
+    it('정상 조회 시 일별 용량 목록과 nextCursor를 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      const rows = [
+        {
+          id: BigInt(20),
+          capacity_date: new Date('2026-04-01'),
+          capacity: 100,
+          created_at: NOW,
+          updated_at: NOW,
+        },
+        {
+          id: BigInt(21),
+          capacity_date: new Date('2026-04-02'),
+          capacity: 150,
+          created_at: NOW,
+          updated_at: NOW,
+        },
+      ];
+      repo.listStoreDailyCapacities.mockResolvedValue(rows as never);
+
+      const result = await service.sellerStoreDailyCapacities(BigInt(1));
+
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].id).toBe('20');
+      expect(result.items[0].capacityDate).toEqual(new Date('2026-04-01'));
+      expect(result.items[0].capacity).toBe(100);
+      expect(result.items[1].id).toBe('21');
+      expect(result.items[1].capacity).toBe(150);
+      expect(result.nextCursor).toBeNull();
+      expect(repo.listStoreDailyCapacities).toHaveBeenCalledWith(
+        expect.objectContaining({ storeId: BigInt(100) }),
+      );
+    });
+
+    it('fromDate/toDate 필터를 전달하면 repository에 전달해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      repo.listStoreDailyCapacities.mockResolvedValue([] as never);
+
+      await service.sellerStoreDailyCapacities(BigInt(1), {
+        limit: 10,
+        cursor: '30',
+        fromDate: new Date('2026-04-01'),
+        toDate: new Date('2026-04-30'),
+      });
+
+      expect(repo.listStoreDailyCapacities).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        limit: 10,
+        cursor: BigInt(30),
+        fromDate: new Date('2026-04-01'),
+        toDate: new Date('2026-04-30'),
+      });
+    });
+  });
+
+  // ─── sellerUpdateStoreBasicInfo ───
+
+  describe('sellerUpdateStoreBasicInfo', () => {
+    it('정상 수정 시 업데이트된 매장 정보를 반환하고 감사 로그를 생성해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      repo.findStoreBySellerAccountId.mockResolvedValue(STORE_ROW as never);
+      const updatedRow = {
+        ...STORE_ROW,
+        store_name: '새 매장명',
+        store_phone: '02-9999-8888',
+        updated_at: new Date('2026-03-30T13:00:00Z'),
+      };
+      repo.updateStore.mockResolvedValue(updatedRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpdateStoreBasicInfo(BigInt(1), {
+        storeName: '새 매장명',
+        storePhone: '02-9999-8888',
+      });
+
+      expect(result.id).toBe('100');
+      expect(result.storeName).toBe('새 매장명');
+      expect(result.storePhone).toBe('02-9999-8888');
+      expect(repo.updateStore).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        data: expect.objectContaining({
+          store_name: '새 매장명',
+          store_phone: '02-9999-8888',
+        }),
+      });
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(1),
+          storeId: BigInt(100),
+          targetType: AuditTargetType.STORE,
+          targetId: BigInt(100),
+          action: AuditActionType.UPDATE,
+        }),
+      );
+    });
+
+    it('매장 정보가 없으면 NotFoundException을 던져야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      repo.findStoreBySellerAccountId.mockResolvedValue(null as never);
+
+      await expect(
+        service.sellerUpdateStoreBasicInfo(BigInt(1), {
+          storeName: '새 매장명',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   // ─── sellerUpsertStoreBusinessHour ───
@@ -152,6 +395,79 @@ describe('SellerStoreService', () => {
           closeTime: new Date('1970-01-01T09:00:00Z'),
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('정상 영업일 upsert 시 영업시간을 반환하고 감사 로그를 생성해야 한다', async () => {
+      const bhRow = {
+        id: BigInt(5),
+        day_of_week: 1,
+        is_closed: false,
+        open_time: new Date('1970-01-01T09:00:00Z'),
+        close_time: new Date('1970-01-01T18:00:00Z'),
+        created_at: NOW,
+        updated_at: NOW,
+      };
+      repo.upsertStoreBusinessHour.mockResolvedValue(bhRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreBusinessHour(BigInt(1), {
+        dayOfWeek: 1,
+        isClosed: false,
+        openTime: new Date('1970-01-01T09:00:00Z'),
+        closeTime: new Date('1970-01-01T18:00:00Z'),
+      });
+
+      expect(result.id).toBe('5');
+      expect(result.dayOfWeek).toBe(1);
+      expect(result.isClosed).toBe(false);
+      expect(result.openTime).toEqual(new Date('1970-01-01T09:00:00Z'));
+      expect(result.closeTime).toEqual(new Date('1970-01-01T18:00:00Z'));
+      expect(repo.upsertStoreBusinessHour).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        dayOfWeek: 1,
+        isClosed: false,
+        openTime: new Date('1970-01-01T09:00:00Z'),
+        closeTime: new Date('1970-01-01T18:00:00Z'),
+      });
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(1),
+          storeId: BigInt(100),
+          targetType: AuditTargetType.STORE,
+          action: AuditActionType.UPDATE,
+        }),
+      );
+    });
+
+    it('휴무일 upsert 시 openTime/closeTime을 null로 저장해야 한다', async () => {
+      const bhRow = {
+        id: BigInt(6),
+        day_of_week: 0,
+        is_closed: true,
+        open_time: null,
+        close_time: null,
+        created_at: NOW,
+        updated_at: NOW,
+      };
+      repo.upsertStoreBusinessHour.mockResolvedValue(bhRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpsertStoreBusinessHour(BigInt(1), {
+        dayOfWeek: 0,
+        isClosed: true,
+        openTime: new Date('1970-01-01T09:00:00Z'),
+        closeTime: new Date('1970-01-01T18:00:00Z'),
+      });
+
+      expect(result.isClosed).toBe(true);
+      expect(result.openTime).toBeNull();
+      expect(repo.upsertStoreBusinessHour).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isClosed: true,
+          openTime: null,
+          closeTime: null,
+        }),
+      );
     });
   });
 
@@ -232,6 +548,42 @@ describe('SellerStoreService', () => {
         service.sellerDeleteStoreSpecialClosure(BigInt(1), BigInt(999)),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('정상 삭제 시 true를 반환하고 감사 로그를 생성해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      const closureRow = {
+        id: BigInt(10),
+        closure_date: new Date('2026-04-01'),
+        reason: '정기 휴무',
+        created_at: NOW,
+        updated_at: NOW,
+      };
+      repo.findStoreSpecialClosureById.mockResolvedValue(closureRow as never);
+      repo.softDeleteStoreSpecialClosure.mockResolvedValue(undefined as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerDeleteStoreSpecialClosure(
+        BigInt(1),
+        BigInt(10),
+      );
+
+      expect(result).toBe(true);
+      expect(repo.softDeleteStoreSpecialClosure).toHaveBeenCalledWith(
+        BigInt(10),
+      );
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(1),
+          storeId: BigInt(100),
+          targetType: AuditTargetType.STORE,
+          targetId: BigInt(100),
+          action: AuditActionType.DELETE,
+          beforeJson: expect.objectContaining({
+            closureDate: new Date('2026-04-01').toISOString(),
+          }),
+        }),
+      );
+    });
   });
 
   // ─── sellerUpdatePickupPolicy ───
@@ -297,6 +649,57 @@ describe('SellerStoreService', () => {
         ).rejects.toThrow(BadRequestException);
       },
     );
+
+    it('정상 수정 시 업데이트된 매장 정보를 반환하고 감사 로그를 생성해야 한다', async () => {
+      repo.findStoreBySellerAccountId.mockResolvedValue(STORE_ROW as never);
+      const updatedRow = {
+        ...STORE_ROW,
+        pickup_slot_interval_minutes: 15,
+        min_lead_time_minutes: 30,
+        max_days_ahead: 14,
+        updated_at: new Date('2026-03-30T13:00:00Z'),
+      };
+      repo.updateStore.mockResolvedValue(updatedRow as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerUpdatePickupPolicy(BigInt(1), {
+        pickupSlotIntervalMinutes: 15,
+        minLeadTimeMinutes: 30,
+        maxDaysAhead: 14,
+      });
+
+      expect(result.id).toBe('100');
+      expect(result.pickupSlotIntervalMinutes).toBe(15);
+      expect(result.minLeadTimeMinutes).toBe(30);
+      expect(result.maxDaysAhead).toBe(14);
+      expect(repo.updateStore).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        data: {
+          pickup_slot_interval_minutes: 15,
+          min_lead_time_minutes: 30,
+          max_days_ahead: 14,
+        },
+      });
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(1),
+          storeId: BigInt(100),
+          targetType: AuditTargetType.STORE,
+          targetId: BigInt(100),
+          action: AuditActionType.UPDATE,
+          beforeJson: expect.objectContaining({
+            pickupSlotIntervalMinutes: 30,
+            minLeadTimeMinutes: 60,
+            maxDaysAhead: 7,
+          }),
+          afterJson: expect.objectContaining({
+            pickupSlotIntervalMinutes: 15,
+            minLeadTimeMinutes: 30,
+            maxDaysAhead: 14,
+          }),
+        }),
+      );
+    });
   });
 
   // ─── sellerUpsertStoreDailyCapacity ───
@@ -387,6 +790,43 @@ describe('SellerStoreService', () => {
       await expect(
         service.sellerDeleteStoreDailyCapacity(BigInt(1), BigInt(999)),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('정상 삭제 시 true를 반환하고 감사 로그를 생성해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      const capacityRow = {
+        id: BigInt(20),
+        capacity_date: new Date('2026-04-01'),
+        capacity: 100,
+        created_at: NOW,
+        updated_at: NOW,
+      };
+      repo.findStoreDailyCapacityById.mockResolvedValue(capacityRow as never);
+      repo.softDeleteStoreDailyCapacity.mockResolvedValue(undefined as never);
+      repo.createAuditLog.mockResolvedValue(undefined as never);
+
+      const result = await service.sellerDeleteStoreDailyCapacity(
+        BigInt(1),
+        BigInt(20),
+      );
+
+      expect(result).toBe(true);
+      expect(repo.softDeleteStoreDailyCapacity).toHaveBeenCalledWith(
+        BigInt(20),
+      );
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(1),
+          storeId: BigInt(100),
+          targetType: AuditTargetType.STORE,
+          targetId: BigInt(100),
+          action: AuditActionType.DELETE,
+          beforeJson: expect.objectContaining({
+            capacityDate: new Date('2026-04-01').toISOString().slice(0, 10),
+            capacity: 100,
+          }),
+        }),
+      );
     });
   });
 });

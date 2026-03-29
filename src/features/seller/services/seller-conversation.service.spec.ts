@@ -46,6 +46,80 @@ describe('SellerConversationService', () => {
     service = module.get<SellerConversationService>(SellerConversationService);
   });
 
+  // ─── sellerConversations ───
+
+  describe('sellerConversations', () => {
+    it('정상 조회 시 대화 목록과 nextCursor를 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      conversationRepo.listConversationsByStore.mockResolvedValue([
+        {
+          id: BigInt(10),
+          account_id: BigInt(50),
+          store_id: BigInt(100),
+          last_message_at: new Date('2026-03-30T10:00:00Z'),
+          last_read_at: new Date('2026-03-30T09:00:00Z'),
+          updated_at: new Date('2026-03-30T10:00:00Z'),
+        },
+        {
+          id: BigInt(11),
+          account_id: BigInt(51),
+          store_id: BigInt(100),
+          last_message_at: null,
+          last_read_at: null,
+          updated_at: new Date('2026-03-29T15:00:00Z'),
+        },
+      ] as never);
+
+      const result = await service.sellerConversations(BigInt(1));
+
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].id).toBe('10');
+      expect(result.items[0].accountId).toBe('50');
+      expect(result.items[0].storeId).toBe('100');
+      expect(result.items[0].lastMessageAt).toEqual(
+        new Date('2026-03-30T10:00:00Z'),
+      );
+      expect(result.items[0].lastReadAt).toEqual(
+        new Date('2026-03-30T09:00:00Z'),
+      );
+      expect(result.items[1].id).toBe('11');
+      expect(result.items[1].lastMessageAt).toBeNull();
+      expect(result.items[1].lastReadAt).toBeNull();
+      expect(result.nextCursor).toBeNull();
+      expect(conversationRepo.listConversationsByStore).toHaveBeenCalledWith(
+        expect.objectContaining({ storeId: BigInt(100) }),
+      );
+    });
+
+    it('cursor와 limit을 전달하면 정규화된 값으로 repository를 호출해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      conversationRepo.listConversationsByStore.mockResolvedValue([] as never);
+
+      await service.sellerConversations(BigInt(1), {
+        limit: 5,
+        cursor: '30',
+      });
+
+      expect(conversationRepo.listConversationsByStore).toHaveBeenCalledWith({
+        storeId: BigInt(100),
+        limit: 5,
+        cursor: BigInt(30),
+      });
+    });
+
+    it('결과가 빈 배열이면 빈 items와 null nextCursor를 반환해야 한다', async () => {
+      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+      conversationRepo.listConversationsByStore.mockResolvedValue([] as never);
+
+      const result = await service.sellerConversations(BigInt(1));
+
+      expect(result.items).toHaveLength(0);
+      expect(result.nextCursor).toBeNull();
+    });
+  });
+
+  // ─── sellerConversationMessages ───
+
   describe('sellerConversationMessages', () => {
     it('정상 조회 시 메시지 목록과 nextCursor를 반환해야 한다', async () => {
       repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
