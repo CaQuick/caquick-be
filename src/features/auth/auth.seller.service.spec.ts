@@ -1,6 +1,12 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AccountType } from '@prisma/client';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
@@ -11,19 +17,45 @@ import { OidcClientService } from '@/features/auth/services/oidc-client.service'
 describe('AuthService (seller)', () => {
   let service: AuthService;
   let repo: jest.Mocked<AuthRepository>;
+  let mockConfig: jest.Mocked<ConfigService>;
+
+  const mockReq = {
+    headers: { 'user-agent': 'Mozilla/5.0 TestBrowser' },
+    ip: '127.0.0.1',
+    cookies: {},
+  } as unknown as Request;
+
+  const mockRes = {
+    cookie: jest.fn(),
+    clearCookie: jest.fn(),
+  } as unknown as Response;
 
   beforeEach(async () => {
     repo = {
       findSellerCredentialByUsername: jest.fn(),
+      findSellerCredentialByAccountId: jest.fn(),
       updateSellerLastLogin: jest.fn(),
+      updateSellerPasswordHash: jest.fn(),
+      revokeAllRefreshSessions: jest.fn(),
       createRefreshSession: jest.fn(),
+      createAuditLog: jest.fn(),
+      findActiveRefreshSessionByHash: jest.fn(),
+      rotateRefreshSession: jest.fn(),
+      revokeRefreshSession: jest.fn(),
     } as unknown as jest.Mocked<AuthRepository>;
+
+    mockConfig = {
+      get: jest.fn(),
+    } as unknown as jest.Mocked<ConfigService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: JwtService, useValue: { sign: jest.fn(() => 'token') } },
+        { provide: ConfigService, useValue: mockConfig },
+        {
+          provide: JwtService,
+          useValue: { sign: jest.fn(() => 'mock-access-token') },
+        },
         { provide: OidcClientService, useValue: {} },
         { provide: AuthRepository, useValue: repo },
       ],
@@ -32,34 +64,768 @@ describe('AuthService (seller)', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  it('판매자 로그인 성공 시 accountStatus를 반환해야 한다', async () => {
-    const verifySpy = jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-    repo.findSellerCredentialByUsername.mockResolvedValue({
-      seller_account_id: BigInt(1),
-      password_hash: 'hashed',
+  describe('sellerLogin', () => {
+    const validCredential = {
+      id: BigInt(1),
+      seller_account_id: BigInt(10),
+      username: 'seller01',
+      password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc$hashedPw',
+      password_updated_at: new Date('2025-03-01'),
+      last_login_at: new Date('2025-06-10'),
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-06-10'),
+      deleted_at: null,
       seller_account: {
-        account_type: 'SELLER',
-        status: 'PENDING',
+        id: BigInt(10),
+        account_type: AccountType.SELLER,
+        status: 'PENDING' as const,
+        store: { id: BigInt(5) },
       },
-    } as never);
+    };
 
-    const req = {
-      headers: {},
-      ip: '127.0.0.1',
-    } as unknown as Request;
-    const res = {
-      cookie: jest.fn(),
-    } as unknown as Response;
+    it('판매자 로그인 성공 시 accessToken과 accountStatus를 반환해야 한다', async () => {
+      // Arrange
+      jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+      repo.findSellerCredentialByUsername.mockResolvedValue(
+        validCredential as never,
+      );
 
-    const result = await service.sellerLogin({
-      username: 'seller',
-      password: 'Password!123',
-      req,
-      res,
+      // Act
+      const result = await service.sellerLogin({
+        username: 'seller01',
+        password: 'Password!123',
+        req: mockReq,
+        res: mockRes,
+      });
+
+      // Assert
+      expect(result.accessToken).toBe('mock-access-token');
+      expect(result.accountStatus).toBe('PENDING');
+      expect(repo.updateSellerLastLogin).toHaveBeenCalledWith(
+        BigInt(10),
+        expect.any(Date),
+      );
     });
 
-    expect(result.accountStatus).toBe('PENDING');
-    verifySpy.mockRestore();
+    it('username이 빈 문자열이면 UnauthorizedException을 던져야 한다', async () => {
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: '   ',
+          password: 'Password!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('password가 빈 문자열이면 UnauthorizedException을 던져야 한다', async () => {
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: '',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('존재하지 않는 판매자이면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByUsername.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: 'nonexistent',
+          password: 'Password!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.sellerLogin({
+          username: 'nonexistent',
+          password: 'Password!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow('Invalid seller credentials.');
+    });
+
+    it('account_type이 SELLER가 아니면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const nonSellerCredential = {
+        ...validCredential,
+        seller_account: {
+          ...validCredential.seller_account,
+          account_type: AccountType.USER,
+        },
+      };
+      repo.findSellerCredentialByUsername.mockResolvedValue(
+        nonSellerCredential as never,
+      );
+
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: 'Password!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: 'Password!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow('Invalid seller credentials.');
+    });
+
+    it('비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      jest.spyOn(argon2, 'verify').mockResolvedValue(false);
+      repo.findSellerCredentialByUsername.mockResolvedValue(
+        validCredential as never,
+      );
+
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: 'WrongPassword!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: 'WrongPassword!123',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow('Invalid seller credentials.');
+    });
+  });
+
+  describe('changeSellerPassword', () => {
+    const sellerCredential = {
+      id: BigInt(1),
+      seller_account_id: BigInt(10),
+      username: 'seller01',
+      password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc$currentHash',
+      password_updated_at: new Date('2025-03-01'),
+      last_login_at: new Date('2025-06-10'),
+      created_at: new Date('2025-01-01'),
+      updated_at: new Date('2025-06-10'),
+      deleted_at: null,
+      seller_account: {
+        id: BigInt(10),
+        account_type: AccountType.SELLER,
+        status: 'ACTIVE' as const,
+        store: { id: BigInt(5) },
+      },
+    };
+
+    it('비밀번호를 성공적으로 변경해야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+      // 첫 번째 호출: 현재 비밀번호 확인 (true)
+      // 두 번째 호출: 새 비밀번호 동일 여부 확인 (false = 다른 비밀번호)
+      jest
+        .spyOn(argon2, 'verify')
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      jest
+        .spyOn(argon2, 'hash')
+        .mockResolvedValue('$argon2id$v=19$m=65536,t=3,p=4$new$newHash');
+
+      // Act
+      await service.changeSellerPassword({
+        accountId: BigInt(10),
+        currentPassword: 'OldPassword!123',
+        newPassword: 'NewPassword!456',
+        req: mockReq,
+      });
+
+      // Assert
+      expect(repo.updateSellerPasswordHash).toHaveBeenCalledWith({
+        sellerAccountId: BigInt(10),
+        passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
+        now: expect.any(Date),
+      });
+      expect(repo.revokeAllRefreshSessions).toHaveBeenCalledWith(
+        BigInt(10),
+        expect.any(Date),
+      );
+      expect(repo.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorAccountId: BigInt(10),
+          storeId: BigInt(5),
+          targetId: BigInt(10),
+        }),
+      );
+    });
+
+    it('판매자를 찾을 수 없으면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(999),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(999),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow('Seller not found.');
+    });
+
+    it('account_type이 SELLER가 아니면 ForbiddenException을 던져야 한다', async () => {
+      // Arrange
+      const nonSellerCredential = {
+        ...sellerCredential,
+        seller_account: {
+          ...sellerCredential.seller_account,
+          account_type: AccountType.USER,
+        },
+      };
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        nonSellerCredential as never,
+      );
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow('Only SELLER account is allowed.');
+    });
+
+    it('현재 비밀번호가 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: '',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: '',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow('Current and new password are required.');
+    });
+
+    it('새 비밀번호가 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: '',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('현재 비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+      jest.spyOn(argon2, 'verify').mockResolvedValue(false);
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'WrongPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'WrongPassword!123',
+          newPassword: 'NewPassword!456',
+          req: mockReq,
+        }),
+      ).rejects.toThrow('Current password is invalid.');
+    });
+
+    it('새 비밀번호가 정책(8~64자, 대소문자/숫자/특수문자)을 위반하면 BadRequestException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+      jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+
+      // 너무 짧은 비밀번호
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'Ab1!',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 소문자 없음
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'ABCDEFGH!123',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 대문자 없음
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'abcdefgh!123',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 숫자 없음
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'Abcdefgh!xyz',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 특수문자 없음
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'OldPassword!123',
+          newPassword: 'Abcdefgh1234',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('새 비밀번호가 기존 비밀번호와 동일하면 BadRequestException을 던져야 한다', async () => {
+      // Arrange
+      repo.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential as never,
+      );
+      // 현재 비밀번호 확인: true, 새 비밀번호 동일 여부: true (같은 비밀번호)
+      jest
+        .spyOn(argon2, 'verify')
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true);
+
+      // Act & Assert
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'SamePassword!123',
+          newPassword: 'SamePassword!123',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.changeSellerPassword({
+          accountId: BigInt(10),
+          currentPassword: 'SamePassword!123',
+          newPassword: 'SamePassword!123',
+          req: mockReq,
+        }),
+      ).rejects.toThrow(
+        'New password must be different from current password.',
+      );
+    });
+  });
+
+  describe('refreshSeller', () => {
+    it('판매자 refresh 재발급 시 accessToken과 accountStatus를 반환해야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+        headers: { 'user-agent': 'Mozilla/5.0 TestBrowser' },
+        ip: '127.0.0.1',
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0 TestBrowser',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.rotateRefreshSession.mockResolvedValue({
+        id: BigInt(2),
+        account_id: BigInt(10),
+        token_hash: 'new-hash',
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue({
+        id: BigInt(1),
+        seller_account_id: BigInt(10),
+        username: 'seller01',
+        password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc$hash',
+        password_updated_at: new Date('2025-03-01'),
+        last_login_at: new Date('2025-06-10'),
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-06-10'),
+        deleted_at: null,
+        seller_account: {
+          id: BigInt(10),
+          account_type: AccountType.SELLER,
+          status: 'ACTIVE' as const,
+          store: { id: BigInt(5) },
+        },
+      } as never);
+
+      // Act
+      const result = await service.refreshSeller(reqWithCookie, mockRes);
+
+      // Assert
+      expect(result.accessToken).toBe('mock-access-token');
+      expect(result.accountStatus).toBe('ACTIVE');
+    });
+
+    it('refresh 토큰이 없으면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqNoCookie = {
+        cookies: {},
+      } as unknown as Request;
+
+      // Act & Assert
+      await expect(service.refreshSeller(reqNoCookie, mockRes)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(service.refreshSeller(reqNoCookie, mockRes)).rejects.toThrow(
+        'Missing refresh token.',
+      );
+    });
+
+    it('유효하지 않은 refresh 토큰이면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'invalid-refresh-token' },
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid refresh token.');
+    });
+
+    it('판매자 자격정보가 없으면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+        headers: { 'user-agent': 'Mozilla/5.0' },
+        ip: '127.0.0.1',
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.rotateRefreshSession.mockResolvedValue({
+        id: BigInt(2),
+        account_id: BigInt(10),
+        token_hash: 'new-hash',
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid seller refresh token.');
+    });
+
+    it('account_type이 SELLER가 아니면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+        headers: { 'user-agent': 'Mozilla/5.0' },
+        ip: '127.0.0.1',
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.rotateRefreshSession.mockResolvedValue({
+        id: BigInt(2),
+        account_id: BigInt(10),
+        token_hash: 'new-hash',
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue({
+        id: BigInt(1),
+        seller_account_id: BigInt(10),
+        username: 'seller01',
+        password_hash: '$argon2id$v=19$hash',
+        seller_account: {
+          id: BigInt(10),
+          account_type: AccountType.USER, // SELLER가 아님
+          status: 'ACTIVE' as const,
+          store: null,
+        },
+      } as never);
+
+      // Act & Assert
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.refreshSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid seller refresh token.');
+    });
+  });
+
+  describe('logoutSeller', () => {
+    it('판매자 로그아웃 시 세션을 revoke하고 쿠키를 삭제해야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue({
+        id: BigInt(1),
+        seller_account_id: BigInt(10),
+        username: 'seller01',
+        password_hash: '$argon2id$v=19$hash',
+        password_updated_at: new Date('2025-03-01'),
+        last_login_at: new Date('2025-06-10'),
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-06-10'),
+        deleted_at: null,
+        seller_account: {
+          id: BigInt(10),
+          account_type: AccountType.SELLER,
+          status: 'ACTIVE' as const,
+          store: { id: BigInt(5) },
+        },
+      } as never);
+
+      repo.revokeRefreshSession.mockResolvedValue({
+        id: BigInt(1),
+        revoked_at: new Date(),
+      } as never);
+
+      // Act
+      await service.logoutSeller(reqWithCookie, mockRes);
+
+      // Assert
+      expect(repo.revokeRefreshSession).toHaveBeenCalledWith(BigInt(1));
+      expect(mockRes.clearCookie).toHaveBeenCalled();
+    });
+
+    it('refresh 토큰이 없으면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqNoCookie = {
+        cookies: {},
+      } as unknown as Request;
+
+      // Act & Assert
+      await expect(service.logoutSeller(reqNoCookie, mockRes)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      await expect(service.logoutSeller(reqNoCookie, mockRes)).rejects.toThrow(
+        'Missing refresh token.',
+      );
+    });
+
+    it('유효하지 않은 refresh 토큰이면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'invalid-token' },
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid refresh token.');
+    });
+
+    it('판매자 자격정보가 없으면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid seller refresh token.');
+    });
+
+    it('account_type이 SELLER가 아니면 UnauthorizedException을 던져야 한다', async () => {
+      // Arrange
+      const reqWithCookie = {
+        cookies: { caquick_rt: 'valid-refresh-token' },
+      } as unknown as Request;
+
+      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(10),
+        token_hash: 'hashed-token',
+        user_agent: 'Mozilla/5.0',
+        ip_address: '127.0.0.1',
+        expires_at: new Date('2030-01-01'),
+        revoked_at: null,
+        replaced_by_session_id: null,
+        created_at: new Date('2025-01-01'),
+        updated_at: new Date('2025-01-01'),
+        deleted_at: null,
+      } as never);
+
+      repo.findSellerCredentialByAccountId.mockResolvedValue({
+        id: BigInt(1),
+        seller_account_id: BigInt(10),
+        username: 'seller01',
+        password_hash: '$argon2id$v=19$hash',
+        seller_account: {
+          id: BigInt(10),
+          account_type: AccountType.USER, // SELLER가 아님
+          status: 'ACTIVE' as const,
+          store: null,
+        },
+      } as never);
+
+      // Act & Assert
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.logoutSeller(reqWithCookie, mockRes),
+      ).rejects.toThrow('Invalid seller refresh token.');
+    });
   });
 });
