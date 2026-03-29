@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   pr-ai-description:
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    if: false # 임시 비활성화 — 원래 조건: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
