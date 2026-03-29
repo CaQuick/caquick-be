@@ -135,6 +135,18 @@ describe('AuthService (seller)', () => {
       ).rejects.toThrow(UnauthorizedException);
     });
 
+    it('공백만 있는 비밀번호이면 UnauthorizedException을 던져야 한다', async () => {
+      // Act & Assert
+      await expect(
+        service.sellerLogin({
+          username: 'seller01',
+          password: '   ',
+          req: mockReq,
+          res: mockRes,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
     it('존재하지 않는 판매자이면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
       repo.findSellerCredentialByUsername.mockResolvedValue(null);

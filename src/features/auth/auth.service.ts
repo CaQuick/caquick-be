@@ -154,9 +154,9 @@ export class AuthService {
     res: Response;
   }): Promise<{ accessToken: string; accountStatus: AccountStatus }> {
     const username = args.username.trim();
-    const password = args.password.trim();
+    const password = args.password;
 
-    if (!username || !password) {
+    if (!username || !password.trim()) {
       throw new UnauthorizedException('Invalid seller credentials.');
     }
 
