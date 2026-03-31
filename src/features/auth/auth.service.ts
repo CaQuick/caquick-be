@@ -549,6 +549,7 @@ export class AuthService {
 
     pick('code');
     pick('state');
+    pick('iss');
     pick('error');
     pick('error_description');
 
