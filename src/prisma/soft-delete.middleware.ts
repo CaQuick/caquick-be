@@ -36,7 +36,7 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'OrderItemCustomFreeEdit',
   'OrderItemCustomFreeEditAttachment',
   'Review',
-  'ReviewImage',
+  'ReviewMedia',
   'Notification',
   'SearchHistory',
   'SearchEvent',
@@ -47,6 +47,7 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'StoreConversationMessage',
   'StoreFaqTopic',
   'StoreDailyCapacity',
+  'RecentProductView',
 ]);
 
 const READ_ACTIONS = new Set<Prisma.PrismaAction>([

@@ -74,6 +74,11 @@ enum ConversationBodyFormat {
   HTML
 }
 
+enum ReviewMediaType {
+  IMAGE
+  VIDEO
+}
+
 enum SearchContext {
   GLOBAL
   NEIGHBORHOOD
@@ -154,6 +159,7 @@ model Account {
   store_conversations        StoreConversation[]
   sent_conversation_messages StoreConversationMessage[] @relation("ConversationMessageSender")
   store                      Store?                     @relation("StoreSellerAccount")
+  recent_product_views       RecentProductView[]
 
   @@index([account_type, status], map: "idx_account_type_status")
   @@index([deleted_at], map: "idx_account_deleted_at")
@@ -452,7 +458,8 @@ model Product {
   reviews        Review[]
   banners        Banner[]       @relation("BannerProductLink")
 
-  notifications Notification[]
+  notifications        Notification[]
+  recent_product_views RecentProductView[]
 
   @@index([store_id], map: "idx_product_store")
   @@index([name], map: "idx_product_name")
@@ -1009,7 +1016,7 @@ model Review {
   store      Store     @relation(fields: [store_id], references: [id])
   product    Product   @relation(fields: [product_id], references: [id])
 
-  images ReviewImage[]
+  media ReviewMedia[]
 
   likes         ReviewLike[]
   notifications Notification[]
@@ -1021,12 +1028,14 @@ model Review {
   @@map("review")
 }
 
-model ReviewImage {
+model ReviewMedia {
   id        BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   review_id BigInt @db.UnsignedBigInt
 
-  image_url  String @db.VarChar(2048)
-  sort_order Int    @default(0)
+  media_type    ReviewMediaType @default(IMAGE)
+  media_url     String          @db.VarChar(2048)
+  thumbnail_url String?         @db.VarChar(2048)
+  sort_order    Int             @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -1034,9 +1043,9 @@ model ReviewImage {
 
   review Review @relation(fields: [review_id], references: [id])
 
-  @@index([review_id, sort_order], map: "idx_review_image_review")
-  @@index([deleted_at], map: "idx_review_image_deleted_at")
-  @@map("review_image")
+  @@index([review_id, sort_order], map: "idx_review_media_review")
+  @@index([deleted_at], map: "idx_review_media_deleted_at")
+  @@map("review_media")
 }
 
 /**
@@ -1347,4 +1356,30 @@ model AuditLog {
   @@index([store_id, created_at], map: "idx_audit_store_time")
   @@index([target_type, target_id, created_at], map: "idx_audit_target_time")
   @@map("audit_log")
+}
+
+/**
+ * =========================
+ * 17) Recent Product View (최근 본 상품)
+ * =========================
+ */
+
+model RecentProductView {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  product_id BigInt @db.UnsignedBigInt
+
+  viewed_at DateTime @default(now()) @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  account Account @relation(fields: [account_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@unique([account_id, product_id], map: "uk_recent_product_view")
+  @@index([account_id, viewed_at], map: "idx_recent_product_view_account_viewed")
+  @@index([deleted_at], map: "idx_recent_product_view_deleted_at")
+  @@map("recent_product_view")
 }
