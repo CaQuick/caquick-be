@@ -18,6 +18,7 @@ import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
+import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
 import { SellerModule } from '@/features/seller/seller.module';
 import { SystemModule } from '@/features/system/system.module';
@@ -33,7 +34,7 @@ import { PrismaModule } from '@/prisma';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [authConfig, databaseConfig, docsConfig, oidcConfig],
+      load: [authConfig, databaseConfig, docsConfig, oidcConfig, s3Config],
     }),
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public'),
