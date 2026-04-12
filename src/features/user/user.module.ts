@@ -7,6 +7,7 @@ import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-e
 import { UserMypageQueryResolver } from '@/features/user/resolvers/user-mypage-query.resolver';
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
 import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
+import { UserOrderQueryResolver } from '@/features/user/resolvers/user-order-query.resolver';
 import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
 import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
@@ -14,6 +15,7 @@ import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-q
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
+import { UserOrderService } from '@/features/user/services/user-order.service';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
 import { UserSearchService } from '@/features/user/services/user-search.service';
 
@@ -28,12 +30,14 @@ import { UserSearchService } from '@/features/user/services/user-search.service'
     UserSearchService,
     UserEngagementService,
     UserMypageService,
+    UserOrderService,
     UserRepository,
     RecentProductViewRepository,
     UserProfileQueryResolver,
     UserNotificationQueryResolver,
     UserSearchQueryResolver,
     UserMypageQueryResolver,
+    UserOrderQueryResolver,
     UserProfileMutationResolver,
     UserNotificationMutationResolver,
     UserSearchMutationResolver,

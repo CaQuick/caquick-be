@@ -9,6 +9,23 @@ import {
 
 import { PrismaService } from '@/prisma';
 
+export interface MyOrderRow {
+  id: bigint;
+  order_number: string;
+  status: OrderStatus;
+  created_at: Date;
+  pickup_at: Date;
+  total_price: number;
+  items: {
+    product_name_snapshot: string;
+    store: { store_name: string };
+    product: {
+      images: { image_url: string }[];
+    };
+  }[];
+  _count: { items: number };
+}
+
 export interface OngoingOrderRow {
   id: bigint;
   order_number: string;
@@ -61,6 +78,66 @@ export class OrderRepository {
             },
           },
         },
+      },
+    });
+  }
+
+  async findOrdersByAccount(args: {
+    accountId: bigint;
+    statuses?: OrderStatus[];
+    offset: number;
+    limit: number;
+  }): Promise<MyOrderRow[]> {
+    const where = {
+      account_id: args.accountId,
+      ...(args.statuses && args.statuses.length > 0
+        ? { status: { in: args.statuses } }
+        : {}),
+    };
+
+    return this.prisma.order.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      skip: args.offset,
+      take: args.limit,
+      include: {
+        items: {
+          where: { deleted_at: null },
+          orderBy: { id: 'asc' },
+          take: 1,
+          include: {
+            store: {
+              select: { store_name: true },
+            },
+            product: {
+              select: {
+                images: {
+                  where: { deleted_at: null },
+                  orderBy: { sort_order: 'asc' },
+                  take: 1,
+                  select: { image_url: true },
+                },
+              },
+            },
+          },
+        },
+        _count: {
+          select: { items: { where: { deleted_at: null } } },
+        },
+      },
+    });
+  }
+
+  async countOrdersByAccount(args: {
+    accountId: bigint;
+    statuses?: OrderStatus[];
+  }): Promise<number> {
+    return this.prisma.order.count({
+      where: {
+        account_id: args.accountId,
+        ...(args.statuses && args.statuses.length > 0
+          ? { status: { in: args.statuses } }
+          : {}),
       },
     });
   }
