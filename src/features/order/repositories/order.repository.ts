@@ -205,7 +205,7 @@ export class OrderRepository {
               },
             },
             review: {
-              select: { id: true },
+              select: { id: true, deleted_at: true },
             },
           },
         },

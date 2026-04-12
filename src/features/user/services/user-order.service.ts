@@ -138,8 +138,9 @@ export class UserOrderService {
           sortOrder: fe.sort_order,
           attachmentImageUrls: fe.attachments.map((a) => a.image_url),
         })),
-        hasMyReview: Boolean(item.review),
-        canWriteReview: isPickedUp && !item.review,
+        hasMyReview: Boolean(item.review && !item.review.deleted_at),
+        canWriteReview:
+          isPickedUp && (!item.review || Boolean(item.review.deleted_at)),
       })),
       store: store
         ? {

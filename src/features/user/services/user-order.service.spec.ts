@@ -183,6 +183,7 @@ describe('UserOrderService', () => {
     const makeDetailOrder = (overrides?: {
       status?: OrderStatus;
       hasReview?: boolean;
+      reviewDeleted?: boolean;
     }) => ({
       id: BigInt(100),
       order_number: 'CQ-20260413-00001',
@@ -243,7 +244,14 @@ describe('UserOrderService', () => {
           ],
           custom_texts: [],
           free_edits: [],
-          review: overrides?.hasReview ? { id: BigInt(1) } : null,
+          review: overrides?.hasReview
+            ? {
+                id: BigInt(1),
+                deleted_at: overrides?.reviewDeleted
+                  ? new Date('2026-04-12')
+                  : null,
+              }
+            : null,
         },
       ],
     });
@@ -299,6 +307,21 @@ describe('UserOrderService', () => {
 
       expect(result.items[0].canWriteReview).toBe(false);
       expect(result.items[0].hasMyReview).toBe(true);
+    });
+
+    it('soft-delete된 리뷰가 있으면 canWriteReview가 true여야 한다', async () => {
+      orderRepo.findOrderDetailByAccount.mockResolvedValue(
+        makeDetailOrder({
+          status: OrderStatus.PICKED_UP,
+          hasReview: true,
+          reviewDeleted: true,
+        }) as never,
+      );
+
+      const result = await service.getMyOrder(accountId, BigInt(100));
+
+      expect(result.items[0].canWriteReview).toBe(true);
+      expect(result.items[0].hasMyReview).toBe(false);
     });
 
     it('PICKED_UP이 아닌 상태면 canWriteReview가 false여야 한다', async () => {
