@@ -3,7 +3,11 @@ import { extname } from 'node:path';
 
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { S3Config } from '@/config/s3.config';
@@ -94,7 +98,7 @@ export class S3Service {
         expiresInSeconds: this.presignExpiresSeconds,
       };
     } catch {
-      throw new BadRequestException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
+      throw new InternalServerErrorException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
     }
   }
 

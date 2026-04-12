@@ -1,4 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -230,7 +233,7 @@ describe('S3Service', () => {
     });
 
     describe('S3 presign 실패', () => {
-      it('getSignedUrl 실패 시 BadRequestException을 던져야 한다', async () => {
+      it('getSignedUrl 실패 시 InternalServerErrorException을 던져야 한다', async () => {
         const { getSignedUrl: mockGetSignedUrl } = jest.requireMock<
           typeof import('@aws-sdk/s3-request-presigner')
         >('@aws-sdk/s3-request-presigner');
