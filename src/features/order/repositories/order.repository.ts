@@ -9,9 +9,59 @@ import {
 
 import { PrismaService } from '@/prisma';
 
+export interface OngoingOrderRow {
+  id: bigint;
+  order_number: string;
+  status: OrderStatus;
+  created_at: Date;
+  pickup_at: Date;
+  total_price: number;
+  items: {
+    product_name_snapshot: string;
+    product: {
+      images: { image_url: string }[];
+    };
+  }[];
+}
+
 @Injectable()
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async findOngoingOrdersByAccount(args: {
+    accountId: bigint;
+    since: Date;
+    limit: number;
+  }): Promise<OngoingOrderRow[]> {
+    return this.prisma.order.findMany({
+      where: {
+        account_id: args.accountId,
+        status: {
+          in: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED, OrderStatus.MADE],
+        },
+        created_at: { gte: args.since },
+      },
+      orderBy: { created_at: 'desc' },
+      take: args.limit,
+      include: {
+        items: {
+          orderBy: { id: 'asc' },
+          take: 1,
+          include: {
+            product: {
+              select: {
+                images: {
+                  orderBy: { sort_order: 'asc' },
+                  take: 1,
+                  select: { image_url: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 
   async listOrdersByStore(args: {
     storeId: bigint;
