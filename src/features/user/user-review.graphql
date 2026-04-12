@@ -1,0 +1,87 @@
+extend type Query {
+  """내가 작성한 리뷰 목록"""
+  myReviews(input: MyReviewsInput): MyReviewConnection!
+  """주문 아이템에 대한 리뷰 작성 가능 여부 및 기존 리뷰"""
+  myReviewForOrderItem(orderItemId: ID!): MyReviewOrNull!
+}
+
+extend type Mutation {
+  """리뷰 미디어 업로드용 Presigned URL 발급"""
+  createReviewMediaUploadUrl(input: CreateReviewMediaUploadUrlInput!): ReviewMediaUploadUrl!
+  """리뷰 작성"""
+  writeReview(input: WriteReviewInput!): MyReview!
+  """내 리뷰 삭제(soft)"""
+  deleteMyReview(reviewId: ID!): Boolean!
+}
+
+input MyReviewsInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type MyReviewConnection {
+  items: [MyReview!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+type MyReview {
+  reviewId: ID!
+  orderItemId: ID!
+  productId: ID!
+  productName: String!
+  productImageUrl: String
+  storeName: String!
+  rating: Float!
+  content: String
+  media: [MyReviewMedia!]!
+  createdAt: DateTime!
+}
+
+type MyReviewOrNull {
+  review: MyReview
+  canWrite: Boolean!
+  reasonIfCannotWrite: String
+}
+
+type MyReviewMedia {
+  mediaType: ReviewMediaType!
+  mediaUrl: String!
+  thumbnailUrl: String
+  sortOrder: Int!
+}
+
+enum ReviewMediaType {
+  IMAGE
+  VIDEO
+}
+
+input CreateReviewMediaUploadUrlInput {
+  mediaType: ReviewMediaType!
+  contentType: String!
+  contentLength: Int!
+}
+
+type ReviewMediaUploadUrl {
+  uploadUrl: String!
+  publicUrl: String!
+  key: String!
+  expiresInSeconds: Int!
+}
+
+input WriteReviewInput {
+  orderItemId: ID!
+  """별점 1.0 ~ 5.0 (0.5 단위)"""
+  rating: Float!
+  """최소 20자, 최대 1000자"""
+  content: String!
+  media: [WriteReviewMediaInput!]
+}
+
+input WriteReviewMediaInput {
+  mediaType: ReviewMediaType!
+  """업로드 완료 후의 publicUrl"""
+  mediaUrl: String!
+  thumbnailUrl: String
+  sortOrder: Int!
+}
