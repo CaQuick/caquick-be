@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { CustomDraftStatus, OrderStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';

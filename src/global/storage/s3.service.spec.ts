@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
