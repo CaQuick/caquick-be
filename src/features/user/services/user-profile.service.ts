@@ -132,6 +132,8 @@ export class UserProfileService extends UserBaseService {
     nickname: string,
     accountId: bigint,
   ): Promise<NicknameAvailability> {
+    await this.requireActiveUser(accountId);
+
     const trimmed = nickname.trim();
 
     if (
@@ -164,6 +166,8 @@ export class UserProfileService extends UserBaseService {
     accountId: bigint,
     input: { contentType: string; contentLength: number },
   ): Promise<ProfileImageUploadUrl> {
+    await this.requireActiveUser(accountId);
+
     return this.s3Service.createUploadUrl({
       accountId,
       purpose: 'PROFILE_IMAGE',

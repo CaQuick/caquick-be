@@ -102,6 +102,10 @@ describe('UserProfileService', () => {
   });
 
   describe('checkNicknameAvailability', () => {
+    beforeEach(() => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+    });
+
     it('사용 가능한 닉네임이면 available: true를 반환해야 한다', async () => {
       repo.isNicknameTaken.mockResolvedValue(false);
 
@@ -144,6 +148,10 @@ describe('UserProfileService', () => {
   });
 
   describe('createProfileImageUploadUrl', () => {
+    beforeEach(() => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+    });
+
     it('S3Service에 PROFILE_IMAGE purpose로 위임해야 한다', async () => {
       const mockResult = {
         uploadUrl: 'https://presigned-url.com',
