@@ -1,0 +1,24 @@
+extend type Query {
+  """최근 본 상품 목록 조회"""
+  myRecentViewedProducts(input: MyRecentViewedProductsInput): RecentViewedProductConnection!
+}
+
+extend type Mutation {
+  """상품 상세 진입 시 호출하여 최근 본 상품에 기록"""
+  recordProductView(productId: ID!): Boolean!
+  """최근 본 상품 단건 삭제"""
+  deleteRecentViewedProduct(productId: ID!): Boolean!
+  """최근 본 상품 전체 삭제"""
+  clearRecentViewedProducts: Boolean!
+}
+
+input MyRecentViewedProductsInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type RecentViewedProductConnection {
+  items: [RecentViewedProductSummary!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
