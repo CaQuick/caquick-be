@@ -4,6 +4,10 @@ import {
   Injectable,
 } from '@nestjs/common';
 
+import {
+  MAX_NICKNAME_LENGTH,
+  MIN_NICKNAME_LENGTH,
+} from '@/features/user/constants/user.constants';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
 import type {
@@ -11,11 +15,19 @@ import type {
   UpdateMyProfileImageInput,
   UpdateMyProfileInput,
 } from '@/features/user/types/user-input.type';
-import type { MePayload } from '@/features/user/types/user-output.type';
+import type {
+  MePayload,
+  NicknameAvailability,
+  ProfileImageUploadUrl,
+} from '@/features/user/types/user-output.type';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class UserProfileService extends UserBaseService {
-  constructor(repo: UserRepository) {
+  constructor(
+    repo: UserRepository,
+    private readonly s3Service: S3Service,
+  ) {
     super(repo);
   }
 
@@ -114,6 +126,54 @@ export class UserProfileService extends UserBaseService {
     });
 
     return this.me(accountId);
+  }
+
+  async checkNicknameAvailability(
+    nickname: string,
+    accountId: bigint,
+  ): Promise<NicknameAvailability> {
+    await this.requireActiveUser(accountId);
+
+    const trimmed = nickname.trim();
+
+    if (
+      trimmed.length < MIN_NICKNAME_LENGTH ||
+      trimmed.length > MAX_NICKNAME_LENGTH
+    ) {
+      return {
+        available: false,
+        reason: `닉네임은 ${MIN_NICKNAME_LENGTH}~${MAX_NICKNAME_LENGTH}자여야 합니다.`,
+      };
+    }
+
+    const nicknameRegex = /^[A-Za-z0-9가-힣_]+$/;
+    if (!nicknameRegex.test(trimmed)) {
+      return {
+        available: false,
+        reason: '닉네임은 한글, 영문, 숫자, 언더스코어만 사용할 수 있습니다.',
+      };
+    }
+
+    const isTaken = await this.repo.isNicknameTaken(trimmed, accountId);
+    if (isTaken) {
+      return { available: false, reason: '이미 사용 중인 닉네임입니다.' };
+    }
+
+    return { available: true, reason: null };
+  }
+
+  async createProfileImageUploadUrl(
+    accountId: bigint,
+    input: { contentType: string; contentLength: number },
+  ): Promise<ProfileImageUploadUrl> {
+    await this.requireActiveUser(accountId);
+
+    return this.s3Service.createUploadUrl({
+      accountId,
+      purpose: 'PROFILE_IMAGE',
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
   }
 
   async deleteMyAccount(accountId: bigint): Promise<boolean> {

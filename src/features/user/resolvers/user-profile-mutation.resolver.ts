@@ -7,7 +7,10 @@ import type {
   UpdateMyProfileImageInput,
   UpdateMyProfileInput,
 } from '@/features/user/types/user-input.type';
-import type { MePayload } from '@/features/user/types/user-output.type';
+import type {
+  MePayload,
+  ProfileImageUploadUrl,
+} from '@/features/user/types/user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -45,6 +48,15 @@ export class UserProfileMutationResolver {
   ): Promise<MePayload> {
     const accountId = parseAccountId(user);
     return this.profileService.updateMyProfileImage(accountId, input);
+  }
+
+  @Mutation('createProfileImageUploadUrl')
+  createProfileImageUploadUrl(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: { contentType: string; contentLength: number },
+  ): Promise<ProfileImageUploadUrl> {
+    const accountId = parseAccountId(user);
+    return this.profileService.createProfileImageUploadUrl(accountId, input);
   }
 
   @Mutation('deleteMyAccount')
