@@ -29,6 +29,7 @@ export class RecentProductViewRepository {
   }): Promise<{ items: RecentViewedProductRow[]; totalCount: number }> {
     const where = {
       account_id: args.accountId,
+      deleted_at: null,
       product: {
         deleted_at: null,
         is_active: true,
@@ -95,7 +96,7 @@ export class RecentProductViewRepository {
 
   async countByAccount(accountId: bigint): Promise<number> {
     return this.prisma.recentProductView.count({
-      where: { account_id: accountId },
+      where: { account_id: accountId, deleted_at: null },
     });
   }
 
@@ -105,7 +106,7 @@ export class RecentProductViewRepository {
     now: Date;
   }): Promise<void> {
     const oldest = await this.prisma.recentProductView.findMany({
-      where: { account_id: args.accountId },
+      where: { account_id: args.accountId, deleted_at: null },
       orderBy: { viewed_at: 'desc' },
       skip: args.maxCount,
       select: { id: true },
