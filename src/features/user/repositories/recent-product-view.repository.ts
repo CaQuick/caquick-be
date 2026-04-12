@@ -27,7 +27,14 @@ export class RecentProductViewRepository {
     limit: number,
   ): Promise<RecentViewedProductRow[]> {
     return this.prisma.recentProductView.findMany({
-      where: { account_id: accountId },
+      where: {
+        account_id: accountId,
+        product: {
+          deleted_at: null,
+          is_active: true,
+          store: { deleted_at: null },
+        },
+      },
       orderBy: { viewed_at: 'desc' },
       take: limit,
       select: {
@@ -42,6 +49,7 @@ export class RecentProductViewRepository {
               select: { store_name: true },
             },
             images: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
               take: 1,
               select: { image_url: true },

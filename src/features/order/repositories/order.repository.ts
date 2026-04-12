@@ -45,12 +45,14 @@ export class OrderRepository {
       take: args.limit,
       include: {
         items: {
+          where: { deleted_at: null },
           orderBy: { id: 'asc' },
           take: 1,
           include: {
             product: {
               select: {
                 images: {
+                  where: { deleted_at: null },
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
