@@ -28,6 +28,12 @@ export interface RecentViewedProductSummary {
   viewedAt: Date;
 }
 
+export interface RecentViewedProductConnection {
+  items: RecentViewedProductSummary[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
 export interface MyPageOverview {
   counts: MyPageCounts;
   ongoingOrders: OngoingOrderSummary[];

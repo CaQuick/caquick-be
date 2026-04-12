@@ -659,6 +659,16 @@ export class ProductRepository {
     });
   }
 
+  async findActiveProduct(productId: bigint): Promise<{ id: bigint } | null> {
+    return this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        is_active: true,
+      },
+      select: { id: true },
+    });
+  }
+
   async findProductOwnership(args: { productId: bigint; storeId: bigint }) {
     return this.prisma.product.findFirst({
       where: {
