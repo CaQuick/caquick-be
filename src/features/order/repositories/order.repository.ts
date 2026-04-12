@@ -142,6 +142,77 @@ export class OrderRepository {
     });
   }
 
+  async findOrderDetailByAccount(args: { orderId: bigint; accountId: bigint }) {
+    return this.prisma.order.findFirst({
+      where: {
+        id: args.orderId,
+        account_id: args.accountId,
+      },
+      include: {
+        status_histories: {
+          where: { deleted_at: null },
+          orderBy: { changed_at: 'asc' },
+        },
+        items: {
+          where: { deleted_at: null },
+          orderBy: { id: 'asc' },
+          include: {
+            store: {
+              select: {
+                id: true,
+                store_name: true,
+                store_phone: true,
+                address_full: true,
+                address_city: true,
+                address_district: true,
+                address_neighborhood: true,
+                latitude: true,
+                longitude: true,
+                business_hours_text: true,
+                website_url: true,
+                business_hours: {
+                  where: { deleted_at: null },
+                  orderBy: { day_of_week: 'asc' },
+                },
+              },
+            },
+            product: {
+              select: {
+                images: {
+                  where: { deleted_at: null },
+                  orderBy: { sort_order: 'asc' },
+                  take: 1,
+                  select: { image_url: true },
+                },
+              },
+            },
+            option_items: {
+              where: { deleted_at: null },
+              orderBy: { id: 'asc' },
+            },
+            custom_texts: {
+              where: { deleted_at: null },
+              orderBy: { sort_order: 'asc' },
+            },
+            free_edits: {
+              where: { deleted_at: null },
+              orderBy: { sort_order: 'asc' },
+              include: {
+                attachments: {
+                  where: { deleted_at: null },
+                  orderBy: { sort_order: 'asc' },
+                },
+              },
+            },
+            review: {
+              select: { id: true, deleted_at: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
