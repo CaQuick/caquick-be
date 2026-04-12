@@ -27,6 +27,7 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
+import { StorageModule } from '@/global/storage/storage.module';
 import { PrismaModule } from '@/prisma';
 
 @Module({
@@ -44,6 +45,7 @@ import { PrismaModule } from '@/prisma';
     LoggerModule,
     AuthGlobalModule,
     GraphqlGlobalModule,
+    StorageModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
