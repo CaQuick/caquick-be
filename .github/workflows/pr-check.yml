@@ -2,7 +2,7 @@ name: PR Check
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -71,12 +71,24 @@ jobs:
           corepack enable
           yarn install --immutable
 
-      - name: Coverage Report
+      - name: Coverage Report (jest-coverage-report)
         uses: ArtiomTr/jest-coverage-report-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           test-script: yarn jest --coverage --ci
           skip-step: install
+          annotations: failed-tests
+
+      - name: Test with lcov output for Codecov
+        run: yarn jest --coverage --ci --coverageReporters=lcov --coverageReporters=text
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN || '' }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
 
   pr-title:
     runs-on: ubuntu-latest
