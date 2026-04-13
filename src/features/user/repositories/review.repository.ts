@@ -184,14 +184,27 @@ export class ReviewRepository {
     accountId: bigint;
     now: Date;
   }): Promise<boolean> {
-    const result = await this.prisma.review.updateMany({
-      where: {
-        id: args.reviewId,
-        account_id: args.accountId,
-        deleted_at: null,
-      },
-      data: { deleted_at: args.now },
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.review.updateMany({
+        where: {
+          id: args.reviewId,
+          account_id: args.accountId,
+          deleted_at: null,
+        },
+        data: { deleted_at: args.now },
+      });
+
+      if (result.count > 0) {
+        await tx.reviewMedia.updateMany({
+          where: {
+            review_id: args.reviewId,
+            deleted_at: null,
+          },
+          data: { deleted_at: args.now },
+        });
+      }
+
+      return result.count > 0;
     });
-    return result.count > 0;
   }
 }
