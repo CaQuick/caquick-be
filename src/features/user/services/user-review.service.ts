@@ -93,7 +93,7 @@ export class UserReviewService {
       storeId: orderItem.store_id,
       productId: orderItem.product_id,
       rating: input.rating,
-      content: input.content,
+      content: input.content.trim(),
       existingDeletedReviewId,
       media: (input.media ?? []).map((m, i) => ({
         media_type:
