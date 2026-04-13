@@ -39,7 +39,7 @@ describe('UserReviewService', () => {
   beforeEach(async () => {
     reviewRepo = {
       findOrderItemForReview: jest.fn(),
-      createReviewWithMedia: jest.fn(),
+      createOrRestoreReviewWithMedia: jest.fn(),
       listMyReviews: jest.fn(),
       softDeleteReview: jest.fn(),
     } as unknown as jest.Mocked<ReviewRepository>;
@@ -64,7 +64,7 @@ describe('UserReviewService', () => {
       reviewRepo.findOrderItemForReview.mockResolvedValue(
         mockOrderItem as never,
       );
-      reviewRepo.createReviewWithMedia.mockResolvedValue({
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
         id: BigInt(500),
         order_item_id: BigInt(200),
         product_id: BigInt(300),
@@ -125,7 +125,7 @@ describe('UserReviewService', () => {
         ...mockOrderItem,
         review: { id: BigInt(1), deleted_at: new Date() },
       } as never);
-      reviewRepo.createReviewWithMedia.mockResolvedValue({
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
         id: BigInt(501),
         order_item_id: BigInt(200),
         product_id: BigInt(300),

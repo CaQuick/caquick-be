@@ -82,13 +82,19 @@ export class UserReviewService {
       throw new ConflictException(USER_REVIEW_ERRORS.REVIEW_ALREADY_EXISTS);
     }
 
-    const review = await this.reviewRepo.createReviewWithMedia({
+    // soft-delete된 기존 리뷰가 있으면 복원, 없으면 신규 생성
+    const existingDeletedReviewId = orderItem.review?.deleted_at
+      ? orderItem.review.id
+      : undefined;
+
+    const review = await this.reviewRepo.createOrRestoreReviewWithMedia({
       orderItemId,
       accountId,
       storeId: orderItem.store_id,
       productId: orderItem.product_id,
       rating: input.rating,
       content: input.content,
+      existingDeletedReviewId,
       media: (input.media ?? []).map((m, i) => ({
         media_type:
           m.mediaType === 'VIDEO'

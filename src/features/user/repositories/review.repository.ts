@@ -36,13 +36,14 @@ export class ReviewRepository {
     });
   }
 
-  async createReviewWithMedia(args: {
+  async createOrRestoreReviewWithMedia(args: {
     orderItemId: bigint;
     accountId: bigint;
     storeId: bigint;
     productId: bigint;
     rating: number;
     content: string;
+    existingDeletedReviewId?: bigint;
     media: {
       media_type: ReviewMediaType;
       media_url: string;
@@ -51,21 +52,43 @@ export class ReviewRepository {
     }[];
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const review = await tx.review.create({
-        data: {
-          order_item_id: args.orderItemId,
-          account_id: args.accountId,
-          store_id: args.storeId,
-          product_id: args.productId,
-          rating: args.rating,
-          content: args.content,
-        },
-      });
+      let reviewId: bigint;
+
+      if (args.existingDeletedReviewId) {
+        // soft-delete된 기존 리뷰를 복원 + 내용 교체
+        const restored = await tx.review.update({
+          where: { id: args.existingDeletedReviewId },
+          data: {
+            rating: args.rating,
+            content: args.content,
+            deleted_at: null,
+          },
+        });
+        reviewId = restored.id;
+
+        // 기존 미디어 soft-delete
+        await tx.reviewMedia.updateMany({
+          where: { review_id: reviewId },
+          data: { deleted_at: new Date() },
+        });
+      } else {
+        const review = await tx.review.create({
+          data: {
+            order_item_id: args.orderItemId,
+            account_id: args.accountId,
+            store_id: args.storeId,
+            product_id: args.productId,
+            rating: args.rating,
+            content: args.content,
+          },
+        });
+        reviewId = review.id;
+      }
 
       if (args.media.length > 0) {
         await tx.reviewMedia.createMany({
           data: args.media.map((m) => ({
-            review_id: review.id,
+            review_id: reviewId,
             media_type: m.media_type,
             media_url: m.media_url,
             thumbnail_url: m.thumbnail_url,
@@ -74,7 +97,7 @@ export class ReviewRepository {
         });
       }
 
-      return this.findReviewById(review.id, tx);
+      return this.findReviewById(reviewId, tx);
     });
   }
 
