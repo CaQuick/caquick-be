@@ -50,11 +50,11 @@ jobs:
 
   coverage-report:
     runs-on: ubuntu-latest
+    needs: check
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
-      checks: write
 
     steps:
       - name: Checkout
@@ -71,17 +71,8 @@ jobs:
           corepack enable
           yarn install --immutable
 
-      - name: Coverage Report (jest-coverage-report)
-        uses: ArtiomTr/jest-coverage-report-action@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          test-script: yarn jest --coverage --ci
-          skip-step: install
-          annotations: failed-tests
-
-      - name: Test with lcov output for Codecov
+      - name: Test with lcov output
         run: yarn jest --coverage --ci --coverageReporters=lcov --coverageReporters=text
-        continue-on-error: true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
