@@ -30,6 +30,8 @@
   "dependencies": {
     "@apollo/server": "^5.2.0",
     "@as-integrations/express5": "^1.1.2",
+    "@aws-sdk/client-s3": "^3.1027.0",
+    "@aws-sdk/s3-request-presigner": "^3.1027.0",
     "@nestjs/apollo": "13.2.3",
     "@nestjs/common": "11.1.10",
     "@nestjs/config": "^4.0.2",
@@ -122,10 +124,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "statements": 43,
-        "branches": 33,
-        "functions": 30,
-        "lines": 43
+        "statements": 70,
+        "branches": 58,
+        "functions": 58,
+        "lines": 70
       }
     },
     "coverageDirectory": "../coverage",

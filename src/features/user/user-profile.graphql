@@ -1,6 +1,8 @@
 extend type Query {
   """현재 로그인한 유저 정보 조회"""
   me: MePayload!
+  """닉네임 중복 확인"""
+  checkNicknameAvailability(nickname: String!): NicknameAvailability!
 }
 
 extend type Mutation {
@@ -12,6 +14,8 @@ extend type Mutation {
   updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
   """회원 탈퇴(soft delete)"""
   deleteMyAccount: Boolean!
+  """프로필 이미지 업로드용 Presigned URL 발급"""
+  createProfileImageUploadUrl(input: CreateProfileImageUploadUrlInput!): ProfileImageUploadUrl!
 }
 
 """현재 로그인한 유저 정보"""
@@ -68,4 +72,25 @@ input UpdateMyProfileInput {
 input UpdateMyProfileImageInput {
   """프로필 이미지 URL"""
   profileImageUrl: String!
+}
+
+"""닉네임 사용 가능 여부"""
+type NicknameAvailability {
+  available: Boolean!
+  """미통과 시 이유"""
+  reason: String
+}
+
+"""프로필 이미지 업로드 URL 발급 입력"""
+input CreateProfileImageUploadUrlInput {
+  contentType: String!
+  contentLength: Int!
+}
+
+"""프로필 이미지 업로드 URL 결과"""
+type ProfileImageUploadUrl {
+  uploadUrl: String!
+  publicUrl: String!
+  key: String!
+  expiresInSeconds: Int!
 }

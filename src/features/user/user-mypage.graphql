@@ -1,0 +1,49 @@
+extend type Query {
+  """마이페이지 메인 화면 집계 데이터"""
+  myPageOverview: MyPageOverview!
+}
+
+"""마이페이지 메인 집계"""
+type MyPageOverview {
+  """상단 카운트 카드"""
+  counts: MyPageCounts!
+  """진행중인 주문 요약 (최근 3개월, 최대 5건)"""
+  ongoingOrders: [OngoingOrderSummary!]!
+  """최근 본 상품 (최대 20건)"""
+  recentViewedProducts: [RecentViewedProductSummary!]!
+}
+
+type MyPageCounts {
+  """진행중 + 저장된 커스텀 드래프트 수"""
+  customDraftCount: Int!
+  """쿠폰함 보유 쿠폰 수 (MVP: 항상 0)"""
+  couponCount: Int!
+  """상품 찜 수"""
+  wishlistCount: Int!
+  """내가 작성한 리뷰 수"""
+  myReviewCount: Int!
+}
+
+type OngoingOrderSummary {
+  orderId: ID!
+  orderNumber: String!
+  status: OrderStatusType!
+  createdAt: DateTime!
+  pickupAt: DateTime!
+  """첫 번째 OrderItem 기준 대표 상품명"""
+  representativeProductName: String!
+  """첫 번째 OrderItem 기준 대표 이미지 URL"""
+  representativeProductImageUrl: String
+  """총 가격"""
+  totalPrice: Int!
+}
+
+type RecentViewedProductSummary {
+  productId: ID!
+  productName: String!
+  representativeImageUrl: String
+  salePrice: Int
+  regularPrice: Int!
+  storeName: String!
+  viewedAt: DateTime!
+}

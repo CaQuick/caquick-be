@@ -143,6 +143,24 @@ describe('UserBaseService', () => {
     });
   });
 
+  describe('normalizeName', () => {
+    it('null이면 null을 반환해야 한다', () => {
+      expect(service.testNormalizeName(null)).toBeNull();
+    });
+
+    it('undefined이면 null을 반환해야 한다', () => {
+      expect(service.testNormalizeName(undefined)).toBeNull();
+    });
+
+    it('빈 문자열이면 null을 반환해야 한다', () => {
+      expect(service.testNormalizeName('   ')).toBeNull();
+    });
+
+    it('공백이 제거된 이름을 반환해야 한다', () => {
+      expect(service.testNormalizeName('  홍길동  ')).toBe('홍길동');
+    });
+  });
+
   describe('normalizePhoneNumber', () => {
     it('길이가 7 미만이면 BadRequestException을 던져야 한다', () => {
       expect(() => service.testNormalizePhoneNumber('12345')).toThrow(
@@ -159,6 +177,16 @@ describe('UserBaseService', () => {
     it('null/undefined이면 null을 반환해야 한다', () => {
       expect(service.testNormalizePhoneNumber(null)).toBeNull();
       expect(service.testNormalizePhoneNumber(undefined)).toBeNull();
+    });
+
+    it('빈 문자열이면 null을 반환해야 한다', () => {
+      expect(service.testNormalizePhoneNumber('   ')).toBeNull();
+    });
+
+    it('유효한 전화번호를 반환해야 한다', () => {
+      expect(service.testNormalizePhoneNumber('010-1234-5678')).toBe(
+        '010-1234-5678',
+      );
     });
   });
 
@@ -178,6 +206,19 @@ describe('UserBaseService', () => {
     it('null/undefined이면 null을 반환해야 한다', () => {
       expect(service.testNormalizeBirthDate(null)).toBeNull();
       expect(service.testNormalizeBirthDate(undefined)).toBeNull();
+    });
+
+    it('문자열 날짜를 Date 객체로 변환해야 한다', () => {
+      const result = service.testNormalizeBirthDate('1990-05-15');
+      expect(result).toBeInstanceOf(Date);
+      expect(result?.getFullYear()).toBe(1990);
+    });
+
+    it('오늘 날짜면 정상 처리해야 한다', () => {
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      const result = service.testNormalizeBirthDate(today);
+      expect(result).toBeInstanceOf(Date);
     });
   });
 

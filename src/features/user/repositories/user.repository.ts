@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   AccountType,
+  CustomDraftStatus,
   NotificationEvent,
   NotificationType,
 } from '@prisma/client';
@@ -328,6 +329,32 @@ export class UserRepository {
       data: { deleted_at: args.now },
     });
     return result.count;
+  }
+
+  async countCustomDrafts(accountId: bigint): Promise<number> {
+    return this.prisma.customDraft.count({
+      where: {
+        account_id: accountId,
+        status: {
+          in: [
+            CustomDraftStatus.IN_PROGRESS,
+            CustomDraftStatus.READY_FOR_ORDER,
+          ],
+        },
+      },
+    });
+  }
+
+  async countWishlistItems(accountId: bigint): Promise<number> {
+    return this.prisma.wishlistItem.count({
+      where: { account_id: accountId },
+    });
+  }
+
+  async countMyReviews(accountId: bigint): Promise<number> {
+    return this.prisma.review.count({
+      where: { account_id: accountId },
+    });
   }
 
   async likeReview(args: {

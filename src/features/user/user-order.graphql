@@ -1,4 +1,133 @@
-"""유저 주문 도메인 확장을 위한 placeholder 타입"""
-type UserOrderPlaceholder {
-  id: ID
+extend type Query {
+  """내 주문 목록 조회"""
+  myOrders(input: MyOrdersInput): MyOrderConnection!
+  """내 주문 상세 조회"""
+  myOrder(orderId: ID!): MyOrderDetail!
+}
+
+"""내 주문 조회 입력"""
+input MyOrdersInput {
+  """상태 필터 (복수 선택 가능). 미지정 시 전체"""
+  statuses: [OrderStatusType!]
+  offset: Int = 0
+  limit: Int = 20
+}
+
+"""주문 목록 응답"""
+type MyOrderConnection {
+  items: [MyOrderSummary!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""유저 주문 목록 카드"""
+type MyOrderSummary {
+  orderId: ID!
+  orderNumber: String!
+  status: OrderStatusType!
+  createdAt: DateTime!
+  pickupAt: DateTime!
+  """대표 상품명 (첫 OrderItem 기준)"""
+  representativeProductName: String!
+  """대표 상품 이미지 URL"""
+  representativeProductImageUrl: String
+  """주문에 포함된 추가 상품 종류 수 (첫 아이템 제외)"""
+  additionalItemCount: Int!
+  """총 가격"""
+  totalPrice: Int!
+  """매장명"""
+  storeName: String!
+}
+
+"""주문 상세"""
+type MyOrderDetail {
+  orderId: ID!
+  orderNumber: String!
+  status: OrderStatusType!
+  createdAt: DateTime!
+  pickupAt: DateTime!
+
+  buyerName: String!
+  buyerPhone: String!
+
+  subtotalPrice: Int!
+  discountPrice: Int!
+  totalPrice: Int!
+
+  """상태 스테퍼용 타임스탬프"""
+  submittedAt: DateTime
+  confirmedAt: DateTime
+  madeAt: DateTime
+  pickedUpAt: DateTime
+  canceledAt: DateTime
+
+  """상태 변경 히스토리"""
+  statusHistories: [MyOrderStatusHistory!]!
+  """주문 아이템 목록"""
+  items: [MyOrderItemDetail!]!
+  """판매자 정보 (단일 매장 전제)"""
+  store: MyOrderStoreInfo!
+}
+
+type MyOrderStatusHistory {
+  fromStatus: OrderStatusType
+  toStatus: OrderStatusType!
+  changedAt: DateTime!
+  note: String
+}
+
+type MyOrderItemDetail {
+  orderItemId: ID!
+  productId: ID!
+  productName: String!
+  representativeImageUrl: String
+  quantity: Int!
+  regularPrice: Int!
+  salePrice: Int
+  itemSubtotalPrice: Int!
+  """선택한 옵션 목록"""
+  selectedOptions: [MyOrderItemSelectedOption!]!
+  """커스텀 텍스트(스냅샷)"""
+  customTexts: [MyOrderItemCustomText!]!
+  """자유 커스텀(스냅샷)"""
+  customFreeEdits: [MyOrderItemCustomFreeEdit!]!
+  """내 리뷰 작성 여부"""
+  hasMyReview: Boolean!
+  """리뷰 작성 가능 여부"""
+  canWriteReview: Boolean!
+}
+
+type MyOrderItemSelectedOption {
+  groupName: String!
+  optionTitle: String!
+  priceDelta: Int!
+}
+
+type MyOrderItemCustomText {
+  tokenKey: String!
+  defaultText: String!
+  valueText: String!
+  sortOrder: Int!
+}
+
+type MyOrderItemCustomFreeEdit {
+  cropImageUrl: String!
+  descriptionText: String!
+  sortOrder: Int!
+  attachmentImageUrls: [String!]!
+}
+
+type MyOrderStoreInfo {
+  storeId: ID!
+  storeName: String!
+  storePhone: String!
+  addressFull: String!
+  addressCity: String
+  addressDistrict: String
+  addressNeighborhood: String
+  latitude: Float
+  longitude: Float
+  """영업시간 평문"""
+  businessHoursText: String
+  websiteUrl: String
 }

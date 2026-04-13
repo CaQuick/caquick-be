@@ -48,3 +48,15 @@ export interface SearchHistoryConnection {
   totalCount: number;
   hasMore: boolean;
 }
+
+export interface NicknameAvailability {
+  available: boolean;
+  reason: string | null;
+}
+
+export interface ProfileImageUploadUrl {
+  uploadUrl: string;
+  publicUrl: string;
+  key: string;
+  expiresInSeconds: number;
+}
