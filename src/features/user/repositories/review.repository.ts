@@ -101,7 +101,7 @@ export class ReviewRepository {
     });
   }
 
-  private async findReviewById(
+  async findReviewById(
     reviewId: bigint,
     tx?: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
   ) {

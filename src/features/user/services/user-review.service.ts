@@ -154,21 +154,10 @@ export class UserReviewService {
     const hasActiveReview = orderItem.review && !orderItem.review.deleted_at;
 
     if (hasActiveReview) {
-      // 기존 리뷰 상세를 가져오기 위해 목록 API를 활용하는 것은 비효율적이므로
-      // 간소화된 정보만 반환
+      const review = await this.reviewRepo.findReviewById(orderItem.review!.id);
+
       return {
-        review: {
-          reviewId: orderItem.review!.id.toString(),
-          orderItemId: orderItem.id.toString(),
-          productId: orderItem.product.id.toString(),
-          productName: orderItem.product_name_snapshot,
-          productImageUrl: orderItem.product.images[0]?.image_url ?? null,
-          storeName: orderItem.store.store_name,
-          rating: 0, // 상세 조회 시 별도 쿼리 필요 — 여기서는 존재 여부만 전달
-          content: null,
-          media: [],
-          createdAt: new Date(),
-        },
+        review: review ? this.mapReview(review) : null,
         canWrite: false,
         reasonIfCannotWrite: '이미 리뷰가 작성된 주문 아이템입니다.',
       };

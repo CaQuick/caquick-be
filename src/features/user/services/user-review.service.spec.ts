@@ -39,6 +39,7 @@ describe('UserReviewService', () => {
   beforeEach(async () => {
     reviewRepo = {
       findOrderItemForReview: jest.fn(),
+      findReviewById: jest.fn(),
       createOrRestoreReviewWithMedia: jest.fn(),
       listMyReviews: jest.fn(),
       softDeleteReview: jest.fn(),
