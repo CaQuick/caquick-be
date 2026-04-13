@@ -79,6 +79,11 @@ jobs:
           skip-step: install
           annotations: failed-tests
 
+      - name: Reinstall dependencies (jest-coverage-report-action 이후 state 복구)
+        run: |
+          corepack enable
+          yarn install --immutable
+
       - name: Test with lcov output for Codecov
         run: yarn jest --coverage --ci --coverageReporters=lcov --coverageReporters=text
 
