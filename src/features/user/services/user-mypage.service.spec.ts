@@ -189,6 +189,56 @@ describe('UserMypageService', () => {
     jest.useRealTimers();
   });
 
+  it('주문에 items가 비어있으면 기본값을 반환해야 한다', async () => {
+    const mockOrder = {
+      id: BigInt(102),
+      order_number: 'CQ-00002',
+      status: OrderStatus.SUBMITTED,
+      created_at: new Date('2026-04-10'),
+      pickup_at: new Date('2026-04-15'),
+      total_price: 0,
+      items: [],
+    };
+
+    userRepo.countCustomDrafts.mockResolvedValue(0);
+    userRepo.countWishlistItems.mockResolvedValue(0);
+    userRepo.countMyReviews.mockResolvedValue(0);
+    orderRepo.findOngoingOrdersByAccount.mockResolvedValue([mockOrder]);
+    recentViewRepo.findRecentByAccount.mockResolvedValue([]);
+
+    const result = await service.getOverview(accountId);
+
+    expect(result.ongoingOrders[0].representativeProductName).toBe(
+      '상품 정보 없음',
+    );
+    expect(result.ongoingOrders[0].representativeProductImageUrl).toBeNull();
+  });
+
+  it('최근 본 상품에 이미지가 없으면 null을 반환해야 한다', async () => {
+    const mockView = {
+      product_id: BigInt(201),
+      viewed_at: new Date('2026-04-12'),
+      product: {
+        name: '무이미지 케이크',
+        regular_price: 30000,
+        sale_price: null,
+        store: { store_name: '테스트 베이커리' },
+        images: [],
+      },
+    };
+
+    userRepo.countCustomDrafts.mockResolvedValue(0);
+    userRepo.countWishlistItems.mockResolvedValue(0);
+    userRepo.countMyReviews.mockResolvedValue(0);
+    orderRepo.findOngoingOrdersByAccount.mockResolvedValue([]);
+    recentViewRepo.findRecentByAccount.mockResolvedValue([mockView]);
+
+    const result = await service.getOverview(accountId);
+
+    expect(result.recentViewedProducts[0].representativeImageUrl).toBeNull();
+    expect(result.recentViewedProducts[0].salePrice).toBeNull();
+  });
+
   it('모든 카운트가 0이고 리스트가 비어있어도 정상 반환해야 한다', async () => {
     userRepo.countCustomDrafts.mockResolvedValue(0);
     userRepo.countWishlistItems.mockResolvedValue(0);
