@@ -1,4 +1,8 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountType } from '@prisma/client';
 
@@ -144,6 +148,172 @@ describe('UserProfileService', () => {
 
       expect(result.available).toBe(false);
       expect(result.reason).toContain('한글, 영문, 숫자, 언더스코어');
+    });
+  });
+
+  describe('completeOnboarding', () => {
+    it('온보딩을 완료하고 프로필을 반환해야 한다', async () => {
+      const accountWithoutName = { ...baseAccount, name: null };
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(accountWithoutName)
+        .mockResolvedValueOnce(baseAccount);
+      repo.isNicknameTaken.mockResolvedValue(false);
+      repo.completeOnboarding.mockResolvedValue(undefined as never);
+
+      const result = await service.completeOnboarding(BigInt(1), {
+        name: '홍길동',
+        nickname: 'newNick',
+        birthDate: new Date('1990-01-01'),
+        phoneNumber: '010-1234-5678',
+      });
+
+      expect(repo.completeOnboarding).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: BigInt(1),
+          name: '홍길동',
+          nickname: 'newNick',
+        }),
+      );
+      expect(result.accountId).toBe('1');
+    });
+
+    it('계정에 이름이 이미 있으면 name 필드를 null로 전달해야 한다', async () => {
+      // baseAccount에는 name: 'Test User'가 있음
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(baseAccount)
+        .mockResolvedValueOnce(baseAccount);
+      repo.isNicknameTaken.mockResolvedValue(false);
+      repo.completeOnboarding.mockResolvedValue(undefined as never);
+
+      await service.completeOnboarding(BigInt(1), {
+        nickname: 'newNick',
+        name: '새이름',
+      });
+
+      expect(repo.completeOnboarding).toHaveBeenCalledWith(
+        expect.objectContaining({ name: null }),
+      );
+    });
+
+    it('계정에 이름이 없고 input에도 이름이 없으면 BadRequestException을 던져야 한다', async () => {
+      const accountWithoutName = { ...baseAccount, name: null };
+      repo.findAccountWithProfile.mockResolvedValue(accountWithoutName);
+
+      await expect(
+        service.completeOnboarding(BigInt(1), {
+          nickname: 'newNick',
+          name: null,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('닉네임이 중복이면 ConflictException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+      repo.isNicknameTaken.mockResolvedValue(true);
+
+      await expect(
+        service.completeOnboarding(BigInt(1), {
+          nickname: 'taken',
+          name: '홍길동',
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('updateMyProfile', () => {
+    it('업데이트 필드가 없으면 BadRequestException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+
+      await expect(service.updateMyProfile(BigInt(1), {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('birthDate만 업데이트하면 성공해야 한다', async () => {
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(baseAccount)
+        .mockResolvedValueOnce(baseAccount);
+      repo.updateProfile.mockResolvedValue(undefined as never);
+
+      const result = await service.updateMyProfile(BigInt(1), {
+        birthDate: new Date('1990-06-15'),
+      });
+
+      expect(repo.updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: BigInt(1),
+          birthDate: expect.any(Date),
+        }),
+      );
+      expect(result.accountId).toBe('1');
+    });
+
+    it('phoneNumber만 업데이트하면 성공해야 한다', async () => {
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(baseAccount)
+        .mockResolvedValueOnce(baseAccount);
+      repo.updateProfile.mockResolvedValue(undefined as never);
+
+      await service.updateMyProfile(BigInt(1), {
+        phoneNumber: '010-9999-8888',
+      });
+
+      expect(repo.updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ phoneNumber: '010-9999-8888' }),
+      );
+    });
+
+    it('닉네임이 undefined가 아니지만 중복 아니면 성공해야 한다', async () => {
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(baseAccount)
+        .mockResolvedValueOnce(baseAccount);
+      repo.isNicknameTaken.mockResolvedValue(false);
+      repo.updateProfile.mockResolvedValue(undefined as never);
+
+      await service.updateMyProfile(BigInt(1), { nickname: 'uniqueNick' });
+
+      expect(repo.isNicknameTaken).toHaveBeenCalledWith(
+        'uniqueNick',
+        BigInt(1),
+      );
+      expect(repo.updateProfile).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateMyProfileImage', () => {
+    it('유효한 URL이면 프로필 이미지를 업데이트해야 한다', async () => {
+      repo.findAccountWithProfile
+        .mockResolvedValueOnce(baseAccount)
+        .mockResolvedValueOnce(baseAccount);
+      repo.updateProfileImage.mockResolvedValue(undefined as never);
+
+      const result = await service.updateMyProfileImage(BigInt(1), {
+        profileImageUrl: 'https://s3.example.com/profile.jpg',
+      });
+
+      expect(repo.updateProfileImage).toHaveBeenCalledWith({
+        accountId: BigInt(1),
+        profileImageUrl: 'https://s3.example.com/profile.jpg',
+      });
+      expect(result.accountId).toBe('1');
+    });
+
+    it('URL이 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+
+      await expect(
+        service.updateMyProfileImage(BigInt(1), { profileImageUrl: '   ' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('URL이 2048자 초과이면 BadRequestException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+
+      await expect(
+        service.updateMyProfileImage(BigInt(1), {
+          profileImageUrl: 'https://s3.example.com/' + 'a'.repeat(2030),
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

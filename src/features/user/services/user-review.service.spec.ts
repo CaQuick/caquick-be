@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus } from '@prisma/client';
 
@@ -121,6 +125,137 @@ describe('UserReviewService', () => {
       );
     });
 
+    it('media가 undefined이면 빈 배열로 처리해야 한다', async () => {
+      reviewRepo.findOrderItemForReview.mockResolvedValue(
+        mockOrderItem as never,
+      );
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
+        id: BigInt(502),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: 4.5 as never,
+        content: validInput.content,
+        created_at: new Date(),
+        order_item: {
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { images: [] },
+        },
+        media: [],
+      } as never);
+
+      const inputWithoutMedia = {
+        orderItemId: '200',
+        rating: 4.5,
+        content: validInput.content,
+      };
+
+      const result = await service.writeReview(
+        accountId,
+        inputWithoutMedia as never,
+      );
+
+      expect(result.reviewId).toBe('502');
+      expect(reviewRepo.createOrRestoreReviewWithMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ media: [] }),
+      );
+    });
+
+    it('rating이 toNumber 메서드를 가진 Decimal 객체이면 toNumber()로 변환해야 한다', async () => {
+      const decimalRating = { toNumber: () => 4.5 };
+      reviewRepo.findOrderItemForReview.mockResolvedValue(
+        mockOrderItem as never,
+      );
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
+        id: BigInt(503),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: decimalRating as never,
+        content: validInput.content,
+        created_at: new Date(),
+        order_item: {
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { images: [] },
+        },
+        media: [],
+      } as never);
+
+      const result = await service.writeReview(accountId, validInput);
+
+      expect(result.rating).toBe(4.5);
+    });
+
+    it('media가 undefined이면 빈 미디어로 생성해야 한다', async () => {
+      reviewRepo.findOrderItemForReview.mockResolvedValue(
+        mockOrderItem as never,
+      );
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
+        id: BigInt(502),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: 4.5 as never,
+        content: validInput.content,
+        created_at: new Date(),
+        order_item: {
+          id: BigInt(200),
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { id: BigInt(300), images: [] },
+        },
+        media: [],
+      } as never);
+
+      const { media: _, ...inputWithoutMedia } = validInput;
+      const result = await service.writeReview(accountId, inputWithoutMedia);
+
+      expect(result.reviewId).toBe('502');
+      expect(reviewRepo.createOrRestoreReviewWithMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ media: [] }),
+      );
+    });
+
+    it('media에 VIDEO 타입이 포함되면 올바르게 매핑해야 한다', async () => {
+      reviewRepo.findOrderItemForReview.mockResolvedValue(
+        mockOrderItem as never,
+      );
+      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
+        id: BigInt(503),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: 4.0 as never,
+        content: validInput.content,
+        created_at: new Date(),
+        order_item: {
+          id: BigInt(200),
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { id: BigInt(300), images: [] },
+        },
+        media: [
+          {
+            media_type: 'VIDEO',
+            media_url: 'https://s3.example.com/vid.mp4',
+            thumbnail_url: null,
+            sort_order: 0,
+          },
+        ],
+      } as never);
+
+      const result = await service.writeReview(accountId, {
+        ...validInput,
+        media: [
+          {
+            mediaType: 'VIDEO' as const,
+            mediaUrl: 'https://s3.example.com/vid.mp4',
+            sortOrder: 0,
+          },
+        ],
+      });
+
+      expect(result.media[0].mediaType).toBe('VIDEO');
+    });
+
     it('soft-delete된 리뷰가 있으면 새 리뷰를 작성할 수 있어야 한다', async () => {
       reviewRepo.findOrderItemForReview.mockResolvedValue({
         ...mockOrderItem,
@@ -217,6 +352,111 @@ describe('UserReviewService', () => {
       expect(result.totalCount).toBe(0);
       expect(result.hasMore).toBe(false);
     });
+
+    it('hasMore가 true인 경우를 올바르게 계산해야 한다', async () => {
+      const makeReviewRow = (id: number) => ({
+        id: BigInt(id),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: 4.5,
+        content: '맛있어요',
+        created_at: new Date(),
+        order_item: {
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { images: [] },
+        },
+        media: [],
+      });
+
+      reviewRepo.listMyReviews.mockResolvedValue({
+        items: Array.from({ length: 10 }, (_, i) => makeReviewRow(i + 1)),
+        totalCount: 25,
+      } as never);
+
+      const result = await service.myReviews(accountId, {
+        offset: 0,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(10);
+      expect(result.totalCount).toBe(25);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('offset이 음수이면 BadRequestException을 던져야 한다', async () => {
+      await expect(
+        service.myReviews(accountId, { offset: -1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('limit이 0이면 BadRequestException을 던져야 한다', async () => {
+      await expect(service.myReviews(accountId, { limit: 0 })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('limit이 50 초과이면 BadRequestException을 던져야 한다', async () => {
+      await expect(service.myReviews(accountId, { limit: 51 })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rating이 Decimal 객체(toNumber 메서드)일 때 올바르게 변환해야 한다', async () => {
+      reviewRepo.listMyReviews.mockResolvedValue({
+        items: [
+          {
+            id: BigInt(1),
+            order_item_id: BigInt(200),
+            product_id: BigInt(300),
+            rating: { toNumber: () => 3.5 } as never,
+            content: '맛있어요',
+            created_at: new Date(),
+            order_item: {
+              product_name_snapshot: '딸기 케이크',
+              store: { store_name: '스웨이드 베이커리' },
+              product: { images: [] },
+            },
+            media: undefined,
+          },
+        ],
+        totalCount: 1,
+      } as never);
+
+      const result = await service.myReviews(accountId, {
+        offset: 0,
+        limit: 10,
+      });
+
+      expect(result.items[0].rating).toBe(3.5);
+      expect(result.items[0].media).toEqual([]);
+    });
+
+    it('rating이 toNumber 메서드 없는 객체일 때 Number()로 변환해야 한다', async () => {
+      // Decimal 객체에 toNumber가 없는 케이스 대비
+      reviewRepo.listMyReviews.mockResolvedValue({
+        items: [
+          {
+            id: BigInt(1),
+            order_item_id: BigInt(200),
+            product_id: BigInt(300),
+            rating: { valueOf: () => 4.5 } as never,
+            content: '맛있어요',
+            created_at: new Date(),
+            order_item: null,
+            media: [],
+          },
+        ],
+        totalCount: 1,
+      } as never);
+
+      const result = await service.myReviews(accountId, {
+        offset: 0,
+        limit: 10,
+      });
+
+      expect(result.items[0].rating).toBeCloseTo(4.5, 0);
+    });
   });
 
   describe('deleteMyReview', () => {
@@ -307,6 +547,49 @@ describe('UserReviewService', () => {
       await expect(
         service.myReviewForOrderItem(accountId, '999'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('활성 리뷰가 있고 findReviewById가 리뷰를 반환하면 canWrite: false와 리뷰를 반환해야 한다', async () => {
+      const reviewRow = {
+        id: BigInt(500),
+        order_item_id: BigInt(200),
+        product_id: BigInt(300),
+        rating: 4.5,
+        content: '정말 맛있어요!',
+        created_at: new Date(),
+        order_item: {
+          product_name_snapshot: '딸기 케이크',
+          store: { store_name: '스웨이드 베이커리' },
+          product: { images: [] },
+        },
+        media: [],
+      };
+
+      reviewRepo.findOrderItemForReview.mockResolvedValue({
+        ...mockOrderItem,
+        review: { id: BigInt(500), deleted_at: null },
+      } as never);
+      reviewRepo.findReviewById.mockResolvedValue(reviewRow as never);
+
+      const result = await service.myReviewForOrderItem(accountId, '200');
+
+      expect(result.canWrite).toBe(false);
+      expect(result.review).not.toBeNull();
+      expect(result.review?.reviewId).toBe('500');
+      expect(result.reasonIfCannotWrite).toContain('이미 리뷰가 작성된');
+    });
+
+    it('활성 리뷰가 있지만 findReviewById가 null을 반환하면 review가 null이어야 한다', async () => {
+      reviewRepo.findOrderItemForReview.mockResolvedValue({
+        ...mockOrderItem,
+        review: { id: BigInt(500), deleted_at: null },
+      } as never);
+      reviewRepo.findReviewById.mockResolvedValue(null);
+
+      const result = await service.myReviewForOrderItem(accountId, '200');
+
+      expect(result.canWrite).toBe(false);
+      expect(result.review).toBeNull();
     });
   });
 });

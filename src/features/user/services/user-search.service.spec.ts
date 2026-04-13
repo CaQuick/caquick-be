@@ -44,6 +44,57 @@ describe('UserSearchService', () => {
     service = module.get<UserSearchService>(UserSearchService);
   });
 
+  describe('mySearchHistories', () => {
+    it('검색 기록 목록과 hasMore를 올바르게 반환해야 한다', async () => {
+      const now = new Date();
+      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
+      repo.listSearchHistories.mockResolvedValue({
+        items: [
+          {
+            id: BigInt(1),
+            keyword: '딸기 케이크',
+            last_used_at: now,
+          },
+        ],
+        totalCount: 30,
+      } as never);
+
+      const result = await service.mySearchHistories(BigInt(1), {
+        offset: 0,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('1');
+      expect(result.items[0].keyword).toBe('딸기 케이크');
+      expect(result.totalCount).toBe(30);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('마지막 페이지이면 hasMore가 false여야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
+      repo.listSearchHistories.mockResolvedValue({
+        items: [],
+        totalCount: 5,
+      } as never);
+
+      const result = await service.mySearchHistories(BigInt(1), {
+        offset: 0,
+        limit: 10,
+      });
+
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('계정이 없으면 UnauthorizedException을 던져야 한다', async () => {
+      repo.findAccountWithProfile.mockResolvedValue(null);
+
+      await expect(service.mySearchHistories(BigInt(1))).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
   describe('deleteSearchHistory', () => {
     it('검색 기록이 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
       repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);

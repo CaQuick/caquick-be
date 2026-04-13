@@ -161,6 +161,28 @@ describe('UserOrderService', () => {
     expect(result.hasMore).toBe(false);
   });
 
+  it('주문에 items가 없으면 기본 상품/매장 정보 없음을 반환해야 한다', async () => {
+    const orderWithNoItems = {
+      id: BigInt(200),
+      order_number: 'CQ-20260413-00002',
+      status: OrderStatus.SUBMITTED,
+      created_at: new Date('2026-04-10'),
+      pickup_at: new Date('2026-04-15'),
+      total_price: 0,
+      items: [],
+      _count: { items: 0 },
+    };
+    orderRepo.findOrdersByAccount.mockResolvedValue([orderWithNoItems]);
+    orderRepo.countOrdersByAccount.mockResolvedValue(1);
+
+    const result = await service.listMyOrders(accountId);
+
+    expect(result.items[0].representativeProductName).toBe('상품 정보 없음');
+    expect(result.items[0].representativeProductImageUrl).toBeNull();
+    expect(result.items[0].storeName).toBe('매장 정보 없음');
+    expect(result.items[0].additionalItemCount).toBe(0);
+  });
+
   it('limit이 50 초과이면 에러를 던져야 한다', async () => {
     await expect(
       service.listMyOrders(accountId, { limit: 51 }),
@@ -343,6 +365,120 @@ describe('UserOrderService', () => {
 
       expect(result.statusHistories).toHaveLength(1);
       expect(result.statusHistories[0].toStatus).toBe(OrderStatus.SUBMITTED);
+    });
+
+    it('customTexts와 customFreeEdits를 올바르게 매핑해야 한다', async () => {
+      const orderWithCustomData = {
+        ...makeDetailOrder(),
+        items: [
+          {
+            ...makeDetailOrder().items[0],
+            custom_texts: [
+              {
+                token_key_snapshot: 'TEXT_1',
+                default_text_snapshot: '기본 텍스트',
+                value_text: '사용자 입력',
+                sort_order: 0,
+              },
+            ],
+            free_edits: [
+              {
+                crop_image_url: 'https://s3.example.com/crop.jpg',
+                description_text: '편집 설명',
+                sort_order: 0,
+                attachments: [
+                  { image_url: 'https://s3.example.com/attach1.jpg' },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      orderRepo.findOrderDetailByAccount.mockResolvedValue(
+        orderWithCustomData as never,
+      );
+
+      const result = await service.getMyOrder(accountId, BigInt(100));
+
+      expect(result.items[0].customTexts).toHaveLength(1);
+      expect(result.items[0].customTexts[0].tokenKey).toBe('TEXT_1');
+      expect(result.items[0].customTexts[0].valueText).toBe('사용자 입력');
+
+      expect(result.items[0].customFreeEdits).toHaveLength(1);
+      expect(result.items[0].customFreeEdits[0].cropImageUrl).toBe(
+        'https://s3.example.com/crop.jpg',
+      );
+      expect(result.items[0].customFreeEdits[0].attachmentImageUrls).toEqual([
+        'https://s3.example.com/attach1.jpg',
+      ]);
+    });
+
+    it('item에 product가 없으면 representativeImageUrl이 null이어야 한다', async () => {
+      const orderWithoutProduct = {
+        ...makeDetailOrder(),
+        items: [
+          {
+            ...makeDetailOrder().items[0],
+            product: null,
+          },
+        ],
+      };
+
+      orderRepo.findOrderDetailByAccount.mockResolvedValue(
+        orderWithoutProduct as never,
+      );
+
+      const result = await service.getMyOrder(accountId, BigInt(100));
+
+      expect(result.items[0].representativeImageUrl).toBeNull();
+    });
+
+    it('store의 latitude와 longitude가 null이면 null을 반환해야 한다', async () => {
+      const orderWithNullCoords = {
+        ...makeDetailOrder(),
+        items: [
+          {
+            ...makeDetailOrder().items[0],
+            store: {
+              ...makeDetailOrder().items[0].store,
+              latitude: null,
+              longitude: null,
+            },
+          },
+        ],
+      };
+
+      orderRepo.findOrderDetailByAccount.mockResolvedValue(
+        orderWithNullCoords as never,
+      );
+
+      const result = await service.getMyOrder(accountId, BigInt(100));
+
+      expect(result.store.latitude).toBeNull();
+      expect(result.store.longitude).toBeNull();
+    });
+
+    it('store 정보가 없으면 기본값을 반환해야 한다', async () => {
+      const orderWithoutStore = {
+        ...makeDetailOrder(),
+        items: [
+          {
+            ...makeDetailOrder().items[0],
+            store: null,
+          },
+        ],
+      };
+
+      orderRepo.findOrderDetailByAccount.mockResolvedValue(
+        orderWithoutStore as never,
+      );
+
+      const result = await service.getMyOrder(accountId, BigInt(100));
+
+      expect(result.store.storeId).toBe('0');
+      expect(result.store.storeName).toBe('매장 정보 없음');
+      expect(result.store.latitude).toBeNull();
     });
   });
 });
