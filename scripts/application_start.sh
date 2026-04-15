@@ -15,6 +15,11 @@ ECOSYS="/home/ubuntu/project/caquick-backend/ecosystem.config.js"
 
 cd "$RUN_PATH"
 
+# DB 마이그레이션 적용 (신규 테이블/컬럼이 있을 때만 실행됨, 변경 없으면 no-op)
+echo ">> Running Prisma migrate deploy..."
+npx prisma migrate deploy
+echo ">> Prisma migrate deploy complete."
+
 if [ ! -f "$ECOSYS" ]; then
   echo "ecosystem file not found: $ECOSYS"
   exit 1
