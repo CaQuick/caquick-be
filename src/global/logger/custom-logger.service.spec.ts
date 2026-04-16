@@ -1,6 +1,3 @@
-import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import { LogContext } from '@/global/types/log.type';
-
 // winston 로거를 모킹하여 실제 출력 방지
 jest.mock('@/global/logger/logger', () => ({
   customLogger: {
@@ -12,7 +9,9 @@ jest.mock('@/global/logger/logger', () => ({
   },
 }));
 
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { customLogger } from '@/global/logger/logger';
+import { LogContext } from '@/global/types/log.type';
 
 const mockLogger = customLogger as jest.Mocked<typeof customLogger>;
 
