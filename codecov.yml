@@ -21,6 +21,7 @@ ignore:
   - "src/test/**"
   - "src/config/**"
   - "src/**/*.module.ts"
+  - "src/**/*.spec.ts"
   - "src/main.ts"
   - "src/**/index.ts"
   - "src/graphql/graphql.types.ts"

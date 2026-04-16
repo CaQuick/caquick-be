@@ -1,6 +1,8 @@
-name: PR Check
+name: CI
 
 on:
+  push:
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -8,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr-check-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -43,12 +45,20 @@ jobs:
       - name: Test with coverage
         run: yarn test:cov
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN || '' }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
       - name: Build
         run: |
           yarn graphql:docs
           yarn build
 
   coverage-report:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -79,22 +89,8 @@ jobs:
           skip-step: install
           annotations: failed-tests
 
-      - name: Reinstall dependencies (jest-coverage-report-action 이후 state 복구)
-        run: |
-          corepack enable
-          yarn install --immutable
-
-      - name: Test with lcov output for Codecov
-        run: yarn jest --coverage --ci --coverageReporters=lcov --coverageReporters=text
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN || '' }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-
   pr-title:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
