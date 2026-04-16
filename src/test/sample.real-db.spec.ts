@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { ClockService } from '@/common/providers/clock.service';
 import { IdGenerator } from '@/common/providers/id-generator.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
-import { truncateAll } from '@/test/db/truncate';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createUserProfile } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -27,6 +27,7 @@ describe('Test DB infra pipeline', () => {
   });
 
   afterAll(async () => {
+    await closeTruncateConnection();
     await disconnectTestPrismaClient();
   });
 
