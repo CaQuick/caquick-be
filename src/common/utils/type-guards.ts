@@ -2,7 +2,7 @@
  * 객체(레코드)인지 체크
  */
 export function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /**
