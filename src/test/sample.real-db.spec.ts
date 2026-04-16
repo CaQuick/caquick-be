@@ -31,7 +31,7 @@ describe('Test DB infra pipeline', () => {
   });
 
   beforeEach(async () => {
-    await truncateAll(prisma);
+    await truncateAll();
   });
 
   it('Testcontainer MySQL에 실제로 쓰기/읽기가 가능하다', async () => {
