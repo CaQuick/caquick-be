@@ -14,6 +14,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import type { Request, Response } from 'express';
 
+import { CommonModule } from '@/common/common.module';
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
@@ -41,6 +42,7 @@ import { PrismaModule } from '@/prisma';
       rootPath: join(process.cwd(), 'public'),
       serveRoot: '/gql-docs',
     }),
+    CommonModule,
     PrismaModule,
     LoggerModule,
     AuthGlobalModule,
