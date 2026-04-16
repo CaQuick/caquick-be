@@ -21,6 +21,7 @@ import {
   getEnvAsBoolean,
   getEnvAsNumber,
 } from '@/common/helpers/config.helper';
+import { ClockService } from '@/common/providers/clock.service';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import {
   AuthCookie,
@@ -51,6 +52,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly oidc: OidcClientService,
     private readonly repo: AuthRepository,
+    private readonly clock: ClockService,
   ) {}
 
   /**
@@ -176,7 +178,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid seller credentials.');
     }
 
-    const now = new Date();
+    const now = this.clock.now();
     await this.repo.updateSellerLastLogin(credential.seller_account_id, now);
 
     const { accessToken } = await this.issueAuthTokens({
@@ -331,7 +333,7 @@ export class AuthService {
       );
     }
 
-    const now = new Date();
+    const now = this.clock.now();
     const newHash = await argon2.hash(newPassword, {
       type: argon2.argon2id,
     });

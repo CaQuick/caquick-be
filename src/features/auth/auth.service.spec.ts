@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
@@ -47,6 +48,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
         { provide: AuthRepository, useValue: mockRepo },
+        { provide: ClockService, useValue: { now: () => new Date() } },
       ],
     }).compile();
 
