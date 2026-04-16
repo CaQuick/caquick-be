@@ -10,8 +10,8 @@ describe('type-guards', () => {
       expect(isRecord({})).toBe(true);
     });
 
-    it('배열이면 true (typeof === object)', () => {
-      expect(isRecord([])).toBe(true);
+    it('배열이면 false (객체지만 레코드가 아님)', () => {
+      expect(isRecord([])).toBe(false);
     });
 
     it('null이면 false', () => {

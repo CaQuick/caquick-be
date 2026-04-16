@@ -30,7 +30,11 @@ export class DateTimeScalar implements CustomScalar<string, Date> {
       return value.toISOString();
     }
     if (typeof value === 'string') {
-      return value;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new TypeError('Invalid DateTime value.');
+      }
+      return parsed.toISOString();
     }
     throw new TypeError('Invalid DateTime value.');
   }
