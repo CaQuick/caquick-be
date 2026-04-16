@@ -20,12 +20,22 @@ export async function createReview(
   let storeId = overrides.store_id;
   let productId = overrides.product_id;
 
-  if (!orderItemId || !accountId || !storeId || !productId) {
+  if (orderItemId && (!accountId || !storeId || !productId)) {
+    // order_item_id가 주어졌으면 해당 아이템의 관계를 조회하여 일관성 유지
+    const oi = await prisma.orderItem.findUniqueOrThrow({
+      where: { id: orderItemId },
+      include: { order: true },
+    });
+    storeId = storeId ?? oi.store_id;
+    productId = productId ?? oi.product_id;
+    accountId = accountId ?? oi.order.account_id;
+  } else if (!orderItemId) {
+    // order_item_id가 없으면 새로 생성
     const oi = await createOrderItem(prisma);
     const order = await prisma.order.findUniqueOrThrow({
       where: { id: oi.order_id },
     });
-    orderItemId = orderItemId ?? oi.id;
+    orderItemId = oi.id;
     storeId = storeId ?? oi.store_id;
     productId = productId ?? oi.product_id;
     accountId = accountId ?? order.account_id;
@@ -34,9 +44,9 @@ export async function createReview(
   return prisma.review.create({
     data: {
       order_item_id: orderItemId,
-      account_id: accountId,
-      store_id: storeId,
-      product_id: productId,
+      account_id: accountId!,
+      store_id: storeId!,
+      product_id: productId!,
       rating: overrides.rating ?? 5,
       content:
         overrides.content === undefined

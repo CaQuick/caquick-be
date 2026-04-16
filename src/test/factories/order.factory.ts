@@ -61,16 +61,18 @@ export async function createOrderItem(
   prisma: PrismaClient,
   overrides: OrderItemOverrides = {},
 ): Promise<OrderItem> {
-  const product =
-    overrides.product_id && overrides.store_id
-      ? null
-      : await createProduct(prisma);
+  // product_id와 store_id는 항상 같은 상품 기준으로 일관성을 유지한다
+  let productId = overrides.product_id;
+  let storeId = overrides.store_id;
+  if (!productId || !storeId) {
+    const product = await createProduct(prisma, {
+      ...(storeId ? { store_id: storeId } : {}),
+    });
+    productId = productId ?? product.id;
+    storeId = storeId ?? product.store_id;
+  }
 
-  const productId = overrides.product_id ?? product!.id;
-  const storeId = overrides.store_id ?? product!.store_id;
-
-  const order = overrides.order_id ? null : await createOrder(prisma);
-  const orderId = overrides.order_id ?? order!.id;
+  const orderId = overrides.order_id ?? (await createOrder(prisma)).id;
 
   return prisma.orderItem.create({
     data: {

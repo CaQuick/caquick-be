@@ -43,10 +43,13 @@ export async function truncateAll(): Promise<void> {
   if (rows.length === 0) return;
 
   await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-  for (const row of rows) {
-    await conn.query(`TRUNCATE TABLE \`${row.table_name}\``);
+  try {
+    for (const row of rows) {
+      await conn.query(`TRUNCATE TABLE \`${row.table_name}\``);
+    }
+  } finally {
+    await conn.query('SET FOREIGN_KEY_CHECKS = 1');
   }
-  await conn.query('SET FOREIGN_KEY_CHECKS = 1');
 }
 
 /**
