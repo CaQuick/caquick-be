@@ -29,6 +29,15 @@ describe('parseAccountId', () => {
     expect(() => parseAccountId(user('1.5'))).toThrow(BadRequestException);
   });
 
+  it('빈 문자열이면 BadRequestException을 던진다', () => {
+    expect(() => parseAccountId(user(''))).toThrow(BadRequestException);
+    expect(() => parseAccountId(user('   '))).toThrow(BadRequestException);
+  });
+
+  it('음수이면 BadRequestException을 던진다', () => {
+    expect(() => parseAccountId(user('-1'))).toThrow(BadRequestException);
+  });
+
   it('undefined이면 BadRequestException을 던진다', () => {
     expect(() => parseAccountId(user(undefined))).toThrow(BadRequestException);
   });
