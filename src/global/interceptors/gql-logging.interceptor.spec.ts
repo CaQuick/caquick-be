@@ -77,10 +77,20 @@ describe('GqlLoggingInterceptor', () => {
     });
   });
 
-  it('Query 루트이면 tx 로그를 남긴다', (done) => {
+  it('Query 루트이면 tx 로그에 requestId, request 메타가 포함된다', (done) => {
     const ctx = mockGqlContext('Query');
     interceptor.intercept(ctx, mockHandler({ data: 1 })).subscribe(() => {
-      expect(logger.tx).toHaveBeenCalled();
+      expect(logger.tx).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: expect.any(String),
+          request: expect.objectContaining({
+            fieldName: 'testQuery',
+            parentType: 'Query',
+          }),
+          processingTimeInMs: expect.any(Number),
+          context: 'GraphQL',
+        }),
+      );
       done();
     });
   });
@@ -88,7 +98,11 @@ describe('GqlLoggingInterceptor', () => {
   it('Mutation 루트이면 tx 로그를 남긴다', (done) => {
     const ctx = mockGqlContext('Mutation');
     interceptor.intercept(ctx, mockHandler({ data: 1 })).subscribe(() => {
-      expect(logger.tx).toHaveBeenCalled();
+      expect(logger.tx).toHaveBeenCalledWith(
+        expect.objectContaining({
+          request: expect.objectContaining({ parentType: 'Mutation' }),
+        }),
+      );
       done();
     });
   });
@@ -101,11 +115,16 @@ describe('GqlLoggingInterceptor', () => {
     });
   });
 
-  it('에러 시 txError 로그를 남긴다', (done) => {
+  it('에러 시 txError 로그에 에러 메시지가 포함된다', (done) => {
     const ctx = mockGqlContext('Query');
     interceptor.intercept(ctx, mockErrorHandler(new Error('fail'))).subscribe({
       error: () => {
-        expect(logger.txError).toHaveBeenCalled();
+        expect(logger.txError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({ message: 'fail' }),
+            processingTimeInMs: expect.any(Number),
+          }),
+        );
         done();
       },
     });
