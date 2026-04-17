@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { PrismaService } from '@/prisma';
 
 /**
@@ -16,8 +17,12 @@ import { PrismaService } from '@/prisma';
 export class AuthRepository {
   /**
    * @param prisma PrismaService
+   * @param clock ClockService
    */
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clock: ClockService,
+  ) {}
 
   /**
    * provider + subject로 AccountIdentity를 조회한다(soft-delete 제외).
@@ -87,7 +92,7 @@ export class AuthRepository {
         },
       });
 
-      const now = new Date();
+      const now = this.clock.now();
 
       // 기존 Identity가 있으면 업데이트
       if (found) {
@@ -287,7 +292,7 @@ export class AuthRepository {
    * @param tokenHash refresh token hash(sha256 hex)
    */
   async findActiveRefreshSessionByHash(tokenHash: string) {
-    const now = new Date();
+    const now = this.clock.now();
     return this.prisma.authRefreshSession.findFirst({
       where: {
         token_hash: tokenHash,
@@ -315,7 +320,7 @@ export class AuthRepository {
     newExpiresAt: Date;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const now = new Date();
+      const now = this.clock.now();
 
       const newSession = await tx.authRefreshSession.create({
         data: {
@@ -346,7 +351,7 @@ export class AuthRepository {
    * @param sessionId session id
    */
   async revokeRefreshSession(sessionId: bigint) {
-    const now = new Date();
+    const now = this.clock.now();
     return this.prisma.authRefreshSession.update({
       where: { id: sessionId },
       data: { revoked_at: now, updated_at: now },

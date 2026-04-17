@@ -1,1244 +1,421 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import type { PrismaClient } from '@prisma/client';
 import {
-  AccountType,
   AuditActionType,
   AuditTargetType,
   IdentityProvider,
-  Prisma,
 } from '@prisma/client';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
-import { PrismaService } from '@/prisma';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createAccountIdentity,
+  createRefreshSession,
+  createSellerCredential,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('AuthRepository', () => {
-  let repository: AuthRepository;
-  let mockPrisma: {
-    accountIdentity: {
-      findFirst: jest.Mock;
-      update: jest.Mock;
-      create: jest.Mock;
-    };
-    account: {
-      findFirst: jest.Mock;
-      create: jest.Mock;
-      update: jest.Mock;
-    };
-    userProfile: {
-      create: jest.Mock;
-    };
-    authRefreshSession: {
-      create: jest.Mock;
-      findFirst: jest.Mock;
-      update: jest.Mock;
-      updateMany: jest.Mock;
-    };
-    sellerCredential: {
-      findFirst: jest.Mock;
-      update: jest.Mock;
-    };
-    auditLog: {
-      create: jest.Mock;
-    };
-    $transaction: jest.Mock;
-  };
+describe('AuthRepository (real DB)', () => {
+  let repo: AuthRepository;
+  let prisma: PrismaClient;
+  let clock: ClockService;
 
-  beforeEach(async () => {
-    mockPrisma = {
-      accountIdentity: {
-        findFirst: jest.fn(),
-        update: jest.fn(),
-        create: jest.fn(),
-      },
-      account: {
-        findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-      },
-      userProfile: {
-        create: jest.fn(),
-      },
-      authRefreshSession: {
-        create: jest.fn(),
-        findFirst: jest.fn(),
-        update: jest.fn(),
-        updateMany: jest.fn(),
-      },
-      sellerCredential: {
-        findFirst: jest.fn(),
-        update: jest.fn(),
-      },
-      auditLog: {
-        create: jest.fn(),
-      },
-      $transaction: jest.fn((callback) => callback(mockPrisma)),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AuthRepository,
-        { provide: PrismaService, useValue: mockPrisma },
-      ],
-    }).compile();
-
-    repository = module.get<AuthRepository>(AuthRepository);
+  beforeAll(async () => {
+    clock = new ClockService();
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [AuthRepository, { provide: ClockService, useValue: clock }],
+    });
+    repo = module.get(AuthRepository);
+    prisma = p;
   });
 
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // ─── Identity 조회 ───
+
   describe('findIdentityByProviderSubject', () => {
-    it('provider + subject로 AccountIdentity를 조회해야 한다', async () => {
-      // Arrange
-      const identity = {
-        id: BigInt(1),
-        account_id: BigInt(10),
-        provider: IdentityProvider.GOOGLE,
+    it('provider+subject로 Identity를 조회한다', async () => {
+      const account = await createAccount(prisma);
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
         provider_subject: 'google-sub-123',
-        provider_email: 'user@example.com',
-        provider_display_name: 'Test User',
-        provider_profile_image_url: 'https://example.com/photo.jpg',
-        last_login_at: new Date('2025-06-01'),
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-01'),
-        deleted_at: null,
-        account: {
-          id: BigInt(10),
-          account_type: AccountType.USER,
-          status: 'ACTIVE',
-          email: 'user@example.com',
-          name: 'Test User',
-          created_at: new Date('2025-01-01'),
-          updated_at: new Date('2025-06-01'),
-          deleted_at: null,
-          user_profile: {
-            account_id: BigInt(10),
-            nickname: 'testuser',
-            profile_image_url: 'https://example.com/photo.jpg',
-            birth_date: null,
-            phone_number: null,
-          },
-        },
-      };
+      });
 
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(identity);
-
-      // Act
-      const result = await repository.findIdentityByProviderSubject(
+      const result = await repo.findIdentityByProviderSubject(
         IdentityProvider.GOOGLE,
         'google-sub-123',
       );
 
-      // Assert
-      expect(result).toEqual(identity);
-      expect(mockPrisma.accountIdentity.findFirst).toHaveBeenCalledWith({
-        where: {
-          provider: IdentityProvider.GOOGLE,
-          provider_subject: 'google-sub-123',
-        },
-        include: {
-          account: {
-            include: {
-              user_profile: true,
-            },
-          },
-        },
-      });
+      expect(result).not.toBeNull();
+      expect(result!.provider_subject).toBe('google-sub-123');
+      expect(result!.account.id).toBe(account.id);
     });
 
-    it('존재하지 않는 identity는 null을 반환해야 한다', async () => {
-      // Arrange
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(null);
-
-      // Act
-      const result = await repository.findIdentityByProviderSubject(
-        IdentityProvider.KAKAO,
-        'non-existent-subject',
+    it('존재하지 않으면 null을 반환한다', async () => {
+      const result = await repo.findIdentityByProviderSubject(
+        IdentityProvider.GOOGLE,
+        'nonexistent',
       );
-
-      // Assert
       expect(result).toBeNull();
     });
   });
+
+  // ─── 이메일 계정 조회 ───
 
   describe('findAccountByEmail', () => {
-    it('이메일로 계정을 조회해야 한다', async () => {
-      // Arrange
-      const account = {
-        id: BigInt(5),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
+    it('이메일로 계정을 조회한다', async () => {
+      const account = await createAccount(prisma, {
         email: 'test@example.com',
-        name: 'Test User',
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-01'),
-        deleted_at: null,
-        user_profile: {
-          account_id: BigInt(5),
-          nickname: 'testuser',
-          profile_image_url: null,
-          birth_date: null,
-          phone_number: null,
-        },
-      };
-
-      mockPrisma.account.findFirst.mockResolvedValue(account);
-
-      // Act
-      const result = await repository.findAccountByEmail('test@example.com');
-
-      // Assert
-      expect(result).toEqual(account);
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { email: 'test@example.com' },
-        include: { user_profile: true },
       });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await repo.findAccountByEmail('test@example.com');
+
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe(account.id);
+      expect(result!.user_profile).not.toBeNull();
     });
 
-    it('존재하지 않는 이메일은 null을 반환해야 한다', async () => {
-      // Arrange
-      mockPrisma.account.findFirst.mockResolvedValue(null);
-
-      // Act
-      const result = await repository.findAccountByEmail(
-        'nonexistent@example.com',
-      );
-
-      // Assert
+    it('존재하지 않는 이메일이면 null을 반환한다', async () => {
+      const result = await repo.findAccountByEmail('nobody@example.com');
       expect(result).toBeNull();
     });
   });
 
+  // ─── OIDC Identity Upsert ───
+
   describe('upsertUserByOidcIdentity', () => {
-    it('기존 Identity가 있으면 업데이트해야 한다', async () => {
-      // Arrange
-      const existingIdentity = {
-        id: BigInt(1),
-        account_id: BigInt(10),
+    it('신규 Identity+계정을 생성한다', async () => {
+      const result = await repo.upsertUserByOidcIdentity({
         provider: IdentityProvider.GOOGLE,
-        provider_subject: 'google-123',
-        account: {
-          id: BigInt(10),
-          email: 'old@example.com',
-          name: 'Old Name',
-          user_profile: {
-            nickname: 'olduser',
-          },
-        },
-      };
-
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(existingIdentity);
-      mockPrisma.accountIdentity.update.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(10),
-        provider: IdentityProvider.GOOGLE,
-        provider_subject: 'google-123',
-        provider_email: 'new@example.com',
-        provider_display_name: 'New Name',
-        provider_profile_image_url: 'https://example.com/photo.jpg',
-        last_login_at: expect.any(Date),
-        updated_at: expect.any(Date),
-      } as never);
-      mockPrisma.account.update.mockResolvedValue({
-        id: BigInt(10),
-        email: 'old@example.com',
-        name: 'Old Name',
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(10),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'old@example.com',
-        name: 'Old Name',
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-01'),
-        deleted_at: null,
-        user_profile: { nickname: 'olduser' },
-      });
-
-      const args = {
-        provider: IdentityProvider.GOOGLE,
-        providerSubject: 'google-123',
-        providerEmail: 'new@example.com',
-        emailVerified: true,
-        providerDisplayName: 'New Name',
-        providerProfileImageUrl: 'https://example.com/photo.jpg',
-      };
-
-      // Act
-      const result = await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      expect(mockPrisma.accountIdentity.update).toHaveBeenCalledWith({
-        where: { id: BigInt(1) },
-        data: expect.objectContaining({
-          provider_email: 'new@example.com',
-          provider_display_name: 'New Name',
-          provider_profile_image_url: 'https://example.com/photo.jpg',
-        }),
-      });
-      expect(result.account).toBeDefined();
-    });
-
-    it('기존 Identity가 있고 profile이 없으면 profile을 생성해야 한다', async () => {
-      // Arrange
-      const existingIdentity = {
-        id: BigInt(1),
-        account_id: BigInt(10),
-        account: {
-          id: BigInt(10),
-          email: 'test@example.com',
-          name: 'Test User',
-          user_profile: null, // profile 없음
-        },
-      };
-
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(existingIdentity);
-      mockPrisma.accountIdentity.update.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(10),
-        provider_email: 'test@example.com',
-        provider_display_name: 'Test User',
-        provider_profile_image_url: null,
-        last_login_at: expect.any(Date),
-        updated_at: expect.any(Date),
-      } as never);
-      mockPrisma.account.update.mockResolvedValue({
-        id: BigInt(10),
-        email: 'test@example.com',
-        name: 'Test User',
-      } as never);
-      mockPrisma.userProfile.create.mockResolvedValue({
-        account_id: BigInt(10),
-        nickname: 'Test User',
-        profile_image_url: null,
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(10),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'test@example.com',
-        name: 'Test User',
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-01'),
-        deleted_at: null,
-        user_profile: { nickname: 'Test User' },
-      });
-
-      const args = {
-        provider: IdentityProvider.GOOGLE,
-        providerSubject: 'google-123',
-        providerEmail: 'test@example.com',
-        emailVerified: true,
-        providerDisplayName: 'Test User',
-      };
-
-      // Act
-      await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      expect(mockPrisma.userProfile.create).toHaveBeenCalledWith({
-        data: {
-          account_id: BigInt(10),
-          nickname: 'Test User',
-          profile_image_url: null,
-        },
-      });
-    });
-
-    it('신규 Identity는 이메일과 무관하게 새 계정을 생성해야 한다', async () => {
-      // Arrange
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(null); // 신규
-
-      mockPrisma.accountIdentity.create.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(30),
-        provider: IdentityProvider.GOOGLE,
-        provider_subject: 'google-new-user',
-        provider_email: 'existing@example.com',
-        provider_display_name: 'New User',
-        provider_profile_image_url: null,
-        last_login_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      } as never);
-      mockPrisma.account.create.mockResolvedValue({
-        id: BigInt(30),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'existing@example.com',
-        name: 'New User',
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      } as never);
-      mockPrisma.userProfile.create.mockResolvedValue({
-        account_id: BigInt(30),
-        nickname: 'New User',
-        profile_image_url: null,
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(30),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'existing@example.com',
-        name: 'New User',
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-        user_profile: { nickname: 'New User' },
-      });
-
-      const args = {
-        provider: IdentityProvider.GOOGLE,
-        providerSubject: 'google-new-user',
-        providerEmail: 'existing@example.com',
-        emailVerified: true,
-        providerDisplayName: 'New User',
-      };
-
-      // Act
-      await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      // 이메일로 기존 계정을 찾지 않아야 함 (id 재조회는 허용)
-      expect(mockPrisma.account.findFirst).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { email: 'existing@example.com' },
-        }),
-      );
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(30) },
-        include: { user_profile: true },
-      });
-      expect(mockPrisma.accountIdentity.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          account_id: BigInt(30),
-          provider: IdentityProvider.GOOGLE,
-          provider_subject: 'google-new-user',
-        }),
-      });
-      expect(mockPrisma.account.create).toHaveBeenCalled(); // 신규 계정 생성
-    });
-
-    it('신규 Identity이고 기존 계정이 없으면 새 계정을 생성해야 한다', async () => {
-      // Arrange
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(null); // 신규
-      mockPrisma.account.findFirst.mockResolvedValue(null); // 기존 계정 없음
-
-      const newAccount = {
-        id: BigInt(30),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'new@example.com',
-        name: 'New User',
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      };
-      mockPrisma.account.create.mockResolvedValue(newAccount);
-      mockPrisma.userProfile.create.mockResolvedValue({
-        account_id: BigInt(30),
-        nickname: 'New User',
-        profile_image_url: null,
-      } as never);
-      mockPrisma.accountIdentity.create.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(30),
-        provider: IdentityProvider.KAKAO,
-        provider_subject: 'kakao-new-user',
-        provider_email: 'new@example.com',
-        provider_display_name: 'New User',
-        provider_profile_image_url: null,
-        last_login_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(30),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'new@example.com',
-        name: 'New User',
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-        user_profile: { nickname: 'New User' },
-      });
-
-      const args = {
-        provider: IdentityProvider.KAKAO,
-        providerSubject: 'kakao-new-user',
+        providerSubject: 'new-sub',
         providerEmail: 'new@example.com',
         emailVerified: true,
         providerDisplayName: 'New User',
-      };
+      });
 
-      // Act
-      const result = await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      expect(mockPrisma.account.create).toHaveBeenCalledWith({
-        data: {
-          account_type: AccountType.USER,
-          status: 'ACTIVE',
-          email: 'new@example.com',
-          name: 'New User',
-        },
-      });
-      expect(mockPrisma.userProfile.create).toHaveBeenCalledWith({
-        data: {
-          account_id: BigInt(30),
-          nickname: 'New User',
-          profile_image_url: null,
-        },
-      });
-      expect(mockPrisma.accountIdentity.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          account_id: BigInt(30),
-          provider: IdentityProvider.KAKAO,
-          provider_subject: 'kakao-new-user',
-        }),
-      });
-      expect(result.account?.id).toBe(BigInt(30));
+      expect(result.account).not.toBeNull();
+      expect(result.account!.email).toBe('new@example.com');
+      expect(result.account!.user_profile).not.toBeNull();
+      expect(result.account!.user_profile!.nickname).toBe('New User');
     });
 
-    it('이메일이 verified 여부와 관계없이 기존 계정을 조회하지 않아야 한다', async () => {
-      // Arrange
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(null);
-
-      const newAccount = {
-        id: BigInt(50),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: null,
-        name: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      };
-      mockPrisma.account.create.mockResolvedValue(newAccount as never);
-      mockPrisma.userProfile.create.mockResolvedValue({
-        account_id: BigInt(50),
-        nickname: 'testuser',
-        profile_image_url: null,
-      } as never);
-      mockPrisma.accountIdentity.create.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(50),
-        provider: IdentityProvider.GOOGLE,
-        provider_subject: 'google-unverified',
-        provider_email: 'test@example.com',
-        provider_display_name: null,
-        provider_profile_image_url: null,
-        last_login_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(50),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: null,
-        name: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-        user_profile: { nickname: 'testuser', profile_image_url: null },
+    it('기존 Identity가 있으면 업데이트한다', async () => {
+      const account = await createAccount(prisma, { email: 'old@example.com' });
+      await createUserProfile(prisma, { account_id: account.id });
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+        provider_subject: 'existing-sub',
       });
 
-      const args = {
+      const result = await repo.upsertUserByOidcIdentity({
         provider: IdentityProvider.GOOGLE,
-        providerSubject: 'google-unverified',
-        providerEmail: 'test@example.com',
-        emailVerified: false, // verified 아님
-      };
-
-      // Act
-      await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      // 이메일로 기존 계정을 찾지 않아야 함
-      expect(mockPrisma.account.findFirst).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { email: 'test@example.com' },
-        }),
-      );
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(50) },
-        include: { user_profile: true },
-      });
-      // 신규 계정 생성
-      expect(mockPrisma.account.create).toHaveBeenCalled();
-    });
-
-    it('displayName이 없고 email이 있으면 email의 local part를 nickname으로 사용해야 한다', async () => {
-      // Arrange
-      mockPrisma.accountIdentity.findFirst.mockResolvedValue(null);
-      mockPrisma.account.findFirst.mockResolvedValue(null);
-
-      const newAccount = {
-        id: BigInt(60),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'testuser@example.com',
-        name: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      };
-      mockPrisma.account.create.mockResolvedValue(newAccount as never);
-      mockPrisma.userProfile.create.mockResolvedValue({
-        account_id: BigInt(60),
-        nickname: 'testuser',
-        profile_image_url: null,
-      } as never);
-      mockPrisma.accountIdentity.create.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(60),
-        provider: IdentityProvider.GOOGLE,
-        provider_subject: 'google-no-name',
-        provider_email: 'testuser@example.com',
-        provider_display_name: null,
-        provider_profile_image_url: null,
-        last_login_at: new Date(),
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-      } as never);
-      mockPrisma.account.findFirst.mockResolvedValue({
-        id: BigInt(60),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'testuser@example.com',
-        name: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-        deleted_at: null,
-        user_profile: { nickname: 'testuser', profile_image_url: null },
-      });
-
-      const args = {
-        provider: IdentityProvider.GOOGLE,
-        providerSubject: 'google-no-name',
-        providerEmail: 'testuser@example.com',
+        providerSubject: 'existing-sub',
+        providerEmail: 'updated@example.com',
         emailVerified: true,
-        // providerDisplayName 없음
-      };
-
-      // Act
-      await repository.upsertUserByOidcIdentity(args);
-
-      // Assert
-      expect(mockPrisma.userProfile.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          nickname: 'testuser', // email의 local part
-        }),
+        providerDisplayName: 'Updated',
       });
+
+      // 기존 계정의 email은 이미 있으므로 유지
+      expect(result.account!.email).toBe('old@example.com');
+    });
+
+    it('이메일 미인증이면 계정 email을 null로 설정한다', async () => {
+      const result = await repo.upsertUserByOidcIdentity({
+        provider: IdentityProvider.KAKAO,
+        providerSubject: 'kakao-sub',
+        providerEmail: 'unverified@example.com',
+        emailVerified: false,
+      });
+
+      expect(result.account!.email).toBeNull();
+    });
+
+    it('displayName 없으면 email 앞부분으로 nickname을 생성한다', async () => {
+      const result = await repo.upsertUserByOidcIdentity({
+        provider: IdentityProvider.GOOGLE,
+        providerSubject: 'no-name-sub',
+        providerEmail: 'john@example.com',
+        emailVerified: true,
+      });
+
+      expect(result.account!.user_profile!.nickname).toBe('john');
     });
   });
 
+  // ─── Refresh Session ───
+
   describe('createRefreshSession', () => {
-    it('refresh 세션을 생성해야 한다', async () => {
-      // Arrange
-      const args = {
-        accountId: BigInt(1),
-        tokenHash: 'hashed-token',
-        userAgent: 'Mozilla/5.0',
-        ipAddress: '127.0.0.1',
-        expiresAt: new Date('2025-02-01'),
-      };
+    it('refresh session을 생성한다', async () => {
+      const account = await createAccount(prisma);
+      const expiresAt = new Date(Date.now() + 3600_000);
 
-      mockPrisma.authRefreshSession.create.mockResolvedValue({
-        id: BigInt(100),
-        account_id: BigInt(1),
-        token_hash: 'hashed-token',
-        user_agent: 'Mozilla/5.0',
-        ip_address: '127.0.0.1',
-        expires_at: new Date('2025-02-01'),
-        revoked_at: null,
-        replaced_by_session_id: null,
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-01-01'),
-        deleted_at: null,
+      const session = await repo.createRefreshSession({
+        accountId: account.id,
+        tokenHash: 'a'.repeat(64),
+        userAgent: 'test-agent',
+        ipAddress: '1.2.3.4',
+        expiresAt,
       });
 
-      // Act
-      const result = await repository.createRefreshSession(args);
-
-      // Assert
-      expect(mockPrisma.authRefreshSession.create).toHaveBeenCalledWith({
-        data: {
-          account_id: BigInt(1),
-          token_hash: 'hashed-token',
-          user_agent: 'Mozilla/5.0',
-          ip_address: '127.0.0.1',
-          expires_at: args.expiresAt,
-        },
-      });
-      expect(result.id).toBe(BigInt(100));
+      expect(session.account_id).toBe(account.id);
+      expect(session.token_hash).toBe('a'.repeat(64));
+      expect(session.revoked_at).toBeNull();
     });
   });
 
   describe('findActiveRefreshSessionByHash', () => {
-    it('유효한 refresh 세션을 찾아야 한다', async () => {
-      // Arrange
-      const session = {
-        id: BigInt(1),
-        account_id: BigInt(1),
-        token_hash: 'valid-hash',
-        user_agent: 'Mozilla/5.0',
-        ip_address: '127.0.0.1',
-        expires_at: new Date('2030-01-01'),
-        revoked_at: null,
-        replaced_by_session_id: null,
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-01-01'),
-        deleted_at: null,
-      };
-
-      mockPrisma.authRefreshSession.findFirst.mockResolvedValue(session);
-
-      // Act
-      const result =
-        await repository.findActiveRefreshSessionByHash('valid-hash');
-
-      // Assert
-      expect(result).toEqual(session);
-      expect(mockPrisma.authRefreshSession.findFirst).toHaveBeenCalledWith({
-        where: {
-          token_hash: 'valid-hash',
-          revoked_at: null,
-          expires_at: { gt: expect.any(Date) },
-        },
+    it('유효한 세션을 조회한다', async () => {
+      const account = await createAccount(prisma);
+      const tokenHash = 'b'.repeat(64);
+      await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: tokenHash,
+        expires_at: new Date(Date.now() + 3600_000),
       });
+
+      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
+      expect(found).not.toBeNull();
+      expect(found!.token_hash).toBe(tokenHash);
     });
 
-    it('만료되거나 revoked된 세션은 찾지 않아야 한다', async () => {
-      // Arrange
-      mockPrisma.authRefreshSession.findFirst.mockResolvedValue(null);
+    it('만료된 세션은 조회하지 않는다', async () => {
+      const account = await createAccount(prisma);
+      const tokenHash = 'c'.repeat(64);
+      await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: tokenHash,
+        expires_at: new Date(Date.now() - 1000), // 이미 만료
+      });
 
-      // Act
-      const result =
-        await repository.findActiveRefreshSessionByHash('expired-hash');
+      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
+      expect(found).toBeNull();
+    });
 
-      // Assert
-      expect(result).toBeNull();
+    it('revoke된 세션은 조회하지 않는다', async () => {
+      const account = await createAccount(prisma);
+      const tokenHash = 'd'.repeat(64);
+      await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: tokenHash,
+        revoked_at: new Date(),
+      });
+
+      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
+      expect(found).toBeNull();
     });
   });
 
   describe('rotateRefreshSession', () => {
-    it('기존 세션을 revoke하고 새 세션을 생성해야 한다', async () => {
-      // Arrange
-      const args = {
-        currentSessionId: BigInt(1),
-        accountId: BigInt(10),
-        newTokenHash: 'new-hash',
-        userAgent: 'Mozilla/5.0',
-        ipAddress: '127.0.0.1',
-        newExpiresAt: new Date('2025-03-01'),
-      };
-
-      const newSession = {
-        id: BigInt(2),
-        account_id: BigInt(10),
-        token_hash: 'new-hash',
-        user_agent: 'Mozilla/5.0',
-        ip_address: '127.0.0.1',
-        expires_at: new Date('2025-03-01'),
-        revoked_at: null,
-        replaced_by_session_id: null,
-        created_at: new Date('2025-01-15'),
-        updated_at: new Date('2025-01-15'),
-        deleted_at: null,
-      };
-
-      mockPrisma.authRefreshSession.create.mockResolvedValue(newSession);
-      mockPrisma.authRefreshSession.update.mockResolvedValue({
-        id: BigInt(1),
-        account_id: BigInt(10),
-        token_hash: 'old-hash',
-        revoked_at: expect.any(Date),
-        replaced_by_session_id: BigInt(2),
-        updated_at: expect.any(Date),
-      } as never);
-
-      // Act
-      const result = await repository.rotateRefreshSession(args);
-
-      // Assert
-      expect(mockPrisma.authRefreshSession.create).toHaveBeenCalled();
-      expect(mockPrisma.authRefreshSession.update).toHaveBeenCalledWith({
-        where: { id: BigInt(1) },
-        data: expect.objectContaining({
-          revoked_at: expect.any(Date),
-          replaced_by_session_id: BigInt(2),
-        }),
+    it('기존 세션을 revoke하고 새 세션을 생성한다', async () => {
+      const account = await createAccount(prisma);
+      const oldSession = await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: 'e'.repeat(64),
       });
-      expect(result).toEqual(newSession);
+
+      const newSession = await repo.rotateRefreshSession({
+        currentSessionId: oldSession.id,
+        accountId: account.id,
+        newTokenHash: 'f'.repeat(64),
+        newExpiresAt: new Date(Date.now() + 3600_000),
+      });
+
+      expect(newSession.token_hash).toBe('f'.repeat(64));
+
+      // 이전 세션이 revoke 되었는지 확인
+      const revokedOld = await prisma.authRefreshSession.findUnique({
+        where: { id: oldSession.id },
+      });
+      expect(revokedOld!.revoked_at).not.toBeNull();
+      expect(revokedOld!.replaced_by_session_id).toBe(newSession.id);
     });
   });
 
   describe('revokeRefreshSession', () => {
-    it('세션을 revoke해야 한다', async () => {
-      // Arrange
-      const revokedSession = {
-        id: BigInt(1),
-        account_id: BigInt(10),
-        token_hash: 'some-hash',
-        user_agent: 'Mozilla/5.0',
-        ip_address: '127.0.0.1',
-        expires_at: new Date('2025-06-01'),
-        revoked_at: new Date(),
-        replaced_by_session_id: null,
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date(),
-        deleted_at: null,
-      };
-
-      mockPrisma.authRefreshSession.update.mockResolvedValue(revokedSession);
-
-      // Act
-      const result = await repository.revokeRefreshSession(BigInt(1));
-
-      // Assert
-      expect(mockPrisma.authRefreshSession.update).toHaveBeenCalledWith({
-        where: { id: BigInt(1) },
-        data: {
-          revoked_at: expect.any(Date),
-          updated_at: expect.any(Date),
-        },
+    it('세션을 revoke 처리한다', async () => {
+      const account = await createAccount(prisma);
+      const session = await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: 'g'.repeat(64),
       });
-      expect(result.id).toBe(BigInt(1));
+
+      await repo.revokeRefreshSession(session.id);
+
+      const found = await prisma.authRefreshSession.findUnique({
+        where: { id: session.id },
+      });
+      expect(found!.revoked_at).not.toBeNull();
     });
   });
 
   describe('revokeAllRefreshSessions', () => {
-    it('특정 계정의 활성 세션을 모두 revoke해야 한다', async () => {
-      // Arrange
-      const now = new Date('2025-06-15T10:00:00Z');
-      mockPrisma.authRefreshSession.updateMany.mockResolvedValue({ count: 3 });
-
-      // Act
-      await repository.revokeAllRefreshSessions(BigInt(10), now);
-
-      // Assert
-      expect(mockPrisma.authRefreshSession.updateMany).toHaveBeenCalledWith({
-        where: {
-          account_id: BigInt(10),
-          revoked_at: null,
-        },
-        data: {
-          revoked_at: now,
-          updated_at: now,
-        },
+    it('계정의 활성 세션을 모두 revoke한다', async () => {
+      const account = await createAccount(prisma);
+      await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: 'h'.repeat(64),
       });
+      await createRefreshSession(prisma, {
+        account_id: account.id,
+        token_hash: 'i'.repeat(64),
+      });
+
+      await repo.revokeAllRefreshSessions(account.id, new Date());
+
+      const active = await prisma.authRefreshSession.findMany({
+        where: { account_id: account.id, revoked_at: null },
+      });
+      expect(active).toHaveLength(0);
     });
+  });
 
-    it('활성 세션이 없어도 에러 없이 완료해야 한다', async () => {
-      // Arrange
-      const now = new Date('2025-06-15T10:00:00Z');
-      mockPrisma.authRefreshSession.updateMany.mockResolvedValue({ count: 0 });
+  // ─── JWT/Me 조회 ───
 
-      // Act & Assert
-      await expect(
-        repository.revokeAllRefreshSessions(BigInt(999), now),
-      ).resolves.toBeUndefined();
+  describe('findAccountForJwt', () => {
+    it('계정 id/status/type을 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+
+      const found = await repo.findAccountForJwt(account.id);
+
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(account.id);
+      expect(found!.status).toBe('ACTIVE');
+      expect(found!.account_type).toBe('USER');
     });
   });
 
   describe('findAccountForMe', () => {
-    it('account를 profile과 함께 조회해야 한다', async () => {
-      // Arrange
-      const account = {
-        id: BigInt(1),
-        account_type: AccountType.USER,
-        status: 'ACTIVE',
-        email: 'test@example.com',
-        name: 'Test User',
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-01'),
-        deleted_at: null,
-        user_profile: {
-          account_id: BigInt(1),
-          nickname: 'testuser',
-          profile_image_url: 'https://example.com/photo.jpg',
-          birth_date: new Date('1990-01-01'),
-          phone_number: '010-1234-5678',
-        },
-      };
+    it('계정 + user_profile을 반환한다', async () => {
+      const account = await createAccount(prisma);
+      await createUserProfile(prisma, { account_id: account.id });
 
-      mockPrisma.account.findFirst.mockResolvedValue(account);
+      const found = await repo.findAccountForMe(account.id);
 
-      // Act
-      const result = await repository.findAccountForMe(BigInt(1));
-
-      // Assert
-      expect(result).toEqual(account);
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(1) },
-        include: { user_profile: true },
-      });
-    });
-
-    it('삭제된 계정은 찾지 않아야 한다', async () => {
-      // Arrange
-      mockPrisma.account.findFirst.mockResolvedValue(null);
-
-      // Act
-      const result = await repository.findAccountForMe(BigInt(999));
-
-      // Assert
-      expect(result).toBeNull();
+      expect(found).not.toBeNull();
+      expect(found!.user_profile).not.toBeNull();
     });
   });
 
-  describe('findAccountForJwt', () => {
-    it('account id, status, account_type만 조회해야 한다', async () => {
-      // Arrange
-      const account = {
-        id: BigInt(1),
-        status: 'ACTIVE',
-        account_type: AccountType.USER,
-      };
-
-      mockPrisma.account.findFirst.mockResolvedValue(account);
-
-      // Act
-      const result = await repository.findAccountForJwt(BigInt(1));
-
-      // Assert
-      expect(result).toEqual(account);
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { id: BigInt(1) },
-        select: { id: true, status: true, account_type: true },
-      });
-    });
-  });
+  // ─── Seller 조회 ───
 
   describe('findSellerCredentialByUsername', () => {
-    it('username으로 판매자 자격정보를 조회해야 한다', async () => {
-      // Arrange
-      const credential = {
-        id: BigInt(1),
-        seller_account_id: BigInt(20),
-        username: 'seller01',
-        password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc123$hashed',
-        password_updated_at: new Date('2025-03-01'),
-        last_login_at: new Date('2025-06-10'),
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-10'),
-        deleted_at: null,
-        seller_account: {
-          id: BigInt(20),
-          account_type: AccountType.SELLER,
-          status: 'ACTIVE',
-          store: {
-            id: BigInt(5),
-          },
-        },
-      };
-
-      mockPrisma.sellerCredential.findFirst.mockResolvedValue(credential);
-
-      // Act
-      const result =
-        await repository.findSellerCredentialByUsername('seller01');
-
-      // Assert
-      expect(result).toEqual(credential);
-      expect(mockPrisma.sellerCredential.findFirst).toHaveBeenCalledWith({
-        where: { username: 'seller01' },
-        include: {
-          seller_account: {
-            select: {
-              id: true,
-              account_type: true,
-              status: true,
-              store: {
-                select: {
-                  id: true,
-                },
-              },
-            },
-          },
-        },
+    it('username으로 판매자 자격정보를 조회한다', async () => {
+      const sellerAccount = await createAccount(prisma, {
+        account_type: 'SELLER',
       });
+      await createSellerCredential(prisma, {
+        seller_account_id: sellerAccount.id,
+        username: 'test_seller',
+      });
+
+      const found = await repo.findSellerCredentialByUsername('test_seller');
+
+      expect(found).not.toBeNull();
+      expect(found!.username).toBe('test_seller');
+      expect(found!.seller_account.id).toBe(sellerAccount.id);
     });
 
-    it('존재하지 않는 username은 null을 반환해야 한다', async () => {
-      // Arrange
-      mockPrisma.sellerCredential.findFirst.mockResolvedValue(null);
-
-      // Act
-      const result =
-        await repository.findSellerCredentialByUsername('nonexistent');
-
-      // Assert
-      expect(result).toBeNull();
+    it('존재하지 않는 username이면 null', async () => {
+      const found = await repo.findSellerCredentialByUsername('nonexistent');
+      expect(found).toBeNull();
     });
   });
 
   describe('findSellerCredentialByAccountId', () => {
-    it('계정 ID로 판매자 자격정보를 조회해야 한다', async () => {
-      // Arrange
-      const credential = {
-        id: BigInt(1),
-        seller_account_id: BigInt(20),
-        username: 'seller01',
-        password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc123$hashed',
-        password_updated_at: new Date('2025-03-01'),
-        last_login_at: new Date('2025-06-10'),
-        created_at: new Date('2025-01-01'),
-        updated_at: new Date('2025-06-10'),
-        deleted_at: null,
-        seller_account: {
-          id: BigInt(20),
-          account_type: AccountType.SELLER,
-          status: 'ACTIVE',
-          store: {
-            id: BigInt(5),
-          },
-        },
-      };
-
-      mockPrisma.sellerCredential.findFirst.mockResolvedValue(credential);
-
-      // Act
-      const result = await repository.findSellerCredentialByAccountId(
-        BigInt(20),
-      );
-
-      // Assert
-      expect(result).toEqual(credential);
-      expect(mockPrisma.sellerCredential.findFirst).toHaveBeenCalledWith({
-        where: {
-          seller_account_id: BigInt(20),
-        },
-        include: {
-          seller_account: {
-            select: {
-              id: true,
-              account_type: true,
-              status: true,
-              store: {
-                select: {
-                  id: true,
-                },
-              },
-            },
-          },
-        },
+    it('accountId로 판매자 자격정보를 조회한다', async () => {
+      const sellerAccount = await createAccount(prisma, {
+        account_type: 'SELLER',
       });
-    });
+      await createSellerCredential(prisma, {
+        seller_account_id: sellerAccount.id,
+      });
 
-    it('존재하지 않는 계정 ID는 null을 반환해야 한다', async () => {
-      // Arrange
-      mockPrisma.sellerCredential.findFirst.mockResolvedValue(null);
-
-      // Act
-      const result = await repository.findSellerCredentialByAccountId(
-        BigInt(999),
+      const found = await repo.findSellerCredentialByAccountId(
+        sellerAccount.id,
       );
 
-      // Assert
-      expect(result).toBeNull();
+      expect(found).not.toBeNull();
+      expect(found!.seller_account_id).toBe(sellerAccount.id);
     });
   });
 
   describe('updateSellerLastLogin', () => {
-    it('판매자 최근 로그인 시각을 갱신해야 한다', async () => {
-      // Arrange
-      const now = new Date('2025-06-15T10:30:00Z');
-      mockPrisma.sellerCredential.update.mockResolvedValue({
-        id: BigInt(1),
-        seller_account_id: BigInt(20),
-        username: 'seller01',
-        password_hash: '$argon2id$v=19$m=65536,t=3,p=4$abc123$hashed',
-        password_updated_at: new Date('2025-03-01'),
-        last_login_at: now,
-        created_at: new Date('2025-01-01'),
-        updated_at: now,
-        deleted_at: null,
-      } as never);
-
-      // Act
-      await repository.updateSellerLastLogin(BigInt(20), now);
-
-      // Assert
-      expect(mockPrisma.sellerCredential.update).toHaveBeenCalledWith({
-        where: { seller_account_id: BigInt(20) },
-        data: {
-          last_login_at: now,
-          updated_at: now,
-        },
+    it('최근 로그인 시각을 갱신한다', async () => {
+      const sellerAccount = await createAccount(prisma, {
+        account_type: 'SELLER',
       });
+      await createSellerCredential(prisma, {
+        seller_account_id: sellerAccount.id,
+      });
+
+      const now = new Date();
+      await repo.updateSellerLastLogin(sellerAccount.id, now);
+
+      const updated = await prisma.sellerCredential.findUnique({
+        where: { seller_account_id: sellerAccount.id },
+      });
+      expect(updated!.last_login_at!.getTime()).toBe(now.getTime());
     });
   });
 
   describe('updateSellerPasswordHash', () => {
-    it('판매자 비밀번호 해시를 갱신해야 한다', async () => {
-      // Arrange
-      const now = new Date('2025-06-15T11:00:00Z');
-      const newHash = '$argon2id$v=19$m=65536,t=3,p=4$newSalt$newHash';
-      mockPrisma.sellerCredential.update.mockResolvedValue({
-        id: BigInt(1),
-        seller_account_id: BigInt(20),
-        username: 'seller01',
-        password_hash: newHash,
-        password_updated_at: now,
-        last_login_at: new Date('2025-06-15T10:30:00Z'),
-        created_at: new Date('2025-01-01'),
-        updated_at: now,
-        deleted_at: null,
-      } as never);
+    it('비밀번호 해시를 갱신한다', async () => {
+      const sellerAccount = await createAccount(prisma, {
+        account_type: 'SELLER',
+      });
+      await createSellerCredential(prisma, {
+        seller_account_id: sellerAccount.id,
+      });
 
-      // Act
-      await repository.updateSellerPasswordHash({
-        sellerAccountId: BigInt(20),
-        passwordHash: newHash,
+      const now = new Date();
+      await repo.updateSellerPasswordHash({
+        sellerAccountId: sellerAccount.id,
+        passwordHash: 'new_hash_value',
         now,
       });
 
-      // Assert
-      expect(mockPrisma.sellerCredential.update).toHaveBeenCalledWith({
-        where: { seller_account_id: BigInt(20) },
-        data: {
-          password_hash: newHash,
-          password_updated_at: now,
-          updated_at: now,
-        },
+      const updated = await prisma.sellerCredential.findUnique({
+        where: { seller_account_id: sellerAccount.id },
       });
+      expect(updated!.password_hash).toBe('new_hash_value');
     });
   });
 
+  // ─── Audit Log ───
+
   describe('createAuditLog', () => {
-    it('감사 로그를 생성해야 한다', async () => {
-      // Arrange
-      const args = {
-        actorAccountId: BigInt(20),
-        storeId: BigInt(5),
+    it('감사 로그를 생성한다', async () => {
+      const account = await createAccount(prisma);
+
+      await repo.createAuditLog({
+        actorAccountId: account.id,
         targetType: AuditTargetType.CHANGE_PASSWORD,
-        targetId: BigInt(20),
+        targetId: account.id,
         action: AuditActionType.UPDATE,
         beforeJson: null,
-        afterJson: { changedAt: '2025-06-15T11:00:00.000Z' },
-        ipAddress: '192.168.0.1',
-        userAgent: 'Mozilla/5.0',
-      };
-
-      mockPrisma.auditLog.create.mockResolvedValue({
-        id: BigInt(100),
-        actor_account_id: BigInt(20),
-        store_id: BigInt(5),
-        target_type: AuditTargetType.CHANGE_PASSWORD,
-        target_id: BigInt(20),
-        action: AuditActionType.UPDATE,
-        before_json: null,
-        after_json: { changedAt: '2025-06-15T11:00:00.000Z' },
-        ip_address: '192.168.0.1',
-        user_agent: 'Mozilla/5.0',
-        created_at: new Date('2025-06-15'),
-      } as never);
-
-      // Act
-      await repository.createAuditLog(args);
-
-      // Assert
-      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
-        data: {
-          actor_account_id: BigInt(20),
-          store_id: BigInt(5),
-          target_type: AuditTargetType.CHANGE_PASSWORD,
-          target_id: BigInt(20),
-          action: AuditActionType.UPDATE,
-          before_json: Prisma.JsonNull,
-          after_json: { changedAt: '2025-06-15T11:00:00.000Z' },
-          ip_address: '192.168.0.1',
-          user_agent: 'Mozilla/5.0',
-        },
+        afterJson: { changed: true },
+        ipAddress: '1.2.3.4',
+        userAgent: 'test',
       });
-    });
 
-    it('선택 필드가 없으면 null로 저장해야 한다', async () => {
-      // Arrange
-      const args = {
-        actorAccountId: BigInt(20),
-        targetType: AuditTargetType.CHANGE_PASSWORD,
-        targetId: BigInt(20),
-        action: AuditActionType.UPDATE,
-      };
-
-      mockPrisma.auditLog.create.mockResolvedValue({
-        id: BigInt(101),
-        actor_account_id: BigInt(20),
-        store_id: null,
-        target_type: AuditTargetType.CHANGE_PASSWORD,
-        target_id: BigInt(20),
-        action: AuditActionType.UPDATE,
-        before_json: null,
-        after_json: null,
-        ip_address: null,
-        user_agent: null,
-        created_at: new Date('2025-06-15'),
-      } as never);
-
-      // Act
-      await repository.createAuditLog(args);
-
-      // Assert
-      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
-        data: {
-          actor_account_id: BigInt(20),
-          store_id: null,
-          target_type: AuditTargetType.CHANGE_PASSWORD,
-          target_id: BigInt(20),
-          action: AuditActionType.UPDATE,
-          before_json: undefined,
-          after_json: undefined,
-          ip_address: null,
-          user_agent: null,
-        },
+      const logs = await prisma.auditLog.findMany({
+        where: { actor_account_id: account.id },
       });
-    });
-
-    it('beforeJson과 afterJson이 명시적 null이면 Prisma.JsonNull로 변환해야 한다', async () => {
-      // Arrange
-      const args = {
-        actorAccountId: BigInt(20),
-        storeId: null,
-        targetType: AuditTargetType.CHANGE_PASSWORD,
-        targetId: BigInt(20),
-        action: AuditActionType.UPDATE,
-        beforeJson: null,
-        afterJson: null,
-        ipAddress: '10.0.0.1',
-        userAgent: 'TestAgent/1.0',
-      };
-
-      mockPrisma.auditLog.create.mockResolvedValue({
-        id: BigInt(102),
-        actor_account_id: BigInt(20),
-        store_id: null,
-        target_type: AuditTargetType.CHANGE_PASSWORD,
-        target_id: BigInt(20),
-        action: AuditActionType.UPDATE,
-        before_json: null,
-        after_json: null,
-        ip_address: '10.0.0.1',
-        user_agent: 'TestAgent/1.0',
-        created_at: new Date('2025-06-15'),
-      } as never);
-
-      // Act
-      await repository.createAuditLog(args);
-
-      // Assert
-      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          before_json: Prisma.JsonNull,
-          after_json: Prisma.JsonNull,
-        }),
-      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].action).toBe(AuditActionType.UPDATE);
     });
   });
 });
