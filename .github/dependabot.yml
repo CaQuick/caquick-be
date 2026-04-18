@@ -42,6 +42,27 @@ updates:
       # NestJS 메이저 업그레이드는 broad impact라 수동 검토
       - dependency-name: "@nestjs/*"
         update-types: ["version-update:semver-major"]
+      # Jest 계열: 실DB 테스트 인프라 안정화 이후 일괄 업그레이드
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "ts-jest"
+        update-types: ["version-update:semver-major"]
+      # ESLint 생태계: eslint / typescript-eslint / eslint-plugin-* 는 같이 움직여야 함
+      # (eslint-plugin-import와 typescript-eslint가 eslint 신메이저를 늦게 지원)
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript-eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/*"
+        update-types: ["version-update:semver-major"]
 
   # --- GitHub Actions ---
   - package-ecosystem: "github-actions"
