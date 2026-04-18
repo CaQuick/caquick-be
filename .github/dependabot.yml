@@ -17,8 +17,9 @@ updates:
       - "dependencies"
       - "npm"
     commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+      # include: scope 가 (deps) / (deps-dev) 를 자동으로 붙여준다.
+      # prefix에 (deps)를 또 적으면 "chore(deps)(deps): ..." 처럼 중복된다.
+      prefix: "chore"
       include: "scope"
     groups:
       # minor/patch는 묶어서 한 PR로
@@ -55,7 +56,7 @@ updates:
       - "dependencies"
       - "github-actions"
     commit-message:
-      prefix: "ci(deps)"
+      prefix: "ci"
       include: "scope"
     groups:
       actions-minor-patch:
