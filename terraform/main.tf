@@ -22,14 +22,21 @@ resource "github_repository" "caquick_be" {
   allow_auto_merge       = true
   delete_branch_on_merge = true
 
+  # Dependabot vulnerability alerts 명시적 활성화 (drift 탐지 가능하도록).
+  # provider v6.12.0 부터 deprecated 예정 → 상위 버전 마이그레이션 시
+  # github_repository_vulnerability_alerts 전용 리소스로 이관 필요.
+  vulnerability_alerts = true
+
   # 기타 플래그는 현재 상태 유지 (drift 방지 목적의 명시)
   has_issues      = data.github_repository.this.has_issues
   has_projects    = data.github_repository.this.has_projects
   has_wiki        = data.github_repository.this.has_wiki
   has_discussions = data.github_repository.this.has_discussions
 
-  # 아래 필드는 Terraform이 기본값으로 되돌리려 하지 않도록 ignore
+  # 실수로 인한 레포 전체 삭제 방지. 의도적 삭제가 필요하면 일시적으로 false로 내리고 destroy.
   lifecycle {
+    prevent_destroy = true
+
     ignore_changes = [
       description,
       visibility,

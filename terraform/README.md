@@ -22,6 +22,28 @@ export GITHUB_TOKEN=$(gh auth token)
 
 필요 스코프: `repo` (classic) 또는 `Administration: Read and write` (fine-grained).
 
+## 최초 셋업 (fresh state)
+
+새 머신에서 처음 apply하거나 state 파일을 잃어버렸을 때, `github_repository`는 이미 존재하는 레포라 그냥 `terraform apply` 하면 "이미 존재함" 에러로 실패한다. **import 먼저 실행해야 한다.**
+
+```bash
+cd terraform
+terraform init
+
+# 레포 리소스 import (이미 존재하는 레포를 state에 연결)
+terraform import github_repository.caquick_be caquick-be
+
+# Ruleset들도 state 잃어버린 경우 import 필요 (ruleset_id는 GitHub UI 또는 gh api로 확인)
+# gh api repos/CaQuick/caquick-be/rulesets --jq '.[] | {id, name}'
+terraform import github_repository_ruleset.main_protection caquick-be:<ruleset_id>
+terraform import github_repository_ruleset.develop_protection caquick-be:<ruleset_id>
+
+# import 후 plan 돌려서 drift 없는지 확인
+terraform plan
+```
+
+> owner는 provider 인증(`GITHUB_TOKEN`)에서 자동 결정되므로 import 시 별도 지정 불필요.
+
 ## 일상 작업 흐름
 
 ```bash
