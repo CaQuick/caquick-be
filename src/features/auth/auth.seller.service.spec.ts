@@ -10,6 +10,7 @@ import { AccountType } from '@prisma/client';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
@@ -58,6 +59,7 @@ describe('AuthService (seller)', () => {
         },
         { provide: OidcClientService, useValue: {} },
         { provide: AuthRepository, useValue: repo },
+        { provide: ClockService, useValue: { now: () => new Date() } },
       ],
     }).compile();
 
