@@ -14,8 +14,7 @@ updates:
       timezone: "Asia/Seoul"
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
+      - "📦 Dependencies"
     commit-message:
       # include: scope 가 (deps) / (deps-dev) 를 자동으로 붙여준다.
       # prefix에 (deps)를 또 적으면 "chore(deps)(deps): ..." 처럼 중복된다.
@@ -63,6 +62,13 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@typescript-eslint/*"
         update-types: ["version-update:semver-major"]
+      # TypeScript 메이저: rootDir/strict 검증 강화 등 tsconfig & 코드 변경 필요
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # openid-client v6: v5 대비 API 전면 재설계 (Issuer/Client/TokenSet 제거)
+      # → oidc-client.service.ts 재작성 동반되는 별도 마이그레이션 PR로 처리
+      - dependency-name: "openid-client"
+        update-types: ["version-update:semver-major"]
 
   # --- GitHub Actions ---
   - package-ecosystem: "github-actions"
@@ -74,8 +80,7 @@ updates:
       timezone: "Asia/Seoul"
     open-pull-requests-limit: 3
     labels:
-      - "dependencies"
-      - "github-actions"
+      - "📦 Dependencies"
     commit-message:
       prefix: "ci"
       include: "scope"
