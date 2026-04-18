@@ -64,11 +64,18 @@ export async function createOrderItem(
   // product_id와 store_id는 항상 같은 상품 기준으로 일관성을 유지한다
   let productId = overrides.product_id;
   let storeId = overrides.store_id;
-  if (!productId || !storeId) {
+  if (productId && !storeId) {
+    // product_id만 제공: 실제 product의 store_id를 조회해서 사용
+    const product = await prisma.product.findUniqueOrThrow({
+      where: { id: productId },
+    });
+    storeId = product.store_id;
+  } else if (!productId) {
+    // product_id 미제공: 새 product 생성 (storeId가 있으면 그 store에)
     const product = await createProduct(prisma, {
       ...(storeId ? { store_id: storeId } : {}),
     });
-    productId = productId ?? product.id;
+    productId = product.id;
     storeId = storeId ?? product.store_id;
   }
 
@@ -77,7 +84,7 @@ export async function createOrderItem(
   return prisma.orderItem.create({
     data: {
       order_id: orderId,
-      store_id: storeId,
+      store_id: storeId!,
       product_id: productId,
       product_name_snapshot:
         overrides.product_name_snapshot ?? 'Product snapshot',

@@ -10,12 +10,15 @@ export default async function globalTeardown(): Promise<void> {
     globalThis as unknown as { __TESTCONTAINER__?: StartedTestContainer }
   ).__TESTCONTAINER__;
 
-  if (container) {
-    console.log('[test] stopping MySQL container...');
-    await container.stop({ timeout: 5000 });
-  }
-
-  if (existsSync(STATE_FILE)) {
-    unlinkSync(STATE_FILE);
+  try {
+    if (container) {
+      console.log('[test] stopping MySQL container...');
+      await container.stop({ timeout: 5000 });
+    }
+  } finally {
+    // 컨테이너 stop 실패와 무관하게 state 파일은 반드시 정리
+    if (existsSync(STATE_FILE)) {
+      unlinkSync(STATE_FILE);
+    }
   }
 }
