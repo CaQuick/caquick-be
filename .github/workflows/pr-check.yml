@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.x"
           cache: "yarn"
@@ -48,7 +48,7 @@ jobs:
         run: yarn test:cov
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{ secrets.CODECOV_TOKEN || '' }}
           files: ./coverage/lcov.info
@@ -70,10 +70,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.x"
           cache: "yarn"
@@ -84,7 +84,7 @@ jobs:
           yarn install --immutable
 
       - name: Coverage Report (jest-coverage-report)
-        uses: ArtiomTr/jest-coverage-report-action@v2
+        uses: ArtiomTr/jest-coverage-report-action@7f750dd50f5585533321eb7ebc482b936b49a5d4 # v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           test-script: yarn jest --coverage --ci
@@ -98,7 +98,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Validate PR title
-        uses: amannn/action-semantic-pull-request@v5
+        uses: amannn/action-semantic-pull-request@e32d7e603df1aa1ba07e981f2a23455dee596825 # v5
         with:
           subjectPattern: ^.+$
           subjectPatternError: |
