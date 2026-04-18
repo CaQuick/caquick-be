@@ -95,6 +95,10 @@ resource "github_repository_ruleset" "main_protection" {
       required_check {
         context = "coverage-report"
       }
+      # CodeQL 정적 보안 분석. 매트릭스 strategy의 job 이름이 그대로 check context가 된다.
+      required_check {
+        context = "Analyze (javascript-typescript)"
+      }
     }
   }
 }
@@ -138,6 +142,9 @@ resource "github_repository_ruleset" "develop_protection" {
       }
       required_check {
         context = "coverage-report"
+      }
+      required_check {
+        context = "Analyze (javascript-typescript)"
       }
     }
   }
