@@ -1,0 +1,15 @@
+# Terraform local state — 절대 커밋 금지
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# 프로바이더 바이너리 / 작업 디렉토리
+.terraform/
+# 주의: .terraform.lock.hcl 은 provider 버전 고정용이므로 커밋한다 (yarn.lock과 동일한 역할)
+
+# 변수 파일 (민감값이 들어갈 수 있음)
+*.tfvars
+!*.tfvars.example
+
+# 플랜 산출물
+*.tfplan
