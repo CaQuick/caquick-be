@@ -3,593 +3,472 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { OrderStatus } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { S3Service } from '@/global/storage/s3.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createStore,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('UserReviewService', () => {
+const VALID_CONTENT = '맛있었고 포장도 깔끔했습니다. 다음에 또 주문할게요.';
+
+describe('UserReviewService (real DB)', () => {
   let service: UserReviewService;
-  let reviewRepo: jest.Mocked<ReviewRepository>;
+  let prisma: PrismaClient;
   let s3Service: jest.Mocked<S3Service>;
 
-  const accountId = BigInt(1);
-
-  const mockOrderItem = {
-    id: BigInt(200),
-    store_id: BigInt(10),
-    product_id: BigInt(300),
-    product_name_snapshot: '딸기 케이크',
-    order: { status: OrderStatus.PICKED_UP, account_id: accountId },
-    review: null,
-    store: { store_name: '스웨이드 베이커리' },
-    product: {
-      id: BigInt(300),
-      name: '딸기 케이크',
-      images: [{ image_url: 'https://s3.example.com/cake.jpg' }],
-    },
-  };
-
-  const validInput = {
-    orderItemId: '200',
-    rating: 4.5,
-    content: '정말 맛있는 케이크였습니다. 데코레이션도 예쁘고 추천합니다!',
-    media: [],
-  };
-
-  beforeEach(async () => {
-    reviewRepo = {
-      findOrderItemForReview: jest.fn(),
-      findReviewById: jest.fn(),
-      createOrRestoreReviewWithMedia: jest.fn(),
-      listMyReviews: jest.fn(),
-      softDeleteReview: jest.fn(),
-    } as unknown as jest.Mocked<ReviewRepository>;
-
+  beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserReviewService,
-        { provide: ReviewRepository, useValue: reviewRepo },
+        ReviewRepository,
         { provide: S3Service, useValue: s3Service },
       ],
-    }).compile();
-
-    service = module.get<UserReviewService>(UserReviewService);
+    });
+    service = module.get(UserReviewService);
+    prisma = p;
   });
 
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+    jest.clearAllMocks();
+  });
+
+  /** 리뷰 작성 가능한 상태(PICKED_UP 주문 + 본인 아이템)를 세팅 */
+  async function setupReviewableOrderItem(): Promise<{
+    accountId: bigint;
+    storeId: bigint;
+    productId: bigint;
+    orderItemId: bigint;
+  }> {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const store = await createStore(prisma, { store_name: '매장R' });
+    const product = await createProduct(prisma, {
+      store_id: store.id,
+      name: '상품R',
+    });
+    const order = await createOrder(prisma, {
+      account_id: account.id,
+      status: 'PICKED_UP',
+    });
+    const item = await createOrderItem(prisma, {
+      order_id: order.id,
+      product_id: product.id,
+      product_name_snapshot: '상품R 스냅샷',
+    });
+    return {
+      accountId: account.id,
+      storeId: store.id,
+      productId: product.id,
+      orderItemId: item.id,
+    };
+  }
+
+  // ─── writeReview ───
   describe('writeReview', () => {
-    it('유효한 입력이면 리뷰를 생성해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(500),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5 as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          id: BigInt(200),
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: {
-            id: BigInt(300),
-            images: [{ image_url: 'https://s3.example.com/cake.jpg' }],
-          },
-        },
-        media: [],
-      } as never);
+    it('PICKED_UP 주문 아이템에 리뷰와 미디어를 생성한다', async () => {
+      const ctx = await setupReviewableOrderItem();
 
-      const result = await service.writeReview(accountId, validInput);
-
-      expect(result.reviewId).toBe('500');
-      expect(result.rating).toBe(4.5);
-      expect(result.productName).toBe('딸기 케이크');
-    });
-
-    it('주문 아이템이 없으면 NotFoundException을 던져야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(null);
-
-      await expect(service.writeReview(accountId, validInput)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('PICKED_UP이 아니면 BadRequestException을 던져야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        order: { status: OrderStatus.CONFIRMED, account_id: accountId },
-      } as never);
-
-      await expect(service.writeReview(accountId, validInput)).rejects.toThrow(
-        USER_REVIEW_ERRORS.CANNOT_WRITE_REVIEW,
-      );
-    });
-
-    it('이미 리뷰가 있으면 ConflictException을 던져야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        review: { id: BigInt(1), deleted_at: null },
-      } as never);
-
-      await expect(service.writeReview(accountId, validInput)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('media가 undefined이면 빈 배열로 처리해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(502),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5 as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { images: [] },
-        },
-        media: [],
-      } as never);
-
-      const inputWithoutMedia = {
-        orderItemId: '200',
+      const result = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
         rating: 4.5,
-        content: validInput.content,
-      };
-
-      const result = await service.writeReview(
-        accountId,
-        inputWithoutMedia as never,
-      );
-
-      expect(result.reviewId).toBe('502');
-      expect(reviewRepo.createOrRestoreReviewWithMedia).toHaveBeenCalledWith(
-        expect.objectContaining({ media: [] }),
-      );
-    });
-
-    it('rating이 toNumber 메서드를 가진 Decimal 객체이면 toNumber()로 변환해야 한다', async () => {
-      const decimalRating = { toNumber: () => 4.5 };
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(503),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: decimalRating as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { images: [] },
-        },
-        media: [],
-      } as never);
-
-      const result = await service.writeReview(accountId, validInput);
-
-      expect(result.rating).toBe(4.5);
-    });
-
-    it('media가 undefined이면 빈 미디어로 생성해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(502),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5 as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          id: BigInt(200),
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { id: BigInt(300), images: [] },
-        },
-        media: [],
-      } as never);
-
-      const { media: _, ...inputWithoutMedia } = validInput;
-      const result = await service.writeReview(accountId, inputWithoutMedia);
-
-      expect(result.reviewId).toBe('502');
-      expect(reviewRepo.createOrRestoreReviewWithMedia).toHaveBeenCalledWith(
-        expect.objectContaining({ media: [] }),
-      );
-    });
-
-    it('media에 VIDEO 타입이 포함되면 올바르게 매핑해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(503),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.0 as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          id: BigInt(200),
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { id: BigInt(300), images: [] },
-        },
+        content: VALID_CONTENT,
         media: [
           {
-            media_type: 'VIDEO',
-            media_url: 'https://s3.example.com/vid.mp4',
-            thumbnail_url: null,
-            sort_order: 0,
-          },
-        ],
-      } as never);
-
-      const result = await service.writeReview(accountId, {
-        ...validInput,
-        media: [
-          {
-            mediaType: 'VIDEO' as const,
-            mediaUrl: 'https://s3.example.com/vid.mp4',
+            mediaType: 'IMAGE',
+            mediaUrl: 'https://s3.example.com/image1.jpg',
             sortOrder: 0,
           },
+          {
+            mediaType: 'VIDEO',
+            mediaUrl: 'https://s3.example.com/video1.mp4',
+            thumbnailUrl: 'https://s3.example.com/video1-thumb.jpg',
+            sortOrder: 1,
+          },
         ],
       });
 
-      expect(result.media[0].mediaType).toBe('VIDEO');
+      expect(result.rating).toBe(4.5);
+      expect(result.content).toBe(VALID_CONTENT);
+      expect(result.storeName).toBe('매장R');
+      expect(result.productName).toBe('상품R 스냅샷');
+      expect(result.media).toHaveLength(2);
+
+      const saved = await prisma.review.findUniqueOrThrow({
+        where: { id: BigInt(result.reviewId) },
+        include: { media: true },
+      });
+      expect(saved.media).toHaveLength(2);
+      expect(saved.media.some((m) => m.media_type === 'VIDEO')).toBe(true);
     });
 
-    it('soft-delete된 리뷰가 있으면 새 리뷰를 작성할 수 있어야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        review: { id: BigInt(1), deleted_at: new Date() },
-      } as never);
-      reviewRepo.createOrRestoreReviewWithMedia.mockResolvedValue({
-        id: BigInt(501),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5 as never,
-        content: validInput.content,
-        created_at: new Date(),
-        order_item: {
-          id: BigInt(200),
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { id: BigInt(300), images: [] },
-        },
-        media: [],
-      } as never);
+    it('rating이 1 미만이거나 0.5 단위가 아니면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
 
-      const result = await service.writeReview(accountId, validInput);
-
-      expect(result.reviewId).toBe('501');
-    });
-
-    describe('입력 검증', () => {
-      beforeEach(() => {
-        reviewRepo.findOrderItemForReview.mockResolvedValue(
-          mockOrderItem as never,
-        );
-      });
-
-      it('별점이 0.5 단위가 아니면 에러를 던져야 한다', async () => {
-        await expect(
-          service.writeReview(accountId, { ...validInput, rating: 4.3 }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.INVALID_RATING);
-      });
-
-      it('별점이 0이면 에러를 던져야 한다', async () => {
-        await expect(
-          service.writeReview(accountId, { ...validInput, rating: 0 }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.INVALID_RATING);
-      });
-
-      it('별점이 5.5이면 에러를 던져야 한다', async () => {
-        await expect(
-          service.writeReview(accountId, { ...validInput, rating: 5.5 }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.INVALID_RATING);
-      });
-
-      it('내용이 20자 미만이면 에러를 던져야 한다', async () => {
-        await expect(
-          service.writeReview(accountId, {
-            ...validInput,
-            content: '짧은 리뷰',
-          }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.CONTENT_TOO_SHORT);
-      });
-
-      it('내용이 1000자 초과이면 에러를 던져야 한다', async () => {
-        await expect(
-          service.writeReview(accountId, {
-            ...validInput,
-            content: 'a'.repeat(1001),
-          }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.CONTENT_TOO_LONG);
-      });
-
-      it('미디어가 10개 초과이면 에러를 던져야 한다', async () => {
-        const media = Array.from({ length: 11 }, (_, i) => ({
-          mediaType: 'IMAGE' as const,
-          mediaUrl: `https://s3.example.com/${i}.jpg`,
-          sortOrder: i,
-        }));
-
-        await expect(
-          service.writeReview(accountId, { ...validInput, media }),
-        ).rejects.toThrow(USER_REVIEW_ERRORS.TOO_MANY_MEDIA);
-      });
-    });
-  });
-
-  describe('myReviews', () => {
-    it('리뷰 목록을 반환해야 한다', async () => {
-      reviewRepo.listMyReviews.mockResolvedValue({
-        items: [],
-        totalCount: 0,
-      });
-
-      const result = await service.myReviews(accountId);
-
-      expect(result.items).toHaveLength(0);
-      expect(result.totalCount).toBe(0);
-      expect(result.hasMore).toBe(false);
-    });
-
-    it('hasMore가 true인 경우를 올바르게 계산해야 한다', async () => {
-      const makeReviewRow = (id: number) => ({
-        id: BigInt(id),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5,
-        content: '맛있어요',
-        created_at: new Date(),
-        order_item: {
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { images: [] },
-        },
-        media: [],
-      });
-
-      reviewRepo.listMyReviews.mockResolvedValue({
-        items: Array.from({ length: 10 }, (_, i) => makeReviewRow(i + 1)),
-        totalCount: 25,
-      } as never);
-
-      const result = await service.myReviews(accountId, {
-        offset: 0,
-        limit: 10,
-      });
-
-      expect(result.items).toHaveLength(10);
-      expect(result.totalCount).toBe(25);
-      expect(result.hasMore).toBe(true);
-    });
-
-    it('offset이 음수이면 BadRequestException을 던져야 한다', async () => {
       await expect(
-        service.myReviews(accountId, { offset: -1 }),
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 0,
+          content: VALID_CONTENT,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 4.3,
+          content: VALID_CONTENT,
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('limit이 0이면 BadRequestException을 던져야 한다', async () => {
-      await expect(service.myReviews(accountId, { limit: 0 })).rejects.toThrow(
-        BadRequestException,
-      );
+    it('rating이 5 초과면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 6,
+          content: VALID_CONTENT,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('limit이 50 초과이면 BadRequestException을 던져야 한다', async () => {
-      await expect(service.myReviews(accountId, { limit: 51 })).rejects.toThrow(
-        BadRequestException,
-      );
+    it('content가 20자 미만이면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: '짧아요',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('rating이 Decimal 객체(toNumber 메서드)일 때 올바르게 변환해야 한다', async () => {
-      reviewRepo.listMyReviews.mockResolvedValue({
-        items: [
-          {
-            id: BigInt(1),
-            order_item_id: BigInt(200),
-            product_id: BigInt(300),
-            rating: { toNumber: () => 3.5 } as never,
-            content: '맛있어요',
-            created_at: new Date(),
-            order_item: {
-              product_name_snapshot: '딸기 케이크',
-              store: { store_name: '스웨이드 베이커리' },
-              product: { images: [] },
-            },
-            media: undefined,
-          },
-        ],
-        totalCount: 1,
-      } as never);
+    it('content가 1000자 초과면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: 'a'.repeat(1001),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
 
-      const result = await service.myReviews(accountId, {
-        offset: 0,
-        limit: 10,
+    it('media가 10개를 초과하면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: Array.from({ length: 11 }, (_, i) => ({
+            mediaType: 'IMAGE' as const,
+            mediaUrl: `https://s3.example.com/${i}.jpg`,
+            sortOrder: i,
+          })),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('orderItem이 본인 소유가 아니면 NotFoundException', async () => {
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+      const other = await setupReviewableOrderItem();
+
+      await expect(
+        service.writeReview(me.id, {
+          orderItemId: other.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('주문이 PICKED_UP 이전 상태면 BadRequestException', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      const product = await createProduct(prisma);
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
       });
 
-      expect(result.items[0].rating).toBe(3.5);
-      expect(result.items[0].media).toEqual([]);
+      await expect(
+        service.writeReview(account.id, {
+          orderItemId: item.id.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('rating이 toNumber 메서드 없는 객체일 때 Number()로 변환해야 한다', async () => {
-      // Decimal 객체에 toNumber가 없는 케이스 대비
-      reviewRepo.listMyReviews.mockResolvedValue({
-        items: [
-          {
-            id: BigInt(1),
-            order_item_id: BigInt(200),
-            product_id: BigInt(300),
-            rating: { valueOf: () => 4.5 } as never,
-            content: '맛있어요',
-            created_at: new Date(),
-            order_item: null,
-            media: [],
-          },
-        ],
-        totalCount: 1,
-      } as never);
-
-      const result = await service.myReviews(accountId, {
-        offset: 0,
-        limit: 10,
+    it('활성 리뷰가 이미 있으면 ConflictException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
       });
 
-      expect(result.items[0].rating).toBeCloseTo(4.5, 0);
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('soft-delete된 리뷰가 있으면 복원하여 새 rating/content/media를 반영한다', async () => {
+      const ctx = await setupReviewableOrderItem();
+
+      // 첫 작성 후 삭제 (soft delete)
+      const first = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 3,
+        content: VALID_CONTENT,
+      });
+      await service.deleteMyReview(ctx.accountId, first.reviewId);
+
+      // 다시 작성 → 같은 row 복원
+      const restored = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: '복원 후 새 내용입니다. 아주 만족스럽습니다.',
+      });
+
+      expect(restored.reviewId).toBe(first.reviewId);
+      const saved = await prisma.review.findUniqueOrThrow({
+        where: { id: BigInt(restored.reviewId) },
+      });
+      expect(saved.deleted_at).toBeNull();
+      expect(Number(saved.rating)).toBe(5);
     });
   });
 
-  describe('deleteMyReview', () => {
-    it('삭제 성공 시 true를 반환해야 한다', async () => {
-      reviewRepo.softDeleteReview.mockResolvedValue(true);
+  // ─── myReviews ───
+  describe('myReviews', () => {
+    it('본인 리뷰 목록을 최신순으로 반환 + hasMore 계산', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
 
-      const result = await service.deleteMyReview(accountId, '500');
+      const result = await service.myReviews(ctx.accountId, {
+        offset: 0,
+        limit: 10,
+      });
 
-      expect(result).toBe(true);
+      expect(result.totalCount).toBe(1);
+      expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({
+        productName: '상품R 스냅샷',
+        storeName: '매장R',
+      });
     });
 
-    it('리뷰를 찾을 수 없으면 NotFoundException을 던져야 한다', async () => {
-      reviewRepo.softDeleteReview.mockResolvedValue(false);
+    it('다른 유저 리뷰는 포함되지 않는다', async () => {
+      const me = await setupReviewableOrderItem();
+      const other = await setupReviewableOrderItem();
+      await service.writeReview(me.accountId, {
+        orderItemId: me.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
+      await service.writeReview(other.accountId, {
+        orderItemId: other.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
 
-      await expect(service.deleteMyReview(accountId, '999')).rejects.toThrow(
+      const result = await service.myReviews(me.accountId);
+      expect(result.totalCount).toBe(1);
+    });
+
+    it('offset 음수면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.myReviews(ctx.accountId, { offset: -1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('limit이 50 초과면 BadRequestException', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.myReviews(ctx.accountId, { limit: 51 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── myReviewForOrderItem ───
+  describe('myReviewForOrderItem', () => {
+    it('작성 전 + PICKED_UP이면 canWrite=true, review=null', async () => {
+      const ctx = await setupReviewableOrderItem();
+
+      const result = await service.myReviewForOrderItem(
+        ctx.accountId,
+        ctx.orderItemId.toString(),
+      );
+
+      expect(result).toEqual({
+        review: null,
+        canWrite: true,
+        reasonIfCannotWrite: null,
+      });
+    });
+
+    it('작성 전 + PICKED_UP 아님이면 canWrite=false, 사유는 "픽업 완료"', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      const product = await createProduct(prisma);
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+      });
+
+      const result = await service.myReviewForOrderItem(
+        account.id,
+        item.id.toString(),
+      );
+
+      expect(result.canWrite).toBe(false);
+      expect(result.reasonIfCannotWrite).toContain('픽업 완료');
+      expect(result.review).toBeNull();
+    });
+
+    it('활성 리뷰가 있으면 review 반환 + canWrite=false', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
+
+      const result = await service.myReviewForOrderItem(
+        ctx.accountId,
+        ctx.orderItemId.toString(),
+      );
+
+      expect(result.canWrite).toBe(false);
+      expect(result.reasonIfCannotWrite).toContain('이미 리뷰');
+      expect(result.review).not.toBeNull();
+      expect(result.review?.productName).toBe('상품R 스냅샷');
+    });
+
+    it('orderItem이 본인 소유가 아니면 NotFoundException', async () => {
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+      const other = await setupReviewableOrderItem();
+
+      await expect(
+        service.myReviewForOrderItem(me.id, other.orderItemId.toString()),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─── deleteMyReview ───
+  describe('deleteMyReview', () => {
+    it('본인 리뷰를 soft-delete하고 true 반환', async () => {
+      const ctx = await setupReviewableOrderItem();
+      const review = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
+
+      const result = await service.deleteMyReview(
+        ctx.accountId,
+        review.reviewId,
+      );
+
+      expect(result).toBe(true);
+      const saved = await prisma.review.findUniqueOrThrow({
+        where: { id: BigInt(review.reviewId) },
+      });
+      expect(saved.deleted_at).not.toBeNull();
+    });
+
+    it('존재하지 않거나 타인 리뷰면 NotFoundException', async () => {
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      await expect(service.deleteMyReview(me.id, '999999')).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
+  // ─── createReviewMediaUploadUrl ───
   describe('createReviewMediaUploadUrl', () => {
-    it('IMAGE 타입이면 REVIEW_IMAGE purpose로 위임해야 한다', async () => {
-      s3Service.createUploadUrl.mockResolvedValue({
-        uploadUrl: 'https://presigned.url',
+    it('IMAGE 타입이면 REVIEW_IMAGE purpose로 S3Service 위임', async () => {
+      const expected = {
+        uploadUrl: 'https://presigned.example.com',
         publicUrl: 'https://s3.example.com/img.jpg',
-        key: 'review-media/images/1/img.jpg',
+        key: 'review-images/x/uuid.jpg',
         expiresInSeconds: 600,
-      });
+      };
+      s3Service.createUploadUrl.mockResolvedValue(expected);
 
-      await service.createReviewMediaUploadUrl(accountId, {
+      const result = await service.createReviewMediaUploadUrl(BigInt(1), {
         mediaType: 'IMAGE',
         contentType: 'image/jpeg',
         contentLength: 1024,
       });
 
+      expect(result).toEqual(expected);
       expect(s3Service.createUploadUrl).toHaveBeenCalledWith(
         expect.objectContaining({ purpose: 'REVIEW_IMAGE' }),
       );
     });
 
-    it('VIDEO 타입이면 REVIEW_VIDEO purpose로 위임해야 한다', async () => {
+    it('VIDEO 타입이면 REVIEW_VIDEO purpose로 위임', async () => {
       s3Service.createUploadUrl.mockResolvedValue({
-        uploadUrl: 'https://presigned.url',
-        publicUrl: 'https://s3.example.com/vid.mp4',
-        key: 'review-media/videos/1/vid.mp4',
+        uploadUrl: 'x',
+        publicUrl: 'y',
+        key: 'z',
         expiresInSeconds: 600,
       });
 
-      await service.createReviewMediaUploadUrl(accountId, {
+      await service.createReviewMediaUploadUrl(BigInt(1), {
         mediaType: 'VIDEO',
         contentType: 'video/mp4',
-        contentLength: 1024,
+        contentLength: 1024 * 1024,
       });
 
       expect(s3Service.createUploadUrl).toHaveBeenCalledWith(
         expect.objectContaining({ purpose: 'REVIEW_VIDEO' }),
       );
-    });
-  });
-
-  describe('myReviewForOrderItem', () => {
-    it('리뷰가 없고 PICKED_UP이면 canWrite: true를 반환해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(
-        mockOrderItem as never,
-      );
-
-      const result = await service.myReviewForOrderItem(accountId, '200');
-
-      expect(result.canWrite).toBe(true);
-      expect(result.review).toBeNull();
-    });
-
-    it('PICKED_UP이 아니면 canWrite: false를 반환해야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        order: { status: OrderStatus.CONFIRMED, account_id: accountId },
-      } as never);
-
-      const result = await service.myReviewForOrderItem(accountId, '200');
-
-      expect(result.canWrite).toBe(false);
-      expect(result.reasonIfCannotWrite).toContain('픽업 완료');
-    });
-
-    it('주문 아이템이 없으면 NotFoundException을 던져야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue(null);
-
-      await expect(
-        service.myReviewForOrderItem(accountId, '999'),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('활성 리뷰가 있고 findReviewById가 리뷰를 반환하면 canWrite: false와 리뷰를 반환해야 한다', async () => {
-      const reviewRow = {
-        id: BigInt(500),
-        order_item_id: BigInt(200),
-        product_id: BigInt(300),
-        rating: 4.5,
-        content: '정말 맛있어요!',
-        created_at: new Date(),
-        order_item: {
-          product_name_snapshot: '딸기 케이크',
-          store: { store_name: '스웨이드 베이커리' },
-          product: { images: [] },
-        },
-        media: [],
-      };
-
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        review: { id: BigInt(500), deleted_at: null },
-      } as never);
-      reviewRepo.findReviewById.mockResolvedValue(reviewRow as never);
-
-      const result = await service.myReviewForOrderItem(accountId, '200');
-
-      expect(result.canWrite).toBe(false);
-      expect(result.review).not.toBeNull();
-      expect(result.review?.reviewId).toBe('500');
-      expect(result.reasonIfCannotWrite).toContain('이미 리뷰가 작성된');
-    });
-
-    it('활성 리뷰가 있지만 findReviewById가 null을 반환하면 review가 null이어야 한다', async () => {
-      reviewRepo.findOrderItemForReview.mockResolvedValue({
-        ...mockOrderItem,
-        review: { id: BigInt(500), deleted_at: null },
-      } as never);
-      reviewRepo.findReviewById.mockResolvedValue(null);
-
-      const result = await service.myReviewForOrderItem(accountId, '200');
-
-      expect(result.canWrite).toBe(false);
-      expect(result.review).toBeNull();
     });
   });
 });

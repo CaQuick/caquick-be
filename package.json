@@ -126,10 +126,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "statements": 80,
+        "statements": 83,
         "branches": 73,
-        "functions": 73,
-        "lines": 80
+        "functions": 77,
+        "lines": 83
       }
     },
     "coverageDirectory": "../coverage",
