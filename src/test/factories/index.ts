@@ -1,5 +1,6 @@
 export * from './account.factory';
 export * from './auth.factory';
+export * from './notification.factory';
 export * from './order.factory';
 export * from './product.factory';
 export * from './recent-product-view.factory';
