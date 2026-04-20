@@ -1,168 +1,340 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createProduct,
+  createRecentProductView,
+  createStore,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('UserRecentViewService', () => {
+const MAX_RECENT_VIEWS = 50;
+
+describe('UserRecentViewService (real DB)', () => {
   let service: UserRecentViewService;
-  let recentViewRepo: jest.Mocked<RecentProductViewRepository>;
-  let productRepo: jest.Mocked<ProductRepository>;
+  let prisma: PrismaClient;
 
-  const accountId = BigInt(1);
-
-  beforeEach(async () => {
-    recentViewRepo = {
-      findRecentByAccountPaginated: jest.fn(),
-      upsertView: jest.fn(),
-      countByAccount: jest.fn(),
-      deleteOldestOverLimit: jest.fn(),
-      softDeleteByProduct: jest.fn(),
-      softDeleteAllByAccount: jest.fn(),
-    } as unknown as jest.Mocked<RecentProductViewRepository>;
-
-    productRepo = {
-      findActiveProduct: jest.fn(),
-    } as unknown as jest.Mocked<ProductRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserRecentViewService,
-        { provide: RecentProductViewRepository, useValue: recentViewRepo },
-        { provide: ProductRepository, useValue: productRepo },
+        RecentProductViewRepository,
+        ProductRepository,
       ],
-    }).compile();
-
-    service = module.get<UserRecentViewService>(UserRecentViewService);
-  });
-
-  describe('list', () => {
-    it('최근 본 상품 목록을 반환해야 한다', async () => {
-      recentViewRepo.findRecentByAccountPaginated.mockResolvedValue({
-        items: [
-          {
-            product_id: BigInt(200),
-            viewed_at: new Date('2026-04-12'),
-            product: {
-              name: '레터링 케이크',
-              regular_price: 45000,
-              sale_price: 40000,
-              store: { store_name: '스웨이드 베이커리' },
-              images: [{ image_url: 'https://s3.example.com/cake.jpg' }],
-            },
-          },
-        ],
-        totalCount: 1,
-      });
-
-      const result = await service.list(accountId);
-
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0]).toMatchObject({
-        productId: '200',
-        productName: '레터링 케이크',
-        storeName: '스웨이드 베이커리',
-      });
-      expect(result.totalCount).toBe(1);
-      expect(result.hasMore).toBe(false);
     });
 
-    it('offset + limit < totalCount이면 hasMore가 true여야 한다', async () => {
-      recentViewRepo.findRecentByAccountPaginated.mockResolvedValue({
-        items: [],
-        totalCount: 25,
+    service = module.get(UserRecentViewService);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // ─── list ───
+  describe('list', () => {
+    it('최근 본 순서로 정렬된 상품 커넥션을 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma, { store_name: '베이커리A' });
+      const p1 = await createProduct(prisma, {
+        store_id: store.id,
+        name: '케이크1',
+        regular_price: 10000,
+        sale_price: 9000,
+      });
+      const p2 = await createProduct(prisma, {
+        store_id: store.id,
+        name: '케이크2',
+        regular_price: 20000,
       });
 
-      const result = await service.list(accountId, { offset: 0, limit: 20 });
+      // p1은 더 이전, p2는 최근에 봄
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: p1.id,
+        viewed_at: new Date('2026-04-01'),
+      });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: p2.id,
+        viewed_at: new Date('2026-04-20'),
+      });
 
+      const result = await service.list(account.id);
+
+      expect(result.totalCount).toBe(2);
+      expect(result.hasMore).toBe(false);
+      expect(result.items).toHaveLength(2);
+      // 최근 본 것(p2)이 먼저
+      expect(result.items[0]).toMatchObject({
+        productId: p2.id.toString(),
+        productName: '케이크2',
+        storeName: '베이커리A',
+        regularPrice: 20000,
+      });
+      expect(result.items[1].productId).toBe(p1.id.toString());
+      expect(result.items[1].salePrice).toBe(9000);
+    });
+
+    it('pagination: offset + limit < totalCount면 hasMore true', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+      for (let i = 0; i < 3; i++) {
+        const p = await createProduct(prisma, { store_id: store.id });
+        await createRecentProductView(prisma, {
+          account_id: account.id,
+          product_id: p.id,
+          viewed_at: new Date(2026, 3, 20 - i),
+        });
+      }
+
+      const result = await service.list(account.id, { offset: 0, limit: 2 });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.totalCount).toBe(3);
       expect(result.hasMore).toBe(true);
     });
 
-    it('limit이 0이면 에러를 던져야 한다', async () => {
-      await expect(service.list(accountId, { limit: 0 })).rejects.toThrow(
+    it('soft-delete된 view는 포함되지 않는다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        deleted_at: new Date(),
+      });
+
+      const result = await service.list(account.id);
+
+      expect(result.totalCount).toBe(0);
+      expect(result.items).toHaveLength(0);
+    });
+
+    it('is_active=false 상품은 목록에서 제외된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const inactiveProduct = await createProduct(prisma, { is_active: false });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: inactiveProduct.id,
+      });
+
+      const result = await service.list(account.id);
+
+      expect(result.totalCount).toBe(0);
+    });
+
+    it('limit이 0 이하면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.list(account.id, { limit: 0 })).rejects.toThrow(
         BadRequestException,
       );
     });
 
-    it('offset이 음수이면 에러를 던져야 한다', async () => {
-      await expect(service.list(accountId, { offset: -1 })).rejects.toThrow(
+    it('limit이 상한(50)을 초과하면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.list(account.id, { limit: 51 })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('offset이 음수면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.list(account.id, { offset: -1 })).rejects.toThrow(
         BadRequestException,
       );
     });
   });
 
+  // ─── record ───
   describe('record', () => {
-    it('상품이 존재하면 upsert 후 초과분을 정리해야 한다', async () => {
-      productRepo.findActiveProduct.mockResolvedValue({ id: BigInt(200) });
-      recentViewRepo.upsertView.mockResolvedValue(undefined);
-      recentViewRepo.deleteOldestOverLimit.mockResolvedValue(undefined);
+    it('활성 상품이면 view를 새로 기록한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const product = await createProduct(prisma, { is_active: true });
 
-      const result = await service.record(accountId, '200');
+      const result = await service.record(account.id, product.id.toString());
 
       expect(result).toBe(true);
-      expect(recentViewRepo.upsertView).toHaveBeenCalledWith(
-        expect.objectContaining({
-          accountId,
-          productId: BigInt(200),
-        }),
-      );
-      expect(recentViewRepo.deleteOldestOverLimit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          accountId,
-          maxCount: 50,
-        }),
+      const row = await prisma.recentProductView.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: product.id,
+          },
+        },
+      });
+      expect(row.deleted_at).toBeNull();
+    });
+
+    it('이미 기록된 view는 viewed_at을 갱신하고 soft-delete를 복원한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const product = await createProduct(prisma, { is_active: true });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: product.id,
+        viewed_at: new Date('2025-01-01'),
+        deleted_at: new Date('2025-02-01'),
+      });
+
+      await service.record(account.id, product.id.toString());
+
+      const row = await prisma.recentProductView.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: product.id,
+          },
+        },
+      });
+      expect(row.deleted_at).toBeNull();
+      expect(row.viewed_at.getTime()).toBeGreaterThan(
+        new Date('2025-01-01').getTime(),
       );
     });
 
-    it('상품이 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findActiveProduct.mockResolvedValue(null);
-
-      await expect(service.record(accountId, '999')).rejects.toThrow(
+    it('상품이 존재하지 않으면 NotFoundException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.record(account.id, '999999')).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('유효하지 않은 productId이면 BadRequestException을 던져야 한다', async () => {
-      await expect(service.record(accountId, 'abc')).rejects.toThrow(
+    it('is_active=false 상품이면 NotFoundException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const inactive = await createProduct(prisma, { is_active: false });
+
+      await expect(
+        service.record(account.id, inactive.id.toString()),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('유효하지 않은 productId 문자열이면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.record(account.id, 'not-a-number')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it(`계정당 ${MAX_RECENT_VIEWS}개 초과분은 오래된 순으로 soft-delete된다`, async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+
+      // 먼저 50개 기록 (오래된 순)
+      const existingProductIds: bigint[] = [];
+      for (let i = 0; i < MAX_RECENT_VIEWS; i++) {
+        const p = await createProduct(prisma, { store_id: store.id });
+        existingProductIds.push(p.id);
+        await createRecentProductView(prisma, {
+          account_id: account.id,
+          product_id: p.id,
+          // 오름차순 시간: i=0이 가장 오래됨
+          viewed_at: new Date(2026, 0, 1, 0, i),
+        });
+      }
+
+      // 51번째 상품 기록 → oldest 1개가 soft-delete 되어야 함
+      const newProduct = await createProduct(prisma, { store_id: store.id });
+      await service.record(account.id, newProduct.id.toString());
+
+      const activeCount = await prisma.recentProductView.count({
+        where: { account_id: account.id, deleted_at: null },
+      });
+      expect(activeCount).toBe(MAX_RECENT_VIEWS);
+
+      // 가장 오래된 것(인덱스 0)이 soft-delete 되었는지 확인
+      const oldest = await prisma.recentProductView.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: existingProductIds[0],
+          },
+        },
+      });
+      expect(oldest.deleted_at).not.toBeNull();
+    });
+  });
+
+  // ─── deleteOne ───
+  describe('deleteOne', () => {
+    it('기록이 있으면 soft-delete하고 true를 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const product = await createProduct(prisma);
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: product.id,
+      });
+
+      const result = await service.deleteOne(account.id, product.id.toString());
+
+      expect(result).toBe(true);
+      const row = await prisma.recentProductView.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: product.id,
+          },
+        },
+      });
+      expect(row.deleted_at).not.toBeNull();
+    });
+
+    it('존재하지 않는 (또는 이미 삭제된) 항목이면 false', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const result = await service.deleteOne(account.id, '999999');
+      expect(result).toBe(false);
+    });
+
+    it('유효하지 않은 productId 문자열이면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await expect(service.deleteOne(account.id, 'abc')).rejects.toThrow(
         BadRequestException,
       );
     });
   });
 
-  describe('deleteOne', () => {
-    it('삭제 성공 시 true를 반환해야 한다', async () => {
-      recentViewRepo.softDeleteByProduct.mockResolvedValue(true);
-
-      const result = await service.deleteOne(accountId, '200');
-
-      expect(result).toBe(true);
-    });
-
-    it('존재하지 않는 항목이면 false를 반환해야 한다', async () => {
-      recentViewRepo.softDeleteByProduct.mockResolvedValue(false);
-
-      const result = await service.deleteOne(accountId, '999');
-
-      expect(result).toBe(false);
-    });
-  });
-
+  // ─── clearAll ───
   describe('clearAll', () => {
-    it('전체 삭제 후 true를 반환해야 한다', async () => {
-      recentViewRepo.softDeleteAllByAccount.mockResolvedValue(5);
+    it('해당 계정의 모든 active view를 soft-delete한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      for (let i = 0; i < 3; i++) {
+        await createRecentProductView(prisma, { account_id: account.id });
+      }
 
-      const result = await service.clearAll(accountId);
+      const result = await service.clearAll(account.id);
 
+      expect(result).toBe(true);
+      const activeCount = await prisma.recentProductView.count({
+        where: { account_id: account.id, deleted_at: null },
+      });
+      expect(activeCount).toBe(0);
+    });
+
+    it('삭제할 항목이 없어도 true를 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const result = await service.clearAll(account.id);
       expect(result).toBe(true);
     });
 
-    it('삭제할 항목이 없어도 true를 반환해야 한다', async () => {
-      recentViewRepo.softDeleteAllByAccount.mockResolvedValue(0);
+    it('다른 계정의 view는 영향을 받지 않는다', async () => {
+      const a1 = await createAccount(prisma, { account_type: 'USER' });
+      const a2 = await createAccount(prisma, { account_type: 'USER' });
+      await createRecentProductView(prisma, { account_id: a1.id });
+      await createRecentProductView(prisma, { account_id: a2.id });
 
-      const result = await service.clearAll(accountId);
+      await service.clearAll(a1.id);
 
-      expect(result).toBe(true);
+      const a2Remaining = await prisma.recentProductView.count({
+        where: { account_id: a2.id, deleted_at: null },
+      });
+      expect(a2Remaining).toBe(1);
     });
   });
 });

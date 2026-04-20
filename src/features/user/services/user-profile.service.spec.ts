@@ -3,346 +3,402 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { AccountType } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
 import { S3Service } from '@/global/storage/s3.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import { createAccount, createUserProfile } from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('UserProfileService', () => {
+describe('UserProfileService (real DB)', () => {
   let service: UserProfileService;
-  let repo: jest.Mocked<UserRepository>;
+  let prisma: PrismaClient;
   let s3Service: jest.Mocked<S3Service>;
 
-  const baseAccount = {
-    id: BigInt(1),
-    account_type: AccountType.USER,
-    email: 'test@example.com',
-    name: 'Test User',
-    deleted_at: null,
-    user_profile: {
-      nickname: 'tester',
-      birth_date: null,
-      phone_number: null,
-      profile_image_url: null,
-      onboarding_completed_at: null,
-      deleted_at: null,
-    },
-  };
-
-  beforeEach(async () => {
-    repo = {
-      findAccountWithProfile: jest.fn(),
-      isNicknameTaken: jest.fn(),
-      completeOnboarding: jest.fn(),
-      updateProfile: jest.fn(),
-      updateProfileImage: jest.fn(),
-      softDeleteAccount: jest.fn(),
-    } as unknown as jest.Mocked<UserRepository>;
-
+  beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserProfileService,
-        { provide: UserRepository, useValue: repo },
+        UserRepository,
         { provide: S3Service, useValue: s3Service },
       ],
-    }).compile();
-
-    service = module.get<UserProfileService>(UserProfileService);
-  });
-
-  it('me는 인증된 유저 정보를 반환해야 한다', async () => {
-    repo.findAccountWithProfile.mockResolvedValue(baseAccount);
-
-    const result = await service.me(BigInt(1));
-
-    expect(result).toEqual({
-      accountId: '1',
-      email: 'test@example.com',
-      name: 'Test User',
-      accountType: AccountType.USER,
-      profile: {
-        nickname: 'tester',
-        birthDate: null,
-        phoneNumber: null,
-        profileImageUrl: null,
-        onboardingCompletedAt: null,
-      },
-    });
-  });
-
-  it('계정이 없으면 UnauthorizedException을 던져야 한다', async () => {
-    repo.findAccountWithProfile.mockResolvedValue(null);
-
-    await expect(service.me(BigInt(1))).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('닉네임이 중복이면 ConflictException을 던져야 한다', async () => {
-    repo.findAccountWithProfile.mockResolvedValue(baseAccount);
-    repo.isNicknameTaken.mockResolvedValue(true);
-
-    await expect(
-      service.updateMyProfile(BigInt(1), { nickname: 'tester2' }),
-    ).rejects.toThrow(ConflictException);
-  });
-
-  it('deleteMyAccount는 soft delete를 수행해야 한다', async () => {
-    repo.findAccountWithProfile.mockResolvedValue(baseAccount);
-
-    const result = await service.deleteMyAccount(BigInt(1));
-
-    expect(result).toBe(true);
-    expect(repo.softDeleteAccount).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountId: BigInt(1),
-        deletedNickname: 'deleted_1',
-      }),
-    );
-  });
-
-  describe('checkNicknameAvailability', () => {
-    beforeEach(() => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
     });
 
-    it('사용 가능한 닉네임이면 available: true를 반환해야 한다', async () => {
-      repo.isNicknameTaken.mockResolvedValue(false);
-
-      const result = await service.checkNicknameAvailability(
-        'newNick',
-        BigInt(1),
-      );
-
-      expect(result).toEqual({ available: true, reason: null });
-    });
-
-    it('이미 사용 중인 닉네임이면 available: false를 반환해야 한다', async () => {
-      repo.isNicknameTaken.mockResolvedValue(true);
-
-      const result = await service.checkNicknameAvailability(
-        'takenNick',
-        BigInt(1),
-      );
-
-      expect(result.available).toBe(false);
-      expect(result.reason).toContain('이미 사용 중');
-    });
-
-    it('닉네임이 너무 짧으면 available: false를 반환해야 한다', async () => {
-      const result = await service.checkNicknameAvailability('a', BigInt(1));
-
-      expect(result.available).toBe(false);
-      expect(result.reason).toContain('2~20자');
-    });
-
-    it('닉네임에 특수문자가 포함되면 available: false를 반환해야 한다', async () => {
-      const result = await service.checkNicknameAvailability(
-        'nick@name',
-        BigInt(1),
-      );
-
-      expect(result.available).toBe(false);
-      expect(result.reason).toContain('한글, 영문, 숫자, 언더스코어');
-    });
+    service = module.get(UserProfileService);
+    prisma = p;
   });
 
-  describe('completeOnboarding', () => {
-    it('온보딩을 완료하고 프로필을 반환해야 한다', async () => {
-      const accountWithoutName = { ...baseAccount, name: null };
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(accountWithoutName)
-        .mockResolvedValueOnce(baseAccount);
-      repo.isNicknameTaken.mockResolvedValue(false);
-      repo.completeOnboarding.mockResolvedValue(undefined as never);
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
 
-      const result = await service.completeOnboarding(BigInt(1), {
+  beforeEach(async () => {
+    await truncateAll();
+    jest.clearAllMocks();
+  });
+
+  // ─── me ───
+  describe('me', () => {
+    it('활성 USER의 프로필 정보를 MePayload로 반환한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        email: 'me@example.com',
         name: '홍길동',
-        nickname: 'newNick',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'gildong',
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result).toMatchObject({
+        accountId: account.id.toString(),
+        email: 'me@example.com',
+        name: '홍길동',
+        accountType: 'USER',
+        profile: { nickname: 'gildong' },
+      });
+    });
+
+    it('계정이 없으면 UnauthorizedException을 던진다', async () => {
+      await expect(service.me(BigInt(999999))).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  // ─── completeOnboarding ───
+  describe('completeOnboarding', () => {
+    it('이름 미존재 + 입력 이름이 있으면 Account.name과 프로필을 갱신한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: null,
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        onboarding_completed_at: null,
+      });
+
+      const result = await service.completeOnboarding(account.id, {
+        name: '홍길동',
+        nickname: 'gildong1',
         birthDate: new Date('1990-01-01'),
         phoneNumber: '010-1234-5678',
       });
 
-      expect(repo.completeOnboarding).toHaveBeenCalledWith(
-        expect.objectContaining({
-          accountId: BigInt(1),
-          name: '홍길동',
-          nickname: 'newNick',
-        }),
-      );
-      expect(result.accountId).toBe('1');
+      expect(result.name).toBe('홍길동');
+      expect(result.profile.nickname).toBe('gildong1');
+      expect(result.profile.onboardingCompletedAt).toBeInstanceOf(Date);
+
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('홍길동');
     });
 
-    it('계정에 이름이 이미 있으면 name 필드를 null로 전달해야 한다', async () => {
-      // baseAccount에는 name: 'Test User'가 있음
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(baseAccount)
-        .mockResolvedValueOnce(baseAccount);
-      repo.isNicknameTaken.mockResolvedValue(false);
-      repo.completeOnboarding.mockResolvedValue(undefined as never);
+    it('이미 Account.name이 존재하면 입력 name은 무시되고 기존 이름을 유지한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '기존이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
 
-      await service.completeOnboarding(BigInt(1), {
+      const result = await service.completeOnboarding(account.id, {
         nickname: 'newNick',
         name: '새이름',
       });
 
-      expect(repo.completeOnboarding).toHaveBeenCalledWith(
-        expect.objectContaining({ name: null }),
-      );
+      expect(result.name).toBe('기존이름');
     });
 
-    it('계정에 이름이 없고 input에도 이름이 없으면 BadRequestException을 던져야 한다', async () => {
-      const accountWithoutName = { ...baseAccount, name: null };
-      repo.findAccountWithProfile.mockResolvedValue(accountWithoutName);
+    it('Account.name과 입력 name이 모두 없으면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: null,
+      });
+      await createUserProfile(prisma, { account_id: account.id });
 
       await expect(
-        service.completeOnboarding(BigInt(1), {
+        service.completeOnboarding(account.id, {
           nickname: 'newNick',
           name: null,
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('닉네임이 중복이면 ConflictException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
-      repo.isNicknameTaken.mockResolvedValue(true);
+    it('닉네임이 이미 다른 계정에서 사용 중이면 ConflictException을 던진다', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'takenNick',
+      });
+
+      const me = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '길동',
+      });
+      await createUserProfile(prisma, { account_id: me.id });
 
       await expect(
-        service.completeOnboarding(BigInt(1), {
-          nickname: 'taken',
-          name: '홍길동',
-        }),
+        service.completeOnboarding(me.id, { nickname: 'takenNick' }),
       ).rejects.toThrow(ConflictException);
     });
   });
 
+  // ─── updateMyProfile ───
   describe('updateMyProfile', () => {
-    it('업데이트 필드가 없으면 BadRequestException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+    it('변경할 필드가 하나도 없으면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
 
-      await expect(service.updateMyProfile(BigInt(1), {})).rejects.toThrow(
+      await expect(service.updateMyProfile(account.id, {})).rejects.toThrow(
         BadRequestException,
       );
     });
 
-    it('birthDate만 업데이트하면 성공해야 한다', async () => {
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(baseAccount)
-        .mockResolvedValueOnce(baseAccount);
-      repo.updateProfile.mockResolvedValue(undefined as never);
-
-      const result = await service.updateMyProfile(BigInt(1), {
-        birthDate: new Date('1990-06-15'),
+    it('birthDate만 단독 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        birth_date: null,
       });
 
-      expect(repo.updateProfile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          accountId: BigInt(1),
-          birthDate: expect.any(Date),
-        }),
-      );
-      expect(result.accountId).toBe('1');
+      const result = await service.updateMyProfile(account.id, {
+        birthDate: new Date('1995-03-20'),
+      });
+
+      expect(result.profile.birthDate).toBeInstanceOf(Date);
+      expect((result.profile.birthDate as Date).getFullYear()).toBe(1995);
     });
 
-    it('phoneNumber만 업데이트하면 성공해야 한다', async () => {
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(baseAccount)
-        .mockResolvedValueOnce(baseAccount);
-      repo.updateProfile.mockResolvedValue(undefined as never);
+    it('phoneNumber만 단독 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        phone_number: null,
+      });
 
-      await service.updateMyProfile(BigInt(1), {
+      const result = await service.updateMyProfile(account.id, {
         phoneNumber: '010-9999-8888',
       });
 
-      expect(repo.updateProfile).toHaveBeenCalledWith(
-        expect.objectContaining({ phoneNumber: '010-9999-8888' }),
-      );
+      expect(result.profile.phoneNumber).toBe('010-9999-8888');
     });
 
-    it('닉네임이 undefined가 아니지만 중복 아니면 성공해야 한다', async () => {
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(baseAccount)
-        .mockResolvedValueOnce(baseAccount);
-      repo.isNicknameTaken.mockResolvedValue(false);
-      repo.updateProfile.mockResolvedValue(undefined as never);
+    it('사용 가능한 닉네임으로 변경한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'oldNick',
+      });
 
-      await service.updateMyProfile(BigInt(1), { nickname: 'uniqueNick' });
+      const result = await service.updateMyProfile(account.id, {
+        nickname: 'newNick',
+      });
 
-      expect(repo.isNicknameTaken).toHaveBeenCalledWith(
-        'uniqueNick',
-        BigInt(1),
-      );
-      expect(repo.updateProfile).toHaveBeenCalled();
+      expect(result.profile.nickname).toBe('newNick');
+    });
+
+    it('닉네임이 다른 계정에서 이미 쓰이면 ConflictException을 던진다', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'taken',
+      });
+
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      await expect(
+        service.updateMyProfile(me.id, { nickname: 'taken' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
+  // ─── updateMyProfileImage ───
   describe('updateMyProfileImage', () => {
-    it('유효한 URL이면 프로필 이미지를 업데이트해야 한다', async () => {
-      repo.findAccountWithProfile
-        .mockResolvedValueOnce(baseAccount)
-        .mockResolvedValueOnce(baseAccount);
-      repo.updateProfileImage.mockResolvedValue(undefined as never);
+    it('유효한 URL이면 프로필 이미지를 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
 
-      const result = await service.updateMyProfileImage(BigInt(1), {
+      const result = await service.updateMyProfileImage(account.id, {
         profileImageUrl: 'https://s3.example.com/profile.jpg',
       });
 
-      expect(repo.updateProfileImage).toHaveBeenCalledWith({
-        accountId: BigInt(1),
-        profileImageUrl: 'https://s3.example.com/profile.jpg',
-      });
-      expect(result.accountId).toBe('1');
+      expect(result.profile.profileImageUrl).toBe(
+        'https://s3.example.com/profile.jpg',
+      );
     });
 
-    it('URL이 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+    it('URL이 공백-only면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
 
       await expect(
-        service.updateMyProfileImage(BigInt(1), { profileImageUrl: '   ' }),
+        service.updateMyProfileImage(account.id, { profileImageUrl: '   ' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('URL이 2048자 초과이면 BadRequestException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+    it('URL이 2048자를 초과하면 BadRequestException을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
 
       await expect(
-        service.updateMyProfileImage(BigInt(1), {
+        service.updateMyProfileImage(account.id, {
           profileImageUrl: 'https://s3.example.com/' + 'a'.repeat(2030),
         }),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('createProfileImageUploadUrl', () => {
-    beforeEach(() => {
-      repo.findAccountWithProfile.mockResolvedValue(baseAccount);
+  // ─── checkNicknameAvailability ───
+  describe('checkNicknameAvailability', () => {
+    it('사용 가능한 닉네임이면 available: true', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability(
+        'freshNick',
+        account.id,
+      );
+
+      expect(result).toEqual({ available: true, reason: null });
     });
 
-    it('S3Service에 PROFILE_IMAGE purpose로 위임해야 한다', async () => {
-      const mockResult = {
-        uploadUrl: 'https://presigned-url.com',
+    it('이미 사용 중인 닉네임이면 available: false + 사유 반환', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'takenNick',
+      });
+
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      const result = await service.checkNicknameAvailability(
+        'takenNick',
+        me.id,
+      );
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('이미 사용 중');
+    });
+
+    it('자기 자신이 이미 쓰고 있는 닉네임은 사용 가능으로 판정한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'myNick',
+      });
+
+      const result = await service.checkNicknameAvailability(
+        'myNick',
+        account.id,
+      );
+
+      expect(result.available).toBe(true);
+    });
+
+    it('너무 짧으면 available: false + 길이 사유', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability('a', account.id);
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('2~20자');
+    });
+
+    it('특수문자가 포함되면 available: false + 문자 사유', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability(
+        'nick@name',
+        account.id,
+      );
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('한글');
+    });
+  });
+
+  // ─── createProfileImageUploadUrl (S3 mock 유지) ───
+  describe('createProfileImageUploadUrl', () => {
+    it('S3Service.createUploadUrl에 PROFILE_IMAGE purpose로 위임한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const uploadResult = {
+        uploadUrl: 'https://presigned.example.com',
         publicUrl: 'https://s3.example.com/profile.jpg',
-        key: 'profile-images/1/2026-04-13/uuid.jpg',
+        key: 'profile-images/x/2026-04-21/uuid.jpg',
         expiresInSeconds: 600,
       };
-      s3Service.createUploadUrl.mockResolvedValue(mockResult);
+      s3Service.createUploadUrl.mockResolvedValue(uploadResult);
 
-      const result = await service.createProfileImageUploadUrl(BigInt(1), {
+      const result = await service.createProfileImageUploadUrl(account.id, {
         contentType: 'image/jpeg',
         contentLength: 1024 * 1024,
       });
 
-      expect(result).toEqual(mockResult);
+      expect(result).toEqual(uploadResult);
       expect(s3Service.createUploadUrl).toHaveBeenCalledWith({
-        accountId: BigInt(1),
+        accountId: account.id,
         purpose: 'PROFILE_IMAGE',
         contentType: 'image/jpeg',
         contentLength: 1024 * 1024,
       });
+    });
+  });
+
+  // ─── deleteMyAccount ───
+  describe('deleteMyAccount', () => {
+    it('계정/프로필을 soft delete하고 닉네임은 deleted_{id}로 치환한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        email: 'delete@example.com',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'preDelete',
+      });
+
+      const result = await service.deleteMyAccount(account.id);
+
+      expect(result).toBe(true);
+
+      const deletedAccount = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(deletedAccount.deleted_at).toBeInstanceOf(Date);
+      expect(deletedAccount.email).toBeNull();
+
+      const deletedProfile = await prisma.userProfile.findUniqueOrThrow({
+        where: { account_id: account.id },
+      });
+      expect(deletedProfile.deleted_at).toBeInstanceOf(Date);
+      expect(deletedProfile.nickname).toBe(`deleted_${account.id.toString()}`);
+    });
+
+    it('삭제된 계정은 이후 me() 호출 시 UnauthorizedException', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await service.deleteMyAccount(account.id);
+
+      await expect(service.me(account.id)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });
