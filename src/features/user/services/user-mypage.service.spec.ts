@@ -67,11 +67,13 @@ describe('UserMypageService (real DB)', () => {
       expect(result.recentViewedProducts).toEqual([]);
     });
 
-    it('counts는 active 레코드만 계산한다 (타 계정 리뷰는 카운트 제외)', async () => {
+    it('counts는 active 레코드만 계산한다 (soft-delete + 타계정 제외)', async () => {
       const account = await setupUser();
       const product = await createProduct(prisma);
+      const product2 = await createProduct(prisma);
+      const product3 = await createProduct(prisma);
 
-      // Custom drafts: 2 active (IN_PROGRESS, READY_FOR_ORDER) — 카운트 대상
+      // Custom drafts: active 2 + soft-deleted 1
       await prisma.customDraft.create({
         data: {
           account_id: account.id,
@@ -82,25 +84,59 @@ describe('UserMypageService (real DB)', () => {
       await prisma.customDraft.create({
         data: {
           account_id: account.id,
-          product_id: product.id,
+          product_id: product2.id,
           status: 'READY_FOR_ORDER',
         },
       });
+      await prisma.customDraft.create({
+        data: {
+          account_id: account.id,
+          product_id: product3.id,
+          status: 'IN_PROGRESS',
+          deleted_at: new Date(),
+        },
+      });
 
-      // 위시리스트 2개
+      // 위시리스트: active 2 + soft-deleted 1 → soft-delete middleware가 제외해야 함
       await prisma.wishlistItem.create({
         data: { account_id: account.id, product_id: product.id },
       });
-      const product2 = await createProduct(prisma);
       await prisma.wishlistItem.create({
         data: { account_id: account.id, product_id: product2.id },
       });
+      await prisma.wishlistItem.create({
+        data: {
+          account_id: account.id,
+          product_id: product3.id,
+          deleted_at: new Date(),
+        },
+      });
 
-      // 다른 계정 리뷰 — 내 리뷰 카운트에 포함되면 안 됨
+      // 리뷰: 타계정 것 1 + 본인 soft-deleted 1 → 둘 다 myReviewCount=0이어야 함
       await createReview(prisma);
+
+      const myOrder = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PICKED_UP',
+      });
+      const myOrderItem = await createOrderItem(prisma, {
+        order_id: myOrder.id,
+        product_id: product.id,
+      });
+      await prisma.review.create({
+        data: {
+          order_item_id: myOrderItem.id,
+          account_id: account.id,
+          store_id: myOrderItem.store_id,
+          product_id: myOrderItem.product_id,
+          rating: 5,
+          deleted_at: new Date(),
+        },
+      });
 
       const result = await service.getOverview(account.id);
 
+      // 정확히 active 레코드만 카운트
       expect(result.counts.customDraftCount).toBe(2);
       expect(result.counts.wishlistCount).toBe(2);
       expect(result.counts.myReviewCount).toBe(0);
