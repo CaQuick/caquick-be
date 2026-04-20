@@ -228,10 +228,15 @@ describe('UserBaseService (real DB)', () => {
       expect(result?.getFullYear()).toBe(1990);
     });
 
-    it('오늘 날짜는 미래로 취급하지 않는다', () => {
+    it('오늘 날짜는 미래로 취급하지 않고 그대로 반환한다', () => {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
-      expect(service.testNormalizeBirthDate(today)).toBeInstanceOf(Date);
+
+      const result = service.testNormalizeBirthDate(today);
+
+      expect(result).toBeInstanceOf(Date);
+      // 시간은 00:00:00으로 내부 정규화되지만 날짜 자체는 오늘과 같아야 함
+      expect(result?.toDateString()).toBe(today.toDateString());
     });
   });
 
