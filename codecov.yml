@@ -7,14 +7,24 @@ coverage:
       default:
         target: auto
         threshold: 1%
+        base: auto
     patch:
       default:
         target: 80%
+        threshold: 0%
 
 comment:
-  layout: "reach, diff, flags, files"
-  behavior: new
-  require_changes: true
+  # 상세 리포트 복원 설정 (2026-04 리서치 기반):
+  # - hide_project_coverage: false → 댓글 상단에 프로젝트 요약 포함
+  # - require_changes: false → 커버리지 변화 없는 PR에서도 댓글 갱신 유지
+  # - require_base/head: true → 유의미한 비교가 가능할 때만 댓글 (운영 모드)
+  # - layout: reach(deprecated)/flags(미사용) 제거. header/diff/files/footer 표준
+  layout: "header, diff, files, footer"
+  behavior: default
+  require_changes: false
+  require_base: true
+  require_head: true
+  hide_project_coverage: false
 
 ignore:
   - "src/test/**"

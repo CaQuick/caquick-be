@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24.x"
           cache: "yarn"
@@ -48,11 +48,16 @@ jobs:
         run: yarn test:cov
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
-          token: ${{ secrets.CODECOV_TOKEN || '' }}
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
-          fail_ci_if_error: false
+          # disable_search: 지정한 파일만 업로드 (자동 탐색 결과와 섞이지 않도록)
+          disable_search: true
+          name: backend-lcov
+          # 업로드 실패 시 조용히 넘어가지 않고 CI 실패로 가시화 (진단/운영 모두 권장).
+          fail_ci_if_error: true
+          verbose: true
 
       - name: Build
         run: |
@@ -70,10 +75,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "24.x"
           cache: "yarn"
@@ -84,7 +89,7 @@ jobs:
           yarn install --immutable
 
       - name: Coverage Report (jest-coverage-report)
-        uses: ArtiomTr/jest-coverage-report-action@v2
+        uses: ArtiomTr/jest-coverage-report-action@7f750dd50f5585533321eb7ebc482b936b49a5d4 # v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           test-script: yarn jest --coverage --ci
@@ -98,7 +103,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Validate PR title
-        uses: amannn/action-semantic-pull-request@v5
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         with:
           subjectPattern: ^.+$
           subjectPatternError: |
