@@ -3,8 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, type PrismaClient } from '@prisma/client';
 
 import {
   OrderDomainService,
@@ -13,485 +12,225 @@ import {
 } from '@/features/order';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createOrder,
+  createOrderItem,
+  setupSellerWithStore,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('SellerOrderService', () => {
+describe('SellerOrderService (real DB)', () => {
   let service: SellerOrderService;
-  let repo: jest.Mocked<SellerRepository>;
-  let orderRepo: jest.Mocked<OrderRepository>;
+  let prisma: PrismaClient;
 
-  const SELLER_CONTEXT = {
-    id: BigInt(1),
-    account_type: 'SELLER',
-    status: 'ACTIVE',
-    store: { id: BigInt(100) },
-  };
-
-  const NOW = new Date('2026-03-30T00:00:00.000Z');
-
-  beforeEach(async () => {
-    repo = {
-      findSellerAccountContext: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
-    orderRepo = {
-      listOrdersByStore: jest.fn(),
-      findOrderDetailByStore: jest.fn(),
-      updateOrderStatusBySeller: jest.fn(),
-    } as unknown as jest.Mocked<OrderRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         SellerOrderService,
-        OrderStatusTransitionPolicy,
+        SellerRepository,
+        OrderRepository,
         OrderDomainService,
-        {
-          provide: SellerRepository,
-          useValue: repo,
-        },
-        {
-          provide: OrderRepository,
-          useValue: orderRepo,
-        },
+        OrderStatusTransitionPolicy,
       ],
-    }).compile();
-
-    service = module.get<SellerOrderService>(SellerOrderService);
+    });
+    service = module.get(SellerOrderService);
+    prisma = p;
   });
 
-  // ─── 기존 예외 테스트 ────────────────────────────────────────
-
-  it('판매자 계정이 아니면 ForbiddenException을 던져야 한다', async () => {
-    repo.findSellerAccountContext.mockResolvedValue({
-      id: BigInt(1),
-      account_type: 'USER',
-      status: 'ACTIVE',
-      store: { id: BigInt(100) },
-    } as never);
-
-    await expect(service.sellerOrder(BigInt(1), BigInt(10))).rejects.toThrow(
-      ForbiddenException,
-    );
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
   });
 
-  it('주문 상태 전이가 잘못되면 BadRequestException을 던져야 한다', async () => {
-    repo.findSellerAccountContext.mockResolvedValue({
-      id: BigInt(1),
-      account_type: 'SELLER',
-      status: 'ACTIVE',
-      store: { id: BigInt(100) },
-    } as never);
-
-    orderRepo.findOrderDetailByStore.mockResolvedValue({
-      id: BigInt(10),
-      status: OrderStatus.SUBMITTED,
-      order_number: 'O-1',
-      account_id: BigInt(20),
-      pickup_at: new Date(),
-      buyer_name: '홍길동',
-      buyer_phone: '010-0000-0000',
-      subtotal_price: 1000,
-      discount_price: 0,
-      total_price: 1000,
-      submitted_at: new Date(),
-      confirmed_at: null,
-      made_at: null,
-      picked_up_at: null,
-      canceled_at: null,
-      created_at: new Date(),
-      updated_at: new Date(),
-      status_histories: [],
-      items: [],
-    } as never);
-
-    await expect(
-      service.sellerUpdateOrderStatus(BigInt(1), {
-        orderId: '10',
-        toStatus: 'MADE',
-        note: null,
-      }),
-    ).rejects.toThrow(BadRequestException);
+  beforeEach(async () => {
+    await truncateAll();
   });
 
-  it('주문이 없으면 NotFoundException을 던져야 한다', async () => {
-    repo.findSellerAccountContext.mockResolvedValue({
-      id: BigInt(1),
-      account_type: 'SELLER',
-      status: 'ACTIVE',
-      store: { id: BigInt(100) },
-    } as never);
+  async function createStoreOrder(
+    storeId: bigint,
+    opts: { status?: OrderStatus } = {},
+  ) {
+    const buyer = await createAccount(prisma, { account_type: 'USER' });
+    const order = await createOrder(prisma, {
+      account_id: buyer.id,
+      status: opts.status ?? 'SUBMITTED',
+    });
+    await createOrderItem(prisma, {
+      order_id: order.id,
+      store_id: storeId,
+    });
+    return order;
+  }
 
-    orderRepo.findOrderDetailByStore.mockResolvedValue(null);
-
-    await expect(service.sellerOrder(BigInt(1), BigInt(9999))).rejects.toThrow(
-      NotFoundException,
-    );
+  describe('공통 예외', () => {
+    it('판매자 계정이 아니면 ForbiddenException', async () => {
+      const userAccount = await createAccount(prisma, { account_type: 'USER' });
+      await expect(
+        service.sellerOrder(userAccount.id, BigInt(10)),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
-
-  // ─── 성공 경로 테스트 ────────────────────────────────────────
 
   describe('sellerOrderList', () => {
-    it('주문 목록을 커서 기반 페이지네이션으로 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+    it('자기 매장 주문만 반환한다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      await createStoreOrder(me.store.id);
+      await createStoreOrder(other.store.id);
 
-      const orderRows = [
-        {
-          id: BigInt(10),
-          order_number: 'ORD-001',
-          status: OrderStatus.SUBMITTED,
-          pickup_at: NOW,
-          buyer_name: '홍길동',
-          buyer_phone: '010-1234-5678',
-          total_price: 15000,
-          created_at: NOW,
-        },
-        {
-          id: BigInt(9),
-          order_number: 'ORD-002',
-          status: OrderStatus.CONFIRMED,
-          pickup_at: NOW,
-          buyer_name: '김철수',
-          buyer_phone: '010-9876-5432',
-          total_price: 25000,
-          created_at: NOW,
-        },
-      ];
-      orderRepo.listOrdersByStore.mockResolvedValue(orderRows as never);
-
-      const result = await service.sellerOrderList(BigInt(1));
-
-      expect(orderRepo.listOrdersByStore).toHaveBeenCalledWith({
-        storeId: BigInt(100),
-        limit: 20,
-      });
-      expect(result).toEqual({
-        items: [
-          {
-            id: '10',
-            orderNumber: 'ORD-001',
-            status: OrderStatus.SUBMITTED,
-            pickupAt: NOW,
-            buyerName: '홍길동',
-            buyerPhone: '010-1234-5678',
-            totalPrice: 15000,
-            createdAt: NOW,
-          },
-          {
-            id: '9',
-            orderNumber: 'ORD-002',
-            status: OrderStatus.CONFIRMED,
-            pickupAt: NOW,
-            buyerName: '김철수',
-            buyerPhone: '010-9876-5432',
-            totalPrice: 25000,
-            createdAt: NOW,
-          },
-        ],
-        nextCursor: null,
-      });
+      const result = await service.sellerOrderList(me.account.id);
+      expect(result.items).toHaveLength(1);
     });
 
-    it('status 필터를 적용하여 주문 목록을 조회해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      orderRepo.listOrdersByStore.mockResolvedValue([] as never);
+    it('status 필터링이 동작한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createStoreOrder(store.id, { status: 'SUBMITTED' });
+      await createStoreOrder(store.id, { status: 'CONFIRMED' });
 
-      await service.sellerOrderList(BigInt(1), {
-        status: 'SUBMITTED',
+      const result = await service.sellerOrderList(account.id, {
+        status: 'CONFIRMED',
       });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].status).toBe('CONFIRMED');
+    });
 
-      expect(orderRepo.listOrdersByStore).toHaveBeenCalledWith(
-        expect.objectContaining({
-          storeId: BigInt(100),
-          status: OrderStatus.SUBMITTED,
-        }),
-      );
+    it('잘못된 status enum이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerOrderList(account.id, { status: 'INVALID' as never }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('limit 초과 시 nextCursor 반환', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) await createStoreOrder(store.id);
+
+      const result = await service.sellerOrderList(account.id, { limit: 2 });
+      expect(result.items).toHaveLength(2);
+      expect(result.nextCursor).not.toBeNull();
     });
   });
 
   describe('sellerOrder', () => {
-    it('주문 상세 정보를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+    it('존재하지 않는 orderId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerOrder(account.id, BigInt(999999)),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-      const orderDetailRow = {
-        id: BigInt(10),
-        order_number: 'ORD-001',
-        account_id: BigInt(20),
-        status: OrderStatus.CONFIRMED,
-        pickup_at: NOW,
-        buyer_name: '홍길동',
-        buyer_phone: '010-1234-5678',
-        subtotal_price: 15000,
-        discount_price: 1000,
-        total_price: 14000,
-        submitted_at: NOW,
-        confirmed_at: NOW,
-        made_at: null,
-        picked_up_at: null,
-        canceled_at: null,
-        created_at: NOW,
-        updated_at: NOW,
-        status_histories: [
-          {
-            id: BigInt(1),
-            from_status: OrderStatus.SUBMITTED,
-            to_status: OrderStatus.CONFIRMED,
-            changed_at: NOW,
-            note: null,
-          },
-        ],
-        items: [
-          {
-            id: BigInt(50),
-            store_id: BigInt(100),
-            product_id: BigInt(200),
-            product_name_snapshot: '케이크',
-            regular_price_snapshot: 15000,
-            sale_price_snapshot: null,
-            quantity: 1,
-            item_subtotal_price: 15000,
-            option_items: [
-              {
-                id: BigInt(60),
-                group_name_snapshot: '사이즈',
-                option_title_snapshot: '라지',
-                option_price_delta_snapshot: 3000,
-              },
-            ],
-            custom_texts: [
-              {
-                id: BigInt(70),
-                token_key_snapshot: 'message',
-                default_text_snapshot: '축하합니다',
-                value_text: '생일 축하해요!',
-                sort_order: 0,
-              },
-            ],
-            free_edits: [
-              {
-                id: BigInt(80),
-                crop_image_url: 'https://img.example.com/crop.png',
-                description_text: '자유 편집',
-                sort_order: 0,
-                attachments: [
-                  {
-                    id: BigInt(90),
-                    image_url: 'https://img.example.com/attach.png',
-                    sort_order: 0,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-      orderRepo.findOrderDetailByStore.mockResolvedValue(
-        orderDetailRow as never,
-      );
+    it('다른 매장 주문은 NotFoundException', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const othersOrder = await createStoreOrder(other.store.id);
 
-      const result = await service.sellerOrder(BigInt(1), BigInt(10));
+      await expect(
+        service.sellerOrder(me.account.id, othersOrder.id),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-      expect(orderRepo.findOrderDetailByStore).toHaveBeenCalledWith({
-        orderId: BigInt(10),
-        storeId: BigInt(100),
+    it('본인 매장 주문의 상세를 items/status_histories 포함하여 반환', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'CONFIRMED' });
+      await prisma.orderStatusHistory.create({
+        data: {
+          order_id: order.id,
+          from_status: 'SUBMITTED',
+          to_status: 'CONFIRMED',
+          changed_at: new Date('2026-04-15T10:00:00Z'),
+          note: '접수 확정',
+        },
       });
-      expect(result).toEqual({
-        id: '10',
-        orderNumber: 'ORD-001',
-        accountId: '20',
-        status: OrderStatus.CONFIRMED,
-        pickupAt: NOW,
-        buyerName: '홍길동',
-        buyerPhone: '010-1234-5678',
-        subtotalPrice: 15000,
-        discountPrice: 1000,
-        totalPrice: 14000,
-        submittedAt: NOW,
-        confirmedAt: NOW,
-        madeAt: null,
-        pickedUpAt: null,
-        canceledAt: null,
-        createdAt: NOW,
-        updatedAt: NOW,
-        statusHistories: [
-          {
-            id: '1',
-            fromStatus: OrderStatus.SUBMITTED,
-            toStatus: OrderStatus.CONFIRMED,
-            changedAt: NOW,
-            note: null,
-          },
-        ],
-        items: [
-          {
-            id: '50',
-            storeId: '100',
-            productId: '200',
-            productNameSnapshot: '케이크',
-            regularPriceSnapshot: 15000,
-            salePriceSnapshot: null,
-            quantity: 1,
-            itemSubtotalPrice: 15000,
-            optionItems: [
-              {
-                id: '60',
-                groupNameSnapshot: '사이즈',
-                optionTitleSnapshot: '라지',
-                optionPriceDeltaSnapshot: 3000,
-              },
-            ],
-            customTexts: [
-              {
-                id: '70',
-                tokenKeySnapshot: 'message',
-                defaultTextSnapshot: '축하합니다',
-                valueText: '생일 축하해요!',
-                sortOrder: 0,
-              },
-            ],
-            freeEdits: [
-              {
-                id: '80',
-                cropImageUrl: 'https://img.example.com/crop.png',
-                descriptionText: '자유 편집',
-                sortOrder: 0,
-                attachments: [
-                  {
-                    id: '90',
-                    imageUrl: 'https://img.example.com/attach.png',
-                    sortOrder: 0,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
+
+      const result = await service.sellerOrder(account.id, order.id);
+      expect(result.id).toBe(order.id.toString());
+      expect(result.status).toBe('CONFIRMED');
+      expect(result.items).toHaveLength(1);
+      expect(result.statusHistories).toHaveLength(1);
+      expect(result.statusHistories[0].toStatus).toBe('CONFIRMED');
     });
   });
 
   describe('sellerUpdateOrderStatus', () => {
-    it('유효한 상태 전이로 주문 상태를 변경해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-
-      const currentOrder = {
-        id: BigInt(10),
-        order_number: 'ORD-001',
-        account_id: BigInt(20),
-        status: OrderStatus.SUBMITTED,
-        pickup_at: NOW,
-        buyer_name: '홍길동',
-        buyer_phone: '010-1234-5678',
-        subtotal_price: 15000,
-        discount_price: 0,
-        total_price: 15000,
-        submitted_at: NOW,
-        confirmed_at: null,
-        made_at: null,
-        picked_up_at: null,
-        canceled_at: null,
-        created_at: NOW,
-        updated_at: NOW,
-        status_histories: [],
-        items: [],
-      };
-      orderRepo.findOrderDetailByStore.mockResolvedValue(currentOrder as never);
-
-      const updatedOrder = {
-        id: BigInt(10),
-        order_number: 'ORD-001',
-        status: OrderStatus.CONFIRMED,
-        pickup_at: NOW,
-        buyer_name: '홍길동',
-        buyer_phone: '010-1234-5678',
-        total_price: 15000,
-        created_at: NOW,
-      };
-      orderRepo.updateOrderStatusBySeller.mockResolvedValue(
-        updatedOrder as never,
-      );
-
-      const result = await service.sellerUpdateOrderStatus(BigInt(1), {
-        orderId: '10',
-        toStatus: 'CONFIRMED',
-      });
-
-      expect(orderRepo.findOrderDetailByStore).toHaveBeenCalledWith({
-        orderId: BigInt(10),
-        storeId: BigInt(100),
-      });
-      expect(orderRepo.updateOrderStatusBySeller).toHaveBeenCalledWith(
-        expect.objectContaining({
-          orderId: BigInt(10),
-          storeId: BigInt(100),
-          actorAccountId: BigInt(1),
-          toStatus: OrderStatus.CONFIRMED,
+    it('주문이 없으면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: '999999',
+          toStatus: 'CONFIRMED',
           note: null,
         }),
-      );
-      expect(result).toEqual({
-        id: '10',
-        orderNumber: 'ORD-001',
-        status: OrderStatus.CONFIRMED,
-        pickupAt: NOW,
-        buyerName: '홍길동',
-        buyerPhone: '010-1234-5678',
-        totalPrice: 15000,
-        createdAt: NOW,
-      });
+      ).rejects.toThrow(NotFoundException);
     });
 
-    it('취소 시 사유 노트와 함께 상태를 변경해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+    it('상태 전이가 잘못되면 BadRequestException (SUBMITTED → MADE 차단)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'MADE',
+          note: null,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
 
-      const currentOrder = {
-        id: BigInt(10),
-        order_number: 'ORD-001',
-        account_id: BigInt(20),
-        status: OrderStatus.SUBMITTED,
-        pickup_at: NOW,
-        buyer_name: '홍길동',
-        buyer_phone: '010-1234-5678',
-        subtotal_price: 15000,
-        discount_price: 0,
-        total_price: 15000,
-        submitted_at: NOW,
-        confirmed_at: null,
-        made_at: null,
-        picked_up_at: null,
-        canceled_at: null,
-        created_at: NOW,
-        updated_at: NOW,
-        status_histories: [],
-        items: [],
-      };
-      orderRepo.findOrderDetailByStore.mockResolvedValue(currentOrder as never);
+    it('CANCELED 전환 시 note 누락되면 BadRequestException', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'CANCELED',
+          note: null,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
 
-      const updatedOrder = {
-        id: BigInt(10),
-        order_number: 'ORD-001',
-        status: OrderStatus.CANCELED,
-        pickup_at: NOW,
-        buyer_name: '홍길동',
-        buyer_phone: '010-1234-5678',
-        total_price: 15000,
-        created_at: NOW,
-      };
-      orderRepo.updateOrderStatusBySeller.mockResolvedValue(
-        updatedOrder as never,
-      );
+    it('정상 상태 전이: SUBMITTED → CONFIRMED, status_history row 생성 확인', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
 
-      const result = await service.sellerUpdateOrderStatus(BigInt(1), {
-        orderId: '10',
+      const result = await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'CONFIRMED',
+        note: null,
+      });
+
+      expect(result.status).toBe('CONFIRMED');
+
+      const dbOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(dbOrder.status).toBe('CONFIRMED');
+      expect(dbOrder.confirmed_at).not.toBeNull();
+
+      const histories = await prisma.orderStatusHistory.findMany({
+        where: { order_id: order.id },
+      });
+      expect(histories).toHaveLength(1);
+      expect(histories[0].from_status).toBe('SUBMITTED');
+      expect(histories[0].to_status).toBe('CONFIRMED');
+    });
+
+    it('CANCELED 전환 + note 제공 시 정상 처리', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+
+      const result = await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
         toStatus: 'CANCELED',
         note: '재고 부족',
       });
 
-      expect(orderRepo.updateOrderStatusBySeller).toHaveBeenCalledWith(
-        expect.objectContaining({
-          orderId: BigInt(10),
-          toStatus: OrderStatus.CANCELED,
-          note: '재고 부족',
-        }),
-      );
-      expect(result.status).toBe(OrderStatus.CANCELED);
+      expect(result.status).toBe('CANCELED');
+      const histories = await prisma.orderStatusHistory.findMany({
+        where: { order_id: order.id },
+      });
+      expect(histories[0].note).toBe('재고 부족');
     });
   });
 });
