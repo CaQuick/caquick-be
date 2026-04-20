@@ -10,7 +10,6 @@ import {
   createOrder,
   createOrderItem,
   createProduct,
-  createReview,
   createStore,
   createUserProfile,
 } from '@/test/factories';
