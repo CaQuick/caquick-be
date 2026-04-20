@@ -5,6 +5,7 @@ export * from './order.factory';
 export * from './product.factory';
 export * from './recent-product-view.factory';
 export * from './review.factory';
+export * from './search-history.factory';
 export * from './seller.factory';
 export * from './sequence';
 export * from './store.factory';
