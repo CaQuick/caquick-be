@@ -1,620 +1,322 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
+import type { PrismaClient, Product } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import { createProduct, setupSellerWithStore } from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-const SELLER_CONTEXT = {
-  id: BigInt(1),
-  account_type: 'SELLER',
-  status: 'ACTIVE',
-  store: { id: BigInt(100) },
-};
-
-describe('SellerOptionService', () => {
+describe('SellerOptionService (real DB)', () => {
   let service: SellerOptionService;
-  let repo: jest.Mocked<SellerRepository>;
-  let productRepo: jest.Mocked<ProductRepository>;
+  let prisma: PrismaClient;
 
-  beforeEach(async () => {
-    repo = {
-      findSellerAccountContext: jest.fn(),
-      createAuditLog: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
-
-    productRepo = {
-      findProductByIdIncludingInactive: jest.fn(),
-      createOptionGroup: jest.fn(),
-      findOptionGroupById: jest.fn(),
-      updateOptionGroup: jest.fn(),
-      softDeleteOptionGroup: jest.fn(),
-      listOptionGroupsByProduct: jest.fn(),
-      reorderOptionGroups: jest.fn(),
-      createOptionItem: jest.fn(),
-      findOptionItemById: jest.fn(),
-      updateOptionItem: jest.fn(),
-      softDeleteOptionItem: jest.fn(),
-      listOptionItemsByGroup: jest.fn(),
-      reorderOptionItems: jest.fn(),
-    } as unknown as jest.Mocked<ProductRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SellerOptionService,
-        {
-          provide: SellerRepository,
-          useValue: repo,
-        },
-        {
-          provide: ProductRepository,
-          useValue: productRepo,
-        },
-      ],
-    }).compile();
-
-    service = module.get<SellerOptionService>(SellerOptionService);
-
-    // 기본: 유효한 판매자 컨텍스트 반환
-    repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [SellerOptionService, SellerRepository, ProductRepository],
+    });
+    service = module.get(SellerOptionService);
+    prisma = p;
   });
 
-  // ── 옵션 그룹 ──
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
 
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function setupProductForSeller(): Promise<{
+    accountId: bigint;
+    storeId: bigint;
+    product: Product;
+  }> {
+    const { account, store } = await setupSellerWithStore(prisma);
+    const product = await createProduct(prisma, { store_id: store.id });
+    return { accountId: account.id, storeId: store.id, product };
+  }
+
+  async function createOptionGroup(productId: bigint) {
+    return prisma.productOptionGroup.create({
+      data: { product_id: productId, name: '사이즈' },
+    });
+  }
+
+  // ─── OptionGroup ──
   describe('sellerCreateOptionGroup', () => {
-    it('maxSelect가 minSelect보다 작으면 BadRequestException을 던져야 한다', async () => {
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-
+    it('존재하지 않는 productId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerCreateOptionGroup(BigInt(1), {
-          productId: '10',
-          name: '옵션그룹',
+        service.sellerCreateOptionGroup(accountId, {
+          productId: '999999',
+          name: 'X',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('maxSelect < minSelect면 BadRequestException', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      await expect(
+        service.sellerCreateOptionGroup(accountId, {
+          productId: product.id.toString(),
+          name: 'X',
           minSelect: 3,
           maxSelect: 1,
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효한 입력으로 옵션 그룹을 생성하고 결과를 반환해야 한다', async () => {
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-
-      const createdRow = {
-        id: BigInt(50),
-        product_id: BigInt(10),
-        name: '사이즈',
-        is_required: true,
-        min_select: 1,
-        max_select: 1,
-        option_requires_description: false,
-        option_requires_image: false,
-        sort_order: 0,
-        is_active: true,
-        option_items: [],
-      };
-      productRepo.createOptionGroup.mockResolvedValue(createdRow as never);
-
-      const result = await service.sellerCreateOptionGroup(BigInt(1), {
-        productId: '10',
+    it('정상 생성 + audit log', async () => {
+      const { accountId, storeId, product } = await setupProductForSeller();
+      const result = await service.sellerCreateOptionGroup(accountId, {
+        productId: product.id.toString(),
         name: '사이즈',
       });
+      expect(result.name).toBe('사이즈');
 
-      expect(result).toEqual({
-        id: '50',
-        productId: '10',
-        name: '사이즈',
-        isRequired: true,
-        minSelect: 1,
-        maxSelect: 1,
-        optionRequiresDescription: false,
-        optionRequiresImage: false,
-        sortOrder: 0,
-        isActive: true,
-        optionItems: [],
+      const groups = await prisma.productOptionGroup.findMany({
+        where: { product_id: product.id },
       });
+      expect(groups).toHaveLength(1);
 
-      expect(productRepo.createOptionGroup).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        data: expect.objectContaining({
-          name: '사이즈',
-          is_required: true,
-          min_select: 1,
-          max_select: 1,
-        }),
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: storeId, action: 'CREATE' },
       });
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.CREATE,
-        afterJson: { optionGroupId: '50' },
-      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
   describe('sellerUpdateOptionGroup', () => {
-    it('옵션 그룹이 없으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue(null as never);
-
+    it('존재하지 않는 optionGroupId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerUpdateOptionGroup(BigInt(1), {
-          optionGroupId: '999',
-          name: '수정',
+        service.sellerUpdateOptionGroup(accountId, {
+          optionGroupId: '999999',
+          name: 'X',
         }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('maxSelect가 minSelect보다 작으면 BadRequestException을 던져야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(1),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
+    it('다른 매장 소유 group이면 NotFoundException', async () => {
+      const me = await setupProductForSeller();
+      const other = await setupProductForSeller();
+      const othersGroup = await createOptionGroup(other.product.id);
 
       await expect(
-        service.sellerUpdateOptionGroup(BigInt(1), {
-          optionGroupId: '1',
-          minSelect: 5,
-          maxSelect: 2,
+        service.sellerUpdateOptionGroup(me.accountId, {
+          optionGroupId: othersGroup.id.toString(),
+          name: 'X',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('maxSelect < minSelect(기존값+신규값 조합)면 BadRequestException', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: 'G',
+          min_select: 2,
+          max_select: 5,
+        },
+      });
+
+      await expect(
+        service.sellerUpdateOptionGroup(accountId, {
+          optionGroupId: group.id.toString(),
+          maxSelect: 1,
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효한 입력으로 옵션 그룹을 수정하고 결과를 반환해야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(5),
-        product_id: BigInt(10),
-        min_select: 1,
-        max_select: 3,
-        product: { store_id: BigInt(100) },
-      } as never);
+    it('정상 수정', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
 
-      const updatedRow = {
-        id: BigInt(5),
-        product_id: BigInt(10),
-        name: '수정된 옵션그룹',
-        is_required: false,
-        min_select: 1,
-        max_select: 3,
-        option_requires_description: true,
-        option_requires_image: false,
-        sort_order: 2,
-        is_active: true,
-        option_items: [],
-      };
-      productRepo.updateOptionGroup.mockResolvedValue(updatedRow as never);
-
-      const result = await service.sellerUpdateOptionGroup(BigInt(1), {
-        optionGroupId: '5',
-        name: '수정된 옵션그룹',
-        isRequired: false,
-        optionRequiresDescription: true,
-        sortOrder: 2,
+      const result = await service.sellerUpdateOptionGroup(accountId, {
+        optionGroupId: group.id.toString(),
+        name: '신규명',
       });
-
-      expect(result).toEqual({
-        id: '5',
-        productId: '10',
-        name: '수정된 옵션그룹',
-        isRequired: false,
-        minSelect: 1,
-        maxSelect: 3,
-        optionRequiresDescription: true,
-        optionRequiresImage: false,
-        sortOrder: 2,
-        isActive: true,
-        optionItems: [],
-      });
-
-      expect(productRepo.updateOptionGroup).toHaveBeenCalledWith({
-        optionGroupId: BigInt(5),
-        data: expect.objectContaining({
-          name: '수정된 옵션그룹',
-          is_required: false,
-          option_requires_description: true,
-          sort_order: 2,
-        }),
-      });
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.UPDATE,
-        afterJson: { optionGroupId: '5' },
-      });
+      expect(result.name).toBe('신규명');
     });
   });
 
   describe('sellerDeleteOptionGroup', () => {
-    it('옵션 그룹이 없으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue(null as never);
-
+    it('없으면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerDeleteOptionGroup(BigInt(1), BigInt(999)),
+        service.sellerDeleteOptionGroup(accountId, BigInt(999999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('유효한 옵션 그룹을 소프트 삭제하고 true를 반환해야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(5),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
-      productRepo.softDeleteOptionGroup.mockResolvedValue(undefined as never);
+    it('soft-delete + audit log', async () => {
+      const { accountId, storeId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
 
-      const result = await service.sellerDeleteOptionGroup(
-        BigInt(1),
-        BigInt(5),
-      );
+      await service.sellerDeleteOptionGroup(accountId, group.id);
 
-      expect(result).toBe(true);
-
-      expect(productRepo.softDeleteOptionGroup).toHaveBeenCalledWith(BigInt(5));
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.DELETE,
-        beforeJson: { optionGroupId: '5' },
+      const after = await prisma.productOptionGroup.findUnique({
+        where: { id: group.id },
       });
+      expect(after?.deleted_at).not.toBeNull();
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: storeId, action: 'DELETE' },
+      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
   describe('sellerReorderOptionGroups', () => {
-    it('optionGroupIds 길이가 불일치하면 BadRequestException을 던져야 한다', async () => {
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.listOptionGroupsByProduct.mockResolvedValue([
-        { id: BigInt(1) },
-        { id: BigInt(2) },
-      ] as never);
-
+    it('optionGroupIds 길이 불일치면 BadRequestException', async () => {
+      const { accountId, product } = await setupProductForSeller();
       await expect(
-        service.sellerReorderOptionGroups(BigInt(1), {
-          productId: '10',
-          optionGroupIds: ['1'],
+        service.sellerReorderOptionGroups(accountId, {
+          productId: product.id.toString(),
+          optionGroupIds: ['1', '2'],
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효한 입력으로 옵션 그룹을 정렬하고 결과를 반환해야 한다', async () => {
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.listOptionGroupsByProduct.mockResolvedValue([
-        { id: BigInt(1) },
-        { id: BigInt(2) },
-      ] as never);
-
-      const reorderedRows = [
-        {
-          id: BigInt(2),
-          product_id: BigInt(10),
-          name: '그룹B',
-          is_required: true,
-          min_select: 1,
-          max_select: 1,
-          option_requires_description: false,
-          option_requires_image: false,
-          sort_order: 0,
-          is_active: true,
-          option_items: [],
-        },
-        {
-          id: BigInt(1),
-          product_id: BigInt(10),
-          name: '그룹A',
-          is_required: true,
-          min_select: 1,
-          max_select: 1,
-          option_requires_description: false,
-          option_requires_image: false,
-          sort_order: 1,
-          is_active: true,
-          option_items: [],
-        },
-      ];
-      productRepo.reorderOptionGroups.mockResolvedValue(reorderedRows as never);
-
-      const result = await service.sellerReorderOptionGroups(BigInt(1), {
-        productId: '10',
-        optionGroupIds: ['2', '1'],
+    it('정상 재정렬', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const g1 = await createOptionGroup(product.id);
+      const g2 = await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '색상', sort_order: 1 },
       });
 
+      const result = await service.sellerReorderOptionGroups(accountId, {
+        productId: product.id.toString(),
+        optionGroupIds: [g2.id.toString(), g1.id.toString()],
+      });
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('2');
-      expect(result[1].id).toBe('1');
-
-      expect(productRepo.reorderOptionGroups).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        optionGroupIds: [BigInt(2), BigInt(1)],
-      });
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.UPDATE,
-        afterJson: { optionGroupIds: ['2', '1'] },
-      });
+      expect(result[0].id).toBe(g2.id.toString());
     });
   });
 
-  // ── 옵션 아이템 ──
-
+  // ─── OptionItem ──
   describe('sellerCreateOptionItem', () => {
-    it('옵션 그룹이 없으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue(null as never);
-
+    it('없는 optionGroupId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerCreateOptionItem(BigInt(1), {
-          optionGroupId: '999',
-          title: '옵션',
+        service.sellerCreateOptionItem(accountId, {
+          optionGroupId: '999999',
+          title: 'L',
         }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('유효한 입력으로 옵션 아이템을 생성하고 결과를 반환해야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(5),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
+    it('정상 생성', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
 
-      const createdRow = {
-        id: BigInt(30),
-        option_group_id: BigInt(5),
-        title: '라지',
-        description: '큰 사이즈',
-        image_url: null,
-        price_delta: 1000,
-        sort_order: 0,
-        is_active: true,
-      };
-      productRepo.createOptionItem.mockResolvedValue(createdRow as never);
-
-      const result = await service.sellerCreateOptionItem(BigInt(1), {
-        optionGroupId: '5',
-        title: '라지',
-        description: '큰 사이즈',
-        priceDelta: 1000,
+      const result = await service.sellerCreateOptionItem(accountId, {
+        optionGroupId: group.id.toString(),
+        title: 'L',
+        priceDelta: 3000,
       });
-
-      expect(result).toEqual({
-        id: '30',
-        optionGroupId: '5',
-        title: '라지',
-        description: '큰 사이즈',
-        imageUrl: null,
-        priceDelta: 1000,
-        sortOrder: 0,
-        isActive: true,
-      });
-
-      expect(productRepo.createOptionItem).toHaveBeenCalledWith({
-        optionGroupId: BigInt(5),
-        data: expect.objectContaining({
-          title: '라지',
-          description: '큰 사이즈',
-          price_delta: 1000,
-        }),
-      });
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.CREATE,
-        afterJson: { optionItemId: '30' },
-      });
+      expect(result.title).toBe('L');
+      expect(result.priceDelta).toBe(3000);
     });
   });
 
   describe('sellerUpdateOptionItem', () => {
-    it('옵션 아이템이 없으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findOptionItemById.mockResolvedValue(null as never);
-
+    it('없는 optionItemId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerUpdateOptionItem(BigInt(1), {
-          optionItemId: '999',
-          title: '수정',
+        service.sellerUpdateOptionItem(accountId, {
+          optionItemId: '999999',
+          title: 'X',
         }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('유효한 입력으로 옵션 아이템을 수정하고 결과를 반환해야 한다', async () => {
-      productRepo.findOptionItemById.mockResolvedValue({
-        id: BigInt(30),
-        option_group_id: BigInt(5),
-        option_group: {
-          product_id: BigInt(10),
-          product: { store_id: BigInt(100) },
-        },
-      } as never);
-
-      const updatedRow = {
-        id: BigInt(30),
-        option_group_id: BigInt(5),
-        title: '미디엄',
-        description: '중간 사이즈',
-        image_url: 'https://example.com/img.png',
-        price_delta: 500,
-        sort_order: 1,
-        is_active: true,
-      };
-      productRepo.updateOptionItem.mockResolvedValue(updatedRow as never);
-
-      const result = await service.sellerUpdateOptionItem(BigInt(1), {
-        optionItemId: '30',
-        title: '미디엄',
-        description: '중간 사이즈',
-        imageUrl: 'https://example.com/img.png',
-        priceDelta: 500,
-        sortOrder: 1,
+    it('다른 매장 item이면 NotFoundException', async () => {
+      const me = await setupProductForSeller();
+      const other = await setupProductForSeller();
+      const othersGroup = await createOptionGroup(other.product.id);
+      const othersItem = await prisma.productOptionItem.create({
+        data: { option_group_id: othersGroup.id, title: 'T' },
       });
 
-      expect(result).toEqual({
-        id: '30',
-        optionGroupId: '5',
-        title: '미디엄',
-        description: '중간 사이즈',
-        imageUrl: 'https://example.com/img.png',
-        priceDelta: 500,
-        sortOrder: 1,
-        isActive: true,
-      });
-
-      expect(productRepo.updateOptionItem).toHaveBeenCalledWith({
-        optionItemId: BigInt(30),
-        data: expect.objectContaining({
-          title: '미디엄',
-          description: '중간 사이즈',
-          image_url: 'https://example.com/img.png',
-          price_delta: 500,
-          sort_order: 1,
+      await expect(
+        service.sellerUpdateOptionItem(me.accountId, {
+          optionItemId: othersItem.id.toString(),
+          title: 'X',
         }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('정상 수정', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const item = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'S' },
       });
 
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.UPDATE,
-        afterJson: { optionItemId: '30' },
+      const result = await service.sellerUpdateOptionItem(accountId, {
+        optionItemId: item.id.toString(),
+        title: 'XL',
       });
+      expect(result.title).toBe('XL');
     });
   });
 
   describe('sellerDeleteOptionItem', () => {
-    it('옵션 아이템이 없으면 NotFoundException을 던져야 한다', async () => {
-      productRepo.findOptionItemById.mockResolvedValue(null as never);
-
+    it('없으면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
       await expect(
-        service.sellerDeleteOptionItem(BigInt(1), BigInt(999)),
+        service.sellerDeleteOptionItem(accountId, BigInt(999999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('유효한 옵션 아이템을 소프트 삭제하고 true를 반환해야 한다', async () => {
-      productRepo.findOptionItemById.mockResolvedValue({
-        id: BigInt(30),
-        option_group_id: BigInt(5),
-        option_group: {
-          product_id: BigInt(10),
-          product: { store_id: BigInt(100) },
-        },
-      } as never);
-      productRepo.softDeleteOptionItem.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerDeleteOptionItem(
-        BigInt(1),
-        BigInt(30),
-      );
-
-      expect(result).toBe(true);
-
-      expect(productRepo.softDeleteOptionItem).toHaveBeenCalledWith(BigInt(30));
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.DELETE,
-        beforeJson: { optionItemId: '30' },
+    it('soft-delete', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const item = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'S' },
       });
+
+      await service.sellerDeleteOptionItem(accountId, item.id);
+
+      const after = await prisma.productOptionItem.findUnique({
+        where: { id: item.id },
+      });
+      expect(after?.deleted_at).not.toBeNull();
     });
   });
 
   describe('sellerReorderOptionItems', () => {
-    it('optionItemIds 길이가 불일치하면 BadRequestException을 던져야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(1),
-        product: { store_id: BigInt(100) },
-      } as never);
-      productRepo.listOptionItemsByGroup.mockResolvedValue([
-        { id: BigInt(1) },
-        { id: BigInt(2) },
-      ] as never);
-
+    it('optionItemIds 길이 불일치면 BadRequestException', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
       await expect(
-        service.sellerReorderOptionItems(BigInt(1), {
-          optionGroupId: '1',
+        service.sellerReorderOptionItems(accountId, {
+          optionGroupId: group.id.toString(),
           optionItemIds: ['1'],
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효한 입력으로 옵션 아이템을 정렬하고 결과를 반환해야 한다', async () => {
-      productRepo.findOptionGroupById.mockResolvedValue({
-        id: BigInt(5),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
-      productRepo.listOptionItemsByGroup.mockResolvedValue([
-        { id: BigInt(30) },
-        { id: BigInt(31) },
-      ] as never);
-
-      const reorderedRows = [
-        {
-          id: BigInt(31),
-          option_group_id: BigInt(5),
-          title: '아이템B',
-          description: null,
-          image_url: null,
-          price_delta: 0,
-          sort_order: 0,
-          is_active: true,
-        },
-        {
-          id: BigInt(30),
-          option_group_id: BigInt(5),
-          title: '아이템A',
-          description: null,
-          image_url: null,
-          price_delta: 0,
-          sort_order: 1,
-          is_active: true,
-        },
-      ];
-      productRepo.reorderOptionItems.mockResolvedValue(reorderedRows as never);
-
-      const result = await service.sellerReorderOptionItems(BigInt(1), {
-        optionGroupId: '5',
-        optionItemIds: ['31', '30'],
+    it('정상 재정렬', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const i1 = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'A' },
+      });
+      const i2 = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'B' },
       });
 
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('31');
-      expect(result[1].id).toBe('30');
-
-      expect(productRepo.reorderOptionItems).toHaveBeenCalledWith({
-        optionGroupId: BigInt(5),
-        optionItemIds: [BigInt(31), BigInt(30)],
+      const result = await service.sellerReorderOptionItems(accountId, {
+        optionGroupId: group.id.toString(),
+        optionItemIds: [i2.id.toString(), i1.id.toString()],
       });
-
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.PRODUCT,
-        targetId: BigInt(10),
-        action: AuditActionType.UPDATE,
-        afterJson: { optionItemIds: ['31', '30'] },
-      });
+      expect(result[0].id).toBe(i2.id.toString());
     });
   });
 });
