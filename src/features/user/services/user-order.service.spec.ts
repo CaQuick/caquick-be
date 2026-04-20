@@ -1,484 +1,330 @@
-import { NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { OrderStatus } from '@prisma/client';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { PrismaClient } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order/repositories/order.repository';
-import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
 import { UserOrderService } from '@/features/user/services/user-order.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createReview,
+  createStore,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('UserOrderService', () => {
+describe('UserOrderService (real DB)', () => {
   let service: UserOrderService;
-  let orderRepo: jest.Mocked<OrderRepository>;
+  let prisma: PrismaClient;
 
-  const accountId = BigInt(1);
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [UserOrderService, OrderRepository],
+    });
+    service = module.get(UserOrderService);
+    prisma = p;
+  });
 
-  const makeMockOrder = (overrides: {
-    id?: bigint;
-    status?: OrderStatus;
-    storeName?: string;
-    productName?: string;
-    imageUrl?: string | null;
-    itemCount?: number;
-  }) => ({
-    id: overrides.id ?? BigInt(100),
-    order_number: 'CQ-20260413-00001',
-    status: overrides.status ?? OrderStatus.SUBMITTED,
-    created_at: new Date('2026-04-10'),
-    pickup_at: new Date('2026-04-15'),
-    total_price: 35000,
-    items: [
-      {
-        product_name_snapshot: overrides.productName ?? '딸기 케이크',
-        store: { store_name: overrides.storeName ?? '스웨이드 베이커리' },
-        product: {
-          images:
-            overrides.imageUrl !== null
-              ? [
-                  {
-                    image_url:
-                      overrides.imageUrl ?? 'https://s3.example.com/cake.jpg',
-                  },
-                ]
-              : [],
-        },
-      },
-    ],
-    _count: { items: overrides.itemCount ?? 1 },
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
   });
 
   beforeEach(async () => {
-    orderRepo = {
-      findOrdersByAccount: jest.fn(),
-      countOrdersByAccount: jest.fn(),
-      findOrderDetailByAccount: jest.fn(),
-    } as unknown as jest.Mocked<OrderRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UserOrderService,
-        { provide: OrderRepository, useValue: orderRepo },
-      ],
-    }).compile();
-
-    service = module.get<UserOrderService>(UserOrderService);
+    await truncateAll();
   });
 
-  it('기본 입력으로 주문 목록을 반환해야 한다', async () => {
-    const mockOrder = makeMockOrder({});
-    orderRepo.findOrdersByAccount.mockResolvedValue([mockOrder]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(1);
+  async function setupUser() {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    return account;
+  }
 
-    const result = await service.listMyOrders(accountId);
+  // ─── listMyOrders ───
+  describe('listMyOrders', () => {
+    it('최근 생성 순서로 주문을 반환하고 대표상품/매장/추가 아이템 수를 집계한다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, { store_name: '매장A' });
+      const p1 = await createProduct(prisma, {
+        store_id: store.id,
+        name: '상품1',
+      });
+      const p2 = await createProduct(prisma, {
+        store_id: store.id,
+        name: '상품2',
+      });
 
-    expect(result.items).toHaveLength(1);
-    expect(result.totalCount).toBe(1);
-    expect(result.hasMore).toBe(false);
-    expect(result.items[0]).toMatchObject({
-      orderId: '100',
-      orderNumber: 'CQ-20260413-00001',
-      status: OrderStatus.SUBMITTED,
-      representativeProductName: '딸기 케이크',
-      representativeProductImageUrl: 'https://s3.example.com/cake.jpg',
-      storeName: '스웨이드 베이커리',
-      totalPrice: 35000,
-      additionalItemCount: 0,
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: p1.id,
+        product_name_snapshot: '상품1 스냅샷',
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: p2.id,
+      });
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.totalCount).toBe(1);
+      expect(result.hasMore).toBe(false);
+      expect(result.items[0]).toMatchObject({
+        orderId: order.id.toString(),
+        representativeProductName: '상품1 스냅샷',
+        storeName: '매장A',
+        additionalItemCount: 1, // 첫 아이템 외 1개 더
+      });
+    });
+
+    it('아이템이 없는 주문은 대표상품/매장 기본값을 반환한다', async () => {
+      const account = await setupUser();
+      await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.items[0]).toMatchObject({
+        representativeProductName: '상품 정보 없음',
+        representativeProductImageUrl: null,
+        storeName: '매장 정보 없음',
+        additionalItemCount: 0,
+      });
+    });
+
+    it('status 필터를 전달하면 해당 상태의 주문만 포함한다', async () => {
+      const account = await setupUser();
+      await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PICKED_UP',
+      });
+
+      const result = await service.listMyOrders(account.id, {
+        statuses: ['PICKED_UP'],
+      });
+
+      expect(result.totalCount).toBe(1);
+      expect(result.items[0].status).toBe('PICKED_UP');
+    });
+
+    it('limit을 초과하면 hasMore true이고 정확히 limit개만 반환한다', async () => {
+      const account = await setupUser();
+      for (let i = 0; i < 4; i++) {
+        await createOrder(prisma, {
+          account_id: account.id,
+          status: 'SUBMITTED',
+        });
+      }
+
+      const result = await service.listMyOrders(account.id, {
+        offset: 0,
+        limit: 2,
+      });
+
+      expect(result.totalCount).toBe(4);
+      expect(result.items).toHaveLength(2);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('다른 계정의 주문은 포함되지 않는다', async () => {
+      const me = await setupUser();
+      const other = await setupUser();
+      await createOrder(prisma, { account_id: me.id, status: 'SUBMITTED' });
+      await createOrder(prisma, {
+        account_id: other.id,
+        status: 'SUBMITTED',
+      });
+
+      const result = await service.listMyOrders(me.id);
+
+      expect(result.totalCount).toBe(1);
+    });
+
+    it('offset 음수면 BadRequestException', async () => {
+      const account = await setupUser();
+      await expect(
+        service.listMyOrders(account.id, { offset: -1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('limit이 0 이하면 BadRequestException', async () => {
+      const account = await setupUser();
+      await expect(
+        service.listMyOrders(account.id, { limit: 0 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('limit이 상한(50) 초과면 BadRequestException', async () => {
+      const account = await setupUser();
+      await expect(
+        service.listMyOrders(account.id, { limit: 51 }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
-  it('상태 필터가 전달되면 repository에 전달해야 한다', async () => {
-    orderRepo.findOrdersByAccount.mockResolvedValue([]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(0);
-
-    await service.listMyOrders(accountId, {
-      statuses: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED],
-      offset: 0,
-      limit: 20,
-    });
-
-    expect(orderRepo.findOrdersByAccount).toHaveBeenCalledWith({
-      accountId,
-      statuses: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED],
-      offset: 0,
-      limit: 21,
-    });
-    expect(orderRepo.countOrdersByAccount).toHaveBeenCalledWith({
-      accountId,
-      statuses: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED],
-    });
-  });
-
-  it('limit+1개가 반환되면 hasMore가 true여야 한다', async () => {
-    const orders = Array.from({ length: 21 }, (_, i) =>
-      makeMockOrder({ id: BigInt(i + 1) }),
-    );
-    orderRepo.findOrdersByAccount.mockResolvedValue(orders);
-    orderRepo.countOrdersByAccount.mockResolvedValue(25);
-
-    const result = await service.listMyOrders(accountId, { limit: 20 });
-
-    expect(result.items).toHaveLength(20);
-    expect(result.hasMore).toBe(true);
-    expect(result.totalCount).toBe(25);
-  });
-
-  it('limit 미만이면 hasMore가 false여야 한다', async () => {
-    orderRepo.findOrdersByAccount.mockResolvedValue([makeMockOrder({})]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(1);
-
-    const result = await service.listMyOrders(accountId, { limit: 20 });
-
-    expect(result.hasMore).toBe(false);
-  });
-
-  it('additionalItemCount는 전체 아이템 수 - 1이어야 한다', async () => {
-    const mockOrder = makeMockOrder({ itemCount: 3 });
-    orderRepo.findOrdersByAccount.mockResolvedValue([mockOrder]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(1);
-
-    const result = await service.listMyOrders(accountId);
-
-    expect(result.items[0].additionalItemCount).toBe(2);
-  });
-
-  it('이미지가 없으면 representativeProductImageUrl이 null이어야 한다', async () => {
-    const mockOrder = makeMockOrder({ imageUrl: null });
-    orderRepo.findOrdersByAccount.mockResolvedValue([mockOrder]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(1);
-
-    const result = await service.listMyOrders(accountId);
-
-    expect(result.items[0].representativeProductImageUrl).toBeNull();
-  });
-
-  it('빈 목록도 정상 반환해야 한다', async () => {
-    orderRepo.findOrdersByAccount.mockResolvedValue([]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(0);
-
-    const result = await service.listMyOrders(accountId);
-
-    expect(result.items).toHaveLength(0);
-    expect(result.totalCount).toBe(0);
-    expect(result.hasMore).toBe(false);
-  });
-
-  it('주문에 items가 없으면 기본 상품/매장 정보 없음을 반환해야 한다', async () => {
-    const orderWithNoItems = {
-      id: BigInt(200),
-      order_number: 'CQ-20260413-00002',
-      status: OrderStatus.SUBMITTED,
-      created_at: new Date('2026-04-10'),
-      pickup_at: new Date('2026-04-15'),
-      total_price: 0,
-      items: [],
-      _count: { items: 0 },
-    };
-    orderRepo.findOrdersByAccount.mockResolvedValue([orderWithNoItems]);
-    orderRepo.countOrdersByAccount.mockResolvedValue(1);
-
-    const result = await service.listMyOrders(accountId);
-
-    expect(result.items[0].representativeProductName).toBe('상품 정보 없음');
-    expect(result.items[0].representativeProductImageUrl).toBeNull();
-    expect(result.items[0].storeName).toBe('매장 정보 없음');
-    expect(result.items[0].additionalItemCount).toBe(0);
-  });
-
-  it('limit이 50 초과이면 에러를 던져야 한다', async () => {
-    await expect(
-      service.listMyOrders(accountId, { limit: 51 }),
-    ).rejects.toThrow(USER_ORDER_ERRORS.INVALID_LIMIT);
-  });
-
-  it('limit이 0이면 에러를 던져야 한다', async () => {
-    await expect(service.listMyOrders(accountId, { limit: 0 })).rejects.toThrow(
-      USER_ORDER_ERRORS.INVALID_LIMIT,
-    );
-  });
-
-  it('offset이 음수이면 에러를 던져야 한다', async () => {
-    await expect(
-      service.listMyOrders(accountId, { offset: -1 }),
-    ).rejects.toThrow(USER_ORDER_ERRORS.INVALID_OFFSET);
-  });
-
+  // ─── getMyOrder ───
   describe('getMyOrder', () => {
-    const makeDetailOrder = (overrides?: {
-      status?: OrderStatus;
-      hasReview?: boolean;
-      reviewDeleted?: boolean;
-    }) => ({
-      id: BigInt(100),
-      order_number: 'CQ-20260413-00001',
-      account_id: accountId,
-      status: overrides?.status ?? OrderStatus.PICKED_UP,
-      created_at: new Date('2026-04-10'),
-      pickup_at: new Date('2026-04-15'),
-      buyer_name: '홍길동',
-      buyer_phone: '010-1234-5678',
-      subtotal_price: 35000,
-      discount_price: 0,
-      total_price: 35000,
-      submitted_at: new Date('2026-04-10'),
-      confirmed_at: new Date('2026-04-11'),
-      made_at: new Date('2026-04-14'),
-      picked_up_at: new Date('2026-04-15'),
-      canceled_at: null,
-      status_histories: [
-        {
-          from_status: null,
-          to_status: OrderStatus.SUBMITTED,
-          changed_at: new Date('2026-04-10'),
-          note: null,
-        },
-      ],
-      items: [
-        {
-          id: BigInt(200),
-          product_id: BigInt(300),
-          product_name_snapshot: '딸기 케이크',
-          regular_price_snapshot: 35000,
-          sale_price_snapshot: null,
-          quantity: 1,
-          item_subtotal_price: 35000,
-          store: {
-            id: BigInt(10),
-            store_name: '스웨이드 베이커리',
-            store_phone: '0507-1449-4422',
-            address_full: '서울 강남구 도산대로62길 26 1층',
-            address_city: '서울',
-            address_district: '강남구',
-            address_neighborhood: '신사동',
-            latitude: { toNumber: () => 37.5228 } as unknown,
-            longitude: { toNumber: () => 127.0236 } as unknown,
-            business_hours_text: '매일 09:00 ~ 18:00',
-            website_url: 'https://suede.co.kr',
-            business_hours: [],
-          },
-          product: {
-            images: [{ image_url: 'https://s3.example.com/cake.jpg' }],
-          },
-          option_items: [
-            {
-              group_name_snapshot: '사이즈',
-              option_title_snapshot: '2호',
-              option_price_delta_snapshot: 5000,
-            },
-          ],
-          custom_texts: [],
-          free_edits: [],
-          review: overrides?.hasReview
-            ? {
-                id: BigInt(1),
-                deleted_at: overrides?.reviewDeleted
-                  ? new Date('2026-04-12')
-                  : null,
-              }
-            : null,
-        },
-      ],
-    });
+    it('본인 주문의 상세(items/store/status) DTO를 반환한다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, {
+        store_name: '매장B',
+        store_phone: '02-1234-5678',
+      });
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '상품X',
+        regular_price: 30000,
+        sale_price: 25000,
+      });
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+        quantity: 2,
+        regular_price_snapshot: 30000,
+        sale_price_snapshot: 25000,
+      });
 
-    it('주문 상세를 반환해야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder() as never,
-      );
+      const result = await service.getMyOrder(account.id, order.id);
 
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
-      expect(result.orderId).toBe('100');
-      expect(result.orderNumber).toBe('CQ-20260413-00001');
-      expect(result.buyerName).toBe('홍길동');
-      expect(result.store.storeName).toBe('스웨이드 베이커리');
-      expect(result.store.addressFull).toBe('서울 강남구 도산대로62길 26 1층');
+      expect(result.orderId).toBe(order.id.toString());
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].selectedOptions).toHaveLength(1);
-      expect(result.items[0].selectedOptions[0].groupName).toBe('사이즈');
+      expect(result.items[0]).toMatchObject({
+        productName: expect.any(String),
+        quantity: 2,
+        regularPrice: 30000,
+        salePrice: 25000,
+        hasMyReview: false,
+        canWriteReview: false, // 상태가 SUBMITTED이므로 불가
+      });
+      expect(result.store).toMatchObject({
+        storeName: '매장B',
+        storePhone: '02-1234-5678',
+      });
     });
 
-    it('주문이 없으면 NotFoundException을 던져야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(null);
+    it('존재하지 않는 orderId면 NotFoundException', async () => {
+      const account = await setupUser();
+      await expect(
+        service.getMyOrder(account.id, BigInt(999999)),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-      await expect(service.getMyOrder(accountId, BigInt(999))).rejects.toThrow(
+    it('다른 계정의 orderId는 NotFoundException으로 접근 차단', async () => {
+      const me = await setupUser();
+      const other = await setupUser();
+      const othersOrder = await createOrder(prisma, {
+        account_id: other.id,
+        status: 'SUBMITTED',
+      });
+
+      await expect(service.getMyOrder(me.id, othersOrder.id)).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('PICKED_UP 상태이고 리뷰가 없으면 canWriteReview가 true여야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder({
-          status: OrderStatus.PICKED_UP,
-          hasReview: false,
-        }) as never,
-      );
+    it('PICKED_UP 상태면서 리뷰 미작성 아이템은 canWriteReview=true', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PICKED_UP',
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+      });
 
-      const result = await service.getMyOrder(accountId, BigInt(100));
+      const result = await service.getMyOrder(account.id, order.id);
 
       expect(result.items[0].canWriteReview).toBe(true);
       expect(result.items[0].hasMyReview).toBe(false);
     });
 
-    it('리뷰가 이미 있으면 canWriteReview가 false여야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder({
-          status: OrderStatus.PICKED_UP,
-          hasReview: true,
-        }) as never,
-      );
+    it('PICKED_UP 주문 아이템에 리뷰가 있으면 hasMyReview=true, canWriteReview=false', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PICKED_UP',
+      });
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+      });
 
-      const result = await service.getMyOrder(accountId, BigInt(100));
+      await prisma.review.create({
+        data: {
+          order_item_id: item.id,
+          account_id: account.id,
+          store_id: store.id,
+          product_id: product.id,
+          rating: 5,
+        },
+      });
 
-      expect(result.items[0].canWriteReview).toBe(false);
+      const result = await service.getMyOrder(account.id, order.id);
+
       expect(result.items[0].hasMyReview).toBe(true);
-    });
-
-    it('soft-delete된 리뷰가 있으면 canWriteReview가 true여야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder({
-          status: OrderStatus.PICKED_UP,
-          hasReview: true,
-          reviewDeleted: true,
-        }) as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
-      expect(result.items[0].canWriteReview).toBe(true);
-      expect(result.items[0].hasMyReview).toBe(false);
-    });
-
-    it('PICKED_UP이 아닌 상태면 canWriteReview가 false여야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder({ status: OrderStatus.CONFIRMED }) as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
       expect(result.items[0].canWriteReview).toBe(false);
     });
 
-    it('상태 히스토리를 올바르게 매핑해야 한다', async () => {
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        makeDetailOrder() as never,
-      );
+    it('아이템이 없는 주문은 store에 "매장 정보 없음" 폴백을 반환한다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
 
-      const result = await service.getMyOrder(accountId, BigInt(100));
+      const result = await service.getMyOrder(account.id, order.id);
 
-      expect(result.statusHistories).toHaveLength(1);
-      expect(result.statusHistories[0].toStatus).toBe(OrderStatus.SUBMITTED);
-    });
-
-    it('customTexts와 customFreeEdits를 올바르게 매핑해야 한다', async () => {
-      const orderWithCustomData = {
-        ...makeDetailOrder(),
-        items: [
-          {
-            ...makeDetailOrder().items[0],
-            custom_texts: [
-              {
-                token_key_snapshot: 'TEXT_1',
-                default_text_snapshot: '기본 텍스트',
-                value_text: '사용자 입력',
-                sort_order: 0,
-              },
-            ],
-            free_edits: [
-              {
-                crop_image_url: 'https://s3.example.com/crop.jpg',
-                description_text: '편집 설명',
-                sort_order: 0,
-                attachments: [
-                  { image_url: 'https://s3.example.com/attach1.jpg' },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        orderWithCustomData as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
-      expect(result.items[0].customTexts).toHaveLength(1);
-      expect(result.items[0].customTexts[0].tokenKey).toBe('TEXT_1');
-      expect(result.items[0].customTexts[0].valueText).toBe('사용자 입력');
-
-      expect(result.items[0].customFreeEdits).toHaveLength(1);
-      expect(result.items[0].customFreeEdits[0].cropImageUrl).toBe(
-        'https://s3.example.com/crop.jpg',
-      );
-      expect(result.items[0].customFreeEdits[0].attachmentImageUrls).toEqual([
-        'https://s3.example.com/attach1.jpg',
-      ]);
-    });
-
-    it('item에 product가 없으면 representativeImageUrl이 null이어야 한다', async () => {
-      const orderWithoutProduct = {
-        ...makeDetailOrder(),
-        items: [
-          {
-            ...makeDetailOrder().items[0],
-            product: null,
-          },
-        ],
-      };
-
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        orderWithoutProduct as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
-      expect(result.items[0].representativeImageUrl).toBeNull();
-    });
-
-    it('store의 latitude와 longitude가 null이면 null을 반환해야 한다', async () => {
-      const orderWithNullCoords = {
-        ...makeDetailOrder(),
-        items: [
-          {
-            ...makeDetailOrder().items[0],
-            store: {
-              ...makeDetailOrder().items[0].store,
-              latitude: null,
-              longitude: null,
-            },
-          },
-        ],
-      };
-
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        orderWithNullCoords as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
-      expect(result.store.latitude).toBeNull();
-      expect(result.store.longitude).toBeNull();
-    });
-
-    it('store 정보가 없으면 기본값을 반환해야 한다', async () => {
-      const orderWithoutStore = {
-        ...makeDetailOrder(),
-        items: [
-          {
-            ...makeDetailOrder().items[0],
-            store: null,
-          },
-        ],
-      };
-
-      orderRepo.findOrderDetailByAccount.mockResolvedValue(
-        orderWithoutStore as never,
-      );
-
-      const result = await service.getMyOrder(accountId, BigInt(100));
-
+      expect(result.items).toHaveLength(0);
       expect(result.store.storeId).toBe('0');
       expect(result.store.storeName).toBe('매장 정보 없음');
-      expect(result.store.latitude).toBeNull();
+    });
+
+    it('status_histories가 있으면 DTO에 포함되어 시간순으로 반환된다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'CONFIRMED',
+      });
+
+      await prisma.orderStatusHistory.create({
+        data: {
+          order_id: order.id,
+          from_status: 'SUBMITTED',
+          to_status: 'CONFIRMED',
+          changed_at: new Date('2026-04-15T10:00:00Z'),
+          note: '접수 확정',
+        },
+      });
+
+      const result = await service.getMyOrder(account.id, order.id);
+
+      expect(result.statusHistories).toHaveLength(1);
+      expect(result.statusHistories[0]).toMatchObject({
+        fromStatus: 'SUBMITTED',
+        toStatus: 'CONFIRMED',
+        note: '접수 확정',
+      });
     });
   });
 });
