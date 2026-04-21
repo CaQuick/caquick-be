@@ -119,4 +119,28 @@ describe('JwtBearerStrategy (real DB)', () => {
       ).rejects.toThrow(UnauthorizedException);
     });
   });
+
+  describe('constructor 분기', () => {
+    /**
+     * 생성자에서 JWT_ACCESS_SECRET 필수 검증을 fail-fast 한다.
+     * - 미설정/공백만 있는 경우 모두 throw 되어야 한다.
+     * - passport-jwt Strategy 생성자는 secret 없을 때 내부적으로 throw하므로,
+     *   config에 빈 문자열이면 커스텀 throw가 먼저 발생함을 확인한다.
+     */
+    it('JWT_ACCESS_SECRET 미설정이면 Error', () => {
+      const config = { get: () => undefined } as never;
+      const repo = {} as never;
+      expect(() => new JwtBearerStrategy(config, repo)).toThrow(
+        'Missing JWT_ACCESS_SECRET',
+      );
+    });
+
+    it('JWT_ACCESS_SECRET이 공백 문자열이면 Error', () => {
+      const config = { get: () => '   ' } as never;
+      const repo = {} as never;
+      expect(() => new JwtBearerStrategy(config, repo)).toThrow(
+        'Missing JWT_ACCESS_SECRET',
+      );
+    });
+  });
 });
