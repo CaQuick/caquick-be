@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PrismaClient } from '@prisma/client';
@@ -20,26 +20,23 @@ let cachedClient: PrismaClient | null = null;
 let cachedDbUrl: string | null = null;
 
 /**
- * schemaApplied는 worker 프로세스 전역으로 유지한다.
- * Jest는 test file마다 module registry를 새로 만들기 때문에 module-scope 변수로는
- * suite 간 공유되지 않는다. 이 경우 매 suite마다 ensureSchema()가 호출되며
- * `mysql.createConnection`과 `npx prisma migrate deploy`가 반복되는데, CI의
- * MySQL 연결이 flaky하면 "Connection lost" 오류가 발생한다 (PR 7 CI).
- * globalThis에 저장해 한 worker가 살아있는 동안 1회만 실행되도록 한다.
+ * schemaApplied 플래그는 파일 시스템에 저장한다.
+ * Jest는 test file마다 독립된 VM context를 만들므로 module-scope 변수나 globalThis도
+ * 공유되지 않는다 → 매 suite마다 ensureSchema()가 재호출되며 mysql admin 연결이
+ * 반복 오픈되어 CI flaky 연결에서 "Connection lost"가 발생한다 (PR 7 CI).
+ * 파일 시스템은 VM sandboxing과 무관하게 유지되므로 marker file로 해결한다.
+ * worker별 DB가 다르므로 파일 경쟁 조건은 없다 (globalTeardown에서 정리).
  */
-interface TestDbGlobal {
-  __TEST_SCHEMA_APPLIED__?: Record<string, boolean>;
+function getSchemaMarkerPath(dbName: string): string {
+  return join(process.cwd(), '.tmp', `schema-applied-${dbName}.marker`);
 }
 
 function isSchemaApplied(dbName: string): boolean {
-  const g = globalThis as unknown as TestDbGlobal;
-  return g.__TEST_SCHEMA_APPLIED__?.[dbName] === true;
+  return existsSync(getSchemaMarkerPath(dbName));
 }
 
 function markSchemaApplied(dbName: string): void {
-  const g = globalThis as unknown as TestDbGlobal;
-  if (!g.__TEST_SCHEMA_APPLIED__) g.__TEST_SCHEMA_APPLIED__ = {};
-  g.__TEST_SCHEMA_APPLIED__[dbName] = true;
+  writeFileSync(getSchemaMarkerPath(dbName), 'ok', 'utf8');
 }
 
 function loadState(): TestDbState {
