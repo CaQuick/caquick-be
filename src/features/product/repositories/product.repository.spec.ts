@@ -243,17 +243,22 @@ describe('ProductRepository (real DB)', () => {
       expect(result.name).toBe('신상');
     });
 
-    it('updateProduct는 주어진 필드만 갱신', async () => {
+    it('updateProduct는 주어진 필드만 갱신하고 나머지는 유지한다', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, {
         store_id: store.id,
         name: '구',
+        regular_price: 15000,
+        is_active: true,
       });
       const result = await repo.updateProduct({
         productId: product.id,
         data: { name: '신' },
       });
       expect(result.name).toBe('신');
+      expect(result.regular_price).toBe(15000);
+      expect(result.is_active).toBe(true);
+      expect(result.store_id).toBe(store.id);
     });
 
     it('softDeleteProduct는 deleted_at + is_active:false', async () => {
@@ -326,6 +331,17 @@ describe('ProductRepository (real DB)', () => {
         imageIds: [img3.id, img1.id, img2.id],
       });
       expect(result.map((r) => r.id)).toEqual([img3.id, img1.id, img2.id]);
+      // 정렬 결과뿐 아니라 sort_order 값 자체가 0,1,2로 재할당됐는지 확인
+      const sortOrderByImage = new Map(
+        (
+          await prisma.productImage.findMany({
+            where: { product_id: product.id },
+          })
+        ).map((r) => [r.id, r.sort_order]),
+      );
+      expect(sortOrderByImage.get(img3.id)).toBe(0);
+      expect(sortOrderByImage.get(img1.id)).toBe(1);
+      expect(sortOrderByImage.get(img2.id)).toBe(2);
     });
   });
 
@@ -463,6 +479,16 @@ describe('ProductRepository (real DB)', () => {
         optionGroupIds: [g2.id, g1.id],
       });
       expect(rows.map((r) => r.id)).toEqual([g2.id, g1.id]);
+
+      const sortOrderByGroup = new Map(
+        (
+          await prisma.productOptionGroup.findMany({
+            where: { product_id: product.id },
+          })
+        ).map((r) => [r.id, r.sort_order]),
+      );
+      expect(sortOrderByGroup.get(g2.id)).toBe(0);
+      expect(sortOrderByGroup.get(g1.id)).toBe(1);
     });
 
     it('OptionItem CRUD + findOptionItemById(store_id 경유) + softDelete + reorder', async () => {
@@ -490,6 +516,16 @@ describe('ProductRepository (real DB)', () => {
         optionItemIds: [item2.id, item.id],
       });
       expect(reordered.map((r) => r.id)).toEqual([item2.id, item.id]);
+
+      const sortOrderByItem = new Map(
+        (
+          await prisma.productOptionItem.findMany({
+            where: { option_group_id: group.id },
+          })
+        ).map((r) => [r.id, r.sort_order]),
+      );
+      expect(sortOrderByItem.get(item2.id)).toBe(0);
+      expect(sortOrderByItem.get(item.id)).toBe(1);
 
       await repo.softDeleteOptionItem(item.id);
       const after = await prisma.productOptionItem.findUnique({
@@ -581,23 +617,48 @@ describe('ProductRepository (real DB)', () => {
       expect(found?.template.product.store_id).toBe(store.id);
     });
 
-    it('softDeleteCustomTextToken + listCustomTextTokens + reorder', async () => {
+    it('listCustomTextTokens + reorderCustomTextTokens(sort_order 재할당) + softDelete', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
       const tpl = await createTemplate(product.id);
       const t1 = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'A', default_text: 'a' },
+        data: {
+          template_id: tpl.id,
+          token_key: 'A',
+          default_text: 'a',
+          sort_order: 0,
+        },
       });
       const t2 = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'B', default_text: 'b' },
+        data: {
+          template_id: tpl.id,
+          token_key: 'B',
+          default_text: 'b',
+          sort_order: 1,
+        },
       });
 
+      // list: 기본 sort_order 오름차순
+      const listed = await repo.listCustomTextTokens(tpl.id);
+      expect(listed.map((r) => r.id)).toEqual([t1.id, t2.id]);
+
+      // reorder: 순서가 뒤집히고 sort_order 값이 0, 1로 재할당됨
       const reordered = await repo.reorderCustomTextTokens({
         templateId: tpl.id,
         tokenIds: [t2.id, t1.id],
       });
       expect(reordered.map((r) => r.id)).toEqual([t2.id, t1.id]);
+      const sortOrderByToken = new Map(
+        (
+          await prisma.productCustomTextToken.findMany({
+            where: { template_id: tpl.id },
+          })
+        ).map((r) => [r.id, r.sort_order]),
+      );
+      expect(sortOrderByToken.get(t2.id)).toBe(0);
+      expect(sortOrderByToken.get(t1.id)).toBe(1);
 
+      // soft-delete
       await repo.softDeleteCustomTextToken(t1.id);
       const after = await prisma.productCustomTextToken.findUnique({
         where: { id: t1.id },

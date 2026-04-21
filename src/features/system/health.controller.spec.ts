@@ -17,25 +17,29 @@ describe('HealthController', () => {
     process.env.PROFILE = 'test-profile';
     process.env.PORT = '3001';
 
-    const result = controller.getProfiles();
-    expect(result).toEqual({
-      status: 'ok',
-      profile: 'test-profile',
-      port: '3001',
-    });
-
-    if (originalProfile === undefined) delete process.env.PROFILE;
-    else process.env.PROFILE = originalProfile;
-    if (originalPort === undefined) delete process.env.PORT;
-    else process.env.PORT = originalPort;
+    try {
+      const result = controller.getProfiles();
+      expect(result).toEqual({
+        status: 'ok',
+        profile: 'test-profile',
+        port: '3001',
+      });
+    } finally {
+      if (originalProfile === undefined) delete process.env.PROFILE;
+      else process.env.PROFILE = originalProfile;
+      if (originalPort === undefined) delete process.env.PORT;
+      else process.env.PORT = originalPort;
+    }
   });
 
   it('getProfiles: PROFILE 미설정이면 unknown 폴백', () => {
     const original = process.env.PROFILE;
     delete process.env.PROFILE;
 
-    expect(controller.getProfiles().profile).toBe('unknown');
-
-    if (original !== undefined) process.env.PROFILE = original;
+    try {
+      expect(controller.getProfiles().profile).toBe('unknown');
+    } finally {
+      if (original !== undefined) process.env.PROFILE = original;
+    }
   });
 });

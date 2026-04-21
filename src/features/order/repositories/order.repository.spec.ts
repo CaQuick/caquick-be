@@ -471,7 +471,7 @@ describe('OrderRepository (real DB)', () => {
       expect(histories[0].note).toBe('재고 부족');
     });
 
-    it('PICKED_UP/MADE 각각 대응 시각 컬럼 갱신', async () => {
+    it('CONFIRMED→MADE→PICKED_UP 연속 전이 시 각 타임스탬프 컬럼이 누적 기록된다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
@@ -506,13 +506,32 @@ describe('OrderRepository (real DB)', () => {
         now: t3,
       });
 
+      expect(picked?.status).toBe('PICKED_UP');
+      expect(picked?.confirmed_at?.toISOString()).toBe(t1.toISOString());
       expect(picked?.made_at?.toISOString()).toBe(t2.toISOString());
       expect(picked?.picked_up_at?.toISOString()).toBe(t3.toISOString());
 
-      const pickedNotif = await prisma.notification.findFirst({
-        where: { order_id: order.id, event: 'ORDER_PICKED_UP' },
+      const histories = await prisma.orderStatusHistory.findMany({
+        where: { order_id: order.id },
+        orderBy: { changed_at: 'asc' },
       });
-      expect(pickedNotif).not.toBeNull();
+      expect(histories.map((h) => h.to_status)).toEqual([
+        'CONFIRMED',
+        'MADE',
+        'PICKED_UP',
+      ]);
+
+      const notifEvents = (
+        await prisma.notification.findMany({
+          where: { order_id: order.id },
+          orderBy: { id: 'asc' },
+        })
+      ).map((n) => n.event);
+      expect(notifEvents).toEqual([
+        'ORDER_CONFIRMED',
+        'ORDER_MADE',
+        'ORDER_PICKED_UP',
+      ]);
     });
   });
 });

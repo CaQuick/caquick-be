@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
@@ -11,10 +12,10 @@ describe('OrderDomainService', () => {
     expect(service.parseStatus('CONFIRMED')).toBe(OrderStatus.CONFIRMED);
   });
 
-  it('assertSellerTransition은 policy에 위임하여 예외를 전파한다', () => {
+  it('assertSellerTransition은 policy에 위임하여 BadRequestException을 전파한다', () => {
     expect(() =>
       service.assertSellerTransition(OrderStatus.SUBMITTED, OrderStatus.MADE),
-    ).toThrow();
+    ).toThrow(BadRequestException);
   });
 
   it('requiresCancellationNote는 policy 결과를 그대로 반환한다', () => {
