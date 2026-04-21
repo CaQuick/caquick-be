@@ -129,4 +129,23 @@ describe('GqlLoggingInterceptor', () => {
       },
     });
   });
+
+  it('에러가 Error 인스턴스가 아니면 "Unknown error" + stack undefined로 로깅', (done) => {
+    const ctx = mockGqlContext('Query');
+    const notAnError = 'just a string thrown';
+    const handler = {
+      handle: () => throwError(() => notAnError),
+    } as CallHandler;
+
+    interceptor.intercept(ctx, handler).subscribe({
+      error: () => {
+        expect(logger.txError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: { message: 'Unknown error', stack: undefined },
+          }),
+        );
+        done();
+      },
+    });
+  });
 });

@@ -27,17 +27,23 @@ import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
  *   return this.userService.findOne(user.accountId);
  * }
  */
-export const CurrentUser = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext): JwtUser | undefined => {
-    // GraphQL Context
-    const gqlContext = GqlExecutionContext.create(ctx);
-    const gqlReq = gqlContext.getContext<{ req?: Request }>()?.req;
-    if (gqlReq?.user) {
-      return gqlReq.user;
-    }
+/**
+ * createParamDecorator에 전달되는 factory. 테스트에서 직접 호출하기 위해 export.
+ */
+export function currentUserFactory(
+  _data: unknown,
+  ctx: ExecutionContext,
+): JwtUser | undefined {
+  // GraphQL Context
+  const gqlContext = GqlExecutionContext.create(ctx);
+  const gqlReq = gqlContext.getContext<{ req?: Request }>()?.req;
+  if (gqlReq?.user) {
+    return gqlReq.user;
+  }
 
-    // HTTP Context
-    const request = ctx.switchToHttp().getRequest<Request>();
-    return request.user;
-  },
-);
+  // HTTP Context
+  const request = ctx.switchToHttp().getRequest<Request>();
+  return request.user;
+}
+
+export const CurrentUser = createParamDecorator(currentUserFactory);

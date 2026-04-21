@@ -80,6 +80,15 @@ describe('CustomLoggerService', () => {
         }),
       );
     });
+
+    it('optionalParams의 non-Error 값은 그대로 유지된다 (map 삼항 false branch)', () => {
+      service.log('x', 'plain string', 42, { k: 'v' });
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          optionalParams: ['plain string', 42, { k: 'v' }],
+        }),
+      );
+    });
   });
 
   describe('트랜잭션 로그', () => {

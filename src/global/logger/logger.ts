@@ -4,23 +4,28 @@ import { createLogger, format, transports, type Logger } from 'winston';
 const isProduction = process.env.NODE_ENV === 'production';
 
 /**
+ * 개발 환경용 로그 포맷에 사용되는 pure printf 콜백. 테스트 가능하도록 export.
+ */
+export function formatDevLogLine(
+  info: TransformableInfo & { timestamp?: string },
+): string {
+  const ts = info.timestamp ?? new Date().toISOString();
+  const lvl = String(info.level);
+  const { level, timestamp, message, ...meta } = info as Record<
+    string,
+    unknown
+  >;
+  if (typeof message === 'string') {
+    const rest = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+    return `${ts} ${lvl}: ${message}${rest}`;
+  }
+  return `${ts} ${lvl}: ${JSON.stringify(meta)}`;
+}
+
+/**
  * 개발 환경용 로그 포맷
  */
-const devFormat = format.printf(
-  (info: TransformableInfo & { timestamp?: string }) => {
-    const ts = info.timestamp ?? new Date().toISOString();
-    const lvl = String(info.level);
-    const { level, timestamp, message, ...meta } = info as Record<
-      string,
-      unknown
-    >;
-    if (typeof message === 'string') {
-      const rest = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
-      return `${ts} ${lvl}: ${message}${rest}`;
-    }
-    return `${ts} ${lvl}: ${JSON.stringify(meta)}`;
-  },
-);
+const devFormat = format.printf(formatDevLogLine);
 
 /**
  * 콘솔 출력용 트랜스포트 설정

@@ -244,6 +244,39 @@ describe('S3Service', () => {
       });
     });
   });
+
+  describe('생성자의 credentials 분기', () => {
+    it('accessKeyId/secretAccessKey가 없으면 S3Client에 credentials 없이 초기화한다', async () => {
+      const { S3Client: MockS3Client } =
+        jest.requireMock<typeof import('@aws-sdk/client-s3')>(
+          '@aws-sdk/client-s3',
+        );
+      (MockS3Client as jest.Mock).mockClear();
+
+      const moduleRef: TestingModule = await Test.createTestingModule({
+        providers: [
+          S3Service,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn().mockReturnValue({
+                region: 'ap-northeast-2',
+                bucket: 'b',
+                presignExpiresSeconds: 300,
+                // accessKeyId, secretAccessKey 미지정
+              }),
+            },
+          },
+        ],
+      }).compile();
+
+      moduleRef.get<S3Service>(S3Service);
+      const lastCallArgs = (MockS3Client as jest.Mock).mock.calls.at(-1)?.[0];
+      expect(lastCallArgs).toEqual({ region: 'ap-northeast-2' });
+      // credentials 키 자체가 없어야 함 (ECS/EC2 IAM role 위임)
+      expect(lastCallArgs?.credentials).toBeUndefined();
+    });
+  });
 });
 
 // Jest 커스텀 매처
