@@ -3,671 +3,407 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createProduct,
+  createStore,
+  setupSellerWithStore,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('SellerContentService', () => {
+describe('SellerContentService (real DB)', () => {
   let service: SellerContentService;
-  let repo: jest.Mocked<SellerRepository>;
-  let productRepo: jest.Mocked<ProductRepository>;
+  let prisma: PrismaClient;
 
-  const SELLER_CONTEXT = {
-    id: BigInt(1),
-    account_type: 'SELLER',
-    status: 'ACTIVE',
-    store: { id: BigInt(100) },
-  };
-
-  const NOW = new Date('2026-03-30T00:00:00.000Z');
-
-  beforeEach(async () => {
-    repo = {
-      findSellerAccountContext: jest.fn(),
-      createAuditLog: jest.fn(),
-      listFaqTopics: jest.fn(),
-      createFaqTopic: jest.fn(),
-      findFaqTopicById: jest.fn(),
-      updateFaqTopic: jest.fn(),
-      softDeleteFaqTopic: jest.fn(),
-      listBannersByStore: jest.fn(),
-      createBanner: jest.fn(),
-      findBannerByIdForStore: jest.fn(),
-      updateBanner: jest.fn(),
-      softDeleteBanner: jest.fn(),
-      listAuditLogsBySeller: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
-
-    productRepo = {
-      findProductOwnership: jest.fn(),
-    } as unknown as jest.Mocked<ProductRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SellerContentService,
-        {
-          provide: SellerRepository,
-          useValue: repo,
-        },
-        {
-          provide: ProductRepository,
-          useValue: productRepo,
-        },
-      ],
-    }).compile();
-
-    service = module.get<SellerContentService>(SellerContentService);
-
-    // 기본: 유효한 판매자 컨텍스트 반환
-    repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [SellerContentService, SellerRepository, ProductRepository],
+    });
+    service = module.get(SellerContentService);
+    prisma = p;
   });
 
-  // ─── FAQ Topic ────────────────────────────────────────────
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
 
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // ─── FAQ Topic ──
   describe('sellerFaqTopics', () => {
-    it('매장의 FAQ 토픽 목록을 반환해야 한다', async () => {
-      const faqRows = [
-        {
-          id: BigInt(10),
-          store_id: BigInt(100),
-          title: 'FAQ 1',
-          answer_html: '<p>답변1</p>',
-          sort_order: 0,
-          is_active: true,
-          created_at: NOW,
-          updated_at: NOW,
-        },
-        {
-          id: BigInt(11),
-          store_id: BigInt(100),
-          title: 'FAQ 2',
-          answer_html: '<p>답변2</p>',
-          sort_order: 1,
-          is_active: false,
-          created_at: NOW,
-          updated_at: NOW,
-        },
-      ];
-      repo.listFaqTopics.mockResolvedValue(faqRows as never);
+    it('매장의 FAQ 토픽을 sort_order 오름차순으로 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await prisma.storeFaqTopic.createMany({
+        data: [
+          {
+            store_id: store.id,
+            title: 'B',
+            answer_html: '<p>b</p>',
+            sort_order: 1,
+          },
+          {
+            store_id: store.id,
+            title: 'A',
+            answer_html: '<p>a</p>',
+            sort_order: 0,
+          },
+        ],
+      });
 
-      const result = await service.sellerFaqTopics(BigInt(1));
+      const result = await service.sellerFaqTopics(account.id);
 
-      expect(repo.listFaqTopics).toHaveBeenCalledWith(BigInt(100));
-      expect(result).toEqual([
-        {
-          id: '10',
-          storeId: '100',
-          title: 'FAQ 1',
-          answerHtml: '<p>답변1</p>',
-          sortOrder: 0,
-          isActive: true,
-          createdAt: NOW,
-          updatedAt: NOW,
+      expect(result.map((r) => r.title)).toEqual(['A', 'B']);
+    });
+
+    it('soft-delete된 FAQ는 제외된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await prisma.storeFaqTopic.create({
+        data: {
+          store_id: store.id,
+          title: '삭제된',
+          answer_html: '<p>x</p>',
+          deleted_at: new Date(),
         },
-        {
-          id: '11',
-          storeId: '100',
-          title: 'FAQ 2',
-          answerHtml: '<p>답변2</p>',
-          sortOrder: 1,
-          isActive: false,
-          createdAt: NOW,
-          updatedAt: NOW,
-        },
-      ]);
+      });
+      await prisma.storeFaqTopic.create({
+        data: { store_id: store.id, title: '활성', answer_html: '<p>o</p>' },
+      });
+
+      const result = await service.sellerFaqTopics(account.id);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].title).toBe('활성');
     });
   });
 
   describe('sellerCreateFaqTopic', () => {
-    it('FAQ 토픽을 생성하고 감사 로그를 기록해야 한다', async () => {
-      const createdRow = {
-        id: BigInt(20),
-        store_id: BigInt(100),
-        title: '새 FAQ',
-        answer_html: '<p>새 답변</p>',
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      repo.createFaqTopic.mockResolvedValue(createdRow as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
+    it('FAQ를 생성하고 audit log를 남긴다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
 
-      const result = await service.sellerCreateFaqTopic(BigInt(1), {
+      const result = await service.sellerCreateFaqTopic(account.id, {
         title: '새 FAQ',
         answerHtml: '<p>새 답변</p>',
       });
 
-      expect(repo.createFaqTopic).toHaveBeenCalledWith({
-        storeId: BigInt(100),
-        title: '새 FAQ',
-        answerHtml: '<p>새 답변</p>',
-        sortOrder: 0,
-        isActive: true,
+      expect(result.title).toBe('새 FAQ');
+      const dbRow = await prisma.storeFaqTopic.findUniqueOrThrow({
+        where: { id: BigInt(result.id) },
       });
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.CREATE,
-        afterJson: { topicId: '20' },
+      expect(dbRow.store_id).toBe(store.id);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: store.id, action: 'CREATE' },
       });
-      expect(result).toEqual({
-        id: '20',
-        storeId: '100',
-        title: '새 FAQ',
-        answerHtml: '<p>새 답변</p>',
-        sortOrder: 0,
-        isActive: true,
-        createdAt: NOW,
-        updatedAt: NOW,
-      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
   describe('sellerUpdateFaqTopic', () => {
-    it('FAQ 토픽이 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findFaqTopicById.mockResolvedValue(null);
-
+    it('존재하지 않는 topicId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerUpdateFaqTopic(BigInt(1), {
-          topicId: '999',
-          title: '수정된 제목',
+        service.sellerUpdateFaqTopic(account.id, {
+          topicId: '999999',
+          title: '수정',
         }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('FAQ 토픽을 수정하고 감사 로그를 기록해야 한다', async () => {
-      const currentRow = {
-        id: BigInt(10),
-        store_id: BigInt(100),
-        title: '기존 제목',
-        answer_html: '<p>기존 답변</p>',
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      const updatedRow = {
-        ...currentRow,
-        title: '수정된 제목',
-        updated_at: new Date('2026-03-30T01:00:00.000Z'),
-      };
-      repo.findFaqTopicById.mockResolvedValue(currentRow as never);
-      repo.updateFaqTopic.mockResolvedValue(updatedRow as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerUpdateFaqTopic(BigInt(1), {
-        topicId: '10',
-        title: '수정된 제목',
+    it('다른 매장 소유 FAQ는 NotFoundException으로 차단', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const otherFaq = await prisma.storeFaqTopic.create({
+        data: {
+          store_id: other.store.id,
+          title: 'X',
+          answer_html: '<p>x</p>',
+        },
       });
 
-      expect(repo.findFaqTopicById).toHaveBeenCalledWith({
-        topicId: BigInt(10),
-        storeId: BigInt(100),
+      await expect(
+        service.sellerUpdateFaqTopic(me.account.id, {
+          topicId: otherFaq.id.toString(),
+          title: '수정',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('FAQ 수정 + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const faq = await prisma.storeFaqTopic.create({
+        data: { store_id: store.id, title: '구', answer_html: '<p>a</p>' },
       });
-      expect(repo.updateFaqTopic).toHaveBeenCalledWith({
-        topicId: BigInt(10),
-        data: { title: '수정된 제목' },
+
+      const result = await service.sellerUpdateFaqTopic(account.id, {
+        topicId: faq.id.toString(),
+        title: '신',
       });
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.UPDATE,
-        afterJson: { topicId: '10' },
+
+      expect(result.title).toBe('신');
+      const dbRow = await prisma.storeFaqTopic.findUniqueOrThrow({
+        where: { id: faq.id },
       });
-      expect(result).toEqual({
-        id: '10',
-        storeId: '100',
-        title: '수정된 제목',
-        answerHtml: '<p>기존 답변</p>',
-        sortOrder: 0,
-        isActive: true,
-        createdAt: NOW,
-        updatedAt: new Date('2026-03-30T01:00:00.000Z'),
-      });
+      expect(dbRow.title).toBe('신');
     });
   });
 
   describe('sellerDeleteFaqTopic', () => {
-    it('FAQ 토픽이 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findFaqTopicById.mockResolvedValue(null);
-
+    it('존재하지 않는 topicId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerDeleteFaqTopic(BigInt(1), BigInt(999)),
+        service.sellerDeleteFaqTopic(account.id, BigInt(999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('FAQ 토픽을 소프트 삭제하고 감사 로그를 기록해야 한다', async () => {
-      const currentRow = {
-        id: BigInt(10),
-        store_id: BigInt(100),
-        title: '삭제 대상',
-        answer_html: '<p>답변</p>',
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      repo.findFaqTopicById.mockResolvedValue(currentRow as never);
-      repo.softDeleteFaqTopic.mockResolvedValue(undefined as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerDeleteFaqTopic(BigInt(1), BigInt(10));
-
-      expect(repo.findFaqTopicById).toHaveBeenCalledWith({
-        topicId: BigInt(10),
-        storeId: BigInt(100),
+    it('soft-delete + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const faq = await prisma.storeFaqTopic.create({
+        data: { store_id: store.id, title: 'x', answer_html: '<p>x</p>' },
       });
-      expect(repo.softDeleteFaqTopic).toHaveBeenCalledWith(BigInt(10));
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.DELETE,
-        beforeJson: { topicId: '10' },
+
+      await service.sellerDeleteFaqTopic(account.id, faq.id);
+
+      const after = await prisma.storeFaqTopic.findUnique({
+        where: { id: faq.id },
       });
-      expect(result).toBe(true);
+      expect(after?.deleted_at).not.toBeNull();
     });
   });
 
-  // ─── Banner ─────────────────────────────────────────────────
-
+  // ─── Banner ──
   describe('sellerBanners', () => {
-    it('배너 목록을 커서 기반 페이지네이션으로 반환해야 한다', async () => {
-      const bannerRows = [
-        {
-          id: BigInt(30),
-          placement: 'HOME_MAIN' as const,
-          title: '배너 1',
-          image_url: 'https://img.example.com/b1.png',
-          link_type: 'NONE' as const,
-          link_url: null,
-          link_product_id: null,
-          link_store_id: null,
-          link_category_id: null,
-          starts_at: null,
-          ends_at: null,
-          sort_order: 0,
-          is_active: true,
-          created_at: NOW,
-          updated_at: NOW,
+    it('자기 매장 banner만 반환한다 (link_store_id 또는 link_product 매장 필터)', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+
+      // 자기 매장 banner
+      await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/1.png',
+          link_type: 'STORE',
+          link_store_id: me.store.id,
         },
-      ];
-      repo.listBannersByStore.mockResolvedValue(bannerRows as never);
-
-      const result = await service.sellerBanners(BigInt(1));
-
-      expect(repo.listBannersByStore).toHaveBeenCalledWith({
-        storeId: BigInt(100),
-        limit: 20,
       });
-      expect(result).toEqual({
-        items: [
-          {
-            id: '30',
-            placement: 'HOME_MAIN',
-            title: '배너 1',
-            imageUrl: 'https://img.example.com/b1.png',
-            linkType: 'NONE',
-            linkUrl: null,
-            linkProductId: null,
-            linkStoreId: null,
-            linkCategoryId: null,
-            startsAt: null,
-            endsAt: null,
-            sortOrder: 0,
-            isActive: true,
-            createdAt: NOW,
-            updatedAt: NOW,
-          },
-        ],
-        nextCursor: null,
+      // 다른 매장 banner → 제외
+      await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/2.png',
+          link_type: 'STORE',
+          link_store_id: other.store.id,
+        },
       });
+
+      const result = await service.sellerBanners(me.account.id);
+      expect(result.items).toHaveLength(1);
     });
   });
 
   describe('sellerCreateBanner', () => {
-    it('linkType이 NONE인 배너를 생성하고 감사 로그를 기록해야 한다', async () => {
-      const createdRow = {
-        id: BigInt(40),
-        placement: 'HOME_MAIN' as const,
-        title: null,
-        image_url: 'https://img.example.com/new.png',
-        link_type: 'NONE' as const,
-        link_url: null,
-        link_product_id: null,
-        link_store_id: null,
-        link_category_id: null,
-        starts_at: null,
-        ends_at: null,
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      repo.createBanner.mockResolvedValue(createdRow as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerCreateBanner(BigInt(1), {
-        placement: 'HOME_MAIN',
-        imageUrl: 'https://img.example.com/new.png',
-      });
-
-      expect(repo.createBanner).toHaveBeenCalledWith({
-        placement: 'HOME_MAIN',
-        title: null,
-        imageUrl: 'https://img.example.com/new.png',
-        linkType: 'NONE',
-        linkUrl: null,
-        linkProductId: null,
-        linkStoreId: null,
-        linkCategoryId: null,
-        startsAt: null,
-        endsAt: null,
-        sortOrder: 0,
-        isActive: true,
-      });
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.CREATE,
-        afterJson: { bannerId: '40' },
-      });
-      expect(result).toEqual({
-        id: '40',
-        placement: 'HOME_MAIN',
-        title: null,
-        imageUrl: 'https://img.example.com/new.png',
-        linkType: 'NONE',
-        linkUrl: null,
-        linkProductId: null,
-        linkStoreId: null,
-        linkCategoryId: null,
-        startsAt: null,
-        endsAt: null,
-        sortOrder: 0,
-        isActive: true,
-        createdAt: NOW,
-        updatedAt: NOW,
-      });
-    });
-  });
-
-  describe('sellerUpdateBanner', () => {
-    it('배너가 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findBannerByIdForStore.mockResolvedValue(null);
-
+    it('linkType=URL인데 linkUrl 없음 → BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerUpdateBanner(BigInt(1), {
-          bannerId: '999',
-          title: '수정 배너',
-        }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('배너를 수정하고 감사 로그를 기록해야 한다', async () => {
-      const currentRow = {
-        id: BigInt(30),
-        placement: 'HOME_MAIN' as const,
-        title: '기존 배너',
-        image_url: 'https://img.example.com/old.png',
-        link_type: 'NONE' as const,
-        link_url: null,
-        link_product_id: null,
-        link_store_id: null,
-        link_category_id: null,
-        starts_at: null,
-        ends_at: null,
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      const updatedRow = {
-        ...currentRow,
-        title: '수정된 배너',
-        updated_at: new Date('2026-03-30T01:00:00.000Z'),
-      };
-      repo.findBannerByIdForStore.mockResolvedValue(currentRow as never);
-      repo.updateBanner.mockResolvedValue(updatedRow as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerUpdateBanner(BigInt(1), {
-        bannerId: '30',
-        title: '수정된 배너',
-      });
-
-      expect(repo.findBannerByIdForStore).toHaveBeenCalledWith({
-        bannerId: BigInt(30),
-        storeId: BigInt(100),
-      });
-      expect(repo.updateBanner).toHaveBeenCalledWith({
-        bannerId: BigInt(30),
-        data: { title: '수정된 배너' },
-      });
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.UPDATE,
-        afterJson: { bannerId: '30' },
-      });
-      expect(result).toEqual({
-        id: '30',
-        placement: 'HOME_MAIN',
-        title: '수정된 배너',
-        imageUrl: 'https://img.example.com/old.png',
-        linkType: 'NONE',
-        linkUrl: null,
-        linkProductId: null,
-        linkStoreId: null,
-        linkCategoryId: null,
-        startsAt: null,
-        endsAt: null,
-        sortOrder: 0,
-        isActive: true,
-        createdAt: NOW,
-        updatedAt: new Date('2026-03-30T01:00:00.000Z'),
-      });
-    });
-  });
-
-  describe('sellerDeleteBanner', () => {
-    it('배너가 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findBannerByIdForStore.mockResolvedValue(null);
-
-      await expect(
-        service.sellerDeleteBanner(BigInt(1), BigInt(999)),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('배너를 소프트 삭제하고 감사 로그를 기록해야 한다', async () => {
-      const currentRow = {
-        id: BigInt(30),
-        placement: 'HOME_MAIN' as const,
-        title: '삭제 대상 배너',
-        image_url: 'https://img.example.com/del.png',
-        link_type: 'NONE' as const,
-        link_url: null,
-        link_product_id: null,
-        link_store_id: null,
-        link_category_id: null,
-        starts_at: null,
-        ends_at: null,
-        sort_order: 0,
-        is_active: true,
-        created_at: NOW,
-        updated_at: NOW,
-      };
-      repo.findBannerByIdForStore.mockResolvedValue(currentRow as never);
-      repo.softDeleteBanner.mockResolvedValue(undefined as never);
-      repo.createAuditLog.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerDeleteBanner(BigInt(1), BigInt(30));
-
-      expect(repo.findBannerByIdForStore).toHaveBeenCalledWith({
-        bannerId: BigInt(30),
-        storeId: BigInt(100),
-      });
-      expect(repo.softDeleteBanner).toHaveBeenCalledWith(BigInt(30));
-      expect(repo.createAuditLog).toHaveBeenCalledWith({
-        actorAccountId: BigInt(1),
-        storeId: BigInt(100),
-        targetType: AuditTargetType.STORE,
-        targetId: BigInt(100),
-        action: AuditActionType.DELETE,
-        beforeJson: { bannerId: '30' },
-      });
-      expect(result).toBe(true);
-    });
-  });
-
-  // ─── Audit Logs ─────────────────────────────────────────────
-
-  describe('sellerAuditLogs', () => {
-    it('감사 로그 목록을 커서 기반 페이지네이션으로 반환해야 한다', async () => {
-      const auditRows = [
-        {
-          id: BigInt(50),
-          actor_account_id: BigInt(1),
-          store_id: BigInt(100),
-          target_type: 'STORE' as const,
-          target_id: BigInt(100),
-          action: 'CREATE' as const,
-          before_json: null,
-          after_json: { topicId: '20' },
-          ip_address: '127.0.0.1',
-          user_agent: 'TestAgent',
-          created_at: NOW,
-        },
-      ];
-      repo.listAuditLogsBySeller.mockResolvedValue(auditRows as never);
-
-      const result = await service.sellerAuditLogs(BigInt(1));
-
-      expect(repo.listAuditLogsBySeller).toHaveBeenCalledWith({
-        sellerAccountId: BigInt(1),
-        storeId: BigInt(100),
-        limit: 20,
-      });
-      expect(result).toEqual({
-        items: [
-          {
-            id: '50',
-            actorAccountId: '1',
-            storeId: '100',
-            targetType: 'STORE',
-            targetId: '100',
-            action: 'CREATE',
-            beforeJson: null,
-            afterJson: '{"topicId":"20"}',
-            ipAddress: '127.0.0.1',
-            userAgent: 'TestAgent',
-            createdAt: NOW,
-          },
-        ],
-        nextCursor: null,
-      });
-    });
-  });
-
-  // ─── Banner - validateBannerOwnership ─────────────────────
-
-  describe('validateBannerOwnership (sellerCreateBanner 경유)', () => {
-    it('linkType이 URL인데 linkUrl이 없으면 BadRequestException을 던져야 한다', async () => {
-      await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
+          imageUrl: 'https://i.example/a.png',
           linkType: 'URL',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('linkType이 PRODUCT인데 linkProductId가 없으면 BadRequestException을 던져야 한다', async () => {
+    it('linkType=PRODUCT인데 linkProductId 없음 → BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
+          imageUrl: 'https://i.example/a.png',
           linkType: 'PRODUCT',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('linkType이 PRODUCT인데 상품이 다른 매장 소유이면 ForbiddenException을 던져야 한다', async () => {
-      productRepo.findProductOwnership.mockResolvedValue(null);
+    it('linkType=PRODUCT인데 다른 매장 상품 → ForbiddenException', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const otherStore = await createStore(prisma);
+      const otherProduct = await createProduct(prisma, {
+        store_id: otherStore.id,
+      });
 
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(me.account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
+          imageUrl: 'https://i.example/a.png',
           linkType: 'PRODUCT',
-          linkProductId: '50',
+          linkProductId: otherProduct.id.toString(),
         }),
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('linkType이 STORE인데 linkStoreId가 없으면 BadRequestException을 던져야 한다', async () => {
+    it('linkType=STORE인데 다른 매장 storeId → ForbiddenException', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(me.account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
+          imageUrl: 'https://i.example/a.png',
           linkType: 'STORE',
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('linkType이 STORE인데 다른 매장의 storeId이면 ForbiddenException을 던져야 한다', async () => {
-      await expect(
-        service.sellerCreateBanner(BigInt(1), {
-          placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
-          linkType: 'STORE',
-          linkStoreId: '999',
+          linkStoreId: other.store.id.toString(),
         }),
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('linkType이 CATEGORY인데 linkCategoryId가 없으면 BadRequestException을 던져야 한다', async () => {
+    it('linkType=CATEGORY인데 linkCategoryId 없음 → BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
+          imageUrl: 'https://i.example/a.png',
           linkType: 'CATEGORY',
         }),
       ).rejects.toThrow(BadRequestException);
     });
-  });
 
-  // ─── Enum 변환 ────────────────────────────────────────────
-
-  describe('Enum 변환 검증 (sellerCreateBanner 경유)', () => {
-    it('유효하지 않은 배너 placement이면 BadRequestException을 던져야 한다', async () => {
+    it('placement enum 잘못 → BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
-          placement: 'INVALID_PLACEMENT' as never,
-          imageUrl: 'https://img.example.com/a.png',
+        service.sellerCreateBanner(account.id, {
+          placement: 'INVALID' as never,
+          imageUrl: 'https://i.example/a.png',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효하지 않은 배너 linkType이면 BadRequestException을 던져야 한다', async () => {
+    it('linkType enum 잘못 → BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateBanner(BigInt(1), {
+        service.sellerCreateBanner(account.id, {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://img.example.com/a.png',
-          linkType: 'INVALID_LINK_TYPE' as never,
+          imageUrl: 'https://i.example/a.png',
+          linkType: 'BAD' as never,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('정상 STORE banner 생성 + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const result = await service.sellerCreateBanner(account.id, {
+        placement: 'STORE',
+        imageUrl: 'https://i.example/new.png',
+        linkType: 'STORE',
+        linkStoreId: store.id.toString(),
+      });
+      expect(result.imageUrl).toBe('https://i.example/new.png');
+      expect(result.linkStoreId).toBe(store.id.toString());
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: store.id, action: 'CREATE' },
+      });
+      expect(auditLogs).toHaveLength(1);
+    });
+  });
+
+  describe('sellerUpdateBanner', () => {
+    it('존재하지 않는 bannerId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerUpdateBanner(account.id, {
+          bannerId: '999999',
+          title: 'x',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('자기 매장 banner의 title을 수정한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/a.png',
+          link_type: 'STORE',
+          link_store_id: store.id,
+        },
+      });
+
+      const result = await service.sellerUpdateBanner(account.id, {
+        bannerId: banner.id.toString(),
+        title: '새 타이틀',
+      });
+      expect(result.title).toBe('새 타이틀');
+    });
+  });
+
+  describe('sellerDeleteBanner', () => {
+    it('존재하지 않으면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerDeleteBanner(account.id, BigInt(999)),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('soft-delete + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/a.png',
+          link_type: 'STORE',
+          link_store_id: store.id,
+        },
+      });
+
+      await service.sellerDeleteBanner(account.id, banner.id);
+
+      const after = await prisma.banner.findUnique({
+        where: { id: banner.id },
+      });
+      expect(after?.deleted_at).not.toBeNull();
+    });
+  });
+
+  describe('sellerAuditLogs', () => {
+    it('판매자 컨텍스트의 audit log를 cursor 페이지네이션으로 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      // FAQ 생성 → audit log 1건 자동 생성
+      await service.sellerCreateFaqTopic(account.id, {
+        title: 'F',
+        answerHtml: '<p>x</p>',
+      });
+
+      const result = await service.sellerAuditLogs(account.id);
+      expect(result.items.length).toBeGreaterThanOrEqual(1);
+      expect(result.items[0].storeId).toBe(store.id.toString());
+    });
+
+    it('targetType 필터링이 동작한다', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await service.sellerCreateFaqTopic(account.id, {
+        title: 'F',
+        answerHtml: '<p>x</p>',
+      });
+
+      const filtered = await service.sellerAuditLogs(account.id, {
+        targetType: 'STORE',
+      });
+      expect(filtered.items.every((it) => it.targetType === 'STORE')).toBe(
+        true,
+      );
+    });
+
+    it('잘못된 targetType이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerAuditLogs(account.id, {
+          targetType: 'INVALID' as never,
         }),
       ).rejects.toThrow(BadRequestException);
     });
