@@ -107,6 +107,8 @@ export async function disconnectTestPrismaClient(): Promise<void> {
   if (cachedClient) {
     await cachedClient.$disconnect();
     cachedClient = null;
-    schemaApplied = false;
   }
+  // schemaApplied는 유지한다. 같은 worker 프로세스 내에서 DB는 동일하므로
+  // migrate를 다시 돌릴 필요가 없고, 재실행 시 mysql admin 연결이 flaky해
+  // "Connection lost" 오류를 유발할 수 있다 (PR 7 CI에서 관측됨).
 }
