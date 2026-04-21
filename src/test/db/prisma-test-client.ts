@@ -18,7 +18,29 @@ interface TestDbState {
 
 let cachedClient: PrismaClient | null = null;
 let cachedDbUrl: string | null = null;
-let schemaApplied = false;
+
+/**
+ * schemaApplied는 worker 프로세스 전역으로 유지한다.
+ * Jest는 test file마다 module registry를 새로 만들기 때문에 module-scope 변수로는
+ * suite 간 공유되지 않는다. 이 경우 매 suite마다 ensureSchema()가 호출되며
+ * `mysql.createConnection`과 `npx prisma migrate deploy`가 반복되는데, CI의
+ * MySQL 연결이 flaky하면 "Connection lost" 오류가 발생한다 (PR 7 CI).
+ * globalThis에 저장해 한 worker가 살아있는 동안 1회만 실행되도록 한다.
+ */
+interface TestDbGlobal {
+  __TEST_SCHEMA_APPLIED__?: Record<string, boolean>;
+}
+
+function isSchemaApplied(dbName: string): boolean {
+  const g = globalThis as unknown as TestDbGlobal;
+  return g.__TEST_SCHEMA_APPLIED__?.[dbName] === true;
+}
+
+function markSchemaApplied(dbName: string): void {
+  const g = globalThis as unknown as TestDbGlobal;
+  if (!g.__TEST_SCHEMA_APPLIED__) g.__TEST_SCHEMA_APPLIED__ = {};
+  g.__TEST_SCHEMA_APPLIED__[dbName] = true;
+}
 
 function loadState(): TestDbState {
   const raw = readFileSync(STATE_FILE, 'utf8');
@@ -44,7 +66,7 @@ async function ensureSchema(
   dbName: string,
   dbUrl: string,
 ): Promise<void> {
-  if (schemaApplied) return;
+  if (isSchemaApplied(dbName)) return;
 
   const admin = await mysql.createConnection({
     host: state.host,
@@ -68,7 +90,7 @@ async function ensureSchema(
     stdio: 'pipe',
   });
 
-  schemaApplied = true;
+  markSchemaApplied(dbName);
 }
 
 /**
@@ -108,7 +130,6 @@ export async function disconnectTestPrismaClient(): Promise<void> {
     await cachedClient.$disconnect();
     cachedClient = null;
   }
-  // schemaApplied는 유지한다. 같은 worker 프로세스 내에서 DB는 동일하므로
-  // migrate를 다시 돌릴 필요가 없고, 재실행 시 mysql admin 연결이 flaky해
-  // "Connection lost" 오류를 유발할 수 있다 (PR 7 CI에서 관측됨).
+  // schemaApplied 플래그는 globalThis에 있으므로 건드리지 않는다.
+  // worker 프로세스가 살아있는 동안 migrate를 다시 돌리지 않는다.
 }
