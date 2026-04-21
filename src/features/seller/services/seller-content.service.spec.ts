@@ -426,6 +426,76 @@ describe('SellerContentService (real DB)', () => {
       expect(after.link_type).toBe('STORE');
       expect(after.link_store_id).toBe(store.id);
     });
+
+    it('linkType 미변경 + 4가지 inner link 필드(linkUrl/linkProductId/linkStoreId/linkCategoryId) 부분 업데이트', async () => {
+      // STORE 타입 banner로 ownership을 확보하면 validateBannerOwnership은 linkStoreId만
+      // 현재 store인지 확인하므로 나머지 linkUrl/linkProductId/linkCategoryId inner 분기를
+      // 자유롭게 검증할 수 있다.
+      const me = await setupSellerWithStore(prisma);
+      const product = await prisma.product.create({
+        data: { store_id: me.store.id, name: 'p', regular_price: 1000 },
+      });
+      const category = await prisma.category.create({
+        data: { name: '이벤트', category_type: 'EVENT' },
+      });
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/a.png',
+          link_type: 'STORE',
+          link_store_id: me.store.id,
+          link_url: 'https://old.example',
+        },
+      });
+
+      await service.sellerUpdateBanner(me.account.id, {
+        bannerId: banner.id.toString(),
+        // linkType 미지정 → else branch
+        // 4개 inner 분기 모두 발동
+        linkUrl: 'https://new.example',
+        linkProductId: product.id.toString(),
+        linkStoreId: me.store.id.toString(),
+        linkCategoryId: category.id.toString(),
+      });
+
+      const after = await prisma.banner.findUniqueOrThrow({
+        where: { id: banner.id },
+      });
+      expect(after.link_type).toBe('STORE');
+      expect(after.link_url).toBe('https://new.example');
+      expect(after.link_product_id).toBe(product.id);
+      expect(after.link_store_id).toBe(me.store.id);
+      expect(after.link_category_id).toBe(category.id);
+    });
+
+    it('linkType 미변경 + linkProductId를 null로 (falsy 분기: parseId 미호출 경로)', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const product = await prisma.product.create({
+        data: { store_id: me.store.id, name: 'p', regular_price: 1000 },
+      });
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/a.png',
+          link_type: 'STORE',
+          link_store_id: me.store.id,
+          link_product_id: product.id,
+        },
+      });
+
+      await service.sellerUpdateBanner(me.account.id, {
+        bannerId: banner.id.toString(),
+        // linkProductId=null → inner 삼항의 falsy 측(→null) 경로
+        linkProductId: null,
+      });
+
+      const after = await prisma.banner.findUniqueOrThrow({
+        where: { id: banner.id },
+      });
+      expect(after.link_product_id).toBeNull();
+      // linkType 그대로
+      expect(after.link_type).toBe('STORE');
+    });
   });
 
   describe('sellerDeleteBanner', () => {

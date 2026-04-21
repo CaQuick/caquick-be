@@ -1,5 +1,5 @@
 import { BadRequestException, HttpStatus } from '@nestjs/common';
-import type { AbstractHttpAdapter } from '@nestjs/core';
+import { BaseExceptionFilter, type AbstractHttpAdapter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
@@ -149,26 +149,30 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
-  it('GraphQL 컨텍스트(getType !== "http")에서는 BaseExceptionFilter.catch로 위임한다', () => {
-    // super.catch가 호출되는지만 검증 (HttpAdapter가 없어 BaseExceptionFilter 내부에서
-    // throw 가능 → catch해서 호출됐음만 확인)
-    const host = {
-      getType: () => 'graphql',
-      switchToHttp: () => ({
-        getRequest: () => ({}),
-        getResponse: () => ({}),
-      }),
-    } as never;
+  it('GraphQL 컨텍스트(getType !== "http")에서는 BaseExceptionFilter.catch로 위임하고 로깅을 스킵한다', () => {
+    const superCatch = jest
+      .spyOn(BaseExceptionFilter.prototype, 'catch')
+      .mockImplementation(() => undefined);
 
-    // super.catch는 HttpAdapter 필요 → 빈 adapter면 내부에서 throw.
-    // 단순히 super로 delegate됐음을 확인하기 위해 try/catch로 감싼다.
     try {
-      filter.catch(new Error('gql'), host);
-    } catch {
-      /* super.catch 경유 확인만 필요 */
+      const host = {
+        getType: () => 'graphql',
+        switchToHttp: () => ({
+          getRequest: () => ({}),
+          getResponse: () => ({}),
+        }),
+      } as never;
+      const exception = new Error('gql');
+
+      filter.catch(exception, host);
+
+      // 1) super.catch로 정확히 위임됐는지 — exception/host 원본 그대로 전달
+      expect(superCatch).toHaveBeenCalledTimes(1);
+      expect(superCatch).toHaveBeenCalledWith(exception, host);
+      // 2) HTTP 경로의 side effect가 일어나지 않았는지
+      expect(logger.txError).not.toHaveBeenCalled();
+    } finally {
+      superCatch.mockRestore();
     }
-    // res.status / res.json이 호출되지 않았음을 통해 http 경로로 가지 않았음을 확인
-    // (mockRes가 없으므로 간접 검증: logger.txError도 호출되지 않았어야 함)
-    expect(logger.txError).not.toHaveBeenCalled();
   });
 });
