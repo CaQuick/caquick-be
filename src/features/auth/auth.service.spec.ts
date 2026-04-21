@@ -450,5 +450,63 @@ describe('AuthService', () => {
         'Account not found.',
       );
     });
+
+    it('user_profile이 아예 null이면 모든 프로필 필드가 null + needsProfile=true', async () => {
+      mockRepo.findAccountForMe.mockResolvedValue({
+        id: BigInt(1),
+        email: null,
+        name: null,
+        user_profile: null,
+      } as never);
+
+      const result = await service.me(BigInt(1));
+
+      expect(result.nickname).toBeNull();
+      expect(result.profileImageUrl).toBeNull();
+      expect(result.birthDate).toBeNull();
+      expect(result.phoneNumber).toBeNull();
+      expect(result.needsProfile).toBe(true);
+    });
+  });
+
+  describe('startOidcLogin returnTo 분기 (빈 값/공백)', () => {
+    it('returnTo가 undefined이면 기본 프론트 URL을 사용한다', async () => {
+      const mockRes = { cookie: jest.fn() } as unknown as Response;
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'FRONTEND_BASE_URL') return 'http://front.example';
+        return undefined;
+      });
+      mockOidc.buildAuthorizationUrl.mockResolvedValue({
+        authorizationUrl: 'https://a',
+        state: 's',
+        nonce: 'n',
+        codeVerifier: 'v',
+      });
+
+      await service.startOidcLogin('google', undefined, mockRes);
+
+      const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'caquick_oidc_return_to',
+      );
+      expect(returnToCookie![1]).toBe('http://front.example');
+    });
+
+    it('FRONTEND_BASE_URL이 미설정이면 http://localhost:3000으로 fallback', async () => {
+      const mockRes = { cookie: jest.fn() } as unknown as Response;
+      mockConfig.get.mockImplementation(() => undefined);
+      mockOidc.buildAuthorizationUrl.mockResolvedValue({
+        authorizationUrl: 'https://a',
+        state: 's',
+        nonce: 'n',
+        codeVerifier: 'v',
+      });
+
+      await service.startOidcLogin('google', '   ', mockRes);
+
+      const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'caquick_oidc_return_to',
+      );
+      expect(returnToCookie![1]).toBe('http://localhost:3000');
+    });
   });
 });
