@@ -113,4 +113,62 @@ describe('HttpExceptionFilter', () => {
       }),
     );
   });
+
+  it('BadRequestException의 message가 배열이지만 validation 형태가 아니면 기본 ERROR 응답', () => {
+    const req = mockReq();
+    const res = mockRes();
+    const host = mockHost(req, res);
+
+    const exception = new BadRequestException({
+      // 배열이지만 validation 구조({property, constraints}) 아님
+      message: ['plain string', 'another'],
+    });
+
+    filter.catch(exception, host);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    // ERROR 헬퍼로 직렬화 → data는 null
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 400, data: null }),
+    );
+  });
+
+  it('BadRequestException resp가 object이지만 message 속성이 없으면 기본 ERROR', () => {
+    const req = mockReq();
+    const res = mockRes();
+    const host = mockHost(req, res);
+
+    // BadRequestException에 message 없는 object
+    const exception = new BadRequestException({ statusCode: 400 } as never);
+
+    filter.catch(exception, host);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 400 }),
+    );
+  });
+
+  it('GraphQL 컨텍스트(getType !== "http")에서는 BaseExceptionFilter.catch로 위임한다', () => {
+    // super.catch가 호출되는지만 검증 (HttpAdapter가 없어 BaseExceptionFilter 내부에서
+    // throw 가능 → catch해서 호출됐음만 확인)
+    const host = {
+      getType: () => 'graphql',
+      switchToHttp: () => ({
+        getRequest: () => ({}),
+        getResponse: () => ({}),
+      }),
+    } as never;
+
+    // super.catch는 HttpAdapter 필요 → 빈 adapter면 내부에서 throw.
+    // 단순히 super로 delegate됐음을 확인하기 위해 try/catch로 감싼다.
+    try {
+      filter.catch(new Error('gql'), host);
+    } catch {
+      /* super.catch 경유 확인만 필요 */
+    }
+    // res.status / res.json이 호출되지 않았음을 통해 http 경로로 가지 않았음을 확인
+    // (mockRes가 없으므로 간접 검증: logger.txError도 호출되지 않았어야 함)
+    expect(logger.txError).not.toHaveBeenCalled();
+  });
 });

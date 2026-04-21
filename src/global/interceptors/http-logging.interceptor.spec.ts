@@ -115,4 +115,16 @@ describe('HttpLoggingInterceptor', () => {
       done();
     });
   });
+
+  it('statusCode가 falsy(0)이면 HttpStatus.OK(200)로 fallback', (done) => {
+    const { ctx } = mockHttpContext(0);
+    interceptor.intercept(ctx, mockHandler(null)).subscribe(() => {
+      expect(logger.tx).toHaveBeenCalledWith(
+        expect.objectContaining({
+          response: expect.objectContaining({ statusCode: 200 }),
+        }),
+      );
+      done();
+    });
+  });
 });
