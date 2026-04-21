@@ -58,6 +58,35 @@ function buildTestDbUrl(state: TestDbState, dbName: string): string {
  * - worker별 격리된 DB 생성(없으면 CREATE)
  * - `prisma migrate deploy`로 스키마 적용 (worker당 1회)
  */
+/**
+ * MySQL admin 연결을 재시도와 함께 연다.
+ * Testcontainers의 mysqladmin ping healthcheck가 통과해도 실제 외부 연결을 받을
+ * 준비가 안 된 구간이 CI에서 관측됨 ("Connection lost: The server closed the
+ * connection"). 500ms → 1s → 2s → 4s → 8s 백오프로 최대 5회 재시도.
+ */
+async function connectAdminWithRetry(
+  state: TestDbState,
+): Promise<mysql.Connection> {
+  const maxAttempts = 5;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await mysql.createConnection({
+        host: state.host,
+        port: state.port,
+        user: state.rootUser,
+        password: state.rootPassword,
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts - 1) break;
+      const backoffMs = 500 * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+  throw lastError;
+}
+
 async function ensureSchema(
   state: TestDbState,
   dbName: string,
@@ -65,12 +94,7 @@ async function ensureSchema(
 ): Promise<void> {
   if (isSchemaApplied(dbName)) return;
 
-  const admin = await mysql.createConnection({
-    host: state.host,
-    port: state.port,
-    user: state.rootUser,
-    password: state.rootPassword,
-  });
+  const admin = await connectAdminWithRetry(state);
   try {
     await admin.query(
       `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
@@ -127,6 +151,6 @@ export async function disconnectTestPrismaClient(): Promise<void> {
     await cachedClient.$disconnect();
     cachedClient = null;
   }
-  // schemaApplied 플래그는 globalThis에 있으므로 건드리지 않는다.
+  // schema marker는 파일 시스템에 있으므로 건드리지 않는다.
   // worker 프로세스가 살아있는 동안 migrate를 다시 돌리지 않는다.
 }
