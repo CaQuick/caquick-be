@@ -3,10 +3,12 @@ import mysql from 'mysql2/promise';
 import { getTestDatabaseUrl } from '@/test/db/prisma-test-client';
 
 let cachedConn: mysql.Connection | null = null;
+let cachedTableNames: string[] | null = null;
 
 /**
  * Worker별로 캐싱된 mysql2 연결을 반환한다.
  * 연결이 끊겼으면 재생성한다.
+ * truncateAll을 단일 round-trip으로 수행하기 위해 multipleStatements를 활성화.
  */
 async function getConnection(): Promise<mysql.Connection> {
   if (cachedConn) {
@@ -17,21 +19,18 @@ async function getConnection(): Promise<mysql.Connection> {
       cachedConn = null;
     }
   }
-  cachedConn = await mysql.createConnection(getTestDatabaseUrl());
+  cachedConn = await mysql.createConnection({
+    uri: getTestDatabaseUrl(),
+    multipleStatements: true,
+  });
   return cachedConn;
 }
 
 /**
- * 테스트 DB의 모든 테이블을 TRUNCATE한다.
- *
- * Prisma 커넥션 풀을 우회하여 단일 mysql2 연결에서 실행.
- * → SET FOREIGN_KEY_CHECKS=0 과 TRUNCATE가 동일 세션에서 보장됨.
- *
- * - `_prisma_migrations`는 제외 (스키마 이력 유지)
+ * worker 프로세스 동안 테이블 목록은 변하지 않으므로 1회만 조회해 재사용한다.
  */
-export async function truncateAll(): Promise<void> {
-  const conn = await getConnection();
-
+async function loadTableNames(conn: mysql.Connection): Promise<string[]> {
+  if (cachedTableNames) return cachedTableNames;
   const [rows] = await conn.query<mysql.RowDataPacket[]>(`
     SELECT TABLE_NAME AS table_name
     FROM information_schema.tables
@@ -39,17 +38,36 @@ export async function truncateAll(): Promise<void> {
       AND table_type = 'BASE TABLE'
       AND TABLE_NAME <> '_prisma_migrations'
   `);
+  cachedTableNames = rows.map((r) => r.table_name as string);
+  return cachedTableNames;
+}
 
-  if (rows.length === 0) return;
+/**
+ * 테스트 DB의 모든 테이블 데이터를 초기화한다.
+ *
+ * TRUNCATE 대신 DELETE를 사용한다: MySQL에서 TRUNCATE는 빈 테이블이어도 .ibd 파일을
+ * drop & recreate하므로 per-statement 비용이 크지만, DELETE는 빈 테이블에서 거의
+ * 즉시 리턴한다. 테스트 대부분이 소수 테이블만 건드리고 나머지는 비어있으므로
+ * 실측상 DELETE가 훨씬 빠르다.
+ *
+ * 트레이드오프: AUTO_INCREMENT 값이 리셋되지 않는다. 우리 테스트는 factory가 반환한
+ * id를 들고 사용하지 상수 id에 의존하지 않으므로 무해하다.
+ *
+ * - multi-statement 배치로 1회 round-trip
+ * - SET FOREIGN_KEY_CHECKS=0 으로 FK 순서 무시
+ * - `_prisma_migrations`는 제외 (스키마 이력 유지)
+ */
+export async function truncateAll(): Promise<void> {
+  const conn = await getConnection();
+  const tables = await loadTableNames(conn);
+  if (tables.length === 0) return;
 
-  await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-  try {
-    for (const row of rows) {
-      await conn.query(`TRUNCATE TABLE \`${row.table_name}\``);
-    }
-  } finally {
-    await conn.query('SET FOREIGN_KEY_CHECKS = 1');
-  }
+  const deleteStatements = tables
+    .map((name) => `DELETE FROM \`${name}\`;`)
+    .join('\n');
+  const sql = `SET FOREIGN_KEY_CHECKS = 0;\n${deleteStatements}\nSET FOREIGN_KEY_CHECKS = 1;`;
+
+  await conn.query(sql);
 }
 
 /**
@@ -60,4 +78,5 @@ export async function closeTruncateConnection(): Promise<void> {
     await cachedConn.end();
     cachedConn = null;
   }
+  cachedTableNames = null;
 }
