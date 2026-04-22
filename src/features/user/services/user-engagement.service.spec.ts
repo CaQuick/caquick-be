@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import { NotificationEvent, NotificationType } from '@prisma/client';
 
@@ -117,9 +121,10 @@ describe('UserEngagementService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      await expect(service.likeReview(liker.id, review.id)).rejects.toThrow(
-        /Account is deleted/,
-      );
+      // 제목과 일치하도록 예외 타입 + 메시지 둘 다 검증한다 (회귀 감지력 ↑).
+      const promise = service.likeReview(liker.id, review.id);
+      await expect(promise).rejects.toThrow(UnauthorizedException);
+      await expect(promise).rejects.toThrow(/Account is deleted/);
     });
   });
 });
