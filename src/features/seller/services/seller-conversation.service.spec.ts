@@ -183,4 +183,75 @@ describe('SellerConversationService (real DB)', () => {
       expect(auditLogs).toHaveLength(1);
     });
   });
+
+  describe('sellerConversations / sellerConversationMessages cursor 분기', () => {
+    it('sellerConversations: cursor 기반 두 번째 페이지를 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) await setupConversation(store.id);
+
+      const first = await service.sellerConversations(account.id, { limit: 2 });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await service.sellerConversations(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('sellerConversationMessages: cursor 기반 두 번째 페이지를 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      for (let i = 0; i < 3; i++) {
+        await prisma.storeConversationMessage.create({
+          data: {
+            conversation_id: conv.id,
+            sender_type: 'STORE',
+            sender_account_id: account.id,
+            body_format: 'TEXT',
+            body_text: `msg ${i}`,
+          },
+        });
+      }
+      const first = await service.sellerConversationMessages(
+        account.id,
+        conv.id,
+        { limit: 2 },
+      );
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await service.sellerConversationMessages(
+        account.id,
+        conv.id,
+        { limit: 2, cursor: first.nextCursor as string },
+      );
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('toConversationMessageOutput senderAccountId null 분기', () => {
+    it('SYSTEM 메시지처럼 sender_account_id가 null이면 출력도 null', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      await prisma.storeConversationMessage.create({
+        data: {
+          conversation_id: conv.id,
+          sender_type: 'SYSTEM',
+          sender_account_id: null,
+          body_format: 'TEXT',
+          body_text: '시스템 알림',
+        },
+      });
+
+      const result = await service.sellerConversationMessages(
+        account.id,
+        conv.id,
+      );
+      const systemMsg = result.items.find((m) => m.senderType === 'SYSTEM');
+      expect(systemMsg).toBeDefined();
+      expect(systemMsg!.senderAccountId).toBeNull();
+    });
+  });
 });

@@ -400,6 +400,169 @@ describe('SellerProductCrudService (real DB)', () => {
     });
   });
 
+  describe('sellerProducts (필터/커서 분기)', () => {
+    it('cursor와 categoryId를 넘기면 필터 파라미터가 정상 해석된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const category = await prisma.category.create({
+        data: { name: '행사', category_type: 'EVENT' },
+      });
+      const products: bigint[] = [];
+      for (let i = 0; i < 3; i++) {
+        const p = await createSellerProduct(store.id, { name: `P${i}` });
+        await prisma.productCategory.create({
+          data: { product_id: p.id, category_id: category.id },
+        });
+        products.push(p.id);
+      }
+
+      // 첫 페이지
+      const first = await service.sellerProducts(account.id, {
+        limit: 2,
+        categoryId: category.id.toString(),
+      });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      // 두 번째 페이지: cursor path 활성화
+      const second = await service.sellerProducts(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+        categoryId: category.id.toString(),
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('search 필터(공백 trim 후 non-empty) 분기도 호출된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createSellerProduct(store.id, { name: '바나나' });
+      await createSellerProduct(store.id, { name: '사과' });
+
+      const result = await service.sellerProducts(account.id, {
+        search: '  바나나  ',
+      });
+      expect(result.items.map((i) => i.name)).toContain('바나나');
+    });
+  });
+
+  describe('sellerUpdateProduct (buildProductUpdateData 전 필드 분기)', () => {
+    it('description/purchaseNotice/currency/baseDesignImageUrl/preparationTimeMinutes 포함 수정', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, { name: '초기' });
+
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        description: '설명',
+        purchaseNotice: '주의사항',
+        currency: 'KRW',
+        baseDesignImageUrl: 'https://i.example/base.png',
+        preparationTimeMinutes: 60,
+        regularPrice: 12000,
+        salePrice: 9000,
+      });
+
+      expect(result.description).toBe('설명');
+      expect(result.purchaseNotice).toBe('주의사항');
+      expect(result.currency).toBe('KRW');
+      expect(result.baseDesignImageUrl).toBe('https://i.example/base.png');
+      expect(result.preparationTimeMinutes).toBe(60);
+      expect(result.regularPrice).toBe(12000);
+      expect(result.salePrice).toBe(9000);
+    });
+
+    it('salePrice만 넘긴 경우 기존 regularPrice 기준 검증을 통과한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        salePrice: 8000,
+      });
+      expect(result.salePrice).toBe(8000);
+    });
+  });
+
+  describe('sellerSetProductCategories/Tags 존재 검증 실패 분기', () => {
+    it('setProductCategories: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerSetProductCategories(account.id, {
+          productId: '999999',
+          categoryIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('setProductTags: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerSetProductTags(account.id, {
+          productId: '999999',
+          tagIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sellerAddProductImage / sellerDeleteProductImage / sellerReorderProductImages 추가 예외', () => {
+    it('addProductImage: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerAddProductImage(account.id, {
+          productId: '999999',
+          imageUrl: 'https://i.example/x.png',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('reorderProductImages: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerReorderProductImages(account.id, {
+          productId: '999999',
+          imageIds: ['1'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('reorderProductImages: 매장 imageId 집합과 입력 배열이 안 맞으면 BadRequestException(invalidIds)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const otherProduct = await createSellerProduct(store.id);
+      const otherImage = await prisma.productImage.findFirstOrThrow({
+        where: { product_id: otherProduct.id },
+      });
+
+      await expect(
+        service.sellerReorderProductImages(account.id, {
+          productId: product.id.toString(),
+          imageIds: [otherImage.id.toString()],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('toProductOutput custom_template 포함 분기', () => {
+    it('custom_template이 존재하는 product 조회 시 customTemplate 필드가 채워진다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, {
+        name: '템플릿 상품',
+      });
+      await prisma.productCustomTemplate.create({
+        data: {
+          product_id: product.id,
+          base_image_url: 'https://i.example/tpl.png',
+          is_active: true,
+        },
+      });
+
+      const result = await service.sellerProduct(account.id, product.id);
+      expect(result.customTemplate).not.toBeNull();
+      expect(result.customTemplate?.baseImageUrl).toBe(
+        'https://i.example/tpl.png',
+      );
+    });
+  });
+
   describe('sellerSetProductTags', () => {
     it('존재하지 않는 tagId가 있으면 BadRequestException', async () => {
       const { account, store } = await setupSellerWithStore(prisma);

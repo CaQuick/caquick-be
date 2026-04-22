@@ -319,4 +319,164 @@ describe('SellerOptionService (real DB)', () => {
       expect(result[0].id).toBe(i2.id.toString());
     });
   });
+
+  describe('sellerUpdateOptionGroup 모든 선택 필드 분기', () => {
+    it('name/isRequired/minSelect/maxSelect/sortOrder/isActive/optionRequires* 전체 포함 수정', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '사이즈',
+          is_required: true,
+          min_select: 1,
+          max_select: 2,
+        },
+      });
+
+      const result = await service.sellerUpdateOptionGroup(accountId, {
+        optionGroupId: group.id.toString(),
+        name: '사이즈(수정)',
+        isRequired: false,
+        minSelect: 0,
+        maxSelect: 3,
+        sortOrder: 5,
+        isActive: false,
+        optionRequiresDescription: true,
+        optionRequiresImage: true,
+      });
+
+      expect(result.name).toBe('사이즈(수정)');
+      expect(result.isRequired).toBe(false);
+      expect(result.minSelect).toBe(0);
+      expect(result.maxSelect).toBe(3);
+      expect(result.sortOrder).toBe(5);
+      expect(result.isActive).toBe(false);
+      expect(result.optionRequiresDescription).toBe(true);
+      expect(result.optionRequiresImage).toBe(true);
+    });
+  });
+
+  describe('sellerUpdateOptionItem 모든 선택 필드 분기', () => {
+    it('title/description/imageUrl/priceDelta/sortOrder/isActive 전체 포함 수정', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const item = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'S' },
+      });
+
+      const result = await service.sellerUpdateOptionItem(accountId, {
+        optionItemId: item.id.toString(),
+        title: 'L',
+        description: '대사이즈',
+        imageUrl: 'https://i.example/l.png',
+        priceDelta: 2000,
+        sortOrder: 3,
+        isActive: false,
+      });
+
+      expect(result.title).toBe('L');
+      expect(result.description).toBe('대사이즈');
+      expect(result.imageUrl).toBe('https://i.example/l.png');
+      expect(result.priceDelta).toBe(2000);
+      expect(result.sortOrder).toBe(3);
+      expect(result.isActive).toBe(false);
+    });
+  });
+
+  describe('sellerReorderOptionGroups 추가 예외', () => {
+    it('존재하지 않는 productId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
+      await expect(
+        service.sellerReorderOptionGroups(accountId, {
+          productId: '999999',
+          optionGroupIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('매장 그룹 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      // 길이 일치 분기(idsMismatchError) 대신 invalidIds 분기를 타도록
+      // 본인 product에 그룹 1개를 미리 만들어 둔다.
+      await createOptionGroup(product.id);
+      const otherProduct = await createProduct(prisma, {
+        store_id: product.store_id,
+        name: 'other',
+      });
+      const otherGroup = await createOptionGroup(otherProduct.id);
+
+      await expect(
+        service.sellerReorderOptionGroups(accountId, {
+          productId: product.id.toString(),
+          optionGroupIds: [otherGroup.id.toString()],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('sellerCreateOptionItem 타 매장 그룹 접근', () => {
+    it('다른 매장의 group이면 NotFoundException', async () => {
+      const me = await setupProductForSeller();
+      const other = await setupProductForSeller();
+      const othersGroup = await createOptionGroup(other.product.id);
+
+      await expect(
+        service.sellerCreateOptionItem(me.accountId, {
+          optionGroupId: othersGroup.id.toString(),
+          title: 'X',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sellerDeleteOptionItem 타 매장 접근', () => {
+    it('다른 매장의 item이면 NotFoundException', async () => {
+      const me = await setupProductForSeller();
+      const other = await setupProductForSeller();
+      const othersGroup = await createOptionGroup(other.product.id);
+      const othersItem = await prisma.productOptionItem.create({
+        data: { option_group_id: othersGroup.id, title: 'T' },
+      });
+
+      await expect(
+        service.sellerDeleteOptionItem(me.accountId, othersItem.id),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sellerReorderOptionItems 추가 예외', () => {
+    it('없는 optionGroupId면 NotFoundException', async () => {
+      const { accountId } = await setupProductForSeller();
+      await expect(
+        service.sellerReorderOptionItems(accountId, {
+          optionGroupId: '999999',
+          optionItemIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('매장 item 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const otherProduct = await createProduct(prisma, {
+        store_id: product.store_id,
+        name: 'o',
+      });
+      const otherGroup = await createOptionGroup(otherProduct.id);
+      const foreignItem = await prisma.productOptionItem.create({
+        data: { option_group_id: otherGroup.id, title: 'F' },
+      });
+      // 내 group에 item 하나 생성하여 length는 맞추고, 섞인 id만 foreign
+      await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: 'Mine' },
+      });
+
+      await expect(
+        service.sellerReorderOptionItems(accountId, {
+          optionGroupId: group.id.toString(),
+          optionItemIds: [foreignItem.id.toString()],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

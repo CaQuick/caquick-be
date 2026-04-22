@@ -153,6 +153,45 @@ describe('AuthRepository (real DB)', () => {
 
       expect(result.account!.user_profile!.nickname).toBe('john');
     });
+
+    it('displayName/email 모두 없으면 nickname이 "user"로 생성된다', async () => {
+      const result = await repo.upsertUserByOidcIdentity({
+        provider: IdentityProvider.KAKAO,
+        providerSubject: 'anonymous-sub',
+        emailVerified: false,
+      });
+
+      expect(result.account!.user_profile!.nickname).toBe('user');
+    });
+
+    it('기존 Identity + account email이 null + user_profile 없는 경우: profile 신규 생성 + email 주입', async () => {
+      // account는 있지만 email/profile이 비어있는 초기 상태 재현
+      const account = await prisma.account.create({
+        data: {
+          account_type: 'USER',
+          email: null,
+          name: null,
+          status: 'ACTIVE',
+        },
+      });
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+        provider_subject: 'partial-sub',
+      });
+
+      const result = await repo.upsertUserByOidcIdentity({
+        provider: IdentityProvider.GOOGLE,
+        providerSubject: 'partial-sub',
+        providerEmail: 'new-profile@example.com',
+        emailVerified: true,
+        providerDisplayName: 'New Name',
+      });
+
+      expect(result.account!.email).toBe('new-profile@example.com');
+      expect(result.account!.name).toBe('New Name');
+      expect(result.account!.user_profile).not.toBeNull();
+    });
   });
 
   // ─── Refresh Session ───
@@ -416,6 +455,42 @@ describe('AuthRepository (real DB)', () => {
       });
       expect(logs).toHaveLength(1);
       expect(logs[0].action).toBe(AuditActionType.UPDATE);
+    });
+
+    it('storeId/ipAddress/userAgent/beforeJson 모두 생략해도 기본 null 처리로 생성된다', async () => {
+      const account = await createAccount(prisma);
+
+      await repo.createAuditLog({
+        actorAccountId: account.id,
+        targetType: AuditTargetType.STORE,
+        targetId: account.id,
+        action: AuditActionType.UPDATE,
+      });
+
+      const logs = await prisma.auditLog.findMany({
+        where: { actor_account_id: account.id },
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].store_id).toBeNull();
+      expect(logs[0].ip_address).toBeNull();
+      expect(logs[0].user_agent).toBeNull();
+      expect(logs[0].before_json).toBeNull();
+      expect(logs[0].after_json).toBeNull();
+    });
+  });
+
+  describe('createRefreshSession (userAgent/ipAddress 미지정 분기)', () => {
+    it('userAgent/ipAddress 미지정 시 null로 저장된다', async () => {
+      const account = await createAccount(prisma);
+
+      const session = await repo.createRefreshSession({
+        accountId: account.id,
+        tokenHash: 'b'.repeat(64),
+        expiresAt: new Date(Date.now() + 3600_000),
+      });
+
+      expect(session.user_agent).toBeNull();
+      expect(session.ip_address).toBeNull();
     });
   });
 });

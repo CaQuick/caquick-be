@@ -491,4 +491,132 @@ describe('SellerStoreService (real DB)', () => {
       expect(auditLogs[0].before_json).not.toBeNull();
     });
   });
+
+  describe('sellerMyStore / sellerUpdateStoreBasicInfo / sellerUpdatePickupPolicy 존재 실패 분기', () => {
+    /**
+     * SellerContext(SellerProfile + Account SELLER type)는 존재하지만,
+     * 해당 seller의 Store row가 없는 상황을 재현해 `findStoreBySellerAccountId`가
+     * null을 반환하는 분기를 타게 한다.
+     */
+    async function setupSellerWithoutStore() {
+      const account = await prisma.account.create({
+        data: {
+          account_type: 'SELLER',
+          email: `no-store-${Date.now()}-${Math.random()}@example.com`,
+          name: 'no-store-seller',
+        },
+      });
+      await prisma.sellerProfile.create({
+        data: {
+          account_id: account.id,
+          business_name: 'no-store',
+          business_phone: '02-0000-9999',
+        },
+      });
+      return account;
+    }
+
+    it('sellerMyStore: store가 없으면 NotFoundException', async () => {
+      const account = await setupSellerWithoutStore();
+      await expect(service.sellerMyStore(account.id)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('sellerUpdateStoreBasicInfo: store가 없으면 NotFoundException', async () => {
+      const account = await setupSellerWithoutStore();
+      await expect(
+        service.sellerUpdateStoreBasicInfo(account.id, {
+          storeName: '이름',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('sellerUpdatePickupPolicy: store가 없으면 NotFoundException', async () => {
+      const account = await setupSellerWithoutStore();
+      await expect(
+        service.sellerUpdatePickupPolicy(account.id, {
+          pickupSlotIntervalMinutes: 30,
+          minLeadTimeMinutes: 60,
+          maxDaysAhead: 7,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('buildStoreBasicInfoUpdateData 전 필드 분기', () => {
+    it('모든 선택 필드(주소/좌표/지도/웹사이트/영업시간 텍스트)를 포함한 수정', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+
+      const result = await service.sellerUpdateStoreBasicInfo(account.id, {
+        storeName: '매장',
+        storePhone: '02-0000-0000',
+        addressFull: '서울 어딘가 1',
+        addressCity: '서울',
+        addressDistrict: '어딘가구',
+        addressNeighborhood: '어딘가동',
+        latitude: '37.5',
+        longitude: '127.0',
+        mapProvider: 'NAVER',
+        websiteUrl: 'https://example.com',
+        businessHoursText: '월~금 09-18',
+      });
+
+      expect(result.storeName).toBe('매장');
+      expect(result.addressCity).toBe('서울');
+      expect(result.addressDistrict).toBe('어딘가구');
+      expect(result.addressNeighborhood).toBe('어딘가동');
+      expect(result.websiteUrl).toBe('https://example.com');
+      expect(result.businessHoursText).toBe('월~금 09-18');
+    });
+  });
+
+  describe('sellerStoreSpecialClosures / sellerStoreDailyCapacities cursor 분기', () => {
+    it('sellerStoreSpecialClosures: cursor 페이지네이션이 동작한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) {
+        await prisma.storeSpecialClosure.create({
+          data: {
+            store_id: store.id,
+            closure_date: new Date(`2026-0${i + 1}-01`),
+            reason: `r${i}`,
+          },
+        });
+      }
+      const first = await service.sellerStoreSpecialClosures(account.id, {
+        limit: 2,
+      });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await service.sellerStoreSpecialClosures(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('sellerStoreDailyCapacities: cursor 페이지네이션이 동작한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      for (let i = 1; i <= 3; i++) {
+        await prisma.storeDailyCapacity.create({
+          data: {
+            store_id: store.id,
+            capacity_date: new Date(`2026-05-0${i}`),
+            capacity: 10 * i,
+          },
+        });
+      }
+      const first = await service.sellerStoreDailyCapacities(account.id, {
+        limit: 2,
+      });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+      const second = await service.sellerStoreDailyCapacities(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

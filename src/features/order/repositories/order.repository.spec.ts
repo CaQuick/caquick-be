@@ -314,6 +314,66 @@ describe('OrderRepository (real DB)', () => {
       expect(rows.map((r) => r.id)).toEqual([inside.id]);
     });
 
+    it('toCreatedAt / fromPickupAt / toPickupAt 필터가 각각 동작한다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+
+      const oldOrder = await prisma.order.create({
+        data: {
+          account_id: buyer.id,
+          order_number: 'OLD-2',
+          status: 'SUBMITTED',
+          pickup_at: new Date('2026-01-15'),
+          buyer_name: 'x',
+          buyer_phone: '010-0000-0000',
+          subtotal_price: 0,
+          discount_price: 0,
+          total_price: 0,
+          created_at: new Date('2025-06-01'),
+        },
+      });
+      await createOrderItem(prisma, {
+        order_id: oldOrder.id,
+        store_id: store.id,
+      });
+
+      const newOrder = await prisma.order.create({
+        data: {
+          account_id: buyer.id,
+          order_number: 'NEW-2',
+          status: 'SUBMITTED',
+          pickup_at: new Date('2026-06-15'),
+          buyer_name: 'y',
+          buyer_phone: '010-1111-1111',
+          subtotal_price: 0,
+          discount_price: 0,
+          total_price: 0,
+          created_at: new Date('2026-05-01'),
+        },
+      });
+      await createOrderItem(prisma, {
+        order_id: newOrder.id,
+        store_id: store.id,
+      });
+
+      // toCreatedAt 단독: 2025-06 만 통과
+      const byTo = await repo.listOrdersByStore({
+        storeId: store.id,
+        limit: 10,
+        toCreatedAt: new Date('2026-01-01'),
+      });
+      expect(byTo.map((r) => r.id)).toEqual([oldOrder.id]);
+
+      // fromPickupAt/toPickupAt 조합: 2026-03 ~ 2026-08 (newOrder만)
+      const byPickup = await repo.listOrdersByStore({
+        storeId: store.id,
+        limit: 10,
+        fromPickupAt: new Date('2026-03-01'),
+        toPickupAt: new Date('2026-08-01'),
+      });
+      expect(byPickup.map((r) => r.id)).toEqual([newOrder.id]);
+    });
+
     it('cursor 기반 페이지네이션 (id < cursor)', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);

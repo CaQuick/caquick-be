@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -562,6 +562,235 @@ describe('SellerContentService (real DB)', () => {
           targetType: 'INVALID' as never,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('cursor 기반 페이지네이션으로 두 번째 페이지를 반환한다', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) {
+        await service.sellerCreateFaqTopic(account.id, {
+          title: `F${i}`,
+          answerHtml: `<p>${i}</p>`,
+        });
+      }
+
+      const first = await service.sellerAuditLogs(account.id, { limit: 2 });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await service.sellerAuditLogs(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('sellerUpdateFaqTopic 전 필드 분기', () => {
+    it('title/answerHtml/sortOrder/isActive 모든 필드 포함 수정', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      const created = await service.sellerCreateFaqTopic(account.id, {
+        title: '원본',
+        answerHtml: '<p>원본</p>',
+      });
+
+      const result = await service.sellerUpdateFaqTopic(account.id, {
+        topicId: created.id,
+        title: '수정됨',
+        answerHtml: '<p>수정됨</p>',
+        sortOrder: 9,
+        isActive: false,
+      });
+
+      expect(result.title).toBe('수정됨');
+      expect(result.answerHtml).toBe('<p>수정됨</p>');
+      expect(result.sortOrder).toBe(9);
+      expect(result.isActive).toBe(false);
+    });
+  });
+
+  describe('sellerBanners cursor 분기', () => {
+    it('cursor를 포함한 페이지네이션이 정상 동작한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) {
+        await service.sellerCreateBanner(account.id, {
+          placement: 'STORE',
+          imageUrl: `https://i.example/${i}.png`,
+          linkType: 'STORE',
+          linkStoreId: store.id.toString(),
+        });
+      }
+
+      const first = await service.sellerBanners(account.id, { limit: 2 });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await service.sellerBanners(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('sellerCreateBanner 다양한 linkType 분기', () => {
+    it('linkType=PRODUCT + 본인 매장 product로 생성 성공', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+
+      const result = await service.sellerCreateBanner(account.id, {
+        placement: 'HOME_MAIN',
+        imageUrl: 'https://i.example/p.png',
+        linkType: 'PRODUCT',
+        linkProductId: product.id.toString(),
+      });
+      expect(result.linkType).toBe('PRODUCT');
+      expect(result.linkProductId).toBe(product.id.toString());
+    });
+
+    it('linkType=STORE + 본인 storeId로 생성 성공', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const result = await service.sellerCreateBanner(account.id, {
+        placement: 'HOME_SUB',
+        imageUrl: 'https://i.example/s.png',
+        linkType: 'STORE',
+        linkStoreId: store.id.toString(),
+      });
+      expect(result.linkType).toBe('STORE');
+      expect(result.linkStoreId).toBe(store.id.toString());
+    });
+
+    it('linkType=CATEGORY + category 지정 시 생성 성공', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      const category = await prisma.category.create({
+        data: { name: '시즌', category_type: 'EVENT' },
+      });
+      const result = await service.sellerCreateBanner(account.id, {
+        placement: 'CATEGORY',
+        imageUrl: 'https://i.example/c.png',
+        linkType: 'CATEGORY',
+        linkCategoryId: category.id.toString(),
+      });
+      expect(result.linkType).toBe('CATEGORY');
+      expect(result.linkCategoryId).toBe(category.id.toString());
+    });
+  });
+
+  describe('validateBannerOwnership 추가 분기', () => {
+    it('linkType=STORE + linkStoreId 누락이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'STORE',
+          linkStoreId: null,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('linkType=STORE + 타 store 지정이면 ForbiddenException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      const otherStore = await createStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'STORE',
+          linkStoreId: otherStore.id.toString(),
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('linkType=CATEGORY + linkCategoryId 누락이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'CATEGORY',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'CATEGORY',
+          linkCategoryId: null,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('toBannerPlacement/toBannerLinkType/toAuditTargetType 오류 분기', () => {
+    it('placement가 알 수 없는 값이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'UNKNOWN' as never,
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'NONE',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('linkType이 알 수 없는 값이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'INVALID' as never,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('audit targetType ORDER/CONVERSATION/CHANGE_PASSWORD가 enum으로 정확히 매핑되어 필터된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+
+      // 각 targetType별로 식별 가능한 audit log를 미리 생성한다.
+      // (전체 5종 중 위 3종을 검증; STORE/PRODUCT는 다른 분기에서 이미 사용)
+      const types = ['ORDER', 'CONVERSATION', 'CHANGE_PASSWORD'] as const;
+      const created = new Map<string, bigint>();
+      for (const t of types) {
+        const row = await prisma.auditLog.create({
+          data: {
+            actor_account_id: account.id,
+            store_id: store.id,
+            target_type: t,
+            target_id: store.id,
+            action: 'UPDATE',
+          },
+        });
+        created.set(t, row.id);
+      }
+
+      for (const t of types) {
+        const r = await service.sellerAuditLogs(account.id, { targetType: t });
+        // 1) 해당 타입의 row만 반환되는지 (다른 타입 섞이지 않음)
+        expect(r.items.length).toBeGreaterThan(0);
+        expect(r.items.every((it) => it.targetType === t)).toBe(true);
+        // 2) 미리 만든 row가 실제로 결과에 포함되는지 (매핑이 정확함을 확인)
+        expect(r.items.some((it) => it.id === created.get(t)!.toString())).toBe(
+          true,
+        );
+      }
+    });
+  });
+
+  describe('toAuditLogOutput 비어있는 json 필드 분기', () => {
+    it('before/after json이 null인 audit log도 정상 직렬화된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const created = await prisma.auditLog.create({
+        data: {
+          actor_account_id: account.id,
+          store_id: store.id,
+          target_type: 'STORE',
+          target_id: store.id,
+          action: 'UPDATE',
+          before_json: Prisma.JsonNull,
+          after_json: Prisma.JsonNull,
+        },
+      });
+
+      const result = await service.sellerAuditLogs(account.id);
+      // 정렬/다른 자동 생성 audit 영향 없이 방금 만든 row 자체를 검증
+      const target = result.items.find((it) => it.id === created.id.toString());
+      expect(target).toBeDefined();
+      expect(target!.beforeJson).toBeNull();
+      expect(target!.afterJson).toBeNull();
     });
   });
 });
