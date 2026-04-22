@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
+import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
   return {
@@ -172,8 +173,9 @@ describe('AuthController', () => {
     const res = mockRes();
     const req = {} as Request;
 
+    const user: JwtUser = { accountId: '42', accountType: 'SELLER' };
     await controller.sellerChangePassword(
-      { accountId: '42' },
+      user,
       { currentPassword: 'old!Pass1', newPassword: 'New!Pass1' },
       req,
       res,
@@ -193,9 +195,13 @@ describe('AuthController', () => {
     const res = mockRes();
     const req = {} as Request;
 
+    const badUser: JwtUser = {
+      accountId: 'not-a-number',
+      accountType: 'SELLER',
+    };
     await expect(
       controller.sellerChangePassword(
-        { accountId: 'not-a-number' },
+        badUser,
         { currentPassword: 'old', newPassword: 'new' },
         req,
         res,
