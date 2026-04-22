@@ -59,25 +59,55 @@ describe('formatDevLogLine (printf 콜백)', () => {
     expect(line).toBe('2026-04-22 10:00:00 warn: single message');
   });
 
-  it('message가 non-string(객체)이면 meta 전체를 JSON.stringify로 직렬화한다', () => {
+  it('message가 non-string(객체)이면 message를 보존하여 meta와 함께 직렬화한다', () => {
     const line = formatDevLogLine({
       level: 'info',
       message: { eventType: 'LOGIN', userId: 7 } as never,
       timestamp: '2026-04-22 10:00:00',
     });
-    // message가 non-string이므로 meta 자체가 출력 대상 (message는 rest에 포함 안됨)
-    expect(line).toBe('2026-04-22 10:00:00 info: {}');
+    // structured log 메시지가 사라지지 않도록 message 키로 보존된다.
+    expect(line).toBe(
+      '2026-04-22 10:00:00 info: {"message":{"eventType":"LOGIN","userId":7}}',
+    );
   });
 
-  it('timestamp 누락 시 현재 시각 ISO 문자열로 fallback', () => {
+  it('non-string message + meta 동시에 있으면 둘 다 직렬화된다', () => {
     const line = formatDevLogLine({
-      level: 'debug',
-      message: 'no ts',
+      level: 'warn',
+      message: { code: 'E1' } as never,
+      timestamp: '2026-04-22 10:00:00',
+      requestId: 'req-1',
     });
-    // ISO 8601 패턴 (yyyy-mm-ddThh:mm:ss.sssZ)
-    expect(line).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z debug: no ts$/,
+    expect(line).toBe(
+      '2026-04-22 10:00:00 warn: {"message":{"code":"E1"},"requestId":"req-1"}',
     );
+  });
+
+  it('bigint meta가 포함되어도 throw 없이 문자열로 직렬화된다', () => {
+    const line = formatDevLogLine({
+      level: 'info',
+      message: 'with bigint',
+      timestamp: '2026-04-22 10:00:00',
+      // Number.MAX_SAFE_INTEGER 초과 값은 number로 표현 못 하므로 bigint literal로 정확히 전달
+      accountId: 9007199254740993n,
+    });
+    expect(line).toBe(
+      '2026-04-22 10:00:00 info: with bigint {"accountId":"9007199254740993"}',
+    );
+  });
+
+  it('timestamp 누락 시 현재 시각 ISO 문자열로 fallback (fake timer로 결정성 확보)', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-22T10:00:00.000Z'));
+    try {
+      const line = formatDevLogLine({
+        level: 'debug',
+        message: 'no ts',
+      });
+      expect(line).toBe('2026-04-22T10:00:00.000Z debug: no ts');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('error level + meta (stack 포함)도 형식에 맞게 문자열화', () => {

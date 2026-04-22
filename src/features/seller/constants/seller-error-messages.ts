@@ -51,6 +51,8 @@ export const LINK_STORE_REQUIRED =
 export const LINK_STORE_MISMATCH = 'Cannot link another store.';
 export const LINK_CATEGORY_REQUIRED =
   'linkCategoryId is required when linkType is CATEGORY.';
+export const LINK_FIELDS_MISMATCH =
+  'Link fields not relevant to the current linkType cannot be set.';
 export const INVALID_BANNER_PLACEMENT = 'Invalid banner placement.';
 export const INVALID_BANNER_LINK_TYPE = 'Invalid banner link type.';
 

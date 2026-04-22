@@ -81,12 +81,36 @@ describe('SellerProductCrudService (real DB)', () => {
     it('자기 매장 상품만 반환하고 nextCursor 동작', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
+      const myProducts = await Promise.all([
+        createSellerProduct(me.store.id),
+        createSellerProduct(me.store.id),
+        createSellerProduct(me.store.id),
+      ]);
+      const othersProduct = await createSellerProduct(other.store.id);
+
+      // limit 충분히 크게 잡아 length만으로 통과하지 않도록 한다.
+      const result = await service.sellerProducts(me.account.id, { limit: 10 });
+
+      const returnedIds = result.items.map((it) => it.id).sort();
+      const myIds = myProducts.map((p) => p.id.toString()).sort();
+      // 반환 셋이 정확히 본인 매장 상품 셋과 일치 (타 매장 제외 검증 포함)
+      expect(returnedIds).toEqual(myIds);
+      expect(returnedIds).not.toContain(othersProduct.id.toString());
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('limit 페이지네이션은 nextCursor를 반환하고 자기 매장 외 데이터는 노출되지 않는다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
       for (let i = 0; i < 3; i++) await createSellerProduct(me.store.id);
-      await createSellerProduct(other.store.id);
+      const othersProduct = await createSellerProduct(other.store.id);
 
       const result = await service.sellerProducts(me.account.id, { limit: 2 });
       expect(result.items).toHaveLength(2);
       expect(result.nextCursor).not.toBeNull();
+      expect(result.items.map((it) => it.id)).not.toContain(
+        othersProduct.id.toString(),
+      );
     });
   });
 
