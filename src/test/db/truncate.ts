@@ -56,6 +56,13 @@ async function loadTableNames(conn: mysql.Connection): Promise<string[]> {
  * - multi-statement 배치로 1회 round-trip
  * - SET FOREIGN_KEY_CHECKS=0 으로 FK 순서 무시
  * - `_prisma_migrations`는 제외 (스키마 이력 유지)
+ *
+ * FK 복원 안전성:
+ *   multi-statement 중간 DELETE가 실패하면 MySQL은 후속 statement를 실행하지 않고
+ *   abort하므로 마지막의 `SET FOREIGN_KEY_CHECKS = 1`이 누락될 수 있다. 이 경우
+ *   캐시된 connection은 FK 비활성 상태로 남아 후속 테스트의 FK 위반을 silent하게
+ *   통과시킬 위험이 있다. 성공 케이스의 1 round-trip 성능은 유지하면서, 실패 시에만
+ *   별도 쿼리로 명시 복원한다.
  */
 export async function truncateAll(): Promise<void> {
   const conn = await getConnection();
@@ -67,7 +74,16 @@ export async function truncateAll(): Promise<void> {
     .join('\n');
   const sql = `SET FOREIGN_KEY_CHECKS = 0;\n${deleteStatements}\nSET FOREIGN_KEY_CHECKS = 1;`;
 
-  await conn.query(sql);
+  try {
+    await conn.query(sql);
+  } catch (err) {
+    try {
+      await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+    } catch {
+      // 복원 자체가 실패해도 원래 에러를 우선 throw 한다.
+    }
+    throw err;
+  }
 }
 
 /**
