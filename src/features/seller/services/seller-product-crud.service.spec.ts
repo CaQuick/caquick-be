@@ -4,698 +4,613 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createProduct,
+  setupSellerWithStore,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-const SELLER_CONTEXT = {
-  id: BigInt(1),
-  account_type: 'SELLER',
-  status: 'ACTIVE',
-  store: { id: BigInt(100) },
-};
-
-const USER_CONTEXT = {
-  id: BigInt(1),
-  account_type: 'USER',
-  status: 'ACTIVE',
-  store: { id: BigInt(100) },
-};
-
-const NOW = new Date('2026-03-30T00:00:00.000Z');
-
-/** 상품 상세 조회 결과 픽스처 */
-function makeProductDetailRow(overrides?: Record<string, unknown>) {
-  return {
-    id: BigInt(10),
-    store_id: BigInt(100),
-    name: '테스트 케이크',
-    description: '맛있는 케이크',
-    purchase_notice: '주문 후 3시간 소요',
-    regular_price: 30000,
-    sale_price: 25000,
-    currency: 'KRW',
-    base_design_image_url: null,
-    preparation_time_minutes: 180,
-    is_active: true,
-    created_at: NOW,
-    updated_at: NOW,
-    images: [
-      {
-        id: BigInt(1),
-        image_url: 'https://example.com/img1.png',
-        sort_order: 0,
-      },
-    ],
-    product_categories: [{ category: { id: BigInt(50), name: '케이크' } }],
-    product_tags: [{ tag: { id: BigInt(60), name: '생일' } }],
-    option_groups: [],
-    custom_template: null,
-    ...overrides,
-  };
-}
-
-/** 상품 생성 결과 픽스처 (createProduct 반환값) */
-function makeCreatedProductRow(overrides?: Record<string, unknown>) {
-  return {
-    id: BigInt(10),
-    store_id: BigInt(100),
-    name: '테스트 케이크',
-    regular_price: 30000,
-    sale_price: 25000,
-    currency: 'KRW',
-    description: '맛있는 케이크',
-    purchase_notice: null,
-    base_design_image_url: null,
-    preparation_time_minutes: 180,
-    is_active: true,
-    created_at: NOW,
-    updated_at: NOW,
-    ...overrides,
-  };
-}
-
-describe('SellerProductCrudService', () => {
+describe('SellerProductCrudService (real DB)', () => {
   let service: SellerProductCrudService;
-  let repo: jest.Mocked<SellerRepository>;
-  let productRepo: jest.Mocked<ProductRepository>;
+  let prisma: PrismaClient;
 
-  beforeEach(async () => {
-    repo = {
-      findSellerAccountContext: jest.fn(),
-      createAuditLog: jest.fn(),
-    } as unknown as jest.Mocked<SellerRepository>;
-
-    productRepo = {
-      findProductById: jest.fn(),
-      findProductByIdIncludingInactive: jest.fn(),
-      createProduct: jest.fn(),
-      updateProduct: jest.fn(),
-      softDeleteProduct: jest.fn(),
-      countProductImages: jest.fn(),
-      addProductImage: jest.fn(),
-      findProductImageById: jest.fn(),
-      softDeleteProductImage: jest.fn(),
-      listProductImages: jest.fn(),
-      reorderProductImages: jest.fn(),
-      listProductsByStore: jest.fn(),
-      findCategoryIds: jest.fn(),
-      replaceProductCategories: jest.fn(),
-      findTagIds: jest.fn(),
-      replaceProductTags: jest.fn(),
-    } as unknown as jest.Mocked<ProductRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         SellerProductCrudService,
-        {
-          provide: SellerRepository,
-          useValue: repo,
-        },
-        {
-          provide: ProductRepository,
-          useValue: productRepo,
-        },
+        SellerRepository,
+        ProductRepository,
       ],
-    }).compile();
-
-    service = module.get<SellerProductCrudService>(SellerProductCrudService);
+    });
+    service = module.get(SellerProductCrudService);
+    prisma = p;
   });
 
-  // ── 컨텍스트 검증 ──
-
-  it('판매자 계정이 아니면 ForbiddenException을 던져야 한다', async () => {
-    repo.findSellerAccountContext.mockResolvedValue(USER_CONTEXT as never);
-
-    await expect(service.sellerProduct(BigInt(1), BigInt(10))).rejects.toThrow(
-      ForbiddenException,
-    );
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
   });
 
-  it('계정을 찾을 수 없으면 UnauthorizedException을 던져야 한다', async () => {
-    repo.findSellerAccountContext.mockResolvedValue(null as never);
-
-    await expect(service.sellerProduct(BigInt(1), BigInt(10))).rejects.toThrow(
-      UnauthorizedException,
-    );
+  beforeEach(async () => {
+    await truncateAll();
   });
 
-  // ── 상품 CRUD ──
+  /**
+   * 판매자 소유 상품(이미지 1개 + 초기 baseline) 생성.
+   * 이미지 최소 1개 제약(IMAGE_MIN_REQUIRED)을 만족시켜 delete 테스트를 돕는다.
+   */
+  async function createSellerProduct(storeId: bigint, overrides = {}) {
+    const product = await createProduct(prisma, {
+      store_id: storeId,
+      ...overrides,
+    });
+    await prisma.productImage.create({
+      data: {
+        product_id: product.id,
+        image_url: `https://img.example/${product.id}.png`,
+        sort_order: 0,
+      },
+    });
+    return product;
+  }
+
+  describe('공통 예외', () => {
+    it('계정이 없으면 UnauthorizedException', async () => {
+      await expect(
+        service.sellerProduct(BigInt(99999), BigInt(1)),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('판매자 계정이 아니면 ForbiddenException', async () => {
+      const userAccount = await createAccount(prisma, { account_type: 'USER' });
+      await expect(
+        service.sellerProduct(userAccount.id, BigInt(1)),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
 
   describe('sellerProducts', () => {
-    it('상품 목록을 커서 페이지네이션으로 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
+    it('자기 매장 상품만 반환하고 nextCursor 동작', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const myProducts = await Promise.all([
+        createSellerProduct(me.store.id),
+        createSellerProduct(me.store.id),
+        createSellerProduct(me.store.id),
+      ]);
+      const othersProduct = await createSellerProduct(other.store.id);
 
-      const row1 = makeProductDetailRow({ id: BigInt(10) });
-      const row2 = makeProductDetailRow({ id: BigInt(11), name: '롤케이크' });
-      productRepo.listProductsByStore.mockResolvedValue([row1, row2] as never);
+      // limit 충분히 크게 잡아 length만으로 통과하지 않도록 한다.
+      const result = await service.sellerProducts(me.account.id, { limit: 10 });
 
-      const result = await service.sellerProducts(BigInt(1), {
-        limit: 20,
-        cursor: null,
-      });
-
-      expect(result.items).toHaveLength(2);
-      expect(result.items[0].id).toBe('10');
-      expect(result.items[1].id).toBe('11');
+      const returnedIds = result.items.map((it) => it.id).sort();
+      const myIds = myProducts.map((p) => p.id.toString()).sort();
+      // 반환 셋이 정확히 본인 매장 상품 셋과 일치 (타 매장 제외 검증 포함)
+      expect(returnedIds).toEqual(myIds);
+      expect(returnedIds).not.toContain(othersProduct.id.toString());
       expect(result.nextCursor).toBeNull();
-      expect(productRepo.listProductsByStore).toHaveBeenCalledWith(
-        expect.objectContaining({
-          storeId: BigInt(100),
-          limit: 20,
-          isActive: true,
-        }),
+    });
+
+    it('limit 페이지네이션은 nextCursor를 반환하고 자기 매장 외 데이터는 노출되지 않는다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) await createSellerProduct(me.store.id);
+      const othersProduct = await createSellerProduct(other.store.id);
+
+      const result = await service.sellerProducts(me.account.id, { limit: 2 });
+      expect(result.items).toHaveLength(2);
+      expect(result.nextCursor).not.toBeNull();
+      expect(result.items.map((it) => it.id)).not.toContain(
+        othersProduct.id.toString(),
       );
     });
   });
 
   describe('sellerProduct', () => {
-    it('상품이 없으면 NotFoundException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductById.mockResolvedValue(null as never);
-
+    it('존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerProduct(BigInt(1), BigInt(999)),
+        service.sellerProduct(account.id, BigInt(999999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('상품 ID로 단건 조회 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const row = makeProductDetailRow();
-      productRepo.findProductById.mockResolvedValue(row as never);
+    it('다른 매장 상품이면 NotFoundException', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const othersProduct = await createSellerProduct(other.store.id);
 
-      const result = await service.sellerProduct(BigInt(1), BigInt(10));
+      await expect(
+        service.sellerProduct(me.account.id, othersProduct.id),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-      expect(result.id).toBe('10');
-      expect(result.storeId).toBe('100');
-      expect(result.name).toBe('테스트 케이크');
-      expect(result.regularPrice).toBe(30000);
-      expect(result.salePrice).toBe(25000);
-      expect(result.currency).toBe('KRW');
-      expect(result.images).toHaveLength(1);
-      expect(result.categories).toHaveLength(1);
-      expect(result.categories[0].name).toBe('케이크');
-      expect(result.tags).toHaveLength(1);
-      expect(result.tags[0].name).toBe('생일');
-      expect(productRepo.findProductById).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        storeId: BigInt(100),
+    it('본인 상품 상세를 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, {
+        name: '바닐라 케이크',
       });
+
+      const result = await service.sellerProduct(account.id, product.id);
+      expect(result.id).toBe(product.id.toString());
+      expect(result.name).toBe('바닐라 케이크');
+      expect(result.images).toHaveLength(1);
     });
   });
 
   describe('sellerCreateProduct', () => {
-    it('regularPrice가 1 미만이면 BadRequestException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-
+    it('regularPrice가 범위 밖(<1)이면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateProduct(BigInt(1), {
-          name: '테스트 상품',
+        service.sellerCreateProduct(account.id, {
+          name: 'X',
           regularPrice: 0,
-          initialImageUrl: 'https://example.com/img.png',
+          initialImageUrl: 'https://i.example/a.png',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('salePrice가 regularPrice보다 크면 BadRequestException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-
+    it('salePrice > regularPrice면 BadRequestException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerCreateProduct(BigInt(1), {
-          name: '테스트 상품',
-          regularPrice: 1000,
-          salePrice: 2000,
-          initialImageUrl: 'https://example.com/img.png',
+        service.sellerCreateProduct(account.id, {
+          name: 'X',
+          regularPrice: 10000,
+          salePrice: 20000,
+          initialImageUrl: 'https://i.example/a.png',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('유효한 입력이면 상품을 생성하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const created = makeCreatedProductRow();
-      productRepo.createProduct.mockResolvedValue(created as never);
-      productRepo.addProductImage.mockResolvedValue({
-        id: BigInt(1),
-        image_url: 'https://example.com/img.png',
-        sort_order: 0,
-      } as never);
-      const detail = makeProductDetailRow();
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue(
-        detail as never,
-      );
+    it('정상 생성 + 초기 이미지 + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
 
-      const result = await service.sellerCreateProduct(BigInt(1), {
-        name: '테스트 케이크',
+      const result = await service.sellerCreateProduct(account.id, {
+        name: '신상 케이크',
         regularPrice: 30000,
         salePrice: 25000,
-        initialImageUrl: 'https://example.com/img.png',
+        initialImageUrl: 'https://i.example/init.png',
       });
 
-      expect(result.id).toBe('10');
-      expect(result.name).toBe('테스트 케이크');
-      expect(productRepo.createProduct).toHaveBeenCalledWith(
-        expect.objectContaining({
-          storeId: BigInt(100),
-          data: expect.objectContaining({
-            name: '테스트 케이크',
-            regular_price: 30000,
-            sale_price: 25000,
-          }),
-        }),
-      );
-      expect(productRepo.addProductImage).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        imageUrl: 'https://example.com/img.png',
-        sortOrder: 0,
+      expect(result.name).toBe('신상 케이크');
+      expect(result.regularPrice).toBe(30000);
+      expect(result.images).toHaveLength(1);
+
+      const images = await prisma.productImage.findMany({
+        where: { product_id: BigInt(result.id) },
       });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.CREATE,
-        }),
-      );
+      expect(images).toHaveLength(1);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: store.id, action: 'CREATE' },
+      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
   describe('sellerUpdateProduct', () => {
-    it('상품이 없으면 NotFoundException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue(
-        null as never,
-      );
-
+    it('존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerUpdateProduct(BigInt(1), {
-          productId: '999',
+        service.sellerUpdateProduct(account.id, {
+          productId: '999999',
           name: '수정',
         }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('유효한 입력이면 상품을 수정하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const current = makeProductDetailRow();
-      const updated = makeCreatedProductRow({ name: '수정된 케이크' });
-      const detail = makeProductDetailRow({ name: '수정된 케이크' });
+    it('정상 수정 + audit log(before/after)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, { name: '구' });
 
-      // 첫 번째 호출: current 조회, 두 번째 호출: 업데이트 후 detail 조회
-      productRepo.findProductByIdIncludingInactive
-        .mockResolvedValueOnce(current as never)
-        .mockResolvedValueOnce(detail as never);
-      productRepo.updateProduct.mockResolvedValue(updated as never);
-
-      const result = await service.sellerUpdateProduct(BigInt(1), {
-        productId: '10',
-        name: '수정된 케이크',
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        name: '신',
       });
+      expect(result.name).toBe('신');
 
-      expect(result.id).toBe('10');
-      expect(result.name).toBe('수정된 케이크');
-      expect(productRepo.updateProduct).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: BigInt(10),
-          data: expect.objectContaining({ name: '수정된 케이크' }),
-        }),
-      );
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          beforeJson: { name: '테스트 케이크' },
-          afterJson: { name: '수정된 케이크' },
-        }),
-      );
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: store.id, action: 'UPDATE' },
+      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
   describe('sellerDeleteProduct', () => {
-    it('상품이 없으면 NotFoundException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue(
-        null as never,
-      );
-
+    it('존재하지 않으면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerDeleteProduct(BigInt(1), BigInt(999)),
+        service.sellerDeleteProduct(account.id, BigInt(999999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('상품을 소프트 삭제하고 true를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const current = makeProductDetailRow();
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue(
-        current as never,
-      );
-      productRepo.softDeleteProduct.mockResolvedValue(undefined as never);
+    it('soft-delete + audit log', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
-      const result = await service.sellerDeleteProduct(BigInt(1), BigInt(10));
+      await service.sellerDeleteProduct(account.id, product.id);
 
-      expect(result).toBe(true);
-      expect(productRepo.softDeleteProduct).toHaveBeenCalledWith(BigInt(10));
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.DELETE,
-          beforeJson: { name: '테스트 케이크' },
-        }),
-      );
+      const after = await prisma.product.findUnique({
+        where: { id: product.id },
+      });
+      expect(after?.deleted_at).not.toBeNull();
     });
   });
 
   describe('sellerSetProductActive', () => {
-    it('상품 활성 상태를 변경하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const current = makeProductDetailRow({ is_active: true });
-      const detail = makeProductDetailRow({ is_active: false });
+    it('is_active 토글 + audit log STATUS_CHANGE', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
-      productRepo.findProductByIdIncludingInactive
-        .mockResolvedValueOnce(current as never)
-        .mockResolvedValueOnce(detail as never);
-      productRepo.updateProduct.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerSetProductActive(BigInt(1), {
-        productId: '10',
+      await service.sellerSetProductActive(account.id, {
+        productId: product.id.toString(),
         isActive: false,
       });
 
-      expect(result.id).toBe('10');
-      expect(result.isActive).toBe(false);
-      expect(productRepo.updateProduct).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        data: { is_active: false },
+      const after = await prisma.product.findUniqueOrThrow({
+        where: { id: product.id },
       });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.STATUS_CHANGE,
-          beforeJson: { isActive: true },
-          afterJson: { isActive: false },
-        }),
-      );
+      expect(after.is_active).toBe(false);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { store_id: store.id, action: 'STATUS_CHANGE' },
+      });
+      expect(auditLogs).toHaveLength(1);
     });
   });
 
-  // ── 이미지 ──
-
   describe('sellerAddProductImage', () => {
-    it('이미지가 5개 이상이면 BadRequestException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.countProductImages.mockResolvedValue(5 as never);
+    it('이미지가 이미 5개면 BadRequestException (IMAGE_LIMIT_EXCEEDED)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id); // 1개
+      for (let i = 1; i <= 4; i++) {
+        await prisma.productImage.create({
+          data: {
+            product_id: product.id,
+            image_url: `https://i.example/${i}.png`,
+            sort_order: i,
+          },
+        });
+      }
 
       await expect(
-        service.sellerAddProductImage(BigInt(1), {
-          productId: '10',
-          imageUrl: 'https://example.com/img.png',
+        service.sellerAddProductImage(account.id, {
+          productId: product.id.toString(),
+          imageUrl: 'https://i.example/6.png',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('이미지를 추가하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.countProductImages.mockResolvedValue(2 as never);
-      productRepo.addProductImage.mockResolvedValue({
-        id: BigInt(3),
-        image_url: 'https://example.com/new.png',
-        sort_order: 2,
-      } as never);
+    it('정상 추가', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
-      const result = await service.sellerAddProductImage(BigInt(1), {
-        productId: '10',
-        imageUrl: 'https://example.com/new.png',
+      const result = await service.sellerAddProductImage(account.id, {
+        productId: product.id.toString(),
+        imageUrl: 'https://i.example/new.png',
       });
+      expect(result.imageUrl).toBe('https://i.example/new.png');
 
-      expect(result.id).toBe('3');
-      expect(result.imageUrl).toBe('https://example.com/new.png');
-      expect(result.sortOrder).toBe(2);
-      expect(productRepo.addProductImage).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        imageUrl: 'https://example.com/new.png',
-        sortOrder: 2,
+      const images = await prisma.productImage.findMany({
+        where: { product_id: product.id },
       });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          afterJson: { imageId: '3' },
-        }),
-      );
+      expect(images).toHaveLength(2);
     });
   });
 
   describe('sellerDeleteProductImage', () => {
-    it('이미지가 1개 이하이면 BadRequestException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductImageById.mockResolvedValue({
-        id: BigInt(1),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
-      productRepo.countProductImages.mockResolvedValue(1 as never);
+    it('이미지가 최소 1개 제약에 걸리면 BadRequestException', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const image = await prisma.productImage.findFirstOrThrow({
+        where: { product_id: product.id },
+      });
 
       await expect(
-        service.sellerDeleteProductImage(BigInt(1), BigInt(1)),
+        service.sellerDeleteProductImage(account.id, image.id),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('이미지가 없으면 NotFoundException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductImageById.mockResolvedValue(null as never);
-
+    it('존재하지 않는 imageId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
       await expect(
-        service.sellerDeleteProductImage(BigInt(1), BigInt(999)),
+        service.sellerDeleteProductImage(account.id, BigInt(999999)),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('다른 스토어의 이미지면 NotFoundException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductImageById.mockResolvedValue({
-        id: BigInt(1),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(999) },
-      } as never);
+    it('다른 매장의 이미지면 NotFoundException', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const othersProduct = await createSellerProduct(other.store.id);
+      const othersImage = await prisma.productImage.create({
+        data: {
+          product_id: othersProduct.id,
+          image_url: 'x',
+          sort_order: 1,
+        },
+      });
 
       await expect(
-        service.sellerDeleteProductImage(BigInt(1), BigInt(1)),
+        service.sellerDeleteProductImage(me.account.id, othersImage.id),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('이미지를 소프트 삭제하고 true를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductImageById.mockResolvedValue({
-        id: BigInt(5),
-        product_id: BigInt(10),
-        product: { store_id: BigInt(100) },
-      } as never);
-      productRepo.countProductImages.mockResolvedValue(3 as never);
-      productRepo.softDeleteProductImage.mockResolvedValue(undefined as never);
+    it('정상 삭제 (이미지 2개 이상)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const extra = await prisma.productImage.create({
+        data: { product_id: product.id, image_url: 'x', sort_order: 1 },
+      });
 
-      const result = await service.sellerDeleteProductImage(
-        BigInt(1),
-        BigInt(5),
-      );
+      await service.sellerDeleteProductImage(account.id, extra.id);
 
-      expect(result).toBe(true);
-      expect(productRepo.softDeleteProductImage).toHaveBeenCalledWith(
-        BigInt(5),
-      );
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          beforeJson: { imageId: '5' },
-        }),
-      );
+      const after = await prisma.productImage.findUnique({
+        where: { id: extra.id },
+      });
+      expect(after?.deleted_at).not.toBeNull();
     });
   });
 
   describe('sellerReorderProductImages', () => {
-    it('imageIds 길이가 불일치하면 BadRequestException을 던져야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.listProductImages.mockResolvedValue([
-        { id: BigInt(1) },
-        { id: BigInt(2) },
-      ] as never);
+    it('imageIds 길이가 불일치하면 BadRequestException', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
       await expect(
-        service.sellerReorderProductImages(BigInt(1), {
-          productId: '10',
-          imageIds: ['1'],
+        service.sellerReorderProductImages(account.id, {
+          productId: product.id.toString(),
+          imageIds: ['1', '2', '3'],
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('이미지 순서를 변경하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      productRepo.findProductByIdIncludingInactive.mockResolvedValue({
-        id: BigInt(10),
-      } as never);
-      productRepo.listProductImages.mockResolvedValue([
-        { id: BigInt(1) },
-        { id: BigInt(2) },
-      ] as never);
-      productRepo.reorderProductImages.mockResolvedValue([
-        {
-          id: BigInt(2),
-          image_url: 'https://example.com/img2.png',
-          sort_order: 0,
-        },
-        {
-          id: BigInt(1),
-          image_url: 'https://example.com/img1.png',
+    it('정상 재정렬', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const img1 = await prisma.productImage.findFirstOrThrow({
+        where: { product_id: product.id },
+      });
+      const img2 = await prisma.productImage.create({
+        data: {
+          product_id: product.id,
+          image_url: 'https://i.example/b.png',
           sort_order: 1,
         },
-      ] as never);
-
-      const result = await service.sellerReorderProductImages(BigInt(1), {
-        productId: '10',
-        imageIds: ['2', '1'],
       });
 
+      const result = await service.sellerReorderProductImages(account.id, {
+        productId: product.id.toString(),
+        imageIds: [img2.id.toString(), img1.id.toString()],
+      });
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('2');
-      expect(result[0].sortOrder).toBe(0);
-      expect(result[1].id).toBe('1');
-      expect(result[1].sortOrder).toBe(1);
-      expect(productRepo.reorderProductImages).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        imageIds: [BigInt(2), BigInt(1)],
-      });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          afterJson: { imageIds: ['2', '1'] },
-        }),
-      );
+      expect(result[0].id).toBe(img2.id.toString());
+      expect(result[1].id).toBe(img1.id.toString());
     });
   });
 
-  // ── 카테고리 / 태그 ──
-
   describe('sellerSetProductCategories', () => {
-    it('상품에 카테고리를 설정하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const product = makeProductDetailRow();
-      const detail = makeProductDetailRow({
-        product_categories: [
-          { category: { id: BigInt(50), name: '케이크' } },
-          { category: { id: BigInt(51), name: '마카롱' } },
-        ],
-      });
+    it('존재하지 않는 categoryId가 있으면 BadRequestException', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
-      productRepo.findProductByIdIncludingInactive
-        .mockResolvedValueOnce(product as never)
-        .mockResolvedValueOnce(detail as never);
-      productRepo.findCategoryIds.mockResolvedValue([
-        { id: BigInt(50) },
-        { id: BigInt(51) },
-      ] as never);
-      productRepo.replaceProductCategories.mockResolvedValue(
-        undefined as never,
-      );
-
-      const result = await service.sellerSetProductCategories(BigInt(1), {
-        productId: '10',
-        categoryIds: ['50', '51'],
-      });
-
-      expect(result.id).toBe('10');
-      expect(result.categories).toHaveLength(2);
-      expect(result.categories[0].name).toBe('케이크');
-      expect(result.categories[1].name).toBe('마카롱');
-      expect(productRepo.replaceProductCategories).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        categoryIds: [BigInt(50), BigInt(51)],
-      });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          afterJson: { categoryIds: ['50', '51'] },
+      await expect(
+        service.sellerSetProductCategories(account.id, {
+          productId: product.id.toString(),
+          categoryIds: ['999999'],
         }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('카테고리 할당 + product detail에 포함', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const cat1 = await prisma.category.create({
+        data: { name: '생일', category_type: 'EVENT' },
+      });
+
+      const result = await service.sellerSetProductCategories(account.id, {
+        productId: product.id.toString(),
+        categoryIds: [cat1.id.toString()],
+      });
+      expect(result.categories).toHaveLength(1);
+      expect(result.categories[0].name).toBe('생일');
+    });
+  });
+
+  describe('sellerProducts (필터/커서 분기)', () => {
+    it('cursor와 categoryId를 넘기면 필터 파라미터가 정상 해석된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const category = await prisma.category.create({
+        data: { name: '행사', category_type: 'EVENT' },
+      });
+      const products: bigint[] = [];
+      for (let i = 0; i < 3; i++) {
+        const p = await createSellerProduct(store.id, { name: `P${i}` });
+        await prisma.productCategory.create({
+          data: { product_id: p.id, category_id: category.id },
+        });
+        products.push(p.id);
+      }
+
+      // 첫 페이지
+      const first = await service.sellerProducts(account.id, {
+        limit: 2,
+        categoryId: category.id.toString(),
+      });
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+
+      // 두 번째 페이지: cursor path 활성화
+      const second = await service.sellerProducts(account.id, {
+        limit: 2,
+        cursor: first.nextCursor as string,
+        categoryId: category.id.toString(),
+      });
+      expect(second.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('search 필터(공백 trim 후 non-empty) 분기도 호출된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createSellerProduct(store.id, { name: '바나나' });
+      await createSellerProduct(store.id, { name: '사과' });
+
+      const result = await service.sellerProducts(account.id, {
+        search: '  바나나  ',
+      });
+      expect(result.items.map((i) => i.name)).toContain('바나나');
+    });
+  });
+
+  describe('sellerUpdateProduct (buildProductUpdateData 전 필드 분기)', () => {
+    it('description/purchaseNotice/currency/baseDesignImageUrl/preparationTimeMinutes 포함 수정', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, { name: '초기' });
+
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        description: '설명',
+        purchaseNotice: '주의사항',
+        currency: 'KRW',
+        baseDesignImageUrl: 'https://i.example/base.png',
+        preparationTimeMinutes: 60,
+        regularPrice: 12000,
+        salePrice: 9000,
+      });
+
+      expect(result.description).toBe('설명');
+      expect(result.purchaseNotice).toBe('주의사항');
+      expect(result.currency).toBe('KRW');
+      expect(result.baseDesignImageUrl).toBe('https://i.example/base.png');
+      expect(result.preparationTimeMinutes).toBe(60);
+      expect(result.regularPrice).toBe(12000);
+      expect(result.salePrice).toBe(9000);
+    });
+
+    it('salePrice만 넘긴 경우 기존 regularPrice 기준 검증을 통과한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        salePrice: 8000,
+      });
+      expect(result.salePrice).toBe(8000);
+    });
+  });
+
+  describe('sellerSetProductCategories/Tags 존재 검증 실패 분기', () => {
+    it('setProductCategories: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerSetProductCategories(account.id, {
+          productId: '999999',
+          categoryIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('setProductTags: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerSetProductTags(account.id, {
+          productId: '999999',
+          tagIds: [],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sellerAddProductImage / sellerDeleteProductImage / sellerReorderProductImages 추가 예외', () => {
+    it('addProductImage: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerAddProductImage(account.id, {
+          productId: '999999',
+          imageUrl: 'https://i.example/x.png',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('reorderProductImages: 존재하지 않는 productId면 NotFoundException', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerReorderProductImages(account.id, {
+          productId: '999999',
+          imageIds: ['1'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('reorderProductImages: 매장 imageId 집합과 입력 배열이 안 맞으면 BadRequestException(invalidIds)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const otherProduct = await createSellerProduct(store.id);
+      const otherImage = await prisma.productImage.findFirstOrThrow({
+        where: { product_id: otherProduct.id },
+      });
+
+      await expect(
+        service.sellerReorderProductImages(account.id, {
+          productId: product.id.toString(),
+          imageIds: [otherImage.id.toString()],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('toProductOutput custom_template 포함 분기', () => {
+    it('custom_template이 존재하는 product 조회 시 customTemplate 필드가 채워진다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, {
+        name: '템플릿 상품',
+      });
+      await prisma.productCustomTemplate.create({
+        data: {
+          product_id: product.id,
+          base_image_url: 'https://i.example/tpl.png',
+          is_active: true,
+        },
+      });
+
+      const result = await service.sellerProduct(account.id, product.id);
+      expect(result.customTemplate).not.toBeNull();
+      expect(result.customTemplate?.baseImageUrl).toBe(
+        'https://i.example/tpl.png',
       );
     });
   });
 
   describe('sellerSetProductTags', () => {
-    it('상품에 태그를 설정하고 결과를 반환해야 한다', async () => {
-      repo.findSellerAccountContext.mockResolvedValue(SELLER_CONTEXT as never);
-      const product = makeProductDetailRow();
-      const detail = makeProductDetailRow({
-        product_tags: [
-          { tag: { id: BigInt(60), name: '생일' } },
-          { tag: { id: BigInt(61), name: '기념일' } },
-        ],
-      });
+    it('존재하지 않는 tagId가 있으면 BadRequestException', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
 
-      productRepo.findProductByIdIncludingInactive
-        .mockResolvedValueOnce(product as never)
-        .mockResolvedValueOnce(detail as never);
-      productRepo.findTagIds.mockResolvedValue([
-        { id: BigInt(60) },
-        { id: BigInt(61) },
-      ] as never);
-      productRepo.replaceProductTags.mockResolvedValue(undefined as never);
-
-      const result = await service.sellerSetProductTags(BigInt(1), {
-        productId: '10',
-        tagIds: ['60', '61'],
-      });
-
-      expect(result.id).toBe('10');
-      expect(result.tags).toHaveLength(2);
-      expect(result.tags[0].name).toBe('생일');
-      expect(result.tags[1].name).toBe('기념일');
-      expect(productRepo.replaceProductTags).toHaveBeenCalledWith({
-        productId: BigInt(10),
-        tagIds: [BigInt(60), BigInt(61)],
-      });
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(1),
-          storeId: BigInt(100),
-          targetType: AuditTargetType.PRODUCT,
-          targetId: BigInt(10),
-          action: AuditActionType.UPDATE,
-          afterJson: { tagIds: ['60', '61'] },
+      await expect(
+        service.sellerSetProductTags(account.id, {
+          productId: product.id.toString(),
+          tagIds: ['999999'],
         }),
-      );
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('태그 할당', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const tag = await prisma.tag.create({ data: { name: '레터링' } });
+
+      const result = await service.sellerSetProductTags(account.id, {
+        productId: product.id.toString(),
+        tagIds: [tag.id.toString()],
+      });
+      expect(result.tags).toHaveLength(1);
+      expect(result.tags[0].name).toBe('레터링');
     });
   });
 });

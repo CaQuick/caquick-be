@@ -1,72 +1,130 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { PrismaClient } from '@prisma/client';
+import { NotificationEvent, NotificationType } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createReview,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-const USER_CONTEXT = {
-  id: BigInt(1),
-  deleted_at: null,
-  account_type: 'USER',
-  status: 'ACTIVE',
-  user_profile: {
-    deleted_at: null,
-    nickname: 'test',
-    birth_date: null,
-    phone_number: null,
-    profile_image_url: null,
-    onboarding_completed_at: null,
-  },
-};
-
-describe('UserEngagementService', () => {
+describe('UserEngagementService (real DB)', () => {
   let service: UserEngagementService;
-  let repo: jest.Mocked<UserRepository>;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [UserEngagementService, UserRepository],
+    });
+
+    service = module.get(UserEngagementService);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
 
   beforeEach(async () => {
-    repo = {
-      findAccountWithProfile: jest.fn(),
-      likeReview: jest.fn(),
-    } as unknown as jest.Mocked<UserRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UserEngagementService,
-        {
-          provide: UserRepository,
-          useValue: repo,
-        },
-      ],
-    }).compile();
-
-    service = module.get<UserEngagementService>(UserEngagementService);
+    await truncateAll();
   });
 
   describe('likeReview', () => {
-    it('리뷰가 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.likeReview.mockResolvedValue('not-found');
+    it('다른 유저의 리뷰에 좋아요를 누르면 ReviewLike 레코드 + 알림이 생성된다', async () => {
+      // 리뷰 작성자 (author) - createReview가 OrderItem 계정을 자동 사용
+      const review = await createReview(prisma);
 
-      await expect(service.likeReview(BigInt(1), BigInt(999))).rejects.toThrow(
-        NotFoundException,
-      );
-    });
+      // 좋아요 누를 별도 유저
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: liker.id });
 
-    it('자기 리뷰에 좋아요 시 BadRequestException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.likeReview.mockResolvedValue('self-like');
+      const result = await service.likeReview(liker.id, review.id);
 
-      await expect(service.likeReview(BigInt(1), BigInt(10))).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('정상적으로 좋아요하면 true를 반환해야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.likeReview.mockResolvedValue('liked');
-
-      const result = await service.likeReview(BigInt(1), BigInt(10));
       expect(result).toBe(true);
+
+      const like = await prisma.reviewLike.findFirstOrThrow({
+        where: { review_id: review.id, account_id: liker.id },
+      });
+      expect(like).toBeDefined();
+
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: {
+          account_id: review.account_id,
+          type: NotificationType.REVIEW_LIKE,
+          event: NotificationEvent.REVIEW_LIKED,
+          review_id: review.id,
+        },
+      });
+      expect(notification.title).toContain('좋아요');
+    });
+
+    it('자기 리뷰에 좋아요 시 BadRequestException이 발생하고 ReviewLike/알림이 생성되지 않는다', async () => {
+      const review = await createReview(prisma);
+      // 리뷰 작성자 계정에 USER 프로필을 채워 requireActiveUser 통과하도록
+      await createUserProfile(prisma, { account_id: review.account_id });
+
+      await expect(
+        service.likeReview(review.account_id, review.id),
+      ).rejects.toThrow(BadRequestException);
+
+      const likeCount = await prisma.reviewLike.count({
+        where: { review_id: review.id },
+      });
+      expect(likeCount).toBe(0);
+
+      const notifCount = await prisma.notification.count({
+        where: { review_id: review.id },
+      });
+      expect(notifCount).toBe(0);
+    });
+
+    it('존재하지 않는 리뷰면 NotFoundException을 던진다', async () => {
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: liker.id });
+
+      await expect(
+        service.likeReview(liker.id, BigInt(999999)),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('이미 좋아요를 누른 리뷰에 다시 누르면 true를 반환하되 중복 레코드를 만들지 않는다', async () => {
+      const review = await createReview(prisma);
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: liker.id });
+
+      await service.likeReview(liker.id, review.id);
+      const second = await service.likeReview(liker.id, review.id);
+
+      expect(second).toBe(true);
+      const likeCount = await prisma.reviewLike.count({
+        where: { review_id: review.id, account_id: liker.id },
+      });
+      expect(likeCount).toBe(1);
+    });
+
+    it('계정이 삭제된 사용자는 UnauthorizedException을 던진다 (requireActiveUser)', async () => {
+      const review = await createReview(prisma);
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: liker.id });
+      await prisma.account.update({
+        where: { id: liker.id },
+        data: { deleted_at: new Date() },
+      });
+
+      // 제목과 일치하도록 예외 타입 + 메시지 둘 다 검증한다 (회귀 감지력 ↑).
+      const promise = service.likeReview(liker.id, review.id);
+      await expect(promise).rejects.toThrow(UnauthorizedException);
+      await expect(promise).rejects.toThrow(/Account is deleted/);
     });
   });
 });

@@ -17,6 +17,11 @@ export class OrderStatusTransitionPolicy {
       throw new BadRequestException('Order status is already set to target.');
     }
 
+    // SUBMITTED는 주문 생성 시점의 초기 상태이므로 어떤 상태에서도 되돌아갈 수 없다.
+    if (to === OrderStatus.SUBMITTED) {
+      throw new BadRequestException('Invalid order status transition.');
+    }
+
     if (to === OrderStatus.CONFIRMED && from !== OrderStatus.SUBMITTED) {
       throw new BadRequestException('Invalid order status transition.');
     }

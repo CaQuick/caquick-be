@@ -1,135 +1,194 @@
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchService } from '@/features/user/services/user-search.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createSearchHistory,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-const USER_CONTEXT = {
-  id: BigInt(1),
-  deleted_at: null,
-  account_type: 'USER',
-  status: 'ACTIVE',
-  user_profile: {
-    deleted_at: null,
-    nickname: 'test',
-    birth_date: null,
-    phone_number: null,
-    profile_image_url: null,
-    onboarding_completed_at: null,
-  },
-};
-
-describe('UserSearchService', () => {
+describe('UserSearchService (real DB)', () => {
   let service: UserSearchService;
-  let repo: jest.Mocked<UserRepository>;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [UserSearchService, UserRepository],
+    });
+    service = module.get(UserSearchService);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
 
   beforeEach(async () => {
-    repo = {
-      findAccountWithProfile: jest.fn(),
-      listSearchHistories: jest.fn(),
-      deleteSearchHistory: jest.fn(),
-      clearSearchHistories: jest.fn(),
-    } as unknown as jest.Mocked<UserRepository>;
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UserSearchService,
-        {
-          provide: UserRepository,
-          useValue: repo,
-        },
-      ],
-    }).compile();
-
-    service = module.get<UserSearchService>(UserSearchService);
+    await truncateAll();
   });
 
+  async function setupUser() {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    return account;
+  }
+
+  // ─── mySearchHistories ───
   describe('mySearchHistories', () => {
-    it('검색 기록 목록과 hasMore를 올바르게 반환해야 한다', async () => {
-      const now = new Date();
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.listSearchHistories.mockResolvedValue({
-        items: [
-          {
-            id: BigInt(1),
-            keyword: '딸기 케이크',
-            last_used_at: now,
-          },
-        ],
-        totalCount: 30,
-      } as never);
+    it('last_used_at desc 정렬로 페이지네이션된 결과를 반환한다', async () => {
+      const account = await setupUser();
+      const a = await createSearchHistory(prisma, {
+        account_id: account.id,
+        keyword: '오래된',
+        last_used_at: new Date('2026-04-01'),
+      });
+      const b = await createSearchHistory(prisma, {
+        account_id: account.id,
+        keyword: '최근',
+        last_used_at: new Date('2026-04-20'),
+      });
 
-      const result = await service.mySearchHistories(BigInt(1), {
+      const result = await service.mySearchHistories(account.id, {
         offset: 0,
         limit: 10,
       });
 
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe('1');
-      expect(result.items[0].keyword).toBe('딸기 케이크');
-      expect(result.totalCount).toBe(30);
-      expect(result.hasMore).toBe(true);
-    });
-
-    it('마지막 페이지이면 hasMore가 false여야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.listSearchHistories.mockResolvedValue({
-        items: [],
-        totalCount: 5,
-      } as never);
-
-      const result = await service.mySearchHistories(BigInt(1), {
-        offset: 0,
-        limit: 10,
-      });
-
+      expect(result.totalCount).toBe(2);
       expect(result.hasMore).toBe(false);
+      expect(result.items[0].id).toBe(b.id.toString());
+      expect(result.items[0].keyword).toBe('최근');
+      expect(result.items[1].id).toBe(a.id.toString());
     });
 
-    it('계정이 없으면 UnauthorizedException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(null);
+    it('hasMore 플래그를 offset/limit에 맞게 계산한다', async () => {
+      const account = await setupUser();
+      for (let i = 0; i < 3; i++) {
+        await createSearchHistory(prisma, {
+          account_id: account.id,
+          keyword: `k${i}`,
+          last_used_at: new Date(2026, 3, 20 - i),
+        });
+      }
 
-      await expect(service.mySearchHistories(BigInt(1))).rejects.toThrow(
-        UnauthorizedException,
-      );
+      const result = await service.mySearchHistories(account.id, {
+        offset: 0,
+        limit: 2,
+      });
+
+      expect(result.totalCount).toBe(3);
+      expect(result.hasMore).toBe(true);
+      expect(result.items).toHaveLength(2);
+    });
+
+    it('다른 계정의 검색 기록은 포함되지 않는다', async () => {
+      const me = await setupUser();
+      const other = await setupUser();
+      await createSearchHistory(prisma, { account_id: me.id, keyword: 'mine' });
+      await createSearchHistory(prisma, {
+        account_id: other.id,
+        keyword: 'other',
+      });
+
+      const result = await service.mySearchHistories(me.id);
+
+      expect(result.totalCount).toBe(1);
+      expect(result.items[0].keyword).toBe('mine');
     });
   });
 
+  // ─── deleteSearchHistory ───
   describe('deleteSearchHistory', () => {
-    it('검색 기록이 존재하지 않으면 NotFoundException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.deleteSearchHistory.mockResolvedValue(null as never);
+    it('본인 기록이면 soft-delete하고 true 반환', async () => {
+      const account = await setupUser();
+      const history = await createSearchHistory(prisma, {
+        account_id: account.id,
+      });
+
+      const result = await service.deleteSearchHistory(account.id, history.id);
+
+      expect(result).toBe(true);
+      const saved = await prisma.searchHistory.findUniqueOrThrow({
+        where: { id: history.id },
+      });
+      expect(saved.deleted_at).not.toBeNull();
+    });
+
+    it('이미 삭제된 기록이면 NotFoundException', async () => {
+      const account = await setupUser();
+      const history = await createSearchHistory(prisma, {
+        account_id: account.id,
+        deleted_at: new Date(),
+      });
 
       await expect(
-        service.deleteSearchHistory(BigInt(1), BigInt(999)),
+        service.deleteSearchHistory(account.id, history.id),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('정상적으로 삭제하면 true를 반환해야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.deleteSearchHistory.mockResolvedValue({ id: BigInt(1) } as never);
+    it('존재하지 않는 id면 NotFoundException', async () => {
+      const account = await setupUser();
+      await expect(
+        service.deleteSearchHistory(account.id, BigInt(999999)),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-      const result = await service.deleteSearchHistory(BigInt(1), BigInt(10));
-      expect(result).toBe(true);
+    it('다른 계정의 기록은 접근 불가 (NotFoundException)', async () => {
+      const me = await setupUser();
+      const other = await setupUser();
+      const othersHistory = await createSearchHistory(prisma, {
+        account_id: other.id,
+      });
+
+      await expect(
+        service.deleteSearchHistory(me.id, othersHistory.id),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
+  // ─── clearSearchHistories ───
   describe('clearSearchHistories', () => {
-    it('정상적으로 전체 삭제하면 true를 반환해야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(USER_CONTEXT as never);
-      repo.clearSearchHistories.mockResolvedValue(undefined as never);
+    it('해당 계정의 모든 active 기록을 soft-delete한다', async () => {
+      const account = await setupUser();
+      for (let i = 0; i < 3; i++) {
+        await createSearchHistory(prisma, {
+          account_id: account.id,
+          keyword: `k${i}`,
+        });
+      }
 
-      const result = await service.clearSearchHistories(BigInt(1));
+      const result = await service.clearSearchHistories(account.id);
+
+      expect(result).toBe(true);
+      const active = await prisma.searchHistory.count({
+        where: { account_id: account.id, deleted_at: null },
+      });
+      expect(active).toBe(0);
+    });
+
+    it('기록이 없어도 true를 반환한다', async () => {
+      const account = await setupUser();
+      const result = await service.clearSearchHistories(account.id);
       expect(result).toBe(true);
     });
 
-    it('계정이 유효하지 않으면 UnauthorizedException을 던져야 한다', async () => {
-      repo.findAccountWithProfile.mockResolvedValue(null);
+    it('다른 계정의 기록은 영향을 받지 않는다', async () => {
+      const me = await setupUser();
+      const other = await setupUser();
+      await createSearchHistory(prisma, { account_id: me.id });
+      await createSearchHistory(prisma, { account_id: other.id });
 
-      await expect(service.clearSearchHistories(BigInt(1))).rejects.toThrow(
-        UnauthorizedException,
-      );
-      expect(repo.clearSearchHistories).not.toHaveBeenCalled();
+      await service.clearSearchHistories(me.id);
+
+      const otherActive = await prisma.searchHistory.count({
+        where: { account_id: other.id, deleted_at: null },
+      });
+      expect(otherActive).toBe(1);
     });
   });
 });

@@ -58,5 +58,26 @@ describe('ApiResponseTemplate', () => {
       expect(res.code).toBe(400);
       expect(res.data).toEqual(errors);
     });
+
+    it('message/status 기본값: "error", 500', () => {
+      const res = ApiResponseTemplate.ERROR_WITH_DATA({ x: 1 });
+      expect(res.message).toBe('error');
+      expect(res.code).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(res.data).toEqual({ x: 1 });
+    });
+
+    it('message만 지정 + status 기본값', () => {
+      const res = ApiResponseTemplate.ERROR_WITH_DATA({ x: 1 }, 'custom error');
+      expect(res.message).toBe('custom error');
+      expect(res.code).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    });
+  });
+
+  describe('SUCCESS_WITH_DATA (default 파라미터 커버)', () => {
+    it('message만 지정 + status 기본값(200)', () => {
+      const res = ApiResponseTemplate.SUCCESS_WITH_DATA({ id: 1 }, 'created');
+      expect(res.message).toBe('created');
+      expect(res.code).toBe(HttpStatus.OK);
+    });
   });
 });

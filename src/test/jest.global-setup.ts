@@ -1,4 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import {
@@ -7,7 +13,8 @@ import {
   type StartedTestContainer,
 } from 'testcontainers';
 
-const STATE_FILE = join(process.cwd(), '.tmp', 'test-db-state.json');
+const TMP_DIR = join(process.cwd(), '.tmp');
+const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
 
 /**
  * Jest globalSetup.
@@ -17,6 +24,17 @@ const STATE_FILE = join(process.cwd(), '.tmp', 'test-db-state.json');
  * 3) worker들이 state 파일로부터 접속 정보를 읽어 worker별 DB를 구성
  */
 export default async function globalSetup(): Promise<void> {
+  // 이전 실행이 Ctrl+C 등으로 중단되어 globalTeardown이 실행되지 않았다면
+  // .tmp/schema-applied-*.marker가 stale 상태로 남는다. 새 MySQL 컨테이너를
+  // 기동하는 시점이므로 무조건 정리한다 (Codex 리뷰 반영).
+  if (existsSync(TMP_DIR)) {
+    for (const name of readdirSync(TMP_DIR)) {
+      if (name.startsWith('schema-applied-') && name.endsWith('.marker')) {
+        unlinkSync(join(TMP_DIR, name));
+      }
+    }
+  }
+
   console.log('[test] starting MySQL container...');
 
   const container: StartedTestContainer = await new GenericContainer(

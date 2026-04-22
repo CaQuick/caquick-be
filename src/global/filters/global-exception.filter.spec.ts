@@ -1,5 +1,5 @@
 import { BadRequestException, HttpStatus } from '@nestjs/common';
-import type { AbstractHttpAdapter } from '@nestjs/core';
+import { BaseExceptionFilter, type AbstractHttpAdapter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
@@ -112,5 +112,67 @@ describe('HttpExceptionFilter', () => {
         ],
       }),
     );
+  });
+
+  it('BadRequestException의 message가 배열이지만 validation 형태가 아니면 기본 ERROR 응답', () => {
+    const req = mockReq();
+    const res = mockRes();
+    const host = mockHost(req, res);
+
+    const exception = new BadRequestException({
+      // 배열이지만 validation 구조({property, constraints}) 아님
+      message: ['plain string', 'another'],
+    });
+
+    filter.catch(exception, host);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    // ERROR 헬퍼로 직렬화 → data는 null
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 400, data: null }),
+    );
+  });
+
+  it('BadRequestException resp가 object이지만 message 속성이 없으면 기본 ERROR', () => {
+    const req = mockReq();
+    const res = mockRes();
+    const host = mockHost(req, res);
+
+    // BadRequestException에 message 없는 object
+    const exception = new BadRequestException({ statusCode: 400 } as never);
+
+    filter.catch(exception, host);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 400 }),
+    );
+  });
+
+  it('GraphQL 컨텍스트(getType !== "http")에서는 BaseExceptionFilter.catch로 위임하고 로깅을 스킵한다', () => {
+    const superCatch = jest
+      .spyOn(BaseExceptionFilter.prototype, 'catch')
+      .mockImplementation(() => undefined);
+
+    try {
+      const host = {
+        getType: () => 'graphql',
+        switchToHttp: () => ({
+          getRequest: () => ({}),
+          getResponse: () => ({}),
+        }),
+      } as never;
+      const exception = new Error('gql');
+
+      filter.catch(exception, host);
+
+      // 1) super.catch로 정확히 위임됐는지 — exception/host 원본 그대로 전달
+      expect(superCatch).toHaveBeenCalledTimes(1);
+      expect(superCatch).toHaveBeenCalledWith(exception, host);
+      // 2) HTTP 경로의 side effect가 일어나지 않았는지
+      expect(logger.txError).not.toHaveBeenCalled();
+    } finally {
+      superCatch.mockRestore();
+    }
   });
 });

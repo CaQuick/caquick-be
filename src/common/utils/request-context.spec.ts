@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
+import type { GraphQLResolveInfo } from 'graphql';
 
 import {
+  buildGraphqlRequestMeta,
   buildHttpRequestMeta,
   calculateDuration,
   ensureRequestTracking,
@@ -129,6 +131,80 @@ describe('request-context', () => {
 
     it('유효하지 않은 문자열이면 null을 반환한다', () => {
       expect(resolveUserId(mockReq({ user: { id: 'abc' } }))).toBeNull();
+    });
+  });
+
+  describe('readSingleHeader (배열 헤더 분기)', () => {
+    it('배열 헤더에서 첫 유효 값만 사용해 requestId로 반영한다', () => {
+      const req = mockReq({
+        headers: { [REQUEST_ID_HEADER]: ['', '  ', 'array-id', 'second-id'] },
+      });
+      const { requestId } = ensureRequestTracking(req);
+      expect(requestId).toBe('array-id');
+    });
+
+    it('배열 헤더가 모두 공백/빈값이면 새 UUID를 생성한다', () => {
+      const req = mockReq({
+        headers: { [REQUEST_ID_HEADER]: ['', '   '] },
+      });
+      const { requestId } = ensureRequestTracking(req);
+      expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+  });
+
+  describe('buildHttpRequestMeta 엣지 분기', () => {
+    it('originalUrl이 없고 path만 있으면 path를 사용한다', () => {
+      const req = mockReq({ originalUrl: undefined, path: '/only-path' });
+      const meta = buildHttpRequestMeta(req);
+      expect(meta.path).toBe('/only-path');
+    });
+
+    it('originalUrl/path가 모두 없으면 빈 문자열로 반환한다', () => {
+      const req = mockReq({ originalUrl: undefined, path: undefined });
+      const meta = buildHttpRequestMeta(req);
+      expect(meta.path).toBe('');
+    });
+  });
+
+  describe('buildGraphqlRequestMeta path.key 분기', () => {
+    function mockInfo(
+      overrides: Partial<GraphQLResolveInfo>,
+    ): GraphQLResolveInfo {
+      return {
+        fieldName: 'testField',
+        operation: { name: { value: 'TestOp' } },
+        parentType: { toString: () => 'Query' },
+        path: { key: 'testField' },
+        ...overrides,
+      } as unknown as GraphQLResolveInfo;
+    }
+
+    it('path.key가 문자열이면 그대로 사용한다', () => {
+      const req = mockReq();
+      const meta = buildGraphqlRequestMeta(mockInfo({}), req);
+      expect(meta.path).toBe('testField');
+      expect(meta.operationName).toBe('TestOp');
+      expect(meta.parentType).toBe('Query');
+    });
+
+    it('path.key가 숫자이면 문자열화한다', () => {
+      const req = mockReq();
+      const info = mockInfo({
+        path: { key: 3, prev: undefined, typename: undefined },
+      } as unknown as GraphQLResolveInfo);
+      const meta = buildGraphqlRequestMeta(info, req);
+      expect(meta.path).toBe('3');
+    });
+
+    it('path.key가 잘못된 타입이면 fieldName으로 fallback', () => {
+      const req = mockReq();
+      const info = mockInfo({
+        path: {
+          key: undefined as unknown as string,
+        } as GraphQLResolveInfo['path'],
+      });
+      const meta = buildGraphqlRequestMeta(info, req);
+      expect(meta.path).toBe('testField');
     });
   });
 });
