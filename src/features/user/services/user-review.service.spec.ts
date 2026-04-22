@@ -246,20 +246,40 @@ describe('UserReviewService (real DB)', () => {
 
     it('soft-delete된 리뷰가 있으면 복원하여 새 rating/content/media를 반영한다', async () => {
       const ctx = await setupReviewableOrderItem();
+      const NEW_CONTENT = '복원 후 새 내용입니다. 아주 만족스럽습니다.';
 
-      // 첫 작성 후 삭제 (soft delete)
+      // 첫 작성 (media 1건 포함) 후 soft-delete
       const first = await service.writeReview(ctx.accountId, {
         orderItemId: ctx.orderItemId.toString(),
         rating: 3,
         content: VALID_CONTENT,
+        media: [
+          {
+            mediaType: 'IMAGE',
+            mediaUrl: 'https://i.example/old.png',
+            sortOrder: 0,
+          },
+        ],
       });
       await service.deleteMyReview(ctx.accountId, first.reviewId);
 
-      // 다시 작성 → 같은 row 복원
+      // 다시 작성 → 같은 row 복원, rating/content/media 모두 새 값으로 교체되어야 함
       const restored = await service.writeReview(ctx.accountId, {
         orderItemId: ctx.orderItemId.toString(),
         rating: 5,
-        content: '복원 후 새 내용입니다. 아주 만족스럽습니다.',
+        content: NEW_CONTENT,
+        media: [
+          {
+            mediaType: 'IMAGE',
+            mediaUrl: 'https://i.example/new1.png',
+            sortOrder: 0,
+          },
+          {
+            mediaType: 'VIDEO',
+            mediaUrl: 'https://i.example/new2.mp4',
+            sortOrder: 1,
+          },
+        ],
       });
 
       expect(restored.reviewId).toBe(first.reviewId);
@@ -268,6 +288,17 @@ describe('UserReviewService (real DB)', () => {
       });
       expect(saved.deleted_at).toBeNull();
       expect(Number(saved.rating)).toBe(5);
+      expect(saved.content).toBe(NEW_CONTENT);
+
+      // media: 새 값 2건만 남고 stale 1건은 정리됐는지 확인
+      const mediaRows = await prisma.reviewMedia.findMany({
+        where: { review_id: BigInt(restored.reviewId), deleted_at: null },
+      });
+      const mediaUrls = mediaRows.map((m) => m.media_url).sort();
+      expect(mediaUrls).toEqual([
+        'https://i.example/new1.png',
+        'https://i.example/new2.mp4',
+      ]);
     });
   });
 
