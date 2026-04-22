@@ -310,6 +310,46 @@ describe('SellerContentService (real DB)', () => {
       });
       expect(auditLogs).toHaveLength(1);
     });
+
+    it('linkType=STORE인데 무관한 link 필드(linkProductId/linkUrl)가 함께 들어오면 BadRequest', async () => {
+      // 회귀 가드: 깨진 row(linkType과 무관 필드 동시 set) 생성 시도는 도메인에서 거부 (B-1).
+      const me = await setupSellerWithStore(prisma);
+      const product = await prisma.product.create({
+        data: { store_id: me.store.id, name: 'p', regular_price: 1000 },
+      });
+
+      await expect(
+        service.sellerCreateBanner(me.account.id, {
+          placement: 'STORE',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'STORE',
+          linkStoreId: me.store.id.toString(),
+          linkProductId: product.id.toString(), // STORE에 무관
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.sellerCreateBanner(me.account.id, {
+          placement: 'STORE',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'STORE',
+          linkStoreId: me.store.id.toString(),
+          linkUrl: 'https://other.example', // STORE에 무관
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('linkType=NONE인데 link 필드가 들어오면 BadRequest', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      await expect(
+        service.sellerCreateBanner(account.id, {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'NONE',
+          linkUrl: 'https://x.example',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('sellerUpdateBanner', () => {
@@ -427,16 +467,38 @@ describe('SellerContentService (real DB)', () => {
       expect(after.link_store_id).toBe(store.id);
     });
 
-    it('linkType 미변경 + 4가지 inner link 필드(linkUrl/linkProductId/linkStoreId/linkCategoryId) 부분 업데이트', async () => {
-      // STORE 타입 banner로 ownership을 확보하면 validateBannerOwnership은 linkStoreId만
-      // 현재 store인지 확인하므로 나머지 linkUrl/linkProductId/linkCategoryId inner 분기를
-      // 자유롭게 검증할 수 있다.
+    it('linkType 미변경 + 같은 linkType의 link 필드만 부분 업데이트는 허용된다', async () => {
+      // STORE 타입 banner의 linkStoreId만 input으로 업데이트하는 정상 경로.
+      // assertInputLinkFieldsMatch가 input 기준이므로 무관 필드만 안 보내면 통과한다.
+      const me = await setupSellerWithStore(prisma);
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'STORE',
+          image_url: 'https://i.example/a.png',
+          link_type: 'STORE',
+          link_store_id: me.store.id,
+        },
+      });
+
+      await service.sellerUpdateBanner(me.account.id, {
+        bannerId: banner.id.toString(),
+        // linkType 미지정 + linkStoreId만 set → STORE에 매칭되는 필드라 통과
+        linkStoreId: me.store.id.toString(),
+      });
+
+      const after = await prisma.banner.findUniqueOrThrow({
+        where: { id: banner.id },
+      });
+      expect(after.link_type).toBe('STORE');
+      expect(after.link_store_id).toBe(me.store.id);
+    });
+
+    it('linkType 미변경 + 무관한 link 필드(linkProductId)를 set하면 BadRequest로 거부된다', async () => {
+      // 회귀 가드: STORE 타입 banner에 linkProductId가 함께 들어오는 정합성 위반 입력은
+      // 도메인 레벨에서 즉시 거부되어야 한다 (B-1 정책).
       const me = await setupSellerWithStore(prisma);
       const product = await prisma.product.create({
         data: { store_id: me.store.id, name: 'p', regular_price: 1000 },
-      });
-      const category = await prisma.category.create({
-        data: { name: '이벤트', category_type: 'EVENT' },
       });
       const banner = await prisma.banner.create({
         data: {
@@ -444,28 +506,21 @@ describe('SellerContentService (real DB)', () => {
           image_url: 'https://i.example/a.png',
           link_type: 'STORE',
           link_store_id: me.store.id,
-          link_url: 'https://old.example',
         },
       });
 
-      await service.sellerUpdateBanner(me.account.id, {
-        bannerId: banner.id.toString(),
-        // linkType 미지정 → else branch
-        // 4개 inner 분기 모두 발동
-        linkUrl: 'https://new.example',
-        linkProductId: product.id.toString(),
-        linkStoreId: me.store.id.toString(),
-        linkCategoryId: category.id.toString(),
-      });
+      await expect(
+        service.sellerUpdateBanner(me.account.id, {
+          bannerId: banner.id.toString(),
+          linkProductId: product.id.toString(),
+        }),
+      ).rejects.toThrow(BadRequestException);
 
+      // DB에는 변경 없음
       const after = await prisma.banner.findUniqueOrThrow({
         where: { id: banner.id },
       });
-      expect(after.link_type).toBe('STORE');
-      expect(after.link_url).toBe('https://new.example');
-      expect(after.link_product_id).toBe(product.id);
-      expect(after.link_store_id).toBe(me.store.id);
-      expect(after.link_category_id).toBe(category.id);
+      expect(after.link_product_id).toBeNull();
     });
 
     it('linkType 미변경 + linkProductId를 null로 (falsy 분기: parseId 미호출 경로)', async () => {

@@ -26,6 +26,7 @@ import {
   INVALID_BANNER_LINK_TYPE,
   INVALID_BANNER_PLACEMENT,
   LINK_CATEGORY_REQUIRED,
+  LINK_FIELDS_MISMATCH,
   LINK_PRODUCT_MISMATCH,
   LINK_PRODUCT_REQUIRED,
   LINK_STORE_MISMATCH,
@@ -205,8 +206,11 @@ export class SellerContentService extends SellerBaseService {
     input: SellerCreateBannerInput,
   ): Promise<SellerBannerOutput> {
     const ctx = await this.requireSellerContext(accountId);
+    const intendedLinkType = input.linkType ?? 'NONE';
+    // 호출자가 intendedLinkType과 무관한 link 필드를 보냈는지 검증 (B-1 정합성 가드)
+    this.assertInputLinkFieldsMatch(intendedLinkType, input);
     await this.validateBannerOwnership(ctx, {
-      linkType: input.linkType ?? 'NONE',
+      linkType: intendedLinkType,
       linkProductId: input.linkProductId ? parseId(input.linkProductId) : null,
       linkStoreId: input.linkStoreId ? parseId(input.linkStoreId) : null,
       linkCategoryId: input.linkCategoryId
@@ -258,6 +262,17 @@ export class SellerContentService extends SellerBaseService {
       storeId: ctx.storeId,
     });
     if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
+
+    const intendedLinkType = (input.linkType ?? current.link_type) as
+      | 'NONE'
+      | 'URL'
+      | 'PRODUCT'
+      | 'STORE'
+      | 'CATEGORY';
+    // input에 명시된 link 필드가 intendedLinkType과 매칭되는지 검증 (B-1 정합성 가드).
+    // resolved 기준으로 검증하면 STORE→NONE 같은 정상 변경에서도 current 잔여값으로 false positive가 발생하므로,
+    // input 기준으로만 검증한다.
+    this.assertInputLinkFieldsMatch(intendedLinkType, input);
 
     const resolved = this.resolveNextBannerLinkValues(input, current);
     await this.validateBannerOwnership(ctx, resolved);
@@ -523,6 +538,48 @@ export class SellerContentService extends SellerBaseService {
 
     if (args.linkType === 'CATEGORY' && !args.linkCategoryId) {
       throw new BadRequestException(LINK_CATEGORY_REQUIRED);
+    }
+  }
+
+  /**
+   * 호출자(create/update 입력) 기준으로 intendedLinkType과 무관한 link 필드가 함께
+   * 들어왔는지 검증한다. 깨진 row(linkType=STORE인데 link_product_id가 set되는 등)를
+   * 도메인 레벨에서 fail-fast로 거부한다.
+   *
+   * - NONE: 모든 link_* 필드 X
+   * - URL: linkUrl만
+   * - PRODUCT: linkProductId만
+   * - STORE: linkStoreId만
+   * - CATEGORY: linkCategoryId만
+   *
+   * `null`은 명시적 clear 의도이므로 "set 의도 없음"으로 간주한다.
+   * `undefined`(input 미지정)도 마찬가지.
+   * 빈 문자열은 의미 없는 값이므로 falsy로 처리해 통과시킨다.
+   */
+  private assertInputLinkFieldsMatch(
+    intendedLinkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY',
+    input: {
+      linkUrl?: string | null;
+      linkProductId?: string | null;
+      linkStoreId?: string | null;
+      linkCategoryId?: string | null;
+    },
+  ): void {
+    const hasUrl = !!input.linkUrl && input.linkUrl.trim().length > 0;
+    const hasProduct = !!input.linkProductId;
+    const hasStore = !!input.linkStoreId;
+    const hasCategory = !!input.linkCategoryId;
+
+    const allowed: Record<typeof intendedLinkType, boolean> = {
+      NONE: !hasUrl && !hasProduct && !hasStore && !hasCategory,
+      URL: !hasProduct && !hasStore && !hasCategory,
+      PRODUCT: !hasUrl && !hasStore && !hasCategory,
+      STORE: !hasUrl && !hasProduct && !hasCategory,
+      CATEGORY: !hasUrl && !hasProduct && !hasStore,
+    };
+
+    if (!allowed[intendedLinkType]) {
+      throw new BadRequestException(LINK_FIELDS_MISMATCH);
     }
   }
 
