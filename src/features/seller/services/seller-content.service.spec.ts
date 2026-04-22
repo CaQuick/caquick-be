@@ -737,11 +737,35 @@ describe('SellerContentService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('audit targetType ORDER/CONVERSATION/CHANGE_PASSWORD도 해석된다', async () => {
-      const { account } = await setupSellerWithStore(prisma);
-      for (const t of ['ORDER', 'CONVERSATION', 'CHANGE_PASSWORD'] as const) {
+    it('audit targetType ORDER/CONVERSATION/CHANGE_PASSWORD가 enum으로 정확히 매핑되어 필터된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+
+      // 각 targetType별로 식별 가능한 audit log를 미리 생성한다.
+      // (전체 5종 중 위 3종을 검증; STORE/PRODUCT는 다른 분기에서 이미 사용)
+      const types = ['ORDER', 'CONVERSATION', 'CHANGE_PASSWORD'] as const;
+      const created = new Map<string, bigint>();
+      for (const t of types) {
+        const row = await prisma.auditLog.create({
+          data: {
+            actor_account_id: account.id,
+            store_id: store.id,
+            target_type: t,
+            target_id: store.id,
+            action: 'UPDATE',
+          },
+        });
+        created.set(t, row.id);
+      }
+
+      for (const t of types) {
         const r = await service.sellerAuditLogs(account.id, { targetType: t });
-        expect(Array.isArray(r.items)).toBe(true);
+        // 1) 해당 타입의 row만 반환되는지 (다른 타입 섞이지 않음)
+        expect(r.items.length).toBeGreaterThan(0);
+        expect(r.items.every((it) => it.targetType === t)).toBe(true);
+        // 2) 미리 만든 row가 실제로 결과에 포함되는지 (매핑이 정확함을 확인)
+        expect(r.items.some((it) => it.id === created.get(t)!.toString())).toBe(
+          true,
+        );
       }
     });
   });
@@ -749,7 +773,7 @@ describe('SellerContentService (real DB)', () => {
   describe('toAuditLogOutput 비어있는 json 필드 분기', () => {
     it('before/after json이 null인 audit log도 정상 직렬화된다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      await prisma.auditLog.create({
+      const created = await prisma.auditLog.create({
         data: {
           actor_account_id: account.id,
           store_id: store.id,
@@ -762,9 +786,11 @@ describe('SellerContentService (real DB)', () => {
       });
 
       const result = await service.sellerAuditLogs(account.id);
-      expect(result.items.length).toBeGreaterThan(0);
-      expect(result.items[0].beforeJson).toBeNull();
-      expect(result.items[0].afterJson).toBeNull();
+      // 정렬/다른 자동 생성 audit 영향 없이 방금 만든 row 자체를 검증
+      const target = result.items.find((it) => it.id === created.id.toString());
+      expect(target).toBeDefined();
+      expect(target!.beforeJson).toBeNull();
+      expect(target!.afterJson).toBeNull();
     });
   });
 });
