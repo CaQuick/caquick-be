@@ -396,7 +396,9 @@ describe('SellerOptionService (real DB)', () => {
 
     it('매장 그룹 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
       const { accountId, product } = await setupProductForSeller();
-      const g1 = await createOptionGroup(product.id);
+      // 길이 일치 분기(idsMismatchError) 대신 invalidIds 분기를 타도록
+      // 본인 product에 그룹 1개를 미리 만들어 둔다.
+      await createOptionGroup(product.id);
       const otherProduct = await createProduct(prisma, {
         store_id: product.store_id,
         name: 'other',
@@ -409,8 +411,6 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupIds: [otherGroup.id.toString()],
         }),
       ).rejects.toThrow(BadRequestException);
-      // g1은 실제 정합성 확인용 (존재 기준치)
-      expect(g1.id).toBeDefined();
     });
   });
 
