@@ -96,38 +96,45 @@ describe('Seller Product Resolvers (real DB)', () => {
   });
 
   /**
-   * 모든 seller-product-mutation resolver 메서드를 한 번씩 경유하는 배선 통합 테스트.
-   * 상세 분기/예외는 service.spec에서 담당하며, 이 블록은
-   * resolver → service → repository 어댑터 계층이 정상 배선되었는지만 확인한다.
+   * 모든 seller-product-mutation resolver 메서드를 도메인 단위로 묶어 배선만 검증하는 통합 테스트.
+   * 상세 분기/예외는 service.spec에서 담당하며, 여기는 resolver → service → repository 어댑터
+   * 계층이 정상 배선되었는지만 확인한다.
+   *
+   * truncateAll이 beforeEach에서 동작하므로, 각 it은 자체 setup(seller + product)으로 시작한다.
    */
   describe('전체 Mutation 메서드 배선 커버리지', () => {
-    it('product/option/template/token 주요 mutation을 순차 호출하여 DB 반영까지 확인', async () => {
+    /**
+     * 본 describe의 공통 setup. account/store + 1개 product를 만들고 auth/productId/auth+resolver 호출에
+     * 필요한 최소 입력을 반환한다.
+     */
+    async function setupProductForMutationWiring() {
       const { account, store } = await setupSellerWithStore(prisma);
       const auth = { accountId: account.id.toString() };
-
-      // 1) sellerCreateProduct
       const created = await mutationResolver.sellerCreateProduct(auth, {
         name: '원본',
         regularPrice: 10000,
         initialImageUrl: 'https://i.example/init.png',
       } as never);
-      const productId = created.id;
+      return { account, store, auth, productId: created.id };
+    }
 
-      // 2) sellerUpdateProduct
+    it('product CRUD + image + category + tag mutation 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      // update / setActive
       const updated = await mutationResolver.sellerUpdateProduct(auth, {
         productId,
         name: '수정됨',
       } as never);
       expect(updated.name).toBe('수정됨');
 
-      // 3) sellerSetProductActive
       const toggled = await mutationResolver.sellerSetProductActive(auth, {
         productId,
         isActive: false,
       } as never);
       expect(toggled.isActive).toBe(false);
 
-      // 4) sellerAddProductImage + 5) sellerReorderProductImages + 6) sellerDeleteProductImage
+      // image add / reorder / delete
       const addedImage = await mutationResolver.sellerAddProductImage(auth, {
         productId,
         imageUrl: 'https://i.example/b.png',
@@ -149,13 +156,11 @@ describe('Seller Product Resolvers (real DB)', () => {
         addedImage.id,
         initialImage.id.toString(),
       ]);
-      const deleteOk = await mutationResolver.sellerDeleteProductImage(
-        auth,
-        addedImage.id,
-      );
-      expect(deleteOk).toBe(true);
+      expect(
+        await mutationResolver.sellerDeleteProductImage(auth, addedImage.id),
+      ).toBe(true);
 
-      // 7) sellerSetProductCategories
+      // category / tag
       const category = await prisma.category.create({
         data: { name: '생일', category_type: 'EVENT' },
       });
@@ -168,7 +173,6 @@ describe('Seller Product Resolvers (real DB)', () => {
       );
       expect(withCategory.categories.map((c) => c.name)).toContain('생일');
 
-      // 8) sellerSetProductTags
       const tag = await prisma.tag.create({ data: { name: '레터링' } });
       const withTag = await mutationResolver.sellerSetProductTags(auth, {
         productId,
@@ -176,7 +180,15 @@ describe('Seller Product Resolvers (real DB)', () => {
       } as never);
       expect(withTag.tags.map((t) => t.name)).toContain('레터링');
 
-      // 9~12) option group: create/update/reorder/delete
+      // 본인 product delete
+      expect(await mutationResolver.sellerDeleteProduct(auth, productId)).toBe(
+        true,
+      );
+    });
+
+    it('option group lifecycle(create/update/reorder/delete) 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
       const group1 = await mutationResolver.sellerCreateOptionGroup(auth, {
         productId,
         name: '사이즈',
@@ -189,11 +201,13 @@ describe('Seller Product Resolvers (real DB)', () => {
         minSelect: 0,
         maxSelect: 3,
       } as never);
+
       const groupUpdated = await mutationResolver.sellerUpdateOptionGroup(
         auth,
         { optionGroupId: group1.id, name: '사이즈(수정)' } as never,
       );
       expect(groupUpdated.name).toBe('사이즈(수정)');
+
       const reorderedGroups = await mutationResolver.sellerReorderOptionGroups(
         auth,
         {
@@ -202,35 +216,55 @@ describe('Seller Product Resolvers (real DB)', () => {
         } as never,
       );
       expect(reorderedGroups.map((g) => g.id)).toEqual([group2.id, group1.id]);
-      await mutationResolver.sellerDeleteOptionGroup(auth, group2.id);
 
-      // 13~16) option item: create/update/reorder/delete
+      expect(
+        await mutationResolver.sellerDeleteOptionGroup(auth, group2.id),
+      ).toBe(true);
+    });
+
+    it('option item lifecycle(create/update/reorder/delete) 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+      const group = await mutationResolver.sellerCreateOptionGroup(auth, {
+        productId,
+        name: '사이즈',
+        minSelect: 0,
+        maxSelect: 3,
+      } as never);
+
       const item1 = await mutationResolver.sellerCreateOptionItem(auth, {
-        optionGroupId: group1.id,
+        optionGroupId: group.id,
         title: 'S',
         priceDelta: 0,
       } as never);
       const item2 = await mutationResolver.sellerCreateOptionItem(auth, {
-        optionGroupId: group1.id,
+        optionGroupId: group.id,
         title: 'M',
         priceDelta: 1000,
       } as never);
+
       const itemUpdated = await mutationResolver.sellerUpdateOptionItem(auth, {
         optionItemId: item1.id,
         title: 'Small',
       } as never);
       expect(itemUpdated.title).toBe('Small');
+
       const reorderedItems = await mutationResolver.sellerReorderOptionItems(
         auth,
         {
-          optionGroupId: group1.id,
+          optionGroupId: group.id,
           optionItemIds: [item2.id, item1.id],
         } as never,
       );
       expect(reorderedItems.map((i) => i.id)).toEqual([item2.id, item1.id]);
-      await mutationResolver.sellerDeleteOptionItem(auth, item2.id);
 
-      // 17~18) custom template: upsert + setActive
+      expect(
+        await mutationResolver.sellerDeleteOptionItem(auth, item2.id),
+      ).toBe(true);
+    });
+
+    it('custom template + text token lifecycle 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
       const template = await mutationResolver.sellerUpsertProductCustomTemplate(
         auth,
         {
@@ -246,7 +280,6 @@ describe('Seller Product Resolvers (real DB)', () => {
         } as never);
       expect(templateActive.isActive).toBe(false);
 
-      // 19~21) custom text token: upsert/reorder/delete
       const token1 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
         {
@@ -263,23 +296,20 @@ describe('Seller Product Resolvers (real DB)', () => {
           defaultText: '10',
         } as never,
       );
+
       const reorderedTokens =
         await mutationResolver.sellerReorderProductCustomTextTokens(auth, {
           templateId: template.id,
           tokenIds: [token2.id, token1.id],
         } as never);
       expect(reorderedTokens.map((t) => t.id)).toEqual([token2.id, token1.id]);
-      await mutationResolver.sellerDeleteProductCustomTextToken(
-        auth,
-        token1.id,
-      );
 
-      // 22) sellerDeleteProduct (이미 위에서 sellerDeleteProduct 타 store 테스트 존재, 여기선 본인 삭제)
-      const deleted = await mutationResolver.sellerDeleteProduct(
-        auth,
-        productId,
-      );
-      expect(deleted).toBe(true);
+      expect(
+        await mutationResolver.sellerDeleteProductCustomTextToken(
+          auth,
+          token1.id,
+        ),
+      ).toBe(true);
     });
   });
 });
