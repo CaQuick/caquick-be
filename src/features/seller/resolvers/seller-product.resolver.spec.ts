@@ -8,6 +8,25 @@ import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-p
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
+import type {
+  SellerAddProductImageInput,
+  SellerCreateOptionGroupInput,
+  SellerCreateOptionItemInput,
+  SellerCreateProductInput,
+  SellerReorderOptionGroupsInput,
+  SellerReorderOptionItemsInput,
+  SellerReorderProductCustomTextTokensInput,
+  SellerReorderProductImagesInput,
+  SellerSetProductActiveInput,
+  SellerSetProductCategoriesInput,
+  SellerSetProductCustomTemplateActiveInput,
+  SellerSetProductTagsInput,
+  SellerUpdateOptionGroupInput,
+  SellerUpdateOptionItemInput,
+  SellerUpdateProductInput,
+  SellerUpsertProductCustomTemplateInput,
+  SellerUpsertProductCustomTextTokenInput,
+} from '@/features/seller/types/seller-input.type';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
@@ -47,13 +66,14 @@ describe('Seller Product Resolvers (real DB)', () => {
   it('Mutation.sellerCreateProduct + Query.sellerProducts: DB 왕복 반영', async () => {
     const { account } = await setupSellerWithStore(prisma);
 
+    const createInput: SellerCreateProductInput = {
+      name: '신상',
+      regularPrice: 10000,
+      initialImageUrl: 'https://i.example/a.png',
+    };
     const created = await mutationResolver.sellerCreateProduct(
       { accountId: account.id.toString() },
-      {
-        name: '신상',
-        regularPrice: 10000,
-        initialImageUrl: 'https://i.example/a.png',
-      } as never,
+      createInput,
     );
     expect(created.name).toBe('신상');
 
@@ -82,15 +102,16 @@ describe('Seller Product Resolvers (real DB)', () => {
     const { account, store } = await setupSellerWithStore(prisma);
     const product = await createProduct(prisma, { store_id: store.id });
 
+    const badInput: SellerCreateOptionGroupInput = {
+      productId: product.id.toString(),
+      name: 'X',
+      minSelect: 3,
+      maxSelect: 1,
+    };
     await expect(
       mutationResolver.sellerCreateOptionGroup(
         { accountId: account.id.toString() },
-        {
-          productId: product.id.toString(),
-          name: 'X',
-          minSelect: 3,
-          maxSelect: 1,
-        } as never,
+        badInput,
       ),
     ).rejects.toThrow(BadRequestException);
   });
@@ -110,11 +131,15 @@ describe('Seller Product Resolvers (real DB)', () => {
     async function setupProductForMutationWiring() {
       const { account, store } = await setupSellerWithStore(prisma);
       const auth = { accountId: account.id.toString() };
-      const created = await mutationResolver.sellerCreateProduct(auth, {
+      const createInput: SellerCreateProductInput = {
         name: '원본',
         regularPrice: 10000,
         initialImageUrl: 'https://i.example/init.png',
-      } as never);
+      };
+      const created = await mutationResolver.sellerCreateProduct(
+        auth,
+        createInput,
+      );
       return { account, store, auth, productId: created.id };
     }
 
@@ -122,35 +147,48 @@ describe('Seller Product Resolvers (real DB)', () => {
       const { auth, productId } = await setupProductForMutationWiring();
 
       // update / setActive
-      const updated = await mutationResolver.sellerUpdateProduct(auth, {
+      const updateInput: SellerUpdateProductInput = {
         productId,
         name: '수정됨',
-      } as never);
+      };
+      const updated = await mutationResolver.sellerUpdateProduct(
+        auth,
+        updateInput,
+      );
       expect(updated.name).toBe('수정됨');
 
-      const toggled = await mutationResolver.sellerSetProductActive(auth, {
+      const setActiveInput: SellerSetProductActiveInput = {
         productId,
         isActive: false,
-      } as never);
+      };
+      const toggled = await mutationResolver.sellerSetProductActive(
+        auth,
+        setActiveInput,
+      );
       expect(toggled.isActive).toBe(false);
 
       // image add / reorder / delete
-      const addedImage = await mutationResolver.sellerAddProductImage(auth, {
+      const addImageInput: SellerAddProductImageInput = {
         productId,
         imageUrl: 'https://i.example/b.png',
-      } as never);
+      };
+      const addedImage = await mutationResolver.sellerAddProductImage(
+        auth,
+        addImageInput,
+      );
       const initialImage = await prisma.productImage.findFirstOrThrow({
         where: {
           product_id: BigInt(productId),
           id: { not: BigInt(addedImage.id) },
         },
       });
+      const reorderImagesInput: SellerReorderProductImagesInput = {
+        productId,
+        imageIds: [addedImage.id, initialImage.id.toString()],
+      };
       const reordered = await mutationResolver.sellerReorderProductImages(
         auth,
-        {
-          productId,
-          imageIds: [addedImage.id, initialImage.id.toString()],
-        } as never,
+        reorderImagesInput,
       );
       expect(reordered.map((r) => r.id)).toEqual([
         addedImage.id,
@@ -164,20 +202,25 @@ describe('Seller Product Resolvers (real DB)', () => {
       const category = await prisma.category.create({
         data: { name: '생일', category_type: 'EVENT' },
       });
+      const setCategoriesInput: SellerSetProductCategoriesInput = {
+        productId,
+        categoryIds: [category.id.toString()],
+      };
       const withCategory = await mutationResolver.sellerSetProductCategories(
         auth,
-        {
-          productId,
-          categoryIds: [category.id.toString()],
-        } as never,
+        setCategoriesInput,
       );
       expect(withCategory.categories.map((c) => c.name)).toContain('생일');
 
       const tag = await prisma.tag.create({ data: { name: '레터링' } });
-      const withTag = await mutationResolver.sellerSetProductTags(auth, {
+      const setTagsInput: SellerSetProductTagsInput = {
         productId,
         tagIds: [tag.id.toString()],
-      } as never);
+      };
+      const withTag = await mutationResolver.sellerSetProductTags(
+        auth,
+        setTagsInput,
+      );
       expect(withTag.tags.map((t) => t.name)).toContain('레터링');
 
       // 본인 product delete
@@ -189,31 +232,44 @@ describe('Seller Product Resolvers (real DB)', () => {
     it('option group lifecycle(create/update/reorder/delete) 배선', async () => {
       const { auth, productId } = await setupProductForMutationWiring();
 
-      const group1 = await mutationResolver.sellerCreateOptionGroup(auth, {
+      const createGroup1: SellerCreateOptionGroupInput = {
         productId,
         name: '사이즈',
         minSelect: 1,
         maxSelect: 1,
-      } as never);
-      const group2 = await mutationResolver.sellerCreateOptionGroup(auth, {
+      };
+      const group1 = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroup1,
+      );
+      const createGroup2: SellerCreateOptionGroupInput = {
         productId,
         name: '토핑',
         minSelect: 0,
         maxSelect: 3,
-      } as never);
+      };
+      const group2 = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroup2,
+      );
 
+      const updateGroupInput: SellerUpdateOptionGroupInput = {
+        optionGroupId: group1.id,
+        name: '사이즈(수정)',
+      };
       const groupUpdated = await mutationResolver.sellerUpdateOptionGroup(
         auth,
-        { optionGroupId: group1.id, name: '사이즈(수정)' } as never,
+        updateGroupInput,
       );
       expect(groupUpdated.name).toBe('사이즈(수정)');
 
+      const reorderGroupsInput: SellerReorderOptionGroupsInput = {
+        productId,
+        optionGroupIds: [group2.id, group1.id],
+      };
       const reorderedGroups = await mutationResolver.sellerReorderOptionGroups(
         auth,
-        {
-          productId,
-          optionGroupIds: [group2.id, group1.id],
-        } as never,
+        reorderGroupsInput,
       );
       expect(reorderedGroups.map((g) => g.id)).toEqual([group2.id, group1.id]);
 
@@ -224,36 +280,53 @@ describe('Seller Product Resolvers (real DB)', () => {
 
     it('option item lifecycle(create/update/reorder/delete) 배선', async () => {
       const { auth, productId } = await setupProductForMutationWiring();
-      const group = await mutationResolver.sellerCreateOptionGroup(auth, {
+      const createGroupInput: SellerCreateOptionGroupInput = {
         productId,
         name: '사이즈',
         minSelect: 0,
         maxSelect: 3,
-      } as never);
+      };
+      const group = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroupInput,
+      );
 
-      const item1 = await mutationResolver.sellerCreateOptionItem(auth, {
+      const createItem1: SellerCreateOptionItemInput = {
         optionGroupId: group.id,
         title: 'S',
         priceDelta: 0,
-      } as never);
-      const item2 = await mutationResolver.sellerCreateOptionItem(auth, {
+      };
+      const item1 = await mutationResolver.sellerCreateOptionItem(
+        auth,
+        createItem1,
+      );
+      const createItem2: SellerCreateOptionItemInput = {
         optionGroupId: group.id,
         title: 'M',
         priceDelta: 1000,
-      } as never);
+      };
+      const item2 = await mutationResolver.sellerCreateOptionItem(
+        auth,
+        createItem2,
+      );
 
-      const itemUpdated = await mutationResolver.sellerUpdateOptionItem(auth, {
+      const updateItemInput: SellerUpdateOptionItemInput = {
         optionItemId: item1.id,
         title: 'Small',
-      } as never);
+      };
+      const itemUpdated = await mutationResolver.sellerUpdateOptionItem(
+        auth,
+        updateItemInput,
+      );
       expect(itemUpdated.title).toBe('Small');
 
+      const reorderItemsInput: SellerReorderOptionItemsInput = {
+        optionGroupId: group.id,
+        optionItemIds: [item2.id, item1.id],
+      };
       const reorderedItems = await mutationResolver.sellerReorderOptionItems(
         auth,
-        {
-          optionGroupId: group.id,
-          optionItemIds: [item2.id, item1.id],
-        } as never,
+        reorderItemsInput,
       );
       expect(reorderedItems.map((i) => i.id)).toEqual([item2.id, item1.id]);
 
@@ -265,43 +338,55 @@ describe('Seller Product Resolvers (real DB)', () => {
     it('custom template + text token lifecycle 배선', async () => {
       const { auth, productId } = await setupProductForMutationWiring();
 
+      const upsertTemplateInput: SellerUpsertProductCustomTemplateInput = {
+        productId,
+        baseImageUrl: 'https://i.example/tpl.png',
+        isActive: true,
+      };
       const template = await mutationResolver.sellerUpsertProductCustomTemplate(
         auth,
-        {
-          productId,
-          baseImageUrl: 'https://i.example/tpl.png',
-          isActive: true,
-        } as never,
+        upsertTemplateInput,
       );
-      const templateActive =
-        await mutationResolver.sellerSetProductCustomTemplateActive(auth, {
+      const setTemplateActiveInput: SellerSetProductCustomTemplateActiveInput =
+        {
           templateId: template.id,
           isActive: false,
-        } as never);
+        };
+      const templateActive =
+        await mutationResolver.sellerSetProductCustomTemplateActive(
+          auth,
+          setTemplateActiveInput,
+        );
       expect(templateActive.isActive).toBe(false);
 
+      const upsertToken1: SellerUpsertProductCustomTextTokenInput = {
+        templateId: template.id,
+        tokenKey: 'name',
+        defaultText: '기본',
+      };
       const token1 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
-        {
-          templateId: template.id,
-          tokenKey: 'name',
-          defaultText: '기본',
-        } as never,
+        upsertToken1,
       );
+      const upsertToken2: SellerUpsertProductCustomTextTokenInput = {
+        templateId: template.id,
+        tokenKey: 'age',
+        defaultText: '10',
+      };
       const token2 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
-        {
-          templateId: template.id,
-          tokenKey: 'age',
-          defaultText: '10',
-        } as never,
+        upsertToken2,
       );
 
+      const reorderTokensInput: SellerReorderProductCustomTextTokensInput = {
+        templateId: template.id,
+        tokenIds: [token2.id, token1.id],
+      };
       const reorderedTokens =
-        await mutationResolver.sellerReorderProductCustomTextTokens(auth, {
-          templateId: template.id,
-          tokenIds: [token2.id, token1.id],
-        } as never);
+        await mutationResolver.sellerReorderProductCustomTextTokens(
+          auth,
+          reorderTokensInput,
+        );
       expect(reorderedTokens.map((t) => t.id)).toEqual([token2.id, token1.id]);
 
       expect(
