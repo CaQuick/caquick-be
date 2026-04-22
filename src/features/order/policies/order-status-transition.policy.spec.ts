@@ -88,6 +88,22 @@ describe('OrderStatusTransitionPolicy', () => {
         ),
       ).toThrow(BadRequestException);
     });
+
+    /**
+     * SUBMITTED는 주문 생성 시점의 초기 상태로, 도메인 정의상 어떤 상태에서도 되돌아갈 수 없다.
+     * 가드가 빠지면 PICKED_UP/CONFIRMED → SUBMITTED 같은 비정상 역전이가 silent하게 통과될 수 있어,
+     * 모든 from 케이스에 대해 reject되는지 명시적으로 회귀 검증한다.
+     */
+    it.each([
+      OrderStatus.CONFIRMED,
+      OrderStatus.MADE,
+      OrderStatus.PICKED_UP,
+      OrderStatus.CANCELED,
+    ])('SUBMITTED로 되돌리는 역전이는 거부 (from=%s)', (from) => {
+      expect(() =>
+        policy.assertSellerTransition(from, OrderStatus.SUBMITTED),
+      ).toThrow(BadRequestException);
+    });
   });
 
   describe('requiresCancellationNote', () => {
