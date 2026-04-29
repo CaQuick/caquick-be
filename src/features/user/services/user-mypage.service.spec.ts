@@ -241,6 +241,51 @@ describe('UserMypageService (real DB)', () => {
       });
     });
 
+    it('wishlistCount는 비활성/삭제 product가 연결된 wishlist는 제외한다 (myWishlist 가시성과 일치)', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const visibleProduct = await createProduct(prisma, {
+        store_id: store.id,
+      });
+      const inactiveProduct = await createProduct(prisma, {
+        store_id: store.id,
+      });
+      const deletedProduct = await createProduct(prisma, {
+        store_id: store.id,
+      });
+      const inactiveStore = await createStore(prisma);
+      const productOfInactiveStore = await createProduct(prisma, {
+        store_id: inactiveStore.id,
+      });
+
+      // 4개 모두 active 상태에서 찜 추가
+      await prisma.wishlistItem.createMany({
+        data: [
+          { account_id: account.id, product_id: visibleProduct.id },
+          { account_id: account.id, product_id: inactiveProduct.id },
+          { account_id: account.id, product_id: deletedProduct.id },
+          { account_id: account.id, product_id: productOfInactiveStore.id },
+        ],
+      });
+      // 이후 상태 변경 (3개는 invisible로 만든다)
+      await prisma.product.update({
+        where: { id: inactiveProduct.id },
+        data: { is_active: false },
+      });
+      await prisma.product.update({
+        where: { id: deletedProduct.id },
+        data: { deleted_at: new Date() },
+      });
+      await prisma.store.update({
+        where: { id: inactiveStore.id },
+        data: { is_active: false },
+      });
+
+      const result = await service.getOverview(account.id);
+
+      expect(result.counts.wishlistCount).toBe(1);
+    });
+
     it('recentViewedProducts에 찜한 상품은 isWishlisted=true로 매핑된다', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);

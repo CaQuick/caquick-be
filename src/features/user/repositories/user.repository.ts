@@ -34,6 +34,27 @@ export class UserRepository {
     return { ...where, deleted_at: null };
   }
 
+  /**
+   * 화면에 노출 가능한 wishlist row 조건.
+   * - wishlist 자체가 active (deleted_at: null)
+   * - 연결된 product 가 active + soft-delete 아님
+   * - 연결된 store 가 active + soft-delete 아님
+   *
+   * count 와 list 가 같은 가시성 기준을 공유하도록 하여
+   * 마이페이지 카운트 카드와 실제 목록 길이 불일치를 방지한다.
+   */
+  private visibleWishlistWhere(accountId: bigint) {
+    return {
+      account_id: accountId,
+      deleted_at: null,
+      product: {
+        deleted_at: null,
+        is_active: true,
+        store: { deleted_at: null, is_active: true },
+      },
+    } as const;
+  }
+
   async findAccountWithProfile(
     accountId: bigint,
     options?: { withDeleted?: boolean },
@@ -197,10 +218,7 @@ export class UserRepository {
           },
         }),
         this.prisma.wishlistItem.count({
-          where: {
-            account_id: accountId,
-            deleted_at: null,
-          },
+          where: this.visibleWishlistWhere(accountId),
         }),
       ]);
 
@@ -369,7 +387,7 @@ export class UserRepository {
 
   async countWishlistItems(accountId: bigint): Promise<number> {
     return this.prisma.wishlistItem.count({
-      where: { account_id: accountId, deleted_at: null },
+      where: this.visibleWishlistWhere(accountId),
     });
   }
 
@@ -455,15 +473,7 @@ export class UserRepository {
     }[];
     totalCount: number;
   }> {
-    const where = {
-      account_id: args.accountId,
-      deleted_at: null,
-      product: {
-        deleted_at: null,
-        is_active: true,
-        store: { deleted_at: null, is_active: true },
-      },
-    };
+    const where = this.visibleWishlistWhere(args.accountId);
 
     const [rows, totalCount] = await this.prisma.$transaction([
       this.prisma.wishlistItem.findMany({
