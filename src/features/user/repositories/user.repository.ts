@@ -434,7 +434,9 @@ export class UserRepository {
 
   /**
    * 주어진 productIds 중 사용자가 찜한 것들의 product_id 집합을 단일 IN 쿼리로 반환.
-   * 매핑(N+1 회피)용.
+   * 매핑(N+1 회피)용. 가시성 조건(visibleWishlistWhere)을 myWishlist/wishlistCount와
+   * 공유하여, recent-view 등에 노출되는 isWishlisted 플래그가 실제 wishlist 표면
+   * (목록/카운트)과 일관되도록 한다.
    */
   async findWishlistedProductIds(args: {
     accountId: bigint;
@@ -443,8 +445,7 @@ export class UserRepository {
     if (args.productIds.length === 0) return new Set();
     const rows = await this.prisma.wishlistItem.findMany({
       where: {
-        account_id: args.accountId,
-        deleted_at: null,
+        ...this.visibleWishlistWhere(args.accountId),
         product_id: { in: args.productIds },
       },
       select: { product_id: true },
@@ -478,7 +479,8 @@ export class UserRepository {
     const [rows, totalCount] = await this.prisma.$transaction([
       this.prisma.wishlistItem.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        // 같은 밀리초 생성 시 페이지 경계 흔들림 방지를 위해 product_id를 보조 정렬키로 둔다.
+        orderBy: [{ created_at: 'desc' }, { product_id: 'desc' }],
         skip: args.offset,
         take: args.limit,
         select: {
