@@ -96,18 +96,39 @@ export class UserRepository {
   async updateProfile(args: {
     accountId: bigint;
     nickname?: string;
+    name?: string;
     birthDate?: Date | null;
     phoneNumber?: string | null;
   }): Promise<void> {
-    await this.prisma.userProfile.update({
-      where: { account_id: args.accountId },
-      data: {
-        ...(args.nickname !== undefined ? { nickname: args.nickname } : {}),
-        ...(args.birthDate !== undefined ? { birth_date: args.birthDate } : {}),
-        ...(args.phoneNumber !== undefined
-          ? { phone_number: args.phoneNumber }
-          : {}),
-      },
+    const hasName = args.name !== undefined;
+    const hasProfileFields =
+      args.nickname !== undefined ||
+      args.birthDate !== undefined ||
+      args.phoneNumber !== undefined;
+
+    // name은 account 테이블, 나머지는 user_profile 테이블이라
+    // 두 테이블 부분 실패 방지를 위해 transaction으로 묶는다.
+    await this.prisma.$transaction(async (tx) => {
+      if (hasName) {
+        await tx.account.update({
+          where: { id: args.accountId },
+          data: { name: args.name },
+        });
+      }
+      if (hasProfileFields) {
+        await tx.userProfile.update({
+          where: { account_id: args.accountId },
+          data: {
+            ...(args.nickname !== undefined ? { nickname: args.nickname } : {}),
+            ...(args.birthDate !== undefined
+              ? { birth_date: args.birthDate }
+              : {}),
+            ...(args.phoneNumber !== undefined
+              ? { phone_number: args.phoneNumber }
+              : {}),
+          },
+        });
+      }
     });
   }
 

@@ -222,6 +222,98 @@ describe('UserProfileService (real DB)', () => {
         service.updateMyProfile(me.id, { nickname: 'taken' }),
       ).rejects.toThrow(ConflictException);
     });
+
+    it('name만 단독 업데이트하면 Account.name이 갱신된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '새이름',
+      });
+
+      expect(result.name).toBe('새이름');
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('새이름');
+    });
+
+    it('name 입력 시 trim 후 저장한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '  홍길동  ',
+      });
+
+      expect(result.name).toBe('홍길동');
+    });
+
+    it('name이 빈 문자열이면 BadRequestException', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.updateMyProfile(account.id, { name: '' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('name이 공백-only이면 BadRequestException', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.updateMyProfile(account.id, { name: '   ' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('name + nickname 동시 업데이트 시 둘 다 반영된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'oldNick',
+      });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '새이름',
+        nickname: 'newNick',
+      });
+
+      expect(result.name).toBe('새이름');
+      expect(result.profile.nickname).toBe('newNick');
+    });
+
+    it('name 미지정 시 기존 Account.name이 유지된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '유지될이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await service.updateMyProfile(account.id, {
+        nickname: 'newNick',
+      });
+
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('유지될이름');
+    });
   });
 
   // ─── updateMyProfileImage ───

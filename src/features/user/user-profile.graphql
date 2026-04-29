@@ -62,6 +62,8 @@ input CompleteOnboardingInput {
 input UpdateMyProfileInput {
   """닉네임"""
   nickname: String
+  """이름(전송 시 trim 후 비어있으면 reject)"""
+  name: String
   """생년월일"""
   birthDate: DateTime
   """전화번호"""
