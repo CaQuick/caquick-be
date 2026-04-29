@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -26,6 +27,7 @@ describe('UserRecentViewService (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
+        UserRepository,
       ],
     });
 
@@ -85,6 +87,60 @@ describe('UserRecentViewService (real DB)', () => {
       });
       expect(result.items[1].productId).toBe(p1.id.toString());
       expect(result.items[1].salePrice).toBe(9000);
+    });
+
+    it('찜한 상품은 isWishlisted=true, 안 한 상품은 false로 매핑된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+      const wishlisted = await createProduct(prisma, { store_id: store.id });
+      const notWishlisted = await createProduct(prisma, { store_id: store.id });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: wishlisted.id,
+      });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: notWishlisted.id,
+      });
+      await prisma.wishlistItem.create({
+        data: { account_id: account.id, product_id: wishlisted.id },
+      });
+
+      const result = await service.list(account.id);
+
+      const map = new Map(
+        result.items.map((p) => [p.productId, p.isWishlisted]),
+      );
+      expect(map.get(wishlisted.id.toString())).toBe(true);
+      expect(map.get(notWishlisted.id.toString())).toBe(false);
+    });
+
+    it('비활성 store/product에 대한 wishlist는 isWishlisted=false로 매핑된다 (myWishlist 가시성과 일치)', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const inactiveStore = await createStore(prisma, { is_active: false });
+      const productOfInactiveStore = await createProduct(prisma, {
+        store_id: inactiveStore.id,
+      });
+      // recent-view 항목으로는 보이지만, 그 product의 store가 비활성이라
+      // myWishlist에는 노출되지 않음 → isWishlisted도 false여야 일관됨
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: productOfInactiveStore.id,
+      });
+      await prisma.wishlistItem.create({
+        data: {
+          account_id: account.id,
+          product_id: productOfInactiveStore.id,
+        },
+      });
+
+      const result = await service.list(account.id);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].productId).toBe(
+        productOfInactiveStore.id.toString(),
+      );
+      expect(result.items[0].isWishlisted).toBe(false);
     });
 
     it('pagination: offset + limit < totalCount면 hasMore true', async () => {

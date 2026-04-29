@@ -183,21 +183,33 @@ describe('UserBaseService (real DB)', () => {
       expect(service.testNormalizePhoneNumber('   ')).toBeNull();
     });
 
-    it('길이가 하한 미만이면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizePhoneNumber('12345')).toThrow(
-        BadRequestException,
-      );
-    });
+    it.each([['010-0000-0000'], ['010-1234-5678'], ['010-9999-9999']])(
+      '정상 형식 %s 은 그대로 반환한다',
+      (raw) => {
+        expect(service.testNormalizePhoneNumber(raw)).toBe(raw);
+      },
+    );
 
-    it('숫자와 하이픈 외 문자가 포함되면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizePhoneNumber('010-abc-1234')).toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('유효한 전화번호를 반환한다', () => {
-      expect(service.testNormalizePhoneNumber('010-1234-5678')).toBe(
+    it('앞뒤 공백을 trim하여 검증한다', () => {
+      expect(service.testNormalizePhoneNumber('  010-1234-5678  ')).toBe(
         '010-1234-5678',
+      );
+    });
+
+    it.each([
+      ['011-1234-5678'], // 010 prefix 외
+      ['019-1234-5678'], // 010 prefix 외
+      ['010-123-4567'], // 자릿수 부족
+      ['010-12345-6789'], // 자릿수 초과
+      ['01012345678'], // 하이픈 없음
+      ['010 1234 5678'], // 공백 구분자
+      ['+82-10-1234-5678'], // 국가코드 포함
+      ['010-abc-1234'], // 문자 포함
+      ['010--1234-5678'], // 하이픈 위치 잘못
+      ['12345'], // 짧은 임의 문자열
+    ])('비정상 형식 %s 은 BadRequestException을 던진다', (raw) => {
+      expect(() => service.testNormalizePhoneNumber(raw)).toThrow(
+        BadRequestException,
       );
     });
   });
@@ -222,21 +234,41 @@ describe('UserBaseService (real DB)', () => {
       );
     });
 
+    it('1899-12-31 등 1900-01-01 이전이면 BadRequestException을 던진다', () => {
+      expect(() => service.testNormalizeBirthDate('1899-12-31')).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.testNormalizeBirthDate('1850-01-01')).toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('1900-01-01은 통과한다 (UTC 기준)', () => {
+      const result = service.testNormalizeBirthDate('1900-01-01');
+      expect(result).toBeInstanceOf(Date);
+      expect(result?.getUTCFullYear()).toBe(1900);
+      expect(result?.getUTCMonth()).toBe(0);
+      expect(result?.getUTCDate()).toBe(1);
+    });
+
     it('문자열 날짜를 Date 객체로 변환한다', () => {
       const result = service.testNormalizeBirthDate('1990-05-15');
       expect(result).toBeInstanceOf(Date);
-      expect(result?.getFullYear()).toBe(1990);
+      expect(result?.getUTCFullYear()).toBe(1990);
+      expect(result?.getUTCMonth()).toBe(4);
+      expect(result?.getUTCDate()).toBe(15);
     });
 
-    it('오늘 날짜는 미래로 취급하지 않고 그대로 반환한다', () => {
-      const today = new Date();
-      today.setHours(12, 0, 0, 0);
+    it('오늘(UTC) 날짜는 미래로 취급하지 않고 그대로 반환한다', () => {
+      const now = new Date();
+      const todayIso = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
 
-      const result = service.testNormalizeBirthDate(today);
+      const result = service.testNormalizeBirthDate(todayIso);
 
       expect(result).toBeInstanceOf(Date);
-      // 시간은 00:00:00으로 내부 정규화되지만 날짜 자체는 오늘과 같아야 함
-      expect(result?.toDateString()).toBe(today.toDateString());
+      expect(result?.getUTCFullYear()).toBe(now.getUTCFullYear());
+      expect(result?.getUTCMonth()).toBe(now.getUTCMonth());
+      expect(result?.getUTCDate()).toBe(now.getUTCDate());
     });
   });
 

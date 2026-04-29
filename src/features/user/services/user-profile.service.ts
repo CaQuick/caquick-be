@@ -73,10 +73,11 @@ export class UserProfileService extends UserBaseService {
     await this.requireActiveUser(accountId);
 
     const hasNickname = input.nickname !== undefined;
+    const hasName = input.name !== undefined;
     const hasBirthDate = input.birthDate !== undefined;
     const hasPhoneNumber = input.phoneNumber !== undefined;
 
-    if (!hasNickname && !hasBirthDate && !hasPhoneNumber) {
+    if (!hasNickname && !hasName && !hasBirthDate && !hasPhoneNumber) {
       throw new BadRequestException('No fields to update.');
     }
 
@@ -89,6 +90,16 @@ export class UserProfileService extends UserBaseService {
       if (isTaken) throw new ConflictException('Nickname already exists.');
     }
 
+    // figma 명세: 이름은 필수값. 전송되었지만 trim 후 빈 문자열이면 reject.
+    let name: string | undefined = undefined;
+    if (hasName) {
+      const normalized = this.normalizeName(input.name);
+      if (!normalized) {
+        throw new BadRequestException('Name cannot be empty.');
+      }
+      name = normalized;
+    }
+
     const birthDate = hasBirthDate
       ? this.normalizeBirthDate(input.birthDate)
       : undefined;
@@ -99,6 +110,7 @@ export class UserProfileService extends UserBaseService {
     await this.repo.updateProfile({
       accountId,
       ...(hasNickname ? { nickname } : {}),
+      ...(hasName ? { name } : {}),
       ...(hasBirthDate ? { birthDate } : {}),
       ...(hasPhoneNumber ? { phoneNumber } : {}),
     });

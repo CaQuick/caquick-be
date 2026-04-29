@@ -84,3 +84,5 @@ docs/*
 .env.example
 caquick_ddl.sql
 src/features/example/*
+
+.figma/

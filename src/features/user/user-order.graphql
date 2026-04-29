@@ -37,6 +37,8 @@ type MyOrderSummary {
   totalPrice: Int!
   """매장명"""
   storeName: String!
+  """주문 내 OrderItem 중 리뷰 작성 가능한 것이 1건이라도 있는지 (PICKED_UP + 활성 리뷰 미존재)"""
+  hasReviewableItem: Boolean!
 }
 
 """주문 상세"""

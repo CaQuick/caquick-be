@@ -34,6 +34,27 @@ export class UserRepository {
     return { ...where, deleted_at: null };
   }
 
+  /**
+   * 화면에 노출 가능한 wishlist row 조건.
+   * - wishlist 자체가 active (deleted_at: null)
+   * - 연결된 product 가 active + soft-delete 아님
+   * - 연결된 store 가 active + soft-delete 아님
+   *
+   * count 와 list 가 같은 가시성 기준을 공유하도록 하여
+   * 마이페이지 카운트 카드와 실제 목록 길이 불일치를 방지한다.
+   */
+  private visibleWishlistWhere(accountId: bigint) {
+    return {
+      account_id: accountId,
+      deleted_at: null,
+      product: {
+        deleted_at: null,
+        is_active: true,
+        store: { deleted_at: null, is_active: true },
+      },
+    } as const;
+  }
+
   async findAccountWithProfile(
     accountId: bigint,
     options?: { withDeleted?: boolean },
@@ -96,18 +117,39 @@ export class UserRepository {
   async updateProfile(args: {
     accountId: bigint;
     nickname?: string;
+    name?: string;
     birthDate?: Date | null;
     phoneNumber?: string | null;
   }): Promise<void> {
-    await this.prisma.userProfile.update({
-      where: { account_id: args.accountId },
-      data: {
-        ...(args.nickname !== undefined ? { nickname: args.nickname } : {}),
-        ...(args.birthDate !== undefined ? { birth_date: args.birthDate } : {}),
-        ...(args.phoneNumber !== undefined
-          ? { phone_number: args.phoneNumber }
-          : {}),
-      },
+    const hasName = args.name !== undefined;
+    const hasProfileFields =
+      args.nickname !== undefined ||
+      args.birthDate !== undefined ||
+      args.phoneNumber !== undefined;
+
+    // name은 account 테이블, 나머지는 user_profile 테이블이라
+    // 두 테이블 부분 실패 방지를 위해 transaction으로 묶는다.
+    await this.prisma.$transaction(async (tx) => {
+      if (hasName) {
+        await tx.account.update({
+          where: { id: args.accountId },
+          data: { name: args.name },
+        });
+      }
+      if (hasProfileFields) {
+        await tx.userProfile.update({
+          where: { account_id: args.accountId },
+          data: {
+            ...(args.nickname !== undefined ? { nickname: args.nickname } : {}),
+            ...(args.birthDate !== undefined
+              ? { birth_date: args.birthDate }
+              : {}),
+            ...(args.phoneNumber !== undefined
+              ? { phone_number: args.phoneNumber }
+              : {}),
+          },
+        });
+      }
     });
   }
 
@@ -176,9 +218,7 @@ export class UserRepository {
           },
         }),
         this.prisma.wishlistItem.count({
-          where: {
-            account_id: accountId,
-          },
+          where: this.visibleWishlistWhere(accountId),
         }),
       ]);
 
@@ -347,8 +387,125 @@ export class UserRepository {
 
   async countWishlistItems(accountId: bigint): Promise<number> {
     return this.prisma.wishlistItem.count({
-      where: { account_id: accountId },
+      where: this.visibleWishlistWhere(accountId),
     });
+  }
+
+  /**
+   * 찜 추가 (멱등). 이미 있으면 그대로, soft-delete된 경우 deleted_at=null로 복원.
+   */
+  async upsertWishlistItem(args: {
+    accountId: bigint;
+    productId: bigint;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.wishlistItem.upsert({
+      where: {
+        account_id_product_id: {
+          account_id: args.accountId,
+          product_id: args.productId,
+        },
+      },
+      create: {
+        account_id: args.accountId,
+        product_id: args.productId,
+      },
+      update: { deleted_at: null, updated_at: args.now },
+    });
+  }
+
+  /**
+   * 찜 해제 (멱등). active 항목만 soft-delete.
+   */
+  async softDeleteWishlistItem(args: {
+    accountId: bigint;
+    productId: bigint;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.wishlistItem.updateMany({
+      where: {
+        account_id: args.accountId,
+        product_id: args.productId,
+        deleted_at: null,
+      },
+      data: { deleted_at: args.now },
+    });
+  }
+
+  /**
+   * 주어진 productIds 중 사용자가 찜한 것들의 product_id 집합을 단일 IN 쿼리로 반환.
+   * 매핑(N+1 회피)용. 가시성 조건(visibleWishlistWhere)을 myWishlist/wishlistCount와
+   * 공유하여, recent-view 등에 노출되는 isWishlisted 플래그가 실제 wishlist 표면
+   * (목록/카운트)과 일관되도록 한다.
+   */
+  async findWishlistedProductIds(args: {
+    accountId: bigint;
+    productIds: bigint[];
+  }): Promise<Set<string>> {
+    if (args.productIds.length === 0) return new Set();
+    const rows = await this.prisma.wishlistItem.findMany({
+      where: {
+        ...this.visibleWishlistWhere(args.accountId),
+        product_id: { in: args.productIds },
+      },
+      select: { product_id: true },
+    });
+    return new Set(rows.map((r) => r.product_id.toString()));
+  }
+
+  /**
+   * 내 찜 목록 조회. 비활성/soft-delete된 product/store는 제외.
+   */
+  async findWishlistItems(args: {
+    accountId: bigint;
+    offset: number;
+    limit: number;
+  }): Promise<{
+    items: {
+      product_id: bigint;
+      created_at: Date;
+      product: {
+        name: string;
+        regular_price: number;
+        sale_price: number | null;
+        images: { image_url: string }[];
+        store: { store_name: string };
+      };
+    }[];
+    totalCount: number;
+  }> {
+    const where = this.visibleWishlistWhere(args.accountId);
+
+    const [rows, totalCount] = await this.prisma.$transaction([
+      this.prisma.wishlistItem.findMany({
+        where,
+        // 같은 밀리초 생성 시 페이지 경계 흔들림 방지를 위해 product_id를 보조 정렬키로 둔다.
+        orderBy: [{ created_at: 'desc' }, { product_id: 'desc' }],
+        skip: args.offset,
+        take: args.limit,
+        select: {
+          product_id: true,
+          created_at: true,
+          product: {
+            select: {
+              name: true,
+              regular_price: true,
+              sale_price: true,
+              store: { select: { store_name: true } },
+              images: {
+                where: { deleted_at: null },
+                orderBy: { sort_order: 'asc' },
+                take: 1,
+                select: { image_url: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.wishlistItem.count({ where }),
+    ]);
+
+    return { items: rows, totalCount };
   }
 
   async countMyReviews(accountId: bigint): Promise<number> {

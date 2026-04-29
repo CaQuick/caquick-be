@@ -175,7 +175,30 @@ describe('UserReviewService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('media가 10개를 초과하면 BadRequestException', async () => {
+    it('사진 10장 + 동영상 1개(총 11개)는 통과한다', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            ...Array.from({ length: 10 }, (_, i) => ({
+              mediaType: 'IMAGE' as const,
+              mediaUrl: `https://s3.example.com/${i}.jpg`,
+              sortOrder: i,
+            })),
+            {
+              mediaType: 'VIDEO' as const,
+              mediaUrl: 'https://s3.example.com/v.mp4',
+              sortOrder: 10,
+            },
+          ],
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('사진 11장이면 BadRequestException (TOO_MANY_IMAGES)', async () => {
       const ctx = await setupReviewableOrderItem();
       await expect(
         service.writeReview(ctx.accountId, {
@@ -189,6 +212,47 @@ describe('UserReviewService (real DB)', () => {
           })),
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('동영상 2개면 BadRequestException (TOO_MANY_VIDEOS)', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'VIDEO' as const,
+              mediaUrl: 'https://s3.example.com/v1.mp4',
+              sortOrder: 0,
+            },
+            {
+              mediaType: 'VIDEO' as const,
+              mediaUrl: 'https://s3.example.com/v2.mp4',
+              sortOrder: 1,
+            },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('사진 0 + 동영상 1개만 있어도 통과한다', async () => {
+      const ctx = await setupReviewableOrderItem();
+      await expect(
+        service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'VIDEO' as const,
+              mediaUrl: 'https://s3.example.com/v.mp4',
+              sortOrder: 0,
+            },
+          ],
+        }),
+      ).resolves.toBeDefined();
     });
 
     it('orderItem이 본인 소유가 아니면 NotFoundException', async () => {

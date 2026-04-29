@@ -46,7 +46,9 @@ interface ReviewRow {
 
 const MIN_CONTENT_LENGTH = 20;
 const MAX_CONTENT_LENGTH = 1000;
-const MAX_MEDIA_COUNT = 10;
+// figma 명세: 사진 최대 10장 / 동영상 1개. 합쳐서 최대 11개까지 허용.
+const MAX_IMAGE_COUNT = 10;
+const MAX_VIDEO_COUNT = 1;
 const MAX_LIMIT = 50;
 
 @Injectable()
@@ -230,8 +232,20 @@ export class UserReviewService {
   private validateMedia(
     media?: { mediaType: string; mediaUrl: string }[],
   ): void {
-    if (media && media.length > MAX_MEDIA_COUNT) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_MEDIA);
+    if (!media || media.length === 0) return;
+
+    let imageCount = 0;
+    let videoCount = 0;
+    for (const m of media) {
+      if (m.mediaType === 'VIDEO') videoCount++;
+      else imageCount++;
+    }
+
+    if (imageCount > MAX_IMAGE_COUNT) {
+      throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_IMAGES);
+    }
+    if (videoCount > MAX_VIDEO_COUNT) {
+      throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_VIDEOS);
     }
   }
 
