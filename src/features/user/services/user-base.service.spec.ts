@@ -222,6 +222,21 @@ describe('UserBaseService (real DB)', () => {
       );
     });
 
+    it('1899-12-31 등 1900-01-01 이전이면 BadRequestException을 던진다', () => {
+      expect(() => service.testNormalizeBirthDate('1899-12-31')).toThrow(
+        BadRequestException,
+      );
+      expect(() =>
+        service.testNormalizeBirthDate(new Date(1850, 0, 1)),
+      ).toThrow(BadRequestException);
+    });
+
+    it('1900-01-01은 통과한다', () => {
+      const result = service.testNormalizeBirthDate(new Date(1900, 0, 1));
+      expect(result).toBeInstanceOf(Date);
+      expect(result?.getFullYear()).toBe(1900);
+    });
+
     it('문자열 날짜를 Date 객체로 변환한다', () => {
       const result = service.testNormalizeBirthDate('1990-05-15');
       expect(result).toBeInstanceOf(Date);

@@ -10,6 +10,7 @@ import {
   MAX_NICKNAME_LENGTH,
   MAX_PAGINATION_LIMIT,
   MAX_PHONE_LENGTH,
+  MIN_BIRTH_DATE,
   MIN_NICKNAME_LENGTH,
   MIN_PHONE_LENGTH,
 } from '@/features/user/constants/user.constants';
@@ -111,6 +112,11 @@ export abstract class UserBaseService {
     today.setHours(0, 0, 0, 0);
     const normalized = new Date(date);
     normalized.setHours(0, 0, 0, 0);
+    if (normalized < MIN_BIRTH_DATE) {
+      throw new BadRequestException(
+        'birthDate is too old (before 1900-01-01).',
+      );
+    }
     if (normalized > today) {
       throw new BadRequestException('birthDate cannot be in the future.');
     }
