@@ -142,6 +142,38 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * 주어진 orderId 중 PICKED_UP 상태이며 active 리뷰가 미작성인 OrderItem을
+   * 1건 이상 가진 order의 ID 집합을 반환한다.
+   *
+   * 주의: list 매핑에서 order별 개별 쿼리(N+1) 회피용. 단일 IN 쿼리로 처리.
+   */
+  async findReviewableOrderIds(args: {
+    accountId: bigint;
+    orderIds: bigint[];
+  }): Promise<Set<string>> {
+    if (args.orderIds.length === 0) return new Set();
+
+    const rows = await this.prisma.orderItem.findMany({
+      where: {
+        order_id: { in: args.orderIds },
+        deleted_at: null,
+        order: {
+          account_id: args.accountId,
+          status: OrderStatus.PICKED_UP,
+        },
+        OR: [
+          { review: { is: null } },
+          { review: { is: { deleted_at: { not: null } } } },
+        ],
+      },
+      select: { order_id: true },
+      distinct: ['order_id'],
+    });
+
+    return new Set(rows.map((r) => r.order_id.toString()));
+  }
+
   async findOrderDetailByAccount(args: { orderId: bigint; accountId: bigint }) {
     return this.prisma.order.findFirst({
       where: {
