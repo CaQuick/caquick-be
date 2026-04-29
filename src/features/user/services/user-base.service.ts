@@ -9,10 +9,10 @@ import {
   DEFAULT_PAGINATION_LIMIT,
   MAX_NICKNAME_LENGTH,
   MAX_PAGINATION_LIMIT,
-  MAX_PHONE_LENGTH,
   MIN_BIRTH_DATE,
   MIN_NICKNAME_LENGTH,
-  MIN_PHONE_LENGTH,
+  PHONE_FORMAT_EXAMPLE,
+  PHONE_REGEX,
 } from '@/features/user/constants/user.constants';
 import type { UserAccountWithProfile } from '@/features/user/repositories/user.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -90,14 +90,10 @@ export abstract class UserBaseService {
     if (raw === undefined || raw === null) return null;
     const trimmed = raw.trim();
     if (trimmed.length === 0) return null;
-    if (
-      trimmed.length < MIN_PHONE_LENGTH ||
-      trimmed.length > MAX_PHONE_LENGTH
-    ) {
-      throw new BadRequestException('Invalid phone number length.');
-    }
-    if (!/^[0-9-]+$/.test(trimmed)) {
-      throw new BadRequestException('Invalid phone number format.');
+    if (!PHONE_REGEX.test(trimmed)) {
+      throw new BadRequestException(
+        `Invalid phone number format. Expected ${PHONE_FORMAT_EXAMPLE}.`,
+      );
     }
     return trimmed;
   }
