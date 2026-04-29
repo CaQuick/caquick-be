@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -26,6 +27,7 @@ describe('UserRecentViewService (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
+        UserRepository,
       ],
     });
 
@@ -85,6 +87,32 @@ describe('UserRecentViewService (real DB)', () => {
       });
       expect(result.items[1].productId).toBe(p1.id.toString());
       expect(result.items[1].salePrice).toBe(9000);
+    });
+
+    it('찜한 상품은 isWishlisted=true, 안 한 상품은 false로 매핑된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+      const wishlisted = await createProduct(prisma, { store_id: store.id });
+      const notWishlisted = await createProduct(prisma, { store_id: store.id });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: wishlisted.id,
+      });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: notWishlisted.id,
+      });
+      await prisma.wishlistItem.create({
+        data: { account_id: account.id, product_id: wishlisted.id },
+      });
+
+      const result = await service.list(account.id);
+
+      const map = new Map(
+        result.items.map((p) => [p.productId, p.isWishlisted]),
+      );
+      expect(map.get(wishlisted.id.toString())).toBe(true);
+      expect(map.get(notWishlisted.id.toString())).toBe(false);
     });
 
     it('pagination: offset + limit < totalCount면 hasMore true', async () => {

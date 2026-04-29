@@ -18,6 +18,8 @@ import { UserReviewMutationResolver } from '@/features/user/resolvers/user-revie
 import { UserReviewQueryResolver } from '@/features/user/resolvers/user-review-query.resolver';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
 import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-query.resolver';
+import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
+import { UserWishlistQueryResolver } from '@/features/user/resolvers/user-wishlist-query.resolver';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
@@ -26,6 +28,7 @@ import { UserProfileService } from '@/features/user/services/user-profile.servic
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { UserSearchService } from '@/features/user/services/user-search.service';
+import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 
 /**
  * User 도메인 모듈
@@ -41,6 +44,7 @@ import { UserSearchService } from '@/features/user/services/user-search.service'
     UserOrderService,
     UserRecentViewService,
     UserReviewService,
+    UserWishlistService,
     UserRepository,
     RecentProductViewRepository,
     ReviewRepository,
@@ -57,6 +61,8 @@ import { UserSearchService } from '@/features/user/services/user-search.service'
     UserNotificationMutationResolver,
     UserSearchMutationResolver,
     UserEngagementMutationResolver,
+    UserWishlistQueryResolver,
+    UserWishlistMutationResolver,
   ],
 })
 export class UserModule {}

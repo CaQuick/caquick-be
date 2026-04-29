@@ -26,6 +26,7 @@ export interface RecentViewedProductSummary {
   regularPrice: number;
   storeName: string;
   viewedAt: Date;
+  isWishlisted: boolean;
 }
 
 export interface RecentViewedProductConnection {

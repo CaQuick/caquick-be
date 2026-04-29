@@ -7,6 +7,7 @@ import {
 import { parseId } from '@/common/utils/id-parser';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { RecentViewedProductConnection } from '@/features/user/types/user-mypage-output.type';
 
 /** 계정당 최대 보관 개수 */
@@ -23,6 +24,7 @@ export class UserRecentViewService {
   constructor(
     private readonly recentViewRepo: RecentProductViewRepository,
     private readonly productRepo: ProductRepository,
+    private readonly userRepo: UserRepository,
   ) {}
 
   async list(
@@ -46,6 +48,12 @@ export class UserRecentViewService {
         limit,
       });
 
+    // N+1 회피: 단일 IN 쿼리로 찜 여부 조회
+    const wishlistedProductIds = await this.userRepo.findWishlistedProductIds({
+      accountId,
+      productIds: items.map((v) => v.product_id),
+    });
+
     return {
       items: items.map((view) => ({
         productId: view.product_id.toString(),
@@ -55,6 +63,7 @@ export class UserRecentViewService {
         regularPrice: view.product.regular_price,
         storeName: view.product.store.store_name,
         viewedAt: view.viewed_at,
+        isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
       })),
       totalCount,
       hasMore: offset + limit < totalCount,

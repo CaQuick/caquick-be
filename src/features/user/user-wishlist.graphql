@@ -1,0 +1,32 @@
+extend type Query {
+  """내 찜 목록"""
+  myWishlist(input: MyWishlistInput): MyWishlistConnection!
+}
+
+extend type Mutation {
+  """찜 추가 (멱등: 이미 있어도 true 반환, soft-delete된 항목은 복원)"""
+  addToWishlist(productId: ID!): Boolean!
+  """찜 해제 (멱등: 이미 없어도 true 반환)"""
+  removeFromWishlist(productId: ID!): Boolean!
+}
+
+input MyWishlistInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type MyWishlistConnection {
+  items: [WishlistItemSummary!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+type WishlistItemSummary {
+  productId: ID!
+  productName: String!
+  representativeImageUrl: String
+  salePrice: Int
+  regularPrice: Int!
+  storeName: String!
+  addedAt: DateTime!
+}
