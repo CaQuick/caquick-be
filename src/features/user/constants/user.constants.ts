@@ -5,8 +5,9 @@ export const MAX_NICKNAME_LENGTH = 20;
 
 // ── 전화번호 ──
 
-export const MIN_PHONE_LENGTH = 7;
-export const MAX_PHONE_LENGTH = 20;
+// 정책: 010-XXXX-XXXX 고정 (13자). figma 명세 기준.
+export const PHONE_REGEX = /^010-\d{4}-\d{4}$/;
+export const PHONE_FORMAT_EXAMPLE = '010-XXXX-XXXX';
 
 // ── 생년월일 ──
 
