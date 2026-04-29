@@ -172,6 +172,16 @@ describe('UserOrderService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('주문이 0건이면 빈 connection을 반환한다', async () => {
+      const account = await setupUser();
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.totalCount).toBe(0);
+      expect(result.items).toEqual([]);
+      expect(result.hasMore).toBe(false);
+    });
+
     // ─── hasReviewableItem ───
     describe('hasReviewableItem', () => {
       async function createPickedUpOrderWithItem(accountId: bigint) {
