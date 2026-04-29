@@ -171,6 +171,158 @@ describe('UserOrderService (real DB)', () => {
         service.listMyOrders(account.id, { limit: 51 }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('주문이 0건이면 빈 connection을 반환한다', async () => {
+      const account = await setupUser();
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.totalCount).toBe(0);
+      expect(result.items).toEqual([]);
+      expect(result.hasMore).toBe(false);
+    });
+
+    // ─── hasReviewableItem ───
+    describe('hasReviewableItem', () => {
+      async function createPickedUpOrderWithItem(accountId: bigint) {
+        const store = await createStore(prisma);
+        const product = await createProduct(prisma, { store_id: store.id });
+        const order = await createOrder(prisma, {
+          account_id: accountId,
+          status: 'PICKED_UP',
+        });
+        const item = await createOrderItem(prisma, {
+          order_id: order.id,
+          product_id: product.id,
+        });
+        return { store, product, order, item };
+      }
+
+      async function createReview(args: {
+        orderItemId: bigint;
+        accountId: bigint;
+        storeId: bigint;
+        productId: bigint;
+        deletedAt?: Date | null;
+      }) {
+        return prisma.review.create({
+          data: {
+            order_item_id: args.orderItemId,
+            account_id: args.accountId,
+            store_id: args.storeId,
+            product_id: args.productId,
+            rating: 5,
+            content: '리뷰 더미 텍스트입니다. 만족합니다.',
+            deleted_at: args.deletedAt ?? null,
+          },
+        });
+      }
+
+      it('PICKED_UP + 리뷰 미작성 item이 1건이면 true', async () => {
+        const account = await setupUser();
+        await createPickedUpOrderWithItem(account.id);
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0].hasReviewableItem).toBe(true);
+      });
+
+      it('PICKED_UP + 모든 item에 active 리뷰가 있으면 false', async () => {
+        const account = await setupUser();
+        const { item, store, product } = await createPickedUpOrderWithItem(
+          account.id,
+        );
+        await createReview({
+          orderItemId: item.id,
+          accountId: account.id,
+          storeId: store.id,
+          productId: product.id,
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].hasReviewableItem).toBe(false);
+      });
+
+      it('PICKED_UP + 모든 item의 리뷰가 soft-delete면 true', async () => {
+        const account = await setupUser();
+        const { item, store, product } = await createPickedUpOrderWithItem(
+          account.id,
+        );
+        await createReview({
+          orderItemId: item.id,
+          accountId: account.id,
+          storeId: store.id,
+          productId: product.id,
+          deletedAt: new Date(),
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].hasReviewableItem).toBe(true);
+      });
+
+      it('CONFIRMED 등 비-PICKED_UP 상태는 false', async () => {
+        const account = await setupUser();
+        const store = await createStore(prisma);
+        const product = await createProduct(prisma, { store_id: store.id });
+        const order = await createOrder(prisma, {
+          account_id: account.id,
+          status: 'CONFIRMED',
+        });
+        await createOrderItem(prisma, {
+          order_id: order.id,
+          product_id: product.id,
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].status).toBe('CONFIRMED');
+        expect(result.items[0].hasReviewableItem).toBe(false);
+      });
+
+      it('CANCELED 상태는 false', async () => {
+        const account = await setupUser();
+        const store = await createStore(prisma);
+        const product = await createProduct(prisma, { store_id: store.id });
+        const order = await createOrder(prisma, {
+          account_id: account.id,
+          status: 'CANCELED',
+        });
+        await createOrderItem(prisma, {
+          order_id: order.id,
+          product_id: product.id,
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].status).toBe('CANCELED');
+        expect(result.items[0].hasReviewableItem).toBe(false);
+      });
+
+      it('PICKED_UP + 일부 item에만 리뷰 미작성이면 true (혼합 케이스)', async () => {
+        const account = await setupUser();
+        const { item, store, product, order } =
+          await createPickedUpOrderWithItem(account.id);
+        // item1에는 리뷰가 있고, item2에는 없음
+        await createReview({
+          orderItemId: item.id,
+          accountId: account.id,
+          storeId: store.id,
+          productId: product.id,
+        });
+        const product2 = await createProduct(prisma, { store_id: store.id });
+        await createOrderItem(prisma, {
+          order_id: order.id,
+          product_id: product2.id,
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].hasReviewableItem).toBe(true);
+      });
+    });
   });
 
   // ─── getMyOrder ───

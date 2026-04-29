@@ -51,6 +51,13 @@ export class UserOrderService {
     const hasMore = orders.length > limit;
     const sliced = hasMore ? orders.slice(0, limit) : orders;
 
+    // N+1 회피: PICKED_UP + 미작성 리뷰가 있는 order id 집합을 단일 IN 쿼리로 조회
+    const reviewableOrderIds =
+      await this.orderRepository.findReviewableOrderIds({
+        accountId,
+        orderIds: sliced.map((o) => o.id),
+      });
+
     return {
       items: sliced.map((order) => {
         const firstItem = order.items[0];
@@ -69,6 +76,7 @@ export class UserOrderService {
           additionalItemCount: Math.max(0, itemCount - 1),
           totalPrice: order.total_price,
           storeName: firstItem?.store?.store_name ?? '매장 정보 없음',
+          hasReviewableItem: reviewableOrderIds.has(order.id.toString()),
         };
       }),
       totalCount,

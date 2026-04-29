@@ -11,6 +11,7 @@ export interface MyOrderSummary {
   additionalItemCount: number;
   totalPrice: number;
   storeName: string;
+  hasReviewableItem: boolean;
 }
 
 export interface MyOrderConnection {
