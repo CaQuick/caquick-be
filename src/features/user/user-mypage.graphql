@@ -46,4 +46,6 @@ type RecentViewedProductSummary {
   regularPrice: Int!
   storeName: String!
   viewedAt: DateTime!
+  """현재 사용자의 찜 여부"""
+  isWishlisted: Boolean!
 }

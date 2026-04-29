@@ -78,6 +78,23 @@ export class ProductRepository {
     });
   }
 
+  /**
+   * active product가 존재하는지(soft-delete 아님 + 매장도 active/soft-delete 아님) 가벼운 검증.
+   * 판매 가능한 상품인지 확인하는 용도. 다른 도메인(wishlist, cart 등)에서 활용.
+   */
+  async existsActiveProduct(productId: bigint): Promise<boolean> {
+    const found = await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+      },
+      select: { id: true },
+    });
+    return Boolean(found);
+  }
+
   async findProductById(args: { productId: bigint; storeId: bigint }) {
     return this.prisma.product.findFirst({
       where: {

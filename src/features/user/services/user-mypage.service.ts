@@ -45,6 +45,13 @@ export class UserMypageService {
       ),
     ]);
 
+    // N+1 회피: 최근 본 상품 productId 묶음으로 단일 IN 쿼리로 찜 여부 조회
+    const wishlistedProductIds =
+      await this.userRepository.findWishlistedProductIds({
+        accountId,
+        productIds: recentViews.map((v) => v.product_id),
+      });
+
     return {
       counts: {
         customDraftCount,
@@ -76,6 +83,7 @@ export class UserMypageService {
         regularPrice: view.product.regular_price,
         storeName: view.product.store.store_name,
         viewedAt: view.viewed_at,
+        isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
       })),
     };
   }

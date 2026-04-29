@@ -237,7 +237,39 @@ describe('UserMypageService (real DB)', () => {
         storeName: '케이크샵',
         regularPrice: 40000,
         salePrice: 35000,
+        isWishlisted: false,
       });
+    });
+
+    it('recentViewedProducts에 찜한 상품은 isWishlisted=true로 매핑된다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const wishlisted = await createProduct(prisma, { store_id: store.id });
+      const notWishlisted = await createProduct(prisma, { store_id: store.id });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: wishlisted.id,
+      });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: notWishlisted.id,
+      });
+      await prisma.wishlistItem.create({
+        data: { account_id: account.id, product_id: wishlisted.id },
+      });
+      // 다른 계정 찜 + 본인 soft-delete 찜은 isWishlisted에 영향 안 줌
+      const other = await setupUser();
+      await prisma.wishlistItem.create({
+        data: { account_id: other.id, product_id: notWishlisted.id },
+      });
+
+      const result = await service.getOverview(account.id);
+
+      const map = new Map(
+        result.recentViewedProducts.map((p) => [p.productId, p.isWishlisted]),
+      );
+      expect(map.get(wishlisted.id.toString())).toBe(true);
+      expect(map.get(notWishlisted.id.toString())).toBe(false);
     });
   });
 });

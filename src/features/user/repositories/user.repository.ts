@@ -199,6 +199,7 @@ export class UserRepository {
         this.prisma.wishlistItem.count({
           where: {
             account_id: accountId,
+            deleted_at: null,
           },
         }),
       ]);
@@ -368,8 +369,131 @@ export class UserRepository {
 
   async countWishlistItems(accountId: bigint): Promise<number> {
     return this.prisma.wishlistItem.count({
-      where: { account_id: accountId },
+      where: { account_id: accountId, deleted_at: null },
     });
+  }
+
+  /**
+   * 찜 추가 (멱등). 이미 있으면 그대로, soft-delete된 경우 deleted_at=null로 복원.
+   */
+  async upsertWishlistItem(args: {
+    accountId: bigint;
+    productId: bigint;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.wishlistItem.upsert({
+      where: {
+        account_id_product_id: {
+          account_id: args.accountId,
+          product_id: args.productId,
+        },
+      },
+      create: {
+        account_id: args.accountId,
+        product_id: args.productId,
+      },
+      update: { deleted_at: null, updated_at: args.now },
+    });
+  }
+
+  /**
+   * 찜 해제 (멱등). active 항목만 soft-delete.
+   */
+  async softDeleteWishlistItem(args: {
+    accountId: bigint;
+    productId: bigint;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.wishlistItem.updateMany({
+      where: {
+        account_id: args.accountId,
+        product_id: args.productId,
+        deleted_at: null,
+      },
+      data: { deleted_at: args.now },
+    });
+  }
+
+  /**
+   * 주어진 productIds 중 사용자가 찜한 것들의 product_id 집합을 단일 IN 쿼리로 반환.
+   * 매핑(N+1 회피)용.
+   */
+  async findWishlistedProductIds(args: {
+    accountId: bigint;
+    productIds: bigint[];
+  }): Promise<Set<string>> {
+    if (args.productIds.length === 0) return new Set();
+    const rows = await this.prisma.wishlistItem.findMany({
+      where: {
+        account_id: args.accountId,
+        deleted_at: null,
+        product_id: { in: args.productIds },
+      },
+      select: { product_id: true },
+    });
+    return new Set(rows.map((r) => r.product_id.toString()));
+  }
+
+  /**
+   * 내 찜 목록 조회. 비활성/soft-delete된 product/store는 제외.
+   */
+  async findWishlistItems(args: {
+    accountId: bigint;
+    offset: number;
+    limit: number;
+  }): Promise<{
+    items: {
+      product_id: bigint;
+      created_at: Date;
+      product: {
+        name: string;
+        regular_price: number;
+        sale_price: number | null;
+        images: { image_url: string }[];
+        store: { store_name: string };
+      };
+    }[];
+    totalCount: number;
+  }> {
+    const where = {
+      account_id: args.accountId,
+      deleted_at: null,
+      product: {
+        deleted_at: null,
+        is_active: true,
+        store: { deleted_at: null, is_active: true },
+      },
+    };
+
+    const [rows, totalCount] = await this.prisma.$transaction([
+      this.prisma.wishlistItem.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: args.offset,
+        take: args.limit,
+        select: {
+          product_id: true,
+          created_at: true,
+          product: {
+            select: {
+              name: true,
+              regular_price: true,
+              sale_price: true,
+              store: { select: { store_name: true } },
+              images: {
+                where: { deleted_at: null },
+                orderBy: { sort_order: 'asc' },
+                take: 1,
+                select: { image_url: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.wishlistItem.count({ where }),
+    ]);
+
+    return { items: rows, totalCount };
   }
 
   async countMyReviews(accountId: bigint): Promise<number> {
