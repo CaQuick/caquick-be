@@ -7,6 +7,7 @@ export interface CompleteOnboardingInput {
 
 export interface UpdateMyProfileInput {
   nickname?: string | null;
+  name?: string | null;
   birthDate?: Date | null;
   phoneNumber?: string | null;
 }
