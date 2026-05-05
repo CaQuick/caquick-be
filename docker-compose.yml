@@ -2,6 +2,13 @@ services:
   mysql:
     image: mysql:8.0
     container_name: caquick-mysql
+    # MySQL 8 기본 caching_sha2_password 가 prisma client(현 6.x)에서
+    # 일부 환경에서 sha256_password 로 잘못 인식되어 연결이 실패하는 케이스가
+    # 있어 mysql_native_password 로 통일한다. 새로 생성되는 사용자도 동일 plugin.
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: CaQuick
