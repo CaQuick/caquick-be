@@ -57,6 +57,23 @@ $ yarn run test:e2e
 $ yarn run test:cov
 ```
 
+## 테스트 데이터 시드 (로컬 한정)
+
+마이페이지 API를 시각적으로 검증하기 위한 테스트 데이터를 한 번에 채울 수 있습니다.
+
+```bash
+# 사전: docker compose up -d 로 MySQL 컨테이너가 떠 있어야 함
+# 사전: yarn prisma:migrate:deploy (또는 :dev) 로 마이그레이션이 적용되어 있어야 함
+
+$ yarn prisma:seed
+```
+
+- 실행 시 기존 시드 영역(`seed-user-*` 이메일, `[SEED] *` 매장명)을 정리한 뒤 재삽입합니다 (idempotent).
+- 발급된 테스트 `accountId`가 콘솔에 출력됩니다 — Dev 토큰 발급 헬퍼와 함께 사용하세요.
+- `NODE_ENV=production` 에서는 자동으로 차단됩니다.
+
+자세한 시드 시나리오와 검증 가능한 API 매핑은 노션의 `마이페이지 API 가이드` 를 참고하세요.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

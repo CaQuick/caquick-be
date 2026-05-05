@@ -23,9 +23,13 @@
     "prisma:migrate:create": "prisma migrate dev --create-only",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "prisma:seed": "prisma db seed",
     "graphql:codegen": "graphql-codegen --config codegen.yml",
     "graphql:docs": "spectaql -c spectaql.yml",
     "prepare": "husky"
+  },
+  "prisma": {
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.0",
