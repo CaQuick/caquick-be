@@ -1,4 +1,8 @@
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -38,6 +42,7 @@ describe('AuthService', () => {
       rotateRefreshSession: jest.fn(),
       revokeRefreshSession: jest.fn(),
       findAccountForMe: jest.fn(),
+      findAccountForJwt: jest.fn(),
       createRefreshSession: jest.fn(),
     } as unknown as jest.Mocked<AuthRepository>;
 
@@ -507,6 +512,57 @@ describe('AuthService', () => {
         (c) => c[0] === 'caquick_oidc_return_to',
       );
       expect(returnToCookie![1]).toBe('http://localhost:3000');
+    });
+  });
+
+  describe('issueDevAccessToken', () => {
+    beforeEach(() => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'JWT_ACCESS_EXPIRES_SECONDS') return '900';
+        return undefined;
+      });
+      mockJwt.sign.mockReturnValue('signed-access-token');
+    });
+
+    it('정상 발급: 활성 USER 계정이면 access token + 만료 정보를 반환한다', async () => {
+      mockRepo.findAccountForJwt.mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+      });
+
+      const result = await service.issueDevAccessToken(BigInt(1));
+
+      expect(result).toEqual({
+        accessToken: 'signed-access-token',
+        tokenType: 'Bearer',
+        expiresInSeconds: 900,
+      });
+      expect(mockJwt.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: '1', typ: 'access' }),
+      );
+    });
+
+    it('존재하지 않는 accountId면 NotFoundException', async () => {
+      mockRepo.findAccountForJwt.mockResolvedValue(null);
+
+      await expect(service.issueDevAccessToken(BigInt(999))).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockJwt.sign).not.toHaveBeenCalled();
+    });
+
+    it('비활성(SUSPENDED) 계정이면 ForbiddenException', async () => {
+      mockRepo.findAccountForJwt.mockResolvedValue({
+        id: BigInt(2),
+        status: 'SUSPENDED',
+        account_type: 'USER',
+      });
+
+      await expect(service.issueDevAccessToken(BigInt(2))).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockJwt.sign).not.toHaveBeenCalled();
     });
   });
 });

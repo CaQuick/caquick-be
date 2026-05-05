@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -202,6 +203,37 @@ export class AuthService {
   async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
     const { accessToken } = await this.rotateRefresh(req, res);
     return { accessToken };
+  }
+
+  /**
+   * 개발 환경 한정: accountId 만으로 access token을 즉시 발급한다.
+   *
+   * 운영자/FE가 OIDC 흐름을 거치지 않고 시드 데이터의 accountId 로 곧장
+   * GraphQL API를 시험하기 위함. production 환경에서는 controller 입구에서
+   * 차단된다.
+   *
+   * @param accountId 발급 대상 account id
+   * @returns 발급된 access token + 만료(초)
+   */
+  async issueDevAccessToken(accountId: bigint): Promise<{
+    accessToken: string;
+    tokenType: 'Bearer';
+    expiresInSeconds: number;
+  }> {
+    const account = await this.repo.findAccountForJwt(accountId);
+    if (!account) {
+      throw new NotFoundException('Account not found.');
+    }
+    if (account.status !== 'ACTIVE') {
+      throw new ForbiddenException('Account is not active.');
+    }
+
+    const accessToken = this.signAccessToken(accountId);
+    return {
+      accessToken,
+      tokenType: 'Bearer',
+      expiresInSeconds: this.getAccessExpiresSeconds(),
+    };
   }
 
   /**
