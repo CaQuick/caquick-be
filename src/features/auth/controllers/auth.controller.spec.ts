@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
@@ -29,6 +29,7 @@ describe('AuthController', () => {
       refreshSeller: jest.fn(),
       logoutSeller: jest.fn(),
       changeSellerPassword: jest.fn(),
+      issueDevAccessToken: jest.fn(),
     } as unknown as jest.Mocked<AuthService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -207,5 +208,62 @@ describe('AuthController', () => {
         res,
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  describe('devIssueToken', () => {
+    const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+
+    afterEach(() => {
+      process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    });
+
+    it('NODE_ENV=production이면 ForbiddenException', async () => {
+      process.env.NODE_ENV = 'production';
+      const res = mockRes();
+
+      await expect(
+        controller.devIssueToken({ accountId: '1' }, res),
+      ).rejects.toThrow(ForbiddenException);
+      expect(auth.issueDevAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('accountId 문자열이 누락되면 BadRequestException', async () => {
+      process.env.NODE_ENV = 'development';
+      const res = mockRes();
+
+      await expect(
+        controller.devIssueToken({} as unknown as { accountId: string }, res),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('accountId가 BigInt로 파싱 불가하면 BadRequestException', async () => {
+      process.env.NODE_ENV = 'development';
+      const res = mockRes();
+
+      await expect(
+        controller.devIssueToken({ accountId: 'not-a-number' }, res),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('정상 발급: service 위임 + 200 응답', async () => {
+      process.env.NODE_ENV = 'development';
+      const res = mockRes();
+
+      auth.issueDevAccessToken.mockResolvedValue({
+        accessToken: 't',
+        tokenType: 'Bearer',
+        expiresInSeconds: 900,
+      });
+
+      await controller.devIssueToken({ accountId: '5' }, res);
+
+      expect(auth.issueDevAccessToken).toHaveBeenCalledWith(BigInt(5));
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        accessToken: 't',
+        tokenType: 'Bearer',
+        expiresInSeconds: 900,
+      });
+    });
   });
 });
