@@ -119,6 +119,16 @@ resource "github_repository_ruleset" "develop_protection" {
     }
   }
 
+  # Repository Admin role 보유자는 develop에 직접 push 가능 (PR/CI 우회).
+  # 주 use case: release 머지 후 develop을 main HEAD로 fast-forward 동기화.
+  # 일반 작업은 여전히 PR + CI 경유 권장. main 보호는 영향받지 않는다.
+  # (GitHub Ruleset bypass_actors는 user 직접 지정 불가 — RepositoryRole/Team만 가능)
+  bypass_actors {
+    actor_id    = 5 # RepositoryRole: Admin
+    actor_type  = "RepositoryRole"
+    bypass_mode = "always"
+  }
+
   rules {
     deletion         = true
     non_fast_forward = true
