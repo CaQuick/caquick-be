@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Post,
@@ -267,6 +268,54 @@ export class AuthController {
   }
 
   /**
+   * Dev 전용 access token 발급 (개발 환경 한정)
+   *
+   * POST /auth/dev/issue-token
+   *
+   * - NODE_ENV=production 인 경우 ForbiddenException
+   * - body: { accountId: string }
+   * - 응답: { accessToken, tokenType, expiresInSeconds }
+   *
+   * 시드(yarn prisma:seed) 데이터의 accountId 로 곧장 GraphQL Playground에서
+   * 마이페이지 API를 시험해 볼 수 있도록 OIDC 흐름을 우회한다.
+   */
+  @ApiOperation({
+    summary: '[DEV ONLY] Access token 즉시 발급',
+    description:
+      '개발 환경에서 OIDC 흐름 없이 accountId로 access token을 발급한다. NODE_ENV=production 에서는 차단된다.',
+  })
+  @ApiOkResponse({
+    description: 'Dev access token',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string' },
+        tokenType: { type: 'string', example: 'Bearer' },
+        expiresInSeconds: { type: 'number', example: 900 },
+      },
+      required: ['accessToken', 'tokenType', 'expiresInSeconds'],
+    },
+  })
+  @Post('dev/issue-token')
+  async devIssueToken(
+    @Body() body: DevIssueTokenBody,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException(
+        '/auth/dev/issue-token은 개발 환경에서만 사용 가능합니다.',
+      );
+    }
+    if (!body || typeof body.accountId !== 'string') {
+      throw new BadRequestException('accountId(string)가 필요합니다.');
+    }
+
+    const accountId = parseAccountIdString(body.accountId);
+    const result = await this.auth.issueDevAccessToken(accountId);
+    res.status(200).json(result);
+  }
+
+  /**
    * 판매자 비밀번호 변경
    *
    * POST /auth/seller/change-password
@@ -313,9 +362,21 @@ interface SellerChangePasswordBody {
   newPassword: string;
 }
 
+interface DevIssueTokenBody {
+  accountId: string;
+}
+
 function parseAccountId(user: JwtUser): bigint {
   try {
     return BigInt(user.accountId);
+  } catch {
+    throw new BadRequestException('Invalid account id.');
+  }
+}
+
+function parseAccountIdString(raw: string): bigint {
+  try {
+    return BigInt(raw);
   } catch {
     throw new BadRequestException('Invalid account id.');
   }
