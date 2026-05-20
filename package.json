@@ -1,10 +1,10 @@
 {
   "name": "caquick-be",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "케이퀵(CaQuick) 백엔드 - 시각 기반 올인원 맞춤 케이크 주문 플랫폼",
+  "author": "chanwoo7",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN ./LICENSE",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
