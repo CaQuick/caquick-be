@@ -2,11 +2,17 @@ import { Injectable } from '@nestjs/common';
 import {
   AccountType,
   CustomDraftStatus,
+  IdentityProvider,
   NotificationEvent,
   NotificationType,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
+
+export interface UserAccountIdentity {
+  provider: IdentityProvider;
+  last_login_at: Date | null;
+}
 
 export interface UserAccountWithProfile {
   id: bigint;
@@ -22,6 +28,7 @@ export interface UserAccountWithProfile {
     onboarding_completed_at: Date | null;
     deleted_at: Date | null;
   } | null;
+  account_identities: UserAccountIdentity[];
 }
 
 @Injectable()
@@ -59,17 +66,22 @@ export class UserRepository {
     accountId: bigint,
     options?: { withDeleted?: boolean },
   ): Promise<UserAccountWithProfile | null> {
-    const where = {
-      id: accountId,
-      ...(options?.withDeleted ? { deleted_at: undefined } : {}),
-    };
-    const args = {
-      where,
+    return this.prisma.account.findFirst({
+      where: {
+        id: accountId,
+        ...(options?.withDeleted ? { deleted_at: undefined } : {}),
+      },
       include: {
         user_profile: true,
+        // soft-deleted identity는 노출 대상 아님. 최근 로그인 순으로 정렬해
+        // FE가 "최근 로그인 provider" 표시할 때 별도 정렬 없이 사용 가능.
+        account_identities: {
+          where: { deleted_at: null },
+          orderBy: [{ last_login_at: 'desc' }, { id: 'asc' }],
+          select: { provider: true, last_login_at: true },
+        },
       },
-    };
-    return this.prisma.account.findFirst(args);
+    });
   }
 
   async isNicknameTaken(

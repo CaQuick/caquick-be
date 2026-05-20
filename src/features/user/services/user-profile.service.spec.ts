@@ -10,7 +10,11 @@ import { UserProfileService } from '@/features/user/services/user-profile.servic
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createUserProfile } from '@/test/factories';
+import {
+  createAccount,
+  createAccountIdentity,
+  createUserProfile,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('UserProfileService (real DB)', () => {
@@ -73,6 +77,96 @@ describe('UserProfileService (real DB)', () => {
       await expect(service.me(BigInt(999999))).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('연동된 identity가 없으면 linkedIdentities는 빈 배열이다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([]);
+    });
+
+    it('연동된 identity가 있으면 provider/lastLoginAt을 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      const identity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const loggedInAt = new Date('2025-01-15T10:00:00Z');
+      await prisma.accountIdentity.update({
+        where: { id: identity.id },
+        data: { last_login_at: loggedInAt },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([
+        { provider: 'GOOGLE', lastLoginAt: loggedInAt },
+      ]);
+    });
+
+    it('여러 provider 연동 시 last_login_at desc 순으로 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const oldLogin = new Date('2025-01-01T00:00:00Z');
+      const recentLogin = new Date('2025-03-01T00:00:00Z');
+
+      const google = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const kakao = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+      });
+      await prisma.accountIdentity.update({
+        where: { id: google.id },
+        data: { last_login_at: oldLogin },
+      });
+      await prisma.accountIdentity.update({
+        where: { id: kakao.id },
+        data: { last_login_at: recentLogin },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([
+        { provider: 'KAKAO', lastLoginAt: recentLogin },
+        { provider: 'GOOGLE', lastLoginAt: oldLogin },
+      ]);
+    });
+
+    it('soft-deleted identity는 linkedIdentities에서 제외된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const activeIdentity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const deletedIdentity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+      });
+      await prisma.accountIdentity.update({
+        where: { id: deletedIdentity.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toHaveLength(1);
+      expect(result.linkedIdentities[0]).toMatchObject({ provider: 'GOOGLE' });
+      // soft-deleted 식별자가 우연히 노출되지 않는지 명시적으로 검증
+      expect(result.linkedIdentities.some((i) => i.provider === 'KAKAO')).toBe(
+        false,
+      );
+      // 의도된 활성 identity가 실제 DB row와 매칭되는지 확인
+      expect(activeIdentity.provider).toBe('GOOGLE');
     });
   });
 
