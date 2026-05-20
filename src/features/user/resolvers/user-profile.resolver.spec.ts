@@ -8,7 +8,11 @@ import { UserProfileService } from '@/features/user/services/user-profile.servic
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createUserProfile } from '@/test/factories';
+import {
+  createAccount,
+  createAccountIdentity,
+  createUserProfile,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 /**
@@ -76,6 +80,22 @@ describe('User Profile Resolvers (real DB)', () => {
       await expect(queryResolver.me({ accountId: '999999' })).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('linkedIdentities 필드까지 resolver를 통해 그대로 노출된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+      });
+
+      const result = await queryResolver.me({
+        accountId: account.id.toString(),
+      });
+
+      expect(result.linkedIdentities).toHaveLength(1);
+      expect(result.linkedIdentities[0].provider).toBe('KAKAO');
     });
   });
 

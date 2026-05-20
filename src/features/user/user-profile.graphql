@@ -30,6 +30,22 @@ type MePayload {
   accountType: AccountType!
   """프로필 정보"""
   profile: UserProfile!
+  """연동된 소셜 로그인 식별자 목록(soft-deleted 제외, 최근 로그인 순)"""
+  linkedIdentities: [LinkedIdentity!]!
+}
+
+"""소셜 로그인 Provider 종류"""
+enum IdentityProvider {
+  GOOGLE
+  KAKAO
+}
+
+"""유저 계정에 연동된 소셜 로그인 식별자"""
+type LinkedIdentity {
+  """소셜 로그인 Provider"""
+  provider: IdentityProvider!
+  """해당 provider로 마지막 로그인한 시각(없을 수 있음)"""
+  lastLoginAt: DateTime
 }
 
 """유저 프로필"""

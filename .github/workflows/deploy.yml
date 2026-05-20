@@ -1,8 +1,10 @@
 name: Deploy Backend
 
+# 현재 개발 단계 인프라 비용 절감 차원에서 RDS 삭제(스냅샷 보관) + EC2 중지
+# 상태이므로 자동 배포를 비활성화한다. 인프라 복구 후 재개 시 trigger를
+# `push: branches: ["main"]`으로 되돌리면 된다.
 on:
-  push:
-    branches: ["main"]
+  workflow_dispatch:
 
 concurrency:
   group: backend-deploy

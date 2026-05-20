@@ -60,6 +60,11 @@ export abstract class UserBaseService {
         profileImageUrl: account.user_profile.profile_image_url,
         onboardingCompletedAt: account.user_profile.onboarding_completed_at,
       },
+      // repository에서 soft-deleted 제외 + 최근 로그인 순으로 정렬해 가져온다.
+      linkedIdentities: account.account_identities.map((identity) => ({
+        provider: identity.provider,
+        lastLoginAt: identity.last_login_at,
+      })),
     };
   }
 

@@ -1,4 +1,8 @@
-import type { AccountType, NotificationType } from '@prisma/client';
+import type {
+  AccountType,
+  IdentityProvider,
+  NotificationType,
+} from '@prisma/client';
 
 export interface UserProfileOutput {
   nickname: string;
@@ -8,12 +12,18 @@ export interface UserProfileOutput {
   onboardingCompletedAt: Date | null;
 }
 
+export interface LinkedIdentityOutput {
+  provider: IdentityProvider;
+  lastLoginAt: Date | null;
+}
+
 export interface MePayload {
   accountId: string;
   email: string | null;
   name: string | null;
   accountType: AccountType;
   profile: UserProfileOutput;
+  linkedIdentities: LinkedIdentityOutput[];
 }
 
 export interface ViewerCounts {
