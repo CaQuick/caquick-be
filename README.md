@@ -27,12 +27,12 @@
 
 - [기획 배경](#-기획-배경)
 - [기술 스택](#-기술-스택)
-- [아키텍처](#-아키텍처)
+- [아키텍처](#%EF%B8%8F-아키텍처)
 - [디렉터리 구조](#-디렉터리-구조)
 - [시작하기](#-시작하기)
 - [GraphQL](#-graphql)
 - [테스트](#-테스트)
-- [CI / CD](#-ci--cd)
+- [CI / CD](#%EF%B8%8F-ci--cd)
 - [팀](#-팀)
 - [라이선스](#-라이선스)
 
@@ -259,7 +259,7 @@ yarn prisma:seed
 yarn start:dev
 ```
 
-기본 GraphQL endpoint: `http://localhost:3000/graphql`
+기본 GraphQL endpoint: `http://localhost:4000/graphql` (`PORT` 환경변수로 변경 가능)
 
 ### 필요 환경 변수
 
