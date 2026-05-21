@@ -4,7 +4,7 @@
   "description": "케이퀵(CaQuick) 백엔드 - 시각 기반 올인원 맞춤 케이크 주문 플랫폼",
   "author": "chanwoo7",
   "private": true,
-  "license": "SEE LICENSE IN ./LICENSE",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

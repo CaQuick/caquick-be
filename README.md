@@ -32,7 +32,7 @@
 - [시작하기](#-시작하기)
 - [GraphQL](#-graphql)
 - [테스트](#-테스트)
-- [CI / CD](#%EF%B8%8F-ci--cd)
+- [CI / CD](#-ci--cd)
 - [팀](#-팀)
 - [라이선스](#-라이선스)
 
@@ -246,9 +246,8 @@ caquick-be/
 corepack enable
 yarn install
 
-# 2. 환경 변수 (루트에 .env 생성, 필요한 키는 .env.example 참고)
-cp .env.example .env
-# DATABASE_URL · JWT_SECRET · OIDC_* · AWS_* 등 채우기
+# 2. 환경 변수 (.env 직접 생성 — 아래 "필요 환경 변수" 표 참고)
+touch .env
 
 # 3. DB 마이그레이션
 yarn prisma:migrate:dev
@@ -261,6 +260,21 @@ yarn start:dev
 ```
 
 기본 GraphQL endpoint: `http://localhost:3000/graphql`
+
+### 필요 환경 변수
+
+> `.env.example`은 보안상 레포에 포함되지 않습니다. 아래 키를 참고해 `.env`를 직접 작성해 주세요. 정확한 검증 스키마는 [`src/config/`](./src/config/) 참고.
+
+| 카테고리 | 키 |
+| --- | --- |
+| **서버** | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL` |
+| **DB** | `DATABASE_URL` |
+| **JWT / Auth** | `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE` |
+| **OIDC (Google)** | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL` |
+| **OIDC (Kakao)** | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL` |
+| **OIDC (공통)** | `OIDC_TEMP_COOKIE_MAX_AGE_MS` |
+| **AWS S3** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS` |
+| **Docs (선택)** | `DOCS_ACCESS_TOKEN` |
 
 ### 자주 쓰는 스크립트
 
