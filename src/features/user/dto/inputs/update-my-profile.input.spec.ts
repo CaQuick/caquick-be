@@ -38,4 +38,16 @@ describe('UpdateMyProfileInput', () => {
     const errors = await validate(dto);
     expect(errors[0].property).toBe('phoneNumber');
   });
+
+  it('name 이 null 이면 통과 (IsOptional 흡수, Transform 은 비-string 경로)', async () => {
+    const dto = build({ name: null });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('name 이 string 도 null 도 아니면 IsString 으로 거절', async () => {
+    const dto = build({ name: 12345 });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('name');
+    expect(errors[0].constraints).toHaveProperty('isString');
+  });
 });

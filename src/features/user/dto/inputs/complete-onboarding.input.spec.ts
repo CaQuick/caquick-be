@@ -72,4 +72,18 @@ describe('CompleteOnboardingInput', () => {
     const dto = build({ nickname: 'gildong', name: '   ' });
     expect(await validate(dto)).toHaveLength(0);
   });
+
+  it('name 이 null 이면 통과 (IsOptional 흡수, Transform 은 비-string 경로)', async () => {
+    // Transform 콜백은 string 이 아닌 입력을 그대로 통과시켜야 한다.
+    // 후속 IsOptional 이 null 을 보고 다른 validator 를 스킵.
+    const dto = build({ nickname: 'gildong', name: null });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('name 이 string 도 null 도 아니면 IsString 으로 거절 (Transform 은 통과)', async () => {
+    const dto = build({ nickname: 'gildong', name: 12345 });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('name');
+    expect(errors[0].constraints).toHaveProperty('isString');
+  });
 });

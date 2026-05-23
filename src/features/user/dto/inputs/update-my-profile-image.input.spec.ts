@@ -42,4 +42,19 @@ describe('UpdateMyProfileImageInput', () => {
     const errors = await validate(dto);
     expect(errors[0].property).toBe('profileImageUrl');
   });
+
+  it('null 입력 시 IsString 으로 거절 (Transform 은 비-string 경로 통과)', async () => {
+    // Transform 콜백은 string 이 아닌 값을 그대로 통과시킨다. 검증은 IsString 이 담당.
+    const dto = build({ profileImageUrl: null });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('profileImageUrl');
+    expect(errors[0].constraints).toHaveProperty('isString');
+  });
+
+  it('숫자 입력 시 IsString 으로 거절', async () => {
+    const dto = build({ profileImageUrl: 12345 });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('profileImageUrl');
+    expect(errors[0].constraints).toHaveProperty('isString');
+  });
 });
