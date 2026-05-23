@@ -44,6 +44,9 @@ jobs:
       - name: Lint
         run: yarn lint
 
+      - name: DTO ↔ SDL sync check (warning during migration)
+        run: yarn dto:check --warning
+
       - name: Test with coverage
         run: yarn test:cov
 
