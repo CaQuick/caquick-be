@@ -25,6 +25,9 @@ import {
 import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
+import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
+import { SellerChangePasswordInput } from '@/features/auth/dto/inputs/seller-change-password.input';
+import { SellerLoginInput } from '@/features/auth/dto/inputs/seller-login.input';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 
@@ -192,7 +195,7 @@ export class AuthController {
   })
   @Post('seller/login')
   async sellerLogin(
-    @Body() body: SellerLoginBody,
+    @Body() body: SellerLoginInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -298,16 +301,13 @@ export class AuthController {
   })
   @Post('dev/issue-token')
   async devIssueToken(
-    @Body() body: DevIssueTokenBody,
+    @Body() body: DevIssueTokenInput,
     @Res() res: Response,
   ): Promise<void> {
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException(
         '/auth/dev/issue-token은 개발 환경에서만 사용 가능합니다.',
       );
-    }
-    if (!body || typeof body.accountId !== 'string') {
-      throw new BadRequestException('accountId(string)가 필요합니다.');
     }
 
     const accountId = parseAccountIdString(body.accountId);
@@ -337,7 +337,7 @@ export class AuthController {
   @Post('seller/change-password')
   async sellerChangePassword(
     @CurrentUser() user: JwtUser,
-    @Body() body: SellerChangePasswordBody,
+    @Body() body: SellerChangePasswordInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -350,20 +350,6 @@ export class AuthController {
     });
     res.status(200).json({ ok: true });
   }
-}
-
-interface SellerLoginBody {
-  username: string;
-  password: string;
-}
-
-interface SellerChangePasswordBody {
-  currentPassword: string;
-  newPassword: string;
-}
-
-interface DevIssueTokenBody {
-  accountId: string;
 }
 
 function parseAccountId(user: JwtUser): bigint {
