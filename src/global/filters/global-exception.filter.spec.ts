@@ -139,7 +139,7 @@ describe('HttpExceptionFilter', () => {
     const host = mockHost(req, res);
 
     // BadRequestException에 message 없는 object
-    const exception = new BadRequestException({ statusCode: 400 } as never);
+    const exception = new BadRequestException({ statusCode: 400 });
 
     filter.catch(exception, host);
 

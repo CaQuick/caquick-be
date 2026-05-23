@@ -62,7 +62,7 @@ describe('formatDevLogLine (printf 콜백)', () => {
   it('message가 non-string(객체)이면 message를 보존하여 meta와 함께 직렬화한다', () => {
     const line = formatDevLogLine({
       level: 'info',
-      message: { eventType: 'LOGIN', userId: 7 } as never,
+      message: { eventType: 'LOGIN', userId: 7 },
       timestamp: '2026-04-22 10:00:00',
     });
     // structured log 메시지가 사라지지 않도록 message 키로 보존된다.
@@ -74,7 +74,7 @@ describe('formatDevLogLine (printf 콜백)', () => {
   it('non-string message + meta 동시에 있으면 둘 다 직렬화된다', () => {
     const line = formatDevLogLine({
       level: 'warn',
-      message: { code: 'E1' } as never,
+      message: { code: 'E1' },
       timestamp: '2026-04-22 10:00:00',
       requestId: 'req-1',
     });

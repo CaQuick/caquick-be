@@ -44,7 +44,7 @@ describe('Seller Content Resolvers (real DB)', () => {
     const { account } = await setupSellerWithStore(prisma);
     await mutationResolver.sellerCreateFaqTopic(
       { accountId: account.id.toString() },
-      { title: 'F1', answerHtml: '<p>a</p>' } as never,
+      { title: 'F1', answerHtml: '<p>a</p>' },
     );
     const result = await queryResolver.sellerFaqTopics({
       accountId: account.id.toString(),

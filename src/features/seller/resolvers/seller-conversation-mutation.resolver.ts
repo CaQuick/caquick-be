@@ -1,8 +1,8 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
+import { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
-import type { SellerSendConversationMessageInput } from '@/features/seller/types/seller-input.type';
 import type { SellerConversationMessageOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,

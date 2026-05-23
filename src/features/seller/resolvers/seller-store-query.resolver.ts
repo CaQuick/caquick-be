@@ -1,11 +1,9 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
 import { SellerStoreService } from '@/features/seller/services/seller-store.service';
-import type {
-  SellerCursorInput,
-  SellerDateCursorInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerStoreBusinessHourOutput,

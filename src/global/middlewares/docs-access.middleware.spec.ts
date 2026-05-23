@@ -9,14 +9,13 @@ type MockResponse = Pick<Response, 'status' | 'json' | 'setHeader'> & {
   setHeader: jest.Mock;
 };
 
-const createResponse = (): MockResponse =>
-  ({
-    status: jest.fn().mockReturnThis(),
-    json: jest.fn(),
-    setHeader: jest.fn(),
-  }) as unknown as MockResponse;
+const createResponse = (): MockResponse => ({
+  status: jest.fn().mockReturnThis(),
+  json: jest.fn(),
+  setHeader: jest.fn(),
+});
 
-const createNext = (): NextFunction => jest.fn() as unknown as NextFunction;
+const createNext = (): NextFunction => jest.fn();
 
 describe('DocsAccessMiddleware', () => {
   const docsToken = 'docs_token_value';

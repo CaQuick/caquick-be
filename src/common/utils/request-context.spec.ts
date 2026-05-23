@@ -191,7 +191,7 @@ describe('request-context', () => {
       const req = mockReq();
       const info = mockInfo({
         path: { key: 3, prev: undefined, typename: undefined },
-      } as unknown as GraphQLResolveInfo);
+      });
       const meta = buildGraphqlRequestMeta(info, req);
       expect(meta.path).toBe('3');
     });

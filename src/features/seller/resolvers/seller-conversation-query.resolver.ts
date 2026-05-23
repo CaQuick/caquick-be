@@ -2,8 +2,8 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
-import type { SellerCursorInput } from '@/features/seller/types/seller-input.type';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,

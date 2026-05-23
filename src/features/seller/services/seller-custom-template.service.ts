@@ -21,14 +21,12 @@ import {
   MAX_TOKEN_KEY_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerReorderProductCustomTextTokensInput } from '@/features/seller/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import type { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
+import type { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
+import type { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerReorderProductCustomTextTokensInput,
-  SellerSetProductCustomTemplateActiveInput,
-  SellerUpsertProductCustomTemplateInput,
-  SellerUpsertProductCustomTextTokenInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
