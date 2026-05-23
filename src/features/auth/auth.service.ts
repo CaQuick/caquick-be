@@ -339,11 +339,7 @@ export class AuthService {
       throw new ForbiddenException('Only SELLER account is allowed.');
     }
 
-    const currentPassword = args.currentPassword;
-    const newPassword = args.newPassword;
-    if (!currentPassword || !newPassword) {
-      throw new BadRequestException('Current and new password are required.');
-    }
+    const { currentPassword, newPassword } = args;
 
     const isCurrentPasswordValid = await argon2.verify(
       credential.password_hash,
@@ -352,8 +348,6 @@ export class AuthService {
     if (!isCurrentPasswordValid) {
       throw new UnauthorizedException('Current password is invalid.');
     }
-
-    this.assertStrongPassword(newPassword);
 
     const isSamePassword = await argon2.verify(
       credential.password_hash,
@@ -654,29 +648,6 @@ export class AuthService {
       accessToken,
       accountId: session.account_id,
     };
-  }
-
-  /**
-   * 판매자 비밀번호 정책을 검증한다.
-   *
-   * @param rawPassword 입력 비밀번호
-   */
-  private assertStrongPassword(rawPassword: string): void {
-    const password = rawPassword.trim();
-    if (password.length < 8 || password.length > 64) {
-      throw new BadRequestException('Password length must be 8~64.');
-    }
-
-    const hasLower = /[a-z]/.test(password);
-    const hasUpper = /[A-Z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecial = /[^A-Za-z0-9]/.test(password);
-
-    if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
-      throw new BadRequestException(
-        'Password must include upper/lower case, number, and special character.',
-      );
-    }
   }
 
   /**

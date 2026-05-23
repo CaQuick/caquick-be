@@ -347,47 +347,10 @@ describe('AuthService (seller)', () => {
       ).rejects.toThrow('Only SELLER account is allowed.');
     });
 
-    it('현재 비밀번호가 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
-      // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
-
-      // Act & Assert
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: '',
-          newPassword: 'NewPassword!456',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: '',
-          newPassword: 'NewPassword!456',
-          req: mockReq,
-        }),
-      ).rejects.toThrow('Current and new password are required.');
-    });
-
-    it('새 비밀번호가 빈 문자열이면 BadRequestException을 던져야 한다', async () => {
-      // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
-
-      // Act & Assert
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: '',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // NOTE: currentPassword/newPassword 의 형식 검증(빈 문자열, 길이, 복잡도)은
+    // DTO + ValidationPipe 책임으로 이전됨 (P0-3).
+    // - 길이/필수 검증: seller-change-password.input.spec.ts
+    // - 강 정책 검증: strong-password.validator.spec.ts
 
     it('현재 비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
@@ -413,64 +376,6 @@ describe('AuthService (seller)', () => {
           req: mockReq,
         }),
       ).rejects.toThrow('Current password is invalid.');
-    });
-
-    it('새 비밀번호가 정책(8~64자, 대소문자/숫자/특수문자)을 위반하면 BadRequestException을 던져야 한다', async () => {
-      // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
-      jest.spyOn(argon2, 'verify').mockResolvedValue(true);
-
-      // 너무 짧은 비밀번호
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: 'Ab1!',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      // 소문자 없음
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: 'ABCDEFGH!123',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      // 대문자 없음
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: 'abcdefgh!123',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      // 숫자 없음
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: 'Abcdefgh!xyz',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      // 특수문자 없음
-      await expect(
-        service.changeSellerPassword({
-          accountId: BigInt(10),
-          currentPassword: 'OldPassword!123',
-          newPassword: 'Abcdefgh1234',
-          req: mockReq,
-        }),
-      ).rejects.toThrow(BadRequestException);
     });
 
     it('새 비밀번호가 기존 비밀번호와 동일하면 BadRequestException을 던져야 한다', async () => {
