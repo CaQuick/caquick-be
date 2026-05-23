@@ -1,8 +1,8 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
 import { UserReviewService } from '@/features/user/services/user-review.service';
-import type { MyReviewsInput } from '@/features/user/types/user-review-input.type';
 import type {
   MyReviewConnection,
   MyReviewOrNull,

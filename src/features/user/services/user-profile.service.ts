@@ -8,13 +8,11 @@ import {
   MAX_NICKNAME_LENGTH,
   MIN_NICKNAME_LENGTH,
 } from '@/features/user/constants/user.constants';
+import type { CompleteOnboardingInput } from '@/features/user/dto/inputs/complete-onboarding.input';
+import type { UpdateMyProfileImageInput } from '@/features/user/dto/inputs/update-my-profile-image.input';
+import type { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
-import type {
-  CompleteOnboardingInput,
-  UpdateMyProfileImageInput,
-  UpdateMyProfileInput,
-} from '@/features/user/types/user-input.type';
 import type {
   MePayload,
   NicknameAvailability,
@@ -90,7 +88,8 @@ export class UserProfileService extends UserBaseService {
       if (isTaken) throw new ConflictException('Nickname already exists.');
     }
 
-    // figma 명세: 이름은 필수값. 전송되었지만 trim 후 빈 문자열이면 reject.
+    // figma 명세: 이름은 필수값. DTO 가 trim + 빈 문자열 거절을 담당하지만,
+    // 서비스 단으로 들어온 이상 정규화 결과가 null 인 경우는 방어적으로 reject.
     let name: string | undefined = undefined;
     if (hasName) {
       const normalized = this.normalizeName(input.name);
@@ -124,13 +123,8 @@ export class UserProfileService extends UserBaseService {
   ): Promise<MePayload> {
     await this.requireActiveUser(accountId);
 
-    const profileImageUrl = input.profileImageUrl.trim();
-    if (profileImageUrl.length === 0) {
-      throw new BadRequestException('profileImageUrl is required.');
-    }
-    if (profileImageUrl.length > 2048) {
-      throw new BadRequestException('profileImageUrl is too long.');
-    }
+    // DTO 의 @Transform 이 trim, @MinLength/@MaxLength 가 길이를 보장.
+    const profileImageUrl = input.profileImageUrl;
 
     await this.repo.updateProfileImage({
       accountId,

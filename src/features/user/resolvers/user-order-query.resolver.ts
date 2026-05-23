@@ -2,8 +2,8 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import { UserOrderService } from '@/features/user/services/user-order.service';
-import type { MyOrdersInput } from '@/features/user/types/user-order-input.type';
 import type {
   MyOrderConnection,
   MyOrderDetail,

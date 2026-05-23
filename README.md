@@ -284,7 +284,9 @@ yarn start:dev
 | `yarn build` | 프로덕션 빌드 (`dist/`) |
 | `yarn lint` | ESLint --fix |
 | `yarn test` | Jest (실 DB 통합 테스트 포함) |
-| `yarn test:cov` | 커버리지 측정 |
+| `yarn test:cov` | 커버리지 측정 (임계 미달 시 비-0 종료) |
+| `yarn dto:check` | SDL ↔ DTO 동기화 검사 (마이그레이션 중 warning 모드) |
+| `yarn validate` | lint + tsc + dto:check + test:cov 일괄. push 전 권장 |
 | `yarn prisma:migrate:dev` | DB 마이그레이션 생성/적용 |
 | `yarn prisma:studio` | Prisma Studio (GUI DB 브라우저) |
 | `yarn graphql:codegen` | SDL → TypeScript 타입 생성 |
