@@ -1,8 +1,8 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyNotificationsInput } from '@/features/user/dto/inputs/my-notifications.input';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
-import type { MyNotificationsInput } from '@/features/user/types/user-input.type';
 import type {
   NotificationConnection,
   ViewerCounts,

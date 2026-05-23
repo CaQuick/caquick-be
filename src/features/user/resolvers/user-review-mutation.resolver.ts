@@ -1,11 +1,9 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
+import { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
+import { WriteReviewInput } from '@/features/user/dto/inputs/write-review.input';
 import { UserReviewService } from '@/features/user/services/user-review.service';
-import type {
-  CreateReviewMediaUploadUrlInput,
-  WriteReviewInput,
-} from '@/features/user/types/user-review-input.type';
 import type {
   MyReview,
   ReviewMediaUploadUrl,

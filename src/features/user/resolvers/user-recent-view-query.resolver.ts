@@ -1,6 +1,7 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import {
   CurrentUser,
@@ -17,7 +18,7 @@ export class UserRecentViewQueryResolver {
   @Query('myRecentViewedProducts')
   myRecentViewedProducts(
     @CurrentUser() user: JwtUser,
-    @Args('input') input?: { offset?: number; limit?: number },
+    @Args('input') input?: MyRecentViewedProductsInput,
   ) {
     const accountId = parseAccountId(user);
     return this.recentViewService.list(accountId, input);

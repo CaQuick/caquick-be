@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -151,26 +151,7 @@ describe('UserOrderService (real DB)', () => {
       expect(result.totalCount).toBe(1);
     });
 
-    it('offset 음수면 BadRequestException', async () => {
-      const account = await setupUser();
-      await expect(
-        service.listMyOrders(account.id, { offset: -1 }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('limit이 0 이하면 BadRequestException', async () => {
-      const account = await setupUser();
-      await expect(
-        service.listMyOrders(account.id, { limit: 0 }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('limit이 상한(50) 초과면 BadRequestException', async () => {
-      const account = await setupUser();
-      await expect(
-        service.listMyOrders(account.id, { limit: 51 }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // offset/limit 범위 검증은 DTO (MyOrdersInput → UserPaginationInput) 로 이전됨.
 
     it('주문이 0건이면 빈 connection을 반환한다', async () => {
       const account = await setupUser();

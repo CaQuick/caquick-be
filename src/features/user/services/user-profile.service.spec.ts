@@ -425,25 +425,7 @@ describe('UserProfileService (real DB)', () => {
       );
     });
 
-    it('URL이 공백-only면 BadRequestException을 던진다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await createUserProfile(prisma, { account_id: account.id });
-
-      await expect(
-        service.updateMyProfileImage(account.id, { profileImageUrl: '   ' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('URL이 2048자를 초과하면 BadRequestException을 던진다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await createUserProfile(prisma, { account_id: account.id });
-
-      await expect(
-        service.updateMyProfileImage(account.id, {
-          profileImageUrl: 'https://s3.example.com/' + 'a'.repeat(2030),
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // profileImageUrl 형식·길이 검증은 DTO (UpdateMyProfileImageInput) 로 이전됨.
   });
 
   // ─── checkNicknameAvailability ───

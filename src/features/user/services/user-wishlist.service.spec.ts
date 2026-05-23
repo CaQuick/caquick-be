@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -292,18 +292,6 @@ describe('UserWishlistService (real DB)', () => {
       expect(page2.hasMore).toBe(false);
     });
 
-    it('offset 음수는 BadRequestException', async () => {
-      const account = await setupUser();
-      await expect(
-        service.myWishlist(account.id, { offset: -1 }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('limit이 50 초과면 BadRequestException', async () => {
-      const account = await setupUser();
-      await expect(
-        service.myWishlist(account.id, { limit: 51 }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // offset/limit 범위 검증은 DTO (MyWishlistInput → UserPaginationInput) 로 이전됨.
   });
 });

@@ -1,12 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
+import { CompleteOnboardingInput } from '@/features/user/dto/inputs/complete-onboarding.input';
+import { CreateProfileImageUploadUrlInput } from '@/features/user/dto/inputs/create-profile-image-upload-url.input';
+import { UpdateMyProfileImageInput } from '@/features/user/dto/inputs/update-my-profile-image.input';
+import { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
-import type {
-  CompleteOnboardingInput,
-  UpdateMyProfileImageInput,
-  UpdateMyProfileInput,
-} from '@/features/user/types/user-input.type';
 import type {
   MePayload,
   ProfileImageUploadUrl,
@@ -53,7 +52,7 @@ export class UserProfileMutationResolver {
   @Mutation('createProfileImageUploadUrl')
   createProfileImageUploadUrl(
     @CurrentUser() user: JwtUser,
-    @Args('input') input: { contentType: string; contentLength: number },
+    @Args('input') input: CreateProfileImageUploadUrlInput,
   ): Promise<ProfileImageUploadUrl> {
     const accountId = parseAccountId(user);
     return this.profileService.createProfileImageUploadUrl(accountId, input);

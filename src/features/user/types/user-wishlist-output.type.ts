@@ -13,8 +13,3 @@ export interface MyWishlistConnection {
   totalCount: number;
   hasMore: boolean;
 }
-
-export interface MyWishlistInput {
-  offset?: number | null;
-  limit?: number | null;
-}

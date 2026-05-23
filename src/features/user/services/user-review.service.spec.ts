@@ -122,58 +122,8 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.media.some((m) => m.media_type === 'VIDEO')).toBe(true);
     });
 
-    it('rating이 1 미만이거나 0.5 단위가 아니면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-
-      await expect(
-        service.writeReview(ctx.accountId, {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 0,
-          content: VALID_CONTENT,
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      await expect(
-        service.writeReview(ctx.accountId, {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 4.3,
-          content: VALID_CONTENT,
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('rating이 5 초과면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-      await expect(
-        service.writeReview(ctx.accountId, {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 6,
-          content: VALID_CONTENT,
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('content가 20자 미만이면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-      await expect(
-        service.writeReview(ctx.accountId, {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 5,
-          content: '짧아요',
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('content가 1000자 초과면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-      await expect(
-        service.writeReview(ctx.accountId, {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 5,
-          content: 'a'.repeat(1001),
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // rating(범위/0.5 단위) · content 길이 검증은 DTO (WriteReviewInput +
+    // IsRatingValid) 로 이전됨. service 테스트는 미디어 카운트·도메인 분기에 집중.
 
     it('사진 10장 + 동영상 1개(총 11개)는 통과한다', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -407,19 +357,7 @@ describe('UserReviewService (real DB)', () => {
       expect(result.totalCount).toBe(1);
     });
 
-    it('offset 음수면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-      await expect(
-        service.myReviews(ctx.accountId, { offset: -1 }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('limit이 50 초과면 BadRequestException', async () => {
-      const ctx = await setupReviewableOrderItem();
-      await expect(
-        service.myReviews(ctx.accountId, { limit: 51 }),
-      ).rejects.toThrow(BadRequestException);
-    });
+    // offset/limit 범위 검증은 DTO (MyReviewsInput → UserPaginationInput) 로 이전됨.
   });
 
   // ─── myReviewForOrderItem ───

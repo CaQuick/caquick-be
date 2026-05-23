@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import type { MySearchHistoriesInput } from '@/features/user/dto/inputs/my-search-histories.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
-import type { MySearchHistoriesInput } from '@/features/user/types/user-input.type';
 import type { SearchHistoryConnection } from '@/features/user/types/user-output.type';
 
 @Injectable()
