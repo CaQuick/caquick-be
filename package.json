@@ -27,6 +27,7 @@
     "graphql:codegen": "graphql-codegen --config codegen.yml",
     "graphql:docs": "spectaql -c spectaql.yml",
     "dto:check": "ts-node -r tsconfig-paths/register scripts/check-graphql-dto-sync.ts",
+    "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn test:cov",
     "prepare": "husky"
   },
   "prisma": {
