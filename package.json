@@ -26,6 +26,7 @@
     "prisma:seed": "prisma db seed",
     "graphql:codegen": "graphql-codegen --config codegen.yml",
     "graphql:docs": "spectaql -c spectaql.yml",
+    "dto:check": "ts-node -r tsconfig-paths/register scripts/check-graphql-dto-sync.ts",
     "prepare": "husky"
   },
   "prisma": {
