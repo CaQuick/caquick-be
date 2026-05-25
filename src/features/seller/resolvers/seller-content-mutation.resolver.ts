@@ -2,13 +2,11 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { SellerCreateBannerInput } from '@/features/seller/dto/inputs/seller-create-banner.input';
+import { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
+import { SellerUpdateBannerInput } from '@/features/seller/dto/inputs/seller-update-banner.input';
+import { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
 import { SellerContentService } from '@/features/seller/services/seller-content.service';
-import type {
-  SellerCreateBannerInput,
-  SellerCreateFaqTopicInput,
-  SellerUpdateBannerInput,
-  SellerUpdateFaqTopicInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerBannerOutput,
   SellerFaqTopicOutput,

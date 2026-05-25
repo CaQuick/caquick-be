@@ -449,8 +449,8 @@ describe('SellerContentService (real DB)', () => {
         imageUrl: 'https://i.example/new.png',
         sortOrder: 7,
         isActive: false,
-        startsAt: '2026-05-01T00:00:00Z',
-        endsAt: '2026-05-31T23:59:59Z',
+        startsAt: new Date('2026-05-01T00:00:00Z'),
+        endsAt: new Date('2026-05-31T23:59:59Z'),
       });
 
       const after = await prisma.banner.findUniqueOrThrow({

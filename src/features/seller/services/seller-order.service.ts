@@ -13,16 +13,14 @@ import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
 } from '@/features/seller/constants/seller-error-messages';
+import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
+import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerOrderListInput,
-  SellerUpdateOrderStatusInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerOrderDetailOutput,

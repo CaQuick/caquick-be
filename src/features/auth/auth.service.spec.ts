@@ -172,7 +172,7 @@ describe('AuthService', () => {
         }),
       } as never);
 
-      mockOidc.toIdentityProvider.mockReturnValue('GOOGLE' as never);
+      mockOidc.toIdentityProvider.mockReturnValue('GOOGLE');
 
       mockRepo.upsertUserByOidcIdentity.mockResolvedValue({
         account: {

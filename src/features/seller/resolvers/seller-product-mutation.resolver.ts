@@ -2,28 +2,26 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
+import { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
+import { SellerCreateOptionItemInput } from '@/features/seller/dto/inputs/seller-create-option-item.input';
+import { SellerCreateProductInput } from '@/features/seller/dto/inputs/seller-create-product.input';
+import { SellerReorderOptionGroupsInput } from '@/features/seller/dto/inputs/seller-reorder-option-groups.input';
+import { SellerReorderOptionItemsInput } from '@/features/seller/dto/inputs/seller-reorder-option-items.input';
+import { SellerReorderProductCustomTextTokensInput } from '@/features/seller/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
+import { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/seller-set-product-active.input';
+import { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
+import { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
+import { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
+import { SellerUpdateOptionGroupInput } from '@/features/seller/dto/inputs/seller-update-option-group.input';
+import { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/seller-update-option-item.input';
+import { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
+import { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
+import { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
-import type {
-  SellerAddProductImageInput,
-  SellerCreateOptionGroupInput,
-  SellerCreateOptionItemInput,
-  SellerCreateProductInput,
-  SellerReorderOptionGroupsInput,
-  SellerReorderOptionItemsInput,
-  SellerReorderProductCustomTextTokensInput,
-  SellerReorderProductImagesInput,
-  SellerSetProductActiveInput,
-  SellerSetProductCategoriesInput,
-  SellerSetProductCustomTemplateActiveInput,
-  SellerSetProductTagsInput,
-  SellerUpdateOptionGroupInput,
-  SellerUpdateOptionItemInput,
-  SellerUpdateProductInput,
-  SellerUpsertProductCustomTemplateInput,
-  SellerUpsertProductCustomTextTokenInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,

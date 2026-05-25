@@ -32,22 +32,20 @@ import {
   MIN_PRODUCT_PRICE,
   MIN_SALE_PRICE,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
+import type { SellerCreateProductInput } from '@/features/seller/dto/inputs/seller-create-product.input';
+import type { SellerProductListInput } from '@/features/seller/dto/inputs/seller-product-list.input';
+import type { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
+import type { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/seller-set-product-active.input';
+import type { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
+import type { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
+import type { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerAddProductImageInput,
-  SellerCreateProductInput,
-  SellerProductListInput,
-  SellerReorderProductImagesInput,
-  SellerSetProductActiveInput,
-  SellerSetProductCategoriesInput,
-  SellerSetProductTagsInput,
-  SellerUpdateProductInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerProductImageOutput,

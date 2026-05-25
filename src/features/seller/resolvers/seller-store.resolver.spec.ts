@@ -53,7 +53,7 @@ describe('Seller Store Resolvers (real DB)', () => {
     const { account, store } = await setupSellerWithStore(prisma);
     const result = await mutationResolver.sellerUpdateStoreBasicInfo(
       { accountId: account.id.toString() },
-      { storeName: '변경됨' } as never,
+      { storeName: '변경됨' },
     );
     expect(result.storeName).toBe('변경됨');
 
@@ -75,7 +75,7 @@ describe('Seller Store Resolvers (real DB)', () => {
           isClosed: true,
           openTime: null,
           closeTime: null,
-        } as never,
+        },
       ),
     ).rejects.toThrow();
   });

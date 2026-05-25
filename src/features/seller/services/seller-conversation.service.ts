@@ -22,16 +22,14 @@ import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerCursorInput,
-  SellerSendConversationMessageInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,

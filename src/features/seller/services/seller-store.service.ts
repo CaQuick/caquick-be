@@ -40,21 +40,19 @@ import {
   MIN_LEAD_TIME_MINUTES,
   MIN_PICKUP_SLOT_INTERVAL_MINUTES,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import type { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
+import type { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
+import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
+import type { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
+import type { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
+import type { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerCursorInput,
-  SellerDateCursorInput,
-  SellerUpdatePickupPolicyInput,
-  SellerUpdateStoreBasicInfoInput,
-  SellerUpsertStoreBusinessHourInput,
-  SellerUpsertStoreDailyCapacityInput,
-  SellerUpsertStoreSpecialClosureInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerStoreBusinessHourOutput,

@@ -1,11 +1,9 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
+import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import { SellerContentService } from '@/features/seller/services/seller-content.service';
-import type {
-  SellerAuditLogListInput,
-  SellerCursorInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,

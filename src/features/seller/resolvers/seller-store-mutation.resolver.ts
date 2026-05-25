@@ -2,14 +2,12 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
+import { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
+import { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
+import { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
+import { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
 import { SellerStoreService } from '@/features/seller/services/seller-store.service';
-import type {
-  SellerUpdatePickupPolicyInput,
-  SellerUpdateStoreBasicInfoInput,
-  SellerUpsertStoreBusinessHourInput,
-  SellerUpsertStoreDailyCapacityInput,
-  SellerUpsertStoreSpecialClosureInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,

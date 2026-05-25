@@ -39,20 +39,18 @@ import {
   MAX_FAQ_TITLE_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
+import type { SellerCreateBannerInput } from '@/features/seller/dto/inputs/seller-create-banner.input';
+import type { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
+import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import type { SellerUpdateBannerInput } from '@/features/seller/dto/inputs/seller-update-banner.input';
+import type { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerAuditLogListInput,
-  SellerCreateBannerInput,
-  SellerCreateFaqTopicInput,
-  SellerCursorInput,
-  SellerUpdateBannerInput,
-  SellerUpdateFaqTopicInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,
@@ -263,12 +261,7 @@ export class SellerContentService extends SellerBaseService {
     });
     if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
-    const intendedLinkType = (input.linkType ?? current.link_type) as
-      | 'NONE'
-      | 'URL'
-      | 'PRODUCT'
-      | 'STORE'
-      | 'CATEGORY';
+    const intendedLinkType = input.linkType ?? current.link_type;
     // input에 명시된 link 필드가 intendedLinkType과 매칭되는지 검증 (B-1 정합성 가드).
     // resolved 기준으로 검증하면 STORE→NONE 같은 정상 변경에서도 current 잔여값으로 false positive가 발생하므로,
     // input 기준으로만 검증한다.

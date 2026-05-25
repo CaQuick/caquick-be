@@ -92,9 +92,7 @@ describe('AuthService (seller)', () => {
     it('판매자 로그인 성공 시 accessToken과 accountStatus를 반환해야 한다', async () => {
       // Arrange
       jest.spyOn(argon2, 'verify').mockResolvedValue(true);
-      repo.findSellerCredentialByUsername.mockResolvedValue(
-        validCredential as never,
-      );
+      repo.findSellerCredentialByUsername.mockResolvedValue(validCredential);
 
       // Act
       const result = await service.sellerLogin({
@@ -182,7 +180,7 @@ describe('AuthService (seller)', () => {
         },
       };
       repo.findSellerCredentialByUsername.mockResolvedValue(
-        nonSellerCredential as never,
+        nonSellerCredential,
       );
 
       // Act & Assert
@@ -207,9 +205,7 @@ describe('AuthService (seller)', () => {
     it('비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
-      repo.findSellerCredentialByUsername.mockResolvedValue(
-        validCredential as never,
-      );
+      repo.findSellerCredentialByUsername.mockResolvedValue(validCredential);
 
       // Act & Assert
       await expect(
@@ -252,9 +248,7 @@ describe('AuthService (seller)', () => {
 
     it('비밀번호를 성공적으로 변경해야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
+      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
       // 첫 번째 호출: 현재 비밀번호 확인 (true)
       // 두 번째 호출: 새 비밀번호 동일 여부 확인 (false = 다른 비밀번호)
       jest
@@ -325,7 +319,7 @@ describe('AuthService (seller)', () => {
         },
       };
       repo.findSellerCredentialByAccountId.mockResolvedValue(
-        nonSellerCredential as never,
+        nonSellerCredential,
       );
 
       // Act & Assert
@@ -354,9 +348,7 @@ describe('AuthService (seller)', () => {
 
     it('현재 비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
+      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
 
       // Act & Assert
@@ -380,9 +372,7 @@ describe('AuthService (seller)', () => {
 
     it('새 비밀번호가 기존 비밀번호와 동일하면 BadRequestException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
-        sellerCredential as never,
-      );
+      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
       // 현재 비밀번호 확인: true, 새 비밀번호 동일 여부: true (같은 비밀번호)
       jest
         .spyOn(argon2, 'verify')
@@ -434,7 +424,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
@@ -458,7 +448,7 @@ describe('AuthService (seller)', () => {
           status: 'ACTIVE' as const,
           store: { id: BigInt(5) },
         },
-      } as never);
+      });
 
       // Act
       const result = await service.refreshSeller(reqWithCookie, mockRes);
@@ -520,7 +510,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
@@ -559,7 +549,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
@@ -609,7 +599,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),
@@ -627,7 +617,7 @@ describe('AuthService (seller)', () => {
           status: 'ACTIVE' as const,
           store: { id: BigInt(5) },
         },
-      } as never);
+      });
 
       repo.revokeRefreshSession.mockResolvedValue({
         id: BigInt(1),
@@ -692,7 +682,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.findSellerCredentialByAccountId.mockResolvedValue(null);
 
@@ -723,7 +713,7 @@ describe('AuthService (seller)', () => {
         created_at: new Date('2025-01-01'),
         updated_at: new Date('2025-01-01'),
         deleted_at: null,
-      } as never);
+      });
 
       repo.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),

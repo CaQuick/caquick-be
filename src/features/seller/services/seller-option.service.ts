@@ -26,16 +26,14 @@ import {
   MAX_OPTION_ITEM_TITLE_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
+import type { SellerCreateOptionItemInput } from '@/features/seller/dto/inputs/seller-create-option-item.input';
+import type { SellerReorderOptionGroupsInput } from '@/features/seller/dto/inputs/seller-reorder-option-groups.input';
+import type { SellerReorderOptionItemsInput } from '@/features/seller/dto/inputs/seller-reorder-option-items.input';
+import type { SellerUpdateOptionGroupInput } from '@/features/seller/dto/inputs/seller-update-option-group.input';
+import type { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/seller-update-option-item.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerCreateOptionGroupInput,
-  SellerCreateOptionItemInput,
-  SellerReorderOptionGroupsInput,
-  SellerReorderOptionItemsInput,
-  SellerUpdateOptionGroupInput,
-  SellerUpdateOptionItemInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
