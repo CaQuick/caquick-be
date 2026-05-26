@@ -12,7 +12,6 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createAccountIdentity,
-  createRefreshSession,
   createSellerCredential,
   createUserProfile,
 } from '@/test/factories';
@@ -194,133 +193,6 @@ describe('AuthRepository (real DB)', () => {
     });
   });
 
-  // ─── Refresh Session ───
-
-  describe('createRefreshSession', () => {
-    it('refresh session을 생성한다', async () => {
-      const account = await createAccount(prisma);
-      const expiresAt = new Date(Date.now() + 3600_000);
-
-      const session = await repo.createRefreshSession({
-        accountId: account.id,
-        tokenHash: 'a'.repeat(64),
-        userAgent: 'test-agent',
-        ipAddress: '1.2.3.4',
-        expiresAt,
-      });
-
-      expect(session.account_id).toBe(account.id);
-      expect(session.token_hash).toBe('a'.repeat(64));
-      expect(session.revoked_at).toBeNull();
-    });
-  });
-
-  describe('findActiveRefreshSessionByHash', () => {
-    it('유효한 세션을 조회한다', async () => {
-      const account = await createAccount(prisma);
-      const tokenHash = 'b'.repeat(64);
-      await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + 3600_000),
-      });
-
-      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
-      expect(found).not.toBeNull();
-      expect(found!.token_hash).toBe(tokenHash);
-    });
-
-    it('만료된 세션은 조회하지 않는다', async () => {
-      const account = await createAccount(prisma);
-      const tokenHash = 'c'.repeat(64);
-      await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() - 1000), // 이미 만료
-      });
-
-      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
-      expect(found).toBeNull();
-    });
-
-    it('revoke된 세션은 조회하지 않는다', async () => {
-      const account = await createAccount(prisma);
-      const tokenHash = 'd'.repeat(64);
-      await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: tokenHash,
-        revoked_at: new Date(),
-      });
-
-      const found = await repo.findActiveRefreshSessionByHash(tokenHash);
-      expect(found).toBeNull();
-    });
-  });
-
-  describe('rotateRefreshSession', () => {
-    it('기존 세션을 revoke하고 새 세션을 생성한다', async () => {
-      const account = await createAccount(prisma);
-      const oldSession = await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: 'e'.repeat(64),
-      });
-
-      const newSession = await repo.rotateRefreshSession({
-        currentSessionId: oldSession.id,
-        accountId: account.id,
-        newTokenHash: 'f'.repeat(64),
-        newExpiresAt: new Date(Date.now() + 3600_000),
-      });
-
-      expect(newSession.token_hash).toBe('f'.repeat(64));
-
-      // 이전 세션이 revoke 되었는지 확인
-      const revokedOld = await prisma.authRefreshSession.findUnique({
-        where: { id: oldSession.id },
-      });
-      expect(revokedOld!.revoked_at).not.toBeNull();
-      expect(revokedOld!.replaced_by_session_id).toBe(newSession.id);
-    });
-  });
-
-  describe('revokeRefreshSession', () => {
-    it('세션을 revoke 처리한다', async () => {
-      const account = await createAccount(prisma);
-      const session = await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: 'g'.repeat(64),
-      });
-
-      await repo.revokeRefreshSession(session.id);
-
-      const found = await prisma.authRefreshSession.findUnique({
-        where: { id: session.id },
-      });
-      expect(found!.revoked_at).not.toBeNull();
-    });
-  });
-
-  describe('revokeAllRefreshSessions', () => {
-    it('계정의 활성 세션을 모두 revoke한다', async () => {
-      const account = await createAccount(prisma);
-      await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: 'h'.repeat(64),
-      });
-      await createRefreshSession(prisma, {
-        account_id: account.id,
-        token_hash: 'i'.repeat(64),
-      });
-
-      await repo.revokeAllRefreshSessions(account.id, new Date());
-
-      const active = await prisma.authRefreshSession.findMany({
-        where: { account_id: account.id, revoked_at: null },
-      });
-      expect(active).toHaveLength(0);
-    });
-  });
-
   // ─── JWT/Me 조회 ───
 
   describe('findAccountForJwt', () => {
@@ -476,21 +348,6 @@ describe('AuthRepository (real DB)', () => {
       expect(logs[0].user_agent).toBeNull();
       expect(logs[0].before_json).toBeNull();
       expect(logs[0].after_json).toBeNull();
-    });
-  });
-
-  describe('createRefreshSession (userAgent/ipAddress 미지정 분기)', () => {
-    it('userAgent/ipAddress 미지정 시 null로 저장된다', async () => {
-      const account = await createAccount(prisma);
-
-      const session = await repo.createRefreshSession({
-        accountId: account.id,
-        tokenHash: 'b'.repeat(64),
-        expiresAt: new Date(Date.now() + 3600_000),
-      });
-
-      expect(session.user_agent).toBeNull();
-      expect(session.ip_address).toBeNull();
     });
   });
 });

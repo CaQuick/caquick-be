@@ -13,11 +13,16 @@ import type { Request, Response } from 'express';
 import { ClockService } from '@/common/providers/clock.service';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  REFRESH_SESSION_REPOSITORY,
+  type IRefreshSessionRepository,
+} from '@/features/auth/repositories/refresh-session.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 
 describe('AuthService (seller)', () => {
   let service: AuthService;
   let repo: jest.Mocked<AuthRepository>;
+  let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
   let mockConfig: jest.Mocked<ConfigService>;
 
   const mockReq = {
@@ -37,13 +42,16 @@ describe('AuthService (seller)', () => {
       findSellerCredentialByAccountId: jest.fn(),
       updateSellerLastLogin: jest.fn(),
       updateSellerPasswordHash: jest.fn(),
-      revokeAllRefreshSessions: jest.fn(),
-      createRefreshSession: jest.fn(),
       createAuditLog: jest.fn(),
+    } as unknown as jest.Mocked<AuthRepository>;
+
+    refreshSessions = {
+      createRefreshSession: jest.fn(),
       findActiveRefreshSessionByHash: jest.fn(),
       rotateRefreshSession: jest.fn(),
       revokeRefreshSession: jest.fn(),
-    } as unknown as jest.Mocked<AuthRepository>;
+      revokeAllRefreshSessions: jest.fn(),
+    };
 
     mockConfig = {
       get: jest.fn(),
@@ -59,6 +67,10 @@ describe('AuthService (seller)', () => {
         },
         { provide: OidcClientService, useValue: {} },
         { provide: AuthRepository, useValue: repo },
+        {
+          provide: REFRESH_SESSION_REPOSITORY,
+          useValue: refreshSessions,
+        },
         { provide: ClockService, useValue: { now: () => new Date() } },
       ],
     }).compile();
@@ -273,7 +285,7 @@ describe('AuthService (seller)', () => {
         passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
         now: expect.any(Date),
       });
-      expect(repo.revokeAllRefreshSessions).toHaveBeenCalledWith(
+      expect(refreshSessions.revokeAllRefreshSessions).toHaveBeenCalledWith(
         BigInt(10),
         expect.any(Date),
       );
@@ -412,7 +424,7 @@ describe('AuthService (seller)', () => {
         ip: '127.0.0.1',
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',
@@ -426,7 +438,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.rotateRefreshSession.mockResolvedValue({
+      refreshSessions.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
         account_id: BigInt(10),
         token_hash: 'new-hash',
@@ -479,7 +491,7 @@ describe('AuthService (seller)', () => {
         cookies: { caquick_rt: 'invalid-refresh-token' },
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue(null);
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -498,7 +510,7 @@ describe('AuthService (seller)', () => {
         ip: '127.0.0.1',
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',
@@ -512,7 +524,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.rotateRefreshSession.mockResolvedValue({
+      refreshSessions.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
         account_id: BigInt(10),
         token_hash: 'new-hash',
@@ -537,7 +549,7 @@ describe('AuthService (seller)', () => {
         ip: '127.0.0.1',
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',
@@ -551,7 +563,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.rotateRefreshSession.mockResolvedValue({
+      refreshSessions.rotateRefreshSession.mockResolvedValue({
         id: BigInt(2),
         account_id: BigInt(10),
         token_hash: 'new-hash',
@@ -587,7 +599,7 @@ describe('AuthService (seller)', () => {
         cookies: { caquick_rt: 'valid-refresh-token' },
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',
@@ -619,7 +631,7 @@ describe('AuthService (seller)', () => {
         },
       });
 
-      repo.revokeRefreshSession.mockResolvedValue({
+      refreshSessions.revokeRefreshSession.mockResolvedValue({
         id: BigInt(1),
         revoked_at: new Date(),
       } as never);
@@ -628,7 +640,9 @@ describe('AuthService (seller)', () => {
       await service.logoutSeller(reqWithCookie, mockRes);
 
       // Assert
-      expect(repo.revokeRefreshSession).toHaveBeenCalledWith(BigInt(1));
+      expect(refreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
+        BigInt(1),
+      );
       expect(mockRes.clearCookie).toHaveBeenCalled();
     });
 
@@ -653,7 +667,7 @@ describe('AuthService (seller)', () => {
         cookies: { caquick_rt: 'invalid-token' },
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue(null);
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -670,7 +684,7 @@ describe('AuthService (seller)', () => {
         cookies: { caquick_rt: 'valid-refresh-token' },
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',
@@ -701,7 +715,7 @@ describe('AuthService (seller)', () => {
         cookies: { caquick_rt: 'valid-refresh-token' },
       } as unknown as Request;
 
-      repo.findActiveRefreshSessionByHash.mockResolvedValue({
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(10),
         token_hash: 'hashed-token',

@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -29,6 +30,10 @@ import {
   type CookieSameSite,
 } from '@/features/auth/helpers/auth-cookie.helper';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  REFRESH_SESSION_REPOSITORY,
+  type IRefreshSessionRepository,
+} from '@/features/auth/repositories/refresh-session.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import {
   parseOidcProvider,
@@ -47,12 +52,16 @@ export class AuthService {
    * @param jwt JwtService
    * @param oidc OidcClientService
    * @param repo AuthRepository
+   * @param refreshSessions RefreshSessionRepository
+   * @param clock ClockService
    */
   constructor(
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly oidc: OidcClientService,
     private readonly repo: AuthRepository,
+    @Inject(REFRESH_SESSION_REPOSITORY)
+    private readonly refreshSessions: IRefreshSessionRepository,
     private readonly clock: ClockService,
   ) {}
 
@@ -273,7 +282,8 @@ export class AuthService {
       throw new UnauthorizedException('Missing refresh token.');
 
     const tokenHash = this.sha256Hex(refreshToken);
-    const session = await this.repo.findActiveRefreshSessionByHash(tokenHash);
+    const session =
+      await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new UnauthorizedException('Invalid refresh token.');
 
     const seller = await this.repo.findSellerCredentialByAccountId(
@@ -283,7 +293,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid seller refresh token.');
     }
 
-    await this.repo.revokeRefreshSession(session.id);
+    await this.refreshSessions.revokeRefreshSession(session.id);
 
     AuthCookie.clearRefreshCookie(
       res,
@@ -308,8 +318,9 @@ export class AuthService {
 
     if (refreshToken) {
       const tokenHash = this.sha256Hex(refreshToken);
-      const session = await this.repo.findActiveRefreshSessionByHash(tokenHash);
-      if (session) await this.repo.revokeRefreshSession(session.id);
+      const session =
+        await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
+      if (session) await this.refreshSessions.revokeRefreshSession(session.id);
     }
 
     AuthCookie.clearRefreshCookie(
@@ -369,7 +380,7 @@ export class AuthService {
       passwordHash: newHash,
       now,
     });
-    await this.repo.revokeAllRefreshSessions(args.accountId, now);
+    await this.refreshSessions.revokeAllRefreshSessions(args.accountId, now);
 
     await this.repo.createAuditLog({
       actorAccountId: args.accountId,
@@ -616,7 +627,8 @@ export class AuthService {
     }
 
     const tokenHash = this.sha256Hex(refreshToken);
-    const session = await this.repo.findActiveRefreshSessionByHash(tokenHash);
+    const session =
+      await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new UnauthorizedException('Invalid refresh token.');
 
     const newRefreshToken = this.generateRefreshToken();
@@ -625,7 +637,7 @@ export class AuthService {
     const refreshDays = this.getRefreshDays();
     const newExpiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
 
-    await this.repo.rotateRefreshSession({
+    await this.refreshSessions.rotateRefreshSession({
       currentSessionId: session.id,
       accountId: session.account_id,
       newTokenHash,
@@ -687,7 +699,7 @@ export class AuthService {
     const refreshDays = this.getRefreshDays();
     const expiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
 
-    await this.repo.createRefreshSession({
+    await this.refreshSessions.createRefreshSession({
       accountId: args.accountId,
       tokenHash: refreshHash,
       userAgent: this.getUserAgent(args.req),
