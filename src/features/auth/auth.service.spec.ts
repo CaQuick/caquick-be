@@ -11,6 +11,10 @@ import type { Request, Response } from 'express';
 import { ClockService } from '@/common/providers/clock.service';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  REFRESH_SESSION_REPOSITORY,
+  type IRefreshSessionRepository,
+} from '@/features/auth/repositories/refresh-session.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
@@ -20,6 +24,7 @@ describe('AuthService', () => {
   let mockJwt: jest.Mocked<JwtService>;
   let mockOidc: jest.Mocked<OidcClientService>;
   let mockRepo: jest.Mocked<AuthRepository>;
+  let mockRefreshSessions: jest.Mocked<IRefreshSessionRepository>;
 
   beforeEach(async () => {
     mockConfig = {
@@ -38,13 +43,17 @@ describe('AuthService', () => {
 
     mockRepo = {
       upsertUserByOidcIdentity: jest.fn(),
+      findAccountForMe: jest.fn(),
+      findAccountForJwt: jest.fn(),
+    } as unknown as jest.Mocked<AuthRepository>;
+
+    mockRefreshSessions = {
       findActiveRefreshSessionByHash: jest.fn(),
       rotateRefreshSession: jest.fn(),
       revokeRefreshSession: jest.fn(),
-      findAccountForMe: jest.fn(),
-      findAccountForJwt: jest.fn(),
+      revokeAllRefreshSessions: jest.fn(),
       createRefreshSession: jest.fn(),
-    } as unknown as jest.Mocked<AuthRepository>;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -53,6 +62,10 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
         { provide: AuthRepository, useValue: mockRepo },
+        {
+          provide: REFRESH_SESSION_REPOSITORY,
+          useValue: mockRefreshSessions,
+        },
         { provide: ClockService, useValue: { now: () => new Date() } },
       ],
     }).compile();
@@ -182,7 +195,7 @@ describe('AuthService', () => {
         } as never,
       });
 
-      mockRepo.createRefreshSession.mockResolvedValue({} as never);
+      mockRefreshSessions.createRefreshSession.mockResolvedValue({} as never);
       mockJwt.sign.mockReturnValue('mock-access-token');
 
       // Act
@@ -284,20 +297,22 @@ describe('AuthService', () => {
         return undefined;
       });
 
-      mockRepo.findActiveRefreshSessionByHash.mockResolvedValue({
+      mockRefreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
         account_id: BigInt(1),
       } as never);
 
-      mockRepo.rotateRefreshSession.mockResolvedValue({} as never);
+      mockRefreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
       mockJwt.sign.mockReturnValue('new-access-token');
 
       // Act
       const result = await service.refresh(mockReq, mockRes);
 
       // Assert
-      expect(mockRepo.findActiveRefreshSessionByHash).toHaveBeenCalled();
-      expect(mockRepo.rotateRefreshSession).toHaveBeenCalled();
+      expect(
+        mockRefreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalled();
+      expect(mockRefreshSessions.rotateRefreshSession).toHaveBeenCalled();
       expect(result).toEqual({ accessToken: 'new-access-token' });
       expect(mockRes.cookie).toHaveBeenCalledWith(
         AUTH_COOKIE.REFRESH,
@@ -330,7 +345,9 @@ describe('AuthService', () => {
 
       const mockRes = {} as Response;
 
-      mockRepo.findActiveRefreshSessionByHash.mockResolvedValue(null);
+      mockRefreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(
+        null,
+      );
 
       // Act & Assert
       await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
@@ -359,17 +376,19 @@ describe('AuthService', () => {
         return undefined;
       });
 
-      mockRepo.findActiveRefreshSessionByHash.mockResolvedValue({
+      mockRefreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(1),
       } as never);
 
-      mockRepo.revokeRefreshSession.mockResolvedValue({} as never);
+      mockRefreshSessions.revokeRefreshSession.mockResolvedValue({} as never);
 
       // Act
       await service.logout(mockReq, mockRes);
 
       // Assert
-      expect(mockRepo.revokeRefreshSession).toHaveBeenCalledWith(BigInt(1));
+      expect(mockRefreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
+        BigInt(1),
+      );
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1); // refresh
     });
 
@@ -389,7 +408,7 @@ describe('AuthService', () => {
       await service.logout(mockReq, mockRes);
 
       // Assert
-      expect(mockRepo.revokeRefreshSession).not.toHaveBeenCalled();
+      expect(mockRefreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
     });
   });

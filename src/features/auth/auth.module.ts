@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
+import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
@@ -20,6 +22,10 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
     AuthService,
     OidcClientService,
     AuthRepository,
+    {
+      provide: REFRESH_SESSION_REPOSITORY,
+      useClass: RefreshSessionRepository,
+    },
     JwtBearerStrategy,
   ],
   exports: [AuthService],
