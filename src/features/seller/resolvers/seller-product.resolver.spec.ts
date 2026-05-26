@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
 import type { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
@@ -45,6 +46,10 @@ describe('Seller Product Resolvers (real DB)', () => {
         SellerCustomTemplateService,
         SellerRepository,
         ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerProductQueryResolver);

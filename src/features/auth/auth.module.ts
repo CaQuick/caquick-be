@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuditLogModule } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
@@ -16,7 +17,7 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
  * - JWT 가드/모듈은 global/auth/auth-global.module.ts에서 제공
  */
 @Module({
-  imports: [AuthGlobalModule],
+  imports: [AuthGlobalModule, AuditLogModule],
   controllers: [AuthController],
   providers: [
     AuthService,

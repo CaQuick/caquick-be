@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
@@ -28,6 +29,10 @@ describe('SellerProductCrudService (real DB)', () => {
         SellerProductCrudService,
         SellerRepository,
         ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     service = module.get(SellerProductCrudService);

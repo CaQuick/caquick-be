@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, type PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import {
   OrderDomainService,
   OrderRepository,
@@ -34,6 +35,10 @@ describe('SellerOrderService (real DB)', () => {
         OrderRepository,
         OrderDomainService,
         OrderStatusTransitionPolicy,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     service = module.get(SellerOrderService);

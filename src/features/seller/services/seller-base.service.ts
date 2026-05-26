@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
+import type { IAuditLogRepository } from '@/features/audit-log';
 import {
   ACCOUNT_NOT_FOUND,
   DUPLICATE_IDS,
@@ -28,7 +29,10 @@ export interface SellerContext {
 }
 
 export abstract class SellerBaseService {
-  protected constructor(protected readonly repo: SellerRepository) {}
+  protected constructor(
+    protected readonly repo: SellerRepository,
+    protected readonly auditLogs: IAuditLogRepository,
+  ) {}
 
   protected async requireSellerContext(
     accountId: bigint,

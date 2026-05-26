@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient, Product } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
@@ -15,7 +16,15 @@ describe('SellerOptionService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [SellerOptionService, SellerRepository, ProductRepository],
+      providers: [
+        SellerOptionService,
+        SellerRepository,
+        ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
+      ],
     });
     service = module.get(SellerOptionService);
     prisma = p;

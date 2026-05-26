@@ -11,6 +11,10 @@ import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
 import { ClockService } from '@/common/providers/clock.service';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
 import {
@@ -23,6 +27,7 @@ describe('AuthService (seller)', () => {
   let service: AuthService;
   let repo: jest.Mocked<AuthRepository>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
+  let auditLogs: jest.Mocked<IAuditLogRepository>;
   let mockConfig: jest.Mocked<ConfigService>;
 
   const mockReq = {
@@ -42,7 +47,6 @@ describe('AuthService (seller)', () => {
       findSellerCredentialByAccountId: jest.fn(),
       updateSellerLastLogin: jest.fn(),
       updateSellerPasswordHash: jest.fn(),
-      createAuditLog: jest.fn(),
     } as unknown as jest.Mocked<AuthRepository>;
 
     refreshSessions = {
@@ -51,6 +55,10 @@ describe('AuthService (seller)', () => {
       rotateRefreshSession: jest.fn(),
       revokeRefreshSession: jest.fn(),
       revokeAllRefreshSessions: jest.fn(),
+    };
+
+    auditLogs = {
+      createAuditLog: jest.fn(),
     };
 
     mockConfig = {
@@ -70,6 +78,10 @@ describe('AuthService (seller)', () => {
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
+        },
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useValue: auditLogs,
         },
         { provide: ClockService, useValue: { now: () => new Date() } },
       ],
@@ -289,7 +301,7 @@ describe('AuthService (seller)', () => {
         BigInt(10),
         expect.any(Date),
       );
-      expect(repo.createAuditLog).toHaveBeenCalledWith(
+      expect(auditLogs.createAuditLog).toHaveBeenCalledWith(
         expect.objectContaining({
           actorAccountId: BigInt(10),
           storeId: BigInt(5),

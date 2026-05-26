@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,10 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
   idsMismatchError,
@@ -43,9 +48,11 @@ import type {
 export class SellerOptionService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
 
   async sellerCreateOptionGroup(
@@ -82,7 +89,7 @@ export class SellerOptionService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -145,7 +152,7 @@ export class SellerOptionService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -171,7 +178,7 @@ export class SellerOptionService extends SellerBaseService {
     }
 
     await this.productRepository.softDeleteOptionGroup(optionGroupId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -218,7 +225,7 @@ export class SellerOptionService extends SellerBaseService {
       optionGroupIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -260,7 +267,7 @@ export class SellerOptionService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -321,7 +328,7 @@ export class SellerOptionService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -347,7 +354,7 @@ export class SellerOptionService extends SellerBaseService {
     }
 
     await this.productRepository.softDeleteOptionItem(optionItemId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -393,7 +400,7 @@ export class SellerOptionService extends SellerBaseService {
       optionItemIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,

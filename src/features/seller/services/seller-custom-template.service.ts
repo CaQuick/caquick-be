@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,6 +8,10 @@ import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
   CUSTOM_TEMPLATE_NOT_FOUND,
@@ -36,9 +41,11 @@ import type {
 export class SellerCustomTemplateService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
 
   async sellerUpsertProductCustomTemplate(
@@ -61,7 +68,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       isActive: input.isActive ?? true,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -93,7 +100,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       input.isActive,
     );
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -151,7 +158,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       height: input.height ?? null,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -177,7 +184,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     }
 
     await this.productRepository.softDeleteCustomTextToken(tokenId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -224,7 +231,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       tokenIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,

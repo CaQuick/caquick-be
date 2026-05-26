@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -18,6 +19,10 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
   BANNER_NOT_FOUND,
@@ -62,9 +67,11 @@ import type {
 export class SellerContentService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
   async sellerFaqTopics(accountId: bigint): Promise<SellerFaqTopicOutput[]> {
     const ctx = await this.requireSellerContext(accountId);
@@ -88,7 +95,7 @@ export class SellerContentService extends SellerBaseService {
       isActive: input.isActive ?? true,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -136,7 +143,7 @@ export class SellerContentService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -162,7 +169,7 @@ export class SellerContentService extends SellerBaseService {
     if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
 
     await this.repo.softDeleteFaqTopic(topicId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -234,7 +241,7 @@ export class SellerContentService extends SellerBaseService {
       isActive: input.isActive ?? true,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -273,7 +280,7 @@ export class SellerContentService extends SellerBaseService {
     const data = this.buildBannerUpdateData(input, resolved);
     const row = await this.repo.updateBanner({ bannerId, data });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -451,7 +458,7 @@ export class SellerContentService extends SellerBaseService {
     if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
 
     await this.repo.softDeleteBanner(bannerId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,

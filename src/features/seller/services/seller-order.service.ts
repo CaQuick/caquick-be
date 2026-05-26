@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,10 @@ import { OrderStatus } from '@prisma/client';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { OrderDomainService, OrderRepository } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
@@ -64,10 +69,12 @@ interface OrderItemRow {
 export class SellerOrderService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly orderDomainService: OrderDomainService,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
   async sellerOrderList(
     accountId: bigint,

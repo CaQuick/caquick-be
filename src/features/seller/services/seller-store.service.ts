@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,10 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import {
   CLOSE_BEFORE_OPEN,
   DAILY_CAPACITY_NOT_FOUND,
@@ -63,8 +68,12 @@ import type {
 
 @Injectable()
 export class SellerStoreService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
-    super(repo);
+  constructor(
+    repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
+  ) {
+    super(repo, auditLogs);
   }
   async sellerMyStore(accountId: bigint): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
@@ -143,7 +152,7 @@ export class SellerStoreService extends SellerBaseService {
       data,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -271,7 +280,7 @@ export class SellerStoreService extends SellerBaseService {
       closeTime,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -318,7 +327,7 @@ export class SellerStoreService extends SellerBaseService {
           reason,
         });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -345,7 +354,7 @@ export class SellerStoreService extends SellerBaseService {
     if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
 
     await this.repo.softDeleteStoreSpecialClosure(closureId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -395,7 +404,7 @@ export class SellerStoreService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -451,7 +460,7 @@ export class SellerStoreService extends SellerBaseService {
           capacity: input.capacity,
         });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -478,7 +487,7 @@ export class SellerStoreService extends SellerBaseService {
     if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
 
     await this.repo.softDeleteStoreDailyCapacity(capacityId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
