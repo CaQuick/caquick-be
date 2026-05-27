@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 
 import { AppModule } from '@/app.module';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
+import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { ApiResponseInterceptor } from '@/global/interceptors/api-response.interceptor';
 import { GqlLoggingInterceptor } from '@/global/interceptors/gql-logging.interceptor';
 import { HttpLoggingInterceptor } from '@/global/interceptors/http-logging.interceptor';
@@ -78,8 +79,13 @@ async function bootstrap(): Promise<void> {
     new ApiResponseInterceptor(new Set(['/health', '/health/profiles'])),
   );
 
+  const gqlExceptionFilter = new GraphQLExceptionFilter(logger);
   app.useGlobalFilters(
-    new HttpExceptionFilter(httpAdapterHost.httpAdapter, logger),
+    new HttpExceptionFilter(
+      httpAdapterHost.httpAdapter,
+      logger,
+      gqlExceptionFilter,
+    ),
   );
 
   // 임시 해제
