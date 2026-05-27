@@ -33,12 +33,28 @@ import { SellerProductQueryService } from '@/features/seller/services/seller-pro
 import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
 import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
-import { SellerStoreService } from '@/features/seller/services/seller-store.service';
+import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
+import { SELLER_STORE_HOURS_SERVICE } from '@/features/seller/services/seller-store-hours.service.interface';
+import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
+import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
+import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
 
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule, AuditLogModule],
   providers: [
-    SellerStoreService,
+    {
+      provide: SELLER_STORE_PROFILE_SERVICE,
+      useClass: SellerStoreProfileService,
+    },
+    {
+      provide: SELLER_STORE_HOURS_SERVICE,
+      useClass: SellerStoreHoursService,
+    },
+    {
+      provide: SELLER_STORE_POLICY_SERVICE,
+      useClass: SellerStorePolicyService,
+    },
     {
       provide: SELLER_PRODUCT_QUERY_SERVICE,
       useClass: SellerProductQueryService,
