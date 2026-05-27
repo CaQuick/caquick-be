@@ -5,7 +5,12 @@ import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
-import { SellerStoreService } from '@/features/seller/services/seller-store.service';
+import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
+import { SELLER_STORE_HOURS_SERVICE } from '@/features/seller/services/seller-store-hours.service.interface';
+import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
+import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
+import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';
@@ -21,7 +26,18 @@ describe('Seller Store Resolvers (real DB)', () => {
       providers: [
         SellerStoreQueryResolver,
         SellerStoreMutationResolver,
-        SellerStoreService,
+        {
+          provide: SELLER_STORE_PROFILE_SERVICE,
+          useClass: SellerStoreProfileService,
+        },
+        {
+          provide: SELLER_STORE_HOURS_SERVICE,
+          useClass: SellerStoreHoursService,
+        },
+        {
+          provide: SELLER_STORE_POLICY_SERVICE,
+          useClass: SellerStorePolicyService,
+        },
         SellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

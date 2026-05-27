@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { Inject, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -7,7 +7,18 @@ import { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/se
 import { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
 import { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
 import { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
-import { SellerStoreService } from '@/features/seller/services/seller-store.service';
+import {
+  SELLER_STORE_HOURS_SERVICE,
+  type ISellerStoreHoursService,
+} from '@/features/seller/services/seller-store-hours.service.interface';
+import {
+  SELLER_STORE_POLICY_SERVICE,
+  type ISellerStorePolicyService,
+} from '@/features/seller/services/seller-store-policy.service.interface';
+import {
+  SELLER_STORE_PROFILE_SERVICE,
+  type ISellerStoreProfileService,
+} from '@/features/seller/services/seller-store-profile.service.interface';
 import type {
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
@@ -24,7 +35,14 @@ import {
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class SellerStoreMutationResolver {
-  constructor(private readonly storeService: SellerStoreService) {}
+  constructor(
+    @Inject(SELLER_STORE_PROFILE_SERVICE)
+    private readonly profileService: ISellerStoreProfileService,
+    @Inject(SELLER_STORE_HOURS_SERVICE)
+    private readonly hoursService: ISellerStoreHoursService,
+    @Inject(SELLER_STORE_POLICY_SERVICE)
+    private readonly policyService: ISellerStorePolicyService,
+  ) {}
 
   @Mutation('sellerUpdateStoreBasicInfo')
   sellerUpdateStoreBasicInfo(
@@ -32,7 +50,7 @@ export class SellerStoreMutationResolver {
     @Args('input') input: SellerUpdateStoreBasicInfoInput,
   ): Promise<SellerStoreOutput> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerUpdateStoreBasicInfo(accountId, input);
+    return this.profileService.sellerUpdateStoreBasicInfo(accountId, input);
   }
 
   @Mutation('sellerUpsertStoreBusinessHour')
@@ -41,7 +59,7 @@ export class SellerStoreMutationResolver {
     @Args('input') input: SellerUpsertStoreBusinessHourInput,
   ): Promise<SellerStoreBusinessHourOutput> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerUpsertStoreBusinessHour(accountId, input);
+    return this.hoursService.sellerUpsertStoreBusinessHour(accountId, input);
   }
 
   @Mutation('sellerUpsertStoreSpecialClosure')
@@ -50,7 +68,7 @@ export class SellerStoreMutationResolver {
     @Args('input') input: SellerUpsertStoreSpecialClosureInput,
   ): Promise<SellerStoreSpecialClosureOutput> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerUpsertStoreSpecialClosure(accountId, input);
+    return this.hoursService.sellerUpsertStoreSpecialClosure(accountId, input);
   }
 
   @Mutation('sellerDeleteStoreSpecialClosure')
@@ -59,7 +77,7 @@ export class SellerStoreMutationResolver {
     @Args('closureId') closureId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerDeleteStoreSpecialClosure(
+    return this.hoursService.sellerDeleteStoreSpecialClosure(
       accountId,
       parseId(closureId),
     );
@@ -71,7 +89,7 @@ export class SellerStoreMutationResolver {
     @Args('input') input: SellerUpdatePickupPolicyInput,
   ): Promise<SellerStoreOutput> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerUpdatePickupPolicy(accountId, input);
+    return this.policyService.sellerUpdatePickupPolicy(accountId, input);
   }
 
   @Mutation('sellerUpsertStoreDailyCapacity')
@@ -80,7 +98,7 @@ export class SellerStoreMutationResolver {
     @Args('input') input: SellerUpsertStoreDailyCapacityInput,
   ): Promise<SellerStoreDailyCapacityOutput> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerUpsertStoreDailyCapacity(accountId, input);
+    return this.policyService.sellerUpsertStoreDailyCapacity(accountId, input);
   }
 
   @Mutation('sellerDeleteStoreDailyCapacity')
@@ -89,7 +107,7 @@ export class SellerStoreMutationResolver {
     @Args('capacityId') capacityId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.storeService.sellerDeleteStoreDailyCapacity(
+    return this.policyService.sellerDeleteStoreDailyCapacity(
       accountId,
       parseId(capacityId),
     );
