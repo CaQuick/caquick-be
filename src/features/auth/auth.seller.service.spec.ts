@@ -29,6 +29,8 @@ import {
   type ISellerCredentialRepository,
 } from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { TokenService } from '@/features/auth/services/token.service';
+import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 
 describe('AuthService (seller)', () => {
   let service: AuthService;
@@ -90,6 +92,10 @@ describe('AuthService (seller)', () => {
           useValue: { sign: jest.fn(() => 'mock-access-token') },
         },
         { provide: OidcClientService, useValue: {} },
+        {
+          provide: TOKEN_SERVICE,
+          useClass: TokenService,
+        },
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: accounts,

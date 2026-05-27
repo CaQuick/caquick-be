@@ -27,6 +27,8 @@ import {
   type ISellerCredentialRepository,
 } from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { TokenService } from '@/features/auth/services/token.service';
+import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 describe('AuthService', () => {
@@ -87,6 +89,10 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
+        {
+          provide: TOKEN_SERVICE,
+          useClass: TokenService,
+        },
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,

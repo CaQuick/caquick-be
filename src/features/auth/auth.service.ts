@@ -1,5 +1,3 @@
-import { createHash, randomBytes } from 'node:crypto';
-
 import {
   BadRequestException,
   ForbiddenException,
@@ -9,7 +7,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import {
   AccountType,
   AuditActionType,
@@ -19,20 +16,18 @@ import {
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
-import {
-  getEnvAsBoolean,
-  getEnvAsNumber,
-} from '@/common/helpers/config.helper';
 import { ClockService } from '@/common/providers/clock.service';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
+import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
+import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
 import {
-  AuthCookie,
-  type CookieSameSite,
-} from '@/features/auth/helpers/auth-cookie.helper';
+  getIp,
+  getUserAgent,
+} from '@/features/auth/helpers/auth-request-meta.helper';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -47,11 +42,14 @@ import {
 } from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import {
+  TOKEN_SERVICE,
+  type ITokenService,
+} from '@/features/auth/services/token.service.interface';
+import {
   parseOidcProvider,
   type OidcProvider,
 } from '@/features/auth/types/oidc-provider.type';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
 
 /**
  * 인증/로그인/토큰 발급/갱신 비즈니스 로직
@@ -60,8 +58,8 @@ import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
 export class AuthService {
   /**
    * @param config ConfigService
-   * @param jwt JwtService
    * @param oidc OidcClientService
+   * @param tokens TokenService
    * @param accounts AccountRepository
    * @param sellerCredentials SellerCredentialRepository
    * @param refreshSessions RefreshSessionRepository
@@ -70,8 +68,9 @@ export class AuthService {
    */
   constructor(
     private readonly config: ConfigService,
-    private readonly jwt: JwtService,
     private readonly oidc: OidcClientService,
+    @Inject(TOKEN_SERVICE)
+    private readonly tokens: ITokenService,
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
     @Inject(SELLER_CREDENTIAL_REPOSITORY)
@@ -106,9 +105,9 @@ export class AuthService {
       nonce,
       codeVerifier,
       returnTo: safeReturnTo,
-      cookieDomain: this.getCookieDomain(),
-      secure: this.isCookieSecure(),
-      sameSite: this.getCookieSameSite(),
+      cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
+      secure: AuthCookieOptions.isCookieSecure(this.config),
+      sameSite: AuthCookieOptions.getCookieSameSite(this.config),
     });
 
     return { redirectUrl: authorizationUrl };
@@ -152,7 +151,7 @@ export class AuthService {
     const account = await this.upsertAccountFromOidc(provider, userInfo);
 
     // 5. refresh 쿠키 발급 + access token 생성
-    const { accessToken } = await this.issueAuthTokens({
+    const { accessToken } = await this.tokens.issueAuthTokens({
       accountId: account.id,
       req,
       res,
@@ -161,9 +160,9 @@ export class AuthService {
     // 6. OIDC 임시 쿠키 삭제
     AuthCookie.clearOidcTempCookies(
       res,
-      this.getCookieDomain(),
-      this.isCookieSecure(),
-      this.getCookieSameSite(),
+      AuthCookieOptions.getCookieDomain(this.config),
+      AuthCookieOptions.isCookieSecure(this.config),
+      AuthCookieOptions.getCookieSameSite(this.config),
     );
 
     return { returnTo, accessToken };
@@ -213,7 +212,7 @@ export class AuthService {
       now,
     );
 
-    const { accessToken } = await this.issueAuthTokens({
+    const { accessToken } = await this.tokens.issueAuthTokens({
       accountId: credential.seller_account_id,
       req: args.req,
       res: args.res,
@@ -232,7 +231,7 @@ export class AuthService {
    * @param res Response
    */
   async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
-    const { accessToken } = await this.rotateRefresh(req, res);
+    const { accessToken } = await this.tokens.rotateRefresh(req, res);
     return { accessToken };
   }
 
@@ -259,11 +258,11 @@ export class AuthService {
       throw new ForbiddenException('Account is not active.');
     }
 
-    const accessToken = this.signAccessToken(accountId);
+    const accessToken = this.tokens.signAccessToken(accountId);
     return {
       accessToken,
       tokenType: 'Bearer',
-      expiresInSeconds: this.getAccessExpiresSeconds(),
+      expiresInSeconds: this.tokens.getAccessExpiresSeconds(),
     };
   }
 
@@ -277,7 +276,10 @@ export class AuthService {
     req: Request,
     res: Response,
   ): Promise<{ accessToken: string; accountStatus: AccountStatus }> {
-    const { accessToken, accountId } = await this.rotateRefresh(req, res);
+    const { accessToken, accountId } = await this.tokens.rotateRefresh(
+      req,
+      res,
+    );
     const seller =
       await this.sellerCredentials.findSellerCredentialByAccountId(accountId);
     if (!seller || seller.seller_account.account_type !== AccountType.SELLER) {
@@ -304,7 +306,7 @@ export class AuthService {
     if (!refreshToken)
       throw new UnauthorizedException('Missing refresh token.');
 
-    const tokenHash = this.sha256Hex(refreshToken);
+    const tokenHash = this.tokens.sha256Hex(refreshToken);
     const session =
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new UnauthorizedException('Invalid refresh token.');
@@ -318,12 +320,7 @@ export class AuthService {
 
     await this.refreshSessions.revokeRefreshSession(session.id);
 
-    AuthCookie.clearRefreshCookie(
-      res,
-      this.getCookieDomain(),
-      this.isCookieSecure(),
-      this.getCookieSameSite(),
-    );
+    this.tokens.clearRefreshCookie(res);
   }
 
   /**
@@ -340,18 +337,13 @@ export class AuthService {
       | undefined;
 
     if (refreshToken) {
-      const tokenHash = this.sha256Hex(refreshToken);
+      const tokenHash = this.tokens.sha256Hex(refreshToken);
       const session =
         await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
       if (session) await this.refreshSessions.revokeRefreshSession(session.id);
     }
 
-    AuthCookie.clearRefreshCookie(
-      res,
-      this.getCookieDomain(),
-      this.isCookieSecure(),
-      this.getCookieSameSite(),
-    );
+    this.tokens.clearRefreshCookie(res);
   }
 
   /**
@@ -415,8 +407,8 @@ export class AuthService {
       afterJson: {
         changedAt: now.toISOString(),
       },
-      ipAddress: this.getIp(args.req),
-      userAgent: this.getUserAgent(args.req),
+      ipAddress: getIp(args.req),
+      userAgent: getUserAgent(args.req),
     });
   }
 
@@ -630,202 +622,5 @@ export class AuthService {
       'http://localhost:4000';
 
     return `${backendBase}/auth/oidc/${provider}/callback`;
-  }
-
-  /**
-   * refresh 토큰을 회전하고 access token을 재발급한다.
-   *
-   * @param req Request
-   * @param res Response
-   */
-  private async rotateRefresh(
-    req: Request,
-    res: Response,
-  ): Promise<{ accessToken: string; accountId: bigint }> {
-    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      | string
-      | undefined;
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Missing refresh token.');
-    }
-
-    const tokenHash = this.sha256Hex(refreshToken);
-    const session =
-      await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-    if (!session) throw new UnauthorizedException('Invalid refresh token.');
-
-    const newRefreshToken = this.generateRefreshToken();
-    const newTokenHash = this.sha256Hex(newRefreshToken);
-
-    const refreshDays = this.getRefreshDays();
-    const newExpiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
-
-    await this.refreshSessions.rotateRefreshSession({
-      currentSessionId: session.id,
-      accountId: session.account_id,
-      newTokenHash,
-      userAgent: this.getUserAgent(req),
-      ipAddress: this.getIp(req),
-      newExpiresAt,
-    });
-
-    const accessToken = this.signAccessToken(session.account_id);
-
-    AuthCookie.setRefreshCookie(res, {
-      refreshToken: newRefreshToken,
-      refreshMaxAgeMs: refreshDays * 86400 * 1000,
-      cookieDomain: this.getCookieDomain(),
-      secure: this.isCookieSecure(),
-      sameSite: this.getCookieSameSite(),
-    });
-
-    return {
-      accessToken,
-      accountId: session.account_id,
-    };
-  }
-
-  /**
-   * access token을 서명한다.
-   *
-   * @param accountId account id
-   */
-  private signAccessToken(accountId: bigint): string {
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + this.getAccessExpiresSeconds();
-
-    const payload: AccessTokenPayload = {
-      sub: accountId.toString(),
-      typ: 'access',
-      iat: now,
-      exp,
-    };
-
-    return this.jwt.sign(payload);
-  }
-
-  /**
-   * refresh 쿠키를 발급하고 refresh 세션을 저장한다.
-   *
-   * @param args 발급 파라미터
-   */
-  private async issueAuthTokens(args: {
-    accountId: bigint;
-    req: Request;
-    res: Response;
-  }): Promise<{ accessToken: string }> {
-    const accessToken = this.signAccessToken(args.accountId);
-
-    const refreshToken = this.generateRefreshToken();
-    const refreshHash = this.sha256Hex(refreshToken);
-
-    const refreshDays = this.getRefreshDays();
-    const expiresAt = new Date(Date.now() + refreshDays * 86400 * 1000);
-
-    await this.refreshSessions.createRefreshSession({
-      accountId: args.accountId,
-      tokenHash: refreshHash,
-      userAgent: this.getUserAgent(args.req),
-      ipAddress: this.getIp(args.req),
-      expiresAt,
-    });
-
-    AuthCookie.setRefreshCookie(args.res, {
-      refreshToken,
-      refreshMaxAgeMs: refreshDays * 86400 * 1000,
-      cookieDomain: this.getCookieDomain(),
-      secure: this.isCookieSecure(),
-      sameSite: this.getCookieSameSite(),
-    });
-
-    return { accessToken };
-  }
-
-  /**
-   * refresh token 랜덤 문자열을 생성한다.
-   */
-  private generateRefreshToken(): string {
-    // 32 bytes -> 64 hex
-    return randomBytes(32).toString('hex');
-  }
-
-  /**
-   * sha256 hex를 만든다.
-   *
-   * @param raw raw string
-   */
-  private sha256Hex(raw: string): string {
-    return createHash('sha256').update(raw).digest('hex');
-  }
-
-  /**
-   * Access Token 만료(초)를 반환한다.
-   */
-  private getAccessExpiresSeconds(): number {
-    return getEnvAsNumber(this.config, 'JWT_ACCESS_EXPIRES_SECONDS', 900);
-  }
-
-  /**
-   * Refresh 만료(일)를 반환한다.
-   */
-  private getRefreshDays(): number {
-    return getEnvAsNumber(this.config, 'AUTH_REFRESH_EXPIRES_DAYS', 30);
-  }
-
-  /**
-   * 쿠키 도메인을 반환한다.
-   */
-  private getCookieDomain(): string | undefined {
-    const v = this.config.get<string>('AUTH_COOKIE_DOMAIN');
-    const trimmed = v?.trim();
-    return trimmed && trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  /**
-   * 쿠키 secure 옵션을 반환한다.
-   */
-  private isCookieSecure(): boolean {
-    const envValue = this.config.get<string>('AUTH_COOKIE_SECURE');
-    if (envValue !== undefined) {
-      return getEnvAsBoolean(this.config, 'AUTH_COOKIE_SECURE', false);
-    }
-    // 기본값: production이면 true
-    return (this.config.get<string>('NODE_ENV') ?? '') === 'production';
-  }
-
-  /**
-   * 쿠키 sameSite 옵션을 반환한다.
-   * 환경변수 AUTH_COOKIE_SAMESITE로 설정 가능 (lax | strict | none).
-   * 기본값: 'lax'
-   */
-  private getCookieSameSite(): CookieSameSite {
-    const v = this.config
-      .get<string>('AUTH_COOKIE_SAMESITE')
-      ?.trim()
-      .toLowerCase();
-    if (v === 'none' || v === 'strict' || v === 'lax') {
-      return v;
-    }
-    return 'lax';
-  }
-
-  /**
-   * Request에서 user-agent를 추출한다.
-   *
-   * @param req Request
-   */
-  private getUserAgent(req: Request): string | undefined {
-    const ua = req.headers['user-agent'];
-    return typeof ua === 'string' ? ua.slice(0, 512) : undefined;
-  }
-
-  /**
-   * Request에서 IP를 추출한다.
-   *
-   * @param req Request
-   */
-  private getIp(req: Request): string | undefined {
-    return typeof req.ip === 'string' ? req.ip : undefined;
   }
 }

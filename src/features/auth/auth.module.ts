@@ -10,6 +10,8 @@ import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh
 import { SellerCredentialRepository } from '@/features/auth/repositories/seller-credential.repository';
 import { SELLER_CREDENTIAL_REPOSITORY } from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { TokenService } from '@/features/auth/services/token.service';
+import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 
@@ -25,6 +27,10 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
   providers: [
     AuthService,
     OidcClientService,
+    {
+      provide: TOKEN_SERVICE,
+      useClass: TokenService,
+    },
     {
       provide: ACCOUNT_REPOSITORY,
       useClass: AccountRepository,
