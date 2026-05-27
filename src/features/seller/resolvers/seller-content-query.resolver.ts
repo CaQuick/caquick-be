@@ -1,9 +1,20 @@
-import { UseGuards } from '@nestjs/common';
+import { Inject, UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
-import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import {
+  SELLER_AUDIT_SERVICE,
+  type ISellerAuditService,
+} from '@/features/seller/services/seller-audit.service.interface';
+import {
+  SELLER_BANNER_SERVICE,
+  type ISellerBannerService,
+} from '@/features/seller/services/seller-banner.service.interface';
+import {
+  SELLER_FAQ_SERVICE,
+  type ISellerFaqService,
+} from '@/features/seller/services/seller-faq.service.interface';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,
@@ -20,14 +31,21 @@ import {
 @Resolver('Query')
 @UseGuards(JwtAuthGuard)
 export class SellerContentQueryResolver {
-  constructor(private readonly contentService: SellerContentService) {}
+  constructor(
+    @Inject(SELLER_FAQ_SERVICE)
+    private readonly faqService: ISellerFaqService,
+    @Inject(SELLER_BANNER_SERVICE)
+    private readonly bannerService: ISellerBannerService,
+    @Inject(SELLER_AUDIT_SERVICE)
+    private readonly auditService: ISellerAuditService,
+  ) {}
 
   @Query('sellerFaqTopics')
   sellerFaqTopics(
     @CurrentUser() user: JwtUser,
   ): Promise<SellerFaqTopicOutput[]> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerFaqTopics(accountId);
+    return this.faqService.sellerFaqTopics(accountId);
   }
 
   @Query('sellerBanners')
@@ -36,7 +54,7 @@ export class SellerContentQueryResolver {
     @Args('input', { nullable: true }) input?: SellerCursorInput,
   ): Promise<SellerCursorConnection<SellerBannerOutput>> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerBanners(accountId, input);
+    return this.bannerService.sellerBanners(accountId, input);
   }
 
   @Query('sellerAuditLogs')
@@ -45,6 +63,6 @@ export class SellerContentQueryResolver {
     @Args('input', { nullable: true }) input?: SellerAuditLogListInput,
   ): Promise<SellerCursorConnection<SellerAuditLogOutput>> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerAuditLogs(accountId, input);
+    return this.auditService.sellerAuditLogs(accountId, input);
   }
 }

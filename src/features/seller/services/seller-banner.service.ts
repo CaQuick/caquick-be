@@ -10,7 +10,6 @@ import {
   AuditTargetType,
   BannerLinkType,
   BannerPlacement,
-  Prisma,
 } from '@prisma/client';
 
 import { toDate } from '@/common/utils/date-parser';
@@ -26,8 +25,6 @@ import {
 import { ProductRepository } from '@/features/product';
 import {
   BANNER_NOT_FOUND,
-  FAQ_TOPIC_NOT_FOUND,
-  INVALID_AUDIT_TARGET_TYPE,
   INVALID_BANNER_LINK_TYPE,
   INVALID_BANNER_PLACEMENT,
   LINK_CATEGORY_REQUIRED,
@@ -40,31 +37,29 @@ import {
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_BANNER_TITLE_LENGTH,
-  MAX_FAQ_ANSWER_HTML_LENGTH,
-  MAX_FAQ_TITLE_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/seller/constants/seller.constants';
-import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import type { SellerCreateBannerInput } from '@/features/seller/dto/inputs/seller-create-banner.input';
-import type { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
 import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerUpdateBannerInput } from '@/features/seller/dto/inputs/seller-update-banner.input';
-import type { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
+import type { ISellerBannerService } from '@/features/seller/services/seller-banner.service.interface';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
+import { toBannerOutput } from '@/features/seller/services/seller-content-mappers.helper';
 import type {
-  SellerAuditLogOutput,
   SellerBannerOutput,
   SellerCursorConnection,
-  SellerFaqTopicOutput,
 } from '@/features/seller/types/seller-output.type';
 
 @Injectable()
-export class SellerContentService extends SellerBaseService {
+export class SellerBannerService
+  extends SellerBaseService
+  implements ISellerBannerService
+{
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
@@ -72,115 +67,6 @@ export class SellerContentService extends SellerBaseService {
     private readonly productRepository: ProductRepository,
   ) {
     super(repo, auditLogs);
-  }
-  async sellerFaqTopics(accountId: bigint): Promise<SellerFaqTopicOutput[]> {
-    const ctx = await this.requireSellerContext(accountId);
-    const rows = await this.repo.listFaqTopics(ctx.storeId);
-    return rows.map((row) => this.toFaqTopicOutput(row));
-  }
-
-  async sellerCreateFaqTopic(
-    accountId: bigint,
-    input: SellerCreateFaqTopicInput,
-  ): Promise<SellerFaqTopicOutput> {
-    const ctx = await this.requireSellerContext(accountId);
-    const row = await this.repo.createFaqTopic({
-      storeId: ctx.storeId,
-      title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
-      answerHtml: cleanRequiredText(
-        input.answerHtml,
-        MAX_FAQ_ANSWER_HTML_LENGTH,
-      ),
-      sortOrder: input.sortOrder ?? 0,
-      isActive: input.isActive ?? true,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        topicId: row.id.toString(),
-      },
-    });
-
-    return this.toFaqTopicOutput(row);
-  }
-
-  async sellerUpdateFaqTopic(
-    accountId: bigint,
-    input: SellerUpdateFaqTopicInput,
-  ): Promise<SellerFaqTopicOutput> {
-    const ctx = await this.requireSellerContext(accountId);
-    const topicId = parseId(input.topicId);
-
-    const current = await this.repo.findFaqTopicById({
-      topicId,
-      storeId: ctx.storeId,
-    });
-    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
-
-    const row = await this.repo.updateFaqTopic({
-      topicId,
-      data: {
-        ...(input.title !== undefined
-          ? { title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
-          : {}),
-        ...(input.answerHtml !== undefined
-          ? {
-              answer_html: cleanRequiredText(
-                input.answerHtml,
-                MAX_FAQ_ANSWER_HTML_LENGTH,
-              ),
-            }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
-      },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        topicId: row.id.toString(),
-      },
-    });
-
-    return this.toFaqTopicOutput(row);
-  }
-
-  async sellerDeleteFaqTopic(
-    accountId: bigint,
-    topicId: bigint,
-  ): Promise<boolean> {
-    const ctx = await this.requireSellerContext(accountId);
-    const current = await this.repo.findFaqTopicById({
-      topicId,
-      storeId: ctx.storeId,
-    });
-    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
-
-    await this.repo.softDeleteFaqTopic(topicId);
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.DELETE,
-      beforeJson: {
-        topicId: current.id.toString(),
-      },
-    });
-
-    return true;
   }
 
   async sellerBanners(
@@ -201,7 +87,7 @@ export class SellerContentService extends SellerBaseService {
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
-      items: paged.items.map((row) => this.toBannerOutput(row)),
+      items: paged.items.map((row) => toBannerOutput(row)),
       nextCursor: paged.nextCursor,
     };
   }
@@ -252,7 +138,7 @@ export class SellerContentService extends SellerBaseService {
       },
     });
 
-    return this.toBannerOutput(row);
+    return toBannerOutput(row);
   }
 
   async sellerUpdateBanner(
@@ -291,7 +177,33 @@ export class SellerContentService extends SellerBaseService {
       },
     });
 
-    return this.toBannerOutput(row);
+    return toBannerOutput(row);
+  }
+
+  async sellerDeleteBanner(
+    accountId: bigint,
+    bannerId: bigint,
+  ): Promise<boolean> {
+    const ctx = await this.requireSellerContext(accountId);
+    const current = await this.repo.findBannerByIdForStore({
+      bannerId,
+      storeId: ctx.storeId,
+    });
+    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
+
+    await this.repo.softDeleteBanner(bannerId);
+    await this.auditLogs.createAuditLog({
+      actorAccountId: ctx.accountId,
+      storeId: ctx.storeId,
+      targetType: AuditTargetType.STORE,
+      targetId: ctx.storeId,
+      action: AuditActionType.DELETE,
+      beforeJson: {
+        bannerId: current.id.toString(),
+      },
+    });
+
+    return true;
   }
 
   private resolveNextBannerLinkValues(
@@ -446,59 +358,6 @@ export class SellerContentService extends SellerBaseService {
     }
   }
 
-  async sellerDeleteBanner(
-    accountId: bigint,
-    bannerId: bigint,
-  ): Promise<boolean> {
-    const ctx = await this.requireSellerContext(accountId);
-    const current = await this.repo.findBannerByIdForStore({
-      bannerId,
-      storeId: ctx.storeId,
-    });
-    if (!current) throw new NotFoundException(BANNER_NOT_FOUND);
-
-    await this.repo.softDeleteBanner(bannerId);
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.DELETE,
-      beforeJson: {
-        bannerId: current.id.toString(),
-      },
-    });
-
-    return true;
-  }
-
-  async sellerAuditLogs(
-    accountId: bigint,
-    input?: SellerAuditLogListInput,
-  ): Promise<SellerCursorConnection<SellerAuditLogOutput>> {
-    const ctx = await this.requireSellerContext(accountId);
-    const normalized = normalizeCursorInput({
-      limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
-    });
-
-    const rows = await this.repo.listAuditLogsBySeller({
-      sellerAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
-      targetType: input?.targetType
-        ? this.toAuditTargetType(input.targetType)
-        : undefined,
-    });
-
-    const paged = nextCursorOf(rows, normalized.limit);
-    return {
-      items: paged.items.map((row) => this.toAuditLogOutput(row)),
-      nextCursor: paged.nextCursor,
-    };
-  }
-
   private async validateBannerOwnership(
     ctx: { accountId: bigint; storeId: bigint },
     args: {
@@ -598,105 +457,5 @@ export class SellerContentService extends SellerBaseService {
     if (raw === 'STORE') return BannerLinkType.STORE;
     if (raw === 'CATEGORY') return BannerLinkType.CATEGORY;
     throw new BadRequestException(INVALID_BANNER_LINK_TYPE);
-  }
-
-  private toAuditTargetType(raw: string): AuditTargetType {
-    if (raw === 'STORE') return AuditTargetType.STORE;
-    if (raw === 'PRODUCT') return AuditTargetType.PRODUCT;
-    if (raw === 'ORDER') return AuditTargetType.ORDER;
-    if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
-    if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
-    throw new BadRequestException(INVALID_AUDIT_TARGET_TYPE);
-  }
-
-  private toFaqTopicOutput(row: {
-    id: bigint;
-    store_id: bigint;
-    title: string;
-    answer_html: string;
-    sort_order: number;
-    is_active: boolean;
-    created_at: Date;
-    updated_at: Date;
-  }): SellerFaqTopicOutput {
-    return {
-      id: row.id.toString(),
-      storeId: row.store_id.toString(),
-      title: row.title,
-      answerHtml: row.answer_html,
-      sortOrder: row.sort_order,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private toBannerOutput(row: {
-    id: bigint;
-    placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE';
-    title: string | null;
-    image_url: string;
-    link_type: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
-    link_url: string | null;
-    link_product_id: bigint | null;
-    link_store_id: bigint | null;
-    link_category_id: bigint | null;
-    starts_at: Date | null;
-    ends_at: Date | null;
-    sort_order: number;
-    is_active: boolean;
-    created_at: Date;
-    updated_at: Date;
-  }): SellerBannerOutput {
-    return {
-      id: row.id.toString(),
-      placement: row.placement,
-      title: row.title,
-      imageUrl: row.image_url,
-      linkType: row.link_type,
-      linkUrl: row.link_url,
-      linkProductId: row.link_product_id?.toString() ?? null,
-      linkStoreId: row.link_store_id?.toString() ?? null,
-      linkCategoryId: row.link_category_id?.toString() ?? null,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      sortOrder: row.sort_order,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private toAuditLogOutput(row: {
-    id: bigint;
-    actor_account_id: bigint;
-    store_id: bigint | null;
-    target_type:
-      | 'STORE'
-      | 'PRODUCT'
-      | 'ORDER'
-      | 'CONVERSATION'
-      | 'CHANGE_PASSWORD';
-    target_id: bigint;
-    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
-    before_json: Prisma.JsonValue | null;
-    after_json: Prisma.JsonValue | null;
-    ip_address: string | null;
-    user_agent: string | null;
-    created_at: Date;
-  }): SellerAuditLogOutput {
-    return {
-      id: row.id.toString(),
-      actorAccountId: row.actor_account_id.toString(),
-      storeId: row.store_id?.toString() ?? null,
-      targetType: row.target_type,
-      targetId: row.target_id.toString(),
-      action: row.action,
-      beforeJson: row.before_json ? JSON.stringify(row.before_json) : null,
-      afterJson: row.after_json ? JSON.stringify(row.after_json) : null,
-      ipAddress: row.ip_address,
-      userAgent: row.user_agent,
-      createdAt: row.created_at,
-    };
   }
 }

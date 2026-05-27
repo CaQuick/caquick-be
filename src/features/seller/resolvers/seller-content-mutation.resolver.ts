@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { Inject, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -6,7 +6,14 @@ import { SellerCreateBannerInput } from '@/features/seller/dto/inputs/seller-cre
 import { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
 import { SellerUpdateBannerInput } from '@/features/seller/dto/inputs/seller-update-banner.input';
 import { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
-import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import {
+  SELLER_BANNER_SERVICE,
+  type ISellerBannerService,
+} from '@/features/seller/services/seller-banner.service.interface';
+import {
+  SELLER_FAQ_SERVICE,
+  type ISellerFaqService,
+} from '@/features/seller/services/seller-faq.service.interface';
 import type {
   SellerBannerOutput,
   SellerFaqTopicOutput,
@@ -21,7 +28,12 @@ import {
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class SellerContentMutationResolver {
-  constructor(private readonly contentService: SellerContentService) {}
+  constructor(
+    @Inject(SELLER_FAQ_SERVICE)
+    private readonly faqService: ISellerFaqService,
+    @Inject(SELLER_BANNER_SERVICE)
+    private readonly bannerService: ISellerBannerService,
+  ) {}
 
   @Mutation('sellerCreateFaqTopic')
   sellerCreateFaqTopic(
@@ -29,7 +41,7 @@ export class SellerContentMutationResolver {
     @Args('input') input: SellerCreateFaqTopicInput,
   ): Promise<SellerFaqTopicOutput> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerCreateFaqTopic(accountId, input);
+    return this.faqService.sellerCreateFaqTopic(accountId, input);
   }
 
   @Mutation('sellerUpdateFaqTopic')
@@ -38,7 +50,7 @@ export class SellerContentMutationResolver {
     @Args('input') input: SellerUpdateFaqTopicInput,
   ): Promise<SellerFaqTopicOutput> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerUpdateFaqTopic(accountId, input);
+    return this.faqService.sellerUpdateFaqTopic(accountId, input);
   }
 
   @Mutation('sellerDeleteFaqTopic')
@@ -47,10 +59,7 @@ export class SellerContentMutationResolver {
     @Args('topicId') topicId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerDeleteFaqTopic(
-      accountId,
-      parseId(topicId),
-    );
+    return this.faqService.sellerDeleteFaqTopic(accountId, parseId(topicId));
   }
 
   @Mutation('sellerCreateBanner')
@@ -59,7 +68,7 @@ export class SellerContentMutationResolver {
     @Args('input') input: SellerCreateBannerInput,
   ): Promise<SellerBannerOutput> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerCreateBanner(accountId, input);
+    return this.bannerService.sellerCreateBanner(accountId, input);
   }
 
   @Mutation('sellerUpdateBanner')
@@ -68,7 +77,7 @@ export class SellerContentMutationResolver {
     @Args('input') input: SellerUpdateBannerInput,
   ): Promise<SellerBannerOutput> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerUpdateBanner(accountId, input);
+    return this.bannerService.sellerUpdateBanner(accountId, input);
   }
 
   @Mutation('sellerDeleteBanner')
@@ -77,6 +86,6 @@ export class SellerContentMutationResolver {
     @Args('bannerId') bannerId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.contentService.sellerDeleteBanner(accountId, parseId(bannerId));
+    return this.bannerService.sellerDeleteBanner(accountId, parseId(bannerId));
   }
 }
