@@ -42,7 +42,6 @@ describe('OidcLoginService', () => {
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
       findAccountForJwt: jest.fn(),
-      findAccountForMe: jest.fn(),
     };
 
     mockRefreshSessions = {

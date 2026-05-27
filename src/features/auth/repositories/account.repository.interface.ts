@@ -69,9 +69,4 @@ export interface IAccountRepository {
    * access token 검증용으로 계정을 조회한다.
    */
   findAccountForJwt(accountId: bigint): Promise<AccountForJwt | null>;
-
-  /**
-   * accountId 기준으로 유저를 조회한다(soft-delete 제외).
-   */
-  findAccountForMe(accountId: bigint): Promise<AccountWithProfile | null>;
 }

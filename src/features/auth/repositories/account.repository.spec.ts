@@ -197,16 +197,4 @@ describe('AccountRepository (real DB)', () => {
       expect(found!.account_type).toBe('USER');
     });
   });
-
-  describe('findAccountForMe', () => {
-    it('계정 + user_profile을 반환한다', async () => {
-      const account = await createAccount(prisma);
-      await createUserProfile(prisma, { account_id: account.id });
-
-      const found = await repo.findAccountForMe(account.id);
-
-      expect(found).not.toBeNull();
-      expect(found!.user_profile).not.toBeNull();
-    });
-  });
 });

@@ -53,7 +53,6 @@ describe('AuthService', () => {
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
       findAccountForJwt: jest.fn(),
-      findAccountForMe: jest.fn(),
     };
 
     mockSellerCredentials = {
@@ -249,86 +248,6 @@ describe('AuthService', () => {
       // Assert
       expect(mockRefreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('me', () => {
-    it('사용자 정보를 성공적으로 반환해야 한다', async () => {
-      // Arrange
-      mockAccounts.findAccountForMe.mockResolvedValue({
-        id: BigInt(1),
-        email: 'test@example.com',
-        name: 'Test User',
-        user_profile: {
-          nickname: 'testuser',
-          profile_image_url: 'https://example.com/photo.jpg',
-          birth_date: new Date('1990-01-01'),
-          phone_number: '010-1234-5678',
-        },
-      } as never);
-
-      // Act
-      const result = await service.me(BigInt(1));
-
-      // Assert
-      expect(result).toEqual({
-        accountId: '1',
-        email: 'test@example.com',
-        name: 'Test User',
-        nickname: 'testuser',
-        profileImageUrl: 'https://example.com/photo.jpg',
-        birthDate: '1990-01-01',
-        phoneNumber: '010-1234-5678',
-        needsProfile: false,
-      });
-    });
-
-    it('프로필 정보가 불완전하면 needsProfile이 true여야 한다', async () => {
-      // Arrange
-      mockAccounts.findAccountForMe.mockResolvedValue({
-        id: BigInt(1),
-        email: 'test@example.com',
-        name: 'Test User',
-        user_profile: {
-          nickname: 'testuser',
-          profile_image_url: null,
-          birth_date: null, // 누락
-          phone_number: null, // 누락
-        },
-      } as never);
-
-      // Act
-      const result = await service.me(BigInt(1));
-
-      // Assert
-      expect(result.needsProfile).toBe(true);
-    });
-
-    it('계정을 찾을 수 없으면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
-      mockAccounts.findAccountForMe.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(service.me(BigInt(999))).rejects.toThrow(
-        'Account not found.',
-      );
-    });
-
-    it('user_profile이 아예 null이면 모든 프로필 필드가 null + needsProfile=true', async () => {
-      mockAccounts.findAccountForMe.mockResolvedValue({
-        id: BigInt(1),
-        email: null,
-        name: null,
-        user_profile: null,
-      } as never);
-
-      const result = await service.me(BigInt(1));
-
-      expect(result.nickname).toBeNull();
-      expect(result.profileImageUrl).toBeNull();
-      expect(result.birthDate).toBeNull();
-      expect(result.phoneNumber).toBeNull();
-      expect(result.needsProfile).toBe(true);
     });
   });
 
