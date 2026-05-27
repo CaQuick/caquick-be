@@ -1,14 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType, IdentityProvider } from '@prisma/client';
+import { AccountType, type IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import type {
+  AccountForJwt,
+  AccountIdentityWithAccount,
+  AccountWithProfile,
+  IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import { PrismaService } from '@/prisma';
 
 /**
- * 인증 Repository
+ * Account / AccountIdentity / UserProfile Repository 구체 구현.
  */
 @Injectable()
-export class AuthRepository {
+export class AccountRepository implements IAccountRepository {
   /**
    * @param prisma PrismaService
    * @param clock ClockService
@@ -18,16 +24,10 @@ export class AuthRepository {
     private readonly clock: ClockService,
   ) {}
 
-  /**
-   * provider + subject로 AccountIdentity를 조회한다(soft-delete 제외).
-   *
-   * @param provider provider
-   * @param providerSubject subject
-   */
   async findIdentityByProviderSubject(
     provider: IdentityProvider,
     providerSubject: string,
-  ) {
+  ): Promise<AccountIdentityWithAccount | null> {
     return this.prisma.accountIdentity.findFirst({
       where: {
         provider,
@@ -43,27 +43,13 @@ export class AuthRepository {
     });
   }
 
-  /**
-   * 이메일(verified 전제)로 기존 계정을 찾는다(soft-delete 제외).
-   *
-   * @param email email
-   */
-  async findAccountByEmail(email: string) {
+  async findAccountByEmail(email: string): Promise<AccountWithProfile | null> {
     return this.prisma.account.findFirst({
       where: { email },
       include: { user_profile: true },
     });
   }
 
-  /**
-   * Identity가 없을 때, 계정을 만들거나(또는 이메일로 기존 계정에 붙여서) Identity를 upsert 한다.
-   *
-   * 정책:
-   * - (provider, subject)로 우선 식별
-   * - 없으면 신규 계정 생성
-   *
-   * @param args 생성/연결 정보
-   */
   async upsertUserByOidcIdentity(args: {
     provider: IdentityProvider;
     providerSubject: string;
@@ -71,9 +57,8 @@ export class AuthRepository {
     emailVerified: boolean;
     providerDisplayName?: string;
     providerProfileImageUrl?: string;
-  }) {
+  }): Promise<{ account: AccountWithProfile | null }> {
     return this.prisma.$transaction(async (tx) => {
-      // 기존 Identity 조회
       const found = await tx.accountIdentity.findFirst({
         where: {
           provider: args.provider,
@@ -88,18 +73,16 @@ export class AuthRepository {
 
       const now = this.clock.now();
 
-      // 기존 Identity가 있으면 업데이트
       if (found) {
         return this.updateExistingIdentity(tx, found, args, now);
       }
 
-      // 신규 Identity 생성
       return this.createNewIdentity(tx, args, now);
     });
   }
 
   /**
-   * 기존 Identity와 연결된 계정을 업데이트한다.
+   * 기존 Identity 와 연결된 계정을 업데이트한다.
    */
   private async updateExistingIdentity(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
@@ -120,7 +103,6 @@ export class AuthRepository {
     },
     now: Date,
   ) {
-    // Identity 정보 업데이트
     await tx.accountIdentity.update({
       where: { id: found.id },
       data: {
@@ -132,7 +114,7 @@ export class AuthRepository {
       },
     });
 
-    // account email/name은 null일 때만 채움(변경 불가 정책)
+    // account email/name 은 null 일 때만 채움(변경 불가 정책)
     await tx.account.update({
       where: { id: found.account_id },
       data: {
@@ -141,7 +123,6 @@ export class AuthRepository {
       },
     });
 
-    // profile이 없으면 최소 nickname으로 생성
     if (!found.account.user_profile) {
       await this.createUserProfile(
         tx,
@@ -161,7 +142,7 @@ export class AuthRepository {
   }
 
   /**
-   * 신규 Identity를 생성하고 계정에 연결한다.
+   * 신규 Identity 를 생성하고 계정에 연결한다.
    */
   private async createNewIdentity(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
@@ -175,7 +156,6 @@ export class AuthRepository {
     },
     now: Date,
   ) {
-    // 신규 계정을 생성한다.
     const accountId = await this.createNewAccount(
       tx,
       args.providerEmail,
@@ -184,7 +164,6 @@ export class AuthRepository {
       args.providerProfileImageUrl,
     );
 
-    // Identity 생성
     await tx.accountIdentity.create({
       data: {
         account_id: accountId,
@@ -236,7 +215,7 @@ export class AuthRepository {
   }
 
   /**
-   * UserProfile을 생성한다.
+   * UserProfile 을 생성한다.
    */
   private async createUserProfile(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
@@ -257,12 +236,7 @@ export class AuthRepository {
     });
   }
 
-  /**
-   * access token 검증용으로 계정을 조회한다.
-   *
-   * @param accountId account id
-   */
-  async findAccountForJwt(accountId: bigint) {
+  async findAccountForJwt(accountId: bigint): Promise<AccountForJwt | null> {
     return this.prisma.account.findFirst({
       where: { id: accountId },
       select: {
@@ -273,108 +247,12 @@ export class AuthRepository {
     });
   }
 
-  /**
-   * accountId 기준으로 유저를 조회한다(soft-delete 제외).
-   *
-   * @param accountId account id
-   */
-  async findAccountForMe(accountId: bigint) {
+  async findAccountForMe(
+    accountId: bigint,
+  ): Promise<AccountWithProfile | null> {
     return this.prisma.account.findFirst({
       where: { id: accountId },
       include: { user_profile: true },
-    });
-  }
-
-  /**
-   * username 기준 판매자 자격정보를 조회한다.
-   *
-   * @param username 판매자 username
-   */
-  async findSellerCredentialByUsername(username: string) {
-    return this.prisma.sellerCredential.findFirst({
-      where: { username },
-      include: {
-        seller_account: {
-          select: {
-            id: true,
-            account_type: true,
-            status: true,
-            store: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * 계정 ID 기준 판매자 자격정보를 조회한다.
-   *
-   * @param accountId account id
-   */
-  async findSellerCredentialByAccountId(accountId: bigint) {
-    return this.prisma.sellerCredential.findFirst({
-      where: {
-        seller_account_id: accountId,
-      },
-      include: {
-        seller_account: {
-          select: {
-            id: true,
-            account_type: true,
-            status: true,
-            store: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * 판매자 최근 로그인 시각을 갱신한다.
-   *
-   * @param sellerAccountId seller account id
-   * @param now 기준 시각
-   */
-  async updateSellerLastLogin(
-    sellerAccountId: bigint,
-    now: Date,
-  ): Promise<void> {
-    await this.prisma.sellerCredential.update({
-      where: { seller_account_id: sellerAccountId },
-      data: {
-        last_login_at: now,
-        updated_at: now,
-      },
-    });
-  }
-
-  /**
-   * 판매자 비밀번호 해시를 갱신한다.
-   *
-   * @param sellerAccountId seller account id
-   * @param passwordHash 새 비밀번호 해시
-   * @param now 기준 시각
-   */
-  async updateSellerPasswordHash(args: {
-    sellerAccountId: bigint;
-    passwordHash: string;
-    now: Date;
-  }): Promise<void> {
-    await this.prisma.sellerCredential.update({
-      where: { seller_account_id: args.sellerAccountId },
-      data: {
-        password_hash: args.passwordHash,
-        password_updated_at: args.now,
-        updated_at: args.now,
-      },
     });
   }
 }

@@ -3,9 +3,12 @@ import { Module } from '@nestjs/common';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { AccountRepository } from '@/features/auth/repositories/account.repository';
+import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
 import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh-session.repository.interface';
+import { SellerCredentialRepository } from '@/features/auth/repositories/seller-credential.repository';
+import { SELLER_CREDENTIAL_REPOSITORY } from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
@@ -22,7 +25,14 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
   providers: [
     AuthService,
     OidcClientService,
-    AuthRepository,
+    {
+      provide: ACCOUNT_REPOSITORY,
+      useClass: AccountRepository,
+    },
+    {
+      provide: SELLER_CREDENTIAL_REPOSITORY,
+      useClass: SellerCredentialRepository,
+    },
     {
       provide: REFRESH_SESSION_REPOSITORY,
       useClass: RefreshSessionRepository,

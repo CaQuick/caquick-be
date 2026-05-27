@@ -2,7 +2,8 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { AccountRepository } from '@/features/auth/repositories/account.repository';
+import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -16,18 +17,21 @@ describe('JwtBearerStrategy (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
-        AuthRepository,
         ClockService,
         {
+          provide: ACCOUNT_REPOSITORY,
+          useClass: AccountRepository,
+        },
+        {
           provide: JwtBearerStrategy,
-          useFactory: (repo: AuthRepository) => {
-            // Passport Strategy는 생성자에서 super()를 호출하므로 직접 생성
-            // validate 메서드만 테스트하기 위해 prototype에서 추출
+          useFactory: (accounts: AccountRepository) => {
+            // Passport Strategy 는 생성자에서 super() 를 호출하므로 직접 생성.
+            // validate 메서드만 테스트하기 위해 prototype 에서 추출.
             const instance = Object.create(JwtBearerStrategy.prototype);
-            instance.repo = repo;
+            instance.accounts = accounts;
             return instance;
           },
-          inject: [AuthRepository],
+          inject: [ACCOUNT_REPOSITORY],
         },
       ],
     });
@@ -129,16 +133,16 @@ describe('JwtBearerStrategy (real DB)', () => {
      */
     it('JWT_ACCESS_SECRET 미설정이면 Error', () => {
       const config = { get: () => undefined } as never;
-      const repo = {} as never;
-      expect(() => new JwtBearerStrategy(config, repo)).toThrow(
+      const accounts = {} as never;
+      expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
         'Missing JWT_ACCESS_SECRET',
       );
     });
 
     it('JWT_ACCESS_SECRET이 공백 문자열이면 Error', () => {
       const config = { get: () => '   ' } as never;
-      const repo = {} as never;
-      expect(() => new JwtBearerStrategy(config, repo)).toThrow(
+      const accounts = {} as never;
+      expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
         'Missing JWT_ACCESS_SECRET',
       );
     });

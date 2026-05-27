@@ -14,11 +14,18 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  ACCOUNT_REPOSITORY,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
+import {
+  SELLER_CREDENTIAL_REPOSITORY,
+  type ISellerCredentialRepository,
+} from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
@@ -27,7 +34,8 @@ describe('AuthService', () => {
   let mockConfig: jest.Mocked<ConfigService>;
   let mockJwt: jest.Mocked<JwtService>;
   let mockOidc: jest.Mocked<OidcClientService>;
-  let mockRepo: jest.Mocked<AuthRepository>;
+  let mockAccounts: jest.Mocked<IAccountRepository>;
+  let mockSellerCredentials: jest.Mocked<ISellerCredentialRepository>;
   let mockRefreshSessions: jest.Mocked<IRefreshSessionRepository>;
   let mockAuditLogs: jest.Mocked<IAuditLogRepository>;
 
@@ -46,11 +54,20 @@ describe('AuthService', () => {
       toIdentityProvider: jest.fn(),
     } as unknown as jest.Mocked<OidcClientService>;
 
-    mockRepo = {
+    mockAccounts = {
+      findIdentityByProviderSubject: jest.fn(),
+      findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      findAccountForMe: jest.fn(),
       findAccountForJwt: jest.fn(),
-    } as unknown as jest.Mocked<AuthRepository>;
+      findAccountForMe: jest.fn(),
+    };
+
+    mockSellerCredentials = {
+      findSellerCredentialByUsername: jest.fn(),
+      findSellerCredentialByAccountId: jest.fn(),
+      updateSellerLastLogin: jest.fn(),
+      updateSellerPasswordHash: jest.fn(),
+    };
 
     mockRefreshSessions = {
       findActiveRefreshSessionByHash: jest.fn(),
@@ -70,7 +87,14 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
-        { provide: AuthRepository, useValue: mockRepo },
+        {
+          provide: ACCOUNT_REPOSITORY,
+          useValue: mockAccounts,
+        },
+        {
+          provide: SELLER_CREDENTIAL_REPOSITORY,
+          useValue: mockSellerCredentials,
+        },
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: mockRefreshSessions,
@@ -200,7 +224,7 @@ describe('AuthService', () => {
 
       mockOidc.toIdentityProvider.mockReturnValue('GOOGLE');
 
-      mockRepo.upsertUserByOidcIdentity.mockResolvedValue({
+      mockAccounts.upsertUserByOidcIdentity.mockResolvedValue({
         account: {
           id: BigInt(1),
           email: 'test@example.com',
@@ -224,7 +248,7 @@ describe('AuthService', () => {
         accessToken: 'mock-access-token',
       });
       expect(mockOidc.exchangeCode).toHaveBeenCalled();
-      expect(mockRepo.upsertUserByOidcIdentity).toHaveBeenCalledWith({
+      expect(mockAccounts.upsertUserByOidcIdentity).toHaveBeenCalledWith({
         provider: 'GOOGLE',
         providerSubject: 'google-user-123',
         providerEmail: 'test@example.com',
@@ -429,7 +453,7 @@ describe('AuthService', () => {
   describe('me', () => {
     it('사용자 정보를 성공적으로 반환해야 한다', async () => {
       // Arrange
-      mockRepo.findAccountForMe.mockResolvedValue({
+      mockAccounts.findAccountForMe.mockResolvedValue({
         id: BigInt(1),
         email: 'test@example.com',
         name: 'Test User',
@@ -459,7 +483,7 @@ describe('AuthService', () => {
 
     it('프로필 정보가 불완전하면 needsProfile이 true여야 한다', async () => {
       // Arrange
-      mockRepo.findAccountForMe.mockResolvedValue({
+      mockAccounts.findAccountForMe.mockResolvedValue({
         id: BigInt(1),
         email: 'test@example.com',
         name: 'Test User',
@@ -480,7 +504,7 @@ describe('AuthService', () => {
 
     it('계정을 찾을 수 없으면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
-      mockRepo.findAccountForMe.mockResolvedValue(null);
+      mockAccounts.findAccountForMe.mockResolvedValue(null);
 
       // Act & Assert
       await expect(service.me(BigInt(999))).rejects.toThrow(
@@ -489,7 +513,7 @@ describe('AuthService', () => {
     });
 
     it('user_profile이 아예 null이면 모든 프로필 필드가 null + needsProfile=true', async () => {
-      mockRepo.findAccountForMe.mockResolvedValue({
+      mockAccounts.findAccountForMe.mockResolvedValue({
         id: BigInt(1),
         email: null,
         name: null,
@@ -557,7 +581,7 @@ describe('AuthService', () => {
     });
 
     it('정상 발급: 활성 USER 계정이면 access token + 만료 정보를 반환한다', async () => {
-      mockRepo.findAccountForJwt.mockResolvedValue({
+      mockAccounts.findAccountForJwt.mockResolvedValue({
         id: BigInt(1),
         status: 'ACTIVE',
         account_type: 'USER',
@@ -576,7 +600,7 @@ describe('AuthService', () => {
     });
 
     it('존재하지 않는 accountId면 NotFoundException', async () => {
-      mockRepo.findAccountForJwt.mockResolvedValue(null);
+      mockAccounts.findAccountForJwt.mockResolvedValue(null);
 
       await expect(service.issueDevAccessToken(BigInt(999))).rejects.toThrow(
         NotFoundException,
@@ -585,7 +609,7 @@ describe('AuthService', () => {
     });
 
     it('비활성(SUSPENDED) 계정이면 ForbiddenException', async () => {
-      mockRepo.findAccountForJwt.mockResolvedValue({
+      mockAccounts.findAccountForJwt.mockResolvedValue({
         id: BigInt(2),
         status: 'SUSPENDED',
         account_type: 'USER',
