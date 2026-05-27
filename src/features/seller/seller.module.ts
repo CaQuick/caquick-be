@@ -15,9 +15,14 @@ import { SellerProductMutationResolver } from '@/features/seller/resolvers/selle
 import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-product-query.resolver';
 import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
-import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
+import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
+import { SellerBannerService } from '@/features/seller/services/seller-banner.service';
+import { SELLER_BANNER_SERVICE } from '@/features/seller/services/seller-banner.service.interface';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
+import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
+import { SELLER_FAQ_SERVICE } from '@/features/seller/services/seller-faq.service.interface';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
@@ -54,7 +59,18 @@ import { SellerStoreService } from '@/features/seller/services/seller-store.serv
     SellerCustomTemplateService,
     SellerOrderService,
     SellerConversationService,
-    SellerContentService,
+    {
+      provide: SELLER_FAQ_SERVICE,
+      useClass: SellerFaqService,
+    },
+    {
+      provide: SELLER_BANNER_SERVICE,
+      useClass: SellerBannerService,
+    },
+    {
+      provide: SELLER_AUDIT_SERVICE,
+      useClass: SellerAuditService,
+    },
     SellerRepository,
     SellerStoreQueryResolver,
     SellerProductQueryResolver,
