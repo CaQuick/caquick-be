@@ -9,6 +9,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
 import { ClockService } from '@/common/providers/clock.service';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
 import {
@@ -25,6 +29,7 @@ describe('AuthService', () => {
   let mockOidc: jest.Mocked<OidcClientService>;
   let mockRepo: jest.Mocked<AuthRepository>;
   let mockRefreshSessions: jest.Mocked<IRefreshSessionRepository>;
+  let mockAuditLogs: jest.Mocked<IAuditLogRepository>;
 
   beforeEach(async () => {
     mockConfig = {
@@ -55,6 +60,10 @@ describe('AuthService', () => {
       createRefreshSession: jest.fn(),
     };
 
+    mockAuditLogs = {
+      createAuditLog: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -65,6 +74,10 @@ describe('AuthService', () => {
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: mockRefreshSessions,
+        },
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useValue: mockAuditLogs,
         },
         { provide: ClockService, useValue: { now: () => new Date() } },
       ],

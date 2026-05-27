@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuditLogModule } from '@/features/audit-log';
 import { ConversationModule } from '@/features/conversation';
 import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
@@ -23,7 +24,7 @@ import { SellerProductCrudService } from '@/features/seller/services/seller-prod
 import { SellerStoreService } from '@/features/seller/services/seller-store.service';
 
 @Module({
-  imports: [OrderModule, ProductModule, ConversationModule],
+  imports: [OrderModule, ProductModule, ConversationModule, AuditLogModule],
   providers: [
     SellerStoreService,
     SellerProductCrudService,

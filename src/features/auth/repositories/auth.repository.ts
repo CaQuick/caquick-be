@@ -1,11 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  AccountType,
-  AuditActionType,
-  AuditTargetType,
-  IdentityProvider,
-  Prisma,
-} from '@prisma/client';
+import { AccountType, IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { PrismaService } from '@/prisma';
@@ -380,36 +374,6 @@ export class AuthRepository {
         password_hash: args.passwordHash,
         password_updated_at: args.now,
         updated_at: args.now,
-      },
-    });
-  }
-
-  /**
-   * 감사 로그를 생성한다.
-   */
-  async createAuditLog(args: {
-    actorAccountId: bigint;
-    storeId?: bigint | null;
-    targetType: AuditTargetType;
-    targetId: bigint;
-    action: AuditActionType;
-    beforeJson?: Prisma.InputJsonValue | null;
-    afterJson?: Prisma.InputJsonValue | null;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<void> {
-    await this.prisma.auditLog.create({
-      data: {
-        actor_account_id: args.actorAccountId,
-        store_id: args.storeId ?? null,
-        target_type: args.targetType,
-        target_id: args.targetId,
-        action: args.action,
-        before_json:
-          args.beforeJson === null ? Prisma.JsonNull : args.beforeJson,
-        after_json: args.afterJson === null ? Prisma.JsonNull : args.afterJson,
-        ip_address: args.ipAddress ?? null,
-        user_agent: args.userAgent ?? null,
       },
     });
   }

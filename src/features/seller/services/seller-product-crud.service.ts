@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,10 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
   IMAGE_LIMIT_EXCEEDED,
@@ -120,9 +125,11 @@ interface ProductDetailRow {
 export class SellerProductCrudService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
 
   async sellerProducts(
@@ -205,7 +212,7 @@ export class SellerProductCrudService extends SellerBaseService {
       sortOrder: 0,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -251,7 +258,7 @@ export class SellerProductCrudService extends SellerBaseService {
       data,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -288,7 +295,7 @@ export class SellerProductCrudService extends SellerBaseService {
     if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     await this.productRepository.softDeleteProduct(productId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -322,7 +329,7 @@ export class SellerProductCrudService extends SellerBaseService {
       },
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -370,7 +377,7 @@ export class SellerProductCrudService extends SellerBaseService {
       sortOrder: input.sortOrder ?? count,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -402,7 +409,7 @@ export class SellerProductCrudService extends SellerBaseService {
     }
 
     await this.productRepository.softDeleteProductImage(imageId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -448,7 +455,7 @@ export class SellerProductCrudService extends SellerBaseService {
       imageIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -488,7 +495,7 @@ export class SellerProductCrudService extends SellerBaseService {
       categoryIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -534,7 +541,7 @@ export class SellerProductCrudService extends SellerBaseService {
       tagIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,

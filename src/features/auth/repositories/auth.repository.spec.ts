@@ -1,9 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import {
-  AuditActionType,
-  AuditTargetType,
-  IdentityProvider,
-} from '@prisma/client';
+import { IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { AuthRepository } from '@/features/auth/repositories/auth.repository';
@@ -302,52 +298,6 @@ describe('AuthRepository (real DB)', () => {
         where: { seller_account_id: sellerAccount.id },
       });
       expect(updated!.password_hash).toBe('new_hash_value');
-    });
-  });
-
-  // ─── Audit Log ───
-
-  describe('createAuditLog', () => {
-    it('감사 로그를 생성한다', async () => {
-      const account = await createAccount(prisma);
-
-      await repo.createAuditLog({
-        actorAccountId: account.id,
-        targetType: AuditTargetType.CHANGE_PASSWORD,
-        targetId: account.id,
-        action: AuditActionType.UPDATE,
-        beforeJson: null,
-        afterJson: { changed: true },
-        ipAddress: '1.2.3.4',
-        userAgent: 'test',
-      });
-
-      const logs = await prisma.auditLog.findMany({
-        where: { actor_account_id: account.id },
-      });
-      expect(logs).toHaveLength(1);
-      expect(logs[0].action).toBe(AuditActionType.UPDATE);
-    });
-
-    it('storeId/ipAddress/userAgent/beforeJson 모두 생략해도 기본 null 처리로 생성된다', async () => {
-      const account = await createAccount(prisma);
-
-      await repo.createAuditLog({
-        actorAccountId: account.id,
-        targetType: AuditTargetType.STORE,
-        targetId: account.id,
-        action: AuditActionType.UPDATE,
-      });
-
-      const logs = await prisma.auditLog.findMany({
-        where: { actor_account_id: account.id },
-      });
-      expect(logs).toHaveLength(1);
-      expect(logs[0].store_id).toBeNull();
-      expect(logs[0].ip_address).toBeNull();
-      expect(logs[0].user_agent).toBeNull();
-      expect(logs[0].before_json).toBeNull();
-      expect(logs[0].after_json).toBeNull();
     });
   });
 });

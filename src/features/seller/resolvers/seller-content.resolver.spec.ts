@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerContentMutationResolver } from '@/features/seller/resolvers/seller-content-mutation.resolver';
@@ -24,6 +25,10 @@ describe('Seller Content Resolvers (real DB)', () => {
         SellerContentService,
         SellerRepository,
         ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerContentQueryResolver);

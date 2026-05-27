@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   AccountType,
-  AuditActionType,
   AuditTargetType,
   BannerLinkType,
   BannerPlacement,
@@ -403,33 +402,6 @@ export class SellerRepository {
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
-    });
-  }
-
-  async createAuditLog(args: {
-    actorAccountId: bigint;
-    storeId?: bigint;
-    targetType: AuditTargetType;
-    targetId: bigint;
-    action: AuditActionType;
-    beforeJson?: Prisma.InputJsonValue | null;
-    afterJson?: Prisma.InputJsonValue | null;
-    ipAddress?: string;
-    userAgent?: string;
-  }) {
-    return this.prisma.auditLog.create({
-      data: {
-        actor_account_id: args.actorAccountId,
-        store_id: args.storeId,
-        target_type: args.targetType,
-        target_id: args.targetId,
-        action: args.action,
-        before_json:
-          args.beforeJson === null ? Prisma.JsonNull : args.beforeJson,
-        after_json: args.afterJson === null ? Prisma.JsonNull : args.afterJson,
-        ip_address: args.ipAddress,
-        user_agent: args.userAgent,
-      },
     });
   }
 }

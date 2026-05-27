@@ -24,6 +24,10 @@ import {
   getEnvAsNumber,
 } from '@/common/helpers/config.helper';
 import { ClockService } from '@/common/providers/clock.service';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import {
   AuthCookie,
@@ -53,6 +57,7 @@ export class AuthService {
    * @param oidc OidcClientService
    * @param repo AuthRepository
    * @param refreshSessions RefreshSessionRepository
+   * @param auditLogs AuditLogRepository
    * @param clock ClockService
    */
   constructor(
@@ -62,6 +67,8 @@ export class AuthService {
     private readonly repo: AuthRepository,
     @Inject(REFRESH_SESSION_REPOSITORY)
     private readonly refreshSessions: IRefreshSessionRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
     private readonly clock: ClockService,
   ) {}
 
@@ -382,7 +389,7 @@ export class AuthService {
     });
     await this.refreshSessions.revokeAllRefreshSessions(args.accountId, now);
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: args.accountId,
       storeId: credential.seller_account.store?.id ?? null,
       targetType: AuditTargetType.CHANGE_PASSWORD,

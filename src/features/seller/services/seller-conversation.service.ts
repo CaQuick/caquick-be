@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,10 @@ import {
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ConversationRepository } from '@/features/conversation';
 import {
   BODY_HTML_REQUIRED,
@@ -40,9 +45,11 @@ import type {
 export class SellerConversationService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly conversationRepository: ConversationRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
   async sellerConversations(
     accountId: bigint,
@@ -139,7 +146,7 @@ export class SellerConversationService extends SellerBaseService {
         now: new Date(),
       });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.CONVERSATION,

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerContentService } from '@/features/seller/services/seller-content.service';
@@ -23,7 +24,15 @@ describe('SellerContentService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [SellerContentService, SellerRepository, ProductRepository],
+      providers: [
+        SellerContentService,
+        SellerRepository,
+        ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
+      ],
     });
     service = module.get(SellerContentService);
     prisma = p;
