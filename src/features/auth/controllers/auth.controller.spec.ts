@@ -4,6 +4,10 @@ import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
+import {
+  OIDC_LOGIN_SERVICE,
+  type IOidcLoginService,
+} from '@/features/auth/services/oidc-login.service.interface';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -18,11 +22,10 @@ function mockRes(): Response {
 describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
+  let oidcLogin: jest.Mocked<IOidcLoginService>;
 
   beforeEach(async () => {
     auth = {
-      startOidcLogin: jest.fn(),
-      handleOidcCallback: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
       sellerLogin: jest.fn(),
@@ -32,9 +35,17 @@ describe('AuthController', () => {
       issueDevAccessToken: jest.fn(),
     } as unknown as jest.Mocked<AuthService>;
 
+    oidcLogin = {
+      startOidcLogin: jest.fn(),
+      handleOidcCallback: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: auth }],
+      providers: [
+        { provide: AuthService, useValue: auth },
+        { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
@@ -45,13 +56,13 @@ describe('AuthController', () => {
       redirect: jest.fn(),
     } as unknown as Response;
 
-    auth.startOidcLogin.mockResolvedValue({
+    oidcLogin.startOidcLogin.mockResolvedValue({
       redirectUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     });
 
     await controller.start('google', 'https://caquick.site/login', res);
 
-    expect(auth.startOidcLogin).toHaveBeenCalledWith(
+    expect(oidcLogin.startOidcLogin).toHaveBeenCalledWith(
       'google',
       'https://caquick.site/login',
       res,
@@ -73,14 +84,18 @@ describe('AuthController', () => {
       redirect: jest.fn(),
     } as unknown as Response;
 
-    auth.handleOidcCallback.mockResolvedValue({
+    oidcLogin.handleOidcCallback.mockResolvedValue({
       returnTo: 'https://caquick.site/mypage',
       accessToken: 'access-token',
     });
 
     await controller.callback('google', req, res);
 
-    expect(auth.handleOidcCallback).toHaveBeenCalledWith('google', req, res);
+    expect(oidcLogin.handleOidcCallback).toHaveBeenCalledWith(
+      'google',
+      req,
+      res,
+    );
     expect(res.redirect).toHaveBeenCalledWith('https://caquick.site/mypage');
   });
 

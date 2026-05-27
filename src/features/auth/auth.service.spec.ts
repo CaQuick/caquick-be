@@ -26,7 +26,6 @@ import {
   SELLER_CREDENTIAL_REPOSITORY,
   type ISellerCredentialRepository,
 } from '@/features/auth/repositories/seller-credential.repository.interface';
-import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { TokenService } from '@/features/auth/services/token.service';
 import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
@@ -35,7 +34,6 @@ describe('AuthService', () => {
   let service: AuthService;
   let mockConfig: jest.Mocked<ConfigService>;
   let mockJwt: jest.Mocked<JwtService>;
-  let mockOidc: jest.Mocked<OidcClientService>;
   let mockAccounts: jest.Mocked<IAccountRepository>;
   let mockSellerCredentials: jest.Mocked<ISellerCredentialRepository>;
   let mockRefreshSessions: jest.Mocked<IRefreshSessionRepository>;
@@ -49,12 +47,6 @@ describe('AuthService', () => {
     mockJwt = {
       sign: jest.fn(),
     } as unknown as jest.Mocked<JwtService>;
-
-    mockOidc = {
-      buildAuthorizationUrl: jest.fn(),
-      exchangeCode: jest.fn(),
-      toIdentityProvider: jest.fn(),
-    } as unknown as jest.Mocked<OidcClientService>;
 
     mockAccounts = {
       findIdentityByProviderSubject: jest.fn(),
@@ -88,7 +80,6 @@ describe('AuthService', () => {
         AuthService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
-        { provide: OidcClientService, useValue: mockOidc },
         {
           provide: TOKEN_SERVICE,
           useClass: TokenService,
@@ -116,203 +107,8 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  describe('startOidcLogin', () => {
-    it('OIDC 로그인 URL을 생성하고 임시 쿠키를 설정해야 한다', async () => {
-      // Arrange
-      const mockRes = {
-        cookie: jest.fn(),
-      } as unknown as Response;
-
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'FRONTEND_BASE_URL') return 'http://localhost:3000';
-        if (key === 'AUTH_COOKIE_DOMAIN') return undefined;
-        if (key === 'AUTH_COOKIE_SECURE') return 'false';
-        return undefined;
-      });
-
-      mockOidc.buildAuthorizationUrl.mockResolvedValue({
-        authorizationUrl: 'https://accounts.google.com/auth',
-        state: 'mock-state',
-        nonce: 'mock-nonce',
-        codeVerifier: 'mock-verifier',
-      });
-
-      // Act
-      const result = await service.startOidcLogin(
-        'google',
-        'http://localhost:3000/dashboard',
-        mockRes,
-      );
-
-      // Assert
-      expect(result).toEqual({
-        redirectUrl: 'https://accounts.google.com/auth',
-      });
-      expect(mockOidc.buildAuthorizationUrl).toHaveBeenCalledWith('google');
-      expect(mockRes.cookie).toHaveBeenCalledTimes(4); // state, nonce, codeVerifier, returnTo
-    });
-
-    it('returnTo가 허용되지 않은 도메인이면 기본값을 사용해야 한다', async () => {
-      // Arrange
-      const mockRes = {
-        cookie: jest.fn(),
-      } as unknown as Response;
-
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'FRONTEND_BASE_URL') return 'http://localhost:3000';
-        return undefined;
-      });
-
-      mockOidc.buildAuthorizationUrl.mockResolvedValue({
-        authorizationUrl: 'https://accounts.google.com/auth',
-        state: 'state',
-        nonce: 'nonce',
-        codeVerifier: 'verifier',
-      });
-
-      // Act
-      await service.startOidcLogin('google', 'https://malicious.com', mockRes);
-
-      // Assert
-      // returnTo 쿠키가 기본값으로 설정되어야 함
-      const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'caquick_oidc_return_to',
-      );
-      expect(returnToCookie).toBeDefined();
-      expect(returnToCookie![1]).toBe('http://localhost:3000');
-    });
-  });
-
-  describe('handleOidcCallback', () => {
-    it('OIDC 콜백을 성공적으로 처리하고 인증 쿠키를 발급해야 한다', async () => {
-      // Arrange
-      const mockReq = {
-        cookies: {
-          caquick_oidc_state: 'expected-state',
-          caquick_oidc_nonce: 'expected-nonce',
-          caquick_oidc_cv: 'expected-verifier',
-          caquick_oidc_return_to: 'http://localhost:3000/dashboard',
-        },
-        query: {
-          code: 'auth-code',
-          state: 'expected-state',
-        },
-        headers: {
-          'user-agent': 'Mozilla/5.0',
-        },
-        ip: '127.0.0.1',
-      } as unknown as Request;
-
-      const mockRes = {
-        cookie: jest.fn(),
-        clearCookie: jest.fn(),
-      } as unknown as Response;
-
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'BACKEND_BASE_URL') return 'http://localhost:4000';
-        if (key === 'JWT_ACCESS_EXPIRES_SECONDS') return '900';
-        if (key === 'AUTH_REFRESH_EXPIRES_DAYS') return '30';
-        if (key === 'AUTH_COOKIE_DOMAIN') return undefined;
-        if (key === 'AUTH_COOKIE_SECURE') return 'false';
-        if (key === 'NODE_ENV') return 'development';
-        return undefined;
-      });
-
-      mockOidc.exchangeCode.mockResolvedValue({
-        claims: () => ({
-          sub: 'google-user-123',
-          email: 'test@example.com',
-          email_verified: true,
-          name: 'Test User',
-          picture: 'https://example.com/photo.jpg',
-        }),
-      } as never);
-
-      mockOidc.toIdentityProvider.mockReturnValue('GOOGLE');
-
-      mockAccounts.upsertUserByOidcIdentity.mockResolvedValue({
-        account: {
-          id: BigInt(1),
-          email: 'test@example.com',
-          name: 'Test User',
-        } as never,
-      });
-
-      mockRefreshSessions.createRefreshSession.mockResolvedValue({} as never);
-      mockJwt.sign.mockReturnValue('mock-access-token');
-
-      // Act
-      const result = await service.handleOidcCallback(
-        'google',
-        mockReq,
-        mockRes,
-      );
-
-      // Assert
-      expect(result).toEqual({
-        returnTo: 'http://localhost:3000/dashboard',
-        accessToken: 'mock-access-token',
-      });
-      expect(mockOidc.exchangeCode).toHaveBeenCalled();
-      expect(mockAccounts.upsertUserByOidcIdentity).toHaveBeenCalledWith({
-        provider: 'GOOGLE',
-        providerSubject: 'google-user-123',
-        providerEmail: 'test@example.com',
-        emailVerified: true,
-        providerDisplayName: 'Test User',
-        providerProfileImageUrl: 'https://example.com/photo.jpg',
-      });
-      expect(mockRes.cookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
-        expect.any(String),
-        expect.any(Object),
-      );
-      expect(mockRes.clearCookie).toHaveBeenCalledTimes(4); // OIDC 임시 쿠키 4개
-    });
-
-    it('OIDC 세션 쿠키가 없으면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
-      const mockReq = {
-        cookies: {},
-      } as unknown as Request;
-
-      const mockRes = {} as Response;
-
-      // Act & Assert
-      await expect(
-        service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow(UnauthorizedException);
-      await expect(
-        service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC session is missing.');
-    });
-
-    it('OIDC subject가 없으면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
-      const mockReq = {
-        cookies: {
-          caquick_oidc_state: 'state',
-          caquick_oidc_nonce: 'nonce',
-          caquick_oidc_cv: 'verifier',
-        },
-        query: { code: 'code', state: 'state' },
-        headers: {},
-      } as unknown as Request;
-
-      const mockRes = {} as Response;
-
-      mockConfig.get.mockReturnValue('http://localhost:4000');
-
-      mockOidc.exchangeCode.mockResolvedValue({
-        claims: () => ({}), // sub 없음
-      } as never);
-
-      // Act & Assert
-      await expect(
-        service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC subject is missing.');
-    });
-  });
+  // OIDC 흐름 (startOidcLogin / handleOidcCallback) 은 OidcLoginService 로 분리.
+  // 해당 케이스는 oidc-login.service.spec.ts 에서 다룬다.
 
   describe('refresh', () => {
     it('refresh 토큰을 성공적으로 회전시켜야 한다', async () => {
@@ -533,47 +329,6 @@ describe('AuthService', () => {
       expect(result.birthDate).toBeNull();
       expect(result.phoneNumber).toBeNull();
       expect(result.needsProfile).toBe(true);
-    });
-  });
-
-  describe('startOidcLogin returnTo 분기 (빈 값/공백)', () => {
-    it('returnTo가 undefined이면 기본 프론트 URL을 사용한다', async () => {
-      const mockRes = { cookie: jest.fn() } as unknown as Response;
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'FRONTEND_BASE_URL') return 'http://front.example';
-        return undefined;
-      });
-      mockOidc.buildAuthorizationUrl.mockResolvedValue({
-        authorizationUrl: 'https://a',
-        state: 's',
-        nonce: 'n',
-        codeVerifier: 'v',
-      });
-
-      await service.startOidcLogin('google', undefined, mockRes);
-
-      const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
-        (c) => c[0] === 'caquick_oidc_return_to',
-      );
-      expect(returnToCookie![1]).toBe('http://front.example');
-    });
-
-    it('FRONTEND_BASE_URL이 미설정이면 http://localhost:3000으로 fallback', async () => {
-      const mockRes = { cookie: jest.fn() } as unknown as Response;
-      mockConfig.get.mockImplementation(() => undefined);
-      mockOidc.buildAuthorizationUrl.mockResolvedValue({
-        authorizationUrl: 'https://a',
-        state: 's',
-        nonce: 'n',
-        codeVerifier: 'v',
-      });
-
-      await service.startOidcLogin('google', '   ', mockRes);
-
-      const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
-        (c) => c[0] === 'caquick_oidc_return_to',
-      );
-      expect(returnToCookie![1]).toBe('http://localhost:3000');
     });
   });
 

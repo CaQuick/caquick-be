@@ -6,7 +6,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   AccountType,
   AuditActionType,
@@ -21,9 +20,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
-import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
-import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
 import {
   getIp,
   getUserAgent,
@@ -40,15 +36,10 @@ import {
   SELLER_CREDENTIAL_REPOSITORY,
   type ISellerCredentialRepository,
 } from '@/features/auth/repositories/seller-credential.repository.interface';
-import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import {
   TOKEN_SERVICE,
   type ITokenService,
 } from '@/features/auth/services/token.service.interface';
-import {
-  parseOidcProvider,
-  type OidcProvider,
-} from '@/features/auth/types/oidc-provider.type';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /**
@@ -57,8 +48,6 @@ import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 @Injectable()
 export class AuthService {
   /**
-   * @param config ConfigService
-   * @param oidc OidcClientService
    * @param tokens TokenService
    * @param accounts AccountRepository
    * @param sellerCredentials SellerCredentialRepository
@@ -67,8 +56,6 @@ export class AuthService {
    * @param clock ClockService
    */
   constructor(
-    private readonly config: ConfigService,
-    private readonly oidc: OidcClientService,
     @Inject(TOKEN_SERVICE)
     private readonly tokens: ITokenService,
     @Inject(ACCOUNT_REPOSITORY)
@@ -81,92 +68,6 @@ export class AuthService {
     private readonly auditLogs: IAuditLogRepository,
     private readonly clock: ClockService,
   ) {}
-
-  /**
-   * OIDC 로그인 시작(리다이렉트 URL 생성 + 임시 쿠키 세팅)
-   *
-   * @param rawProvider provider param
-   * @param returnTo FE 리다이렉트 목적지
-   * @param res Response
-   */
-  async startOidcLogin(
-    rawProvider: string,
-    returnTo: string | undefined,
-    res: Response,
-  ): Promise<{ redirectUrl: string }> {
-    const provider = parseOidcProvider(rawProvider);
-    const safeReturnTo = this.normalizeReturnTo(returnTo);
-
-    const { authorizationUrl, state, nonce, codeVerifier } =
-      await this.oidc.buildAuthorizationUrl(provider);
-
-    AuthCookie.setOidcTempCookies(res, {
-      state,
-      nonce,
-      codeVerifier,
-      returnTo: safeReturnTo,
-      cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
-      secure: AuthCookieOptions.isCookieSecure(this.config),
-      sameSite: AuthCookieOptions.getCookieSameSite(this.config),
-    });
-
-    return { redirectUrl: authorizationUrl };
-  }
-
-  /**
-   * OIDC 콜백 처리:
-   * - state/nonce 검증
-   * - code 교환
-   * - Account/Identity upsert
-   * - refresh 쿠키 발급 및 access token 반환
-   *
-   * @param rawProvider provider param
-   * @param req Request
-   * @param res Response
-   */
-  async handleOidcCallback(
-    rawProvider: string,
-    req: Request,
-    res: Response,
-  ): Promise<{ returnTo: string; accessToken: string }> {
-    const provider = parseOidcProvider(rawProvider);
-
-    // 1. OIDC 임시 쿠키 검증 및 추출
-    const { expectedState, expectedNonce, codeVerifier, returnTo } =
-      this.extractOidcTempCookies(req);
-
-    // 2. code를 token으로 교환
-    const tokenSet = await this.exchangeOidcCode(
-      provider,
-      req,
-      expectedState,
-      expectedNonce,
-      codeVerifier,
-    );
-
-    // 3. claims에서 사용자 정보 추출
-    const userInfo = this.extractUserInfoFromClaims(tokenSet.claims());
-
-    // 4. 계정 생성/업데이트
-    const account = await this.upsertAccountFromOidc(provider, userInfo);
-
-    // 5. refresh 쿠키 발급 + access token 생성
-    const { accessToken } = await this.tokens.issueAuthTokens({
-      accountId: account.id,
-      req,
-      res,
-    });
-
-    // 6. OIDC 임시 쿠키 삭제
-    AuthCookie.clearOidcTempCookies(
-      res,
-      AuthCookieOptions.getCookieDomain(this.config),
-      AuthCookieOptions.isCookieSecure(this.config),
-      AuthCookieOptions.getCookieSameSite(this.config),
-    );
-
-    return { returnTo, accessToken };
-  }
 
   /**
    * 판매자 username/password 로그인
@@ -438,189 +339,5 @@ export class AuthService {
       phoneNumber: profile?.phone_number ?? null,
       needsProfile,
     };
-  }
-
-  /**
-   * OIDC 임시 쿠키를 추출하고 검증한다.
-   *
-   * @param req Request
-   */
-  private extractOidcTempCookies(req: Request): {
-    expectedState: string;
-    expectedNonce: string;
-    codeVerifier: string;
-    returnTo: string;
-  } {
-    const expectedState = req.cookies?.[AUTH_COOKIE.OIDC_STATE] as
-      | string
-      | undefined;
-    const expectedNonce = req.cookies?.[AUTH_COOKIE.OIDC_NONCE] as
-      | string
-      | undefined;
-    const codeVerifier = req.cookies?.[AUTH_COOKIE.OIDC_CODE_VERIFIER] as
-      | string
-      | undefined;
-    const returnTo =
-      (req.cookies?.[AUTH_COOKIE.OIDC_RETURN_TO] as string | undefined) ??
-      this.normalizeReturnTo(undefined);
-
-    if (!expectedState || !expectedNonce || !codeVerifier) {
-      throw new UnauthorizedException('OIDC session is missing.');
-    }
-
-    return { expectedState, expectedNonce, codeVerifier, returnTo };
-  }
-
-  /**
-   * OIDC code를 token으로 교환한다.
-   *
-   * @param provider provider
-   * @param req Request
-   * @param expectedState state
-   * @param expectedNonce nonce
-   * @param codeVerifier code verifier
-   */
-  private async exchangeOidcCode(
-    provider: OidcProvider,
-    req: Request,
-    expectedState: string,
-    expectedNonce: string,
-    codeVerifier: string,
-  ) {
-    const callbackParams = this.pickCallbackParams(req);
-    const redirectUri = this.getCallbackRedirectUri(provider);
-
-    return this.oidc.exchangeCode(provider, {
-      redirectUri,
-      callbackParams,
-      state: expectedState,
-      nonce: expectedNonce,
-      codeVerifier,
-    });
-  }
-
-  /**
-   * OIDC claims에서 사용자 정보를 추출한다.
-   *
-   * @param claims OIDC claims
-   */
-  private extractUserInfoFromClaims(claims: Record<string, unknown>): {
-    subject: string;
-    email?: string;
-    emailVerified: boolean;
-    displayName?: string;
-    picture?: string;
-  } {
-    const subject = typeof claims.sub === 'string' ? claims.sub : null;
-    if (!subject) throw new UnauthorizedException('OIDC subject is missing.');
-
-    const email = typeof claims.email === 'string' ? claims.email : undefined;
-    const emailVerified = claims.email_verified === true;
-
-    const displayName =
-      (typeof claims.name === 'string' ? claims.name : undefined) ??
-      (typeof claims.nickname === 'string' ? claims.nickname : undefined);
-
-    const picture =
-      typeof claims.picture === 'string' ? claims.picture : undefined;
-
-    return { subject, email, emailVerified, displayName, picture };
-  }
-
-  /**
-   * OIDC 사용자 정보로 계정을 생성/업데이트한다.
-   *
-   * @param provider provider
-   * @param userInfo 사용자 정보
-   */
-  private async upsertAccountFromOidc(
-    provider: OidcProvider,
-    userInfo: {
-      subject: string;
-      email?: string;
-      emailVerified: boolean;
-      displayName?: string;
-      picture?: string;
-    },
-  ) {
-    const identityProvider = this.oidc.toIdentityProvider(provider);
-
-    const { account } = await this.accounts.upsertUserByOidcIdentity({
-      provider: identityProvider,
-      providerSubject: userInfo.subject,
-      providerEmail: userInfo.email,
-      emailVerified: userInfo.emailVerified,
-      providerDisplayName: userInfo.displayName,
-      providerProfileImageUrl: userInfo.picture,
-    });
-
-    if (!account) throw new UnauthorizedException('Account upsert failed.');
-
-    return account;
-  }
-
-  /**
-   * returnTo 값을 안전하게 정규화한다(오픈리다이렉트 방지).
-   *
-   * @param raw returnTo
-   */
-  private normalizeReturnTo(raw: string | undefined): string {
-    const frontend =
-      this.config.get<string>('FRONTEND_BASE_URL')?.trim() ??
-      'http://localhost:3000';
-
-    if (!raw || raw.trim().length === 0) return frontend;
-
-    // 같은 site로만 허용(정확히는 prefix 기반)
-    const allowed = [frontend, ...ALLOWED_RETURN_TO_DOMAINS];
-    const ok = allowed.some((prefix) => raw.startsWith(prefix));
-    return ok ? raw : frontend;
-  }
-
-  /**
-   * callback params(code/state 등)를 안전하게 추출한다.
-   *
-   * @param req Request
-   */
-  private pickCallbackParams(req: Request): Record<string, string | string[]> {
-    const q = req.query as Record<string, unknown>;
-    const result: Record<string, string | string[]> = {};
-
-    const isStringArray = (val: unknown): val is string[] =>
-      Array.isArray(val) && val.every((x) => typeof x === 'string');
-
-    const pick = (key: string): void => {
-      const v = q[key];
-
-      if (typeof v === 'string') {
-        result[key] = v;
-        return;
-      }
-
-      if (isStringArray(v)) {
-        result[key] = v;
-      }
-    };
-
-    pick('code');
-    pick('state');
-    pick('iss');
-    pick('error');
-    pick('error_description');
-
-    return result;
-  }
-
-  /**
-   * provider별 callback redirect uri를 반환한다.
-   *
-   * @param provider provider
-   */
-  private getCallbackRedirectUri(provider: OidcProvider): string {
-    const backendBase =
-      this.config.get<string>('BACKEND_BASE_URL')?.trim() ??
-      'http://localhost:4000';
-
-    return `${backendBase}/auth/oidc/${provider}/callback`;
   }
 }
