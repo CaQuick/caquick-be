@@ -20,14 +20,36 @@ import { SellerConversationService } from '@/features/seller/services/seller-con
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
-import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
+import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
+import { SELLER_PRODUCT_IMAGE_SERVICE } from '@/features/seller/services/seller-product-image.service.interface';
+import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
+import { SELLER_PRODUCT_LIFECYCLE_SERVICE } from '@/features/seller/services/seller-product-lifecycle.service.interface';
+import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
+import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
+import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
+import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import { SellerStoreService } from '@/features/seller/services/seller-store.service';
 
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule, AuditLogModule],
   providers: [
     SellerStoreService,
-    SellerProductCrudService,
+    {
+      provide: SELLER_PRODUCT_QUERY_SERVICE,
+      useClass: SellerProductQueryService,
+    },
+    {
+      provide: SELLER_PRODUCT_LIFECYCLE_SERVICE,
+      useClass: SellerProductLifecycleService,
+    },
+    {
+      provide: SELLER_PRODUCT_IMAGE_SERVICE,
+      useClass: SellerProductImageService,
+    },
+    {
+      provide: SELLER_PRODUCT_TAXONOMY_SERVICE,
+      useClass: SellerProductTaxonomyService,
+    },
     SellerOptionService,
     SellerCustomTemplateService,
     SellerOrderService,
