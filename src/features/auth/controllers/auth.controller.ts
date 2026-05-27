@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -28,6 +29,10 @@ import { AuthService } from '@/features/auth/auth.service';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
 import { SellerChangePasswordInput } from '@/features/auth/dto/inputs/seller-change-password.input';
 import { SellerLoginInput } from '@/features/auth/dto/inputs/seller-login.input';
+import {
+  OIDC_LOGIN_SERVICE,
+  type IOidcLoginService,
+} from '@/features/auth/services/oidc-login.service.interface';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 
@@ -41,8 +46,13 @@ import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 export class AuthController {
   /**
    * @param auth AuthService
+   * @param oidcLogin OidcLoginService
    */
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @Inject(OIDC_LOGIN_SERVICE)
+    private readonly oidcLogin: IOidcLoginService,
+  ) {}
 
   /**
    * OIDC 로그인 시작
@@ -79,7 +89,7 @@ export class AuthController {
     // provider 검증(잘못된 값이면 즉시 에러)
     parseOidcProvider(provider);
 
-    const { redirectUrl } = await this.auth.startOidcLogin(
+    const { redirectUrl } = await this.oidcLogin.startOidcLogin(
       provider,
       returnTo,
       res,
@@ -115,7 +125,11 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { returnTo } = await this.auth.handleOidcCallback(provider, req, res);
+    const { returnTo } = await this.oidcLogin.handleOidcCallback(
+      provider,
+      req,
+      res,
+    );
     res.redirect(returnTo);
   }
 
