@@ -246,13 +246,4 @@ export class AccountRepository implements IAccountRepository {
       },
     });
   }
-
-  async findAccountForMe(
-    accountId: bigint,
-  ): Promise<AccountWithProfile | null> {
-    return this.prisma.account.findFirst({
-      where: { id: accountId },
-      include: { user_profile: true },
-    });
-  }
 }

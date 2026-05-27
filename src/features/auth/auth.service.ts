@@ -3,7 +3,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
@@ -22,9 +21,12 @@ import {
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /**
- * 인증/로그인/토큰 발급/갱신 비즈니스 로직 (일반 유저 흐름).
+ * 인증 도메인 진입 서비스 (일반 유저용 refresh / logout / dev token 발급).
  *
- * 판매자 자격증명 흐름은 SellerCredentialService 가, OIDC 흐름은 OidcLoginService 가 담당한다.
+ * 다른 흐름은 별도 서비스가 담당:
+ * - OIDC 시작/콜백: OidcLoginService
+ * - 판매자 자격증명 (login / refresh / logout / changePassword): SellerCredentialService
+ * - GraphQL `me` 조회: UserProfileService
  */
 @Injectable()
 export class AuthService {
@@ -105,33 +107,5 @@ export class AuthService {
     }
 
     this.tokens.clearRefreshCookie(res);
-  }
-
-  /**
-   * 현재 로그인 사용자 정보를 반환한다.
-   *
-   * @param accountId accountId(BigInt)
-   */
-  async me(accountId: bigint) {
-    const account = await this.accounts.findAccountForMe(accountId);
-    if (!account) throw new UnauthorizedException('Account not found.');
-
-    const profile = account.user_profile;
-
-    const needsProfile =
-      !profile?.birth_date || !profile?.phone_number || !profile?.nickname;
-
-    return {
-      accountId: account.id.toString(),
-      email: account.email,
-      name: account.name,
-      nickname: profile?.nickname ?? null,
-      profileImageUrl: profile?.profile_image_url ?? null,
-      birthDate: profile?.birth_date
-        ? profile.birth_date.toISOString().slice(0, 10)
-        : null,
-      phoneNumber: profile?.phone_number ?? null,
-      needsProfile,
-    };
   }
 }
