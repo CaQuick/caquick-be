@@ -12,6 +12,8 @@ import { SELLER_CREDENTIAL_REPOSITORY } from '@/features/auth/repositories/selle
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { OIDC_LOGIN_SERVICE } from '@/features/auth/services/oidc-login.service.interface';
+import { SellerCredentialService } from '@/features/auth/services/seller-credential.service';
+import { SELLER_CREDENTIAL_SERVICE } from '@/features/auth/services/seller-credential.service.interface';
 import { TokenService } from '@/features/auth/services/token.service';
 import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
@@ -32,6 +34,10 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
     {
       provide: OIDC_LOGIN_SERVICE,
       useClass: OidcLoginService,
+    },
+    {
+      provide: SELLER_CREDENTIAL_SERVICE,
+      useClass: SellerCredentialService,
     },
     {
       provide: TOKEN_SERVICE,
