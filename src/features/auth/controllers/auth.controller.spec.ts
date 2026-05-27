@@ -8,6 +8,10 @@ import {
   OIDC_LOGIN_SERVICE,
   type IOidcLoginService,
 } from '@/features/auth/services/oidc-login.service.interface';
+import {
+  SELLER_CREDENTIAL_SERVICE,
+  type ISellerCredentialService,
+} from '@/features/auth/services/seller-credential.service.interface';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -23,15 +27,12 @@ describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
   let oidcLogin: jest.Mocked<IOidcLoginService>;
+  let sellerAuth: jest.Mocked<ISellerCredentialService>;
 
   beforeEach(async () => {
     auth = {
       refresh: jest.fn(),
       logout: jest.fn(),
-      sellerLogin: jest.fn(),
-      refreshSeller: jest.fn(),
-      logoutSeller: jest.fn(),
-      changeSellerPassword: jest.fn(),
       issueDevAccessToken: jest.fn(),
     } as unknown as jest.Mocked<AuthService>;
 
@@ -40,11 +41,19 @@ describe('AuthController', () => {
       handleOidcCallback: jest.fn(),
     };
 
+    sellerAuth = {
+      sellerLogin: jest.fn(),
+      refreshSeller: jest.fn(),
+      logoutSeller: jest.fn(),
+      changeSellerPassword: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
+        { provide: SELLER_CREDENTIAL_SERVICE, useValue: sellerAuth },
       ],
     }).compile();
 
@@ -130,7 +139,7 @@ describe('AuthController', () => {
   it('sellerLogin은 accessToken + accountStatus를 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
-    auth.sellerLogin.mockResolvedValue({
+    sellerAuth.sellerLogin.mockResolvedValue({
       accessToken: 'seller-access',
       accountStatus: 'ACTIVE',
     });
@@ -141,7 +150,7 @@ describe('AuthController', () => {
       res,
     );
 
-    expect(auth.sellerLogin).toHaveBeenCalledWith({
+    expect(sellerAuth.sellerLogin).toHaveBeenCalledWith({
       username: 'seller',
       password: 'pw1234!A',
       req,
@@ -158,14 +167,14 @@ describe('AuthController', () => {
   it('sellerRefresh는 accessToken + accountStatus를 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
-    auth.refreshSeller.mockResolvedValue({
+    sellerAuth.refreshSeller.mockResolvedValue({
       accessToken: 'rotated',
       accountStatus: 'ACTIVE',
     });
 
     await controller.sellerRefresh(req, res);
 
-    expect(auth.refreshSeller).toHaveBeenCalledWith(req, res);
+    expect(sellerAuth.refreshSeller).toHaveBeenCalledWith(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       accessToken: 'rotated',
@@ -180,7 +189,7 @@ describe('AuthController', () => {
 
     await controller.sellerLogout(req, res);
 
-    expect(auth.logoutSeller).toHaveBeenCalledWith(req, res);
+    expect(sellerAuth.logoutSeller).toHaveBeenCalledWith(req, res);
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
   });
@@ -197,7 +206,7 @@ describe('AuthController', () => {
       res,
     );
 
-    expect(auth.changeSellerPassword).toHaveBeenCalledWith({
+    expect(sellerAuth.changeSellerPassword).toHaveBeenCalledWith({
       accountId: BigInt(42),
       currentPassword: 'old!Pass1',
       newPassword: 'New!Pass1',

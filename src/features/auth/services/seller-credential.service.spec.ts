@@ -15,11 +15,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { AuthService } from '@/features/auth/auth.service';
-import {
-  ACCOUNT_REPOSITORY,
-  type IAccountRepository,
-} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -28,12 +23,12 @@ import {
   SELLER_CREDENTIAL_REPOSITORY,
   type ISellerCredentialRepository,
 } from '@/features/auth/repositories/seller-credential.repository.interface';
+import { SellerCredentialService } from '@/features/auth/services/seller-credential.service';
 import { TokenService } from '@/features/auth/services/token.service';
 import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 
-describe('AuthService (seller)', () => {
-  let service: AuthService;
-  let accounts: jest.Mocked<IAccountRepository>;
+describe('SellerCredentialService', () => {
+  let service: SellerCredentialService;
   let sellerCredentials: jest.Mocked<ISellerCredentialRepository>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
   let auditLogs: jest.Mocked<IAuditLogRepository>;
@@ -51,14 +46,6 @@ describe('AuthService (seller)', () => {
   } as unknown as Response;
 
   beforeEach(async () => {
-    accounts = {
-      findIdentityByProviderSubject: jest.fn(),
-      findAccountByEmail: jest.fn(),
-      upsertUserByOidcIdentity: jest.fn(),
-      findAccountForJwt: jest.fn(),
-      findAccountForMe: jest.fn(),
-    };
-
     sellerCredentials = {
       findSellerCredentialByUsername: jest.fn(),
       findSellerCredentialByAccountId: jest.fn(),
@@ -84,7 +71,7 @@ describe('AuthService (seller)', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        AuthService,
+        SellerCredentialService,
         { provide: ConfigService, useValue: mockConfig },
         {
           provide: JwtService,
@@ -93,10 +80,6 @@ describe('AuthService (seller)', () => {
         {
           provide: TOKEN_SERVICE,
           useClass: TokenService,
-        },
-        {
-          provide: ACCOUNT_REPOSITORY,
-          useValue: accounts,
         },
         {
           provide: SELLER_CREDENTIAL_REPOSITORY,
@@ -114,7 +97,7 @@ describe('AuthService (seller)', () => {
       ],
     }).compile();
 
-    service = module.get<AuthService>(AuthService);
+    service = module.get<SellerCredentialService>(SellerCredentialService);
   });
 
   afterEach(() => {

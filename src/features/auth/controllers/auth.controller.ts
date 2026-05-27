@@ -33,6 +33,10 @@ import {
   OIDC_LOGIN_SERVICE,
   type IOidcLoginService,
 } from '@/features/auth/services/oidc-login.service.interface';
+import {
+  SELLER_CREDENTIAL_SERVICE,
+  type ISellerCredentialService,
+} from '@/features/auth/services/seller-credential.service.interface';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 
@@ -47,11 +51,14 @@ export class AuthController {
   /**
    * @param auth AuthService
    * @param oidcLogin OidcLoginService
+   * @param sellerAuth SellerCredentialService
    */
   constructor(
     private readonly auth: AuthService,
     @Inject(OIDC_LOGIN_SERVICE)
     private readonly oidcLogin: IOidcLoginService,
+    @Inject(SELLER_CREDENTIAL_SERVICE)
+    private readonly sellerAuth: ISellerCredentialService,
   ) {}
 
   /**
@@ -213,7 +220,7 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.auth.sellerLogin({
+    const { accessToken, accountStatus } = await this.sellerAuth.sellerLogin({
       username: body.username,
       password: body.password,
       req,
@@ -256,7 +263,7 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.auth.refreshSeller(
+    const { accessToken, accountStatus } = await this.sellerAuth.refreshSeller(
       req,
       res,
     );
@@ -280,7 +287,7 @@ export class AuthController {
   @ApiNoContentResponse({ description: '판매자 로그아웃 완료' })
   @Post('seller/logout')
   async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
-    await this.auth.logoutSeller(req, res);
+    await this.sellerAuth.logoutSeller(req, res);
     res.status(204).send();
   }
 
@@ -356,7 +363,7 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     const accountId = parseAccountId(user);
-    await this.auth.changeSellerPassword({
+    await this.sellerAuth.changeSellerPassword({
       accountId,
       currentPassword: body.currentPassword,
       newPassword: body.newPassword,
