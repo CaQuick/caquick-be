@@ -2,28 +2,30 @@ import type { PrismaClient } from '@prisma/client';
 import { IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createAccountIdentity,
-  createSellerCredential,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-describe('AuthRepository (real DB)', () => {
-  let repo: AuthRepository;
+describe('AccountRepository (real DB)', () => {
+  let repo: AccountRepository;
   let prisma: PrismaClient;
   let clock: ClockService;
 
   beforeAll(async () => {
     clock = new ClockService();
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [AuthRepository, { provide: ClockService, useValue: clock }],
+      providers: [
+        AccountRepository,
+        { provide: ClockService, useValue: clock },
+      ],
     });
-    repo = module.get(AuthRepository);
+    repo = module.get(AccountRepository);
     prisma = p;
   });
 
@@ -35,8 +37,6 @@ describe('AuthRepository (real DB)', () => {
   beforeEach(async () => {
     await truncateAll();
   });
-
-  // ─── Identity 조회 ───
 
   describe('findIdentityByProviderSubject', () => {
     it('provider+subject로 Identity를 조회한다', async () => {
@@ -66,8 +66,6 @@ describe('AuthRepository (real DB)', () => {
     });
   });
 
-  // ─── 이메일 계정 조회 ───
-
   describe('findAccountByEmail', () => {
     it('이메일로 계정을 조회한다', async () => {
       const account = await createAccount(prisma, {
@@ -87,8 +85,6 @@ describe('AuthRepository (real DB)', () => {
       expect(result).toBeNull();
     });
   });
-
-  // ─── OIDC Identity Upsert ───
 
   describe('upsertUserByOidcIdentity', () => {
     it('신규 Identity+계정을 생성한다', async () => {
@@ -160,7 +156,7 @@ describe('AuthRepository (real DB)', () => {
     });
 
     it('기존 Identity + account email이 null + user_profile 없는 경우: profile 신규 생성 + email 주입', async () => {
-      // account는 있지만 email/profile이 비어있는 초기 상태 재현
+      // account 는 있지만 email/profile 이 비어있는 초기 상태 재현
       const account = await prisma.account.create({
         data: {
           account_type: 'USER',
@@ -189,8 +185,6 @@ describe('AuthRepository (real DB)', () => {
     });
   });
 
-  // ─── JWT/Me 조회 ───
-
   describe('findAccountForJwt', () => {
     it('계정 id/status/type을 반환한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -213,91 +207,6 @@ describe('AuthRepository (real DB)', () => {
 
       expect(found).not.toBeNull();
       expect(found!.user_profile).not.toBeNull();
-    });
-  });
-
-  // ─── Seller 조회 ───
-
-  describe('findSellerCredentialByUsername', () => {
-    it('username으로 판매자 자격정보를 조회한다', async () => {
-      const sellerAccount = await createAccount(prisma, {
-        account_type: 'SELLER',
-      });
-      await createSellerCredential(prisma, {
-        seller_account_id: sellerAccount.id,
-        username: 'test_seller',
-      });
-
-      const found = await repo.findSellerCredentialByUsername('test_seller');
-
-      expect(found).not.toBeNull();
-      expect(found!.username).toBe('test_seller');
-      expect(found!.seller_account.id).toBe(sellerAccount.id);
-    });
-
-    it('존재하지 않는 username이면 null', async () => {
-      const found = await repo.findSellerCredentialByUsername('nonexistent');
-      expect(found).toBeNull();
-    });
-  });
-
-  describe('findSellerCredentialByAccountId', () => {
-    it('accountId로 판매자 자격정보를 조회한다', async () => {
-      const sellerAccount = await createAccount(prisma, {
-        account_type: 'SELLER',
-      });
-      await createSellerCredential(prisma, {
-        seller_account_id: sellerAccount.id,
-      });
-
-      const found = await repo.findSellerCredentialByAccountId(
-        sellerAccount.id,
-      );
-
-      expect(found).not.toBeNull();
-      expect(found!.seller_account_id).toBe(sellerAccount.id);
-    });
-  });
-
-  describe('updateSellerLastLogin', () => {
-    it('최근 로그인 시각을 갱신한다', async () => {
-      const sellerAccount = await createAccount(prisma, {
-        account_type: 'SELLER',
-      });
-      await createSellerCredential(prisma, {
-        seller_account_id: sellerAccount.id,
-      });
-
-      const now = new Date();
-      await repo.updateSellerLastLogin(sellerAccount.id, now);
-
-      const updated = await prisma.sellerCredential.findUnique({
-        where: { seller_account_id: sellerAccount.id },
-      });
-      expect(updated!.last_login_at!.getTime()).toBe(now.getTime());
-    });
-  });
-
-  describe('updateSellerPasswordHash', () => {
-    it('비밀번호 해시를 갱신한다', async () => {
-      const sellerAccount = await createAccount(prisma, {
-        account_type: 'SELLER',
-      });
-      await createSellerCredential(prisma, {
-        seller_account_id: sellerAccount.id,
-      });
-
-      const now = new Date();
-      await repo.updateSellerPasswordHash({
-        sellerAccountId: sellerAccount.id,
-        passwordHash: 'new_hash_value',
-        now,
-      });
-
-      const updated = await prisma.sellerCredential.findUnique({
-        where: { seller_account_id: sellerAccount.id },
-      });
-      expect(updated!.password_hash).toBe('new_hash_value');
     });
   });
 });

@@ -16,16 +16,24 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  ACCOUNT_REPOSITORY,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
+import {
+  SELLER_CREDENTIAL_REPOSITORY,
+  type ISellerCredentialRepository,
+} from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 
 describe('AuthService (seller)', () => {
   let service: AuthService;
-  let repo: jest.Mocked<AuthRepository>;
+  let accounts: jest.Mocked<IAccountRepository>;
+  let sellerCredentials: jest.Mocked<ISellerCredentialRepository>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
   let auditLogs: jest.Mocked<IAuditLogRepository>;
   let mockConfig: jest.Mocked<ConfigService>;
@@ -42,12 +50,20 @@ describe('AuthService (seller)', () => {
   } as unknown as Response;
 
   beforeEach(async () => {
-    repo = {
+    accounts = {
+      findIdentityByProviderSubject: jest.fn(),
+      findAccountByEmail: jest.fn(),
+      upsertUserByOidcIdentity: jest.fn(),
+      findAccountForJwt: jest.fn(),
+      findAccountForMe: jest.fn(),
+    };
+
+    sellerCredentials = {
       findSellerCredentialByUsername: jest.fn(),
       findSellerCredentialByAccountId: jest.fn(),
       updateSellerLastLogin: jest.fn(),
       updateSellerPasswordHash: jest.fn(),
-    } as unknown as jest.Mocked<AuthRepository>;
+    };
 
     refreshSessions = {
       createRefreshSession: jest.fn(),
@@ -74,7 +90,14 @@ describe('AuthService (seller)', () => {
           useValue: { sign: jest.fn(() => 'mock-access-token') },
         },
         { provide: OidcClientService, useValue: {} },
-        { provide: AuthRepository, useValue: repo },
+        {
+          provide: ACCOUNT_REPOSITORY,
+          useValue: accounts,
+        },
+        {
+          provide: SELLER_CREDENTIAL_REPOSITORY,
+          useValue: sellerCredentials,
+        },
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
@@ -116,7 +139,9 @@ describe('AuthService (seller)', () => {
     it('판매자 로그인 성공 시 accessToken과 accountStatus를 반환해야 한다', async () => {
       // Arrange
       jest.spyOn(argon2, 'verify').mockResolvedValue(true);
-      repo.findSellerCredentialByUsername.mockResolvedValue(validCredential);
+      sellerCredentials.findSellerCredentialByUsername.mockResolvedValue(
+        validCredential,
+      );
 
       // Act
       const result = await service.sellerLogin({
@@ -129,7 +154,7 @@ describe('AuthService (seller)', () => {
       // Assert
       expect(result.accessToken).toBe('mock-access-token');
       expect(result.accountStatus).toBe('PENDING');
-      expect(repo.updateSellerLastLogin).toHaveBeenCalledWith(
+      expect(sellerCredentials.updateSellerLastLogin).toHaveBeenCalledWith(
         BigInt(10),
         expect.any(Date),
       );
@@ -173,7 +198,7 @@ describe('AuthService (seller)', () => {
 
     it('존재하지 않는 판매자이면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByUsername.mockResolvedValue(null);
+      sellerCredentials.findSellerCredentialByUsername.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -203,7 +228,7 @@ describe('AuthService (seller)', () => {
           account_type: AccountType.USER,
         },
       };
-      repo.findSellerCredentialByUsername.mockResolvedValue(
+      sellerCredentials.findSellerCredentialByUsername.mockResolvedValue(
         nonSellerCredential,
       );
 
@@ -229,7 +254,9 @@ describe('AuthService (seller)', () => {
     it('비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
-      repo.findSellerCredentialByUsername.mockResolvedValue(validCredential);
+      sellerCredentials.findSellerCredentialByUsername.mockResolvedValue(
+        validCredential,
+      );
 
       // Act & Assert
       await expect(
@@ -272,7 +299,9 @@ describe('AuthService (seller)', () => {
 
     it('비밀번호를 성공적으로 변경해야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential,
+      );
       // 첫 번째 호출: 현재 비밀번호 확인 (true)
       // 두 번째 호출: 새 비밀번호 동일 여부 확인 (false = 다른 비밀번호)
       jest
@@ -292,7 +321,7 @@ describe('AuthService (seller)', () => {
       });
 
       // Assert
-      expect(repo.updateSellerPasswordHash).toHaveBeenCalledWith({
+      expect(sellerCredentials.updateSellerPasswordHash).toHaveBeenCalledWith({
         sellerAccountId: BigInt(10),
         passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
         now: expect.any(Date),
@@ -312,7 +341,7 @@ describe('AuthService (seller)', () => {
 
     it('판매자를 찾을 수 없으면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -342,7 +371,7 @@ describe('AuthService (seller)', () => {
           account_type: AccountType.USER,
         },
       };
-      repo.findSellerCredentialByAccountId.mockResolvedValue(
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(
         nonSellerCredential,
       );
 
@@ -372,7 +401,9 @@ describe('AuthService (seller)', () => {
 
     it('현재 비밀번호가 틀리면 UnauthorizedException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential,
+      );
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
 
       // Act & Assert
@@ -396,7 +427,9 @@ describe('AuthService (seller)', () => {
 
     it('새 비밀번호가 기존 비밀번호와 동일하면 BadRequestException을 던져야 한다', async () => {
       // Arrange
-      repo.findSellerCredentialByAccountId.mockResolvedValue(sellerCredential);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(
+        sellerCredential,
+      );
       // 현재 비밀번호 확인: true, 새 비밀번호 동일 여부: true (같은 비밀번호)
       jest
         .spyOn(argon2, 'verify')
@@ -456,7 +489,7 @@ describe('AuthService (seller)', () => {
         token_hash: 'new-hash',
       } as never);
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue({
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),
         seller_account_id: BigInt(10),
         username: 'seller01',
@@ -542,7 +575,7 @@ describe('AuthService (seller)', () => {
         token_hash: 'new-hash',
       } as never);
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -581,7 +614,7 @@ describe('AuthService (seller)', () => {
         token_hash: 'new-hash',
       } as never);
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue({
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),
         seller_account_id: BigInt(10),
         username: 'seller01',
@@ -625,7 +658,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue({
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),
         seller_account_id: BigInt(10),
         username: 'seller01',
@@ -710,7 +743,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue(null);
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue(null);
 
       // Act & Assert
       await expect(
@@ -741,7 +774,7 @@ describe('AuthService (seller)', () => {
         deleted_at: null,
       });
 
-      repo.findSellerCredentialByAccountId.mockResolvedValue({
+      sellerCredentials.findSellerCredentialByAccountId.mockResolvedValue({
         id: BigInt(1),
         seller_account_id: BigInt(10),
         username: 'seller01',

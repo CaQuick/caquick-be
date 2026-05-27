@@ -33,11 +33,18 @@ import {
   AuthCookie,
   type CookieSameSite,
 } from '@/features/auth/helpers/auth-cookie.helper';
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  ACCOUNT_REPOSITORY,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
+import {
+  SELLER_CREDENTIAL_REPOSITORY,
+  type ISellerCredentialRepository,
+} from '@/features/auth/repositories/seller-credential.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import {
   parseOidcProvider,
@@ -55,7 +62,8 @@ export class AuthService {
    * @param config ConfigService
    * @param jwt JwtService
    * @param oidc OidcClientService
-   * @param repo AuthRepository
+   * @param accounts AccountRepository
+   * @param sellerCredentials SellerCredentialRepository
    * @param refreshSessions RefreshSessionRepository
    * @param auditLogs AuditLogRepository
    * @param clock ClockService
@@ -64,7 +72,10 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly oidc: OidcClientService,
-    private readonly repo: AuthRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accounts: IAccountRepository,
+    @Inject(SELLER_CREDENTIAL_REPOSITORY)
+    private readonly sellerCredentials: ISellerCredentialRepository,
     @Inject(REFRESH_SESSION_REPOSITORY)
     private readonly refreshSessions: IRefreshSessionRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
@@ -179,7 +190,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid seller credentials.');
     }
 
-    const credential = await this.repo.findSellerCredentialByUsername(username);
+    const credential =
+      await this.sellerCredentials.findSellerCredentialByUsername(username);
     if (!credential)
       throw new UnauthorizedException('Invalid seller credentials.');
 
@@ -196,7 +208,10 @@ export class AuthService {
     }
 
     const now = this.clock.now();
-    await this.repo.updateSellerLastLogin(credential.seller_account_id, now);
+    await this.sellerCredentials.updateSellerLastLogin(
+      credential.seller_account_id,
+      now,
+    );
 
     const { accessToken } = await this.issueAuthTokens({
       accountId: credential.seller_account_id,
@@ -236,7 +251,7 @@ export class AuthService {
     tokenType: 'Bearer';
     expiresInSeconds: number;
   }> {
-    const account = await this.repo.findAccountForJwt(accountId);
+    const account = await this.accounts.findAccountForJwt(accountId);
     if (!account) {
       throw new NotFoundException('Account not found.');
     }
@@ -263,7 +278,8 @@ export class AuthService {
     res: Response,
   ): Promise<{ accessToken: string; accountStatus: AccountStatus }> {
     const { accessToken, accountId } = await this.rotateRefresh(req, res);
-    const seller = await this.repo.findSellerCredentialByAccountId(accountId);
+    const seller =
+      await this.sellerCredentials.findSellerCredentialByAccountId(accountId);
     if (!seller || seller.seller_account.account_type !== AccountType.SELLER) {
       throw new UnauthorizedException('Invalid seller refresh token.');
     }
@@ -293,7 +309,7 @@ export class AuthService {
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new UnauthorizedException('Invalid refresh token.');
 
-    const seller = await this.repo.findSellerCredentialByAccountId(
+    const seller = await this.sellerCredentials.findSellerCredentialByAccountId(
       session.account_id,
     );
     if (!seller || seller.seller_account.account_type !== AccountType.SELLER) {
@@ -349,9 +365,10 @@ export class AuthService {
     newPassword: string;
     req: Request;
   }): Promise<void> {
-    const credential = await this.repo.findSellerCredentialByAccountId(
-      args.accountId,
-    );
+    const credential =
+      await this.sellerCredentials.findSellerCredentialByAccountId(
+        args.accountId,
+      );
     if (!credential) throw new UnauthorizedException('Seller not found.');
     if (credential.seller_account.account_type !== AccountType.SELLER) {
       throw new ForbiddenException('Only SELLER account is allowed.');
@@ -382,7 +399,7 @@ export class AuthService {
       type: argon2.argon2id,
     });
 
-    await this.repo.updateSellerPasswordHash({
+    await this.sellerCredentials.updateSellerPasswordHash({
       sellerAccountId: args.accountId,
       passwordHash: newHash,
       now,
@@ -409,7 +426,7 @@ export class AuthService {
    * @param accountId accountId(BigInt)
    */
   async me(accountId: bigint) {
-    const account = await this.repo.findAccountForMe(accountId);
+    const account = await this.accounts.findAccountForMe(accountId);
     if (!account) throw new UnauthorizedException('Account not found.');
 
     const profile = account.user_profile;
@@ -536,7 +553,7 @@ export class AuthService {
   ) {
     const identityProvider = this.oidc.toIdentityProvider(provider);
 
-    const { account } = await this.repo.upsertUserByOidcIdentity({
+    const { account } = await this.accounts.upsertUserByOidcIdentity({
       provider: identityProvider,
       providerSubject: userInfo.subject,
       providerEmail: userInfo.email,

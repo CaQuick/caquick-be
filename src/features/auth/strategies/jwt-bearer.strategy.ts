@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -7,7 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { AuthRepository } from '@/features/auth/repositories/auth.repository';
+import {
+  ACCOUNT_REPOSITORY,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 
 /**
@@ -17,11 +21,12 @@ import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   /**
    * @param config ConfigService
-   * @param repo AuthRepository
+   * @param accounts AccountRepository
    */
   constructor(
     config: ConfigService,
-    private readonly repo: AuthRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accounts: IAccountRepository,
   ) {
     const secret = config.get<string>('JWT_ACCESS_SECRET');
     if (!secret || secret.trim().length === 0) {
@@ -55,7 +60,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid access token.');
     }
 
-    const account = await this.repo.findAccountForJwt(accountId);
+    const account = await this.accounts.findAccountForJwt(accountId);
 
     // 존재하지 않거나 deleted_at이 찍힌 경우
     if (!account) {

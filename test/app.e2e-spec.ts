@@ -6,7 +6,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 
 import { AppModule } from './../src/app.module';
-import { AuthRepository } from './../src/features/auth/repositories/auth.repository';
+import { ACCOUNT_REPOSITORY } from './../src/features/auth/repositories/account.repository.interface';
 import { UserRepository } from './../src/features/user/repositories/user.repository';
 import { PrismaService } from './../src/prisma';
 
@@ -14,10 +14,11 @@ describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   let jwt: JwtService;
   let originalJwtSecret: string | undefined;
-  const mockAuthRepository = {
+  const mockAccountRepository = {
     findAccountForJwt: jest.fn().mockResolvedValue({
       id: BigInt(1),
       status: 'ACTIVE',
+      account_type: AccountType.USER,
     }),
   };
   const mockUserRepository = {
@@ -51,8 +52,8 @@ describe('AppController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(AuthRepository)
-      .useValue(mockAuthRepository)
+      .overrideProvider(ACCOUNT_REPOSITORY)
+      .useValue(mockAccountRepository)
       .overrideProvider(UserRepository)
       .useValue(mockUserRepository)
       .overrideProvider(PrismaService)
