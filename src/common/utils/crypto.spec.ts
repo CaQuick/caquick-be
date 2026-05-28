@@ -1,6 +1,6 @@
-import { generateRandomToken, sha256Hex } from '@/common/helpers/crypto.helper';
+import { generateRandomToken, sha256Hex } from '@/common/utils/crypto';
 
-describe('crypto.helper', () => {
+describe('crypto', () => {
   describe('sha256Hex', () => {
     it('동일 입력에 대해 동일 해시를 반환한다', () => {
       const hash1 = sha256Hex('hello');

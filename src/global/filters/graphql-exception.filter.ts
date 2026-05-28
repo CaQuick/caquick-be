@@ -3,7 +3,7 @@ import { GqlArgumentsHost } from '@nestjs/graphql';
 import type { Request } from 'express';
 import { GraphQLError, type GraphQLResolveInfo } from 'graphql';
 
-import { resolveMessage, resolveStatus } from '@/common/helpers/error.helper';
+import { resolveMessage, resolveStatus } from '@/common/utils/error';
 import {
   buildGraphqlRequestMeta,
   calculateDuration,

@@ -4,7 +4,7 @@ import type { GqlContextType } from '@nestjs/graphql';
 import type { Request, Response } from 'express';
 import type { GraphQLError } from 'graphql';
 
-import { resolveMessage, resolveStatus } from '@/common/helpers/error.helper';
+import { resolveMessage, resolveStatus } from '@/common/utils/error';
 import {
   buildHttpRequestMeta,
   calculateDuration,

@@ -1,17 +1,16 @@
-import { createHash, randomBytes } from 'node:crypto';
-
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
 import { getEnvAsNumber } from '@/common/helpers/config.helper';
+import {
+  generateRandomToken,
+  sha256Hex as sha256HexUtil,
+} from '@/common/utils/crypto';
+import { tryClientIp, tryUserAgent } from '@/common/utils/http-meta';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
-import {
-  getIp,
-  getUserAgent,
-} from '@/features/auth/helpers/auth-request-meta.helper';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -73,8 +72,8 @@ export class TokenService implements ITokenService {
     await this.refreshSessions.createRefreshSession({
       accountId: args.accountId,
       tokenHash: refreshHash,
-      userAgent: getUserAgent(args.req),
-      ipAddress: getIp(args.req),
+      userAgent: tryUserAgent(args.req),
+      ipAddress: tryClientIp(args.req),
       expiresAt,
     });
 
@@ -116,8 +115,8 @@ export class TokenService implements ITokenService {
       currentSessionId: session.id,
       accountId: session.account_id,
       newTokenHash,
-      userAgent: getUserAgent(req),
-      ipAddress: getIp(req),
+      userAgent: tryUserAgent(req),
+      ipAddress: tryClientIp(req),
       newExpiresAt,
     });
 
@@ -138,7 +137,7 @@ export class TokenService implements ITokenService {
   }
 
   sha256Hex(raw: string): string {
-    return createHash('sha256').update(raw).digest('hex');
+    return sha256HexUtil(raw);
   }
 
   clearRefreshCookie(res: Response): void {
@@ -154,7 +153,7 @@ export class TokenService implements ITokenService {
    * refresh token 랜덤 문자열을 생성한다. (32 bytes → 64 hex)
    */
   private generateRefreshToken(): string {
-    return randomBytes(32).toString('hex');
+    return generateRandomToken(32);
   }
 
   /**

@@ -9,6 +9,7 @@ import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { ValidationError } from 'class-validator';
 import cookieParser from 'cookie-parser';
+import type { Application as ExpressApplication } from 'express';
 
 import { AppModule } from '@/app.module';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
@@ -43,6 +44,17 @@ async function bootstrap(): Promise<void> {
     : frontendFromEnv.length > 0
       ? frontendFromEnv
       : ['http://localhost:3000'];
+
+  // Trust proxy (env-based) — reverse proxy 뒤에서 X-Forwarded-For 처리.
+  // TRUST_PROXY_HOPS = proxy hop 수 (ex. ELB 1대 → 1, CloudFront+ELB → 2).
+  // 미설정 / 0 이면 비활성 (default Express 동작). 잘못 설정 시 IP spoofing 위험이므로
+  // 운영 인프라 (ELB/CloudFront/Nginx) hop 수를 정확히 맞춰야 한다.
+  const trustProxyHops =
+    Number(configService.get<string>('TRUST_PROXY_HOPS')) || 0;
+  if (trustProxyHops > 0) {
+    const expressApp = app.getHttpAdapter().getInstance() as ExpressApplication;
+    expressApp.set('trust proxy', trustProxyHops);
+  }
 
   // CORS 설정
   app.enableCors({

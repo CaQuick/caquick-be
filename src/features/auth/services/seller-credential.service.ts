@@ -15,14 +15,11 @@ import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { tryClientIp, tryUserAgent } from '@/common/utils/http-meta';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  getIp,
-  getUserAgent,
-} from '@/features/auth/helpers/auth-request-meta.helper';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -213,8 +210,8 @@ export class SellerCredentialService implements ISellerCredentialService {
       afterJson: {
         changedAt: now.toISOString(),
       },
-      ipAddress: getIp(args.req),
-      userAgent: getUserAgent(args.req),
+      ipAddress: tryClientIp(args.req),
+      userAgent: tryUserAgent(args.req),
     });
   }
 }
