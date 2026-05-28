@@ -31,7 +31,9 @@ export class GqlLoggingInterceptor implements NestInterceptor {
 
   /**
    * GraphQL 실행 컨텍스트에서 메타데이터를 수집하고,
-   * 성공/에러 모두에 대해 트랜잭션 로그를 남긴다.
+   * 성공 시 트랜잭션 로그(tx) 를 남긴다.
+   * 에러 로깅은 GraphQLExceptionFilter 가 담당 (HTTP path 의 HttpExceptionFilter 와 동일 패턴).
+   * 단, 에러 응답에도 response time header 가 누락되지 않도록 setResponseTimeHeader 는 본 인터셉터에서 유지.
    */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const type = context.getType<GqlContextType>();
@@ -72,18 +74,10 @@ export class GqlLoggingInterceptor implements NestInterceptor {
 
           setResponseTimeHeader(res, duration);
         },
-        error: (error: unknown) => {
+        error: () => {
+          // 에러 로깅은 GraphQLExceptionFilter 가 담당 (중복 방지).
+          // 본 인터셉터에서는 응답 시간 헤더만 누락 없이 기록한다.
           const duration = calculateDuration(startTime);
-
-          this.logger.txError({
-            ...baseLog,
-            processingTimeInMs: duration,
-            error: {
-              message: error instanceof Error ? error.message : 'Unknown error',
-              stack: error instanceof Error ? error.stack : undefined,
-            },
-          });
-
           setResponseTimeHeader(res, duration);
         },
       }),
