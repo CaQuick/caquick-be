@@ -115,34 +115,27 @@ describe('GqlLoggingInterceptor', () => {
     });
   });
 
-  it('에러 시 txError 로그에 에러 메시지가 포함된다', (done) => {
+  it('에러 시 txError 는 호출되지 않는다 (GraphQLExceptionFilter 가 담당)', (done) => {
     const ctx = mockGqlContext('Query');
     interceptor.intercept(ctx, mockErrorHandler(new Error('fail'))).subscribe({
       error: () => {
-        expect(logger.txError).toHaveBeenCalledWith(
-          expect.objectContaining({
-            error: expect.objectContaining({ message: 'fail' }),
-            processingTimeInMs: expect.any(Number),
-          }),
-        );
+        // 중복 로깅 방지: HTTP path 의 HttpExceptionFilter 와 동일 패턴으로
+        // 에러 로깅 owner 는 GraphQLExceptionFilter.
+        expect(logger.txError).not.toHaveBeenCalled();
         done();
       },
     });
   });
 
-  it('에러가 Error 인스턴스가 아니면 "Unknown error" + stack undefined로 로깅', (done) => {
+  it('에러 시에도 setResponseTimeHeader 는 호출된다 (응답 시간 추적 유지)', (done) => {
     const ctx = mockGqlContext('Query');
-    const notAnError = 'just a string thrown';
-    const handler = {
-      handle: () => throwError(() => notAnError),
-    } as CallHandler;
-
-    interceptor.intercept(ctx, handler).subscribe({
+    const args = ctx.getArgs();
+    const gqlContext = args[2] as { res: { setHeader: jest.Mock } };
+    interceptor.intercept(ctx, mockErrorHandler(new Error('boom'))).subscribe({
       error: () => {
-        expect(logger.txError).toHaveBeenCalledWith(
-          expect.objectContaining({
-            error: { message: 'Unknown error', stack: undefined },
-          }),
+        expect(gqlContext.res.setHeader).toHaveBeenCalledWith(
+          'x-response-time-ms',
+          expect.any(String),
         );
         done();
       },
