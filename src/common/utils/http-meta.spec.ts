@@ -3,6 +3,8 @@ import type { Request } from 'express';
 import {
   apiVersionOf,
   clientIpOf,
+  tryClientIp,
+  tryUserAgent,
   userAgentOf,
 } from '@/common/utils/http-meta';
 
@@ -75,6 +77,53 @@ describe('http-meta', () => {
     it('User-Agent가 없으면 Other 계열 문자열을 반환한다', () => {
       const result = userAgentOf(mockReq());
       expect(typeof result).toBe('string');
+    });
+  });
+
+  describe('tryClientIp (DB persistence 용 — 추출 실패 시 undefined)', () => {
+    it('X-Forwarded-For 첫 번째 IP를 반환한다', () => {
+      expect(
+        tryClientIp(mockReq({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' })),
+      ).toBe('1.2.3.4');
+    });
+
+    it('X-Real-IP 를 반환한다', () => {
+      expect(tryClientIp(mockReq({ 'x-real-ip': '10.0.0.1' }))).toBe(
+        '10.0.0.1',
+      );
+    });
+
+    it('req.ip 를 반환한다', () => {
+      expect(tryClientIp(mockReq({}, { ip: '192.168.0.1' }))).toBe(
+        '192.168.0.1',
+      );
+    });
+
+    it('socket.remoteAddress 를 반환한다', () => {
+      expect(tryClientIp(mockReq())).toBe('127.0.0.1');
+    });
+
+    it('아무것도 없으면 undefined 를 반환한다 (Unknown IP 문자열 아님)', () => {
+      expect(
+        tryClientIp(mockReq({}, { ip: undefined, socket: {} } as never)),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('tryUserAgent (DB persistence 용)', () => {
+    it('User-Agent 헤더 raw 문자열을 반환한다 (useragent 파싱 X)', () => {
+      const raw = 'Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36';
+      expect(tryUserAgent(mockReq({ 'user-agent': raw }))).toBe(raw);
+    });
+
+    it('헤더가 없으면 undefined 를 반환한다', () => {
+      expect(tryUserAgent(mockReq())).toBeUndefined();
+    });
+
+    it('512 자에서 자른다', () => {
+      const raw = 'a'.repeat(1000);
+      const result = tryUserAgent(mockReq({ 'user-agent': raw }));
+      expect(result).toHaveLength(512);
     });
   });
 });

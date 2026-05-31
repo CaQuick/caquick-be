@@ -1,9 +1,6 @@
-import {
-  buildQueryString,
-  toQueryParams,
-} from '@/common/helpers/url-query.helper';
+import { buildQueryString, toQueryParams } from '@/common/utils/url-query';
 
-describe('url-query.helper', () => {
+describe('url-query', () => {
   describe('buildQueryString', () => {
     it('단순 키=값 쌍을 변환한다', () => {
       expect(buildQueryString({ a: '1', b: '2' })).toBe('a=1&b=2');

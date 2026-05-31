@@ -1,8 +1,8 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
 
-import { resolveMessage, resolveStatus } from '@/common/helpers/error.helper';
+import { resolveMessage, resolveStatus } from '@/common/utils/error';
 
-describe('error.helper', () => {
+describe('error', () => {
   describe('resolveStatus', () => {
     it('HttpException이면 해당 상태 코드를 반환한다', () => {
       expect(resolveStatus(new BadRequestException())).toBe(400);

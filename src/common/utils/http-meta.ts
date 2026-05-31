@@ -2,17 +2,22 @@ import type { Request } from 'express';
 import useragent from 'useragent';
 
 /**
- * API 버전 헤더 추출
+ * User-Agent 헤더 raw 값을 512 자 한도로 자른다.
+ * 없으면 undefined (DB nullable persistence 용).
  */
-export function apiVersionOf(req: Request): string | undefined {
-  const v = req.headers['api-version'];
-  return Array.isArray(v) ? v[0] : v;
+export function tryUserAgent(req: Request): string | undefined {
+  const ua = req.headers['user-agent'];
+  return typeof ua === 'string' ? ua.slice(0, 512) : undefined;
 }
 
 /**
- * 클라이언트 IP 추출(X-Forwarded-For 우선)
+ * Client IP 를 추출한다 (X-Forwarded-For → X-Real-IP → req.ip → socket.remoteAddress 순).
+ * 추출 실패 시 undefined (DB nullable persistence 용).
+ *
+ * 운영 환경에서 정확한 client IP 를 얻으려면 main.ts 의 trust proxy 설정 필요
+ * (Express 가 X-Forwarded-For 를 신뢰해서 req.ip 에 반영).
  */
-export function clientIpOf(req: Request): string {
+export function tryClientIp(req: Request): string | undefined {
   const forwardedFor = req.headers['x-forwarded-for'];
   if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
     const forwardedIp = forwardedFor.split(',').map((ip) => ip.trim())[0];
@@ -25,11 +30,27 @@ export function clientIpOf(req: Request): string {
   }
 
   const ip = req.ip ?? req.socket?.remoteAddress;
-  return typeof ip === 'string' && ip.length > 0 ? ip : 'Unknown IP';
+  return typeof ip === 'string' && ip.length > 0 ? ip : undefined;
 }
 
 /**
- * User-Agent 문자열 정규화
+ * API 버전 헤더 추출
+ */
+export function apiVersionOf(req: Request): string | undefined {
+  const v = req.headers['api-version'];
+  return Array.isArray(v) ? v[0] : v;
+}
+
+/**
+ * 클라이언트 IP 추출 (로깅용 — 추출 실패 시 'Unknown IP' fallback)
+ */
+export function clientIpOf(req: Request): string {
+  return tryClientIp(req) ?? 'Unknown IP';
+}
+
+/**
+ * User-Agent 문자열 정규화 (로깅용 — useragent 라이브러리로 파싱).
+ * raw 값은 tryUserAgent 사용 (DB persistence 용).
  */
 export function userAgentOf(req: Request): string {
   const raw =
