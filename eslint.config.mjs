@@ -59,11 +59,99 @@ export default defineConfig(
           alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
+      // 순환 참조 금지 (P2-3). 현재 위반 0건 — 회귀 방지용.
+      'import/no-cycle': ['error', { ignoreExternal: true }],
     },
     settings: {
       'import/resolver': {
         typescript: { project: path.join(__dirname, 'tsconfig.json') },
       },
+    },
+  },
+
+  // 모듈 경계 강화 (P2-3) — CLAUDE.md 의존성 방향 룰을 ESLint 로 강제.
+  // common 은 features/global/prisma 에 의존 금지 (common → 무의존).
+  {
+    files: ['src/common/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@/features',
+                '@/features/**',
+                '@/global',
+                '@/global/**',
+                '@/prisma',
+                '@/prisma/**',
+              ],
+              message:
+                'common 은 features/global/prisma 에 의존하면 안 됩니다 (common → 무의존).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // common/utils 는 순수 함수 — DI(Injectable/Inject)·ConfigService·Prisma 의존 금지.
+  // (DI 없는 값 클래스인 HttpException 류는 허용)
+  {
+    files: ['src/common/utils/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@nestjs/common',
+              importNames: ['Injectable', 'Inject'],
+              message:
+                'common/utils 는 DI-free 순수 함수만 (Injectable/Inject 금지).',
+            },
+            {
+              name: '@nestjs/config',
+              message:
+                'common/utils 는 ConfigService 등 런타임 서비스에 의존하면 안 됩니다.',
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                '@/features',
+                '@/features/**',
+                '@/global',
+                '@/global/**',
+                '@/prisma',
+                '@/prisma/**',
+              ],
+              message:
+                'common 은 features/global/prisma 에 의존하면 안 됩니다 (common → 무의존).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // global 은 features/prisma 에 의존 금지 (global → common, config).
+  {
+    files: ['src/global/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features', '@/features/**', '@/prisma', '@/prisma/**'],
+              message:
+                'global 은 features/prisma 에 의존하면 안 됩니다 (global → common, config).',
+            },
+          ],
+        },
+      ],
     },
   },
 
