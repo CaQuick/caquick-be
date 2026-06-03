@@ -2,6 +2,7 @@
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import';
+import boundaries from 'eslint-plugin-boundaries';
 import prettierRecommended from 'eslint-plugin-prettier/recommended';
 import { defineConfig } from 'eslint/config';
 import { fileURLToPath } from 'node:url';
@@ -149,6 +150,41 @@ export default defineConfig(
               message:
                 'global 은 features/prisma 에 의존하면 안 됩니다 (global → common, config).',
             },
+          ],
+        },
+      ],
+    },
+  },
+
+  // cross-feature 내부 import 금지 (P2-3) — feature 는 다른 feature 를 barrel(index.ts) 로만 import.
+  // 같은 feature 내부 import 와 src 루트(app.module/main — 미분류) 의 import 는 검사 대상 아님.
+  // 테스트 파일은 통합 테스트 편의상 제외.
+  {
+    files: ['src/**/*.ts'],
+    plugins: { boundaries },
+    settings: {
+      'boundaries/elements': [
+        { type: 'common', pattern: 'src/common', mode: 'folder' },
+        { type: 'config', pattern: 'src/config', mode: 'folder' },
+        { type: 'prisma', pattern: 'src/prisma', mode: 'folder' },
+        { type: 'global', pattern: 'src/global', mode: 'folder' },
+        {
+          type: 'feature',
+          pattern: 'src/features/*',
+          mode: 'folder',
+          capture: ['family'],
+        },
+      ],
+      'boundaries/ignore': ['**/*.spec.ts', '**/*.test.ts'],
+    },
+    rules: {
+      'boundaries/entry-point': [
+        'error',
+        {
+          default: 'disallow',
+          rules: [
+            { target: ['common', 'config', 'prisma', 'global'], allow: '**' },
+            { target: ['feature'], allow: 'index.ts' },
           ],
         },
       ],

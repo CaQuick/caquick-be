@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
-import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductRepository } from '@/features/product';
 import { USER_WISHLIST_ERRORS } from '@/features/user/constants/user-wishlist-error-messages';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
