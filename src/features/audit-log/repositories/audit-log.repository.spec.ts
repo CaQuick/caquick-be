@@ -154,5 +154,44 @@ describe('AuditLogRepository (real DB)', () => {
       expect(logs[0].ip_address).toBeNull();
       expect(logs[0].user_agent).toBeNull();
     });
+
+    it('malformed·overlong IP 는 컬럼에 쓰지 않고 null 로 저장한다 (insert 실패 방지)', async () => {
+      const account = await createAccount(prisma);
+      // ip_address VarChar(64) 초과 + 비정상 형식. trust proxy 가 넘길 수 있는 위험값.
+      const overlong = `not-an-ip-${'x'.repeat(80)}`;
+
+      await requestContext.run({ clientIp: overlong }, async () => {
+        await repo.createAuditLog({
+          actorAccountId: account.id,
+          targetType: AuditTargetType.STORE,
+          targetId: account.id,
+          action: AuditActionType.UPDATE,
+        });
+      });
+
+      const logs = await prisma.auditLog.findMany({
+        where: { actor_account_id: account.id },
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].ip_address).toBeNull();
+    });
+
+    it('IPv6 client IP 도 유효하면 그대로 저장한다', async () => {
+      const account = await createAccount(prisma);
+
+      await requestContext.run({ clientIp: '2001:db8::1' }, async () => {
+        await repo.createAuditLog({
+          actorAccountId: account.id,
+          targetType: AuditTargetType.STORE,
+          targetId: account.id,
+          action: AuditActionType.UPDATE,
+        });
+      });
+
+      const logs = await prisma.auditLog.findMany({
+        where: { actor_account_id: account.id },
+      });
+      expect(logs[0].ip_address).toBe('2001:db8::1');
+    });
   });
 });
