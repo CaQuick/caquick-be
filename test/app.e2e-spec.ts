@@ -36,6 +36,8 @@ describe('AppController (e2e)', () => {
         onboarding_completed_at: null,
         deleted_at: null,
       },
+      // toMePayload 가 account_identities.map 을 호출하므로 mock 에 포함해야 한다.
+      account_identities: [],
     }),
   };
   const mockPrismaService = {
