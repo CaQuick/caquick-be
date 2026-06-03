@@ -11,24 +11,19 @@ export function tryUserAgent(req: Request): string | undefined {
 }
 
 /**
- * Client IP 를 추출한다 (X-Forwarded-For → X-Real-IP → req.ip → socket.remoteAddress 순).
- * 추출 실패 시 undefined (DB nullable persistence 용).
+ * Client IP 를 추출한다.
  *
- * 운영 환경에서 정확한 client IP 를 얻으려면 main.ts 의 trust proxy 설정 필요
- * (Express 가 X-Forwarded-For 를 신뢰해서 req.ip 에 반영).
+ * Express 의 `trust proxy` 설정(main.ts, `TRUST_PROXY_HOPS`)으로 계산된 `req.ip` 를
+ * 단일 진실 소스로 사용한다. trust proxy 가 설정되면 Express 가 X-Forwarded-For 를
+ * hop 수만큼 신뢰해 실제 client IP 를 `req.ip` 에 반영하고, 미설정 시 socket 주소를 쓴다.
+ *
+ * raw `X-Forwarded-For` / `X-Real-IP` 헤더를 **직접 신뢰하지 않는다** — 클라이언트가
+ * 임의로 위조할 수 있어 trust proxy 검증을 우회하기 때문(IP spoofing). hop 수 적용은
+ * 전적으로 Express 에 위임한다.
+ *
+ * 추출 실패 시 undefined (DB nullable persistence 용).
  */
 export function tryClientIp(req: Request): string | undefined {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
-    const forwardedIp = forwardedFor.split(',').map((ip) => ip.trim())[0];
-    if (forwardedIp) return forwardedIp;
-  }
-
-  const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp.trim().length > 0) {
-    return realIp;
-  }
-
   const ip = req.ip ?? req.socket?.remoteAddress;
   return typeof ip === 'string' && ip.length > 0 ? ip : undefined;
 }
