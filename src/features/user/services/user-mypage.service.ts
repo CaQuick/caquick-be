@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { OrderRepository } from '@/features/order';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';

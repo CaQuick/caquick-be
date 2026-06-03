@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
-import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductRepository } from '@/features/product';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';

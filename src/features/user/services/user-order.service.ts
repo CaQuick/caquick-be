@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { OrderRepository } from '@/features/order';
 import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
 import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import type {

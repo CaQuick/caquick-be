@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 
-import { OrderModule } from '@/features/order/order.module';
-import { ProductModule } from '@/features/product/product.module';
+import { OrderModule } from '@/features/order';
+import { ProductModule } from '@/features/product';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
