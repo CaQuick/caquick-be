@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, type PrismaClient } from '@prisma/client';
 
-import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import {
   OrderDomainService,
   OrderRepository,

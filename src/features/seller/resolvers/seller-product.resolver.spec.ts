@@ -1,7 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
-import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
 import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
 import type { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
