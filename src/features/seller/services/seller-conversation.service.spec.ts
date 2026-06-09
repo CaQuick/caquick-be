@@ -1,7 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
-import { AUDIT_LOG_REPOSITORY, AuditLogRepository } from '@/features/audit-log';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ConversationRepository } from '@/features/conversation';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
