@@ -67,6 +67,46 @@ describe('WriteReviewInput', () => {
     expect(errors[0].property).toBe('content');
   });
 
+  it('공백만 입력은 trim 후 거절 (빈 리뷰 저장 방지)', async () => {
+    const dto = build({
+      orderItemId: '123',
+      rating: 4.5,
+      content: ' '.repeat(30),
+    });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('content');
+  });
+
+  it('앞뒤 공백을 제외한 실제 길이로 검증 (raw 길이로 우회 불가)', async () => {
+    const dto = build({
+      orderItemId: '123',
+      rating: 4.5,
+      // raw 길이 24 지만 trim 후 18 → 거절
+      content: `   ${'a'.repeat(18)}   `,
+    });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('content');
+  });
+
+  it('앞뒤 공백 포함이어도 trim 후 길이 충족 시 통과', async () => {
+    const dto = build({
+      orderItemId: '123',
+      rating: 4.5,
+      content: `  ${'a'.repeat(20)}  `,
+    });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('content 가 문자열이 아니면 trim 시도 없이(크래시 없이) IsString 으로 거절', async () => {
+    const dto = build({
+      orderItemId: '123',
+      rating: 4.5,
+      content: 12345 as unknown as string,
+    });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('content');
+  });
+
   it('미디어 항목 mediaType 오류는 nested 에러로 보고', async () => {
     const dto = build({
       orderItemId: '123',
