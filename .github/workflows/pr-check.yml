@@ -47,6 +47,11 @@ jobs:
       - name: DTO ↔ SDL sync check (warning during migration)
         run: yarn dto:check --warning
 
+      # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 validate(pre-push)뿐 아니라
+      # 보호된 check status에서도 강제해야 --no-verify/Husky 미설치 환경의 우회를 막는다.
+      - name: Architecture check (dependency-cruiser)
+        run: yarn arch:check
+
       - name: Test with coverage
         run: yarn test:cov
 
