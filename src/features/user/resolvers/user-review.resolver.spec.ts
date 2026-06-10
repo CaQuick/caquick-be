@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
@@ -91,20 +90,8 @@ describe('User Review Resolvers (real DB)', () => {
     expect(saved.account_id).toBe(ctx.accountId);
   });
 
-  it('Mutation.writeReview: 유효성 실패는 BadRequestException이 전파된다', async () => {
-    const ctx = await setupReviewableItem();
-
-    await expect(
-      mutationResolver.writeReview(
-        { accountId: ctx.accountId.toString() },
-        {
-          orderItemId: ctx.orderItemId.toString(),
-          rating: 5,
-          content: '너무짧음',
-        },
-      ),
-    ).rejects.toThrow(BadRequestException);
-  });
+  // 입력 형식 검증(rating · content 길이 등)은 DTO + ValidationPipe 의 책임.
+  // 본 resolver 통합 테스트는 도메인 동작(DB 흐름)만 확인한다.
 
   it('Query.myReviews: 본인 리뷰 목록이 DB에서 조회되어 반환된다', async () => {
     const ctx = await setupReviewableItem();

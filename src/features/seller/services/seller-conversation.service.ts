@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,10 @@ import {
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ConversationRepository } from '@/features/conversation';
 import {
   BODY_HTML_REQUIRED,
@@ -22,16 +27,14 @@ import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerCursorInput,
-  SellerSendConversationMessageInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
@@ -42,9 +45,11 @@ import type {
 export class SellerConversationService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly conversationRepository: ConversationRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
   async sellerConversations(
     accountId: bigint,
@@ -141,7 +146,7 @@ export class SellerConversationService extends SellerBaseService {
         now: new Date(),
       });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.CONVERSATION,

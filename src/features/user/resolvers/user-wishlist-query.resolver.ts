@@ -1,11 +1,9 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
-import type {
-  MyWishlistConnection,
-  MyWishlistInput,
-} from '@/features/user/types/user-wishlist-output.type';
+import type { MyWishlistConnection } from '@/features/user/types/user-wishlist-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

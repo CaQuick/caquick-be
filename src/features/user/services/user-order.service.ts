@@ -1,20 +1,14 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { OrderRepository } from '@/features/order';
 import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
-import type { MyOrdersInput } from '@/features/user/types/user-order-input.type';
+import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import type {
   MyOrderConnection,
   MyOrderDetail,
 } from '@/features/user/types/user-order-output.type';
-
-const MAX_LIMIT = 50;
 
 @Injectable()
 export class UserOrderService {
@@ -27,13 +21,6 @@ export class UserOrderService {
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? 20;
     const statuses = input?.statuses;
-
-    if (offset < 0) {
-      throw new BadRequestException(USER_ORDER_ERRORS.INVALID_OFFSET);
-    }
-    if (limit < 1 || limit > MAX_LIMIT) {
-      throw new BadRequestException(USER_ORDER_ERRORS.INVALID_LIMIT);
-    }
 
     const [orders, totalCount] = await Promise.all([
       this.orderRepository.findOrdersByAccount({

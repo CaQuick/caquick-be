@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import type { IAuditLogRepository } from '@/features/audit-log';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -14,8 +15,8 @@ import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 class TestableSellerBaseService extends SellerBaseService {
-  constructor(repo: SellerRepository) {
-    super(repo);
+  constructor(repo: SellerRepository, auditLogs: IAuditLogRepository) {
+    super(repo, auditLogs);
   }
 
   public testRequireSellerContext(accountId: bigint) {
@@ -57,7 +58,10 @@ describe('SellerBaseService (real DB)', () => {
       providers: [SellerRepository],
     });
     const repo = module.get(SellerRepository);
-    service = new TestableSellerBaseService(repo);
+    const auditLogs: IAuditLogRepository = {
+      createAuditLog: jest.fn(),
+    };
+    service = new TestableSellerBaseService(repo, auditLogs);
     prisma = p;
   });
 

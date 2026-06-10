@@ -8,11 +8,10 @@ import { OrderStatus, ReviewMediaType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
+import type { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
+import type { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
+import type { WriteReviewInput } from '@/features/user/dto/inputs/write-review.input';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
-import type {
-  CreateReviewMediaUploadUrlInput,
-  WriteReviewInput,
-} from '@/features/user/types/user-review-input.type';
 import type {
   MyReview,
   MyReviewConnection,
@@ -44,12 +43,9 @@ interface ReviewRow {
   }[];
 }
 
-const MIN_CONTENT_LENGTH = 20;
-const MAX_CONTENT_LENGTH = 1000;
 // figma 명세: 사진 최대 10장 / 동영상 1개. 합쳐서 최대 11개까지 허용.
 const MAX_IMAGE_COUNT = 10;
 const MAX_VIDEO_COUNT = 1;
-const MAX_LIMIT = 50;
 
 @Injectable()
 export class UserReviewService {
@@ -62,8 +58,8 @@ export class UserReviewService {
     accountId: bigint,
     input: WriteReviewInput,
   ): Promise<MyReview> {
-    this.validateRating(input.rating);
-    this.validateContent(input.content);
+    // rating · content 길이 검증은 DTO 가 담당. 미디어 카운트(이미지 10 / 영상 1)
+    // 같은 도메인 invariant 만 service 에서 검증.
     this.validateMedia(input.media);
 
     const orderItemId = parseId(input.orderItemId);
@@ -113,17 +109,10 @@ export class UserReviewService {
 
   async myReviews(
     accountId: bigint,
-    input?: { offset?: number; limit?: number },
+    input?: MyReviewsInput,
   ): Promise<MyReviewConnection> {
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? 20;
-
-    if (offset < 0) {
-      throw new BadRequestException('오프셋은 0 이상이어야 합니다.');
-    }
-    if (limit < 1 || limit > MAX_LIMIT) {
-      throw new BadRequestException('조회 개수는 1~50 사이여야 합니다.');
-    }
 
     const { items, totalCount } = await this.reviewRepo.listMyReviews({
       accountId,
@@ -211,22 +200,6 @@ export class UserReviewService {
       contentType: input.contentType,
       contentLength: input.contentLength,
     });
-  }
-
-  private validateRating(rating: number): void {
-    if (rating < 1 || rating > 5 || (rating * 10) % 5 !== 0) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.INVALID_RATING);
-    }
-  }
-
-  private validateContent(content: string): void {
-    const trimmed = content.trim();
-    if (trimmed.length < MIN_CONTENT_LENGTH) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.CONTENT_TOO_SHORT);
-    }
-    if (trimmed.length > MAX_CONTENT_LENGTH) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.CONTENT_TOO_LONG);
-    }
   }
 
   private validateMedia(

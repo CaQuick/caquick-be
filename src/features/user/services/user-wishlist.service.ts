@@ -1,22 +1,13 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
-import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductRepository } from '@/features/product';
 import { USER_WISHLIST_ERRORS } from '@/features/user/constants/user-wishlist-error-messages';
-import {
-  DEFAULT_PAGINATION_LIMIT,
-  MAX_PAGINATION_LIMIT,
-} from '@/features/user/constants/user.constants';
+import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
+import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
-import type {
-  MyWishlistConnection,
-  MyWishlistInput,
-} from '@/features/user/types/user-wishlist-output.type';
+import type { MyWishlistConnection } from '@/features/user/types/user-wishlist-output.type';
 
 @Injectable()
 export class UserWishlistService extends UserBaseService {
@@ -70,13 +61,6 @@ export class UserWishlistService extends UserBaseService {
 
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? DEFAULT_PAGINATION_LIMIT;
-
-    if (offset < 0) {
-      throw new BadRequestException(USER_WISHLIST_ERRORS.INVALID_OFFSET);
-    }
-    if (limit < 1 || limit > MAX_PAGINATION_LIMIT) {
-      throw new BadRequestException(USER_WISHLIST_ERRORS.INVALID_LIMIT);
-    }
 
     const { items, totalCount } = await this.repo.findWishlistItems({
       accountId,

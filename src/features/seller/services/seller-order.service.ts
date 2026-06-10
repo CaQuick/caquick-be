@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,21 +9,23 @@ import { OrderStatus } from '@prisma/client';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { OrderDomainService, OrderRepository } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
 } from '@/features/seller/constants/seller-error-messages';
+import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
+import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
 import {
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerOrderListInput,
-  SellerUpdateOrderStatusInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCursorConnection,
   SellerOrderDetailOutput,
@@ -66,10 +69,12 @@ interface OrderItemRow {
 export class SellerOrderService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly orderDomainService: OrderDomainService,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
   async sellerOrderList(
     accountId: bigint,

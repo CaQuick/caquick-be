@@ -1,29 +1,38 @@
-import { UseGuards } from '@nestjs/common';
+import { Inject, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
+import { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
+import { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
+import { SellerCreateOptionItemInput } from '@/features/seller/dto/inputs/seller-create-option-item.input';
+import { SellerCreateProductInput } from '@/features/seller/dto/inputs/seller-create-product.input';
+import { SellerReorderOptionGroupsInput } from '@/features/seller/dto/inputs/seller-reorder-option-groups.input';
+import { SellerReorderOptionItemsInput } from '@/features/seller/dto/inputs/seller-reorder-option-items.input';
+import { SellerReorderProductCustomTextTokensInput } from '@/features/seller/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
+import { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/seller-set-product-active.input';
+import { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
+import { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
+import { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
+import { SellerUpdateOptionGroupInput } from '@/features/seller/dto/inputs/seller-update-option-group.input';
+import { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/seller-update-option-item.input';
+import { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
+import { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
+import { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
-import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
-import type {
-  SellerAddProductImageInput,
-  SellerCreateOptionGroupInput,
-  SellerCreateOptionItemInput,
-  SellerCreateProductInput,
-  SellerReorderOptionGroupsInput,
-  SellerReorderOptionItemsInput,
-  SellerReorderProductCustomTextTokensInput,
-  SellerReorderProductImagesInput,
-  SellerSetProductActiveInput,
-  SellerSetProductCategoriesInput,
-  SellerSetProductCustomTemplateActiveInput,
-  SellerSetProductTagsInput,
-  SellerUpdateOptionGroupInput,
-  SellerUpdateOptionItemInput,
-  SellerUpdateProductInput,
-  SellerUpsertProductCustomTemplateInput,
-  SellerUpsertProductCustomTextTokenInput,
-} from '@/features/seller/types/seller-input.type';
+import {
+  SELLER_PRODUCT_IMAGE_SERVICE,
+  type ISellerProductImageService,
+} from '@/features/seller/services/seller-product-image.service.interface';
+import {
+  SELLER_PRODUCT_LIFECYCLE_SERVICE,
+  type ISellerProductLifecycleService,
+} from '@/features/seller/services/seller-product-lifecycle.service.interface';
+import {
+  SELLER_PRODUCT_TAXONOMY_SERVICE,
+  type ISellerProductTaxonomyService,
+} from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
@@ -43,7 +52,12 @@ import {
 @UseGuards(JwtAuthGuard)
 export class SellerProductMutationResolver {
   constructor(
-    private readonly productService: SellerProductCrudService,
+    @Inject(SELLER_PRODUCT_LIFECYCLE_SERVICE)
+    private readonly productLifecycle: ISellerProductLifecycleService,
+    @Inject(SELLER_PRODUCT_IMAGE_SERVICE)
+    private readonly productImage: ISellerProductImageService,
+    @Inject(SELLER_PRODUCT_TAXONOMY_SERVICE)
+    private readonly productTaxonomy: ISellerProductTaxonomyService,
     private readonly optionService: SellerOptionService,
     private readonly templateService: SellerCustomTemplateService,
   ) {}
@@ -54,7 +68,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerCreateProductInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerCreateProduct(accountId, input);
+    return this.productLifecycle.sellerCreateProduct(accountId, input);
   }
 
   @Mutation('sellerUpdateProduct')
@@ -63,7 +77,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerUpdateProductInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerUpdateProduct(accountId, input);
+    return this.productLifecycle.sellerUpdateProduct(accountId, input);
   }
 
   @Mutation('sellerDeleteProduct')
@@ -72,7 +86,7 @@ export class SellerProductMutationResolver {
     @Args('productId') productId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerDeleteProduct(
+    return this.productLifecycle.sellerDeleteProduct(
       accountId,
       parseId(productId),
     );
@@ -84,7 +98,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductActiveInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerSetProductActive(accountId, input);
+    return this.productLifecycle.sellerSetProductActive(accountId, input);
   }
 
   @Mutation('sellerAddProductImage')
@@ -93,7 +107,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerAddProductImageInput,
   ): Promise<SellerProductImageOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerAddProductImage(accountId, input);
+    return this.productImage.sellerAddProductImage(accountId, input);
   }
 
   @Mutation('sellerDeleteProductImage')
@@ -102,7 +116,7 @@ export class SellerProductMutationResolver {
     @Args('imageId') imageId: string,
   ): Promise<boolean> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerDeleteProductImage(
+    return this.productImage.sellerDeleteProductImage(
       accountId,
       parseId(imageId),
     );
@@ -114,7 +128,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerReorderProductImagesInput,
   ): Promise<SellerProductImageOutput[]> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerReorderProductImages(accountId, input);
+    return this.productImage.sellerReorderProductImages(accountId, input);
   }
 
   @Mutation('sellerSetProductCategories')
@@ -123,7 +137,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductCategoriesInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerSetProductCategories(accountId, input);
+    return this.productTaxonomy.sellerSetProductCategories(accountId, input);
   }
 
   @Mutation('sellerSetProductTags')
@@ -132,7 +146,7 @@ export class SellerProductMutationResolver {
     @Args('input') input: SellerSetProductTagsInput,
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.productService.sellerSetProductTags(accountId, input);
+    return this.productTaxonomy.sellerSetProductTags(accountId, input);
   }
 
   @Mutation('sellerCreateOptionGroup')

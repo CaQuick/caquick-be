@@ -1,8 +1,8 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MySearchHistoriesInput } from '@/features/user/dto/inputs/my-search-histories.input';
 import { UserSearchService } from '@/features/user/services/user-search.service';
-import type { MySearchHistoriesInput } from '@/features/user/types/user-input.type';
 import type { SearchHistoryConnection } from '@/features/user/types/user-output.type';
 import {
   CurrentUser,

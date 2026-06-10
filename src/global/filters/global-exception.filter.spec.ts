@@ -3,6 +3,7 @@ import { BaseExceptionFilter, type AbstractHttpAdapter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
+import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 jest.mock('@/global/logger/logger', () => ({
@@ -55,12 +56,17 @@ function mockHost(req: Request, res: Response) {
 describe('HttpExceptionFilter', () => {
   let filter: HttpExceptionFilter;
   let logger: CustomLoggerService;
+  let gqlFilter: GraphQLExceptionFilter;
 
   beforeEach(() => {
     logger = new CustomLoggerService();
     logger.txError = jest.fn();
+    gqlFilter = new GraphQLExceptionFilter(logger);
+    gqlFilter.format = jest
+      .fn()
+      .mockReturnValue(new Error('mock graphql error'));
     const adapter = {} as AbstractHttpAdapter;
-    filter = new HttpExceptionFilter(adapter, logger);
+    filter = new HttpExceptionFilter(adapter, logger, gqlFilter);
   });
 
   it('BadRequestException이면 에러 응답을 반환한다', () => {
@@ -139,7 +145,7 @@ describe('HttpExceptionFilter', () => {
     const host = mockHost(req, res);
 
     // BadRequestException에 message 없는 object
-    const exception = new BadRequestException({ statusCode: 400 } as never);
+    const exception = new BadRequestException({ statusCode: 400 });
 
     filter.catch(exception, host);
 
@@ -149,27 +155,40 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
-  it('GraphQL 컨텍스트(getType !== "http")에서는 BaseExceptionFilter.catch로 위임하고 로깅을 스킵한다', () => {
+  it('GraphQL 컨텍스트에서는 GraphQLExceptionFilter.format 에 위임하고 GraphQL 에러를 반환한다', () => {
+    const host = {
+      getType: () => 'graphql',
+    } as never;
+    const exception = new Error('gql');
+
+    const result = filter.catch(exception, host);
+
+    // 1) gqlFilter.format 에 그대로 위임
+    expect(gqlFilter.format).toHaveBeenCalledTimes(1);
+    expect(gqlFilter.format).toHaveBeenCalledWith(exception, host);
+    // 2) format 결과를 그대로 반환 (Apollo 가 응답에 포함)
+    expect(result).toBe(
+      (gqlFilter.format as jest.Mock).mock.results[0].value as Error,
+    );
+    // 3) HTTP 경로 side effect 없음
+    expect(logger.txError).not.toHaveBeenCalled();
+  });
+
+  it('http/graphql 외 컨텍스트는 BaseExceptionFilter.catch 로 위임한다', () => {
     const superCatch = jest
       .spyOn(BaseExceptionFilter.prototype, 'catch')
       .mockImplementation(() => undefined);
-
     try {
       const host = {
-        getType: () => 'graphql',
-        switchToHttp: () => ({
-          getRequest: () => ({}),
-          getResponse: () => ({}),
-        }),
+        getType: () => 'rpc',
       } as never;
-      const exception = new Error('gql');
+      const exception = new Error('rpc');
 
       filter.catch(exception, host);
 
-      // 1) super.catch로 정확히 위임됐는지 — exception/host 원본 그대로 전달
       expect(superCatch).toHaveBeenCalledTimes(1);
       expect(superCatch).toHaveBeenCalledWith(exception, host);
-      // 2) HTTP 경로의 side effect가 일어나지 않았는지
+      expect(gqlFilter.format).not.toHaveBeenCalled();
       expect(logger.txError).not.toHaveBeenCalled();
     } finally {
       superCatch.mockRestore();

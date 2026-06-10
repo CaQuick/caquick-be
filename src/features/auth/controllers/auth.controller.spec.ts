@@ -4,6 +4,14 @@ import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
+import {
+  OIDC_LOGIN_SERVICE,
+  type IOidcLoginService,
+} from '@/features/auth/services/oidc-login.service.interface';
+import {
+  SELLER_CREDENTIAL_SERVICE,
+  type ISellerCredentialService,
+} from '@/features/auth/services/seller-credential.service.interface';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -18,23 +26,35 @@ function mockRes(): Response {
 describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
+  let oidcLogin: jest.Mocked<IOidcLoginService>;
+  let sellerAuth: jest.Mocked<ISellerCredentialService>;
 
   beforeEach(async () => {
     auth = {
-      startOidcLogin: jest.fn(),
-      handleOidcCallback: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
+      issueDevAccessToken: jest.fn(),
+    } as unknown as jest.Mocked<AuthService>;
+
+    oidcLogin = {
+      startOidcLogin: jest.fn(),
+      handleOidcCallback: jest.fn(),
+    };
+
+    sellerAuth = {
       sellerLogin: jest.fn(),
       refreshSeller: jest.fn(),
       logoutSeller: jest.fn(),
       changeSellerPassword: jest.fn(),
-      issueDevAccessToken: jest.fn(),
-    } as unknown as jest.Mocked<AuthService>;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: auth }],
+      providers: [
+        { provide: AuthService, useValue: auth },
+        { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
+        { provide: SELLER_CREDENTIAL_SERVICE, useValue: sellerAuth },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
@@ -45,13 +65,13 @@ describe('AuthController', () => {
       redirect: jest.fn(),
     } as unknown as Response;
 
-    auth.startOidcLogin.mockResolvedValue({
+    oidcLogin.startOidcLogin.mockResolvedValue({
       redirectUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     });
 
     await controller.start('google', 'https://caquick.site/login', res);
 
-    expect(auth.startOidcLogin).toHaveBeenCalledWith(
+    expect(oidcLogin.startOidcLogin).toHaveBeenCalledWith(
       'google',
       'https://caquick.site/login',
       res,
@@ -73,14 +93,18 @@ describe('AuthController', () => {
       redirect: jest.fn(),
     } as unknown as Response;
 
-    auth.handleOidcCallback.mockResolvedValue({
+    oidcLogin.handleOidcCallback.mockResolvedValue({
       returnTo: 'https://caquick.site/mypage',
       accessToken: 'access-token',
     });
 
     await controller.callback('google', req, res);
 
-    expect(auth.handleOidcCallback).toHaveBeenCalledWith('google', req, res);
+    expect(oidcLogin.handleOidcCallback).toHaveBeenCalledWith(
+      'google',
+      req,
+      res,
+    );
     expect(res.redirect).toHaveBeenCalledWith('https://caquick.site/mypage');
   });
 
@@ -115,7 +139,7 @@ describe('AuthController', () => {
   it('sellerLogin은 accessToken + accountStatus를 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
-    auth.sellerLogin.mockResolvedValue({
+    sellerAuth.sellerLogin.mockResolvedValue({
       accessToken: 'seller-access',
       accountStatus: 'ACTIVE',
     });
@@ -126,7 +150,7 @@ describe('AuthController', () => {
       res,
     );
 
-    expect(auth.sellerLogin).toHaveBeenCalledWith({
+    expect(sellerAuth.sellerLogin).toHaveBeenCalledWith({
       username: 'seller',
       password: 'pw1234!A',
       req,
@@ -143,14 +167,14 @@ describe('AuthController', () => {
   it('sellerRefresh는 accessToken + accountStatus를 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
-    auth.refreshSeller.mockResolvedValue({
+    sellerAuth.refreshSeller.mockResolvedValue({
       accessToken: 'rotated',
       accountStatus: 'ACTIVE',
     });
 
     await controller.sellerRefresh(req, res);
 
-    expect(auth.refreshSeller).toHaveBeenCalledWith(req, res);
+    expect(sellerAuth.refreshSeller).toHaveBeenCalledWith(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       accessToken: 'rotated',
@@ -165,7 +189,7 @@ describe('AuthController', () => {
 
     await controller.sellerLogout(req, res);
 
-    expect(auth.logoutSeller).toHaveBeenCalledWith(req, res);
+    expect(sellerAuth.logoutSeller).toHaveBeenCalledWith(req, res);
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
   });
@@ -182,7 +206,7 @@ describe('AuthController', () => {
       res,
     );
 
-    expect(auth.changeSellerPassword).toHaveBeenCalledWith({
+    expect(sellerAuth.changeSellerPassword).toHaveBeenCalledWith({
       accountId: BigInt(42),
       currentPassword: 'old!Pass1',
       newPassword: 'New!Pass1',

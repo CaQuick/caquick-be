@@ -1,11 +1,18 @@
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerContentMutationResolver } from '@/features/seller/resolvers/seller-content-mutation.resolver';
 import { SellerContentQueryResolver } from '@/features/seller/resolvers/seller-content-query.resolver';
-import { SellerContentService } from '@/features/seller/services/seller-content.service';
+import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
+import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
+import { SellerBannerService } from '@/features/seller/services/seller-banner.service';
+import { SELLER_BANNER_SERVICE } from '@/features/seller/services/seller-banner.service.interface';
+import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
+import { SELLER_FAQ_SERVICE } from '@/features/seller/services/seller-faq.service.interface';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';
@@ -21,9 +28,24 @@ describe('Seller Content Resolvers (real DB)', () => {
       providers: [
         SellerContentQueryResolver,
         SellerContentMutationResolver,
-        SellerContentService,
+        {
+          provide: SELLER_FAQ_SERVICE,
+          useClass: SellerFaqService,
+        },
+        {
+          provide: SELLER_BANNER_SERVICE,
+          useClass: SellerBannerService,
+        },
+        {
+          provide: SELLER_AUDIT_SERVICE,
+          useClass: SellerAuditService,
+        },
         SellerRepository,
         ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerContentQueryResolver);
@@ -44,7 +66,7 @@ describe('Seller Content Resolvers (real DB)', () => {
     const { account } = await setupSellerWithStore(prisma);
     await mutationResolver.sellerCreateFaqTopic(
       { accountId: account.id.toString() },
-      { title: 'F1', answerHtml: '<p>a</p>' } as never,
+      { title: 'F1', answerHtml: '<p>a</p>' },
     );
     const result = await queryResolver.sellerFaqTopics({
       accountId: account.id.toString(),

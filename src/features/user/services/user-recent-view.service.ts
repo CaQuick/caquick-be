@@ -1,11 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
-import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductRepository } from '@/features/product';
+import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { RecentViewedProductConnection } from '@/features/user/types/user-mypage-output.type';
@@ -14,8 +11,6 @@ import type { RecentViewedProductConnection } from '@/features/user/types/user-m
 const MAX_RECENT_VIEWS = 50;
 
 const RECENT_VIEW_ERRORS = {
-  INVALID_LIMIT: '조회 개수는 1~50 사이여야 합니다.',
-  INVALID_OFFSET: '오프셋은 0 이상이어야 합니다.',
   PRODUCT_NOT_FOUND: '상품을 찾을 수 없습니다.',
 } as const;
 
@@ -29,17 +24,10 @@ export class UserRecentViewService {
 
   async list(
     accountId: bigint,
-    input?: { offset?: number; limit?: number },
+    input?: MyRecentViewedProductsInput,
   ): Promise<RecentViewedProductConnection> {
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? 20;
-
-    if (offset < 0) {
-      throw new BadRequestException(RECENT_VIEW_ERRORS.INVALID_OFFSET);
-    }
-    if (limit < 1 || limit > 50) {
-      throw new BadRequestException(RECENT_VIEW_ERRORS.INVALID_LIMIT);
-    }
 
     const { items, totalCount } =
       await this.recentViewRepo.findRecentByAccountPaginated({

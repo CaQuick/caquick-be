@@ -4,14 +4,11 @@ import type { Request, Response } from 'express';
 import type { GraphQLResolveInfo } from 'graphql';
 
 import {
-  buildQueryString,
-  toQueryParams,
-} from '@/common/helpers/url-query.helper';
-import {
   apiVersionOf,
   clientIpOf,
   userAgentOf,
 } from '@/common/utils/http-meta';
+import { buildQueryString, toQueryParams } from '@/common/utils/url-query';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const RESPONSE_TIME_HEADER = 'x-response-time-ms';

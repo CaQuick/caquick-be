@@ -1,0 +1,96 @@
+name: Knip (dead-code report)
+
+# advisory only — PR에 미사용 파일/export/의존성(dead code) 리포트를 코멘트로 남긴다.
+# 필수 status check 아님 → 머지 차단하지 않음. 청소 후보 가시화용(수동 yarn knip이 방치되지 않도록 자동화).
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: knip-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  knip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: GraphQL codegen
+        run: yarn graphql:codegen
+
+      - name: Run knip (report)
+        continue-on-error: true
+        env:
+          NO_COLOR: "1"
+        run: yarn knip > knip-report.txt 2>&1 || true
+
+      - name: Post knip report as PR comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- knip-report -->';
+            let report = '';
+            try {
+              report = fs.readFileSync('knip-report.txt', 'utf8').trim();
+            } catch (e) {
+              report = '';
+            }
+            if (!report) report = '(knip 출력 없음 — 이슈 0이거나 실행 실패)';
+            // 섹션 헤더(예: "Unused exports (6)")만 추려 요약
+            const summary =
+              report
+                .split('\n')
+                .filter((l) => /\(\d+\)\s*$/.test(l))
+                .join('\n') || '요약 항목 없음';
+            const MAX = 60000;
+            const bodyReport = report.length > MAX ? report.slice(0, MAX) + '\n... (truncated)' : report;
+            const body = [
+              MARKER,
+              '## 🧹 knip — dead-code 리포트',
+              '',
+              '```',
+              summary,
+              '```',
+              '',
+              '<details><summary>전체 리포트</summary>',
+              '',
+              '```',
+              bodyReport,
+              '```',
+              '',
+              '</details>',
+              '',
+              '> 청소 후보(오탐 가능) · 기준 `docs/guide/architecture-conventions.md`',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(MARKER));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

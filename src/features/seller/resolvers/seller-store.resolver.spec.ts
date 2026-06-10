@@ -1,10 +1,17 @@
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
-import { SellerStoreService } from '@/features/seller/services/seller-store.service';
+import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
+import { SELLER_STORE_HOURS_SERVICE } from '@/features/seller/services/seller-store-hours.service.interface';
+import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
+import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
+import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';
@@ -20,8 +27,23 @@ describe('Seller Store Resolvers (real DB)', () => {
       providers: [
         SellerStoreQueryResolver,
         SellerStoreMutationResolver,
-        SellerStoreService,
+        {
+          provide: SELLER_STORE_PROFILE_SERVICE,
+          useClass: SellerStoreProfileService,
+        },
+        {
+          provide: SELLER_STORE_HOURS_SERVICE,
+          useClass: SellerStoreHoursService,
+        },
+        {
+          provide: SELLER_STORE_POLICY_SERVICE,
+          useClass: SellerStorePolicyService,
+        },
         SellerRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerStoreQueryResolver);
@@ -53,7 +75,7 @@ describe('Seller Store Resolvers (real DB)', () => {
     const { account, store } = await setupSellerWithStore(prisma);
     const result = await mutationResolver.sellerUpdateStoreBasicInfo(
       { accountId: account.id.toString() },
-      { storeName: '변경됨' } as never,
+      { storeName: '변경됨' },
     );
     expect(result.storeName).toBe('변경됨');
 
@@ -75,7 +97,7 @@ describe('Seller Store Resolvers (real DB)', () => {
           isClosed: true,
           openTime: null,
           closeTime: null,
-        } as never,
+        },
       ),
     ).rejects.toThrow();
   });

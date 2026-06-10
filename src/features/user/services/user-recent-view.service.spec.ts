@@ -188,26 +188,8 @@ describe('UserRecentViewService (real DB)', () => {
       expect(result.totalCount).toBe(0);
     });
 
-    it('limit이 0 이하면 BadRequestException을 던진다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.list(account.id, { limit: 0 })).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('limit이 상한(50)을 초과하면 BadRequestException을 던진다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.list(account.id, { limit: 51 })).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('offset이 음수면 BadRequestException을 던진다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.list(account.id, { offset: -1 })).rejects.toThrow(
-        BadRequestException,
-      );
-    });
+    // offset/limit 범위 검증은 DTO (MyRecentViewedProductsInput → UserPaginationInput)
+    // 로 이전됨. service 테스트는 도메인 로직에 집중.
   });
 
   // ─── record ───

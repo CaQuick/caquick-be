@@ -1,32 +1,39 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
+import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
+import type { SellerCreateOptionGroupInput } from '@/features/seller/dto/inputs/seller-create-option-group.input';
+import type { SellerCreateOptionItemInput } from '@/features/seller/dto/inputs/seller-create-option-item.input';
+import type { SellerCreateProductInput } from '@/features/seller/dto/inputs/seller-create-product.input';
+import type { SellerReorderOptionGroupsInput } from '@/features/seller/dto/inputs/seller-reorder-option-groups.input';
+import type { SellerReorderOptionItemsInput } from '@/features/seller/dto/inputs/seller-reorder-option-items.input';
+import type { SellerReorderProductCustomTextTokensInput } from '@/features/seller/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import type { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
+import type { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/seller-set-product-active.input';
+import type { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
+import type { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
+import type { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
+import type { SellerUpdateOptionGroupInput } from '@/features/seller/dto/inputs/seller-update-option-group.input';
+import type { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/seller-update-option-item.input';
+import type { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
+import type { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
+import type { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductMutationResolver } from '@/features/seller/resolvers/seller-product-mutation.resolver';
 import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-product-query.resolver';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
-import { SellerProductCrudService } from '@/features/seller/services/seller-product-crud.service';
-import type {
-  SellerAddProductImageInput,
-  SellerCreateOptionGroupInput,
-  SellerCreateOptionItemInput,
-  SellerCreateProductInput,
-  SellerReorderOptionGroupsInput,
-  SellerReorderOptionItemsInput,
-  SellerReorderProductCustomTextTokensInput,
-  SellerReorderProductImagesInput,
-  SellerSetProductActiveInput,
-  SellerSetProductCategoriesInput,
-  SellerSetProductCustomTemplateActiveInput,
-  SellerSetProductTagsInput,
-  SellerUpdateOptionGroupInput,
-  SellerUpdateOptionItemInput,
-  SellerUpdateProductInput,
-  SellerUpsertProductCustomTemplateInput,
-  SellerUpsertProductCustomTextTokenInput,
-} from '@/features/seller/types/seller-input.type';
+import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
+import { SELLER_PRODUCT_IMAGE_SERVICE } from '@/features/seller/services/seller-product-image.service.interface';
+import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
+import { SELLER_PRODUCT_LIFECYCLE_SERVICE } from '@/features/seller/services/seller-product-lifecycle.service.interface';
+import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
+import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
+import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
+import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
@@ -42,11 +49,30 @@ describe('Seller Product Resolvers (real DB)', () => {
       providers: [
         SellerProductQueryResolver,
         SellerProductMutationResolver,
-        SellerProductCrudService,
+        {
+          provide: SELLER_PRODUCT_QUERY_SERVICE,
+          useClass: SellerProductQueryService,
+        },
+        {
+          provide: SELLER_PRODUCT_LIFECYCLE_SERVICE,
+          useClass: SellerProductLifecycleService,
+        },
+        {
+          provide: SELLER_PRODUCT_IMAGE_SERVICE,
+          useClass: SellerProductImageService,
+        },
+        {
+          provide: SELLER_PRODUCT_TAXONOMY_SERVICE,
+          useClass: SellerProductTaxonomyService,
+        },
         SellerOptionService,
         SellerCustomTemplateService,
         SellerRepository,
         ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerProductQueryResolver);

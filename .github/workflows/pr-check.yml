@@ -47,11 +47,16 @@ jobs:
       - name: DTO ↔ SDL sync check (warning during migration)
         run: yarn dto:check --warning
 
+      # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 validate(pre-push)뿐 아니라
+      # 보호된 check status에서도 강제해야 --no-verify/Husky 미설치 환경의 우회를 막는다.
+      - name: Architecture check (dependency-cruiser)
+        run: yarn arch:check
+
       - name: Test with coverage
         run: yarn test:cov
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info

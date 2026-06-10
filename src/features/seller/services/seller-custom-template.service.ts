@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,6 +8,10 @@ import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
   CUSTOM_TEMPLATE_NOT_FOUND,
@@ -21,14 +26,12 @@ import {
   MAX_TOKEN_KEY_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerReorderProductCustomTextTokensInput } from '@/features/seller/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import type { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
+import type { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
+import type { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type {
-  SellerReorderProductCustomTextTokensInput,
-  SellerSetProductCustomTemplateActiveInput,
-  SellerUpsertProductCustomTemplateInput,
-  SellerUpsertProductCustomTextTokenInput,
-} from '@/features/seller/types/seller-input.type';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
@@ -38,9 +41,11 @@ import type {
 export class SellerCustomTemplateService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
   ) {
-    super(repo);
+    super(repo, auditLogs);
   }
 
   async sellerUpsertProductCustomTemplate(
@@ -63,7 +68,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       isActive: input.isActive ?? true,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -95,7 +100,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       input.isActive,
     );
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -153,7 +158,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       height: input.height ?? null,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -179,7 +184,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     }
 
     await this.productRepository.softDeleteCustomTextToken(tokenId);
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -226,7 +231,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       tokenIds,
     });
 
-    await this.repo.createAuditLog({
+    await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,

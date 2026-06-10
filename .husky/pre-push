@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Push 전 로컬 검증.
+# - lint / type-check / dto:check / test:cov(커버리지 임계 포함) 일괄 실행
+# - 통과해야 push 진행. 긴급 시 `git push --no-verify` 로 우회 가능
+# - Docker(testcontainers) 가 동작 중이어야 한다
+yarn validate

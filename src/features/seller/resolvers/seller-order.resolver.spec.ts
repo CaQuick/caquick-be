@@ -1,6 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import {
   OrderDomainService,
   OrderRepository,
@@ -35,6 +37,10 @@ describe('Seller Order Resolvers (real DB)', () => {
         OrderRepository,
         OrderDomainService,
         OrderStatusTransitionPolicy,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
       ],
     });
     queryResolver = module.get(SellerOrderQueryResolver);

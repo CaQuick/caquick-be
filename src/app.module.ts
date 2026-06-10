@@ -28,6 +28,10 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
+import {
+  RequestContextMiddleware,
+  RequestContextModule,
+} from '@/global/request-context';
 import { StorageModule } from '@/global/storage/storage.module';
 import { PrismaModule } from '@/prisma';
 
@@ -44,6 +48,7 @@ import { PrismaModule } from '@/prisma';
     }),
     CommonModule,
     PrismaModule,
+    RequestContextModule,
     LoggerModule,
     AuthGlobalModule,
     GraphqlGlobalModule,
@@ -88,6 +93,11 @@ import { PrismaModule } from '@/prisma';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
+    // 모든 요청(REST·GraphQL)에 대해 요청 컨텍스트(client IP/UA)를 가장 먼저 연다.
+    consumer
+      .apply(RequestContextMiddleware)
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+
     consumer
       .apply(DocsAccessMiddleware)
       .forRoutes(

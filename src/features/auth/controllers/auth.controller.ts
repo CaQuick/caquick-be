@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -25,6 +26,17 @@ import {
 import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
+import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
+import { SellerChangePasswordInput } from '@/features/auth/dto/inputs/seller-change-password.input';
+import { SellerLoginInput } from '@/features/auth/dto/inputs/seller-login.input';
+import {
+  OIDC_LOGIN_SERVICE,
+  type IOidcLoginService,
+} from '@/features/auth/services/oidc-login.service.interface';
+import {
+  SELLER_CREDENTIAL_SERVICE,
+  type ISellerCredentialService,
+} from '@/features/auth/services/seller-credential.service.interface';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 
@@ -38,8 +50,16 @@ import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
 export class AuthController {
   /**
    * @param auth AuthService
+   * @param oidcLogin OidcLoginService
+   * @param sellerAuth SellerCredentialService
    */
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @Inject(OIDC_LOGIN_SERVICE)
+    private readonly oidcLogin: IOidcLoginService,
+    @Inject(SELLER_CREDENTIAL_SERVICE)
+    private readonly sellerAuth: ISellerCredentialService,
+  ) {}
 
   /**
    * OIDC 로그인 시작
@@ -76,7 +96,7 @@ export class AuthController {
     // provider 검증(잘못된 값이면 즉시 에러)
     parseOidcProvider(provider);
 
-    const { redirectUrl } = await this.auth.startOidcLogin(
+    const { redirectUrl } = await this.oidcLogin.startOidcLogin(
       provider,
       returnTo,
       res,
@@ -112,7 +132,11 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { returnTo } = await this.auth.handleOidcCallback(provider, req, res);
+    const { returnTo } = await this.oidcLogin.handleOidcCallback(
+      provider,
+      req,
+      res,
+    );
     res.redirect(returnTo);
   }
 
@@ -192,11 +216,11 @@ export class AuthController {
   })
   @Post('seller/login')
   async sellerLogin(
-    @Body() body: SellerLoginBody,
+    @Body() body: SellerLoginInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.auth.sellerLogin({
+    const { accessToken, accountStatus } = await this.sellerAuth.sellerLogin({
       username: body.username,
       password: body.password,
       req,
@@ -239,7 +263,7 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.auth.refreshSeller(
+    const { accessToken, accountStatus } = await this.sellerAuth.refreshSeller(
       req,
       res,
     );
@@ -263,7 +287,7 @@ export class AuthController {
   @ApiNoContentResponse({ description: '판매자 로그아웃 완료' })
   @Post('seller/logout')
   async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
-    await this.auth.logoutSeller(req, res);
+    await this.sellerAuth.logoutSeller(req, res);
     res.status(204).send();
   }
 
@@ -298,16 +322,13 @@ export class AuthController {
   })
   @Post('dev/issue-token')
   async devIssueToken(
-    @Body() body: DevIssueTokenBody,
+    @Body() body: DevIssueTokenInput,
     @Res() res: Response,
   ): Promise<void> {
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException(
         '/auth/dev/issue-token은 개발 환경에서만 사용 가능합니다.',
       );
-    }
-    if (!body || typeof body.accountId !== 'string') {
-      throw new BadRequestException('accountId(string)가 필요합니다.');
     }
 
     const accountId = parseAccountIdString(body.accountId);
@@ -337,12 +358,12 @@ export class AuthController {
   @Post('seller/change-password')
   async sellerChangePassword(
     @CurrentUser() user: JwtUser,
-    @Body() body: SellerChangePasswordBody,
+    @Body() body: SellerChangePasswordInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     const accountId = parseAccountId(user);
-    await this.auth.changeSellerPassword({
+    await this.sellerAuth.changeSellerPassword({
       accountId,
       currentPassword: body.currentPassword,
       newPassword: body.newPassword,
@@ -350,20 +371,6 @@ export class AuthController {
     });
     res.status(200).json({ ok: true });
   }
-}
-
-interface SellerLoginBody {
-  username: string;
-  password: string;
-}
-
-interface SellerChangePasswordBody {
-  currentPassword: string;
-  newPassword: string;
-}
-
-interface DevIssueTokenBody {
-  accountId: string;
 }
 
 function parseAccountId(user: JwtUser): bigint {
