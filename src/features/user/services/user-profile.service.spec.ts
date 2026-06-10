@@ -25,6 +25,7 @@ describe('UserProfileService (real DB)', () => {
   beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
+      isOwnedProfileImageUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -412,9 +413,10 @@ describe('UserProfileService (real DB)', () => {
 
   // ─── updateMyProfileImage ───
   describe('updateMyProfileImage', () => {
-    it('유효한 URL이면 프로필 이미지를 업데이트한다', async () => {
+    it('발급된(소유) URL이면 프로필 이미지를 업데이트한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
+      s3Service.isOwnedProfileImageUrl.mockReturnValue(true);
 
       const result = await service.updateMyProfileImage(account.id, {
         profileImageUrl: 'https://s3.example.com/profile.jpg',
@@ -423,6 +425,18 @@ describe('UserProfileService (real DB)', () => {
       expect(result.profile.profileImageUrl).toBe(
         'https://s3.example.com/profile.jpg',
       );
+    });
+
+    it('발급되지 않은(소유 아님) URL이면 BadRequest 로 거절한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      s3Service.isOwnedProfileImageUrl.mockReturnValue(false);
+
+      await expect(
+        service.updateMyProfileImage(account.id, {
+          profileImageUrl: 'https://evil.example.com/someone-else.jpg',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     // profileImageUrl 형식·길이 검증은 DTO (UpdateMyProfileImageInput) 로 이전됨.

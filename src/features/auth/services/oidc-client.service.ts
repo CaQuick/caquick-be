@@ -62,7 +62,7 @@ export class OidcClientService {
     const codeChallenge = generators.codeChallenge(codeVerifier);
 
     const authorizationUrl = client.authorizationUrl({
-      scope: 'openid email profile',
+      scope: this.getScope(provider),
       state,
       nonce,
       code_challenge: codeChallenge,
@@ -70,6 +70,30 @@ export class OidcClientService {
     });
 
     return { authorizationUrl, state, nonce, codeVerifier };
+  }
+
+  /**
+   * provider별 OIDC scope를 반환한다.
+   *
+   * 카카오는 표준 `email`/`profile`이 아니라 자체 동의항목 ID
+   * (`account_email`/`profile_nickname`/`profile_image`)를 사용한다. 표준 scope를 보내면
+   * KOE205(invalid_scope)가 발생하므로 provider별로 분리한다.
+   * 콘솔에 활성화한 동의항목과 정확히 맞추도록 env(`OIDC_GOOGLE_SCOPE`/`OIDC_KAKAO_SCOPE`)로
+   * 덮어쓸 수 있다(예: account_email 미승인 시 카카오 scope에서 제외).
+   *
+   * @param provider provider
+   */
+  private getScope(provider: OidcProvider): string {
+    if (provider === 'google') {
+      return (
+        this.config.get<string>('OIDC_GOOGLE_SCOPE')?.trim() ||
+        'openid email profile'
+      );
+    }
+    return (
+      this.config.get<string>('OIDC_KAKAO_SCOPE')?.trim() ||
+      'openid account_email profile_nickname profile_image'
+    );
   }
 
   /**
