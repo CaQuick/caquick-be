@@ -305,6 +305,30 @@ describe('S3Service', () => {
         'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/review-media/images/1/x.jpg';
       expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
     });
+
+    it('path traversal(../)로 타 계정 key 를 가리키면 false (정규화 후 검증)', () => {
+      const url =
+        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/../2/2026-06-10/x.jpg';
+      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
+    });
+
+    it('인코딩된 dot(%2e)이 포함되면 false', () => {
+      const url =
+        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/%2e%2e/2/x.jpg';
+      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
+    });
+
+    it('http(비 https)면 false', () => {
+      const url =
+        'http://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/x.jpg';
+      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
+    });
+
+    it('URL 형식이 아니면 false', () => {
+      expect(service.isOwnedProfileImageUrl('not a url', BigInt(1))).toBe(
+        false,
+      );
+    });
   });
 });
 
