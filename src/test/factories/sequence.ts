@@ -8,7 +8,3 @@ export function nextSeq(): number {
   counter += 1;
   return counter;
 }
-
-export function resetSeq(): void {
-  counter = 0;
-}

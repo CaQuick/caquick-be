@@ -1,16 +1,4 @@
 /**
- * 로그 레벨 정의.
- */
-export enum LogLevel {
-  LOG = 'log',
-  ERROR = 'error',
-  WARN = 'warn',
-  DEBUG = 'debug',
-  VERBOSE = 'verbose',
-  FATAL = 'fatal',
-}
-
-/**
  * 로그 컨텍스트.
  */
 export enum LogContext {
