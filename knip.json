@@ -4,8 +4,11 @@
     "src/main.ts",
     "prisma/seed.ts",
     "scripts/**/*.ts",
-    "test/**/*.e2e-spec.ts"
+    "test/**/*.e2e-spec.ts",
+    "src/global/types/graphql-context.type.ts"
   ],
   "project": ["src/**/*.ts"],
-  "ignore": ["src/graphql/graphql.types.ts"]
+  "ignore": ["src/graphql/graphql.types.ts"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["@as-integrations/express5", "qs", "express-serve-static-core"]
 }

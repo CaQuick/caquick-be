@@ -5,7 +5,6 @@ import {
   BannerLinkType,
   BannerPlacement,
   Prisma,
-  type PrismaClient,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
@@ -442,8 +441,3 @@ export function nextCursorOf<T extends { id: bigint }>(
 export function isSellerAccount(accountType: AccountType): boolean {
   return accountType === AccountType.SELLER;
 }
-
-export type TxClient = Omit<
-  PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
->;
