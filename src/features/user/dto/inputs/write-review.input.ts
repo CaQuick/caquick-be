@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsNumber,
@@ -25,7 +25,12 @@ export class WriteReviewInput {
   @IsRatingValid()
   rating!: number;
 
+  // 길이 검증 전에 trim 한다. service 가 trim 후 저장하므로, 공백만/앞뒤 공백으로
+  // 부풀린 입력이 raw 길이로 통과해 빈 리뷰로 저장되는 회귀를 막는다.
   @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @Length(20, 1000)
   content!: string;
 
