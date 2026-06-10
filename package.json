@@ -27,7 +27,9 @@
     "graphql:codegen": "graphql-codegen --config codegen.yml",
     "graphql:docs": "spectaql -c spectaql.yml",
     "dto:check": "ts-node -r tsconfig-paths/register scripts/check-graphql-dto-sync.ts",
-    "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn test:cov",
+    "arch:check": "depcruise --config .dependency-cruiser.cjs src",
+    "knip": "knip",
+    "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn arch:check && yarn test:cov",
     "prepare": "husky"
   },
   "prisma": {
@@ -85,6 +87,7 @@
     "@types/passport-jwt": "^4",
     "@types/supertest": "^7.2.0",
     "@types/useragent": "^2",
+    "dependency-cruiser": "^17.4.3",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.0.1",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -94,6 +97,7 @@
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jest": "^29",
+    "knip": "^6.16.1",
     "lint-staged": "^16.4.0",
     "mysql2": "^3.22.3",
     "prettier": "^3.8.3",

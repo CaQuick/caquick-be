@@ -1,0 +1,105 @@
+name: NestJS Doctor
+
+# advisory only — PR에 nestjs-doctor 점수/요약을 코멘트로 남긴다.
+# 필수 status check 아님 → 머지 차단하지 않음(자문용). 룰 오탐은 docs/guide/architecture-conventions.md 기준으로 판단.
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: nestjs-doctor-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  nestjs-doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: GraphQL codegen
+        run: yarn graphql:codegen
+
+      # pre-1.0 도구라 버전 pin(점수 드리프트 방지). 갱신 시 여기 bump.
+      - name: Run nestjs-doctor (advisory)
+        continue-on-error: true
+        run: npx --yes nestjs-doctor@0.4.32 --json > nestjs-doctor.json
+
+      - name: Post score as PR comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- nestjs-doctor-report -->';
+            let j;
+            try {
+              j = JSON.parse(fs.readFileSync('nestjs-doctor.json', 'utf8'));
+            } catch (e) {
+              core.warning('nestjs-doctor.json 파싱 실패(스킵): ' + e.message);
+              return;
+            }
+            const score = j.score?.value ?? '?';
+            const label = j.score?.label ?? '';
+            const diags = Array.isArray(j.diagnostics) ? j.diagnostics : [];
+            const by = {};
+            for (const d of diags) {
+              const cat = d.category || '?';
+              const sev = d.severity || '?';
+              by[cat] = by[cat] || {};
+              by[cat][sev] = (by[cat][sev] || 0) + 1;
+            }
+            let table = '| Category | error | warning | info |\n|---|---|---|---|\n';
+            for (const c of Object.keys(by).sort()) {
+              table += `| ${c} | ${by[c].error || 0} | ${by[c].warning || 0} | ${by[c].info || 0} |\n`;
+            }
+            const errors = diags.filter((d) => d.severity === 'error').length;
+            const archSec = diags
+              .filter((d) => d.category === 'architecture' || d.category === 'security')
+              .slice(0, 15)
+              .map((d) => `- \`${d.severity}\` ${d.category}/${d.rule}: ${String(d.message || '').slice(0, 140)}`)
+              .join('\n');
+            const body = [
+              MARKER,
+              `## 🩺 NestJS Doctor — ${score}/100 ${label ? '(' + label + ')' : ''}`,
+              '',
+              `진단 ${diags.length}건 · error ${errors}건. **advisory(비차단)** — 머지 게이트 아님.`,
+              '',
+              table,
+              '',
+              '<details><summary>architecture / security 상위 항목</summary>',
+              '',
+              archSec || '(없음)',
+              '',
+              '</details>',
+              '',
+              '> ⚠️ 일부 룰은 우리 패턴에 대한 오탐일 수 있음(DI 토큰 주입·repository async 시그니처·`@IsIn` union 검증 등). 판정 기준은 `docs/guide/architecture-conventions.md`.',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(MARKER));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
