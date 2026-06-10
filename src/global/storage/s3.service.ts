@@ -101,6 +101,20 @@ export class S3Service {
     }
   }
 
+  /**
+   * 주어진 URL 이 이 버킷에 발급된 "해당 계정의 프로필 이미지" URL 인지 검증한다.
+   * 클라이언트가 임의 URL(외부 링크·타인 key)을 프로필 이미지로 저장하는 것을 막는다.
+   *
+   * @param url 저장하려는 URL
+   * @param accountId 소유 계정
+   */
+  isOwnedProfileImageUrl(url: string, accountId: bigint): boolean {
+    const prefix = this.buildPublicUrl(
+      `${UPLOAD_POLICIES.PROFILE_IMAGE.keyPrefix}/${accountId.toString()}/`,
+    );
+    return url.startsWith(prefix);
+  }
+
   private validateContentType(
     contentType: string,
     allowedTypes: readonly string[],
