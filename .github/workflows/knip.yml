@@ -65,10 +65,7 @@ jobs:
             const bodyReport = report.length > MAX ? report.slice(0, MAX) + '\n... (truncated)' : report;
             const body = [
               MARKER,
-              '## 🧹 knip — dead-code 리포트 (비차단)',
-              '',
-              '미사용 파일/export/의존성 **청소 후보**. **게이트 아님** — 머지 차단하지 않음.',
-              '일부는 오탐일 수 있음(데코레이터로 등록되는 class-validator constraint, eslint flat-config 전용 deps 등) — 참고용.',
+              '## 🧹 knip — dead-code 리포트',
               '',
               '```',
               summary,
@@ -81,6 +78,8 @@ jobs:
               '```',
               '',
               '</details>',
+              '',
+              '> 청소 후보(오탐 가능) · 기준 `docs/guide/architecture-conventions.md`',
             ].join('\n');
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;

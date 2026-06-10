@@ -78,7 +78,7 @@ jobs:
               MARKER,
               `## 🩺 NestJS Doctor — ${score}/100 ${label ? '(' + label + ')' : ''}`,
               '',
-              `진단 ${diags.length}건 · error ${errors}건. **advisory(비차단)** — 머지 게이트 아님.`,
+              `진단 ${diags.length}건 (error ${errors}).`,
               '',
               table,
               '',
@@ -88,7 +88,7 @@ jobs:
               '',
               '</details>',
               '',
-              '> ⚠️ 일부 룰은 우리 패턴에 대한 오탐일 수 있음(DI 토큰 주입·repository async 시그니처·`@IsIn` union 검증 등). 판정 기준은 `docs/guide/architecture-conventions.md`.',
+              '> 오탐 포함 가능 · 기준 `docs/guide/architecture-conventions.md`',
             ].join('\n');
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
