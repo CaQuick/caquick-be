@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AccountType, type IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { buildInitialNickname } from '@/features/auth/helpers/initial-nickname.helper';
 import type {
   AccountForJwt,
   AccountIdentityWithAccount,
@@ -224,8 +225,7 @@ export class AccountRepository implements IAccountRepository {
     email?: string,
     profileImageUrl?: string,
   ): Promise<void> {
-    const nickname =
-      displayName?.trim() || (email ? email.split('@')[0] : 'user');
+    const nickname = buildInitialNickname(accountId, displayName, email);
 
     await tx.userProfile.create({
       data: {
