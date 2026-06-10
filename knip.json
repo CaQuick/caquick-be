@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main.ts",
+    "prisma/seed.ts",
+    "scripts/**/*.ts",
+    "test/**/*.e2e-spec.ts"
+  ],
+  "project": ["src/**/*.ts"],
+  "ignore": ["src/graphql/graphql.types.ts"]
+}
