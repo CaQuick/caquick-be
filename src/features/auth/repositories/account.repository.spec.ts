@@ -99,7 +99,10 @@ describe('AccountRepository (real DB)', () => {
       expect(result.account).not.toBeNull();
       expect(result.account!.email).toBe('new@example.com');
       expect(result.account!.user_profile).not.toBeNull();
-      expect(result.account!.user_profile!.nickname).toBe('New User');
+      // 공백 제거 + accountId suffix (이전엔 'New User' 가 공백째 저장되던 회귀)
+      expect(result.account!.user_profile!.nickname).toBe(
+        `NewUser_${result.account!.id}`,
+      );
     });
 
     it('기존 Identity가 있으면 업데이트한다', async () => {
@@ -142,7 +145,9 @@ describe('AccountRepository (real DB)', () => {
         emailVerified: true,
       });
 
-      expect(result.account!.user_profile!.nickname).toBe('john');
+      expect(result.account!.user_profile!.nickname).toBe(
+        `john_${result.account!.id}`,
+      );
     });
 
     it('displayName/email 모두 없으면 nickname이 "user"로 생성된다', async () => {
@@ -152,7 +157,9 @@ describe('AccountRepository (real DB)', () => {
         emailVerified: false,
       });
 
-      expect(result.account!.user_profile!.nickname).toBe('user');
+      expect(result.account!.user_profile!.nickname).toBe(
+        `user_${result.account!.id}`,
+      );
     });
 
     it('기존 Identity + account email이 null + user_profile 없는 경우: profile 신규 생성 + email 주입', async () => {

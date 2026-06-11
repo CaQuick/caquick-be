@@ -161,6 +161,53 @@ describe('OidcClientService', () => {
         code_challenge_method: 'S256',
       });
     });
+
+    it('Kakao는 카카오 동의항목 scope를 사용해야 한다 (표준 email/profile 금지 — KOE205 방지)', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        const config: Record<string, string> = {
+          OIDC_KAKAO_ISSUER_URL: 'https://kauth.kakao.com',
+          OIDC_KAKAO_CLIENT_ID: 'kakao-client-id',
+          OIDC_KAKAO_CLIENT_SECRET: 'kakao-client-secret',
+          BACKEND_BASE_URL: 'http://localhost:4000',
+        };
+        return config[key];
+      });
+      mockClient.authorizationUrl.mockReturnValue(
+        'https://kauth.kakao.com/...',
+      );
+
+      await service.buildAuthorizationUrl('kakao');
+
+      expect(mockClient.authorizationUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'openid account_email profile_nickname profile_image',
+        }),
+      );
+    });
+
+    it('OIDC_KAKAO_SCOPE env 로 scope 를 덮어쓸 수 있어야 한다 (콘솔 동의항목과 정합)', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        const config: Record<string, string> = {
+          OIDC_KAKAO_ISSUER_URL: 'https://kauth.kakao.com',
+          OIDC_KAKAO_CLIENT_ID: 'kakao-client-id',
+          OIDC_KAKAO_CLIENT_SECRET: 'kakao-client-secret',
+          BACKEND_BASE_URL: 'http://localhost:4000',
+          OIDC_KAKAO_SCOPE: 'openid profile_nickname profile_image',
+        };
+        return config[key];
+      });
+      mockClient.authorizationUrl.mockReturnValue(
+        'https://kauth.kakao.com/...',
+      );
+
+      await service.buildAuthorizationUrl('kakao');
+
+      expect(mockClient.authorizationUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'openid profile_nickname profile_image',
+        }),
+      );
+    });
   });
 
   describe('exchangeCode', () => {

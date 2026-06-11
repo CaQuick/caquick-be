@@ -126,6 +126,12 @@ export class UserProfileService extends UserBaseService {
     // DTO 의 @Transform 이 trim, @MinLength/@MaxLength 가 길이를 보장.
     const profileImageUrl = input.profileImageUrl;
 
+    // 우리가 발급한 presigned URL(이 버킷·해당 계정 prefix)인지 검증 —
+    // 클라이언트가 임의 URL 을 프로필 이미지로 저장하는 것을 방지한다.
+    if (!this.s3Service.isOwnedProfileImageUrl(profileImageUrl, accountId)) {
+      throw new BadRequestException('Invalid profile image URL.');
+    }
+
     await this.repo.updateProfileImage({
       accountId,
       profileImageUrl,
