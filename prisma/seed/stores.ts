@@ -19,6 +19,16 @@ export interface SeededStores {
 }
 
 export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
+  // 매장 region 매핑 (seedRegions 선행 실행 전제). Unchecked 경로라 FK를 직접 지정.
+  const gangnam = await prisma.region.findUniqueOrThrow({
+    where: { slug: 'sgg-11680' },
+    select: { id: true },
+  });
+  const mapo = await prisma.region.findUniqueOrThrow({
+    where: { slug: 'sgg-11440' },
+    select: { id: true },
+  });
+
   // 매장 1: 케이크샵 A (소속 seller 계정 자동 생성)
   const sellerA = await prisma.account.create({
     data: {
@@ -37,6 +47,7 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       address_city: '서울특별시',
       address_district: '강남구',
       address_neighborhood: '역삼동',
+      region_id: gangnam.id, // 서울 강남구
       latitude: 37.5012 as unknown as never,
       longitude: 127.0396 as unknown as never,
       business_hours_text: '매일 09:00 ~ 18:00 (화요일 정기 휴무)',
@@ -62,6 +73,7 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       address_city: '서울특별시',
       address_district: '마포구',
       address_neighborhood: '서교동',
+      region_id: mapo.id, // 서울 마포구
       business_hours_text: '평일 11:00 ~ 21:00',
       is_active: true,
     },

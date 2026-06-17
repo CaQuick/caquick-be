@@ -86,3 +86,6 @@ caquick_ddl.sql
 src/features/example/*
 
 .figma/
+
+# 지역 시드 원본 CSV (대용량 공공데이터, 파싱 산출 regions.generated.json 만 커밋)
+prisma/seed/data/*.csv
