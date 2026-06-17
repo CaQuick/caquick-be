@@ -60,4 +60,13 @@ export class StoreWishlistRepository {
     });
     return new Set(rows.map((r) => r.store_id.toString()));
   }
+
+  /** 활성 USER 계정 여부. 매장 찜은 구매자(USER)만 가능 → 인기 랭킹 무결성 보호. */
+  async isActiveUserAccount(accountId: bigint): Promise<boolean> {
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, account_type: 'USER', deleted_at: null },
+      select: { id: true },
+    });
+    return Boolean(account);
+  }
 }

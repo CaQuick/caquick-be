@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
@@ -105,6 +109,14 @@ describe('StoreWishlistService (real DB)', () => {
       await expect(
         service.addStoreToWishlist(account.id, 'not-a-number'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('USER가 아닌 계정(SELLER)은 찜할 수 없다(Forbidden)', async () => {
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      const store = await createStore(prisma);
+      await expect(
+        service.addStoreToWishlist(seller.id, store.id.toString()),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

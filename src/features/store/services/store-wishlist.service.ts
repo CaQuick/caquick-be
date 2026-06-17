@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import { STORE_WISHLIST_ERRORS } from '@/features/store/constants/store-wishlist-error-messages';
@@ -17,6 +21,11 @@ export class StoreWishlistService {
     accountId: bigint,
     storeIdStr: string,
   ): Promise<boolean> {
+    // 매장 찜은 구매자(USER)만 가능. SELLER/ADMIN 찜이 인기 랭킹을 조작하지 못하도록 차단.
+    const isUser = await this.wishlistRepo.isActiveUserAccount(accountId);
+    if (!isUser) {
+      throw new ForbiddenException(STORE_WISHLIST_ERRORS.USER_ONLY);
+    }
     const storeId = parseId(storeIdStr);
     const exists = await this.storeRepo.existsActiveStore(storeId);
     if (!exists) {
