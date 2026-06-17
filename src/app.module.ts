@@ -21,6 +21,7 @@ import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
 import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
+import { RegionModule } from '@/features/region';
 import { SellerModule } from '@/features/seller/seller.module';
 import { SystemModule } from '@/features/system/system.module';
 import { UserModule } from '@/features/user/user.module';
@@ -85,6 +86,7 @@ import { PrismaModule } from '@/prisma';
     }),
     SystemModule,
     AuthModule,
+    RegionModule,
     UserModule,
     SellerModule,
   ],

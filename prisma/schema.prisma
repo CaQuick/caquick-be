@@ -281,6 +281,43 @@ model AuthRefreshSession {
 
 /**
  * =========================
+ * Region (지역 마스터)
+ * - level 1 = 1차 광역그룹 (예: 서울 북부, 경기 남부, 인천)
+ * - level 2 = 2차 시군구    (예: 강남구, 수원시영통구, 강화군)
+ * - 동(洞)을 직접 보유한 표준 시군구를 2차로 채택. parent_id로 1차에 귀속.
+ * =========================
+ */
+
+model Region {
+  id        BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  parent_id BigInt? @db.UnsignedBigInt // null = 1차 광역그룹
+
+  level      Int     @db.UnsignedTinyInt
+  name       String  @db.VarChar(80)
+  slug       String  @unique @db.VarChar(120)
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  // 현재위치 기반 추천용 중심좌표. 좌표 데이터는 후속 확보 → 초기엔 비어 있을 수 있음
+  center_lat Decimal? @db.Decimal(10, 7)
+  center_lng Decimal? @db.Decimal(10, 7)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  parent   Region?  @relation("RegionTree", fields: [parent_id], references: [id])
+  children Region[] @relation("RegionTree")
+  stores   Store[]
+
+  @@index([parent_id, sort_order], map: "idx_region_parent_sort")
+  @@index([level, is_active], map: "idx_region_level_active")
+  @@index([deleted_at], map: "idx_region_deleted_at")
+  @@map("region")
+}
+
+/**
+ * =========================
  * 2) Store
  * =========================
  */
@@ -296,6 +333,9 @@ model Store {
   address_city         String? @db.VarChar(50)
   address_district     String? @db.VarChar(80)
   address_neighborhood String? @db.VarChar(80)
+
+  // 지역 필터용 2차 시군구(Region level 2). 기존 address_* free-text는 표시·역호환 유지
+  region_id BigInt? @db.UnsignedBigInt
 
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)
@@ -316,6 +356,7 @@ model Store {
   deleted_at DateTime? @db.DateTime(3)
 
   seller_account Account @relation("StoreSellerAccount", fields: [seller_account_id], references: [id])
+  region         Region? @relation(fields: [region_id], references: [id])
 
   business_hours   StoreBusinessHour[]
   special_closures StoreSpecialClosure[]
@@ -333,6 +374,7 @@ model Store {
   @@index([seller_account_id], map: "idx_store_seller")
   @@index([store_name], map: "idx_store_name")
   @@index([address_city, address_district, address_neighborhood], map: "idx_store_region")
+  @@index([region_id], map: "idx_store_region_id")
   @@index([deleted_at], map: "idx_store_deleted_at")
   @@map("store")
 }

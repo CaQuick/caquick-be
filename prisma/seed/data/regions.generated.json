@@ -1,0 +1,612 @@
+{
+  "generatedFrom": "국토교통부_전국 법정동_20260609.csv",
+  "note": "수도권(서울/인천/경기) 활성 시군구. 2차=동 보유 표준 시군구. 1차 배정: 서울=한강 북/남, 경기=경기북부청 기준, 인천=단일.",
+  "level1": [
+    {
+      "slug": "nationwide",
+      "name": "전국",
+      "sortOrder": 0
+    },
+    {
+      "slug": "seoul-north",
+      "name": "서울 북부",
+      "sortOrder": 1
+    },
+    {
+      "slug": "seoul-south",
+      "name": "서울 남부",
+      "sortOrder": 2
+    },
+    {
+      "slug": "gyeonggi-north",
+      "name": "경기 북부",
+      "sortOrder": 3
+    },
+    {
+      "slug": "gyeonggi-south",
+      "name": "경기 남부",
+      "sortOrder": 4
+    },
+    {
+      "slug": "incheon",
+      "name": "인천",
+      "sortOrder": 5
+    }
+  ],
+  "level2": [
+    {
+      "slug": "sgg-11110",
+      "name": "종로구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11110",
+      "sortOrder": 0
+    },
+    {
+      "slug": "sgg-11140",
+      "name": "중구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11140",
+      "sortOrder": 1
+    },
+    {
+      "slug": "sgg-11170",
+      "name": "용산구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11170",
+      "sortOrder": 2
+    },
+    {
+      "slug": "sgg-11200",
+      "name": "성동구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11200",
+      "sortOrder": 3
+    },
+    {
+      "slug": "sgg-11215",
+      "name": "광진구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11215",
+      "sortOrder": 4
+    },
+    {
+      "slug": "sgg-11230",
+      "name": "동대문구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11230",
+      "sortOrder": 5
+    },
+    {
+      "slug": "sgg-11260",
+      "name": "중랑구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11260",
+      "sortOrder": 6
+    },
+    {
+      "slug": "sgg-11290",
+      "name": "성북구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11290",
+      "sortOrder": 7
+    },
+    {
+      "slug": "sgg-11305",
+      "name": "강북구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11305",
+      "sortOrder": 8
+    },
+    {
+      "slug": "sgg-11320",
+      "name": "도봉구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11320",
+      "sortOrder": 9
+    },
+    {
+      "slug": "sgg-11350",
+      "name": "노원구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11350",
+      "sortOrder": 10
+    },
+    {
+      "slug": "sgg-11380",
+      "name": "은평구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11380",
+      "sortOrder": 11
+    },
+    {
+      "slug": "sgg-11410",
+      "name": "서대문구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11410",
+      "sortOrder": 12
+    },
+    {
+      "slug": "sgg-11440",
+      "name": "마포구",
+      "parentSlug": "seoul-north",
+      "sigunguCode": "11440",
+      "sortOrder": 13
+    },
+    {
+      "slug": "sgg-11470",
+      "name": "양천구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11470",
+      "sortOrder": 14
+    },
+    {
+      "slug": "sgg-11500",
+      "name": "강서구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11500",
+      "sortOrder": 15
+    },
+    {
+      "slug": "sgg-11530",
+      "name": "구로구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11530",
+      "sortOrder": 16
+    },
+    {
+      "slug": "sgg-11545",
+      "name": "금천구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11545",
+      "sortOrder": 17
+    },
+    {
+      "slug": "sgg-11560",
+      "name": "영등포구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11560",
+      "sortOrder": 18
+    },
+    {
+      "slug": "sgg-11590",
+      "name": "동작구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11590",
+      "sortOrder": 19
+    },
+    {
+      "slug": "sgg-11620",
+      "name": "관악구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11620",
+      "sortOrder": 20
+    },
+    {
+      "slug": "sgg-11650",
+      "name": "서초구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11650",
+      "sortOrder": 21
+    },
+    {
+      "slug": "sgg-11680",
+      "name": "강남구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11680",
+      "sortOrder": 22
+    },
+    {
+      "slug": "sgg-11710",
+      "name": "송파구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11710",
+      "sortOrder": 23
+    },
+    {
+      "slug": "sgg-11740",
+      "name": "강동구",
+      "parentSlug": "seoul-south",
+      "sigunguCode": "11740",
+      "sortOrder": 24
+    },
+    {
+      "slug": "sgg-28110",
+      "name": "중구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28110",
+      "sortOrder": 25
+    },
+    {
+      "slug": "sgg-28140",
+      "name": "동구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28140",
+      "sortOrder": 26
+    },
+    {
+      "slug": "sgg-28177",
+      "name": "미추홀구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28177",
+      "sortOrder": 27
+    },
+    {
+      "slug": "sgg-28185",
+      "name": "연수구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28185",
+      "sortOrder": 28
+    },
+    {
+      "slug": "sgg-28200",
+      "name": "남동구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28200",
+      "sortOrder": 29
+    },
+    {
+      "slug": "sgg-28237",
+      "name": "부평구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28237",
+      "sortOrder": 30
+    },
+    {
+      "slug": "sgg-28245",
+      "name": "계양구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28245",
+      "sortOrder": 31
+    },
+    {
+      "slug": "sgg-28260",
+      "name": "서구",
+      "parentSlug": "incheon",
+      "sigunguCode": "28260",
+      "sortOrder": 32
+    },
+    {
+      "slug": "sgg-28710",
+      "name": "강화군",
+      "parentSlug": "incheon",
+      "sigunguCode": "28710",
+      "sortOrder": 33
+    },
+    {
+      "slug": "sgg-28720",
+      "name": "옹진군",
+      "parentSlug": "incheon",
+      "sigunguCode": "28720",
+      "sortOrder": 34
+    },
+    {
+      "slug": "sgg-41111",
+      "name": "수원시장안구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41111",
+      "sortOrder": 35
+    },
+    {
+      "slug": "sgg-41113",
+      "name": "수원시권선구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41113",
+      "sortOrder": 36
+    },
+    {
+      "slug": "sgg-41115",
+      "name": "수원시팔달구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41115",
+      "sortOrder": 37
+    },
+    {
+      "slug": "sgg-41117",
+      "name": "수원시영통구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41117",
+      "sortOrder": 38
+    },
+    {
+      "slug": "sgg-41131",
+      "name": "성남시수정구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41131",
+      "sortOrder": 39
+    },
+    {
+      "slug": "sgg-41133",
+      "name": "성남시중원구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41133",
+      "sortOrder": 40
+    },
+    {
+      "slug": "sgg-41135",
+      "name": "성남시분당구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41135",
+      "sortOrder": 41
+    },
+    {
+      "slug": "sgg-41150",
+      "name": "의정부시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41150",
+      "sortOrder": 42
+    },
+    {
+      "slug": "sgg-41171",
+      "name": "안양시만안구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41171",
+      "sortOrder": 43
+    },
+    {
+      "slug": "sgg-41173",
+      "name": "안양시동안구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41173",
+      "sortOrder": 44
+    },
+    {
+      "slug": "sgg-41192",
+      "name": "부천시원미구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41192",
+      "sortOrder": 45
+    },
+    {
+      "slug": "sgg-41194",
+      "name": "부천시소사구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41194",
+      "sortOrder": 46
+    },
+    {
+      "slug": "sgg-41196",
+      "name": "부천시오정구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41196",
+      "sortOrder": 47
+    },
+    {
+      "slug": "sgg-41210",
+      "name": "광명시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41210",
+      "sortOrder": 48
+    },
+    {
+      "slug": "sgg-41220",
+      "name": "평택시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41220",
+      "sortOrder": 49
+    },
+    {
+      "slug": "sgg-41250",
+      "name": "동두천시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41250",
+      "sortOrder": 50
+    },
+    {
+      "slug": "sgg-41271",
+      "name": "안산시상록구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41271",
+      "sortOrder": 51
+    },
+    {
+      "slug": "sgg-41273",
+      "name": "안산시단원구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41273",
+      "sortOrder": 52
+    },
+    {
+      "slug": "sgg-41281",
+      "name": "고양시덕양구",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41281",
+      "sortOrder": 53
+    },
+    {
+      "slug": "sgg-41285",
+      "name": "고양시일산동구",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41285",
+      "sortOrder": 54
+    },
+    {
+      "slug": "sgg-41287",
+      "name": "고양시일산서구",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41287",
+      "sortOrder": 55
+    },
+    {
+      "slug": "sgg-41290",
+      "name": "과천시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41290",
+      "sortOrder": 56
+    },
+    {
+      "slug": "sgg-41310",
+      "name": "구리시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41310",
+      "sortOrder": 57
+    },
+    {
+      "slug": "sgg-41360",
+      "name": "남양주시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41360",
+      "sortOrder": 58
+    },
+    {
+      "slug": "sgg-41370",
+      "name": "오산시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41370",
+      "sortOrder": 59
+    },
+    {
+      "slug": "sgg-41390",
+      "name": "시흥시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41390",
+      "sortOrder": 60
+    },
+    {
+      "slug": "sgg-41410",
+      "name": "군포시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41410",
+      "sortOrder": 61
+    },
+    {
+      "slug": "sgg-41430",
+      "name": "의왕시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41430",
+      "sortOrder": 62
+    },
+    {
+      "slug": "sgg-41450",
+      "name": "하남시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41450",
+      "sortOrder": 63
+    },
+    {
+      "slug": "sgg-41461",
+      "name": "용인시처인구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41461",
+      "sortOrder": 64
+    },
+    {
+      "slug": "sgg-41463",
+      "name": "용인시기흥구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41463",
+      "sortOrder": 65
+    },
+    {
+      "slug": "sgg-41465",
+      "name": "용인시수지구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41465",
+      "sortOrder": 66
+    },
+    {
+      "slug": "sgg-41480",
+      "name": "파주시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41480",
+      "sortOrder": 67
+    },
+    {
+      "slug": "sgg-41500",
+      "name": "이천시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41500",
+      "sortOrder": 68
+    },
+    {
+      "slug": "sgg-41550",
+      "name": "안성시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41550",
+      "sortOrder": 69
+    },
+    {
+      "slug": "sgg-41570",
+      "name": "김포시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41570",
+      "sortOrder": 70
+    },
+    {
+      "slug": "sgg-41591",
+      "name": "화성시만세구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41591",
+      "sortOrder": 71
+    },
+    {
+      "slug": "sgg-41593",
+      "name": "화성시효행구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41593",
+      "sortOrder": 72
+    },
+    {
+      "slug": "sgg-41595",
+      "name": "화성시병점구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41595",
+      "sortOrder": 73
+    },
+    {
+      "slug": "sgg-41597",
+      "name": "화성시동탄구",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41597",
+      "sortOrder": 74
+    },
+    {
+      "slug": "sgg-41610",
+      "name": "광주시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41610",
+      "sortOrder": 75
+    },
+    {
+      "slug": "sgg-41630",
+      "name": "양주시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41630",
+      "sortOrder": 76
+    },
+    {
+      "slug": "sgg-41650",
+      "name": "포천시",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41650",
+      "sortOrder": 77
+    },
+    {
+      "slug": "sgg-41670",
+      "name": "여주시",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41670",
+      "sortOrder": 78
+    },
+    {
+      "slug": "sgg-41800",
+      "name": "연천군",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41800",
+      "sortOrder": 79
+    },
+    {
+      "slug": "sgg-41820",
+      "name": "가평군",
+      "parentSlug": "gyeonggi-north",
+      "sigunguCode": "41820",
+      "sortOrder": 80
+    },
+    {
+      "slug": "sgg-41830",
+      "name": "양평군",
+      "parentSlug": "gyeonggi-south",
+      "sigunguCode": "41830",
+      "sortOrder": 81
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
 import { seedOrders } from './seed/orders';
 import { seedRecentViews } from './seed/recent-views';
+import { seedRegions } from './seed/regions';
 import { seedReviews } from './seed/reviews';
 import { seedSearchHistory } from './seed/search-history';
 import { seedStores } from './seed/stores';
@@ -34,6 +35,9 @@ async function main(): Promise<void> {
 
     log('유저 + 프로필 시드 중...');
     const users = await seedUsers(prisma);
+
+    log('지역 마스터 시드 중...');
+    await seedRegions(prisma);
 
     log('매장 + 상품 시드 중...');
     const stores = await seedStores(prisma);
