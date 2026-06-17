@@ -3,6 +3,7 @@
  */
 export * from '@/global/auth/auth-global.module';
 export * from '@/global/auth/guards/jwt-auth.guard';
+export * from '@/global/auth/guards/optional-jwt-auth.guard';
 export * from '@/global/auth/decorators/current-user.decorator';
 export * from '@/global/auth/types/jwt-payload.type';
 export * from '@/global/auth/constants/auth-cookie.constants';

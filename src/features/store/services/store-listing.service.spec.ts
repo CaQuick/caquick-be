@@ -1,10 +1,12 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
+  createAccount,
   createOrder,
   createOrderItem,
   createProduct,
@@ -23,7 +25,11 @@ describe('StoreListingService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreListingService, StoreRepository],
+      providers: [
+        StoreListingService,
+        StoreRepository,
+        StoreWishlistRepository,
+      ],
     });
     service = module.get(StoreListingService);
     prisma = p;
@@ -205,6 +211,26 @@ describe('StoreListingService (real DB)', () => {
       const result = await service.popularStores();
 
       expect(result.totalCount).toBe(0);
+    });
+
+    it('로그인 사용자의 찜 매장은 isWishlisted=true, 비로그인/미찜은 false', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const wished = await createStore(prisma, { store_name: '찜한매장' });
+      await createStore(prisma, { store_name: '안찜매장' });
+      await createStoreWishlist(prisma, {
+        account_id: account.id,
+        store_id: wished.id,
+      });
+
+      const loggedIn = await service.popularStores(undefined, account.id);
+      const byName = new Map(
+        loggedIn.items.map((s) => [s.storeName, s.isWishlisted]),
+      );
+      expect(byName.get('찜한매장')).toBe(true);
+      expect(byName.get('안찜매장')).toBe(false);
+
+      const anonymous = await service.popularStores();
+      expect(anonymous.items.every((s) => s.isWishlisted === false)).toBe(true);
     });
   });
 });

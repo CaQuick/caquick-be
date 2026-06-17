@@ -7,6 +7,7 @@ import {
   RANKING_RECENT_ORDER_DAYS,
 } from '@/features/store/constants/store-ranking.constants';
 import type { PopularStoresInput } from '@/features/store/dto/inputs/popular-stores.input';
+import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { toPopularStore } from '@/features/store/services/store-mappers.helper';
 import {
@@ -19,7 +20,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class StoreListingService {
-  constructor(private readonly repo: StoreRepository) {}
+  constructor(
+    private readonly repo: StoreRepository,
+    private readonly wishlistRepo: StoreWishlistRepository,
+  ) {}
 
   /**
    * 인기 매장 리스트. 후보 매장의 주문·찜·평점을 실시간 집계해 점수화·정렬한 뒤
@@ -29,6 +33,7 @@ export class StoreListingService {
    */
   async popularStores(
     input?: PopularStoresInput,
+    accountId?: bigint,
   ): Promise<PopularStoreConnection> {
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? DEFAULT_POPULAR_STORES_LIMIT;
@@ -76,9 +81,16 @@ export class StoreListingService {
 
     const totalCount = scored.length;
     const page = scored.slice(offset, offset + limit);
-    const imagesByStore = await this.repo.findStoreCakeImages(
-      page.map((s) => s.candidate.id),
-    );
+    const pageStoreIds = page.map((s) => s.candidate.id);
+    const [imagesByStore, wishlistedIds] = await Promise.all([
+      this.repo.findStoreCakeImages(pageStoreIds),
+      accountId
+        ? this.wishlistRepo.findWishlistedStoreIds({
+            accountId,
+            storeIds: pageStoreIds,
+          })
+        : Promise.resolve(new Set<string>()),
+    ]);
 
     const items = page.map((entry, idx) =>
       toPopularStore(
@@ -86,6 +98,7 @@ export class StoreListingService {
         entry.metrics,
         offset + idx + 1,
         imagesByStore.get(entry.candidate.id) ?? [],
+        wishlistedIds.has(entry.candidate.id.toString()),
       ),
     );
 

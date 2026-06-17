@@ -11,6 +11,7 @@ export interface PopularStore {
   reviewCount: number;
   regionLabel: string | null;
   cakeImageUrls: string[];
+  isWishlisted: boolean;
 }
 
 export interface PopularStoreConnection {

@@ -54,6 +54,7 @@ describe('store-mappers.helper', () => {
         },
         1,
         ['a.png', 'b.png'],
+        true,
       );
 
       expect(result).toMatchObject({
@@ -63,6 +64,7 @@ describe('store-mappers.helper', () => {
         ratingAverage: 4.7,
         reviewCount: 9,
         cakeImageUrls: ['a.png', 'b.png'],
+        isWishlisted: true,
       });
     });
   });

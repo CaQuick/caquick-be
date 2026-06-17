@@ -45,6 +45,15 @@ export class StoreRepository {
     });
   }
 
+  /** 활성 매장 존재 검증(찜 등). */
+  async existsActiveStore(storeId: bigint): Promise<boolean> {
+    const found = await this.prisma.store.findFirst({
+      where: { id: storeId, is_active: true, deleted_at: null },
+      select: { id: true },
+    });
+    return Boolean(found);
+  }
+
   /** 매장별 활성 찜 수. */
   async aggregateWishlistCounts(
     storeIds: bigint[],
