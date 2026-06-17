@@ -16,6 +16,7 @@ export function toPopularStore(
   metrics: StoreMetrics,
   rank: number,
   cakeImageUrls: string[],
+  isWishlisted: boolean,
 ): PopularStore {
   return {
     id: row.id.toString(),
@@ -26,5 +27,6 @@ export function toPopularStore(
     reviewCount: metrics.reviewCount,
     regionLabel: buildRegionLabel(row),
     cakeImageUrls,
+    isWishlisted,
   };
 }
