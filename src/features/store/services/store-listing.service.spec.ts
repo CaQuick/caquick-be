@@ -136,6 +136,38 @@ describe('StoreListingService (real DB)', () => {
       expect(result.items[0].storeName).toBe('최근주문');
     });
 
+    it('soft-delete된 주문은 점수에 반영하지 않는다', async () => {
+      const region = await createRegion(prisma, { level: 2, slug: 'sgg-sd' });
+      const valid = await createStore(prisma, {
+        store_name: '유효주문',
+        region_id: region.id,
+      });
+      const removed = await createStore(prisma, {
+        store_name: '삭제주문',
+        region_id: region.id,
+      });
+
+      const validOrder = await createOrder(prisma, { status: 'CONFIRMED' });
+      await createOrderItem(prisma, {
+        order_id: validOrder.id,
+        store_id: valid.id,
+      });
+
+      const removedOrder = await createOrder(prisma, { status: 'CONFIRMED' });
+      await createOrderItem(prisma, {
+        order_id: removedOrder.id,
+        store_id: removed.id,
+      });
+      await prisma.order.update({
+        where: { id: removedOrder.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.popularStores();
+
+      expect(result.items[0].storeName).toBe('유효주문');
+    });
+
     it('대표 케이크 이미지를 매장당 최대 4장 노출한다', async () => {
       const store = await createStore(prisma);
       for (let i = 0; i < 5; i++) {

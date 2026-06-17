@@ -94,6 +94,9 @@ export class StoreRepository {
         order: {
           status: { in: [...RANKING_VALID_ORDER_STATUSES] },
           created_at: { gte: since },
+          // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
+          // 않으므로(=root read만 보정), 삭제된 주문이 랭킹을 부풀리지 않도록 명시한다.
+          deleted_at: null,
         },
       },
       _count: { _all: true },
@@ -115,30 +118,37 @@ export class StoreRepository {
     storeIds: bigint[],
   ): Promise<Map<bigint, string[]>> {
     if (storeIds.length === 0) return new Map();
-    const products = await this.prisma.product.findMany({
-      where: { store_id: { in: storeIds }, is_active: true, deleted_at: null },
-      orderBy: [{ store_id: 'asc' }, { id: 'desc' }],
-      select: {
-        store_id: true,
-        images: {
-          where: { deleted_at: null },
-          orderBy: { sort_order: 'asc' },
-          take: 1,
-          select: { image_url: true },
-        },
-      },
-    });
 
-    const map = new Map<bigint, string[]>();
-    for (const product of products) {
-      const url = product.images[0]?.image_url;
-      if (!url) continue;
-      const acc = map.get(product.store_id) ?? [];
-      if (acc.length < POPULAR_STORE_CAKE_IMAGE_LIMIT) {
-        acc.push(url);
-        map.set(product.store_id, acc);
-      }
-    }
-    return map;
+    // 매장당 이미지 보유 활성 상품을 최대 N개만 조회한다. 전체 상품을 materialize한
+    // 뒤 JS에서 자르면 상품이 많은 매장에서 불필요한 row 스캔이 발생하므로,
+    // 쿼리 단계에서 take로 제한한다(페이지 크기만큼의 병렬 조회).
+    const entries = await Promise.all(
+      storeIds.map(async (storeId) => {
+        const products = await this.prisma.product.findMany({
+          where: {
+            store_id: storeId,
+            is_active: true,
+            deleted_at: null,
+            images: { some: { deleted_at: null } },
+          },
+          orderBy: { id: 'desc' },
+          take: POPULAR_STORE_CAKE_IMAGE_LIMIT,
+          select: {
+            images: {
+              where: { deleted_at: null },
+              orderBy: { sort_order: 'asc' },
+              take: 1,
+              select: { image_url: true },
+            },
+          },
+        });
+        const urls = products
+          .map((product) => product.images[0]?.image_url)
+          .filter((url): url is string => Boolean(url));
+        return [storeId, urls] as const;
+      }),
+    );
+
+    return new Map(entries);
   }
 }
