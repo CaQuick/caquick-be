@@ -21,6 +21,7 @@ import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
 import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
+import { PickupModule } from '@/features/pickup';
 import { RegionModule } from '@/features/region';
 import { SellerModule } from '@/features/seller/seller.module';
 import { StoreModule } from '@/features/store';
@@ -87,6 +88,7 @@ import { PrismaModule } from '@/prisma';
     }),
     SystemModule,
     AuthModule,
+    PickupModule,
     RegionModule,
     StoreModule,
     UserModule,
