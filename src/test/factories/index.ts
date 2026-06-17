@@ -9,5 +9,6 @@ export * from './review.factory';
 export * from './search-history.factory';
 export * from './seller.factory';
 export * from './sequence';
+export * from './store-wishlist.factory';
 export * from './store.factory';
 export * from './user-profile.factory';
