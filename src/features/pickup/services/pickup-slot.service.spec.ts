@@ -42,6 +42,16 @@ describe('PickupSlotService', () => {
         reason: 'OUT_OF_RANGE',
       });
     });
+
+    it('오늘이지만 가용 슬롯이 없으면 CLOSED로 막는다', () => {
+      // KST 19:00 + 리드 60분 = cutoff 20:00 > 마지막 슬롯 19:30 → 당일 슬롯 없음
+      const now = new Date('2026-06-18T10:00:00.000Z'); // KST 06-18 19:00
+      const calendar = service.pickupCalendar('2026-06', now);
+      expect(calendar.days.find((d) => d.date === '2026-06-18')).toMatchObject({
+        selectable: false,
+        reason: 'CLOSED',
+      });
+    });
   });
 
   describe('pickupTimeSlots', () => {

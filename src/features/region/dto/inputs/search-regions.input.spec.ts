@@ -45,4 +45,10 @@ describe('SearchRegionsInput', () => {
     const errors = await validate(build({ keyword: 'a', limit: 1.5 }));
     expect(errors[0].property).toBe('limit');
   });
+
+  it('keyword 최대 길이 경계(80 통과, 81 거절)', async () => {
+    expect(await validate(build({ keyword: 'a'.repeat(80) }))).toHaveLength(0);
+    const errors = await validate(build({ keyword: 'a'.repeat(81) }));
+    expect(errors[0].property).toBe('keyword');
+  });
 });

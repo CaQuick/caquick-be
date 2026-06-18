@@ -39,6 +39,8 @@ export async function seedRegions(prisma: PrismaClient): Promise<void> {
         sort_order: group.sortOrder,
       },
       update: {
+        level: 1,
+        parent_id: null,
         name: group.name,
         sort_order: group.sortOrder,
         is_active: true,
@@ -65,6 +67,7 @@ export async function seedRegions(prisma: PrismaClient): Promise<void> {
         parent_id: parentId,
       },
       update: {
+        level: 2,
         name: child.name,
         sort_order: child.sortOrder,
         parent_id: parentId,
