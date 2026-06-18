@@ -1,0 +1,39 @@
+extend type Query {
+  """1차 광역 지역 목록 (전국 포함)"""
+  regionGroups: [RegionGroup!]!
+  """특정 1차 지역의 2차 시군구 목록"""
+  regions(parentId: ID!): [Region!]!
+  """지역명 자동검색 (1·2차 모두 대상)"""
+  searchRegions(input: SearchRegionsInput!): [RegionSearchResult!]!
+}
+
+input SearchRegionsInput {
+  keyword: String!
+  limit: Int = 20
+}
+
+"""1차 광역 지역 (예: 서울 북부, 인천)"""
+type RegionGroup {
+  id: ID!
+  name: String!
+  slug: String!
+  """하위 2차 지역 보유 여부 (전국 등은 false)"""
+  hasChildren: Boolean!
+}
+
+"""2차 시군구 지역 (예: 강남구, 수원시영통구)"""
+type Region {
+  id: ID!
+  parentId: ID
+  name: String!
+  slug: String!
+  level: Int!
+}
+
+"""지역 검색 결과. 동명 시군구 구분을 위해 상위 지역명을 동반."""
+type RegionSearchResult {
+  id: ID!
+  name: String!
+  parentName: String
+  level: Int!
+}

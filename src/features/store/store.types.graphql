@@ -1,0 +1,35 @@
+extend type Query {
+  """인기 매장 리스트 (지역 필터 + 인기순). 비로그인 접근 가능."""
+  popularStores(input: PopularStoresInput): PopularStoreConnection!
+}
+
+input PopularStoresInput {
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type PopularStoreConnection {
+  items: [PopularStore!]!
+  totalCount: Int!
+  hasMore: Boolean!
+  """랭킹 산출 기준 시각(서버 조회 시점). 화면의 'N시 기준' 표기에 사용."""
+  rankedAt: DateTime!
+}
+
+"""인기 매장 카드"""
+type PopularStore {
+  id: ID!
+  rank: Int!
+  storeName: String!
+  """평균 평점(0.0~5.0, 소수 첫째 자리)."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """매장 위치 표기(예: 서울특별시 역삼동)."""
+  regionLabel: String
+  """대표 케이크 이미지(최대 4장)."""
+  cakeImageUrls: [String!]!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+}

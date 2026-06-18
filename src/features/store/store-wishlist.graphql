@@ -1,0 +1,6 @@
+extend type Mutation {
+  """매장 찜 추가 (멱등: 이미 있어도 true, soft-delete된 항목은 복원). 로그인 필요."""
+  addStoreToWishlist(storeId: ID!): Boolean!
+  """매장 찜 해제 (멱등: 이미 없어도 true). 로그인 필요."""
+  removeStoreFromWishlist(storeId: ID!): Boolean!
+}

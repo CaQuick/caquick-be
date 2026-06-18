@@ -11,6 +11,7 @@ export interface StoreOverrides {
   address_city?: string | null;
   address_district?: string | null;
   address_neighborhood?: string | null;
+  region_id?: bigint | null;
   is_active?: boolean;
 }
 
@@ -33,6 +34,7 @@ export async function createStore(
       address_city: overrides.address_city ?? '서울시',
       address_district: overrides.address_district ?? '테스트구',
       address_neighborhood: overrides.address_neighborhood ?? '테스트동',
+      region_id: overrides.region_id ?? null,
       is_active: overrides.is_active ?? true,
     },
   });

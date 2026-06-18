@@ -1,0 +1,29 @@
+extend type Query {
+  """월별 픽업 가능 날짜 (홈 전역 정책 기준). yearMonth: "YYYY-MM" """
+  pickupCalendar(yearMonth: String!): PickupCalendar!
+  """선택 날짜의 픽업 시간 슬롯. date: "YYYY-MM-DD" """
+  pickupTimeSlots(date: String!): PickupTimeSlots!
+}
+
+type PickupCalendar {
+  yearMonth: String!
+  days: [PickupDay!]!
+}
+
+type PickupDay {
+  date: String!
+  selectable: Boolean!
+  """선택 불가 사유. PAST | OUT_OF_RANGE (선택 가능 시 null)."""
+  reason: String
+}
+
+type PickupTimeSlots {
+  date: String!
+  morning: [PickupSlot!]!
+  afternoon: [PickupSlot!]!
+}
+
+type PickupSlot {
+  time: String!
+  available: Boolean!
+}
