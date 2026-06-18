@@ -1,0 +1,36 @@
+# 로컬 개발용 MySQL (운영과 무관 — 개발 전용 자격증명).
+#
+# 사용:
+#   docker compose -f docker-compose.dev.yml up -d     # 기동
+#   docker compose -f docker-compose.dev.yml down       # 중지(데이터 유지)
+#   docker compose -f docker-compose.dev.yml down -v     # 중지 + 데이터 삭제
+#
+# mysql:8.0 기본 인증은 caching_sha2_password 라 Prisma와 호환된다.
+# (네이티브 brew mysql 의 sha256_password 계정에서 발생하던 접속 오류를 피한다)
+# 자격증명은 .env / .env.example 의 DATABASE_URL 과 일치시킨다.
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: caquick-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: CaQuick
+      MYSQL_USER: caquick
+      MYSQL_PASSWORD: caquick
+    ports:
+      - '3306:3306'
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - caquick-mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -u root -proot --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  caquick-mysql-data:
