@@ -41,6 +41,12 @@ export class PickupSlotService {
 
     const daysInMonth = new Date(Date.UTC(ym.year, ym.month, 0)).getUTCDate();
 
+    // 오늘은 현재시각+리드타임 이후 가용 슬롯이 하나라도 있어야 선택 가능
+    // (없으면 pickupTimeSlots가 전부 마감 → 캘린더도 선택 불가로 일치시킨다)
+    const cutoffMinutes = kstMinutesOfDay(now) + PICKUP_MIN_LEAD_MINUTES;
+    const lastSlotMinutes = PICKUP_CLOSE_MINUTES - PICKUP_SLOT_INTERVAL_MINUTES;
+    const todayHasSlot = cutoffMinutes <= lastSlotMinutes;
+
     const days = Array.from({ length: daysInMonth }, (_, index) => {
       const day = index + 1;
       const date = kstMidnightUtc(ym.year, ym.month, day);
@@ -58,6 +64,13 @@ export class PickupSlotService {
           date: formatKstDate(date),
           selectable: false,
           reason: PICKUP_DAY_REASON.OUT_OF_RANGE,
+        };
+      }
+      if (diff === 0 && !todayHasSlot) {
+        return {
+          date: formatKstDate(date),
+          selectable: false,
+          reason: PICKUP_DAY_REASON.CLOSED,
         };
       }
       return { date: formatKstDate(date), selectable: true, reason: null };
