@@ -84,10 +84,12 @@ describe('OidcClientService', () => {
         client_secret: 'google-client-secret',
         redirect_uris: ['http://localhost:4000/auth/oidc/google/callback'],
         response_types: ['code'],
+        // 구글은 basic/post 모두 지원 → 기본값 유지
+        token_endpoint_auth_method: 'client_secret_basic',
       });
     });
 
-    it('Kakao provider의 client를 생성해야 한다', async () => {
+    it('Kakao provider의 client를 client_secret_post 인증방식으로 생성해야 한다 (invalid_client 방지)', async () => {
       // Arrange
       mockConfig.get.mockImplementation((key: string) => {
         const config: Record<string, string> = {
@@ -103,11 +105,14 @@ describe('OidcClientService', () => {
       await service.getClient('kakao');
 
       // Assert
+      // 카카오 토큰 엔드포인트는 client_secret_post만 지원한다.
+      // 기본값(client_secret_basic)으로 두면 invalid_client (Bad client credentials)로 거부된다.
       expect(mockIssuer.Client).toHaveBeenCalledWith({
         client_id: 'kakao-client-id',
         client_secret: 'kakao-client-secret',
         redirect_uris: ['http://localhost:4000/auth/oidc/kakao/callback'],
         response_types: ['code'],
+        token_endpoint_auth_method: 'client_secret_post',
       });
     });
 
