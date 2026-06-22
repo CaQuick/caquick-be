@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { STORAGE_ERRORS } from '@/global/storage/constants/storage.constants';
 import { S3Service } from '@/global/storage/s3.service';
 
@@ -19,6 +20,10 @@ jest.mock('@aws-sdk/client-s3', () => ({
 describe('S3Service', () => {
   let service: S3Service;
 
+  const mockLogger = {
+    error: jest.fn(),
+  } as unknown as CustomLoggerService;
+
   const mockConfig = {
     region: 'ap-northeast-2',
     bucket: 'caquick-media-test',
@@ -35,10 +40,12 @@ describe('S3Service', () => {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue(mockConfig) },
         },
+        { provide: CustomLoggerService, useValue: mockLogger },
       ],
     }).compile();
 
     service = module.get<S3Service>(S3Service);
+    (mockLogger.error as jest.Mock).mockClear();
   });
 
   describe('createUploadUrl', () => {
@@ -235,11 +242,19 @@ describe('S3Service', () => {
           typeof import('@aws-sdk/s3-request-presigner')
         >('@aws-sdk/s3-request-presigner');
         (mockGetSignedUrl as jest.Mock).mockRejectedValueOnce(
-          new Error('S3 error'),
+          new Error('Credential is missing'),
         );
 
         await expect(service.createUploadUrl(baseInput)).rejects.toThrow(
           STORAGE_ERRORS.S3_PRESIGN_FAILED,
+        );
+        // 실제 원인이 구조화 로그로 남아야 한다 (일반 메시지로 가려지지 않도록)
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          'S3 presigned URL 발급 실패',
+          expect.objectContaining({
+            cause: 'Error: Credential is missing',
+            hasStaticCredentials: true,
+          }),
         );
       });
     });
@@ -267,6 +282,7 @@ describe('S3Service', () => {
               }),
             },
           },
+          { provide: CustomLoggerService, useValue: mockLogger },
         ],
       }).compile();
 
