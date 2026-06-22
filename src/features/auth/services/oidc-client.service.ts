@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IdentityProvider } from '@prisma/client';
-import { Issuer, generators, type Client, type TokenSet } from 'openid-client';
+import {
+  Issuer,
+  generators,
+  type Client,
+  type ClientAuthMethod,
+  type TokenSet,
+} from 'openid-client';
 
 import { mustGetEnv } from '@/common/helpers/config.helper';
 import type { OidcProvider } from '@/features/auth/types/oidc-provider.type';
@@ -27,8 +33,13 @@ export class OidcClientService {
     const cached = this.clients.get(provider);
     if (cached) return cached;
 
-    const { issuerUrl, clientId, clientSecret, redirectUri } =
-      this.getProviderConfig(provider);
+    const {
+      issuerUrl,
+      clientId,
+      clientSecret,
+      redirectUri,
+      tokenEndpointAuthMethod,
+    } = this.getProviderConfig(provider);
 
     const issuer = await Issuer.discover(issuerUrl);
 
@@ -37,6 +48,9 @@ export class OidcClientService {
       client_secret: clientSecret,
       redirect_uris: [redirectUri],
       response_types: ['code'],
+      // 카카오 토큰 엔드포인트는 client_secret_post만 지원한다.
+      // openid-client 기본값(client_secret_basic)을 쓰면 invalid_client로 거부된다.
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
     });
 
     this.clients.set(provider, client);
@@ -140,6 +154,7 @@ export class OidcClientService {
     clientId: string;
     clientSecret: string;
     redirectUri: string;
+    tokenEndpointAuthMethod: ClientAuthMethod;
   } {
     const backendBaseUrl =
       this.config.get<string>('BACKEND_BASE_URL')?.trim() ??
@@ -150,14 +165,28 @@ export class OidcClientService {
       const clientId = this.mustGet('OIDC_GOOGLE_CLIENT_ID');
       const clientSecret = this.mustGet('OIDC_GOOGLE_CLIENT_SECRET');
       const redirectUri = `${backendBaseUrl}/auth/oidc/google/callback`;
-      return { issuerUrl, clientId, clientSecret, redirectUri };
+      // 구글은 basic/post 모두 지원 → openid-client 기본값(basic) 유지
+      return {
+        issuerUrl,
+        clientId,
+        clientSecret,
+        redirectUri,
+        tokenEndpointAuthMethod: 'client_secret_basic',
+      };
     }
 
     const issuerUrl = this.mustGet('OIDC_KAKAO_ISSUER_URL');
     const clientId = this.mustGet('OIDC_KAKAO_CLIENT_ID');
     const clientSecret = this.mustGet('OIDC_KAKAO_CLIENT_SECRET');
     const redirectUri = `${backendBaseUrl}/auth/oidc/kakao/callback`;
-    return { issuerUrl, clientId, clientSecret, redirectUri };
+    // 카카오는 client_secret_post만 지원
+    return {
+      issuerUrl,
+      clientId,
+      clientSecret,
+      redirectUri,
+      tokenEndpointAuthMethod: 'client_secret_post',
+    };
   }
 
   /**
