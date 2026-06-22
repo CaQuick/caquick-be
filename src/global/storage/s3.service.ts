@@ -10,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import type { S3Config } from '@/config/s3.config';
+import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import {
   STORAGE_ERRORS,
   UPLOAD_POLICIES,
@@ -36,13 +37,22 @@ export class S3Service {
   private readonly bucket: string;
   private readonly region: string;
   private readonly presignExpiresSeconds: number;
+  // presign 실패 진단용: 정적 자격증명(Access Key) 주입 여부.
+  // 로컬에서 키 누락이면 getSignedUrl이 "Credential is missing"으로 throw된다.
+  private readonly hasStaticCredentials: boolean;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: CustomLoggerService,
+  ) {
     const config = this.configService.get<S3Config>('s3')!;
 
     this.bucket = config.bucket;
     this.region = config.region;
     this.presignExpiresSeconds = config.presignExpiresSeconds;
+    this.hasStaticCredentials = Boolean(
+      config.accessKeyId && config.secretAccessKey,
+    );
 
     this.client = new S3Client({
       region: config.region,
@@ -96,7 +106,20 @@ export class S3Service {
         key,
         expiresInSeconds: this.presignExpiresSeconds,
       };
-    } catch {
+    } catch (error) {
+      // 실제 실패 원인(예: 자격증명 누락 "Credential is missing")이 일반 메시지에
+      // 가려지지 않도록 구조화 로그로 남긴다. 시크릿(키 값)은 절대 로깅하지 않는다.
+      this.logger.error('S3 presigned URL 발급 실패', {
+        bucket: this.bucket,
+        region: this.region,
+        key,
+        purpose: input.purpose,
+        hasStaticCredentials: this.hasStaticCredentials,
+        cause:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error),
+      });
       throw new InternalServerErrorException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
     }
   }
