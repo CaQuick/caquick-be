@@ -201,4 +201,16 @@ describe('StoreReviewService (real DB)', () => {
 
     expect(result.items[0].authorNickname).toBeNull();
   });
+
+  it('cursor "0"은 페이지를 리셋하지 않고 빈 결과를 반환한다', async () => {
+    const store = await createStore(prisma);
+    await makeReview(store.id, {});
+
+    const result = await service.storeReviews({
+      storeId: store.id.toString(),
+      cursor: '0',
+    });
+
+    expect(result.items).toEqual([]);
+  });
 });
