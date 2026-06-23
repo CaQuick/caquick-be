@@ -756,7 +756,10 @@ export class ProductRepository {
                   product_tags: {
                     some: {
                       deleted_at: null,
-                      tag: { name: { contains: args.search } },
+                      tag: {
+                        name: { contains: args.search },
+                        deleted_at: null,
+                      },
                     },
                   },
                 },

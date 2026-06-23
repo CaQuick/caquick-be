@@ -216,6 +216,27 @@ describe('ProductStorefrontService (real DB)', () => {
 
       expect(result.items[0].categoryIds).toEqual([active.id.toString()]);
     });
+
+    it('soft-delete된 태그로는 검색되지 않는다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '미니 케이크',
+      });
+      const tag = await prisma.tag.create({
+        data: { name: '강아지', deleted_at: new Date() },
+      });
+      await prisma.productTag.create({
+        data: { product_id: product.id, tag_id: tag.id },
+      });
+
+      const result = await service.storeProducts({
+        storeId: store.id.toString(),
+        search: '강아지',
+      });
+
+      expect(result.items).toEqual([]);
+    });
   });
 
   describe('storeProductCategories', () => {
