@@ -740,7 +740,11 @@ export class ProductRepository {
         ...(args.categoryId
           ? {
               product_categories: {
-                some: { category_id: args.categoryId, deleted_at: null },
+                some: {
+                  category_id: args.categoryId,
+                  deleted_at: null,
+                  category: { is_active: true, deleted_at: null },
+                },
               },
             }
           : {}),
@@ -774,7 +778,11 @@ export class ProductRepository {
           select: { image_url: true },
         },
         product_categories: {
-          where: { deleted_at: null },
+          // storeProductCategories와 동일하게 비활성/삭제 카테고리는 categoryIds에서 제외
+          where: {
+            deleted_at: null,
+            category: { is_active: true, deleted_at: null },
+          },
           select: { category_id: true },
         },
       },

@@ -183,6 +183,39 @@ describe('ProductStorefrontService (real DB)', () => {
       expect(second.hasMore).toBe(false);
       expect(second.nextCursor).toBeNull();
     });
+
+    it('비활성/삭제 카테고리는 categoryIds에서 제외한다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const active = await prisma.category.create({
+        data: {
+          name: '활성',
+          category_type: 'EVENT',
+          sort_order: 0,
+          is_active: true,
+        },
+      });
+      const inactive = await prisma.category.create({
+        data: {
+          name: '비활성',
+          category_type: 'EVENT',
+          sort_order: 1,
+          is_active: false,
+        },
+      });
+      await prisma.productCategory.create({
+        data: { product_id: product.id, category_id: active.id },
+      });
+      await prisma.productCategory.create({
+        data: { product_id: product.id, category_id: inactive.id },
+      });
+
+      const result = await service.storeProducts({
+        storeId: store.id.toString(),
+      });
+
+      expect(result.items[0].categoryIds).toEqual([active.id.toString()]);
+    });
   });
 
   describe('storeProductCategories', () => {
