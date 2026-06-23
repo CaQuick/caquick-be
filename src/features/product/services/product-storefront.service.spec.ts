@@ -237,6 +237,30 @@ describe('ProductStorefrontService (real DB)', () => {
 
       expect(result.items).toEqual([]);
     });
+
+    it('categoryId "0"은 전체 목록이 아니라 빈 결과를 반환한다', async () => {
+      const store = await createStore(prisma);
+      await createProduct(prisma, { store_id: store.id });
+
+      const result = await service.storeProducts({
+        storeId: store.id.toString(),
+        categoryId: '0',
+      });
+
+      expect(result.items).toEqual([]);
+    });
+
+    it('cursor "0"은 페이지를 리셋하지 않고 빈 결과를 반환한다', async () => {
+      const store = await createStore(prisma);
+      await createProduct(prisma, { store_id: store.id });
+
+      const result = await service.storeProducts({
+        storeId: store.id.toString(),
+        cursor: '0',
+      });
+
+      expect(result.items).toEqual([]);
+    });
   });
 
   describe('storeProductCategories', () => {

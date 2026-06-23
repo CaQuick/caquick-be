@@ -736,8 +736,10 @@ export class ProductRepository {
         is_active: true,
         deleted_at: null,
         store: { is_active: true, deleted_at: null },
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...(args.categoryId
+        // 0n도 유효한 인자로 다뤄야 한다(parseId("0")=0n). truthiness 체크는 0n을
+        // falsy로 떨궈 잘못된 필터를 전체조회로 만들므로 undefined로만 분기한다.
+        ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
+        ...(args.categoryId !== undefined
           ? {
               product_categories: {
                 some: {
