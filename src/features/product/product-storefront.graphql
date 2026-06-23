@@ -1,0 +1,58 @@
+extend type Query {
+  """매장이 보유한 활성 상품의 카테고리 목록(좌측 사이드바). 빈 카테고리 제외. 비로그인 접근 가능."""
+  storeProductCategories(storeId: ID!): [StoreProductCategory!]!
+
+  """매장 상품 목록(카테고리 필터 / 매장 내 검색 / 커서). 비로그인 접근 가능."""
+  storeProducts(input: StoreProductsInput!): StoreProductConnection!
+}
+
+"""매장 상품 카테고리(사이드바 항목)."""
+type StoreProductCategory {
+  id: ID!
+  name: String!
+  categoryType: CategoryType!
+  sortOrder: Int!
+  """이 매장의 해당 카테고리 활성 상품 수."""
+  productCount: Int!
+}
+
+"""상품 카테고리 분류."""
+enum CategoryType {
+  EVENT
+  STYLE
+  OTHER
+}
+
+input StoreProductsInput {
+  storeId: ID!
+  """특정 카테고리 섹션만. 비우면 전체."""
+  categoryId: ID
+  """매장 내 상품명·태그 검색어."""
+  search: String
+  """이전 페이지 마지막 항목 id(이후부터 조회)."""
+  cursor: ID
+  limit: Int = 20
+}
+
+"""매장 상품 목록(커서 기반)."""
+type StoreProductConnection {
+  items: [StoreProduct!]!
+  hasMore: Boolean!
+  nextCursor: ID
+}
+
+"""매장 상품 카드."""
+type StoreProduct {
+  id: ID!
+  name: String!
+  description: String
+  """대표 이미지(sort_order 최소). 없으면 null."""
+  thumbnailUrl: String
+  regularPrice: Int!
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+  currency: String!
+  """소속 카테고리 ID(FE 섹션 그룹핑/스크롤 스파이용)."""
+  categoryIds: [ID!]!
+}
