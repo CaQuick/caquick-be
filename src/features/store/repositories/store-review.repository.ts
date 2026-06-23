@@ -16,7 +16,9 @@ export interface StoreReviewRow {
   rating: Prisma.Decimal;
   content: string | null;
   created_at: Date;
-  account: { user_profile: { nickname: string } | null };
+  account: {
+    user_profile: { nickname: string; deleted_at: Date | null } | null;
+  };
   order_item: { product_name_snapshot: string };
   media: StoreReviewMediaRow[];
 }
@@ -51,7 +53,11 @@ export class StoreReviewRepository {
         content: true,
         created_at: true,
         account: {
-          select: { user_profile: { select: { nickname: true } } },
+          // soft-delete extension은 nested relation에 deleted_at을 주입하지 않으므로
+          // deleted_at을 함께 읽어 탈퇴 작성자 닉네임은 매퍼에서 익명화한다
+          select: {
+            user_profile: { select: { nickname: true, deleted_at: true } },
+          },
         },
         order_item: { select: { product_name_snapshot: true } },
         media: {

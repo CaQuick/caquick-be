@@ -18,7 +18,11 @@ export function toStoreReview(
     })),
     likeCount,
     isLiked,
-    authorNickname: row.account.user_profile?.nickname ?? null,
+    // 탈퇴(soft-delete)한 작성자는 nickname이 deleted_<id>로 덮어써지므로 익명화한다
+    authorNickname:
+      row.account.user_profile && row.account.user_profile.deleted_at === null
+        ? row.account.user_profile.nickname
+        : null,
     productName: row.order_item.product_name_snapshot,
     createdAt: row.created_at,
   };

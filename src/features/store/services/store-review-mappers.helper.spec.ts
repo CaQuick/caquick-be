@@ -9,7 +9,7 @@ function makeRow(o: Partial<StoreReviewRow> = {}): StoreReviewRow {
     rating: new Prisma.Decimal('4.5'),
     content: '맛있어요',
     created_at: new Date('2026-01-01T00:00:00.000Z'),
-    account: { user_profile: { nickname: '구매자1' } },
+    account: { user_profile: { nickname: '구매자1', deleted_at: null } },
     order_item: { product_name_snapshot: '레터링 케이크' },
     media: [
       {
@@ -49,6 +49,19 @@ describe('toStoreReview', () => {
   it('user_profile이 없으면 authorNickname은 null', () => {
     const result = toStoreReview(
       makeRow({ account: { user_profile: null } }),
+      0,
+      false,
+    );
+    expect(result.authorNickname).toBeNull();
+  });
+
+  it('탈퇴(soft-delete)한 작성자의 닉네임은 익명화한다(null)', () => {
+    const result = toStoreReview(
+      makeRow({
+        account: {
+          user_profile: { nickname: 'deleted_123', deleted_at: new Date() },
+        },
+      }),
       0,
       false,
     );

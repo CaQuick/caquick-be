@@ -179,4 +179,26 @@ describe('StoreReviewService (real DB)', () => {
     expect(result.items).toEqual([]);
     expect(result.totalCount).toBe(0);
   });
+
+  it('탈퇴(soft-delete)한 작성자의 닉네임은 노출하지 않는다', async () => {
+    const store = await createStore(prisma);
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await prisma.userProfile.create({
+      data: {
+        account_id: account.id,
+        nickname: `deleted_${account.id}`,
+        deleted_at: new Date(),
+      },
+    });
+    const order = await createOrder(prisma, { account_id: account.id });
+    const orderItem = await createOrderItem(prisma, {
+      order_id: order.id,
+      store_id: store.id,
+    });
+    await createReview(prisma, { order_item_id: orderItem.id, rating: 5 });
+
+    const result = await service.storeReviews({ storeId: store.id.toString() });
+
+    expect(result.items[0].authorNickname).toBeNull();
+  });
 });
