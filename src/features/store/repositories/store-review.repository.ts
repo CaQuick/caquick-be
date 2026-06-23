@@ -45,7 +45,9 @@ export class StoreReviewRepository {
         deleted_at: null,
         // storeDetail과 동일하게 비활성/삭제 매장의 리뷰는 노출하지 않는다
         store: { is_active: true, deleted_at: null },
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        // 0n도 유효 인자(parseId("0")=0n). truthiness는 0n을 falsy로 떨궈
+        // zero cursor가 페이지를 리셋하므로 undefined로만 분기한다.
+        ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
       },
       select: {
         id: true,
