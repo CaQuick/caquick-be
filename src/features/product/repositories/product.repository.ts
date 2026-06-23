@@ -794,7 +794,13 @@ export class ProductRepository {
       by: ['category_id'],
       where: {
         deleted_at: null,
-        product: { store_id: storeId, is_active: true, deleted_at: null },
+        product: {
+          store_id: storeId,
+          is_active: true,
+          deleted_at: null,
+          // storeProducts와 동일하게 비활성/삭제 매장은 카테고리도 노출하지 않는다
+          store: { is_active: true, deleted_at: null },
+        },
       },
       _count: { _all: true },
     });

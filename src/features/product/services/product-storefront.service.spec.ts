@@ -255,5 +255,25 @@ describe('ProductStorefrontService (real DB)', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('비활성/삭제 매장의 카테고리는 노출하지 않는다', async () => {
+      const store = await createStore(prisma, { is_active: false });
+      const product = await createProduct(prisma, { store_id: store.id });
+      const cat = await prisma.category.create({
+        data: {
+          name: '생일',
+          category_type: 'EVENT',
+          sort_order: 0,
+          is_active: true,
+        },
+      });
+      await prisma.productCategory.create({
+        data: { product_id: product.id, category_id: cat.id },
+      });
+
+      const result = await service.storeProductCategories(store.id.toString());
+
+      expect(result).toEqual([]);
+    });
   });
 });
