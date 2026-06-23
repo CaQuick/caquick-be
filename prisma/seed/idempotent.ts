@@ -238,6 +238,10 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     await prisma.storeSpecialClosure.deleteMany({
       where: { store_id: { in: storeIds } },
     });
+    // store_image FK는 ON DELETE RESTRICT → store 삭제 전에 정리해야 재시드 멱등성 유지
+    await prisma.storeImage.deleteMany({
+      where: { store_id: { in: storeIds } },
+    });
     await prisma.store.deleteMany({ where: { id: { in: storeIds } } });
   }
 
