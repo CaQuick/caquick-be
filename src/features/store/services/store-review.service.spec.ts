@@ -169,4 +169,14 @@ describe('StoreReviewService (real DB)', () => {
     expect(second.hasMore).toBe(false);
     expect(second.nextCursor).toBeNull();
   });
+
+  it('비활성/삭제 매장의 리뷰는 목록·카운트에서 제외한다', async () => {
+    const store = await createStore(prisma, { is_active: false });
+    await makeReview(store.id, {});
+
+    const result = await service.storeReviews({ storeId: store.id.toString() });
+
+    expect(result.items).toEqual([]);
+    expect(result.totalCount).toBe(0);
+  });
 });

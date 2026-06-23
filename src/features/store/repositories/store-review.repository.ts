@@ -41,6 +41,8 @@ export class StoreReviewRepository {
       where: {
         store_id: args.storeId,
         deleted_at: null,
+        // storeDetail과 동일하게 비활성/삭제 매장의 리뷰는 노출하지 않는다
+        store: { is_active: true, deleted_at: null },
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
       },
       select: {
@@ -68,10 +70,14 @@ export class StoreReviewRepository {
     });
   }
 
-  /** 매장 활성 리뷰 수(후기 탭 카운트). */
+  /** 매장 활성 리뷰 수(후기 탭 카운트). 비활성/삭제 매장은 0. */
   async countStoreReviews(storeId: bigint): Promise<number> {
     return this.prisma.review.count({
-      where: { store_id: storeId, deleted_at: null },
+      where: {
+        store_id: storeId,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+      },
     });
   }
 
