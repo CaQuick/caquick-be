@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, type StoreMapProvider } from '@prisma/client';
 
 import {
   POPULAR_STORE_CAKE_IMAGE_LIMIT,
@@ -17,6 +18,25 @@ export interface StoreCandidateRow {
 export interface StoreReviewStat {
   average: number;
   count: number;
+}
+
+/** 매장 상세 조회 결과 row. storeDetail 매퍼 입력. */
+export interface StoreDetailRow {
+  id: bigint;
+  store_name: string;
+  store_phone: string;
+  address_full: string;
+  address_city: string | null;
+  address_neighborhood: string | null;
+  latitude: Prisma.Decimal | null;
+  longitude: Prisma.Decimal | null;
+  map_provider: StoreMapProvider;
+  business_hours_text: string | null;
+  access_guide_text: string | null;
+  regular_closure_text: string | null;
+  website_url: string | null;
+  region: { name: string } | null;
+  store_images: { image_url: string }[];
 }
 
 @Injectable()
@@ -52,6 +72,34 @@ export class StoreRepository {
       select: { id: true },
     });
     return Boolean(found);
+  }
+
+  /** 매장 상세 헤더 조회. 활성·미삭제 매장만. 대표 이미지는 sort_order asc. */
+  async findStoreDetailById(storeId: bigint): Promise<StoreDetailRow | null> {
+    return this.prisma.store.findFirst({
+      where: { id: storeId, is_active: true, deleted_at: null },
+      select: {
+        id: true,
+        store_name: true,
+        store_phone: true,
+        address_full: true,
+        address_city: true,
+        address_neighborhood: true,
+        latitude: true,
+        longitude: true,
+        map_provider: true,
+        business_hours_text: true,
+        access_guide_text: true,
+        regular_closure_text: true,
+        website_url: true,
+        region: { select: { name: true } },
+        store_images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          select: { image_url: true },
+        },
+      },
+    });
   }
 
   /** 매장별 활성 찜 수. */

@@ -50,8 +50,24 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       region_id: gangnam.id, // 서울 강남구
       latitude: 37.5012 as unknown as never,
       longitude: 127.0396 as unknown as never,
+      map_provider: 'NAVER',
       business_hours_text: '매일 09:00 ~ 18:00 (화요일 정기 휴무)',
+      access_guide_text:
+        '강남역 3번 출구에서 도보 5분, 1층 케이크 거리 안쪽입니다.',
+      regular_closure_text: '매주 화요일 정기 휴무',
       is_active: true,
+      store_images: {
+        create: [
+          {
+            image_url: 'https://placehold.co/800x600/png?text=Store+A+Exterior',
+            sort_order: 0,
+          },
+          {
+            image_url: 'https://placehold.co/800x600/png?text=Store+A+Interior',
+            sort_order: 1,
+          },
+        ],
+      },
     },
   });
 
