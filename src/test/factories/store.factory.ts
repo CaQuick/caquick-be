@@ -13,6 +13,12 @@ export interface StoreOverrides {
   address_neighborhood?: string | null;
   region_id?: bigint | null;
   is_active?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  map_provider?: 'NAVER' | 'KAKAO' | 'NONE';
+  business_hours_text?: string | null;
+  access_guide_text?: string | null;
+  regular_closure_text?: string | null;
 }
 
 export async function createStore(
@@ -36,6 +42,12 @@ export async function createStore(
       address_neighborhood: overrides.address_neighborhood ?? '테스트동',
       region_id: overrides.region_id ?? null,
       is_active: overrides.is_active ?? true,
+      latitude: overrides.latitude ?? null,
+      longitude: overrides.longitude ?? null,
+      map_provider: overrides.map_provider ?? 'NONE',
+      business_hours_text: overrides.business_hours_text ?? null,
+      access_guide_text: overrides.access_guide_text ?? null,
+      regular_closure_text: overrides.regular_closure_text ?? null,
     },
   });
 }

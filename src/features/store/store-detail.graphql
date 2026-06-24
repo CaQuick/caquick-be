@@ -1,0 +1,42 @@
+extend type Query {
+  """매장 상세 헤더. 없거나 비활성/삭제 매장이면 NOT_FOUND. 비로그인 접근 가능."""
+  storeDetail(storeId: ID!): StoreDetail!
+}
+
+"""매장 상세 헤더(구매자용)."""
+type StoreDetail {
+  id: ID!
+  storeName: String!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  """평균 평점(0.0~5.0, 소수 첫째 자리)."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+  """매장 대표 이미지(캐러셀, sort_order asc)."""
+  images: [String!]!
+  """매장 전화번호(전화 액션시트)."""
+  phoneNumber: String!
+  """전체 주소(표시·복사용)."""
+  addressFull: String!
+  """위도(지도). 미설정 시 null."""
+  latitude: Float
+  """경도(지도). 미설정 시 null."""
+  longitude: Float
+  mapProvider: StoreMapProvider!
+  """영업시간 표기 텍스트(예: 10:00AM ~ 19:00PM)."""
+  businessHoursText: String
+  """정기 휴무 표기(예: 매주 2,4주 월요일 쉽니다)."""
+  regularClosureText: String
+  """찾아오는 길 안내."""
+  accessGuideText: String
+  websiteUrl: String
+}
+
+"""매장 지도 연동 provider."""
+enum StoreMapProvider {
+  NAVER
+  KAKAO
+  NONE
+}

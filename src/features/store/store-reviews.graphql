@@ -1,0 +1,45 @@
+extend type Query {
+  """매장 공개 리뷰 목록(최신순, 커서 기반). 비로그인 접근 가능."""
+  storeReviews(input: StoreReviewsInput!): StoreReviewConnection!
+}
+
+input StoreReviewsInput {
+  storeId: ID!
+  """이전 페이지 마지막 리뷰 id(이후부터 조회)."""
+  cursor: ID
+  limit: Int = 20
+}
+
+"""매장 리뷰 목록(커서 기반)."""
+type StoreReviewConnection {
+  items: [StoreReview!]!
+  """전체 리뷰 수(후기 탭 카운트). 0이면 빈 상태."""
+  totalCount: Int!
+  hasMore: Boolean!
+  nextCursor: ID
+}
+
+"""매장 공개 리뷰."""
+type StoreReview {
+  id: ID!
+  """평점(0.0~5.0)."""
+  rating: Float!
+  content: String
+  media: [StoreReviewMedia!]!
+  likeCount: Int!
+  """로그인 사용자의 좋아요 여부(비로그인 시 false)."""
+  isLiked: Boolean!
+  """작성자 닉네임."""
+  authorNickname: String
+  """연결 상품명(주문 시점 스냅샷)."""
+  productName: String!
+  createdAt: DateTime!
+}
+
+"""매장 리뷰 첨부 미디어."""
+type StoreReviewMedia {
+  mediaType: ReviewMediaType!
+  mediaUrl: String!
+  thumbnailUrl: String
+  sortOrder: Int!
+}

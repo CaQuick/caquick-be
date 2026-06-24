@@ -1,7 +1,28 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { type CategoryType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
+
+/** 구매자 매장 상품 카드 row. product-storefront 매퍼 입력. */
+export interface StoreProductRow {
+  id: bigint;
+  name: string;
+  description: string | null;
+  regular_price: number;
+  sale_price: number | null;
+  currency: string;
+  images: { image_url: string }[];
+  product_categories: { category_id: bigint }[];
+}
+
+/** 매장 상품 카테고리(사이드바) row. */
+export interface StoreProductCategoryRow {
+  id: bigint;
+  name: string;
+  category_type: CategoryType;
+  sort_order: number;
+  product_count: number;
+}
 
 @Injectable()
 export class ProductRepository {
@@ -696,5 +717,132 @@ export class ProductRepository {
         id: true,
       },
     });
+  }
+
+  /**
+   * 구매자용 매장 상품 목록. 활성 상품(+활성 매장)만, 카테고리/검색 필터.
+   * 카드용 가벼운 select(대표 이미지 1장 + 카테고리 id). 커서는 id < cursor(desc).
+   */
+  async listActiveProductsByStore(args: {
+    storeId: bigint;
+    limit: number;
+    cursor?: bigint;
+    categoryId?: bigint;
+    search?: string;
+  }): Promise<StoreProductRow[]> {
+    return this.prisma.product.findMany({
+      where: {
+        store_id: args.storeId,
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+        // 0n도 유효한 인자로 다뤄야 한다(parseId("0")=0n). truthiness 체크는 0n을
+        // falsy로 떨궈 잘못된 필터를 전체조회로 만들므로 undefined로만 분기한다.
+        ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
+        ...(args.categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: args.categoryId,
+                  deleted_at: null,
+                  category: { is_active: true, deleted_at: null },
+                },
+              },
+            }
+          : {}),
+        ...(args.search
+          ? {
+              OR: [
+                { name: { contains: args.search } },
+                {
+                  product_tags: {
+                    some: {
+                      deleted_at: null,
+                      tag: {
+                        name: { contains: args.search },
+                        deleted_at: null,
+                      },
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        regular_price: true,
+        sale_price: true,
+        currency: true,
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+        product_categories: {
+          // storeProductCategories와 동일하게 비활성/삭제 카테고리는 categoryIds에서 제외
+          where: {
+            deleted_at: null,
+            category: { is_active: true, deleted_at: null },
+          },
+          select: { category_id: true },
+        },
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  /**
+   * 매장이 보유한 활성 상품의 카테고리(사이드바). 빈 카테고리 제외.
+   * sort_order asc, productCount는 이 매장의 활성 상품 기준.
+   */
+  async listStoreProductCategories(
+    storeId: bigint,
+  ): Promise<StoreProductCategoryRow[]> {
+    const grouped = await this.prisma.productCategory.groupBy({
+      by: ['category_id'],
+      where: {
+        deleted_at: null,
+        product: {
+          store_id: storeId,
+          is_active: true,
+          deleted_at: null,
+          // storeProducts와 동일하게 비활성/삭제 매장은 카테고리도 노출하지 않는다
+          store: { is_active: true, deleted_at: null },
+        },
+      },
+      _count: { _all: true },
+    });
+    if (grouped.length === 0) return [];
+
+    const countByCategory = new Map(
+      grouped.map((g) => [g.category_id, g._count._all]),
+    );
+    const categories = await this.prisma.category.findMany({
+      where: {
+        id: { in: grouped.map((g) => g.category_id) },
+        is_active: true,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        category_type: true,
+        sort_order: true,
+      },
+      orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+    });
+
+    return categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      category_type: category.category_type,
+      sort_order: category.sort_order,
+      product_count: countByCategory.get(category.id) ?? 0,
+    }));
   }
 }
