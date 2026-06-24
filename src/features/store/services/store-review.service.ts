@@ -37,7 +37,7 @@ export class StoreReviewService {
 
     const [likeCounts, likedIds] = await Promise.all([
       this.repo.aggregateLikeCounts(reviewIds),
-      accountId
+      accountId !== undefined
         ? this.repo.findLikedReviewIds({ reviewIds, accountId })
         : Promise.resolve(new Set<string>()),
     ]);
