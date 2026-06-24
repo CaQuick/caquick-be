@@ -10,6 +10,7 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'Store',
   'StoreBusinessHour',
   'StoreSpecialClosure',
+  'StoreImage',
   'Category',
   'Tag',
   'Product',

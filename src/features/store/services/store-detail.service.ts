@@ -30,7 +30,7 @@ export class StoreDetailService {
 
     const [reviewStats, wishlistedIds] = await Promise.all([
       this.repo.aggregateReviewStats([storeId]),
-      accountId
+      accountId !== undefined
         ? this.wishlistRepo.findWishlistedStoreIds({
             accountId,
             storeIds: [storeId],

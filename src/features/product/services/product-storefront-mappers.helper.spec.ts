@@ -40,6 +40,10 @@ describe('calcDiscountRate', () => {
   it('정가가 0 이하이면 0', () => {
     expect(calcDiscountRate(0, 0)).toBe(0);
   });
+
+  it('salePrice가 음수 등 비정상이면 0~100으로 clamp한다', () => {
+    expect(calcDiscountRate(40000, -10000)).toBe(100);
+  });
 });
 
 describe('toStoreProduct', () => {

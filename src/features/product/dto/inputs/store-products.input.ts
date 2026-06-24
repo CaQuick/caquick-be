@@ -1,11 +1,20 @@
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class StoreProductsInput {
   @IsString()
+  @IsNotEmpty()
   storeId!: string;
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   categoryId?: string;
 
   @IsOptional()
@@ -14,6 +23,7 @@ export class StoreProductsInput {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   cursor?: string;
 
   @IsOptional()
