@@ -293,6 +293,19 @@ describe('ProductReviewService (real DB)', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it('좋아요순 커서 like count가 안전 정수 범위를 넘으면 BadRequestException', async () => {
+      const product = await createProduct(prisma);
+
+      // 309자리 숫자는 정규식은 통과하지만 Number 변환 시 Infinity가 된다
+      await expect(
+        service.productReviews({
+          productId: product.id.toString(),
+          sort: 'LIKES',
+          cursor: `${'9'.repeat(309)}:1`,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('soft-delete 리뷰·비활성 상품 리뷰는 노출하지 않는다', async () => {
       const product = await createProduct(prisma);
       const review = await createProductReview(product);

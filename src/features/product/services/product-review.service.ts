@@ -184,7 +184,13 @@ export class ProductReviewService {
     if (!match) {
       throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
     }
-    return { likeCount: Number(match[1]), id: BigInt(match[2]) };
+    const likeCount = Number(match[1]);
+    // 자릿수 폭탄(예: 309자리)은 Number 변환 시 Infinity가 되어 raw SQL에
+    // 비유한 값이 흘러간다. 안전 정수 범위를 벗어나면 형식 오류로 거부한다.
+    if (!Number.isSafeInteger(likeCount)) {
+      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
+    }
+    return { likeCount, id: BigInt(match[2]) };
   }
 
   /** id 페이지 순서를 유지하며 본문 + 집계(좋아요/댓글/isLiked)를 채운다. */

@@ -1129,7 +1129,8 @@ model ReviewComment {
   review  Review  @relation(fields: [review_id], references: [id])
   account Account @relation(fields: [account_id], references: [id])
 
-  @@index([review_id, created_at], map: "idx_review_comment_review")
+  // 커서 쿼리(review_id = ? AND id > ? ORDER BY id) 정합 인덱스
+  @@index([review_id, id], map: "idx_review_comment_review")
   @@index([account_id], map: "idx_review_comment_account")
   @@index([deleted_at], map: "idx_review_comment_deleted_at")
   @@map("review_comment")
