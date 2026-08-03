@@ -248,6 +248,51 @@ describe('ProductReviewService (real DB)', () => {
       expect(page2.hasMore).toBe(false);
     });
 
+    it('좋아요순 커서: 경계 리뷰의 좋아요 수가 변해도 이전 페이지가 중복되지 않는다', async () => {
+      const product = await createProduct(prisma);
+      const reviewA = await createProductReview(product);
+      const reviewB = await createProductReview(product);
+      const reviewC = await createProductReview(product);
+      await addLikes(reviewA.id, 2);
+      await addLikes(reviewB.id, 2);
+      await addLikes(reviewC.id, 1);
+
+      // 첫 페이지 [B(2), A(2)] — 커서에 경계 시점 좋아요 수(2)가 담긴다
+      const page1 = await service.productReviews({
+        productId: product.id.toString(),
+        sort: 'LIKES',
+        limit: 2,
+      });
+      expect(page1.items.map((r) => r.id)).toEqual([
+        reviewB.id.toString(),
+        reviewA.id.toString(),
+      ]);
+
+      // 경계 리뷰 A의 좋아요가 요청 사이에 5개로 늘어도
+      await addLikes(reviewA.id, 3);
+
+      // 두 번째 페이지는 경계 시점 기준으로 이어져 B가 중복 노출되지 않는다
+      const page2 = await service.productReviews({
+        productId: product.id.toString(),
+        sort: 'LIKES',
+        limit: 2,
+        cursor: page1.nextCursor!,
+      });
+      expect(page2.items.map((r) => r.id)).toEqual([reviewC.id.toString()]);
+    });
+
+    it('좋아요순 커서 형식이 잘못되면 BadRequestException', async () => {
+      const product = await createProduct(prisma);
+
+      await expect(
+        service.productReviews({
+          productId: product.id.toString(),
+          sort: 'LIKES',
+          cursor: '123',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('soft-delete 리뷰·비활성 상품 리뷰는 노출하지 않는다', async () => {
       const product = await createProduct(prisma);
       const review = await createProductReview(product);

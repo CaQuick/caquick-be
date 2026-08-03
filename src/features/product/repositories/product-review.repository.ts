@@ -109,15 +109,16 @@ export class ProductReviewRepository {
    * 상품 리뷰 id 페이지(좋아요순 desc, 동률이면 id desc).
    *
    * soft-delete된 좋아요를 제외한 집계 기준 정렬이 Prisma orderBy(_count)로는
-   * 불가능하므로 raw 키셋 페이지네이션으로 조회한다. 커서 row의 좋아요 수를
-   * 스칼라 서브쿼리로 구해 (likeCount, id) 복합 키셋을 이어간다.
+   * 불가능하므로 raw 키셋 페이지네이션으로 조회한다. 커서는 이전 페이지 경계의
+   * (likeCount, id) 값을 그대로 받아 이어간다 — 경계 리뷰의 좋아요 수가 요청
+   * 사이에 변해도 페이지가 중복/누락되지 않는다.
    */
   async listProductReviewIdsByLikes(args: {
     productId: bigint;
     photoOnly: boolean;
     limit: number;
-    cursor?: bigint;
-  }): Promise<bigint[]> {
+    cursor?: { likeCount: number; id: bigint };
+  }): Promise<{ id: bigint; likeCount: number }[]> {
     const photoFilter = args.photoOnly
       ? Prisma.sql`AND EXISTS (
           SELECT 1 FROM review_media m
@@ -126,21 +127,14 @@ export class ProductReviewRepository {
       : Prisma.empty;
     const cursorHaving =
       args.cursor !== undefined
-        ? Prisma.sql`HAVING COUNT(l.id) < (
-            SELECT COUNT(*) FROM review_like cl
-            WHERE cl.review_id = ${args.cursor} AND cl.deleted_at IS NULL
-          )
-          OR (
-            COUNT(l.id) = (
-              SELECT COUNT(*) FROM review_like cl
-              WHERE cl.review_id = ${args.cursor} AND cl.deleted_at IS NULL
-            )
-            AND r.id < ${args.cursor}
-          )`
+        ? Prisma.sql`HAVING COUNT(l.id) < ${args.cursor.likeCount}
+          OR (COUNT(l.id) = ${args.cursor.likeCount} AND r.id < ${args.cursor.id})`
         : Prisma.empty;
 
-    const rows = await this.prisma.$queryRaw<{ id: bigint }[]>(Prisma.sql`
-      SELECT r.id AS id
+    const rows = await this.prisma.$queryRaw<
+      { id: bigint; like_count: bigint }[]
+    >(Prisma.sql`
+      SELECT r.id AS id, COUNT(l.id) AS like_count
       FROM review r
       JOIN product p
         ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
@@ -152,10 +146,13 @@ export class ProductReviewRepository {
       ${photoFilter}
       GROUP BY r.id
       ${cursorHaving}
-      ORDER BY COUNT(l.id) DESC, r.id DESC
+      ORDER BY like_count DESC, r.id DESC
       LIMIT ${args.limit + 1}
     `);
-    return rows.map((row) => row.id);
+    return rows.map((row) => ({
+      id: row.id,
+      likeCount: Number(row.like_count),
+    }));
   }
 
   /** 상품 활성 리뷰 수(photoOnly=true면 사진 리뷰 수). */

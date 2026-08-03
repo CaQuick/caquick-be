@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
@@ -37,36 +41,27 @@ export class ProductReviewService {
     const limit = input.limit ?? DEFAULT_PRODUCT_REVIEWS_LIMIT;
     const photoOnly = input.photoOnly ?? false;
     const sort = input.sort ?? 'LATEST';
-    const cursor = input.cursor ? parseId(input.cursor) : undefined;
 
-    const [ids, totalCount, photoTotalCount] = await Promise.all([
-      sort === 'LIKES'
-        ? this.repo.listProductReviewIdsByLikes({
-            productId,
-            photoOnly,
-            limit,
-            cursor,
-          })
-        : this.repo.listProductReviewIdsLatest({
-            productId,
-            photoOnly,
-            limit,
-            cursor,
-          }),
+    const [idPage, totalCount, photoTotalCount] = await Promise.all([
+      this.fetchReviewIdPage({
+        productId,
+        photoOnly,
+        sort,
+        limit,
+        cursorRaw: input.cursor,
+      }),
       this.repo.countProductReviews({ productId, photoOnly: false }),
       this.repo.countProductReviews({ productId, photoOnly: true }),
     ]);
 
-    const hasMore = ids.length > limit;
-    const pageIds = hasMore ? ids.slice(0, limit) : ids;
-    const items = await this.hydrateReviews(pageIds, accountId);
+    const items = await this.hydrateReviews(idPage.pageIds, accountId);
 
     return {
       items,
       totalCount,
       photoTotalCount,
-      hasMore,
-      nextCursor: hasMore ? pageIds[pageIds.length - 1].toString() : null,
+      hasMore: idPage.hasMore,
+      nextCursor: idPage.nextCursor,
     };
   }
 
@@ -129,6 +124,67 @@ export class ProductReviewService {
       hasMore,
       nextCursor: hasMore ? page[page.length - 1].id.toString() : null,
     };
+  }
+
+  /**
+   * 정렬별 리뷰 id 페이지 + 다음 커서 계산.
+   *
+   * 좋아요순 커서는 "<likeCount>:<id>" 불투명 토큰 — 경계 시점의 좋아요 수를
+   * 담아, 이후 좋아요 수가 변해도 페이지가 중복/누락되지 않는다.
+   * 최신순 커서는 마지막 리뷰 id. 커서는 동일 sort 안에서만 유효하다.
+   */
+  private async fetchReviewIdPage(args: {
+    productId: bigint;
+    photoOnly: boolean;
+    sort: 'LATEST' | 'LIKES';
+    limit: number;
+    cursorRaw?: string;
+  }): Promise<{
+    pageIds: bigint[];
+    hasMore: boolean;
+    nextCursor: string | null;
+  }> {
+    if (args.sort === 'LIKES') {
+      const rows = await this.repo.listProductReviewIdsByLikes({
+        productId: args.productId,
+        photoOnly: args.photoOnly,
+        limit: args.limit,
+        cursor: args.cursorRaw
+          ? this.parseLikesCursor(args.cursorRaw)
+          : undefined,
+      });
+      const hasMore = rows.length > args.limit;
+      const page = hasMore ? rows.slice(0, args.limit) : rows;
+      const last = page[page.length - 1];
+      return {
+        pageIds: page.map((row) => row.id),
+        hasMore,
+        nextCursor: hasMore ? `${last.likeCount}:${last.id.toString()}` : null,
+      };
+    }
+
+    const ids = await this.repo.listProductReviewIdsLatest({
+      productId: args.productId,
+      photoOnly: args.photoOnly,
+      limit: args.limit,
+      cursor: args.cursorRaw ? parseId(args.cursorRaw) : undefined,
+    });
+    const hasMore = ids.length > args.limit;
+    const pageIds = hasMore ? ids.slice(0, args.limit) : ids;
+    return {
+      pageIds,
+      hasMore,
+      nextCursor: hasMore ? pageIds[pageIds.length - 1].toString() : null,
+    };
+  }
+
+  /** 좋아요순 커서 파싱. "<likeCount>:<id>" 형식이 아니면 BAD_USER_INPUT. */
+  private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
+    const match = /^(\d+):(\d+)$/.exec(raw);
+    if (!match) {
+      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
+    }
+    return { likeCount: Number(match[1]), id: BigInt(match[2]) };
   }
 
   /** id 페이지 순서를 유지하며 본문 + 집계(좋아요/댓글/isLiked)를 채운다. */
