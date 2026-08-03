@@ -77,6 +77,7 @@ export interface SellerOptionGroupOutput {
   id: string;
   productId: string;
   name: string;
+  description: string | null;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;

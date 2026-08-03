@@ -87,6 +87,7 @@ describe('SellerOptionService (real DB)', () => {
         name: '사이즈',
       });
       expect(result.name).toBe('사이즈');
+      expect(result.description).toBeNull();
 
       const groups = await prisma.productOptionGroup.findMany({
         where: { product_id: product.id },
@@ -97,6 +98,23 @@ describe('SellerOptionService (real DB)', () => {
         where: { store_id: storeId, action: 'CREATE' },
       });
       expect(auditLogs).toHaveLength(1);
+    });
+
+    it('description은 trim 저장, 공백뿐이면 null 정규화', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const withText = await service.sellerCreateOptionGroup(accountId, {
+        productId: product.id.toString(),
+        name: '맛',
+        description: '  크림 설명  ',
+      });
+      expect(withText.description).toBe('크림 설명');
+
+      const blank = await service.sellerCreateOptionGroup(accountId, {
+        productId: product.id.toString(),
+        name: '사이즈',
+        description: '   ',
+      });
+      expect(blank.description).toBeNull();
     });
   });
 
@@ -152,6 +170,23 @@ describe('SellerOptionService (real DB)', () => {
         name: '신규명',
       });
       expect(result.name).toBe('신규명');
+    });
+
+    it('description 수정 및 공백 입력 시 null로 제거', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+
+      const updated = await service.sellerUpdateOptionGroup(accountId, {
+        optionGroupId: group.id.toString(),
+        description: '그룹 안내 문구',
+      });
+      expect(updated.description).toBe('그룹 안내 문구');
+
+      const cleared = await service.sellerUpdateOptionGroup(accountId, {
+        optionGroupId: group.id.toString(),
+        description: '',
+      });
+      expect(cleared.description).toBeNull();
     });
   });
 

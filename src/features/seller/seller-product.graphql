@@ -92,6 +92,8 @@ type SellerOptionGroup {
   id: ID!
   productId: ID!
   name: String!
+  """그룹 안내 문구(상품 상세 옵션 섹션 인트로)."""
+  description: String
   isRequired: Boolean!
   minSelect: Int!
   maxSelect: Int!
@@ -225,6 +227,7 @@ input SellerSetProductTagsInput {
 input SellerCreateOptionGroupInput {
   productId: ID!
   name: String!
+  description: String
   isRequired: Boolean = true
   minSelect: Int = 1
   maxSelect: Int = 1
@@ -238,6 +241,7 @@ input SellerCreateOptionGroupInput {
 input SellerUpdateOptionGroupInput {
   optionGroupId: ID!
   name: String
+  description: String
   isRequired: Boolean
   minSelect: Int
   maxSelect: Int

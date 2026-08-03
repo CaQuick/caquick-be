@@ -9,6 +9,10 @@ export class SellerUpdateOptionGroupInput {
   name?: string;
 
   @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
   @IsBoolean()
   isRequired?: boolean;
 
