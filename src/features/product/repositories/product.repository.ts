@@ -96,8 +96,12 @@ export class ProductRepository {
             }
           : {}),
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -109,9 +113,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -119,6 +125,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -153,8 +160,12 @@ export class ProductRepository {
         store_id: args.storeId,
         is_active: true,
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -166,9 +177,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -176,6 +189,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -193,8 +207,12 @@ export class ProductRepository {
         id: args.productId,
         store_id: args.storeId,
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -206,9 +224,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -216,6 +236,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
