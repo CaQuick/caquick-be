@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -125,6 +126,156 @@ describe('UserEngagementService (real DB)', () => {
       const promise = service.likeReview(liker.id, review.id);
       await expect(promise).rejects.toThrow(UnauthorizedException);
       await expect(promise).rejects.toThrow(/Account is deleted/);
+    });
+  });
+
+  describe('unlikeReview', () => {
+    async function setupLikedReview() {
+      const review = await createReview(prisma);
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: liker.id });
+      await service.likeReview(liker.id, review.id);
+      return { review, liker };
+    }
+
+    it('좋아요를 soft-delete하고 true를 반환한다', async () => {
+      const { review, liker } = await setupLikedReview();
+
+      const result = await service.unlikeReview(liker.id, review.id);
+
+      expect(result).toBe(true);
+      const activeLikes = await prisma.reviewLike.count({
+        where: { review_id: review.id, account_id: liker.id, deleted_at: null },
+      });
+      expect(activeLikes).toBe(0);
+    });
+
+    it('좋아요가 없어도 true(멱등)', async () => {
+      const review = await createReview(prisma);
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: user.id });
+
+      const result = await service.unlikeReview(user.id, review.id);
+      expect(result).toBe(true);
+    });
+
+    it('존재하지 않는 리뷰면 NotFoundException', async () => {
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: user.id });
+
+      await expect(
+        service.unlikeReview(user.id, BigInt(999999)),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('해제 후 다시 좋아요를 누르면 활성 레코드가 복원된다', async () => {
+      const { review, liker } = await setupLikedReview();
+      await service.unlikeReview(liker.id, review.id);
+
+      const relike = await service.likeReview(liker.id, review.id);
+
+      expect(relike).toBe(true);
+      const activeLikes = await prisma.reviewLike.count({
+        where: { review_id: review.id, account_id: liker.id, deleted_at: null },
+      });
+      expect(activeLikes).toBe(1);
+    });
+  });
+
+  describe('writeReviewComment', () => {
+    it('댓글을 생성하고 trim된 내용과 생성 정보를 반환한다', async () => {
+      const review = await createReview(prisma);
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: commenter.id });
+
+      const result = await service.writeReviewComment(commenter.id, {
+        reviewId: review.id.toString(),
+        content: '  너무 귀여워요  ',
+      });
+
+      expect(result.reviewId).toBe(review.id.toString());
+      expect(result.content).toBe('너무 귀여워요');
+
+      const saved = await prisma.reviewComment.findFirstOrThrow({
+        where: { review_id: review.id, account_id: commenter.id },
+      });
+      expect(saved.content).toBe('너무 귀여워요');
+    });
+
+    it('존재하지 않는 리뷰면 NotFoundException', async () => {
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: commenter.id });
+
+      await expect(
+        service.writeReviewComment(commenter.id, {
+          reviewId: '999999',
+          content: '댓글',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('soft-delete된 리뷰에는 작성할 수 없다', async () => {
+      const review = await createReview(prisma);
+      await prisma.review.update({
+        where: { id: review.id },
+        data: { deleted_at: new Date() },
+      });
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: commenter.id });
+
+      await expect(
+        service.writeReviewComment(commenter.id, {
+          reviewId: review.id.toString(),
+          content: '댓글',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('deleteMyReviewComment', () => {
+    async function setupComment() {
+      const review = await createReview(prisma);
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: commenter.id });
+      const comment = await service.writeReviewComment(commenter.id, {
+        reviewId: review.id.toString(),
+        content: '내 댓글',
+      });
+      return { review, commenter, commentId: BigInt(comment.id) };
+    }
+
+    it('본인 댓글을 soft-delete하고 true를 반환한다', async () => {
+      const { commenter, commentId } = await setupComment();
+
+      const result = await service.deleteMyReviewComment(
+        commenter.id,
+        commentId,
+      );
+
+      expect(result).toBe(true);
+      const row = await prisma.reviewComment.findFirstOrThrow({
+        where: { id: commentId, deleted_at: { not: null } },
+      });
+      expect(row.deleted_at).not.toBeNull();
+    });
+
+    it('타인 댓글이면 ForbiddenException', async () => {
+      const { commentId } = await setupComment();
+      const stranger = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: stranger.id });
+
+      await expect(
+        service.deleteMyReviewComment(stranger.id, commentId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('없는(또는 이미 삭제된) 댓글이면 NotFoundException', async () => {
+      const { commenter, commentId } = await setupComment();
+      await service.deleteMyReviewComment(commenter.id, commentId);
+
+      await expect(
+        service.deleteMyReviewComment(commenter.id, commentId),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

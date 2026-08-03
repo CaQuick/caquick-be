@@ -550,11 +550,24 @@ export class UserRepository {
         where: {
           review_id: review.id,
           account_id: args.accountId,
+          // soft-delete 필터 우회: 해제(soft-delete)된 좋아요도 찾아 복원한다.
+          // uk_review_like 유니크 제약 때문에 새로 create하면 충돌한다.
+          deleted_at: undefined,
         },
-        select: { id: true },
+        select: { id: true, deleted_at: true },
       });
 
-      if (existing) return 'already-liked';
+      if (existing && existing.deleted_at === null) return 'already-liked';
+
+      if (existing) {
+        // 해제했던 좋아요 복원. 좋아요↔해제 반복으로 인한 알림 스팸을 막기 위해
+        // 알림은 최초 좋아요(신규 생성)에만 발송한다.
+        await tx.reviewLike.update({
+          where: { id: existing.id },
+          data: { deleted_at: null },
+        });
+        return 'liked';
+      }
 
       await tx.reviewLike.create({
         data: {
@@ -578,5 +591,71 @@ export class UserRepository {
 
       return 'liked';
     });
+  }
+
+  /** 리뷰 좋아요 해제(soft). 좋아요가 없어도 성공 처리(멱등). */
+  async unlikeReview(args: {
+    accountId: bigint;
+    reviewId: bigint;
+  }): Promise<'unliked' | 'not-found'> {
+    const review = await this.prisma.review.findFirst({
+      where: { id: args.reviewId },
+      select: { id: true },
+    });
+    if (!review) return 'not-found';
+
+    await this.prisma.reviewLike.updateMany({
+      where: {
+        review_id: args.reviewId,
+        account_id: args.accountId,
+        deleted_at: null,
+      },
+      data: { deleted_at: new Date() },
+    });
+    return 'unliked';
+  }
+
+  /** 리뷰 댓글 작성. 리뷰가 없으면(soft-delete 포함) 생성하지 않는다. */
+  async createReviewComment(args: {
+    accountId: bigint;
+    reviewId: bigint;
+    content: string;
+  }): Promise<
+    | { id: bigint; review_id: bigint; content: string; created_at: Date }
+    | 'review-not-found'
+  > {
+    const review = await this.prisma.review.findFirst({
+      where: { id: args.reviewId },
+      select: { id: true },
+    });
+    if (!review) return 'review-not-found';
+
+    return this.prisma.reviewComment.create({
+      data: {
+        review_id: args.reviewId,
+        account_id: args.accountId,
+        content: args.content,
+      },
+      select: { id: true, review_id: true, content: true, created_at: true },
+    });
+  }
+
+  /** 내 리뷰 댓글 soft-delete. 소유자 검증 포함. */
+  async softDeleteMyReviewComment(args: {
+    accountId: bigint;
+    commentId: bigint;
+  }): Promise<'deleted' | 'not-found' | 'forbidden'> {
+    const comment = await this.prisma.reviewComment.findFirst({
+      where: { id: args.commentId },
+      select: { id: true, account_id: true },
+    });
+    if (!comment) return 'not-found';
+    if (comment.account_id !== args.accountId) return 'forbidden';
+
+    await this.prisma.reviewComment.update({
+      where: { id: args.commentId },
+      data: { deleted_at: new Date() },
+    });
+    return 'deleted';
   }
 }
