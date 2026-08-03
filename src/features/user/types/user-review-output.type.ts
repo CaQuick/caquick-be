@@ -36,3 +36,10 @@ export interface ReviewMediaUploadUrl {
   key: string;
   expiresInSeconds: number;
 }
+
+export interface MyReviewComment {
+  id: string;
+  reviewId: string;
+  content: string;
+  createdAt: Date;
+}

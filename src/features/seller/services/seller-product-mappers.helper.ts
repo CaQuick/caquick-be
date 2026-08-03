@@ -13,6 +13,7 @@ export interface ProductOptionGroupRow {
   id: bigint;
   product_id: bigint;
   name: string;
+  description: string | null;
   is_required: boolean;
   min_select: number;
   max_select: number;
@@ -90,6 +91,7 @@ export function toOptionGroupOutput(g: ProductOptionGroupRow) {
     id: g.id.toString(),
     productId: g.product_id.toString(),
     name: g.name,
+    description: g.description,
     isRequired: g.is_required,
     minSelect: g.min_select,
     maxSelect: g.max_select,

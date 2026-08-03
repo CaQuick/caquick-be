@@ -156,6 +156,7 @@ model Account {
 
   store_wishlist_items       StoreWishlistItem[]
   review_likes               ReviewLike[]
+  review_comments            ReviewComment[]
   store_conversations        StoreConversation[]
   sent_conversation_messages StoreConversationMessage[] @relation("ConversationMessageSender")
   store                      Store?                     @relation("StoreSellerAccount")
@@ -594,6 +595,8 @@ model ProductOptionGroup {
   product_id BigInt @db.UnsignedBigInt
 
   name        String  @db.VarChar(120)
+  // 그룹 수준 안내 문구(상품 상세 옵션 섹션 인트로. 예: 맛 옵션 크림 설명)
+  description String? @db.VarChar(1000)
   is_required Boolean @default(true) @db.TinyInt
   min_select  Int     @default(1) @db.UnsignedSmallInt
   max_select  Int     @default(1) @db.UnsignedSmallInt
@@ -1082,6 +1085,7 @@ model Review {
   media ReviewMedia[]
 
   likes         ReviewLike[]
+  comments      ReviewComment[]
   notifications Notification[]
 
   @@index([store_id, created_at], map: "idx_review_store")
@@ -1109,6 +1113,27 @@ model ReviewMedia {
   @@index([review_id, sort_order], map: "idx_review_media_review")
   @@index([deleted_at], map: "idx_review_media_deleted_at")
   @@map("review_media")
+}
+
+model ReviewComment {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  review_id  BigInt @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+
+  content String @db.VarChar(500)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  review  Review  @relation(fields: [review_id], references: [id])
+  account Account @relation(fields: [account_id], references: [id])
+
+  // 커서 쿼리(review_id = ? AND id > ? ORDER BY id) 정합 인덱스
+  @@index([review_id, id], map: "idx_review_comment_review")
+  @@index([account_id], map: "idx_review_comment_account")
+  @@index([deleted_at], map: "idx_review_comment_deleted_at")
+  @@map("review_comment")
 }
 
 /**

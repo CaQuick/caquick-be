@@ -8,4 +8,6 @@ export const USER_REVIEW_ERRORS = {
   CANNOT_WRITE_REVIEW: '리뷰를 작성할 수 없는 주문입니다.',
   REVIEW_ALREADY_EXISTS: '이미 리뷰가 작성된 주문 아이템입니다.',
   REVIEW_NOT_FOUND: '리뷰를 찾을 수 없습니다.',
+  COMMENT_NOT_FOUND: '댓글을 찾을 수 없습니다.',
+  NOT_COMMENT_OWNER: '본인 댓글만 삭제할 수 있습니다.',
 } as const;

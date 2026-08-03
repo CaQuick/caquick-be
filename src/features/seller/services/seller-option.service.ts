@@ -26,6 +26,7 @@ import {
   PRODUCT_NOT_FOUND,
 } from '@/features/seller/constants/seller-error-messages';
 import {
+  MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
   MAX_OPTION_GROUP_NAME_LENGTH,
   MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
   MAX_OPTION_ITEM_TITLE_LENGTH,
@@ -79,6 +80,10 @@ export class SellerOptionService extends SellerBaseService {
       productId,
       data: {
         name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
+        description: cleanNullableText(
+          input.description,
+          MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
+        ),
         is_required: input.isRequired ?? true,
         min_select: minSelect,
         max_select: maxSelect,
@@ -128,6 +133,14 @@ export class SellerOptionService extends SellerBaseService {
         ...(input.name !== undefined
           ? {
               name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
+            }
+          : {}),
+        ...(input.description !== undefined
+          ? {
+              description: cleanNullableText(
+                input.description,
+                MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
+              ),
             }
           : {}),
         ...(input.isRequired !== undefined
@@ -418,6 +431,7 @@ export class SellerOptionService extends SellerBaseService {
     id: bigint;
     product_id: bigint;
     name: string;
+    description: string | null;
     is_required: boolean;
     min_select: number;
     max_select: number;
@@ -440,6 +454,7 @@ export class SellerOptionService extends SellerBaseService {
       id: row.id.toString(),
       productId: row.product_id.toString(),
       name: row.name,
+      description: row.description,
       isRequired: row.is_required,
       minSelect: row.min_select,
       maxSelect: row.max_select,
