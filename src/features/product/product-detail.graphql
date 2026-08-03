@@ -1,0 +1,52 @@
+extend type Query {
+  """상품 상세. 없거나 비활성/삭제 상품(또는 매장)이면 NOT_FOUND. 비로그인 접근 가능."""
+  productDetail(productId: ID!): ProductDetail!
+}
+
+"""상품 상세(구매자용)."""
+type ProductDetail {
+  id: ID!
+  """소속 매장 ID(주문/매장 이동용)."""
+  storeId: ID!
+  name: String!
+  description: String
+  """구매 전 필독사항."""
+  purchaseNotice: String
+  """상품 이미지(캐러셀·썸네일, sort_order asc)."""
+  images: [String!]!
+  regularPrice: Int!
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+  currency: String!
+  """후기 탭 카운트."""
+  reviewCount: Int!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+  """옵션 섹션(케이크 사이즈/맛 등, sort_order asc). 활성 그룹만."""
+  optionGroups: [ProductDetailOptionGroup!]!
+}
+
+"""상품 상세 옵션 섹션(그룹)."""
+type ProductDetailOptionGroup {
+  id: ID!
+  name: String!
+  """그룹 안내 문구(섹션 인트로)."""
+  description: String
+  isRequired: Boolean!
+  minSelect: Int!
+  maxSelect: Int!
+  sortOrder: Int!
+  items: [ProductDetailOptionItem!]!
+}
+
+"""상품 상세 옵션 항목."""
+type ProductDetailOptionItem {
+  id: ID!
+  title: String!
+  description: String
+  imageUrl: String
+  """옵션 선택 시 가격 증감(원)."""
+  priceDelta: Int!
+  sortOrder: Int!
+}

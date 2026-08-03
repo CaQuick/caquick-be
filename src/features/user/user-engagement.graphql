@@ -1,4 +1,24 @@
 extend type Mutation {
   """리뷰 좋아요"""
   likeReview(reviewId: ID!): Boolean!
+  """리뷰 좋아요 해제(멱등: 좋아요가 없어도 true)"""
+  unlikeReview(reviewId: ID!): Boolean!
+  """리뷰 댓글 작성"""
+  writeReviewComment(input: WriteReviewCommentInput!): MyReviewComment!
+  """내 리뷰 댓글 삭제(soft). 본인 댓글만 가능."""
+  deleteMyReviewComment(commentId: ID!): Boolean!
+}
+
+input WriteReviewCommentInput {
+  reviewId: ID!
+  """1~500자"""
+  content: String!
+}
+
+"""작성된 내 리뷰 댓글(작성 직후 반환)."""
+type MyReviewComment {
+  id: ID!
+  reviewId: ID!
+  content: String!
+  createdAt: DateTime!
 }

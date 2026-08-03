@@ -1,0 +1,127 @@
+extend type Query {
+  """상품 공개 리뷰 목록(커서). 사진 필터·정렬 지원. 비로그인 접근 가능."""
+  productReviews(input: ProductReviewsInput!): ProductReviewConnection!
+
+  """리뷰 상세(후기 상세 화면). 없거나 삭제된 리뷰면 NOT_FOUND. 비로그인 접근 가능."""
+  reviewDetail(reviewId: ID!): ReviewDetail!
+
+  """리뷰 댓글 목록(등록순, 커서). 비로그인 접근 가능."""
+  reviewComments(input: ReviewCommentsInput!): ReviewCommentConnection!
+}
+
+input ProductReviewsInput {
+  productId: ID!
+  """true면 사진(미디어) 있는 리뷰만(사진후기 그리드/사진후기 상세)."""
+  photoOnly: Boolean = false
+  sort: ProductReviewSort = LATEST
+  """이전 페이지의 nextCursor 값(불투명 토큰). 동일 sort에서만 유효."""
+  cursor: ID
+  limit: Int = 20
+}
+
+"""상품 리뷰 정렬."""
+enum ProductReviewSort {
+  """최신순."""
+  LATEST
+  """좋아요순(동률이면 최신순)."""
+  LIKES
+}
+
+"""상품 리뷰 목록(커서 기반)."""
+type ProductReviewConnection {
+  items: [ProductReview!]!
+  """전체 리뷰 수(후기 탭 카운트). 0이면 빈 상태."""
+  totalCount: Int!
+  """사진 리뷰 수(사진후기 카운트)."""
+  photoTotalCount: Int!
+  hasMore: Boolean!
+  nextCursor: ID
+}
+
+"""상품 공개 리뷰."""
+type ProductReview {
+  id: ID!
+  """평점(0.0~5.0)."""
+  rating: Float!
+  content: String
+  media: [ProductReviewMedia!]!
+  likeCount: Int!
+  """로그인 사용자의 좋아요 여부(비로그인 시 false)."""
+  isLiked: Boolean!
+  """댓글 수."""
+  commentCount: Int!
+  """작성자 닉네임(탈퇴 시 null)."""
+  authorNickname: String
+  """작성자 프로필 이미지(탈퇴/미설정 시 null)."""
+  authorProfileImageUrl: String
+  """주문 시 선택 옵션 스냅샷(커스텀 정보: 모양/크기/맛 등)."""
+  customOptions: [ReviewCustomOption!]!
+  createdAt: DateTime!
+}
+
+"""상품 리뷰 첨부 미디어."""
+type ProductReviewMedia {
+  mediaType: ReviewMediaType!
+  mediaUrl: String!
+  thumbnailUrl: String
+  sortOrder: Int!
+}
+
+"""리뷰의 주문 옵션 스냅샷(커스텀 정보 행)."""
+type ReviewCustomOption {
+  """옵션 그룹명 스냅샷(예: 모양/크기/맛)."""
+  groupName: String!
+  """선택 옵션명 스냅샷(예: (기본) 동그라미)."""
+  optionTitle: String!
+}
+
+"""리뷰 상세(후기 상세 화면)."""
+type ReviewDetail {
+  """리뷰 본문(목록 카드와 동일 구조, content 전문)."""
+  review: ProductReview!
+  """판매 케이크 정보(현재 상품 기준)."""
+  product: ReviewDetailProduct!
+}
+
+"""리뷰 상세 상단 판매 케이크 정보."""
+type ReviewDetailProduct {
+  productId: ID!
+  name: String!
+  """대표 이미지(sort_order 최소). 없으면 null."""
+  thumbnailUrl: String
+  storeName: String!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  regularPrice: Int!
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+}
+
+input ReviewCommentsInput {
+  reviewId: ID!
+  """이전 페이지 마지막 댓글 id(이후부터 조회)."""
+  cursor: ID
+  limit: Int = 20
+}
+
+"""리뷰 댓글 목록(등록순, 커서 기반)."""
+type ReviewCommentConnection {
+  items: [ReviewCommentItem!]!
+  totalCount: Int!
+  hasMore: Boolean!
+  nextCursor: ID
+}
+
+"""리뷰 댓글."""
+type ReviewCommentItem {
+  id: ID!
+  content: String!
+  """작성자 닉네임(탈퇴 시 null)."""
+  authorNickname: String
+  """작성자 프로필 이미지(탈퇴/미설정 시 null)."""
+  authorProfileImageUrl: String
+  """로그인 사용자 본인 댓글 여부(삭제 버튼 노출용, 비로그인 시 false)."""
+  isMine: Boolean!
+  createdAt: DateTime!
+}

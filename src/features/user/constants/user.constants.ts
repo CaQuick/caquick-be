@@ -20,3 +20,7 @@ export const MIN_BIRTH_DATE = new Date(Date.UTC(1900, 0, 1));
 
 export const DEFAULT_PAGINATION_LIMIT = 20;
 export const MAX_PAGINATION_LIMIT = 50;
+
+// ── 리뷰 댓글 ──
+
+export const MAX_REVIEW_COMMENT_LENGTH = 500;

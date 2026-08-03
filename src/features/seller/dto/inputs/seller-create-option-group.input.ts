@@ -13,6 +13,10 @@ export class SellerCreateOptionGroupInput {
   name!: string;
 
   @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
   @IsBoolean()
   isRequired?: boolean;
 

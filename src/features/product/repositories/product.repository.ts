@@ -24,6 +24,36 @@ export interface StoreProductCategoryRow {
   product_count: number;
 }
 
+/** 구매자 상품 상세 row. product-detail 매퍼 입력. */
+export interface ProductDetailRow {
+  id: bigint;
+  store_id: bigint;
+  name: string;
+  description: string | null;
+  purchase_notice: string | null;
+  regular_price: number;
+  sale_price: number | null;
+  currency: string;
+  images: { image_url: string }[];
+  option_groups: {
+    id: bigint;
+    name: string;
+    description: string | null;
+    is_required: boolean;
+    min_select: number;
+    max_select: number;
+    sort_order: number;
+    option_items: {
+      id: bigint;
+      title: string;
+      description: string | null;
+      image_url: string | null;
+      price_delta: number;
+      sort_order: number;
+    }[];
+  }[];
+}
+
 @Injectable()
 export class ProductRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -66,8 +96,12 @@ export class ProductRepository {
             }
           : {}),
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -79,9 +113,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -89,6 +125,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -123,8 +160,12 @@ export class ProductRepository {
         store_id: args.storeId,
         is_active: true,
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -136,9 +177,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -146,6 +189,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -163,8 +207,12 @@ export class ProductRepository {
         id: args.productId,
         store_id: args.storeId,
       },
+      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
-        images: { orderBy: { sort_order: 'asc' } },
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+        },
         product_categories: {
           include: {
             category: true,
@@ -176,9 +224,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
+          where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -186,6 +236,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
+              where: { deleted_at: null },
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -794,6 +845,86 @@ export class ProductRepository {
       orderBy: { id: 'desc' },
       take: args.limit + 1,
     });
+  }
+
+  /**
+   * 구매자 상품 상세. 활성 상품(+활성 매장)만. 이미지·옵션 그룹/아이템 포함.
+   * nested relation은 soft-delete extension이 root만 patch하므로 가드를 명시한다.
+   */
+  async findProductDetailById(
+    productId: bigint,
+  ): Promise<ProductDetailRow | null> {
+    return this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+      },
+      select: {
+        id: true,
+        store_id: true,
+        name: true,
+        description: true,
+        purchase_notice: true,
+        regular_price: true,
+        sale_price: true,
+        currency: true,
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          select: { image_url: true },
+        },
+        option_groups: {
+          where: { is_active: true, deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            is_required: true,
+            min_select: true,
+            max_select: true,
+            sort_order: true,
+            option_items: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: { sort_order: 'asc' },
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                image_url: true,
+                price_delta: true,
+                sort_order: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /** 상품 활성 리뷰 수(후기 탭 카운트). */
+  async countProductReviews(productId: bigint): Promise<number> {
+    return this.prisma.review.count({
+      where: { product_id: productId, deleted_at: null },
+    });
+  }
+
+  /** 로그인 사용자의 상품 찜 여부. */
+  async isProductWishlisted(args: {
+    accountId: bigint;
+    productId: bigint;
+  }): Promise<boolean> {
+    const found = await this.prisma.wishlistItem.findFirst({
+      where: {
+        account_id: args.accountId,
+        product_id: args.productId,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+    return Boolean(found);
   }
 
   /**

@@ -38,6 +38,7 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'OrderItemCustomFreeEditAttachment',
   'Review',
   'ReviewMedia',
+  'ReviewComment',
   'Notification',
   'SearchHistory',
   'SearchEvent',

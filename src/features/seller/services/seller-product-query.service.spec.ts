@@ -181,6 +181,48 @@ describe('SellerProductQueryService (real DB)', () => {
       expect(result.images).toHaveLength(1);
     });
 
+    it('soft-delete된 이미지·옵션 그룹·옵션 아이템은 상세에서 제외한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      await prisma.productImage.create({
+        data: {
+          product_id: product.id,
+          image_url: 'deleted.png',
+          sort_order: 1,
+          deleted_at: new Date(),
+        },
+      });
+      const group = await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '사이즈' },
+      });
+      await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: '살아있는 항목' },
+      });
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: group.id,
+          title: '삭제된 항목',
+          deleted_at: new Date(),
+        },
+      });
+      await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '삭제된 그룹',
+          deleted_at: new Date(),
+        },
+      });
+
+      const result = await service.sellerProduct(account.id, product.id);
+
+      // createSellerProduct가 만든 활성 이미지 1장만 남는다
+      expect(result.images).toHaveLength(1);
+      expect(result.optionGroups.map((g) => g.name)).toEqual(['사이즈']);
+      expect(result.optionGroups[0].optionItems.map((i) => i.title)).toEqual([
+        '살아있는 항목',
+      ]);
+    });
+
     it('custom_template이 존재하는 product 조회 시 customTemplate 필드가 채워진다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id, {
