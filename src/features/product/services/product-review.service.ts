@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import {
   DEFAULT_PRODUCT_REVIEWS_LIMIT,
   DEFAULT_REVIEW_COMMENTS_LIMIT,
 } from '@/features/product/constants/product-review.constants';
-import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import type { ProductReviewsInput } from '@/features/product/dto/inputs/product-reviews.input';
 import type { ReviewCommentsInput } from '@/features/product/dto/inputs/review-comments.input';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';

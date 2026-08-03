@@ -57,10 +57,7 @@ export class UserEngagementService extends UserBaseService {
   ): Promise<MyReviewComment> {
     await this.requireActiveUser(accountId);
 
-    const content = cleanRequiredText(
-      input.content,
-      MAX_REVIEW_COMMENT_LENGTH,
-    );
+    const content = cleanRequiredText(input.content, MAX_REVIEW_COMMENT_LENGTH);
     const created = await this.repo.createReviewComment({
       accountId,
       reviewId: parseId(input.reviewId),

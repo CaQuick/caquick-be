@@ -62,7 +62,9 @@ export function toProductReview(
 }
 
 /** 매장 위치 표기. address_city/neighborhood 우선, 없으면 region명. */
-function buildRegionLabel(store: ReviewDetailProductRow['store']): string | null {
+function buildRegionLabel(
+  store: ReviewDetailProductRow['store'],
+): string | null {
   const parts = [store.address_city, store.address_neighborhood].filter(
     (part): part is string => Boolean(part),
   );
