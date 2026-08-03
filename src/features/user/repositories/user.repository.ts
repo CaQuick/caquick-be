@@ -663,7 +663,8 @@ export class UserRepository {
     commentId: bigint;
   }): Promise<'deleted' | 'not-found' | 'forbidden'> {
     const comment = await this.prisma.reviewComment.findFirst({
-      where: { id: args.commentId },
+      // extension이 주입하지만 재삭제 방지 계약을 코드에서 바로 읽도록 명시한다
+      where: { id: args.commentId, deleted_at: null },
       select: { id: true, account_id: true },
     });
     if (!comment) return 'not-found';
