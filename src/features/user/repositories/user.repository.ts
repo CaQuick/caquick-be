@@ -5,6 +5,7 @@ import {
   IdentityProvider,
   NotificationEvent,
   NotificationType,
+  Prisma,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
@@ -619,6 +620,10 @@ export class UserRepository {
    * 리뷰 댓글 작성. 리뷰가 없으면(soft-delete 포함) 생성하지 않는다.
    * 공개 조회(reviewComments)와 동일하게 상품·매장 활성 가드를 적용해
    * 작성 직후 조회 불가능한 댓글이 생기지 않게 한다.
+   *
+   * 리뷰 row를 FOR SHARE로 잠가 삭제 트랜잭션(review UPDATE → 댓글 정리)과
+   * 직렬화한다 — 체크와 insert 사이에 리뷰가 삭제되어 정리 대상에서 빠지는
+   * 댓글(리뷰 재작성 시 되살아나는 좀비 댓글)을 막는다.
    */
   async createReviewComment(args: {
     accountId: bigint;
@@ -628,23 +633,27 @@ export class UserRepository {
     | { id: bigint; review_id: bigint; content: string; created_at: Date }
     | 'review-not-found'
   > {
-    const review = await this.prisma.review.findFirst({
-      where: {
-        id: args.reviewId,
-        product: { is_active: true, deleted_at: null },
-        store: { is_active: true, deleted_at: null },
-      },
-      select: { id: true },
-    });
-    if (!review) return 'review-not-found';
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`
+        SELECT r.id
+        FROM review r
+        JOIN product p
+          ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
+        JOIN store s
+          ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
+        WHERE r.id = ${args.reviewId} AND r.deleted_at IS NULL
+        FOR SHARE OF r
+      `);
+      if (locked.length === 0) return 'review-not-found';
 
-    return this.prisma.reviewComment.create({
-      data: {
-        review_id: args.reviewId,
-        account_id: args.accountId,
-        content: args.content,
-      },
-      select: { id: true, review_id: true, content: true, created_at: true },
+      return tx.reviewComment.create({
+        data: {
+          review_id: args.reviewId,
+          account_id: args.accountId,
+          content: args.content,
+        },
+        select: { id: true, review_id: true, content: true, created_at: true },
+      });
     });
   }
 
