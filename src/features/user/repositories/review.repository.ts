@@ -202,6 +202,15 @@ export class ReviewRepository {
           },
           data: { deleted_at: args.now },
         });
+        // 리뷰 재작성(createOrRestoreReviewWithMedia)이 같은 review id를 복원하므로
+        // 댓글을 남겨두면 삭제 전 댓글이 새 리뷰에 되살아난다. 함께 정리한다.
+        await tx.reviewComment.updateMany({
+          where: {
+            review_id: args.reviewId,
+            deleted_at: null,
+          },
+          data: { deleted_at: args.now },
+        });
       }
 
       return result.count > 0;

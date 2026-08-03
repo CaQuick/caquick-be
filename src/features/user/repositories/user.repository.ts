@@ -615,7 +615,11 @@ export class UserRepository {
     return 'unliked';
   }
 
-  /** 리뷰 댓글 작성. 리뷰가 없으면(soft-delete 포함) 생성하지 않는다. */
+  /**
+   * 리뷰 댓글 작성. 리뷰가 없으면(soft-delete 포함) 생성하지 않는다.
+   * 공개 조회(reviewComments)와 동일하게 상품·매장 활성 가드를 적용해
+   * 작성 직후 조회 불가능한 댓글이 생기지 않게 한다.
+   */
   async createReviewComment(args: {
     accountId: bigint;
     reviewId: bigint;
@@ -625,7 +629,11 @@ export class UserRepository {
     | 'review-not-found'
   > {
     const review = await this.prisma.review.findFirst({
-      where: { id: args.reviewId },
+      where: {
+        id: args.reviewId,
+        product: { is_active: true, deleted_at: null },
+        store: { is_active: true, deleted_at: null },
+      },
       select: { id: true },
     });
     if (!review) return 'review-not-found';

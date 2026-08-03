@@ -76,6 +76,54 @@ describe('ProductReview Query Resolver (real DB)', () => {
     expect(result.product.productId).toBe(product.id.toString());
   });
 
+  it('productReviews: 로그인 사용자(JwtUser)의 isLiked를 채운다', async () => {
+    const product = await createProduct(prisma);
+    const orderItem = await createOrderItem(prisma, { product_id: product.id });
+    const review = await createReview(prisma, { order_item_id: orderItem.id });
+    const liker = await createAccount(prisma, { account_type: 'USER' });
+    await prisma.reviewLike.create({
+      data: { review_id: review.id, account_id: liker.id },
+    });
+
+    const result = await resolver.productReviews(
+      { productId: product.id.toString() },
+      { accountId: liker.id.toString() },
+    );
+
+    expect(result.items[0].isLiked).toBe(true);
+  });
+
+  it('reviewDetail: 비로그인 사용자는 isLiked=false', async () => {
+    const product = await createProduct(prisma);
+    const orderItem = await createOrderItem(prisma, { product_id: product.id });
+    const review = await createReview(prisma, { order_item_id: orderItem.id });
+
+    const result = await resolver.reviewDetail(review.id.toString(), undefined);
+
+    expect(result.review.isLiked).toBe(false);
+  });
+
+  it('reviewComments: 로그인 사용자(JwtUser)의 isMine을 채운다', async () => {
+    const product = await createProduct(prisma);
+    const orderItem = await createOrderItem(prisma, { product_id: product.id });
+    const review = await createReview(prisma, { order_item_id: orderItem.id });
+    const commenter = await createAccount(prisma, { account_type: 'USER' });
+    await prisma.reviewComment.create({
+      data: {
+        review_id: review.id,
+        account_id: commenter.id,
+        content: '내 댓글',
+      },
+    });
+
+    const result = await resolver.reviewComments(
+      { reviewId: review.id.toString() },
+      { accountId: commenter.id.toString() },
+    );
+
+    expect(result.items[0].isMine).toBe(true);
+  });
+
   it('reviewComments: 없는 리뷰는 NotFoundException', async () => {
     await expect(
       resolver.reviewComments({ reviewId: '999999' }, undefined),

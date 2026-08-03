@@ -18,6 +18,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('ProductReviewService (real DB)', () => {
   let service: ProductReviewService;
+  let repo: ProductReviewRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -25,6 +26,7 @@ describe('ProductReviewService (real DB)', () => {
       providers: [ProductReviewService, ProductReviewRepository],
     });
     service = module.get(ProductReviewService);
+    repo = module.get(ProductReviewRepository);
     prisma = p;
   });
 
@@ -187,6 +189,32 @@ describe('ProductReviewService (real DB)', () => {
         zeroLikes.id.toString(),
       ]);
       expect(result.items.map((r) => r.likeCount)).toEqual([3, 2, 0]);
+    });
+
+    it('좋아요순 + photoOnly 조합: 사진 리뷰만 좋아요순으로 반환한다', async () => {
+      const product = await createProduct(prisma);
+      const textOnlyPopular = await createProductReview(product);
+      await addLikes(textOnlyPopular.id, 5);
+      const photoFew = await createProductReview(product, {
+        mediaUrls: ['a.png'],
+      });
+      await addLikes(photoFew.id, 1);
+      const photoMany = await createProductReview(product, {
+        mediaUrls: ['b.png'],
+      });
+      await addLikes(photoMany.id, 3);
+
+      const result = await service.productReviews({
+        productId: product.id.toString(),
+        sort: 'LIKES',
+        photoOnly: true,
+      });
+
+      // 좋아요 5개인 텍스트 리뷰는 photoOnly에서 제외된다
+      expect(result.items.map((r) => r.id)).toEqual([
+        photoMany.id.toString(),
+        photoFew.id.toString(),
+      ]);
     });
 
     it('좋아요순 커서: (likeCount, id) 키셋으로 다음 페이지를 이어받는다', async () => {
@@ -390,6 +418,28 @@ describe('ProductReviewService (real DB)', () => {
         discountRate: 6,
       });
     });
+
+    it('address가 없으면 region명으로 regionLabel을 채운다', async () => {
+      const region = await prisma.region.create({
+        data: { level: 2, name: '청라동', slug: 'cheongna', sort_order: 0 },
+      });
+      const store = await createStore(prisma);
+      // 팩토리 기본값(??)이 null override를 덮어쓰므로 직접 비운다
+      await prisma.store.update({
+        where: { id: store.id },
+        data: {
+          address_city: null,
+          address_neighborhood: null,
+          region_id: region.id,
+        },
+      });
+      const product = await createProduct(prisma, { store_id: store.id });
+      const review = await createProductReview(product);
+
+      const result = await service.reviewDetail(review.id.toString());
+
+      expect(result.product.regionLabel).toBe('청라동');
+    });
   });
 
   describe('reviewComments', () => {
@@ -469,6 +519,17 @@ describe('ProductReviewService (real DB)', () => {
       });
 
       expect(result.items[0].isMine).toBe(false);
+    });
+  });
+
+  describe('repository 빈 입력 가드', () => {
+    it('reviewIds가 비면 쿼리 없이 빈 컬렉션을 반환한다', async () => {
+      await expect(repo.aggregateLikeCounts([])).resolves.toEqual(new Map());
+      await expect(repo.aggregateCommentCounts([])).resolves.toEqual(new Map());
+      await expect(
+        repo.findLikedReviewIds({ reviewIds: [], accountId: BigInt(1) }),
+      ).resolves.toEqual(new Set());
+      await expect(repo.findProductReviewRowsByIds([])).resolves.toEqual([]);
     });
   });
 });

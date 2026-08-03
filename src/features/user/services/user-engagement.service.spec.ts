@@ -230,6 +230,23 @@ describe('UserEngagementService (real DB)', () => {
         }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('비활성 상품의 리뷰에는 작성할 수 없다(공개 조회 가드와 일치)', async () => {
+      const review = await createReview(prisma);
+      await prisma.product.update({
+        where: { id: review.product_id },
+        data: { is_active: false },
+      });
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: commenter.id });
+
+      await expect(
+        service.writeReviewComment(commenter.id, {
+          reviewId: review.id.toString(),
+          content: '댓글',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('deleteMyReviewComment', () => {

@@ -460,6 +460,38 @@ describe('UserReviewService (real DB)', () => {
         NotFoundException,
       );
     });
+
+    it('리뷰 삭제 시 댓글도 soft-delete되어 재작성(복원) 리뷰에 되살아나지 않는다', async () => {
+      const ctx = await setupReviewableOrderItem();
+      const review = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      });
+      const commenter = await createAccount(prisma, { account_type: 'USER' });
+      await prisma.reviewComment.create({
+        data: {
+          review_id: BigInt(review.reviewId),
+          account_id: commenter.id,
+          content: '삭제 전 댓글',
+        },
+      });
+
+      await service.deleteMyReview(ctx.accountId, review.reviewId);
+
+      // 같은 order item으로 재작성하면 동일 review id가 복원된다
+      const rewritten = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 4,
+        content: VALID_CONTENT,
+      });
+      expect(rewritten.reviewId).toBe(review.reviewId);
+
+      const activeComments = await prisma.reviewComment.count({
+        where: { review_id: BigInt(review.reviewId), deleted_at: null },
+      });
+      expect(activeComments).toBe(0);
+    });
   });
 
   // ─── createReviewMediaUploadUrl ───

@@ -31,4 +31,10 @@ describe('WriteReviewCommentInput', () => {
     const dto = build({ reviewId: '123', content: `  ${'a'.repeat(500)}  ` });
     expect(await validate(dto)).toHaveLength(0);
   });
+
+  it('content가 문자열이 아니면 거절(transform은 원값 유지)', async () => {
+    const dto = build({ reviewId: '123', content: 123 });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('content');
+  });
 });
