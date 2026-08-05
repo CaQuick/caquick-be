@@ -25,6 +25,7 @@ export interface StoreReview {
 export interface StoreReviewConnection {
   items: StoreReview[];
   totalCount: number;
+  photoTotalCount: number;
   hasMore: boolean;
   nextCursor: string | null;
 }

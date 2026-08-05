@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -11,6 +12,10 @@ export class StoreReviewsInput {
   @IsString()
   @IsNotEmpty()
   storeId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  photoOnly?: boolean;
 
   @IsOptional()
   @IsString()

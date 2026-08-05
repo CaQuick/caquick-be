@@ -5,6 +5,8 @@ extend type Query {
 
 input StoreReviewsInput {
   storeId: ID!
+  """true면 사진(미디어) 있는 리뷰만(사진후기 그리드)."""
+  photoOnly: Boolean = false
   """이전 페이지 마지막 리뷰 id(이후부터 조회)."""
   cursor: ID
   limit: Int = 20
@@ -15,6 +17,8 @@ type StoreReviewConnection {
   items: [StoreReview!]!
   """전체 리뷰 수(후기 탭 카운트). 0이면 빈 상태."""
   totalCount: Int!
+  """사진 리뷰 수(사진후기 카운트)."""
+  photoTotalCount: Int!
   hasMore: Boolean!
   nextCursor: ID
 }
