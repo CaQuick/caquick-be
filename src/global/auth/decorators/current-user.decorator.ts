@@ -1,5 +1,5 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
+import { GqlExecutionContext, type GqlContextType } from '@nestjs/graphql';
 import type { Request } from 'express';
 
 import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
@@ -34,16 +34,18 @@ export function currentUserFactory(
   _data: unknown,
   ctx: ExecutionContext,
 ): JwtUser | undefined {
-  // GraphQL Context
-  const gqlContext = GqlExecutionContext.create(ctx);
-  const gqlReq = gqlContext.getContext<{ req?: Request }>()?.req;
-  if (gqlReq?.user) {
-    return gqlReq.user;
+  // GraphQL 요청은 HTTP 경로로 폴백하지 않는다.
+  // GraphQL ExecutionContext의 switchToHttp().getRequest()는 HTTP request가 아니라
+  // resolver root(args[0])를 반환하므로, 루트 Query에서 비로그인이면
+  // undefined.user TypeError(500)가 난다. 컨텍스트 타입으로 분기해 차단한다.
+  if (ctx.getType<GqlContextType>() === 'graphql') {
+    const gqlReq = GqlExecutionContext.create(ctx).getContext<{
+      req?: Request;
+    }>()?.req;
+    return gqlReq?.user;
   }
 
-  // HTTP Context
-  const request = ctx.switchToHttp().getRequest<Request>();
-  return request.user;
+  return ctx.switchToHttp().getRequest<Request>().user;
 }
 
 export const CurrentUser = createParamDecorator(currentUserFactory);
