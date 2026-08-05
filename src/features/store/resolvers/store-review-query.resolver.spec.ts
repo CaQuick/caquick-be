@@ -63,7 +63,30 @@ describe('Store Review Query Resolver (real DB)', () => {
     );
 
     expect(result.totalCount).toBe(1);
+    expect(result.photoTotalCount).toBe(0);
     expect(result.items[0].isLiked).toBe(false);
+  });
+
+  it('storeReviews: photoOnly 필터가 service까지 전달된다', async () => {
+    const store = await createStore(prisma);
+    await makeReview(store.id);
+    const photoReview = await makeReview(store.id);
+    await prisma.reviewMedia.create({
+      data: {
+        review_id: photoReview.id,
+        media_type: 'IMAGE',
+        media_url: 'a.png',
+        sort_order: 0,
+      },
+    });
+
+    const result = await resolver.storeReviews(
+      { storeId: store.id.toString(), photoOnly: true },
+      undefined,
+    );
+
+    expect(result.items.map((r) => r.id)).toEqual([photoReview.id.toString()]);
+    expect(result.photoTotalCount).toBe(1);
   });
 
   it('storeReviews: 로그인 사용자(JwtUser)의 좋아요 여부를 채운다', async () => {

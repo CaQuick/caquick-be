@@ -56,11 +56,12 @@ describe('StoreReviewService (real DB)', () => {
     });
   }
 
-  it('리뷰가 없으면 빈 목록과 totalCount 0', async () => {
+  it('리뷰가 없으면 빈 목록과 totalCount/photoTotalCount 0', async () => {
     const store = await createStore(prisma);
     const result = await service.storeReviews({ storeId: store.id.toString() });
     expect(result.items).toEqual([]);
     expect(result.totalCount).toBe(0);
+    expect(result.photoTotalCount).toBe(0);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
   });
@@ -85,6 +86,7 @@ describe('StoreReviewService (real DB)', () => {
     const result = await service.storeReviews({ storeId: store.id.toString() });
 
     expect(result.totalCount).toBe(1);
+    expect(result.photoTotalCount).toBe(1);
     expect(result.items[0]).toMatchObject({
       rating: 4,
       authorNickname: '구매자1',
@@ -128,6 +130,52 @@ describe('StoreReviewService (real DB)', () => {
       liker1.id,
     );
     expect(loggedIn.items[0].isLiked).toBe(true);
+  });
+
+  it('photoOnly=true면 활성 미디어가 있는 리뷰만 반환한다', async () => {
+    const store = await createStore(prisma);
+    await makeReview(store.id, {});
+    const photoReview = await makeReview(store.id, {});
+    await prisma.reviewMedia.create({
+      data: {
+        review_id: photoReview.id,
+        media_type: 'IMAGE',
+        media_url: 'a.png',
+        sort_order: 0,
+      },
+    });
+
+    const result = await service.storeReviews({
+      storeId: store.id.toString(),
+      photoOnly: true,
+    });
+
+    expect(result.items.map((r) => r.id)).toEqual([photoReview.id.toString()]);
+    // totalCount는 필터와 무관한 전체 리뷰 수, photoTotalCount는 사진 리뷰 수
+    expect(result.totalCount).toBe(2);
+    expect(result.photoTotalCount).toBe(1);
+  });
+
+  it('soft-delete된 미디어만 있는 리뷰는 사진후기로 치지 않는다', async () => {
+    const store = await createStore(prisma);
+    const review = await makeReview(store.id, {});
+    await prisma.reviewMedia.create({
+      data: {
+        review_id: review.id,
+        media_type: 'IMAGE',
+        media_url: 'a.png',
+        sort_order: 0,
+        deleted_at: new Date(),
+      },
+    });
+
+    const result = await service.storeReviews({
+      storeId: store.id.toString(),
+      photoOnly: true,
+    });
+
+    expect(result.items).toEqual([]);
+    expect(result.photoTotalCount).toBe(0);
   });
 
   it('soft-delete된 리뷰는 목록·카운트에서 제외한다', async () => {
