@@ -12,7 +12,7 @@ export class StoreReviewService {
   constructor(private readonly repo: StoreReviewRepository) {}
 
   /**
-   * 매장 공개 리뷰 목록(커서). soft-delete 제외, 최신순.
+   * 매장 공개 리뷰 목록(커서). soft-delete 제외, 최신순. 사진 필터 지원.
    * 좋아요 수는 집계, isLiked는 로그인 사용자에 한해 채운다(비로그인 false).
    */
   async storeReviews(
@@ -21,14 +21,18 @@ export class StoreReviewService {
   ): Promise<StoreReviewConnection> {
     const storeId = parseId(input.storeId);
     const limit = input.limit ?? DEFAULT_STORE_REVIEWS_LIMIT;
+    const photoOnly = input.photoOnly ?? false;
 
-    const [rows, totalCount] = await Promise.all([
+    // photoTotalCount는 필터와 무관하게 항상 사진 리뷰 총수(productReviews와 동일 의미)
+    const [rows, totalCount, photoTotalCount] = await Promise.all([
       this.repo.listStoreReviews({
         storeId,
+        photoOnly,
         limit,
         cursor: input.cursor ? parseId(input.cursor) : undefined,
       }),
-      this.repo.countStoreReviews(storeId),
+      this.repo.countStoreReviews({ storeId, photoOnly: false }),
+      this.repo.countStoreReviews({ storeId, photoOnly: true }),
     ]);
 
     const hasMore = rows.length > limit;
@@ -51,6 +55,7 @@ export class StoreReviewService {
         ),
       ),
       totalCount,
+      photoTotalCount,
       hasMore,
       nextCursor: hasMore ? page[page.length - 1].id.toString() : null,
     };

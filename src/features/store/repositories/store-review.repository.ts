@@ -33,18 +33,27 @@ export interface StoreReviewRow {
 export class StoreReviewRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** 매장 공개 리뷰 공통 가드: 리뷰·매장 활성(photoOnly면 활성 미디어 존재). */
+  private publicReviewWhere(photoOnly: boolean): Prisma.ReviewWhereInput {
+    return {
+      deleted_at: null,
+      // storeDetail과 동일하게 비활성/삭제 매장의 리뷰는 노출하지 않는다
+      store: { is_active: true, deleted_at: null },
+      ...(photoOnly ? { media: { some: { deleted_at: null } } } : {}),
+    };
+  }
+
   /** 매장 공개 리뷰 목록(최신순, 커서 id desc). soft-delete 제외. */
   async listStoreReviews(args: {
     storeId: bigint;
+    photoOnly: boolean;
     limit: number;
     cursor?: bigint;
   }): Promise<StoreReviewRow[]> {
     return this.prisma.review.findMany({
       where: {
         store_id: args.storeId,
-        deleted_at: null,
-        // storeDetail과 동일하게 비활성/삭제 매장의 리뷰는 노출하지 않는다
-        store: { is_active: true, deleted_at: null },
+        ...this.publicReviewWhere(args.photoOnly),
         // 0n도 유효 인자(parseId("0")=0n). truthiness는 0n을 falsy로 떨궈
         // zero cursor가 페이지를 리셋하므로 undefined로만 분기한다.
         ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
@@ -78,13 +87,15 @@ export class StoreReviewRepository {
     });
   }
 
-  /** 매장 활성 리뷰 수(후기 탭 카운트). 비활성/삭제 매장은 0. */
-  async countStoreReviews(storeId: bigint): Promise<number> {
+  /** 매장 활성 리뷰 수(photoOnly=true면 사진 리뷰 수). 비활성/삭제 매장은 0. */
+  async countStoreReviews(args: {
+    storeId: bigint;
+    photoOnly: boolean;
+  }): Promise<number> {
     return this.prisma.review.count({
       where: {
-        store_id: storeId,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store_id: args.storeId,
+        ...this.publicReviewWhere(args.photoOnly),
       },
     });
   }
