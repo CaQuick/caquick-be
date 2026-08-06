@@ -67,6 +67,26 @@ describe('Store Review Query Resolver (real DB)', () => {
     expect(result.items[0].isLiked).toBe(false);
   });
 
+  it('storeReviews: sort=LIKES가 service까지 전달되어 좋아요순으로 반환한다', async () => {
+    const store = await createStore(prisma);
+    const unpopular = await makeReview(store.id);
+    const popular = await makeReview(store.id);
+    const liker = await createAccount(prisma, { account_type: 'USER' });
+    await prisma.reviewLike.create({
+      data: { review_id: popular.id, account_id: liker.id },
+    });
+
+    const result = await resolver.storeReviews(
+      { storeId: store.id.toString(), sort: 'LIKES' },
+      undefined,
+    );
+
+    expect(result.items.map((r) => r.id)).toEqual([
+      popular.id.toString(),
+      unpopular.id.toString(),
+    ]);
+  });
+
   it('storeReviews: photoOnly 필터가 service까지 전달된다', async () => {
     const store = await createStore(prisma);
     await makeReview(store.id);

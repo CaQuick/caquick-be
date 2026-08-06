@@ -7,9 +7,18 @@ input StoreReviewsInput {
   storeId: ID!
   """true면 사진(미디어) 있는 리뷰만(사진후기 그리드)."""
   photoOnly: Boolean = false
-  """이전 페이지 마지막 리뷰 id(이후부터 조회)."""
+  sort: StoreReviewSort = LATEST
+  """이전 페이지의 nextCursor 값(불투명 토큰). 동일 sort에서만 유효."""
   cursor: ID
   limit: Int = 20
+}
+
+"""매장 리뷰 정렬."""
+enum StoreReviewSort {
+  """최신순."""
+  LATEST
+  """좋아요순(동률이면 최신순)."""
+  LIKES
 }
 
 """매장 리뷰 목록(커서 기반)."""
