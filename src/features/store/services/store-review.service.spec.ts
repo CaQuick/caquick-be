@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
@@ -53,6 +54,26 @@ describe('StoreReviewService (real DB)', () => {
     return createReview(prisma, {
       order_item_id: orderItem.id,
       rating: opts.rating ?? 5,
+    });
+  }
+
+  async function addLikes(reviewId: bigint, count: number) {
+    for (let i = 0; i < count; i += 1) {
+      const liker = await createAccount(prisma, { account_type: 'USER' });
+      await prisma.reviewLike.create({
+        data: { review_id: reviewId, account_id: liker.id },
+      });
+    }
+  }
+
+  async function addMedia(reviewId: bigint) {
+    await prisma.reviewMedia.create({
+      data: {
+        review_id: reviewId,
+        media_type: 'IMAGE',
+        media_url: 'a.png',
+        sort_order: 0,
+      },
     });
   }
 
@@ -216,6 +237,114 @@ describe('StoreReviewService (real DB)', () => {
     expect(second.items.map((r) => r.id)).toEqual([r1.id.toString()]);
     expect(second.hasMore).toBe(false);
     expect(second.nextCursor).toBeNull();
+  });
+
+  it('좋아요순 정렬: soft-delete 좋아요 제외 집계, 동률이면 최신순', async () => {
+    const store = await createStore(prisma);
+    const zeroLikes = await makeReview(store.id, {});
+    const twoLikes = await makeReview(store.id, {});
+    const threeLikes = await makeReview(store.id, {});
+    await addLikes(twoLikes.id, 2);
+    await addLikes(threeLikes.id, 3);
+    // soft-delete된 좋아요는 집계에서 제외 → twoLikes는 2개 유지
+    const canceledLiker = await createAccount(prisma, { account_type: 'USER' });
+    await prisma.reviewLike.create({
+      data: {
+        review_id: twoLikes.id,
+        account_id: canceledLiker.id,
+        deleted_at: new Date(),
+      },
+    });
+
+    const result = await service.storeReviews({
+      storeId: store.id.toString(),
+      sort: 'LIKES',
+    });
+
+    expect(result.items.map((r) => r.id)).toEqual([
+      threeLikes.id.toString(),
+      twoLikes.id.toString(),
+      zeroLikes.id.toString(),
+    ]);
+    expect(result.items.map((r) => r.likeCount)).toEqual([3, 2, 0]);
+  });
+
+  it('좋아요순 + photoOnly 조합: 사진 리뷰만 좋아요순으로 반환한다', async () => {
+    const store = await createStore(prisma);
+    const textOnlyPopular = await makeReview(store.id, {});
+    await addLikes(textOnlyPopular.id, 5);
+    const photoFew = await makeReview(store.id, {});
+    await addMedia(photoFew.id);
+    await addLikes(photoFew.id, 1);
+    const photoMany = await makeReview(store.id, {});
+    await addMedia(photoMany.id);
+    await addLikes(photoMany.id, 3);
+
+    const result = await service.storeReviews({
+      storeId: store.id.toString(),
+      sort: 'LIKES',
+      photoOnly: true,
+    });
+
+    // 좋아요 5개인 텍스트 리뷰는 photoOnly에서 제외된다
+    expect(result.items.map((r) => r.id)).toEqual([
+      photoMany.id.toString(),
+      photoFew.id.toString(),
+    ]);
+  });
+
+  it('좋아요순 커서: (likeCount, id) 키셋으로 다음 페이지를 이어받는다', async () => {
+    const store = await createStore(prisma);
+    const reviewA = await makeReview(store.id, {});
+    const reviewB = await makeReview(store.id, {});
+    const reviewC = await makeReview(store.id, {});
+    await addLikes(reviewA.id, 2);
+    await addLikes(reviewB.id, 2);
+    await addLikes(reviewC.id, 1);
+
+    // 동률(2)은 id desc → B, A 순. limit=2로 첫 페이지 [B, A]
+    const page1 = await service.storeReviews({
+      storeId: store.id.toString(),
+      sort: 'LIKES',
+      limit: 2,
+    });
+    expect(page1.items.map((r) => r.id)).toEqual([
+      reviewB.id.toString(),
+      reviewA.id.toString(),
+    ]);
+    expect(page1.hasMore).toBe(true);
+    expect(page1.nextCursor).toBe(`2:${reviewA.id.toString()}`);
+
+    const page2 = await service.storeReviews({
+      storeId: store.id.toString(),
+      sort: 'LIKES',
+      limit: 2,
+      cursor: page1.nextCursor ?? undefined,
+    });
+    expect(page2.items.map((r) => r.id)).toEqual([reviewC.id.toString()]);
+    expect(page2.hasMore).toBe(false);
+    expect(page2.nextCursor).toBeNull();
+  });
+
+  it('좋아요순 커서 형식이 잘못되면 BAD_USER_INPUT', async () => {
+    const store = await createStore(prisma);
+
+    await expect(
+      service.storeReviews({
+        storeId: store.id.toString(),
+        sort: 'LIKES',
+        cursor: 'abc',
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    // 자릿수 폭탄: 안전 정수 범위를 벗어난 likeCount는 형식 오류로 거부
+    await expect(
+      service.storeReviews({
+        storeId: store.id.toString(),
+        sort: 'LIKES',
+        cursor: `${'1'.repeat(400)}:1`,
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('비활성/삭제 매장의 리뷰는 목록·카운트에서 제외한다', async () => {

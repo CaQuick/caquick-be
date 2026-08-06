@@ -43,14 +43,14 @@ export class StoreReviewRepository {
     };
   }
 
-  /** 매장 공개 리뷰 목록(최신순, 커서 id desc). soft-delete 제외. */
-  async listStoreReviews(args: {
+  /** 매장 리뷰 id 페이지(최신순, 커서 id desc). */
+  async listStoreReviewIdsLatest(args: {
     storeId: bigint;
     photoOnly: boolean;
     limit: number;
     cursor?: bigint;
-  }): Promise<StoreReviewRow[]> {
-    return this.prisma.review.findMany({
+  }): Promise<bigint[]> {
+    const rows = await this.prisma.review.findMany({
       where: {
         store_id: args.storeId,
         ...this.publicReviewWhere(args.photoOnly),
@@ -58,6 +58,68 @@ export class StoreReviewRepository {
         // zero cursor가 페이지를 리셋하므로 undefined로만 분기한다.
         ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
       },
+      select: { id: true },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * 매장 리뷰 id 페이지(좋아요순 desc, 동률이면 id desc).
+   *
+   * soft-delete된 좋아요를 제외한 집계 기준 정렬이 Prisma orderBy(_count)로는
+   * 불가능하므로 raw 키셋 페이지네이션으로 조회한다. 커서는 이전 페이지 경계의
+   * (likeCount, id) 값을 그대로 받아 이어간다 — 경계 리뷰의 좋아요 수가 요청
+   * 사이에 변해도 페이지가 중복/누락되지 않는다.
+   */
+  async listStoreReviewIdsByLikes(args: {
+    storeId: bigint;
+    photoOnly: boolean;
+    limit: number;
+    cursor?: { likeCount: number; id: bigint };
+  }): Promise<{ id: bigint; likeCount: number }[]> {
+    const photoFilter = args.photoOnly
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM review_media m
+          WHERE m.review_id = r.id AND m.deleted_at IS NULL
+        )`
+      : Prisma.empty;
+    const cursorHaving =
+      args.cursor !== undefined
+        ? Prisma.sql`HAVING COUNT(l.id) < ${args.cursor.likeCount}
+          OR (COUNT(l.id) = ${args.cursor.likeCount} AND r.id < ${args.cursor.id})`
+        : Prisma.empty;
+
+    const rows = await this.prisma.$queryRaw<
+      { id: bigint; like_count: bigint }[]
+    >(Prisma.sql`
+      SELECT r.id AS id, COUNT(l.id) AS like_count
+      FROM review r
+      JOIN store s
+        ON s.id = r.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
+      LEFT JOIN review_like l
+        ON l.review_id = r.id AND l.deleted_at IS NULL
+      WHERE r.store_id = ${args.storeId} AND r.deleted_at IS NULL
+      ${photoFilter}
+      GROUP BY r.id
+      ${cursorHaving}
+      ORDER BY like_count DESC, r.id DESC
+      LIMIT ${args.limit + 1}
+    `);
+    return rows.map((row) => ({
+      id: row.id,
+      likeCount: Number(row.like_count),
+    }));
+  }
+
+  /** id 페이지의 리뷰 본문 row 일괄 조회(정렬은 service에서 id 순서로 복원). */
+  async findStoreReviewRowsByIds(
+    reviewIds: bigint[],
+  ): Promise<StoreReviewRow[]> {
+    if (reviewIds.length === 0) return [];
+    return this.prisma.review.findMany({
+      where: { id: { in: reviewIds }, deleted_at: null },
       select: {
         id: true,
         rating: true,
@@ -82,8 +144,6 @@ export class StoreReviewRepository {
           },
         },
       },
-      orderBy: { id: 'desc' },
-      take: args.limit + 1,
     });
   }
 
