@@ -1,9 +1,14 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createUserProfile } from '@/test/factories';
+import {
+  createAccount,
+  createAccountIdentity,
+  createUserProfile,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 /**
@@ -70,6 +75,67 @@ describe('UserRepository (real DB)', () => {
       expect(result).not.toBeNull();
       expect(result?.id).toBe(account.id);
       expect(result?.deleted_at).not.toBeNull();
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  // softDeleteAccount - 소셜 연동 은퇴 처리
+  //
+  // 탈퇴 후 같은 소셜 계정으로 재가입할 수 있어야 하는데, account_identity 의
+  // (provider, provider_subject) UNIQUE 는 soft-delete 를 보지 않는다.
+  // subject 익명화까지 함께 일어나는지를 여기서 못박는다.
+  // ─────────────────────────────────────────────
+  describe('softDeleteAccount - account_identity 은퇴', () => {
+    it('연동된 identity를 soft-delete하고 provider_subject를 익명화한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+        provider_subject: 'kakao-withdraw',
+      });
+      const now = new Date();
+
+      await repo.softDeleteAccount({
+        accountId: account.id,
+        deletedNickname: `deleted_${account.id.toString()}`,
+        now,
+      });
+
+      // deleted_at 을 명시해야 soft-delete extension 의 자동 필터를 우회한다
+      const identity = await prisma.accountIdentity.findFirstOrThrow({
+        where: { account_id: account.id, deleted_at: { not: null } },
+      });
+      expect(identity.deleted_at).toBeInstanceOf(Date);
+      expect(identity.provider_subject).toBe(
+        buildWithdrawnProviderSubject(account.id, 'kakao-withdraw'),
+      );
+      expect(identity.provider_subject).not.toContain('kakao-withdraw');
+    });
+
+    it('은퇴 처리 후 같은 provider+subject로 새 identity를 만들 수 있다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+        provider_subject: 'google-reuse',
+      });
+
+      await repo.softDeleteAccount({
+        accountId: account.id,
+        deletedNickname: `deleted_${account.id.toString()}`,
+        now: new Date(),
+      });
+
+      const rejoined = await createAccount(prisma, { account_type: 'USER' });
+      await expect(
+        createAccountIdentity(prisma, {
+          account_id: rejoined.id,
+          provider: 'GOOGLE',
+          provider_subject: 'google-reuse',
+        }),
+      ).resolves.toBeDefined();
     });
   });
 });
