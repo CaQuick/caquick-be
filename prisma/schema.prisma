@@ -133,7 +133,10 @@ model Account {
   account_type AccountType
   status       AccountStatus @default(ACTIVE)
 
-  email String? @unique @db.VarChar(320)
+  // 이메일은 계정 식별자가 아니다. 계정 식별은 (provider, provider_subject) 로만 하고
+  // provider 간 계정 통합을 하지 않기로 했으므로, 같은 사람이 구글/카카오를 모두 쓰면
+  // 서로 다른 account 가 같은 이메일을 갖는 게 정상이다 → 전역 unique 를 두지 않는다.
+  email String? @db.VarChar(320)
   name  String? @db.VarChar(100)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -164,6 +167,7 @@ model Account {
 
   @@index([account_type, status], map: "idx_account_type_status")
   @@index([deleted_at], map: "idx_account_deleted_at")
+  @@index([email], map: "idx_account_email")
   @@map("account")
 }
 
