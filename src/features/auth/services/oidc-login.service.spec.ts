@@ -258,6 +258,91 @@ describe('OidcLoginService', () => {
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(4);
     });
 
+    it('카카오는 email_verified 클레임이 없어도 인증된 이메일로 취급한다', async () => {
+      const mockReq = {
+        cookies: {
+          caquick_oidc_state: 'state',
+          caquick_oidc_nonce: 'nonce',
+          caquick_oidc_cv: 'verifier',
+          caquick_oidc_return_to: 'http://localhost:3000',
+        },
+        query: { code: 'code', state: 'state' },
+        headers: {},
+      } as unknown as Request;
+
+      const mockRes = {
+        cookie: jest.fn(),
+        clearCookie: jest.fn(),
+      } as unknown as Response;
+
+      mockConfig.get.mockReturnValue('http://localhost:4000');
+
+      // 카카오 ID 토큰 실제 형태: email 은 있지만 email_verified 가 없다
+      mockOidc.exchangeCode.mockResolvedValue({
+        claims: () => ({
+          sub: 'kakao-user-123',
+          email: 'kakao@example.com',
+          nickname: 'Kakao User',
+        }),
+      } as never);
+      mockOidc.toIdentityProvider.mockReturnValue('KAKAO');
+      mockAccounts.upsertUserByOidcIdentity.mockResolvedValue({
+        account: { id: BigInt(1) } as never,
+      });
+      mockRefreshSessions.createRefreshSession.mockResolvedValue({} as never);
+
+      await service.handleOidcCallback('kakao', mockReq, mockRes);
+
+      expect(mockAccounts.upsertUserByOidcIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'KAKAO',
+          providerEmail: 'kakao@example.com',
+          emailVerified: true,
+        }),
+      );
+    });
+
+    it('구글은 email_verified 클레임이 없으면 미인증으로 본다', async () => {
+      const mockReq = {
+        cookies: {
+          caquick_oidc_state: 'state',
+          caquick_oidc_nonce: 'nonce',
+          caquick_oidc_cv: 'verifier',
+          caquick_oidc_return_to: 'http://localhost:3000',
+        },
+        query: { code: 'code', state: 'state' },
+        headers: {},
+      } as unknown as Request;
+
+      const mockRes = {
+        cookie: jest.fn(),
+        clearCookie: jest.fn(),
+      } as unknown as Response;
+
+      mockConfig.get.mockReturnValue('http://localhost:4000');
+
+      mockOidc.exchangeCode.mockResolvedValue({
+        claims: () => ({
+          sub: 'google-user-456',
+          email: 'nonverified@example.com',
+        }),
+      } as never);
+      mockOidc.toIdentityProvider.mockReturnValue('GOOGLE');
+      mockAccounts.upsertUserByOidcIdentity.mockResolvedValue({
+        account: { id: BigInt(1) } as never,
+      });
+      mockRefreshSessions.createRefreshSession.mockResolvedValue({} as never);
+
+      await service.handleOidcCallback('google', mockReq, mockRes);
+
+      expect(mockAccounts.upsertUserByOidcIdentity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'GOOGLE',
+          emailVerified: false,
+        }),
+      );
+    });
+
     it('OIDC 세션 쿠키가 없으면 UnauthorizedException을 던져야 한다', async () => {
       const mockReq = { cookies: {} } as unknown as Request;
       const mockRes = {} as Response;

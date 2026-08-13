@@ -8,6 +8,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { PrismaService } from '@/prisma';
 
 export interface UserAccountIdentity {
@@ -198,6 +199,8 @@ export class UserRepository {
         },
       });
 
+      await this.retireAccountIdentities(tx, args.accountId, args.now);
+
       await tx.authRefreshSession.updateMany({
         where: {
           account_id: args.accountId,
@@ -210,6 +213,40 @@ export class UserRepository {
         },
       });
     });
+  }
+
+  /**
+   * 탈퇴 계정에 연결된 소셜 연동을 은퇴 처리한다.
+   *
+   * soft-delete 만 하면 `(provider, provider_subject)` UNIQUE 가 그대로 남아
+   * 같은 소셜 계정으로 재가입할 때 identity 를 새로 만들 수 없다(MySQL unique index 는
+   * deleted_at 을 보지 않는다). subject 를 익명화해 자리를 비워 준다.
+   *
+   * updateMany 로는 컬럼 값을 기존 값 기반으로 바꿀 수 없어 row 단위로 처리한다.
+   * 한 계정의 연동 수는 provider 수준(한 자릿수)이라 비용 문제는 없다.
+   */
+  private async retireAccountIdentities(
+    tx: Prisma.TransactionClient,
+    accountId: bigint,
+    now: Date,
+  ): Promise<void> {
+    const identities = await tx.accountIdentity.findMany({
+      where: { account_id: accountId, deleted_at: null },
+      select: { id: true, provider_subject: true },
+    });
+
+    for (const identity of identities) {
+      await tx.accountIdentity.update({
+        where: { id: identity.id },
+        data: {
+          provider_subject: buildWithdrawnProviderSubject(
+            accountId,
+            identity.provider_subject,
+          ),
+          deleted_at: now,
+        },
+      });
+    }
   }
 
   async getViewerCounts(accountId: bigint): Promise<{

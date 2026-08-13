@@ -2,6 +2,7 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
+import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
@@ -85,7 +86,10 @@ export class OidcLoginService implements IOidcLoginService {
       codeVerifier,
     );
 
-    const userInfo = this.extractUserInfoFromClaims(tokenSet.claims());
+    const userInfo = this.extractUserInfoFromClaims(
+      provider,
+      tokenSet.claims(),
+    );
 
     const account = await this.upsertAccountFromOidc(provider, userInfo);
 
@@ -128,7 +132,7 @@ export class OidcLoginService implements IOidcLoginService {
       this.normalizeReturnTo(undefined);
 
     if (!expectedState || !expectedNonce || !codeVerifier) {
-      throw new UnauthorizedException('OIDC session is missing.');
+      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.OIDC_SESSION_MISSING);
     }
 
     return { expectedState, expectedNonce, codeVerifier, returnTo };
@@ -159,7 +163,10 @@ export class OidcLoginService implements IOidcLoginService {
   /**
    * OIDC claims 에서 사용자 정보를 추출한다.
    */
-  private extractUserInfoFromClaims(claims: Record<string, unknown>): {
+  private extractUserInfoFromClaims(
+    provider: OidcProvider,
+    claims: Record<string, unknown>,
+  ): {
     subject: string;
     email?: string;
     emailVerified: boolean;
@@ -167,10 +174,17 @@ export class OidcLoginService implements IOidcLoginService {
     picture?: string;
   } {
     const subject = typeof claims.sub === 'string' ? claims.sub : null;
-    if (!subject) throw new UnauthorizedException('OIDC subject is missing.');
+    if (!subject) {
+      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.OIDC_SUBJECT_MISSING);
+    }
 
     const email = typeof claims.email === 'string' ? claims.email : undefined;
-    const emailVerified = claims.email_verified === true;
+    // 카카오 ID 토큰에는 email_verified 클레임이 아예 없다. 표준대로 검사하면 카카오 계정의
+    // account.email 이 영구히 null 로 남는다. `account_email` 동의항목으로 내려오는 값은
+    // 카카오가 보유·관리하는 계정 이메일이므로 인증된 것으로 취급한다.
+    const emailVerified =
+      claims.email_verified === true ||
+      (provider === 'kakao' && email !== undefined);
 
     const displayName =
       (typeof claims.name === 'string' ? claims.name : undefined) ??
@@ -206,7 +220,11 @@ export class OidcLoginService implements IOidcLoginService {
       providerProfileImageUrl: userInfo.picture,
     });
 
-    if (!account) throw new UnauthorizedException('Account upsert failed.');
+    if (!account) {
+      throw new UnauthorizedException(
+        AUTH_ERROR_MESSAGES.ACCOUNT_UPSERT_FAILED,
+      );
+    }
 
     return account;
   }
