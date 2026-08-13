@@ -15,10 +15,11 @@ WHERE `deleted_at` IS NOT NULL AND `email` IS NOT NULL;
 
 -- 탈퇴 계정에 매달린 살아있는 identity 은퇴 처리.
 -- (provider, provider_subject) UNIQUE 를 비워 같은 소셜 계정으로 재가입할 수 있게 한다.
--- provider_subject 는 VarChar(255) 라 prefix 를 붙인 뒤 LEFT 로 clamp 한다.
+-- 원본 subject 는 provider 발급 외부 식별자라 그대로 두면 탈퇴 계정이 살아있는 소셜 계정과
+-- 계속 연결된다 → SHA-256 다이제스트로 대체한다(런타임 buildWithdrawnProviderSubject 와 동일 규칙).
 UPDATE `account_identity` `ai`
 JOIN `account` `a` ON `a`.`id` = `ai`.`account_id`
-SET `ai`.`provider_subject` = LEFT(CONCAT('withdrawn:', `a`.`id`, ':', `ai`.`provider_subject`), 255),
+SET `ai`.`provider_subject` = CONCAT('withdrawn:', `a`.`id`, ':', SHA2(`ai`.`provider_subject`, 256)),
     `ai`.`deleted_at` = NOW(3),
     `ai`.`updated_at` = NOW(3)
 WHERE `a`.`deleted_at` IS NOT NULL AND `ai`.`deleted_at` IS NULL;
