@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -107,8 +108,9 @@ describe('UserRepository (real DB)', () => {
       });
       expect(identity.deleted_at).toBeInstanceOf(Date);
       expect(identity.provider_subject).toBe(
-        `withdrawn:${account.id.toString()}:kakao-withdraw`,
+        buildWithdrawnProviderSubject(account.id, 'kakao-withdraw'),
       );
+      expect(identity.provider_subject).not.toContain('kakao-withdraw');
     });
 
     it('은퇴 처리 후 같은 provider+subject로 새 identity를 만들 수 있다', async () => {

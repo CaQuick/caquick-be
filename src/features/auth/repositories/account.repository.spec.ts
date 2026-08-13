@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import { IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -253,8 +254,9 @@ describe('AccountRepository (real DB)', () => {
       });
       expect(retired.deleted_at).toBeInstanceOf(Date);
       expect(retired.provider_subject).toBe(
-        `withdrawn:${withdrawn.id.toString()}:rejoin-sub`,
+        buildWithdrawnProviderSubject(withdrawn.id, 'rejoin-sub'),
       );
+      expect(retired.provider_subject).not.toContain('rejoin-sub');
 
       // 새 identity 가 원본 subject 를 넘겨받는다
       const active = await prisma.accountIdentity.findFirstOrThrow({
