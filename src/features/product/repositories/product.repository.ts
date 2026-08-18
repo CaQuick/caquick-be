@@ -1182,7 +1182,12 @@ export class ProductRepository {
                 some: {
                   category_id: categoryId,
                   deleted_at: null,
-                  category: { is_active: true, deleted_at: null },
+                  // 홈 칩은 EVENT 카테고리만 — 랭킹(findActiveCakesForRanking)과 동일 정책
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
                 },
               },
             }

@@ -634,6 +634,25 @@ describe('ProductHomeService (real DB)', () => {
       expect(result.items.map((i) => i.id)).toEqual([inCategory.id.toString()]);
     });
 
+    it('EVENT가 아닌 카테고리 id가 오면 빈 결과를 반환한다(홈 칩과 동일 정책)', async () => {
+      const store = await createStore(prisma);
+      const style = await createCategory(prisma, {
+        category_type: 'STYLE',
+        name: '포토',
+      });
+      const [cake] = await makeCakesWithImage(store, 1);
+      await linkProductCategory(prisma, {
+        productId: cake.id,
+        categoryId: style.id,
+      });
+
+      const result = await service.randomCakes({
+        categoryId: style.id.toString(),
+      });
+
+      expect(result.items).toEqual([]);
+    });
+
     it('이미지 없는 상품·비활성 상품·비활성 매장 상품은 후보에서 제외한다', async () => {
       const store = await createStore(prisma);
       await createProduct(prisma, { store_id: store.id }); // 이미지 없음
