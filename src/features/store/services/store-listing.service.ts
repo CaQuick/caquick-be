@@ -106,7 +106,8 @@ export class StoreListingService {
     const pageStoreIds = page.map((s) => s.candidate.id);
     const [imagesByStore, wishlistedIds] = await Promise.all([
       this.repo.findStoreCakeImages(pageStoreIds),
-      accountId
+      // 0n도 유효한 계정 id — truthy 체크는 0n을 비로그인으로 떨궈 undefined로만 분기한다
+      accountId !== undefined
         ? this.wishlistRepo.findWishlistedStoreIds({
             accountId,
             storeIds: pageStoreIds,
