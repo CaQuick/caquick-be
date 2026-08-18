@@ -1,0 +1,43 @@
+extend type Query {
+  """오늘 픽업 가능 매장 리스트(인기순). 오늘 예약 가능 슬롯이 있는 매장만. 비로그인 접근 가능."""
+  todayPickupStores(input: TodayPickupStoresInput): TodayPickupStoreConnection!
+}
+
+input TodayPickupStoresInput {
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type TodayPickupStoreConnection {
+  items: [TodayPickupStore!]!
+  """오늘 픽업 가능한 매장 총수."""
+  totalCount: Int!
+  hasMore: Boolean!
+  """슬롯 산출 기준 시각(서버 조회 시점). 화면의 'N시 기준' 표기에 사용."""
+  asOf: DateTime!
+}
+
+"""오늘 픽업 가능 매장 카드 + 슬롯 그리드."""
+type TodayPickupStore {
+  id: ID!
+  storeName: String!
+  """평균 평점(0.0~5.0, 소수 첫째 자리)."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  """대표 케이크 이미지(최대 4장)."""
+  cakeImageUrls: [String!]!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+  """오늘 영업시간 내 슬롯 목록. 리드타임 마감 슬롯은 available=false."""
+  slots: [TodayPickupSlot!]!
+}
+
+"""픽업 슬롯("HH:MM")."""
+type TodayPickupSlot {
+  time: String!
+  available: Boolean!
+}

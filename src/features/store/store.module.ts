@@ -6,10 +6,12 @@ import { StoreRepository } from '@/features/store/repositories/store.repository'
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
 import { StoreReviewQueryResolver } from '@/features/store/resolvers/store-review-query.resolver';
+import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreReviewService } from '@/features/store/services/store-review.service';
+import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
 
 @Module({
@@ -25,6 +27,8 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreWishlistMutationResolver,
     StoreDetailQueryResolver,
     StoreReviewQueryResolver,
+    StoreTodayPickupService,
+    StoreTodayPickupQueryResolver,
   ],
   exports: [StoreRepository],
 })

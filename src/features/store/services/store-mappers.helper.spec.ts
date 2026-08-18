@@ -11,6 +11,8 @@ function row(overrides: Partial<StoreCandidateRow>): StoreCandidateRow {
     address_city: null,
     address_neighborhood: null,
     region: null,
+    pickup_slot_interval_minutes: 30,
+    min_lead_time_minutes: 30,
     ...overrides,
   };
 }

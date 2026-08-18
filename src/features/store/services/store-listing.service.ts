@@ -8,7 +8,10 @@ import {
 } from '@/features/store/constants/store-ranking.constants';
 import type { PopularStoresInput } from '@/features/store/dto/inputs/popular-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
-import { StoreRepository } from '@/features/store/repositories/store.repository';
+import {
+  StoreRepository,
+  type StoreCandidateRow,
+} from '@/features/store/repositories/store.repository';
 import { toPopularStore } from '@/features/store/services/store-mappers.helper';
 import {
   popularityScore,
@@ -18,6 +21,13 @@ import type { PopularStoreConnection } from '@/features/store/types/store-output
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** 점수화·정렬이 끝난 랭킹 항목. */
+export interface ScoredStore {
+  candidate: StoreCandidateRow;
+  metrics: StoreMetrics;
+  score: number;
+}
+
 @Injectable()
 export class StoreListingService {
   constructor(
@@ -26,24 +36,17 @@ export class StoreListingService {
   ) {}
 
   /**
-   * 인기 매장 리스트. 후보 매장의 주문·찜·평점을 실시간 집계해 점수화·정렬한 뒤
-   * 페이지를 잘라 대표 이미지를 채운다.
+   * 활성 매장 후보의 주문·찜·평점을 실시간 집계해 점수화·정렬한다.
+   * popularStores와 todayPickupStores가 동일 랭킹 정책을 공유한다.
    *
    * 실시간 집계는 매장 규모가 커지면 캐시/배치(스냅샷)로 최적화할 여지가 있다.
    */
-  async popularStores(
-    input?: PopularStoresInput,
-    accountId?: bigint,
-  ): Promise<PopularStoreConnection> {
-    const offset = input?.offset ?? 0;
-    const limit = input?.limit ?? DEFAULT_POPULAR_STORES_LIMIT;
-    const regionIds = input?.regionIds?.map((id) => parseId(id));
-
-    const rankedAt = new Date();
+  async rankActiveStores(
+    regionIds: bigint[] | undefined,
+    rankedAt: Date,
+  ): Promise<ScoredStore[]> {
     const candidates = await this.repo.findActiveStoresForRanking(regionIds);
-    if (candidates.length === 0) {
-      return { items: [], totalCount: 0, hasMore: false, rankedAt };
-    }
+    if (candidates.length === 0) return [];
 
     const storeIds = candidates.map((c) => c.id);
     const since = new Date(
@@ -78,6 +81,25 @@ export class StoreListingService {
       }
       return b.candidate.id > a.candidate.id ? 1 : -1;
     });
+    return scored;
+  }
+
+  /**
+   * 인기 매장 리스트. 랭킹 후 페이지를 잘라 대표 이미지·찜 여부를 채운다.
+   */
+  async popularStores(
+    input?: PopularStoresInput,
+    accountId?: bigint,
+  ): Promise<PopularStoreConnection> {
+    const offset = input?.offset ?? 0;
+    const limit = input?.limit ?? DEFAULT_POPULAR_STORES_LIMIT;
+    const regionIds = input?.regionIds?.map((id) => parseId(id));
+
+    const rankedAt = new Date();
+    const scored = await this.rankActiveStores(regionIds, rankedAt);
+    if (scored.length === 0) {
+      return { items: [], totalCount: 0, hasMore: false, rankedAt };
+    }
 
     const totalCount = scored.length;
     const page = scored.slice(offset, offset + limit);

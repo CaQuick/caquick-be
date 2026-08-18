@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  type BannerLinkType,
-  type CategoryType,
-  Prisma,
-} from '@prisma/client';
+import { type BannerLinkType, type CategoryType, Prisma } from '@prisma/client';
 
 import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
 import { PrismaService } from '@/prisma';

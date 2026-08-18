@@ -25,7 +25,12 @@ describe('ProductHomeService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductHomeService, ProductRepository, ProductReviewRepository, RandomService],
+      providers: [
+        ProductHomeService,
+        ProductRepository,
+        ProductReviewRepository,
+        RandomService,
+      ],
     });
     service = module.get(ProductHomeService);
     prisma = p;
