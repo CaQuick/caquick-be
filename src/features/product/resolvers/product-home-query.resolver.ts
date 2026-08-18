@@ -2,10 +2,12 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
 import { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
+import { RandomCakesInput } from '@/features/product/dto/inputs/random-cakes.input';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import type {
   CustomCakeShowcaseItem,
   PopularCakesResult,
+  RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
 
 /**
@@ -27,5 +29,12 @@ export class ProductHomeQueryResolver {
     @Args('input') input?: CustomCakeShowcaseInput,
   ): Promise<CustomCakeShowcaseItem[]> {
     return this.service.customCakeShowcase(input);
+  }
+
+  @Query('randomCakes')
+  randomCakes(
+    @Args('input') input?: RandomCakesInput,
+  ): Promise<RandomCakesResult> {
+    return this.service.randomCakes(input);
   }
 }

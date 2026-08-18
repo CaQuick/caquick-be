@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { RandomService } from '@/common/providers/random.service';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
@@ -29,6 +30,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
         ProductHomeService,
         ProductRepository,
         ProductReviewRepository,
+        RandomService,
       ],
     });
     resolver = module.get(ProductHomeQueryResolver);
@@ -83,5 +85,19 @@ describe('ProductHome Query Resolver (real DB)', () => {
       beforeImageUrl: 'https://img/before.png',
       afterImageUrl: 'https://img/after.png',
     });
+  });
+
+  it('randomCakes: 서비스에 위임해 랜덤 그리드를 반환한다', async () => {
+    const store = await createStore(prisma);
+    const cake = await createProduct(prisma, { store_id: store.id });
+    await prisma.productImage.create({
+      data: { product_id: cake.id, image_url: 'https://img/grid.png' },
+    });
+
+    const result = await resolver.randomCakes();
+
+    expect(result.items).toEqual([
+      { id: cake.id.toString(), thumbnailUrl: 'https://img/grid.png' },
+    ]);
   });
 });
