@@ -111,6 +111,20 @@ export async function seedStores(
       is_active: true,
     },
   });
+  // 매장 B 구조화 영업시간: 평일 11~21시, 주말 휴무(텍스트 표기와 일치).
+  // A가 화요일 휴무라, B가 화요일을 커버해 요일과 무관하게 todayPickupStores 확인 가능.
+  await prisma.storeBusinessHour.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      return {
+        store_id: storeB.id,
+        day_of_week: dayOfWeek,
+        is_closed: isWeekend,
+        open_time: isWeekend ? null : new Date(Date.UTC(1970, 0, 1, 11, 0)),
+        close_time: isWeekend ? null : new Date(Date.UTC(1970, 0, 1, 21, 0)),
+      };
+    }),
+  });
 
   // 상품
   const p1 = await prisma.product.create({

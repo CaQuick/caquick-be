@@ -4,7 +4,11 @@ import type { TodayPickupSlot } from '@/features/store/types/store-today-pickup-
 export interface TodaySlotPolicy {
   /** 영업 시작(자정 경과 분). */
   openMinutes: number;
-  /** 영업 종료(자정 경과 분, 미포함 — 마지막 슬롯은 close-interval). */
+  /**
+   * 영업 종료(자정 경과 분, 미포함).
+   * 슬롯은 픽업 '시각' 포인트라 시작 시각이 close 이전이면 유효하다
+   * (전역 정책 pickup.constants의 close 미포함 규칙과 동일 해석).
+   */
   closeMinutes: number;
   /** 슬롯 간격(분). */
   intervalMinutes: number;
