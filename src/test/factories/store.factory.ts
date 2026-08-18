@@ -19,6 +19,8 @@ export interface StoreOverrides {
   business_hours_text?: string | null;
   access_guide_text?: string | null;
   regular_closure_text?: string | null;
+  pickup_slot_interval_minutes?: number;
+  min_lead_time_minutes?: number;
 }
 
 export async function createStore(
@@ -48,6 +50,9 @@ export async function createStore(
       business_hours_text: overrides.business_hours_text ?? null,
       access_guide_text: overrides.access_guide_text ?? null,
       regular_closure_text: overrides.regular_closure_text ?? null,
+      pickup_slot_interval_minutes:
+        overrides.pickup_slot_interval_minutes ?? 30,
+      min_lead_time_minutes: overrides.min_lead_time_minutes ?? 30,
     },
   });
 }

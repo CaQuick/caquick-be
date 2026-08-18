@@ -13,6 +13,16 @@ export interface StoreCandidateRow {
   address_city: string | null;
   address_neighborhood: string | null;
   region: { name: string } | null;
+  pickup_slot_interval_minutes: number;
+  min_lead_time_minutes: number;
+}
+
+/** 특정 요일의 매장 영업시간 row(오늘 픽업 슬롯 산출용). */
+export interface StoreTodayBusinessHourRow {
+  store_id: bigint;
+  is_closed: boolean;
+  open_time: Date | null;
+  close_time: Date | null;
 }
 
 export interface StoreReviewStat {
@@ -61,8 +71,93 @@ export class StoreRepository {
         address_city: true,
         address_neighborhood: true,
         region: { select: { name: true } },
+        pickup_slot_interval_minutes: true,
+        min_lead_time_minutes: true,
       },
     });
+  }
+
+  /** 특정 요일(0=일~6=토)의 매장별 영업시간. */
+  async findBusinessHoursByWeekday(
+    storeIds: bigint[],
+    dayOfWeek: number,
+  ): Promise<StoreTodayBusinessHourRow[]> {
+    if (storeIds.length === 0) return [];
+    return this.prisma.storeBusinessHour.findMany({
+      where: {
+        store_id: { in: storeIds },
+        day_of_week: dayOfWeek,
+        deleted_at: null,
+      },
+      select: {
+        store_id: true,
+        is_closed: true,
+        open_time: true,
+        close_time: true,
+      },
+    });
+  }
+
+  /** 특정 날짜(@db.Date, UTC 자정 표현)에 특별휴무인 매장 id 집합. */
+  async findSpecialClosureStoreIds(
+    storeIds: bigint[],
+    date: Date,
+  ): Promise<Set<string>> {
+    if (storeIds.length === 0) return new Set();
+    const rows = await this.prisma.storeSpecialClosure.findMany({
+      where: {
+        store_id: { in: storeIds },
+        closure_date: date,
+        deleted_at: null,
+      },
+      select: { store_id: true },
+    });
+    return new Set(rows.map((r) => r.store_id.toString()));
+  }
+
+  /** 특정 날짜의 매장별 일일 capacity(레코드 없으면 무제한 취급은 호출부 책임). */
+  async findDailyCapacities(
+    storeIds: bigint[],
+    date: Date,
+  ): Promise<Map<bigint, number>> {
+    if (storeIds.length === 0) return new Map();
+    const rows = await this.prisma.storeDailyCapacity.findMany({
+      where: {
+        store_id: { in: storeIds },
+        capacity_date: date,
+        deleted_at: null,
+      },
+      select: { store_id: true, capacity: true },
+    });
+    return new Map(rows.map((r) => [r.store_id, r.capacity]));
+  }
+
+  /**
+   * 픽업 시각이 [rangeStart, rangeEnd)인 매장별 유효 주문 수(주문 단위 distinct).
+   * capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
+   */
+  async countPickupOrdersInRange(
+    storeIds: bigint[],
+    rangeStart: Date,
+    rangeEnd: Date,
+  ): Promise<Map<bigint, number>> {
+    if (storeIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<
+      { store_id: bigint; order_count: bigint }[]
+    >(Prisma.sql`
+      SELECT oi.store_id AS store_id, COUNT(DISTINCT oi.order_id) AS order_count
+      FROM order_item oi
+      JOIN \`order\` o
+        ON o.id = oi.order_id
+        AND o.deleted_at IS NULL
+        AND o.status <> 'CANCELED'
+        AND o.pickup_at >= ${rangeStart}
+        AND o.pickup_at < ${rangeEnd}
+      WHERE oi.store_id IN (${Prisma.join(storeIds)})
+        AND oi.deleted_at IS NULL
+      GROUP BY oi.store_id
+    `);
+    return new Map(rows.map((r) => [r.store_id, Number(r.order_count)]));
   }
 
   /** 활성 매장 존재 검증(찜 등). */
