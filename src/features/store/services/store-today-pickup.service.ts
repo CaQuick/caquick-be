@@ -62,7 +62,7 @@ export class StoreTodayPickupService {
         this.repo.findBusinessHoursByWeekday(storeIds, weekday),
         this.repo.findSpecialClosureStoreIds(storeIds, dateOnlyUtc),
         this.repo.findDailyCapacities(storeIds, dateOnlyUtc),
-        this.repo.countPickupOrdersInRange(storeIds, dayStartUtc, dayEndUtc),
+        this.repo.sumPickupQuantitiesInRange(storeIds, dayStartUtc, dayEndUtc),
       ]);
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),

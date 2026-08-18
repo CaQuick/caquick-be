@@ -133,19 +133,20 @@ export class StoreRepository {
   }
 
   /**
-   * 픽업 시각이 [rangeStart, rangeEnd)인 매장별 유효 주문 수(주문 단위 distinct).
-   * capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
+   * 픽업 시각이 [rangeStart, rangeEnd)인 매장별 예약 제작 수량(아이템 quantity 합).
+   * capacity(일별 생산 가능 '수량') 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
    */
-  async countPickupOrdersInRange(
+  async sumPickupQuantitiesInRange(
     storeIds: bigint[],
     rangeStart: Date,
     rangeEnd: Date,
   ): Promise<Map<bigint, number>> {
     if (storeIds.length === 0) return new Map();
     const rows = await this.prisma.$queryRaw<
-      { store_id: bigint; order_count: bigint }[]
+      { store_id: bigint; booked_quantity: bigint }[]
     >(Prisma.sql`
-      SELECT oi.store_id AS store_id, COUNT(DISTINCT oi.order_id) AS order_count
+      SELECT oi.store_id AS store_id,
+             CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked_quantity
       FROM order_item oi
       JOIN \`order\` o
         ON o.id = oi.order_id
@@ -157,7 +158,7 @@ export class StoreRepository {
         AND oi.deleted_at IS NULL
       GROUP BY oi.store_id
     `);
-    return new Map(rows.map((r) => [r.store_id, Number(r.order_count)]));
+    return new Map(rows.map((r) => [r.store_id, Number(r.booked_quantity)]));
   }
 
   /** 활성 매장 존재 검증(찜 등). */

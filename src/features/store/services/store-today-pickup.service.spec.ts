@@ -73,8 +73,12 @@ describe('StoreTodayPickupService (real DB)', () => {
     });
   }
 
-  /** 오늘 픽업 유효 주문 n건 생성. */
-  async function bookToday(store: Store, count: number): Promise<void> {
+  /** 오늘 픽업 유효 주문 n건 생성(주문당 케이크 quantity개). */
+  async function bookToday(
+    store: Store,
+    count: number,
+    quantity = 1,
+  ): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       const order = await createOrder(prisma, {
         status: 'CONFIRMED',
@@ -83,6 +87,7 @@ describe('StoreTodayPickupService (real DB)', () => {
       await createOrderItem(prisma, {
         order_id: order.id,
         store_id: store.id,
+        quantity,
       });
     }
   }
@@ -197,6 +202,24 @@ describe('StoreTodayPickupService (real DB)', () => {
       const result = await service.todayPickupStores();
 
       expect(result.items.map((i) => i.storeName)).toEqual(['여유매장']);
+    });
+
+    it('capacity는 주문 수가 아니라 제작 수량(quantity 합) 기준으로 소진된다', async () => {
+      // 주문 1건이라도 quantity=2면 capacity 2를 전부 소진한다
+      const store = await createStore(prisma, { store_name: '수량마감매장' });
+      await openToday(store, 10, 20);
+      await prisma.storeDailyCapacity.create({
+        data: {
+          store_id: store.id,
+          capacity_date: TODAY_DATE_ONLY,
+          capacity: 2,
+        },
+      });
+      await bookToday(store, 1, 2);
+
+      await expect(service.todayPickupStores()).resolves.toMatchObject({
+        items: [],
+      });
     });
 
     it('capacity 레코드가 없으면 무제한으로 간주한다', async () => {
