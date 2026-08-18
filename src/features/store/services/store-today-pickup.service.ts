@@ -67,7 +67,10 @@ export class StoreTodayPickupService {
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),
     );
-    const nowMinutes = kstMinutesOfDay(asOf);
+    // 분 단위 절삭은 리드타임을 최대 59초 짧게 만들므로, 초가 남으면 다음 분으로 올린다
+    const hasSubMinute =
+      asOf.getUTCSeconds() > 0 || asOf.getUTCMilliseconds() > 0;
+    const nowMinutes = kstMinutesOfDay(asOf) + (hasSubMinute ? 1 : 0);
 
     const open: { entry: ScoredStore; slots: TodayPickupSlot[] }[] = [];
     for (const entry of scored) {

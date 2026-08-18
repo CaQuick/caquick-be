@@ -113,6 +113,24 @@ describe('StoreTodayPickupService (real DB)', () => {
       ]);
     });
 
+    it('초가 남은 시각은 다음 분으로 올려 리드타임을 보수적으로 적용한다', async () => {
+      // 16:00:30 KST + 리드 60분 → 17:00 슬롯은 59분 30초밖에 안 남아 마감
+      jest
+        .spyOn(clock, 'now')
+        .mockReturnValue(new Date('2026-08-19T07:00:30.000Z'));
+      const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+      await openToday(store, 16, 18);
+
+      const [item] = (await service.todayPickupStores()).items;
+
+      expect(item.slots).toEqual([
+        { time: '16:00', available: false },
+        { time: '16:30', available: false },
+        { time: '17:00', available: false },
+        { time: '17:30', available: true },
+      ]);
+    });
+
     it('오늘 요일 휴무·영업시간 미설정·이미 영업 종료된 매장은 제외한다', async () => {
       const closedDay = await createStore(prisma, { store_name: '요일휴무' });
       await prisma.storeBusinessHour.create({
