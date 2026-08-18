@@ -23,6 +23,6 @@ export class PopularCakesInput {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(10)
+  @Max(3)
   limit?: number;
 }

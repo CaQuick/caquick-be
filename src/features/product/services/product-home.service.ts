@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
-import { DEFAULT_POPULAR_CAKES_LIMIT } from '@/features/product/constants/product-home.constants';
+import {
+  DEFAULT_POPULAR_CAKES_LIMIT,
+  MAX_POPULAR_CAKES_LIMIT,
+} from '@/features/product/constants/product-home.constants';
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import {
@@ -28,7 +31,11 @@ export class ProductHomeService {
    * 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리, 정책 확정 사항).
    */
   async popularCakes(input?: PopularCakesInput): Promise<PopularCakesResult> {
-    const limit = input?.limit ?? DEFAULT_POPULAR_CAKES_LIMIT;
+    // DTO(@Max)가 1차로 막지만, 직접 호출 경로에서도 "최대 3개" 계약을 지키도록 클램프
+    const limit = Math.min(
+      input?.limit ?? DEFAULT_POPULAR_CAKES_LIMIT,
+      MAX_POPULAR_CAKES_LIMIT,
+    );
     const categoryId =
       input?.categoryId !== undefined ? parseId(input.categoryId) : undefined;
     const regionIds = input?.regionIds?.map((id) => parseId(id));

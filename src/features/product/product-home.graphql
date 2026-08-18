@@ -8,6 +8,7 @@ input PopularCakesInput {
   categoryId: ID
   """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
   regionIds: [ID!]
+  """카드 수(최대 3 — figma 명세 "최대 3개 케이크 노출")."""
   limit: Int = 3
 }
 

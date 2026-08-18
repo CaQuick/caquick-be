@@ -161,6 +161,18 @@ describe('ProductHomeService (real DB)', () => {
       expect(limited.items).toHaveLength(2);
     });
 
+    it('limit이 상한(3)을 넘으면 3으로 클램프한다', async () => {
+      const store = await createStore(prisma);
+      for (let i = 0; i < 5; i += 1) {
+        await makeCake(store, `케이크 ${i}`);
+      }
+
+      // DTO(@Max)를 우회한 직접 호출에도 "최대 3개" 계약을 지킨다
+      const result = await service.popularCakes({ limit: 5 });
+
+      expect(result.items).toHaveLength(3);
+    });
+
     it('카드에 매장명·지역명·가격·할인율·대표이미지를 매핑한다', async () => {
       const store = await createStore(prisma, {
         store_name: '청담 케이크샵',
