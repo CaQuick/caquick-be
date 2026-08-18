@@ -1206,7 +1206,13 @@ export class ProductRepository {
   ): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
     if (productIds.length === 0) return [];
     return this.prisma.product.findMany({
-      where: { id: { in: productIds }, deleted_at: null },
+      where: {
+        id: { in: productIds },
+        // 후보 추출과 재조회 사이에 비활성화된 상품/매장이 노출되지 않게 재검증
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+      },
       select: {
         id: true,
         images: {
