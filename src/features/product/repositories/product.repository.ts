@@ -928,6 +928,27 @@ export class ProductRepository {
   }
 
   /**
+   * 전역 카테고리 목록(홈 칩·카테고리 진입 화면). 활성만.
+   * category_type asc → sort_order asc → id asc.
+   */
+  async listCategories(type?: CategoryType) {
+    return this.prisma.category.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        ...(type !== undefined ? { category_type: type } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        category_type: true,
+        sort_order: true,
+      },
+      orderBy: [{ category_type: 'asc' }, { sort_order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
    * 매장이 보유한 활성 상품의 카테고리(사이드바). 빈 카테고리 제외.
    * sort_order asc, productCount는 이 매장의 활성 상품 기준.
    */

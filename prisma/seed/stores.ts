@@ -10,6 +10,7 @@
  */
 import type { PrismaClient, Product, Store } from '@prisma/client';
 
+import type { SeededCategories } from './categories';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
 
 export interface SeededStores {
@@ -18,7 +19,10 @@ export interface SeededStores {
   optionGroupIds: { p2GroupId: bigint; p2OptionItemId: bigint };
 }
 
-export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
+export async function seedStores(
+  prisma: PrismaClient,
+  deps: { categories: SeededCategories },
+): Promise<SeededStores> {
   // 매장 region 매핑 (seedRegions 선행 실행 전제). Unchecked 경로라 FK를 직접 지정.
   const gangnam = await prisma.region.findUniqueOrThrow({
     where: { slug: 'sgg-11680' },
@@ -202,6 +206,29 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       regular_price: 10000,
       is_active: false,
     },
+  });
+
+  // 상품 ↔ 카테고리 연결 (홈 화면 섹션들이 로컬에서 동작하도록 이벤트/스타일 배정)
+  const categoryId = (key: string): bigint => {
+    const id = deps.categories.idByTypeName.get(key);
+    if (id === undefined) {
+      throw new Error(`[seed] category not found: ${key}`);
+    }
+    return id;
+  };
+  await prisma.productCategory.createMany({
+    data: [
+      { product_id: p1.id, category_id: categoryId('EVENT:생일') },
+      { product_id: p1.id, category_id: categoryId('STYLE:꽃장식') },
+      { product_id: p2.id, category_id: categoryId('EVENT:생일') },
+      { product_id: p2.id, category_id: categoryId('STYLE:입체') },
+      { product_id: p3.id, category_id: categoryId('EVENT:감사') },
+      { product_id: p3.id, category_id: categoryId('STYLE:도시락') },
+      { product_id: p4.id, category_id: categoryId('EVENT:기타') },
+      // p5(비활성)에도 연결해 활성 필터 검증 데이터로 쓴다
+      { product_id: p5.id, category_id: categoryId('EVENT:생일') },
+    ],
+    skipDuplicates: true,
   });
 
   return {
