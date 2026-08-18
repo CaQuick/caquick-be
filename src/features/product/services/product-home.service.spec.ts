@@ -118,6 +118,25 @@ describe('ProductHomeService (real DB)', () => {
       expect(result.items.map((i) => i.name)).toEqual(['생일 케이크']);
     });
 
+    it('EVENT가 아닌 카테고리 id가 오면 빈 결과를 반환한다(홈 칩은 EVENT 한정)', async () => {
+      const store = await createStore(prisma);
+      const style = await createCategory(prisma, {
+        category_type: 'STYLE',
+        name: '입체',
+      });
+      const cake = await makeCake(store, '입체 케이크');
+      await linkProductCategory(prisma, {
+        productId: cake.id,
+        categoryId: style.id,
+      });
+
+      const result = await service.popularCakes({
+        categoryId: style.id.toString(),
+      });
+
+      expect(result.items).toEqual([]);
+    });
+
     it('regionIds 지정 시 해당 지역 매장 상품만 랭킹 대상이다', async () => {
       const regionA = await prisma.region.create({
         data: { level: 2, name: '강남구', slug: 'test-gangnam' },
@@ -282,6 +301,34 @@ describe('ProductHomeService (real DB)', () => {
       const result = await service.popularCakes();
 
       expect(result.banner).toBeNull();
+    });
+
+    it('링크 대상이 비활성인 배너는 건너뛰고 다음 유효 배너를 반환한다', async () => {
+      const store = await createStore(prisma);
+      const deadProduct = await createProduct(prisma, {
+        store_id: store.id,
+        is_active: false,
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/dead-link.png',
+          link_type: 'PRODUCT',
+          link_product_id: deadProduct.id,
+          sort_order: 0,
+        },
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/alive.png',
+          sort_order: 1,
+        },
+      });
+
+      const result = await service.popularCakes();
+
+      expect(result.banner?.imageUrl).toBe('https://img/alive.png');
     });
 
     it('동일 placement 다건이면 sort_order가 앞선 배너 1건만 반환한다', async () => {

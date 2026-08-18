@@ -991,7 +991,12 @@ export class ProductRepository {
                 some: {
                   category_id: args.categoryId,
                   deleted_at: null,
-                  category: { is_active: true, deleted_at: null },
+                  // 홈 칩은 EVENT 카테고리만 — STYLE/OTHER id가 오면 빈 결과로 처리
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
                 },
               },
             }
@@ -1094,6 +1099,7 @@ export class ProductRepository {
   /**
    * 홈 배너 1건. categoryId 지정 시 placement=CATEGORY + 해당 카테고리 링크,
    * 미지정('전체' 칩) 시 placement=HOME_MAIN. 활성 + 노출 기간(now) 유효만.
+   * 링크 대상(상품/매장/카테고리)이 비활성/삭제된 배너는 건너뛴다.
    */
   async findHomeBanner(args: {
     categoryId?: bigint;
@@ -1107,7 +1113,32 @@ export class ProductRepository {
           ? { placement: 'CATEGORY', link_category_id: args.categoryId }
           : { placement: 'HOME_MAIN' }),
         OR: [{ starts_at: null }, { starts_at: { lte: args.now } }],
-        AND: [{ OR: [{ ends_at: null }, { ends_at: { gt: args.now } }] }],
+        AND: [
+          { OR: [{ ends_at: null }, { ends_at: { gt: args.now } }] },
+          {
+            // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
+            // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다
+            OR: [
+              { link_type: { in: ['NONE', 'URL'] } },
+              {
+                link_type: 'PRODUCT',
+                link_product: {
+                  is_active: true,
+                  deleted_at: null,
+                  store: { is_active: true, deleted_at: null },
+                },
+              },
+              {
+                link_type: 'STORE',
+                link_store: { is_active: true, deleted_at: null },
+              },
+              {
+                link_type: 'CATEGORY',
+                link_category: { is_active: true, deleted_at: null },
+              },
+            ],
+          },
+        ],
       },
       select: {
         id: true,
