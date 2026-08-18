@@ -1,0 +1,45 @@
+extend type Query {
+  """홈 '상황별 인기 케이크' 섹션(배너 1건 + 인기 케이크 카드). 비로그인 접근 가능."""
+  popularCakes(input: PopularCakesInput): PopularCakesResult!
+}
+
+input PopularCakesInput {
+  """EVENT 카테고리 ID. 비우면 '전체' 칩(필터 미적용)."""
+  categoryId: ID
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+  limit: Int = 3
+}
+
+type PopularCakesResult {
+  """카테고리 대표 배너. 등록된 배너가 없으면 null(FE placeholder 처리)."""
+  banner: HomeBanner
+  items: [PopularCake!]!
+  """랭킹 산출 기준 시각(서버 조회 시점)."""
+  rankedAt: DateTime!
+}
+
+"""홈 카테고리 대표 배너."""
+type HomeBanner {
+  id: ID!
+  imageUrl: String!
+  title: String
+  """클릭 시 FE가 카테고리 자동선택 이동에 사용. 없으면 null."""
+  linkCategoryId: ID
+}
+
+"""인기 케이크 카드(지역명·매장명·케이크명·가격·할인율)."""
+type PopularCake {
+  id: ID!
+  rank: Int!
+  name: String!
+  """대표 이미지(sort_order 최소). 없으면 null."""
+  thumbnailUrl: String
+  storeName: String!
+  """매장 위치 표기(예: 서울 청담동)."""
+  regionLabel: String
+  regularPrice: Int!
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+}

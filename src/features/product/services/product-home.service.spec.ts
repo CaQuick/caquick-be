@@ -1,0 +1,291 @@
+import type { PrismaClient, Product, Store } from '@prisma/client';
+
+import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createCategory,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createStore,
+  linkProductCategory,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+describe('ProductHomeService (real DB)', () => {
+  let service: ProductHomeService;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [ProductHomeService, ProductRepository],
+    });
+    service = module.get(ProductHomeService);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  /** 확정(CONFIRMED) 주문 n건을 만들어 상품의 최근 주문수를 채운다. */
+  async function confirmOrders(product: Product, count: number): Promise<void> {
+    for (let i = 0; i < count; i += 1) {
+      const order = await createOrder(prisma, { status: 'CONFIRMED' });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+      });
+    }
+  }
+
+  /** 활성 찜 n건 생성. */
+  async function wishProduct(product: Product, count: number): Promise<void> {
+    for (let i = 0; i < count; i += 1) {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await prisma.wishlistItem.create({
+        data: { account_id: account.id, product_id: product.id },
+      });
+    }
+  }
+
+  async function makeCake(
+    store: Store,
+    name: string,
+    overrides: Parameters<typeof createProduct>[1] = {},
+  ): Promise<Product> {
+    return createProduct(prisma, {
+      store_id: store.id,
+      name,
+      ...overrides,
+    });
+  }
+
+  describe('popularCakes', () => {
+    it('최근 주문수가 많은 순으로 랭킹과 rank 순번을 매긴다', async () => {
+      const store = await createStore(prisma);
+      const first = await makeCake(store, '1등 케이크');
+      const second = await makeCake(store, '2등 케이크');
+      const third = await makeCake(store, '3등 케이크');
+      await confirmOrders(first, 5);
+      await confirmOrders(second, 2);
+      await confirmOrders(third, 1);
+
+      const result = await service.popularCakes();
+
+      expect(result.items.map((i) => i.name)).toEqual([
+        '1등 케이크',
+        '2등 케이크',
+        '3등 케이크',
+      ]);
+      expect(result.items.map((i) => i.rank)).toEqual([1, 2, 3]);
+      expect(result.rankedAt).toBeInstanceOf(Date);
+    });
+
+    it('찜 수도 점수에 반영한다(주문 동일 시 찜 많은 쪽 우선)', async () => {
+      const store = await createStore(prisma);
+      const liked = await makeCake(store, '찜 많은 케이크');
+      await makeCake(store, '찜 없는 케이크');
+      await wishProduct(liked, 3);
+
+      const result = await service.popularCakes();
+
+      expect(result.items[0].name).toBe('찜 많은 케이크');
+    });
+
+    it('categoryId 지정 시 해당 카테고리 상품만 랭킹 대상이다', async () => {
+      const store = await createStore(prisma);
+      const birthday = await createCategory(prisma, { name: '생일' });
+      const inCategory = await makeCake(store, '생일 케이크');
+      await makeCake(store, '무관 케이크');
+      await linkProductCategory(prisma, {
+        productId: inCategory.id,
+        categoryId: birthday.id,
+      });
+
+      const result = await service.popularCakes({
+        categoryId: birthday.id.toString(),
+      });
+
+      expect(result.items.map((i) => i.name)).toEqual(['생일 케이크']);
+    });
+
+    it('regionIds 지정 시 해당 지역 매장 상품만 랭킹 대상이다', async () => {
+      const regionA = await prisma.region.create({
+        data: { level: 2, name: '강남구', slug: 'test-gangnam' },
+      });
+      const storeIn = await createStore(prisma, { region_id: regionA.id });
+      const storeOut = await createStore(prisma);
+      await makeCake(storeIn, '강남 케이크');
+      await makeCake(storeOut, '타지역 케이크');
+
+      const result = await service.popularCakes({
+        regionIds: [regionA.id.toString()],
+      });
+
+      expect(result.items.map((i) => i.name)).toEqual(['강남 케이크']);
+    });
+
+    it('비활성 상품과 비활성 매장 상품은 제외한다', async () => {
+      const store = await createStore(prisma);
+      await makeCake(store, '활성 케이크');
+      await makeCake(store, '비활성 케이크', { is_active: false });
+      const inactiveStore = await createStore(prisma, { is_active: false });
+      await makeCake(inactiveStore, '비활성 매장 케이크');
+
+      const result = await service.popularCakes();
+
+      expect(result.items.map((i) => i.name)).toEqual(['활성 케이크']);
+    });
+
+    it('기본 3개, limit 지정 시 해당 수만큼 자른다', async () => {
+      const store = await createStore(prisma);
+      for (let i = 0; i < 5; i += 1) {
+        await makeCake(store, `케이크 ${i}`);
+      }
+
+      const [byDefault, limited] = [
+        await service.popularCakes(),
+        await service.popularCakes({ limit: 2 }),
+      ];
+
+      expect(byDefault.items).toHaveLength(3);
+      expect(limited.items).toHaveLength(2);
+    });
+
+    it('카드에 매장명·지역명·가격·할인율·대표이미지를 매핑한다', async () => {
+      const store = await createStore(prisma, {
+        store_name: '청담 케이크샵',
+        address_city: '서울',
+        address_neighborhood: '청담동',
+      });
+      const cake = await makeCake(store, '레터링 케이크', {
+        regular_price: 40000,
+        sale_price: 30000,
+      });
+      await prisma.productImage.create({
+        data: { product_id: cake.id, image_url: 'https://img/cake.png' },
+      });
+
+      const [item] = (await service.popularCakes()).items;
+
+      expect(item).toMatchObject({
+        name: '레터링 케이크',
+        storeName: '청담 케이크샵',
+        regionLabel: '서울 청담동',
+        regularPrice: 40000,
+        salePrice: 30000,
+        discountRate: 25,
+        thumbnailUrl: 'https://img/cake.png',
+      });
+    });
+
+    it('상품이 없으면 빈 items를 반환한다', async () => {
+      const result = await service.popularCakes();
+
+      expect(result.items).toEqual([]);
+      expect(result.banner).toBeNull();
+    });
+  });
+
+  describe('popularCakes 배너 선택', () => {
+    it('categoryId 지정 시 해당 카테고리의 CATEGORY 배너를 반환한다', async () => {
+      const birthday = await createCategory(prisma, { name: '생일' });
+      const other = await createCategory(prisma, { name: '웨딩' });
+      await prisma.banner.create({
+        data: {
+          placement: 'CATEGORY',
+          image_url: 'https://img/birthday-banner.png',
+          link_type: 'CATEGORY',
+          link_category_id: birthday.id,
+        },
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'CATEGORY',
+          image_url: 'https://img/other-banner.png',
+          link_type: 'CATEGORY',
+          link_category_id: other.id,
+        },
+      });
+
+      const result = await service.popularCakes({
+        categoryId: birthday.id.toString(),
+      });
+
+      expect(result.banner).toMatchObject({
+        imageUrl: 'https://img/birthday-banner.png',
+        linkCategoryId: birthday.id.toString(),
+      });
+    });
+
+    it('categoryId 미지정(전체 칩) 시 HOME_MAIN 배너를 반환한다', async () => {
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/main-banner.png',
+          title: '메인 배너',
+        },
+      });
+
+      const result = await service.popularCakes();
+
+      expect(result.banner).toMatchObject({
+        imageUrl: 'https://img/main-banner.png',
+        title: '메인 배너',
+        linkCategoryId: null,
+      });
+    });
+
+    it('노출 기간을 벗어난 배너와 비활성 배너는 제외하고 없으면 null을 반환한다', async () => {
+      const past = new Date(Date.now() - 60 * 60 * 1000);
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/expired.png',
+          ends_at: past,
+        },
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/inactive.png',
+          is_active: false,
+        },
+      });
+
+      const result = await service.popularCakes();
+
+      expect(result.banner).toBeNull();
+    });
+
+    it('동일 placement 다건이면 sort_order가 앞선 배너 1건만 반환한다', async () => {
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/second.png',
+          sort_order: 1,
+        },
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://img/first.png',
+          sort_order: 0,
+        },
+      });
+
+      const result = await service.popularCakes();
+
+      expect(result.banner?.imageUrl).toBe('https://img/first.png');
+    });
+  });
+});
