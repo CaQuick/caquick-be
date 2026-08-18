@@ -303,6 +303,27 @@ describe('ProductHomeService (real DB)', () => {
       expect(result.banner).toBeNull();
     });
 
+    it('EVENT가 아닌 카테고리의 배너는 반환하지 않는다', async () => {
+      const style = await createCategory(prisma, {
+        category_type: 'STYLE',
+        name: '입체',
+      });
+      await prisma.banner.create({
+        data: {
+          placement: 'CATEGORY',
+          image_url: 'https://img/style-banner.png',
+          link_type: 'CATEGORY',
+          link_category_id: style.id,
+        },
+      });
+
+      const result = await service.popularCakes({
+        categoryId: style.id.toString(),
+      });
+
+      expect(result.banner).toBeNull();
+    });
+
     it('링크 대상이 비활성인 배너는 건너뛰고 다음 유효 배너를 반환한다', async () => {
       const store = await createStore(prisma);
       const deadProduct = await createProduct(prisma, {

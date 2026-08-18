@@ -1110,7 +1110,16 @@ export class ProductRepository {
         is_active: true,
         deleted_at: null,
         ...(args.categoryId !== undefined
-          ? { placement: 'CATEGORY', link_category_id: args.categoryId }
+          ? {
+              placement: 'CATEGORY',
+              link_category_id: args.categoryId,
+              // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
+              link_category: {
+                is_active: true,
+                deleted_at: null,
+                category_type: 'EVENT',
+              },
+            }
           : { placement: 'HOME_MAIN' }),
         OR: [{ starts_at: null }, { starts_at: { lte: args.now } }],
         AND: [
