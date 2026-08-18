@@ -1,11 +1,17 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createProduct, createStore } from '@/test/factories';
+import {
+  createOrderItem,
+  createProduct,
+  createReview,
+  createStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 /**
@@ -22,6 +28,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
         ProductHomeQueryResolver,
         ProductHomeService,
         ProductRepository,
+        ProductReviewRepository,
       ],
     });
     resolver = module.get(ProductHomeQueryResolver);
@@ -45,5 +52,36 @@ describe('ProductHome Query Resolver (real DB)', () => {
 
     expect(result.items.map((i) => i.name)).toEqual(['인기 케이크']);
     expect(result.banner).toBeNull();
+  });
+
+  it('customCakeShowcase: 서비스에 위임해 제작 후기 목록을 반환한다', async () => {
+    const orderItem = await createOrderItem(prisma);
+    await prisma.orderItemCustomFreeEdit.create({
+      data: {
+        order_item_id: orderItem.id,
+        crop_image_url: 'https://img/before.png',
+        description_text: '요청 디자인',
+      },
+    });
+    const review = await createReview(prisma, {
+      order_item_id: orderItem.id,
+      content: '제작 후기',
+    });
+    await prisma.reviewMedia.create({
+      data: {
+        review_id: review.id,
+        media_type: 'IMAGE',
+        media_url: 'https://img/after.png',
+      },
+    });
+
+    const result = await resolver.customCakeShowcase();
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      reviewText: '제작 후기',
+      beforeImageUrl: 'https://img/before.png',
+      afterImageUrl: 'https://img/after.png',
+    });
   });
 });

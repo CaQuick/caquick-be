@@ -155,6 +155,95 @@ export class ProductReviewRepository {
     }));
   }
 
+  /**
+   * 홈 제작 후기 쇼케이스 후보 id(전체기간 좋아요순 desc, 동률이면 id desc).
+   *
+   * Before(주문 커스텀 자유편집 크롭)/After(리뷰 이미지)가 모두 있는 리뷰만
+   * 후보로 삼는다 — 대비 연출이 섹션의 본질이라 한쪽 없는 카드는 제외(정책 확정).
+   * soft-delete 좋아요 제외 집계 정렬이라 raw SQL(리뷰 목록 좋아요순과 동일 패턴).
+   */
+  async listShowcaseReviewIdsByLikes(
+    limit: number,
+  ): Promise<{ id: bigint; likeCount: number }[]> {
+    const rows = await this.prisma.$queryRaw<
+      { id: bigint; like_count: bigint }[]
+    >(Prisma.sql`
+      SELECT r.id AS id, COUNT(l.id) AS like_count
+      FROM review r
+      JOIN product p
+        ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
+      JOIN store s
+        ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
+      LEFT JOIN review_like l
+        ON l.review_id = r.id AND l.deleted_at IS NULL
+      WHERE r.deleted_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM review_media m
+          WHERE m.review_id = r.id
+            AND m.deleted_at IS NULL
+            AND m.media_type = 'IMAGE'
+        )
+        AND EXISTS (
+          SELECT 1 FROM order_item_custom_free_edit fe
+          WHERE fe.order_item_id = r.order_item_id AND fe.deleted_at IS NULL
+        )
+      GROUP BY r.id
+      ORDER BY like_count DESC, r.id DESC
+      LIMIT ${limit}
+    `);
+    return rows.map((row) => ({
+      id: row.id,
+      likeCount: Number(row.like_count),
+    }));
+  }
+
+  /** 쇼케이스 id 페이지의 본문 row 일괄 조회(정렬은 service에서 id 순서로 복원). */
+  async findShowcaseReviewRowsByIds(reviewIds: bigint[]): Promise<
+    {
+      id: bigint;
+      content: string | null;
+      account: {
+        user_profile: { nickname: string; deleted_at: Date | null } | null;
+      };
+      media: { media_url: string }[];
+      order_item: {
+        free_edits: { crop_image_url: string }[];
+      };
+    }[]
+  > {
+    if (reviewIds.length === 0) return [];
+    return this.prisma.review.findMany({
+      where: { id: { in: reviewIds }, deleted_at: null },
+      select: {
+        id: true,
+        content: true,
+        account: {
+          // soft-delete extension은 nested relation에 deleted_at을 주입하지 않으므로
+          // deleted_at을 함께 읽어 탈퇴 작성자 닉네임은 매퍼에서 익명화한다
+          select: {
+            user_profile: { select: { nickname: true, deleted_at: true } },
+          },
+        },
+        media: {
+          where: { deleted_at: null, media_type: 'IMAGE' },
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { media_url: true },
+        },
+        order_item: {
+          select: {
+            free_edits: {
+              where: { deleted_at: null },
+              orderBy: { sort_order: 'asc' },
+              take: 1,
+              select: { crop_image_url: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
   /** 상품 활성 리뷰 수(photoOnly=true면 사진 리뷰 수). */
   async countProductReviews(args: {
     productId: bigint;

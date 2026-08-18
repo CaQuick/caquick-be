@@ -1,6 +1,9 @@
 extend type Query {
   """홈 '상황별 인기 케이크' 섹션(배너 1건 + 인기 케이크 카드). 비로그인 접근 가능."""
   popularCakes(input: PopularCakesInput): PopularCakesResult!
+
+  """홈 '다른 사람들은 이렇게 만들었어요' 제작 후기(좋아요순). 없으면 빈 배열. 비로그인 접근 가능."""
+  customCakeShowcase(input: CustomCakeShowcaseInput): [CustomCakeShowcaseItem!]!
 }
 
 input PopularCakesInput {
@@ -43,6 +46,28 @@ type HomeBanner {
   linkStoreId: ID
   """linkType=CATEGORY일 때 카테고리 ID(FE 카테고리 자동선택 이동)."""
   linkCategoryId: ID
+}
+
+"""홈 '다른 사람들은 이렇게 만들었어요' 제작 후기 카드 목록."""
+input CustomCakeShowcaseInput {
+  limit: Int = 5
+}
+
+"""제작 후기 카드. Before(요청 디자인)/After(완성 사진)가 모두 있는 리뷰만 노출."""
+type CustomCakeShowcaseItem {
+  """후기 보러가기(reviewDetail) 이동용."""
+  reviewId: ID!
+  """좋아요순 순위(1부터)."""
+  rank: Int!
+  """작성자 닉네임. 탈퇴 작성자는 null(FE 익명 표기)."""
+  authorNickname: String
+  """리뷰 본문. 없으면 null."""
+  reviewText: String
+  likeCount: Int!
+  """사용자가 요청한 디자인 이미지(주문 커스텀 자유편집 크롭)."""
+  beforeImageUrl: String!
+  """실제 완성된 케이크 이미지(리뷰 첫 이미지)."""
+  afterImageUrl: String!
 }
 
 """인기 케이크 카드(지역명·매장명·케이크명·가격·할인율)."""
