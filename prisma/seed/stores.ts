@@ -75,6 +75,19 @@ export async function seedStores(
     },
   });
 
+  // 매장 A 구조화 영업시간: 화요일 정기 휴무(텍스트 표기와 일치), 나머지 09~18시.
+  // todayPickupStores가 구조화 영업시간(StoreBusinessHour) 기준이라 시드에 필수.
+  await prisma.storeBusinessHour.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      store_id: storeA.id,
+      day_of_week: dayOfWeek,
+      is_closed: dayOfWeek === 2,
+      open_time: dayOfWeek === 2 ? null : new Date(Date.UTC(1970, 0, 1, 9, 0)),
+      close_time:
+        dayOfWeek === 2 ? null : new Date(Date.UTC(1970, 0, 1, 18, 0)),
+    })),
+  });
+
   // 매장 2: 도넛샵 B
   const sellerB = await prisma.account.create({
     data: {
