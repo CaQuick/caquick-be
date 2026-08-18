@@ -20,12 +20,28 @@ type PopularCakesResult {
   rankedAt: DateTime!
 }
 
-"""홈 카테고리 대표 배너."""
+"""배너 클릭 이동 대상 타입."""
+enum HomeBannerLinkType {
+  NONE
+  URL
+  PRODUCT
+  STORE
+  CATEGORY
+}
+
+"""홈 카테고리 대표 배너. linkType에 대응하는 링크 필드 하나만 채워진다."""
 type HomeBanner {
   id: ID!
   imageUrl: String!
   title: String
-  """클릭 시 FE가 카테고리 자동선택 이동에 사용. 없으면 null."""
+  linkType: HomeBannerLinkType!
+  """linkType=URL일 때 이동 URL."""
+  linkUrl: String
+  """linkType=PRODUCT일 때 상품 ID."""
+  linkProductId: ID
+  """linkType=STORE일 때 매장 ID."""
+  linkStoreId: ID
+  """linkType=CATEGORY일 때 카테고리 ID(FE 카테고리 자동선택 이동)."""
   linkCategoryId: ID
 }
 

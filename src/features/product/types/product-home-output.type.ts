@@ -7,6 +7,10 @@ export interface HomeBanner {
   id: string;
   imageUrl: string;
   title: string | null;
+  linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+  linkUrl: string | null;
+  linkProductId: string | null;
+  linkStoreId: string | null;
   linkCategoryId: string | null;
 }
 

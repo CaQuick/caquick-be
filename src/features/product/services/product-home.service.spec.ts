@@ -235,6 +235,7 @@ describe('ProductHomeService (real DB)', () => {
 
       expect(result.banner).toMatchObject({
         imageUrl: 'https://img/birthday-banner.png',
+        linkType: 'CATEGORY',
         linkCategoryId: birthday.id.toString(),
       });
     });
@@ -245,6 +246,8 @@ describe('ProductHomeService (real DB)', () => {
           placement: 'HOME_MAIN',
           image_url: 'https://img/main-banner.png',
           title: '메인 배너',
+          link_type: 'URL',
+          link_url: 'https://event.caquick.dev',
         },
       });
 
@@ -253,6 +256,8 @@ describe('ProductHomeService (real DB)', () => {
       expect(result.banner).toMatchObject({
         imageUrl: 'https://img/main-banner.png',
         title: '메인 배너',
+        linkType: 'URL',
+        linkUrl: 'https://event.caquick.dev',
         linkCategoryId: null,
       });
     });

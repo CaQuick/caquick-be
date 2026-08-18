@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { type CategoryType, Prisma } from '@prisma/client';
+import {
+  type BannerLinkType,
+  type CategoryType,
+  Prisma,
+} from '@prisma/client';
 
 import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
 import { PrismaService } from '@/prisma';
@@ -45,6 +49,10 @@ export interface HomeBannerRow {
   id: bigint;
   image_url: string;
   title: string | null;
+  link_type: BannerLinkType;
+  link_url: string | null;
+  link_product_id: bigint | null;
+  link_store_id: bigint | null;
   link_category_id: bigint | null;
 }
 
@@ -1105,6 +1113,10 @@ export class ProductRepository {
         id: true,
         image_url: true,
         title: true,
+        link_type: true,
+        link_url: true,
+        link_product_id: true,
+        link_store_id: true,
         link_category_id: true,
       },
       orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
