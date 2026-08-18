@@ -634,6 +634,17 @@ describe('ProductHomeService (real DB)', () => {
       expect(result.items.map((i) => i.id)).toEqual([inCategory.id.toString()]);
     });
 
+    it('categoryId가 명시적 null이면 필터 없음으로 처리한다', async () => {
+      const store = await createStore(prisma);
+      await makeCakesWithImage(store, 2);
+
+      const result = await service.randomCakes({
+        categoryId: null as unknown as undefined,
+      });
+
+      expect(result.items).toHaveLength(2);
+    });
+
     it('EVENT가 아닌 카테고리 id가 오면 빈 결과를 반환한다(홈 칩과 동일 정책)', async () => {
       const store = await createStore(prisma);
       const style = await createCategory(prisma, {

@@ -1201,17 +1201,33 @@ export class ProductRepository {
   }
 
   /** 랜덤 케이크 셀 데이터(대표 이미지 1장). 반환 순서는 보장하지 않는다. */
-  async findRandomCakeRows(
-    productIds: bigint[],
-  ): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
-    if (productIds.length === 0) return [];
+  async findRandomCakeRows(args: {
+    productIds: bigint[];
+    categoryId?: bigint;
+  }): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
+    if (args.productIds.length === 0) return [];
     return this.prisma.product.findMany({
       where: {
-        id: { in: productIds },
-        // 후보 추출과 재조회 사이에 비활성화된 상품/매장이 노출되지 않게 재검증
+        id: { in: args.productIds },
+        // 후보 추출과 재조회 사이에 비활성화·카테고리 해제된 상품이 노출되지 않게 재검증
         is_active: true,
         deleted_at: null,
         store: { is_active: true, deleted_at: null },
+        ...(args.categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: args.categoryId,
+                  deleted_at: null,
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
+                },
+              },
+            }
+          : {}),
       },
       select: {
         id: true,

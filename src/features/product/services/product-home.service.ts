@@ -51,7 +51,8 @@ export class ProductHomeService {
       MAX_POPULAR_CAKES_LIMIT,
     );
     const categoryId =
-      input?.categoryId !== undefined ? parseId(input.categoryId) : undefined;
+      // GraphQL nullable 필드는 명시적 null도 허용 → null/undefined 모두 '필터 없음'
+      input?.categoryId != null ? parseId(input.categoryId) : undefined;
     const regionIds = input?.regionIds?.map((id) => parseId(id));
 
     const rankedAt = new Date();
@@ -155,13 +156,17 @@ export class ProductHomeService {
   async randomCakes(input?: RandomCakesInput): Promise<RandomCakesResult> {
     const limit = input?.limit ?? DEFAULT_RANDOM_CAKES_LIMIT;
     const categoryId =
-      input?.categoryId !== undefined ? parseId(input.categoryId) : undefined;
+      // GraphQL nullable 필드는 명시적 null도 허용 → null/undefined 모두 '필터 없음'
+      input?.categoryId != null ? parseId(input.categoryId) : undefined;
 
     const candidateIds = await this.repo.listRandomCakeCandidateIds(categoryId);
     if (candidateIds.length === 0) return { items: [] };
 
     const pickedIds = this.random.sample(candidateIds, limit);
-    const rows = await this.repo.findRandomCakeRows(pickedIds);
+    const rows = await this.repo.findRandomCakeRows({
+      productIds: pickedIds,
+      categoryId,
+    });
     const rowById = new Map(rows.map((row) => [row.id.toString(), row]));
 
     // 추출 순서를 유지해 그리드 배치도 무작위가 되게 한다
