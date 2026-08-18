@@ -1,5 +1,6 @@
 import type { PrismaClient, Product, Store } from '@prisma/client';
 
+import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -10,7 +11,9 @@ import {
   createOrder,
   createOrderItem,
   createProduct,
+  createReview,
   createStore,
+  createUserProfile,
   linkProductCategory,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -21,7 +24,7 @@ describe('ProductHomeService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductHomeService, ProductRepository],
+      providers: [ProductHomeService, ProductRepository, ProductReviewRepository],
     });
     service = module.get(ProductHomeService);
     prisma = p;
@@ -371,6 +374,208 @@ describe('ProductHomeService (real DB)', () => {
       const result = await service.popularCakes();
 
       expect(result.banner?.imageUrl).toBe('https://img/first.png');
+    });
+  });
+
+  describe('customCakeShowcase', () => {
+    /**
+     * Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰 생성.
+     * storeId를 주면 해당 매장 소속으로 만든다.
+     */
+    async function makeShowcaseReview(args?: {
+      storeId?: bigint;
+      nickname?: string;
+      content?: string;
+      before?: boolean;
+      after?: boolean;
+    }): Promise<bigint> {
+      const orderItem = await createOrderItem(
+        prisma,
+        args?.storeId !== undefined ? { store_id: args.storeId } : {},
+      );
+      if (args?.before !== false) {
+        await prisma.orderItemCustomFreeEdit.create({
+          data: {
+            order_item_id: orderItem.id,
+            crop_image_url: `https://img/before-${orderItem.id}.png`,
+            description_text: '요청 디자인',
+          },
+        });
+      }
+      const review = await createReview(prisma, {
+        order_item_id: orderItem.id,
+        content: args?.content ?? '후기 본문',
+      });
+      if (args?.after !== false) {
+        await prisma.reviewMedia.create({
+          data: {
+            review_id: review.id,
+            media_type: 'IMAGE',
+            media_url: `https://img/after-${review.id}.png`,
+          },
+        });
+      }
+      if (args?.nickname) {
+        const order = await prisma.order.findUniqueOrThrow({
+          where: { id: orderItem.order_id },
+        });
+        await createUserProfile(prisma, {
+          account_id: order.account_id,
+          nickname: args.nickname,
+        });
+      }
+      return review.id;
+    }
+
+    /** 유효 좋아요 n건 생성. */
+    async function likeReview(reviewId: bigint, count: number): Promise<void> {
+      for (let i = 0; i < count; i += 1) {
+        const account = await createAccount(prisma, { account_type: 'USER' });
+        await prisma.reviewLike.create({
+          data: { review_id: reviewId, account_id: account.id },
+        });
+      }
+    }
+
+    it('좋아요순으로 정렬하고 rank·likeCount를 매긴다(soft-delete 좋아요 미집계)', async () => {
+      const top = await makeShowcaseReview({ content: '1위 후기' });
+      const second = await makeShowcaseReview({ content: '2위 후기' });
+      await likeReview(top, 3);
+      await likeReview(second, 1);
+      // soft-delete된 좋아요는 집계에서 제외되어야 한다
+      const ghost = await createAccount(prisma, { account_type: 'USER' });
+      await prisma.reviewLike.create({
+        data: {
+          review_id: second,
+          account_id: ghost.id,
+          deleted_at: new Date(),
+        },
+      });
+
+      const result = await service.customCakeShowcase();
+
+      expect(result.map((i) => i.reviewText)).toEqual(['1위 후기', '2위 후기']);
+      expect(result.map((i) => i.rank)).toEqual([1, 2]);
+      expect(result.map((i) => i.likeCount)).toEqual([3, 1]);
+    });
+
+    it('Before(커스텀 크롭) 또는 After(리뷰 이미지)가 없는 리뷰는 제외한다', async () => {
+      await makeShowcaseReview({ content: '페어 완성 후기' });
+      await makeShowcaseReview({ content: 'before 없음', before: false });
+      await makeShowcaseReview({ content: 'after 없음', after: false });
+
+      const result = await service.customCakeShowcase();
+
+      expect(result.map((i) => i.reviewText)).toEqual(['페어 완성 후기']);
+    });
+
+    it('VIDEO만 있는 리뷰는 제외하고, IMAGE가 있으면 IMAGE를 After로 쓴다', async () => {
+      const review = await makeShowcaseReview({
+        content: '비디오+이미지',
+        after: false,
+      });
+      await prisma.reviewMedia.create({
+        data: {
+          review_id: review,
+          media_type: 'VIDEO',
+          media_url: 'https://img/video.mp4',
+          sort_order: 0,
+        },
+      });
+      await prisma.reviewMedia.create({
+        data: {
+          review_id: review,
+          media_type: 'IMAGE',
+          media_url: 'https://img/real-after.png',
+          sort_order: 1,
+        },
+      });
+      await makeShowcaseReview({ content: '비디오만', after: false }).then(
+        (id) =>
+          prisma.reviewMedia.create({
+            data: {
+              review_id: id,
+              media_type: 'VIDEO',
+              media_url: 'https://img/only-video.mp4',
+            },
+          }),
+      );
+
+      const result = await service.customCakeShowcase();
+
+      expect(result.map((i) => i.reviewText)).toEqual(['비디오+이미지']);
+      expect(result[0].afterImageUrl).toBe('https://img/real-after.png');
+    });
+
+    it('비활성 매장의 리뷰는 제외한다', async () => {
+      const inactiveStore = await createStore(prisma, { is_active: false });
+      await makeShowcaseReview({
+        storeId: inactiveStore.id,
+        content: '비활성 매장 후기',
+      });
+
+      await expect(service.customCakeShowcase()).resolves.toEqual([]);
+    });
+
+    it('작성자 닉네임을 매핑하고, 탈퇴 작성자는 null로 익명화한다', async () => {
+      const active = await makeShowcaseReview({
+        nickname: '곰돌이빵',
+        content: '활성 작성자',
+      });
+      await likeReview(active, 1);
+      const withdrawnReview = await makeShowcaseReview({
+        nickname: '탈퇴자',
+        content: '탈퇴 작성자',
+      });
+      const row = await prisma.review.findUniqueOrThrow({
+        where: { id: withdrawnReview },
+      });
+      await prisma.userProfile.update({
+        where: { account_id: row.account_id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.customCakeShowcase();
+
+      expect(result.map((i) => i.authorNickname)).toEqual(['곰돌이빵', null]);
+    });
+
+    it('limit만큼 자르고, 후기가 없으면 빈 배열을 반환한다', async () => {
+      await expect(service.customCakeShowcase()).resolves.toEqual([]);
+
+      await makeShowcaseReview();
+      await makeShowcaseReview();
+      await makeShowcaseReview();
+
+      const limited = await service.customCakeShowcase({ limit: 2 });
+      expect(limited).toHaveLength(2);
+    });
+
+    it('beforeImageUrl은 sort_order가 앞선 커스텀 크롭을 사용한다', async () => {
+      const review = await makeShowcaseReview({ before: false });
+      const row = await prisma.review.findUniqueOrThrow({
+        where: { id: review },
+      });
+      await prisma.orderItemCustomFreeEdit.create({
+        data: {
+          order_item_id: row.order_item_id,
+          crop_image_url: 'https://img/second-crop.png',
+          description_text: '두 번째',
+          sort_order: 1,
+        },
+      });
+      await prisma.orderItemCustomFreeEdit.create({
+        data: {
+          order_item_id: row.order_item_id,
+          crop_image_url: 'https://img/first-crop.png',
+          description_text: '첫 번째',
+          sort_order: 0,
+        },
+      });
+
+      const result = await service.customCakeShowcase();
+
+      expect(result[0].beforeImageUrl).toBe('https://img/first-crop.png');
     });
   });
 });

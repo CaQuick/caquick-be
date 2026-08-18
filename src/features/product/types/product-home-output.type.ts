@@ -31,3 +31,13 @@ export interface PopularCakesResult {
   items: PopularCake[];
   rankedAt: Date;
 }
+
+export interface CustomCakeShowcaseItem {
+  reviewId: string;
+  rank: number;
+  authorNickname: string | null;
+  reviewText: string | null;
+  likeCount: number;
+  beforeImageUrl: string;
+  afterImageUrl: string;
+}

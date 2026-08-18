@@ -3,15 +3,21 @@ import { Injectable } from '@nestjs/common';
 import { parseId } from '@/common/utils/id-parser';
 import {
   DEFAULT_POPULAR_CAKES_LIMIT,
+  DEFAULT_SHOWCASE_LIMIT,
   MAX_POPULAR_CAKES_LIMIT,
 } from '@/features/product/constants/product-home.constants';
+import type { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
+import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import {
   toHomeBanner,
   toPopularCake,
 } from '@/features/product/services/product-home-mappers.helper';
-import type { PopularCakesResult } from '@/features/product/types/product-home-output.type';
+import type {
+  CustomCakeShowcaseItem,
+  PopularCakesResult,
+} from '@/features/product/types/product-home-output.type';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   popularityScore,
@@ -23,7 +29,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class ProductHomeService {
-  constructor(private readonly repo: ProductRepository) {}
+  constructor(
+    private readonly repo: ProductRepository,
+    private readonly reviewRepo: ProductReviewRepository,
+  ) {}
 
   /**
    * 홈 '상황별 인기 케이크' 섹션. 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을
@@ -89,5 +98,48 @@ export class ProductHomeService {
       .map((entry, idx) => toPopularCake(entry.candidate, idx + 1));
 
     return { banner: bannerOutput, items, rankedAt };
+  }
+
+  /**
+   * 홈 '다른 사람들은 이렇게 만들었어요' 제작 후기(전체기간 좋아요순).
+   * Before(주문 커스텀 크롭)/After(리뷰 첫 이미지)가 모두 있는 리뷰만 후보.
+   * 데이터가 없으면 빈 배열(FE가 빈 상태 문구 처리).
+   */
+  async customCakeShowcase(
+    input?: CustomCakeShowcaseInput,
+  ): Promise<CustomCakeShowcaseItem[]> {
+    const limit = input?.limit ?? DEFAULT_SHOWCASE_LIMIT;
+    const ranked = await this.reviewRepo.listShowcaseReviewIdsByLikes(limit);
+    if (ranked.length === 0) return [];
+
+    const rows = await this.reviewRepo.findShowcaseReviewRowsByIds(
+      ranked.map((r) => r.id),
+    );
+    const rowById = new Map(rows.map((row) => [row.id.toString(), row]));
+
+    const items: CustomCakeShowcaseItem[] = [];
+    for (const entry of ranked) {
+      const row = rowById.get(entry.id.toString());
+      const beforeImageUrl = row?.order_item.free_edits[0]?.crop_image_url;
+      const afterImageUrl = row?.media[0]?.media_url;
+      // 후보 SQL이 존재를 보장하지만, 조회 사이의 삭제 경합에 대비해 한 번 더 방어
+      if (!row || !beforeImageUrl || !afterImageUrl) continue;
+
+      items.push({
+        reviewId: row.id.toString(),
+        rank: items.length + 1,
+        // 탈퇴(soft-delete) 작성자는 닉네임을 노출하지 않는다(익명화 정책)
+        authorNickname:
+          row.account.user_profile &&
+          row.account.user_profile.deleted_at === null
+            ? row.account.user_profile.nickname
+            : null,
+        reviewText: row.content,
+        likeCount: entry.likeCount,
+        beforeImageUrl,
+        afterImageUrl,
+      });
+    }
+    return items;
   }
 }
