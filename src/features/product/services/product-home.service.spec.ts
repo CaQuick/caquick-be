@@ -1,5 +1,6 @@
 import type { PrismaClient, Product, Store } from '@prisma/client';
 
+import { RandomService } from '@/common/providers/random.service';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
@@ -24,7 +25,7 @@ describe('ProductHomeService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductHomeService, ProductRepository, ProductReviewRepository],
+      providers: [ProductHomeService, ProductRepository, ProductReviewRepository, RandomService],
     });
     service = module.get(ProductHomeService);
     prisma = p;
@@ -576,6 +577,110 @@ describe('ProductHomeService (real DB)', () => {
       const result = await service.customCakeShowcase();
 
       expect(result[0].beforeImageUrl).toBe('https://img/first-crop.png');
+    });
+  });
+
+  describe('randomCakes', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    /** 대표 이미지가 있는 활성 케이크 n개 생성. */
+    async function makeCakesWithImage(
+      store: Store,
+      count: number,
+    ): Promise<Product[]> {
+      const cakes: Product[] = [];
+      for (let i = 0; i < count; i += 1) {
+        const cake = await createProduct(prisma, { store_id: store.id });
+        await prisma.productImage.create({
+          data: {
+            product_id: cake.id,
+            image_url: `https://img/random-${cake.id}.png`,
+          },
+        });
+        cakes.push(cake);
+      }
+      return cakes;
+    }
+
+    it('기본 9개를 중복 없이 반환하고 썸네일을 매핑한다', async () => {
+      const store = await createStore(prisma);
+      await makeCakesWithImage(store, 12);
+
+      const result = await service.randomCakes();
+
+      expect(result.items).toHaveLength(9);
+      expect(new Set(result.items.map((i) => i.id)).size).toBe(9);
+      for (const item of result.items) {
+        expect(item.thumbnailUrl).toBe(`https://img/random-${item.id}.png`);
+      }
+    });
+
+    it('categoryId 지정 시 해당 카테고리 케이크만 추출한다', async () => {
+      const store = await createStore(prisma);
+      const birthday = await createCategory(prisma, { name: '생일' });
+      const [inCategory] = await makeCakesWithImage(store, 1);
+      await makeCakesWithImage(store, 3);
+      await linkProductCategory(prisma, {
+        productId: inCategory.id,
+        categoryId: birthday.id,
+      });
+
+      const result = await service.randomCakes({
+        categoryId: birthday.id.toString(),
+      });
+
+      expect(result.items.map((i) => i.id)).toEqual([inCategory.id.toString()]);
+    });
+
+    it('이미지 없는 상품·비활성 상품·비활성 매장 상품은 후보에서 제외한다', async () => {
+      const store = await createStore(prisma);
+      await createProduct(prisma, { store_id: store.id }); // 이미지 없음
+      const inactive = await createProduct(prisma, {
+        store_id: store.id,
+        is_active: false,
+      });
+      await prisma.productImage.create({
+        data: { product_id: inactive.id, image_url: 'https://img/x.png' },
+      });
+      const inactiveStore = await createStore(prisma, { is_active: false });
+      const cakeInInactiveStore = await createProduct(prisma, {
+        store_id: inactiveStore.id,
+      });
+      await prisma.productImage.create({
+        data: {
+          product_id: cakeInInactiveStore.id,
+          image_url: 'https://img/y.png',
+        },
+      });
+
+      await expect(service.randomCakes()).resolves.toEqual({ items: [] });
+    });
+
+    it('후보가 limit보다 적으면 전량을 반환한다', async () => {
+      const store = await createStore(prisma);
+      await makeCakesWithImage(store, 4);
+
+      const result = await service.randomCakes();
+
+      expect(result.items).toHaveLength(4);
+    });
+
+    it('주입된 난수에 따라 결정적으로 추출한다', async () => {
+      const store = await createStore(prisma);
+      const cakes = await makeCakesWithImage(store, 5);
+      const randomService = (service as unknown as { random: RandomService })
+        .random;
+      // random()=0이면 부분 셔플이 항등이 되어 id asc 앞에서부터 뽑힌다
+      jest.spyOn(randomService, 'random').mockReturnValue(0);
+
+      const result = await service.randomCakes({ limit: 2 });
+
+      expect(result.items.map((i) => i.id)).toEqual([
+        cakes[0].id.toString(),
+        cakes[1].id.toString(),
+      ]);
     });
   });
 });

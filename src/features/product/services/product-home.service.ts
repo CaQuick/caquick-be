@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 
+import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import {
   DEFAULT_POPULAR_CAKES_LIMIT,
+  DEFAULT_RANDOM_CAKES_LIMIT,
   DEFAULT_SHOWCASE_LIMIT,
   MAX_POPULAR_CAKES_LIMIT,
 } from '@/features/product/constants/product-home.constants';
 import type { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
+import type { RandomCakesInput } from '@/features/product/dto/inputs/random-cakes.input';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import {
@@ -17,6 +20,7 @@ import {
 import type {
   CustomCakeShowcaseItem,
   PopularCakesResult,
+  RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
@@ -32,6 +36,7 @@ export class ProductHomeService {
   constructor(
     private readonly repo: ProductRepository,
     private readonly reviewRepo: ProductReviewRepository,
+    private readonly random: RandomService,
   ) {}
 
   /**
@@ -141,5 +146,33 @@ export class ProductHomeService {
       });
     }
     return items;
+  }
+
+  /**
+   * 홈 '렌덤 케이크 둘러보기'. 호출마다 후보 풀에서 무작위 재추출한다
+   * (호출 간 중복 허용 — '새로보기 1/3' 카운트는 FE 로컬 상태, 정책 확정 사항).
+   */
+  async randomCakes(input?: RandomCakesInput): Promise<RandomCakesResult> {
+    const limit = input?.limit ?? DEFAULT_RANDOM_CAKES_LIMIT;
+    const categoryId =
+      input?.categoryId !== undefined ? parseId(input.categoryId) : undefined;
+
+    const candidateIds = await this.repo.listRandomCakeCandidateIds(categoryId);
+    if (candidateIds.length === 0) return { items: [] };
+
+    const pickedIds = this.random.sample(candidateIds, limit);
+    const rows = await this.repo.findRandomCakeRows(pickedIds);
+    const rowById = new Map(rows.map((row) => [row.id.toString(), row]));
+
+    // 추출 순서를 유지해 그리드 배치도 무작위가 되게 한다
+    const items = pickedIds.flatMap((id) => {
+      const row = rowById.get(id.toString());
+      const thumbnailUrl = row?.images[0]?.image_url;
+      // 후보 조회가 이미지 보유를 보장하지만, 조회 사이의 삭제 경합에 대비해 방어
+      if (!thumbnailUrl) return [];
+      return [{ id: id.toString(), thumbnailUrl }];
+    });
+
+    return { items };
   }
 }

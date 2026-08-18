@@ -1164,6 +1164,57 @@ export class ProductRepository {
   }
 
   /**
+   * 랜덤 케이크 후보 id 풀. 활성 상품(+활성 매장) 중 활성 이미지 보유분만
+   * (그리드 셀이 이미지라 썸네일 없는 상품은 후보에서 제외).
+   * id만 조회해 풀 규모 부담을 줄인다 — 상품 수 급증 시 샘플링 방식 개선 여지.
+   */
+  async listRandomCakeCandidateIds(categoryId?: bigint): Promise<bigint[]> {
+    const rows = await this.prisma.product.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+        images: { some: { deleted_at: null } },
+        // 0n도 유효한 인자(parseId("0")=0n) → undefined로만 분기한다.
+        ...(categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: categoryId,
+                  deleted_at: null,
+                  category: { is_active: true, deleted_at: null },
+                },
+              },
+            }
+          : {}),
+      },
+      select: { id: true },
+      // 셔플 전 풀 순서를 고정해 주입 난수 기준 결정적 추출을 보장한다
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /** 랜덤 케이크 셀 데이터(대표 이미지 1장). 반환 순서는 보장하지 않는다. */
+  async findRandomCakeRows(
+    productIds: bigint[],
+  ): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
+    if (productIds.length === 0) return [];
+    return this.prisma.product.findMany({
+      where: { id: { in: productIds }, deleted_at: null },
+      select: {
+        id: true,
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+      },
+    });
+  }
+
+  /**
    * 전역 카테고리 목록(홈 칩·카테고리 진입 화면). 활성만.
    * category_type asc → sort_order asc → id asc.
    */

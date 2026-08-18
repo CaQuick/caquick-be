@@ -32,6 +32,15 @@ export interface PopularCakesResult {
   rankedAt: Date;
 }
 
+export interface RandomCake {
+  id: string;
+  thumbnailUrl: string;
+}
+
+export interface RandomCakesResult {
+  items: RandomCake[];
+}
+
 export interface CustomCakeShowcaseItem {
   reviewId: string;
   rank: number;
