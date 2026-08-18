@@ -5,7 +5,7 @@ extend type Query {
   """홈 '다른 사람들은 이렇게 만들었어요' 제작 후기(좋아요순). 없으면 빈 배열. 비로그인 접근 가능."""
   customCakeShowcase(input: CustomCakeShowcaseInput): [CustomCakeShowcaseItem!]!
 
-  """홈 '렌덤 케이크 둘러보기' 그리드(호출마다 무작위 재추출). 비로그인 접근 가능."""
+  """홈 '랜덤 케이크 둘러보기' 그리드(호출마다 무작위 재추출). 비로그인 접근 가능."""
   randomCakes(input: RandomCakesInput): RandomCakesResult!
 }
 
