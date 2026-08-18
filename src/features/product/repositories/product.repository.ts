@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { type CategoryType, Prisma } from '@prisma/client';
+import { type BannerLinkType, type CategoryType, Prisma } from '@prisma/client';
 
+import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
 import { PrismaService } from '@/prisma';
 
 /** 구매자 매장 상품 카드 row. product-storefront 매퍼 입력. */
@@ -22,6 +23,39 @@ export interface StoreProductCategoryRow {
   category_type: CategoryType;
   sort_order: number;
   product_count: number;
+}
+
+/** 인기 케이크 랭킹 후보 row. product-home 매퍼 입력. */
+export interface CakeCandidateRow {
+  id: bigint;
+  name: string;
+  regular_price: number;
+  sale_price: number | null;
+  images: { image_url: string }[];
+  store: {
+    store_name: string;
+    address_city: string | null;
+    address_neighborhood: string | null;
+    region: { name: string } | null;
+  };
+}
+
+/** 홈 배너 row. */
+export interface HomeBannerRow {
+  id: bigint;
+  image_url: string;
+  title: string | null;
+  link_type: BannerLinkType;
+  link_url: string | null;
+  link_product_id: bigint | null;
+  link_store_id: bigint | null;
+  link_category_id: bigint | null;
+}
+
+/** 상품별 평균 평점·리뷰 수. */
+export interface ProductReviewStat {
+  average: number;
+  count: number;
 }
 
 /** 구매자 상품 상세 row. product-detail 매퍼 입력. */
@@ -925,6 +959,303 @@ export class ProductRepository {
       select: { id: true },
     });
     return Boolean(found);
+  }
+
+  /**
+   * 인기 케이크 랭킹 후보. 활성 상품(+활성 매장)만.
+   * 카테고리/지역(2차 시군구 다중) 필터. 대표 이미지 1장 + 매장 표기 정보 포함.
+   */
+  async findActiveCakesForRanking(args: {
+    categoryId?: bigint;
+    regionIds?: bigint[];
+  }): Promise<CakeCandidateRow[]> {
+    return this.prisma.product.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        store: {
+          is_active: true,
+          deleted_at: null,
+          ...(args.regionIds && args.regionIds.length > 0
+            ? { region_id: { in: args.regionIds } }
+            : {}),
+        },
+        // 0n도 유효한 인자(parseId("0")=0n) → undefined로만 분기한다.
+        ...(args.categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: args.categoryId,
+                  deleted_at: null,
+                  // 홈 칩은 EVENT 카테고리만 — STYLE/OTHER id가 오면 빈 결과로 처리
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        regular_price: true,
+        sale_price: true,
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+        store: {
+          select: {
+            store_name: true,
+            address_city: true,
+            address_neighborhood: true,
+            region: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /** 상품별 활성 찜 수. */
+  async aggregateProductWishlistCounts(
+    productIds: bigint[],
+  ): Promise<Map<bigint, number>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.prisma.wishlistItem.groupBy({
+      by: ['product_id'],
+      where: { product_id: { in: productIds }, deleted_at: null },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.product_id, r._count._all]));
+  }
+
+  /** 상품별 평균 평점·리뷰 수. */
+  async aggregateProductReviewStats(
+    productIds: bigint[],
+  ): Promise<Map<bigint, ProductReviewStat>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.prisma.review.groupBy({
+      by: ['product_id'],
+      where: { product_id: { in: productIds }, deleted_at: null },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+    return new Map(
+      rows.map((r) => [
+        r.product_id,
+        {
+          average: r._avg.rating !== null ? Number(r._avg.rating) : 0,
+          count: r._count._all,
+        },
+      ]),
+    );
+  }
+
+  /** 상품별 최근 N일 유효 주문(아이템) 수. */
+  async aggregateProductRecentOrderCounts(
+    productIds: bigint[],
+    since: Date,
+  ): Promise<Map<bigint, number>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.prisma.orderItem.groupBy({
+      by: ['product_id'],
+      where: {
+        product_id: { in: productIds },
+        deleted_at: null,
+        order: {
+          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
+          created_at: { gte: since },
+          // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
+          // 않으므로(=root read만 보정), 삭제된 주문이 랭킹을 부풀리지 않도록 명시한다.
+          deleted_at: null,
+        },
+      },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.product_id, r._count._all]));
+  }
+
+  /**
+   * 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null.
+   * store feature의 globalReviewAverage와 동일 정의(전 도메인 공용 prior).
+   */
+  async globalReviewAverage(): Promise<number | null> {
+    const agg = await this.prisma.review.aggregate({
+      where: { deleted_at: null },
+      _avg: { rating: true },
+    });
+    return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
+  }
+
+  /**
+   * 홈 배너 1건. categoryId 지정 시 placement=CATEGORY + 해당 카테고리 링크,
+   * 미지정('전체' 칩) 시 placement=HOME_MAIN. 활성 + 노출 기간(now) 유효만.
+   * 링크 대상(상품/매장/카테고리)이 비활성/삭제된 배너는 건너뛴다.
+   */
+  async findHomeBanner(args: {
+    categoryId?: bigint;
+    now: Date;
+  }): Promise<HomeBannerRow | null> {
+    return this.prisma.banner.findFirst({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        ...(args.categoryId !== undefined
+          ? {
+              placement: 'CATEGORY',
+              link_category_id: args.categoryId,
+              // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
+              link_category: {
+                is_active: true,
+                deleted_at: null,
+                category_type: 'EVENT',
+              },
+            }
+          : { placement: 'HOME_MAIN' }),
+        OR: [{ starts_at: null }, { starts_at: { lte: args.now } }],
+        AND: [
+          { OR: [{ ends_at: null }, { ends_at: { gt: args.now } }] },
+          {
+            // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
+            // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다
+            OR: [
+              { link_type: { in: ['NONE', 'URL'] } },
+              {
+                link_type: 'PRODUCT',
+                link_product: {
+                  is_active: true,
+                  deleted_at: null,
+                  store: { is_active: true, deleted_at: null },
+                },
+              },
+              {
+                link_type: 'STORE',
+                link_store: { is_active: true, deleted_at: null },
+              },
+              {
+                link_type: 'CATEGORY',
+                link_category: { is_active: true, deleted_at: null },
+              },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        image_url: true,
+        title: true,
+        link_type: true,
+        link_url: true,
+        link_product_id: true,
+        link_store_id: true,
+        link_category_id: true,
+      },
+      orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * 랜덤 케이크 후보 id 풀. 활성 상품(+활성 매장) 중 활성 이미지 보유분만
+   * (그리드 셀이 이미지라 썸네일 없는 상품은 후보에서 제외).
+   * id만 조회해 풀 규모 부담을 줄인다 — 상품 수 급증 시 샘플링 방식 개선 여지.
+   */
+  async listRandomCakeCandidateIds(categoryId?: bigint): Promise<bigint[]> {
+    const rows = await this.prisma.product.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+        images: { some: { deleted_at: null } },
+        // 0n도 유효한 인자(parseId("0")=0n) → undefined로만 분기한다.
+        ...(categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: categoryId,
+                  deleted_at: null,
+                  // 홈 칩은 EVENT 카테고리만 — 랭킹(findActiveCakesForRanking)과 동일 정책
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      select: { id: true },
+      // 셔플 전 풀 순서를 고정해 주입 난수 기준 결정적 추출을 보장한다
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /** 랜덤 케이크 셀 데이터(대표 이미지 1장). 반환 순서는 보장하지 않는다. */
+  async findRandomCakeRows(args: {
+    productIds: bigint[];
+    categoryId?: bigint;
+  }): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
+    if (args.productIds.length === 0) return [];
+    return this.prisma.product.findMany({
+      where: {
+        id: { in: args.productIds },
+        // 후보 추출과 재조회 사이에 비활성화·카테고리 해제된 상품이 노출되지 않게 재검증
+        is_active: true,
+        deleted_at: null,
+        store: { is_active: true, deleted_at: null },
+        ...(args.categoryId !== undefined
+          ? {
+              product_categories: {
+                some: {
+                  category_id: args.categoryId,
+                  deleted_at: null,
+                  category: {
+                    is_active: true,
+                    deleted_at: null,
+                    category_type: 'EVENT',
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        images: {
+          where: { deleted_at: null },
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * 전역 카테고리 목록(홈 칩·카테고리 진입 화면). 활성만.
+   * category_type asc → sort_order asc → id asc.
+   */
+  async listCategories(type?: CategoryType) {
+    return this.prisma.category.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null,
+        ...(type !== undefined ? { category_type: type } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        category_type: true,
+        sort_order: true,
+      },
+      orderBy: [{ category_type: 'asc' }, { sort_order: 'asc' }, { id: 'asc' }],
+    });
   }
 
   /**

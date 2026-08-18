@@ -1,0 +1,17 @@
+extend type Query {
+  """전역 카테고리 목록(홈 칩·카테고리 진입 화면). type 미지정 시 전체. 비로그인 접근 가능."""
+  categories(input: CategoriesInput): [CategoryItem!]!
+}
+
+input CategoriesInput {
+  """EVENT | STYLE | OTHER. 비우면 전체."""
+  type: CategoryType
+}
+
+"""전역 카테고리 항목. '전체' 칩은 카테고리가 아니라 FE 가상 칩(필터 미적용)이라 포함하지 않는다."""
+type CategoryItem {
+  id: ID!
+  name: String!
+  categoryType: CategoryType!
+  sortOrder: Int!
+}

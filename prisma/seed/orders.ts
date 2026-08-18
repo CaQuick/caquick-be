@@ -248,6 +248,16 @@ export async function seedOrders(
       item_subtotal_price: 35000,
     },
   });
+  // o4에는 리뷰가 달리므로(seedReviews) 커스텀 크롭을 함께 둬
+  // 홈 제작 후기 쇼케이스(Before/After 페어)가 로컬에서 동작하게 한다
+  await prisma.orderItemCustomFreeEdit.create({
+    data: {
+      order_item_id: o4Item.id,
+      crop_image_url: 'https://placehold.co/300x300/png?text=Requested+Design',
+      description_text: '이 그림처럼 레터링해 주세요',
+      sort_order: 0,
+    },
+  });
 
   // ── o5: PICKED_UP (리뷰 미작성 → hasReviewableItem=true) ──
   const o5Picked = new Date(now.getTime() - 5 * day);

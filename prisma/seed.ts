@@ -11,6 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 
+import { seedCategories } from './seed/categories';
 import { seedCustomDrafts } from './seed/custom-drafts';
 import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
@@ -39,8 +40,11 @@ async function main(): Promise<void> {
     log('지역 마스터 시드 중...');
     await seedRegions(prisma);
 
+    log('카테고리 마스터 시드 중...');
+    const categories = await seedCategories(prisma);
+
     log('매장 + 상품 시드 중...');
-    const stores = await seedStores(prisma);
+    const stores = await seedStores(prisma, { categories });
 
     log('주문 + 아이템 시드 중...');
     const orders = await seedOrders(prisma, { users, stores });

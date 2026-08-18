@@ -10,6 +10,7 @@
  */
 import type { PrismaClient, Product, Store } from '@prisma/client';
 
+import type { SeededCategories } from './categories';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
 
 export interface SeededStores {
@@ -18,7 +19,10 @@ export interface SeededStores {
   optionGroupIds: { p2GroupId: bigint; p2OptionItemId: bigint };
 }
 
-export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
+export async function seedStores(
+  prisma: PrismaClient,
+  deps: { categories: SeededCategories },
+): Promise<SeededStores> {
   // 매장 region 매핑 (seedRegions 선행 실행 전제). Unchecked 경로라 FK를 직접 지정.
   const gangnam = await prisma.region.findUniqueOrThrow({
     where: { slug: 'sgg-11680' },
@@ -71,6 +75,19 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
     },
   });
 
+  // 매장 A 구조화 영업시간: 화요일 정기 휴무(텍스트 표기와 일치), 나머지 09~18시.
+  // todayPickupStores가 구조화 영업시간(StoreBusinessHour) 기준이라 시드에 필수.
+  await prisma.storeBusinessHour.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      store_id: storeA.id,
+      day_of_week: dayOfWeek,
+      is_closed: dayOfWeek === 2,
+      open_time: dayOfWeek === 2 ? null : new Date(Date.UTC(1970, 0, 1, 9, 0)),
+      close_time:
+        dayOfWeek === 2 ? null : new Date(Date.UTC(1970, 0, 1, 18, 0)),
+    })),
+  });
+
   // 매장 2: 도넛샵 B
   const sellerB = await prisma.account.create({
     data: {
@@ -93,6 +110,20 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       business_hours_text: '평일 11:00 ~ 21:00',
       is_active: true,
     },
+  });
+  // 매장 B 구조화 영업시간: 평일 11~21시, 주말 휴무(텍스트 표기와 일치).
+  // A가 화요일 휴무라, B가 화요일을 커버해 요일과 무관하게 todayPickupStores 확인 가능.
+  await prisma.storeBusinessHour.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => {
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      return {
+        store_id: storeB.id,
+        day_of_week: dayOfWeek,
+        is_closed: isWeekend,
+        open_time: isWeekend ? null : new Date(Date.UTC(1970, 0, 1, 11, 0)),
+        close_time: isWeekend ? null : new Date(Date.UTC(1970, 0, 1, 21, 0)),
+      };
+    }),
   });
 
   // 상품
@@ -202,6 +233,29 @@ export async function seedStores(prisma: PrismaClient): Promise<SeededStores> {
       regular_price: 10000,
       is_active: false,
     },
+  });
+
+  // 상품 ↔ 카테고리 연결 (홈 화면 섹션들이 로컬에서 동작하도록 이벤트/스타일 배정)
+  const categoryId = (key: string): bigint => {
+    const id = deps.categories.idByTypeName.get(key);
+    if (id === undefined) {
+      throw new Error(`[seed] category not found: ${key}`);
+    }
+    return id;
+  };
+  await prisma.productCategory.createMany({
+    data: [
+      { product_id: p1.id, category_id: categoryId('EVENT:생일') },
+      { product_id: p1.id, category_id: categoryId('STYLE:꽃장식') },
+      { product_id: p2.id, category_id: categoryId('EVENT:생일') },
+      { product_id: p2.id, category_id: categoryId('STYLE:입체') },
+      { product_id: p3.id, category_id: categoryId('EVENT:감사') },
+      { product_id: p3.id, category_id: categoryId('STYLE:도시락') },
+      { product_id: p4.id, category_id: categoryId('EVENT:기타') },
+      // p5(비활성)에도 연결해 활성 필터 검증 데이터로 쓴다
+      { product_id: p5.id, category_id: categoryId('EVENT:생일') },
+    ],
+    skipDuplicates: true,
   });
 
   return {

@@ -19,7 +19,7 @@ export async function seedReviews(
   const [p1] = ctx.stores.products;
   const orderItemId = ctx.orders.o4OrderItemId;
 
-  await prisma.review.create({
+  const review = await prisma.review.create({
     data: {
       order_item_id: orderItemId,
       account_id: user1.id,
@@ -45,4 +45,12 @@ export async function seedReviews(
       },
     },
   });
+
+  // 홈 제작 후기 쇼케이스의 likeCount 표시 검증용 좋아요 1건(user2)
+  const user2 = ctx.users[1];
+  if (user2) {
+    await prisma.reviewLike.create({
+      data: { review_id: review.id, account_id: user2.id },
+    });
+  }
 }
