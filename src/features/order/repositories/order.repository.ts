@@ -174,6 +174,68 @@ export class OrderRepository {
     return new Set(rows.map((r) => r.order_id.toString()));
   }
 
+  /**
+   * 리뷰 작성 가능한 주문 아이템 페이지(마이페이지 '리뷰 남기기' 탭).
+   * 조건은 canWriteReview/findReviewableOrderIds와 동일: 픽업 완료 + 활성 리뷰 미존재
+   * (soft-delete된 리뷰는 재작성 가능으로 취급). 픽업 최신순 정렬.
+   */
+  async listReviewableOrderItems(args: {
+    accountId: bigint;
+    offset: number;
+    limit: number;
+  }) {
+    const where = {
+      deleted_at: null,
+      order: {
+        account_id: args.accountId,
+        status: OrderStatus.PICKED_UP,
+        // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
+        // 않으므로 삭제된 주문의 아이템이 노출되지 않게 명시한다
+        deleted_at: null,
+      },
+      OR: [
+        { review: { is: null } },
+        { review: { is: { deleted_at: { not: null } } } },
+      ],
+    };
+
+    const [items, totalCount] = await this.prisma.$transaction([
+      this.prisma.orderItem.findMany({
+        where,
+        orderBy: [{ order: { picked_up_at: 'desc' } }, { id: 'desc' }],
+        skip: args.offset,
+        take: args.limit,
+        select: {
+          id: true,
+          product_id: true,
+          product_name_snapshot: true,
+          order: { select: { picked_up_at: true } },
+          product: {
+            select: {
+              images: {
+                where: { deleted_at: null },
+                orderBy: { sort_order: 'asc' },
+                take: 1,
+                select: { image_url: true },
+              },
+            },
+          },
+          store: {
+            select: {
+              store_name: true,
+              address_city: true,
+              address_neighborhood: true,
+              region: { select: { name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.orderItem.count({ where }),
+    ]);
+
+    return { items, totalCount };
+  }
+
   async findOrderDetailByAccount(args: { orderId: bigint; accountId: bigint }) {
     return this.prisma.order.findFirst({
       where: {

@@ -1,8 +1,37 @@
 extend type Query {
   """내가 작성한 리뷰 목록"""
   myReviews(input: MyReviewsInput): MyReviewConnection!
+  """리뷰 작성 가능한 주문 아이템 목록(마이페이지 '리뷰 남기기' 탭). 픽업 완료 + 활성 리뷰 미존재."""
+  myReviewableOrderItems(input: MyReviewableOrderItemsInput): MyReviewableOrderItemConnection!
   """주문 아이템에 대한 리뷰 작성 가능 여부 및 기존 리뷰"""
   myReviewForOrderItem(orderItemId: ID!): MyReviewOrNull!
+}
+
+input MyReviewableOrderItemsInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type MyReviewableOrderItemConnection {
+  items: [MyReviewableOrderItem!]!
+  """'리뷰 남기기 N' 탭 카운트"""
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""리뷰 작성 가능한 주문 아이템 카드. writeReview 입력에 orderItemId를 그대로 사용한다."""
+type MyReviewableOrderItem {
+  orderItemId: ID!
+  productId: ID!
+  """케이크명(주문 시점 스냅샷)"""
+  productName: String!
+  """대표 상품 이미지. 없으면 null."""
+  productImageUrl: String
+  storeName: String!
+  """매장 위치 표기(예: 인천 청라동). 없으면 null."""
+  regionLabel: String
+  """픽업 완료 시각(최신 픽업 순 정렬 기준)."""
+  pickedUpAt: DateTime
 }
 
 extend type Mutation {
