@@ -604,16 +604,26 @@ describe('UserReviewService (real DB)', () => {
         where: { id: setup.storeId },
         data: { address_city: '인천', address_neighborhood: '청라동' },
       });
+      const pickedUpAt = new Date('2026-08-15T05:00:00.000Z');
+      const orderItem = await prisma.orderItem.findUniqueOrThrow({
+        where: { id: setup.orderItemId },
+      });
+      await prisma.order.update({
+        where: { id: orderItem.order_id },
+        data: { picked_up_at: pickedUpAt },
+      });
 
       const [item] = (await service.myReviewableOrderItems(setup.accountId))
         .items;
 
       expect(item).toMatchObject({
         orderItemId: setup.orderItemId.toString(),
+        productId: setup.productId.toString(),
         productName: '상품R 스냅샷',
         productImageUrl: 'https://img/review-target.png',
         storeName: '매장R',
         regionLabel: '인천 청라동',
+        pickedUpAt,
       });
     });
 

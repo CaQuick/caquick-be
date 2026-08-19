@@ -41,6 +41,21 @@ export interface OngoingOrderRow {
   }[];
 }
 
+/** 리뷰 작성 가능 주문 아이템 row. UserReviewService 매핑 입력. */
+export interface ReviewableOrderItemRow {
+  id: bigint;
+  product_id: bigint;
+  product_name_snapshot: string;
+  order: { picked_up_at: Date | null } | null;
+  product: { images: { image_url: string }[] } | null;
+  store: {
+    store_name: string;
+    address_city: string | null;
+    address_neighborhood: string | null;
+    region: { name: string } | null;
+  } | null;
+}
+
 @Injectable()
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -183,7 +198,7 @@ export class OrderRepository {
     accountId: bigint;
     offset: number;
     limit: number;
-  }) {
+  }): Promise<{ items: ReviewableOrderItemRow[]; totalCount: number }> {
     const where = {
       deleted_at: null,
       order: {
