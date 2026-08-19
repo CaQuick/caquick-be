@@ -24,6 +24,22 @@ export interface MyReviewConnection {
   hasMore: boolean;
 }
 
+export interface MyReviewableOrderItem {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  productImageUrl: string | null;
+  storeName: string;
+  regionLabel: string | null;
+  pickedUpAt: Date | null;
+}
+
+export interface MyReviewableOrderItemConnection {
+  items: MyReviewableOrderItem[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
 export interface MyReviewOrNull {
   review: MyReview | null;
   canWrite: boolean;

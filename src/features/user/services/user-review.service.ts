@@ -7,13 +7,17 @@ import {
 import { OrderStatus, ReviewMediaType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
+import { OrderRepository } from '@/features/order';
+import { buildRegionLabel } from '@/features/store';
 import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import type { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
+import type { MyReviewableOrderItemsInput } from '@/features/user/dto/inputs/my-reviewable-order-items.input';
 import type { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
 import type { WriteReviewInput } from '@/features/user/dto/inputs/write-review.input';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import type {
   MyReview,
+  MyReviewableOrderItemConnection,
   MyReviewConnection,
   MyReviewOrNull,
   ReviewMediaUploadUrl,
@@ -51,8 +55,36 @@ const MAX_VIDEO_COUNT = 1;
 export class UserReviewService {
   constructor(
     private readonly reviewRepo: ReviewRepository,
+    private readonly orderRepo: OrderRepository,
     private readonly s3Service: S3Service,
   ) {}
+
+  /** 리뷰 작성 가능한 주문 아이템 목록(마이페이지 '리뷰 남기기' 탭). 픽업 최신순. */
+  async myReviewableOrderItems(
+    accountId: bigint,
+    input?: MyReviewableOrderItemsInput,
+  ): Promise<MyReviewableOrderItemConnection> {
+    const offset = input?.offset ?? 0;
+    const limit = input?.limit ?? 20;
+
+    const { items, totalCount } = await this.orderRepo.listReviewableOrderItems(
+      { accountId, offset, limit },
+    );
+
+    return {
+      items: items.map((item) => ({
+        orderItemId: item.id.toString(),
+        productId: item.product_id.toString(),
+        productName: item.product_name_snapshot,
+        productImageUrl: item.product?.images?.[0]?.image_url ?? null,
+        storeName: item.store?.store_name ?? '매장 정보 없음',
+        regionLabel: item.store ? buildRegionLabel(item.store) : null,
+        pickedUpAt: item.order?.picked_up_at ?? null,
+      })),
+      totalCount,
+      hasMore: offset + limit < totalCount,
+    };
+  }
 
   async writeReview(
     accountId: bigint,

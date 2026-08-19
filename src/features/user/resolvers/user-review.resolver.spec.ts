@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { OrderRepository } from '@/features/order';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewMutationResolver } from '@/features/user/resolvers/user-review-mutation.resolver';
 import { UserReviewQueryResolver } from '@/features/user/resolvers/user-review-query.resolver';
@@ -36,6 +37,7 @@ describe('User Review Resolvers (real DB)', () => {
         UserReviewMutationResolver,
         UserReviewService,
         ReviewRepository,
+        OrderRepository,
         { provide: S3Service, useValue: s3Service },
       ],
     });
@@ -111,5 +113,29 @@ describe('User Review Resolvers (real DB)', () => {
 
     expect(result.totalCount).toBe(1);
     expect(result.items[0].rating).toBe(4);
+  });
+
+  it('Query.myReviewableOrderItems: 작성 가능 아이템이 조회되고 작성 후엔 빠진다', async () => {
+    const ctx = await setupReviewableItem();
+
+    const before = await queryResolver.myReviewableOrderItems({
+      accountId: ctx.accountId.toString(),
+    });
+    expect(before.totalCount).toBe(1);
+    expect(before.items[0].orderItemId).toBe(ctx.orderItemId.toString());
+
+    await mutationResolver.writeReview(
+      { accountId: ctx.accountId.toString() },
+      {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      },
+    );
+
+    const after = await queryResolver.myReviewableOrderItems({
+      accountId: ctx.accountId.toString(),
+    });
+    expect(after.totalCount).toBe(0);
   });
 });

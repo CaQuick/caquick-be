@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { OrderRepository } from '@/features/order';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { S3Service } from '@/global/storage/s3.service';
@@ -15,6 +16,7 @@ import {
   createOrder,
   createOrderItem,
   createProduct,
+  createReview,
   createStore,
   createUserProfile,
 } from '@/test/factories';
@@ -36,6 +38,7 @@ describe('UserReviewService (real DB)', () => {
       providers: [
         UserReviewService,
         ReviewRepository,
+        OrderRepository,
         { provide: S3Service, useValue: s3Service },
       ],
     });
@@ -534,6 +537,151 @@ describe('UserReviewService (real DB)', () => {
       expect(s3Service.createUploadUrl).toHaveBeenCalledWith(
         expect.objectContaining({ purpose: 'REVIEW_VIDEO' }),
       );
+    });
+  });
+
+  describe('myReviewableOrderItems', () => {
+    /** 특정 계정의 픽업 완료 주문 아이템 생성. */
+    async function pickUpItem(
+      accountId: bigint,
+      args?: {
+        productName?: string;
+        pickedUpAt?: Date;
+        orderStatus?: 'PICKED_UP' | 'CONFIRMED';
+        orderDeletedAt?: Date | null;
+      },
+    ): Promise<bigint> {
+      const order = await createOrder(prisma, {
+        account_id: accountId,
+        status: args?.orderStatus ?? 'PICKED_UP',
+      });
+      if (args?.pickedUpAt || args?.orderDeletedAt) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            ...(args.pickedUpAt ? { picked_up_at: args.pickedUpAt } : {}),
+            ...(args.orderDeletedAt ? { deleted_at: args.orderDeletedAt } : {}),
+          },
+        });
+      }
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        product_name_snapshot: args?.productName ?? '리뷰 대상 케이크',
+      });
+      return item.id;
+    }
+
+    it('픽업 완료 + 리뷰 미작성 아이템을 픽업 최신순으로 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await pickUpItem(account.id, {
+        productName: '먼저 픽업',
+        pickedUpAt: new Date('2026-08-01T10:00:00Z'),
+      });
+      await pickUpItem(account.id, {
+        productName: '나중 픽업',
+        pickedUpAt: new Date('2026-08-10T10:00:00Z'),
+      });
+
+      const result = await service.myReviewableOrderItems(account.id);
+
+      expect(result.items.map((i) => i.productName)).toEqual([
+        '나중 픽업',
+        '먼저 픽업',
+      ]);
+      expect(result.totalCount).toBe(2);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('카드 필드(이미지·매장명·지역명·픽업시각·orderItemId)를 매핑한다', async () => {
+      const setup = await setupReviewableOrderItem();
+      await prisma.productImage.create({
+        data: {
+          product_id: setup.productId,
+          image_url: 'https://img/review-target.png',
+        },
+      });
+      await prisma.store.update({
+        where: { id: setup.storeId },
+        data: { address_city: '인천', address_neighborhood: '청라동' },
+      });
+      const pickedUpAt = new Date('2026-08-15T05:00:00.000Z');
+      const orderItem = await prisma.orderItem.findUniqueOrThrow({
+        where: { id: setup.orderItemId },
+      });
+      await prisma.order.update({
+        where: { id: orderItem.order_id },
+        data: { picked_up_at: pickedUpAt },
+      });
+
+      const [item] = (await service.myReviewableOrderItems(setup.accountId))
+        .items;
+
+      expect(item).toMatchObject({
+        orderItemId: setup.orderItemId.toString(),
+        productId: setup.productId.toString(),
+        productName: '상품R 스냅샷',
+        productImageUrl: 'https://img/review-target.png',
+        storeName: '매장R',
+        regionLabel: '인천 청라동',
+        pickedUpAt,
+      });
+    });
+
+    it('활성 리뷰가 있으면 제외하고, soft-delete된 리뷰면 다시 포함한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const reviewed = await pickUpItem(account.id, { productName: '작성됨' });
+      const review = await createReview(prisma, { order_item_id: reviewed });
+      const rewritable = await pickUpItem(account.id, {
+        productName: '재작성 가능',
+      });
+      const deletedReview = await createReview(prisma, {
+        order_item_id: rewritable,
+      });
+      await prisma.review.update({
+        where: { id: deletedReview.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.myReviewableOrderItems(account.id);
+
+      expect(result.items.map((i) => i.productName)).toEqual(['재작성 가능']);
+      expect(review.deleted_at).toBeNull();
+    });
+
+    it('픽업 완료가 아닌 주문·삭제된 주문·타인 주문은 제외한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await pickUpItem(account.id, { orderStatus: 'CONFIRMED' });
+      await pickUpItem(account.id, { orderDeletedAt: new Date() });
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await pickUpItem(other.id);
+
+      const result = await service.myReviewableOrderItems(account.id);
+
+      expect(result.items).toEqual([]);
+      expect(result.totalCount).toBe(0);
+    });
+
+    it('offset/limit 페이지네이션과 hasMore를 계산한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      for (let i = 0; i < 3; i += 1) {
+        await pickUpItem(account.id, {
+          pickedUpAt: new Date(`2026-08-0${i + 1}T10:00:00Z`),
+        });
+      }
+
+      const firstPage = await service.myReviewableOrderItems(account.id, {
+        offset: 0,
+        limit: 2,
+      });
+      const secondPage = await service.myReviewableOrderItems(account.id, {
+        offset: 2,
+        limit: 2,
+      });
+
+      expect(firstPage.items).toHaveLength(2);
+      expect(firstPage.hasMore).toBe(true);
+      expect(secondPage.items).toHaveLength(1);
+      expect(secondPage.hasMore).toBe(false);
     });
   });
 });
