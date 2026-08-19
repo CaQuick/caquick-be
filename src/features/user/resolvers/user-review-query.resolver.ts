@@ -1,9 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyReviewableOrderItemsInput } from '@/features/user/dto/inputs/my-reviewable-order-items.input';
 import { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import type {
+  MyReviewableOrderItemConnection,
   MyReviewConnection,
   MyReviewOrNull,
 } from '@/features/user/types/user-review-output.type';
@@ -26,6 +28,15 @@ export class UserReviewQueryResolver {
   ): Promise<MyReviewConnection> {
     const accountId = parseAccountId(user);
     return this.reviewService.myReviews(accountId, input);
+  }
+
+  @Query('myReviewableOrderItems')
+  myReviewableOrderItems(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input?: MyReviewableOrderItemsInput,
+  ): Promise<MyReviewableOrderItemConnection> {
+    const accountId = parseAccountId(user);
+    return this.reviewService.myReviewableOrderItems(accountId, input);
   }
 
   @Query('myReviewForOrderItem')
