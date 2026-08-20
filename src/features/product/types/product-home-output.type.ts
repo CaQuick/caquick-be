@@ -16,6 +16,7 @@ export interface HomeBanner {
 
 export interface PopularCake {
   id: string;
+  storeId: string;
   rank: number;
   name: string;
   thumbnailUrl: string | null;
@@ -34,6 +35,7 @@ export interface PopularCakesResult {
 
 export interface RandomCake {
   id: string;
+  storeId: string;
   thumbnailUrl: string;
 }
 
@@ -43,6 +45,7 @@ export interface RandomCakesResult {
 
 export interface CustomCakeShowcaseItem {
   reviewId: string;
+  storeId: string;
   rank: number;
   authorNickname: string | null;
   reviewText: string | null;

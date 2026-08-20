@@ -133,6 +133,7 @@ export class ProductHomeService {
 
       items.push({
         reviewId: row.id.toString(),
+        storeId: row.store_id.toString(),
         rank: items.length + 1,
         // 탈퇴(soft-delete) 작성자는 닉네임을 노출하지 않는다(익명화 정책)
         authorNickname:
@@ -175,7 +176,9 @@ export class ProductHomeService {
       const thumbnailUrl = row?.images[0]?.image_url;
       // 후보 조회가 이미지 보유를 보장하지만, 조회 사이의 삭제 경합에 대비해 방어
       if (!thumbnailUrl) return [];
-      return [{ id: id.toString(), thumbnailUrl }];
+      return [
+        { id: id.toString(), storeId: row.store_id.toString(), thumbnailUrl },
+      ];
     });
 
     return { items };

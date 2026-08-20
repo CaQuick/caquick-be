@@ -81,6 +81,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
+      storeId: orderItem.store_id.toString(),
       reviewText: '제작 후기',
       beforeImageUrl: 'https://img/before.png',
       afterImageUrl: 'https://img/after.png',
@@ -97,7 +98,11 @@ describe('ProductHome Query Resolver (real DB)', () => {
     const result = await resolver.randomCakes();
 
     expect(result.items).toEqual([
-      { id: cake.id.toString(), thumbnailUrl: 'https://img/grid.png' },
+      {
+        id: cake.id.toString(),
+        storeId: store.id.toString(),
+        thumbnailUrl: 'https://img/grid.png',
+      },
     ]);
   });
 });
