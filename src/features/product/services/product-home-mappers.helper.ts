@@ -28,6 +28,7 @@ export function toPopularCake(
 ): PopularCake {
   return {
     id: row.id.toString(),
+    storeId: row.store_id.toString(),
     rank,
     name: row.name,
     thumbnailUrl: row.images[0]?.image_url ?? null,

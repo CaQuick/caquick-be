@@ -219,6 +219,7 @@ describe('ProductHomeService (real DB)', () => {
 
       expect(item).toMatchObject({
         name: '레터링 케이크',
+        storeId: store.id.toString(),
         storeName: '청담 케이크샵',
         regionLabel: '서울 청담동',
         regularPrice: 40000,
@@ -619,6 +620,7 @@ describe('ProductHomeService (real DB)', () => {
       expect(new Set(result.items.map((i) => i.id)).size).toBe(9);
       for (const item of result.items) {
         expect(item.thumbnailUrl).toBe(`https://img/random-${item.id}.png`);
+        expect(item.storeId).toBe(store.id.toString());
       }
     });
 

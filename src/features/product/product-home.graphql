@@ -24,6 +24,8 @@ type RandomCakesResult {
 """랜덤 케이크 그리드 셀(클릭 시 케이크 상세 이동)."""
 type RandomCake {
   id: ID!
+  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
+  storeId: ID!
   """대표 이미지(sort_order 최소)."""
   thumbnailUrl: String!
 }
@@ -79,6 +81,8 @@ input CustomCakeShowcaseInput {
 type CustomCakeShowcaseItem {
   """후기 보러가기(reviewDetail) 이동용."""
   reviewId: ID!
+  """후기 소속 매장 ID(상세 URL 구성용: /store/{storeId}/reviews/{reviewId})."""
+  storeId: ID!
   """좋아요순 순위(1부터)."""
   rank: Int!
   """작성자 닉네임. 탈퇴 작성자는 null(FE 익명 표기)."""
@@ -95,6 +99,8 @@ type CustomCakeShowcaseItem {
 """인기 케이크 카드(지역명·매장명·케이크명·가격·할인율)."""
 type PopularCake {
   id: ID!
+  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
+  storeId: ID!
   rank: Int!
   name: String!
   """대표 이미지(sort_order 최소). 없으면 null."""
