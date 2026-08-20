@@ -28,6 +28,7 @@ export interface StoreProductCategoryRow {
 /** 인기 케이크 랭킹 후보 row. product-home 매퍼 입력. */
 export interface CakeCandidateRow {
   id: bigint;
+  store_id: bigint;
   name: string;
   regular_price: number;
   sale_price: number | null;
@@ -1000,6 +1001,7 @@ export class ProductRepository {
       },
       select: {
         id: true,
+        store_id: true,
         name: true,
         regular_price: true,
         sale_price: true,
@@ -1200,7 +1202,9 @@ export class ProductRepository {
   async findRandomCakeRows(args: {
     productIds: bigint[];
     categoryId?: bigint;
-  }): Promise<{ id: bigint; images: { image_url: string }[] }[]> {
+  }): Promise<
+    { id: bigint; store_id: bigint; images: { image_url: string }[] }[]
+  > {
     if (args.productIds.length === 0) return [];
     return this.prisma.product.findMany({
       where: {
@@ -1227,6 +1231,7 @@ export class ProductRepository {
       },
       select: {
         id: true,
+        store_id: true,
         images: {
           where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },

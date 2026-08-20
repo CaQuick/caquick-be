@@ -201,6 +201,7 @@ export class ProductReviewRepository {
   async findShowcaseReviewRowsByIds(reviewIds: bigint[]): Promise<
     {
       id: bigint;
+      store_id: bigint;
       content: string | null;
       account: {
         user_profile: { nickname: string; deleted_at: Date | null } | null;
@@ -216,6 +217,7 @@ export class ProductReviewRepository {
       where: { id: { in: reviewIds }, deleted_at: null },
       select: {
         id: true,
+        store_id: true,
         content: true,
         account: {
           // soft-delete extension은 nested relation에 deleted_at을 주입하지 않으므로
