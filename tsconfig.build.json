@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // TS 6부터 출력 레이아웃 기준 디렉터리 명시 필수(TS5011). 기존 공통 소스
+    // 디렉터리와 동일한 ./src라 dist 산출 구조는 변하지 않는다.
+    "rootDir": "./src"
+  },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }
