@@ -50,5 +50,16 @@ describe('url-query', () => {
       const result = toQueryParams({ nested: { x: 1 } as never });
       expect(result.nested).toBe('{"x":1}');
     });
+
+    it('프로토타입 오염 위험 키는 제외한다', () => {
+      const result = toQueryParams({
+        ['__proto__']: 'x',
+        constructor: 'y',
+        prototype: 'z',
+        safe: 'ok',
+      });
+      expect(result).toEqual({ safe: 'ok' });
+      expect(Object.keys(result)).toEqual(['safe']);
+    });
   });
 });
