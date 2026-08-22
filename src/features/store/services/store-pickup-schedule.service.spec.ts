@@ -288,6 +288,10 @@ describe('StorePickupScheduleService (real DB)', () => {
       await expect(
         service.storePickupCalendar(store.id, '0999-01'),
       ).rejects.toThrow(BadRequestException);
+      // 1000-01은 KST 월 시작 경계(-9h)가 0999-12-31T15:00Z로 DATETIME 하한을 밑돈다
+      await expect(
+        service.storePickupCalendar(store.id, '1000-01'),
+      ).rejects.toThrow(BadRequestException);
       // 9999-12는 익월 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
         service.storePickupCalendar(store.id, '9999-12'),
@@ -407,6 +411,10 @@ describe('StorePickupScheduleService (real DB)', () => {
       // 9999-12-31은 익일 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
         service.storePickupTimeSlots(store.id, '9999-12-31'),
+      ).rejects.toThrow(BadRequestException);
+      // 1000-01-01은 KST 자정 경계(-9h)가 DATETIME 하한을 밑돈다
+      await expect(
+        service.storePickupTimeSlots(store.id, '1000-01-01'),
       ).rejects.toThrow(BadRequestException);
     });
 

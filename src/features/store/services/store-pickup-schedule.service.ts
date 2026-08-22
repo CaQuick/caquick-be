@@ -32,9 +32,12 @@ import type {
   StorePickupTimeSlots,
 } from '@/features/store/types/store-pickup-schedule-output.type';
 
-// MySQL DATE 표현 범위(1000-01-01~9999-12-31) 안에서 익월/익일 상한 계산이 넘치지
-// 않도록 연도를 제한한다. Date.UTC의 0~99년 → 1900년대 매핑 오동작도 함께 차단.
-const MIN_SCHEDULE_YEAR = 1000;
+// MySQL DATE/DATETIME 표현 범위(1000-01-01~9999-12-31) 안에서 KST 자정(-9h) 경계와
+// 익월/익일 상한 계산이 넘치지 않도록 연도를 제한한다.
+// 하한 1001: 1000-01의 KST 월 시작 경계가 0999-12-31T15:00Z로 DATETIME 하한을 밑돈다.
+// 상한 9998: 9999-12의 익월 상한이 DATE 상한을 넘는다.
+// Date.UTC의 0~99년 → 1900년대 매핑 오동작도 함께 차단.
+const MIN_SCHEDULE_YEAR = 1001;
 const MAX_SCHEDULE_YEAR = 9998;
 
 /** 월/일 범위 벌크 조회 결과(달력 판정 컨텍스트). */
