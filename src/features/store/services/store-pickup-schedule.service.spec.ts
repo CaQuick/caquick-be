@@ -365,6 +365,25 @@ describe('StorePickupScheduleService (real DB)', () => {
       });
     });
 
+    it('특별휴무일도 빈 배열을 반환한다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+      await prisma.storeSpecialClosure.create({
+        data: {
+          store_id: store.id,
+          closure_date: new Date(Date.UTC(2026, 8, 18)),
+        },
+      });
+
+      const result = await service.storePickupTimeSlots(store.id, '2026-09-18');
+
+      expect(result).toEqual({
+        date: '2026-09-18',
+        morning: [],
+        afternoon: [],
+      });
+    });
+
     it('capacity 소진 날짜는 전 슬롯 마감으로 표기한다', async () => {
       const store = await createStore(prisma);
       await openAllWeek(store, 10, 12);

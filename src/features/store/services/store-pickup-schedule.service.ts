@@ -146,6 +146,14 @@ export class StorePickupScheduleService {
     if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
       return { date, morning: [], afternoon: [] };
     }
+    // 특별휴무도 요일 휴무와 같은 "영업하지 않는 날" — SDL 주석대로 빈 배열로 통일한다.
+    // (PAST/OUT_OF_RANGE/CAPACITY_FULL/당일 마감은 영업일이므로 슬롯을 마감 표기로 유지)
+    const dateKey = new Date(Date.UTC(year, month - 1, day))
+      .toISOString()
+      .slice(0, 10);
+    if (ctx.closureDates.has(dateKey)) {
+      return { date, morning: [], afternoon: [] };
+    }
 
     const reason = this.evaluateDay(store, ctx, now, year, month, day);
     const isToday = kstDayDiff(now, parsed) === 0;
