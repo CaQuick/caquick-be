@@ -21,6 +21,7 @@ export interface StoreOverrides {
   regular_closure_text?: string | null;
   pickup_slot_interval_minutes?: number;
   min_lead_time_minutes?: number;
+  max_days_ahead?: number;
 }
 
 export async function createStore(
@@ -53,6 +54,7 @@ export async function createStore(
       pickup_slot_interval_minutes:
         overrides.pickup_slot_interval_minutes ?? 30,
       min_lead_time_minutes: overrides.min_lead_time_minutes ?? 30,
+      max_days_ahead: overrides.max_days_ahead ?? 30,
     },
   });
 }
