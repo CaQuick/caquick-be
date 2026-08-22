@@ -25,6 +25,22 @@ export interface StoreTodayBusinessHourRow {
   close_time: Date | null;
 }
 
+/** 매장 픽업 정책 row(달력·시간 슬롯 산출용). */
+export interface StorePickupPolicyRow {
+  id: bigint;
+  pickup_slot_interval_minutes: number;
+  min_lead_time_minutes: number;
+  max_days_ahead: number;
+}
+
+/** 요일별 영업시간 row(매장 픽업 달력용). */
+export interface StoreWeekdayBusinessHourRow {
+  day_of_week: number;
+  is_closed: boolean;
+  open_time: Date | null;
+  close_time: Date | null;
+}
+
 export interface StoreReviewStat {
   average: number;
   count: number;
@@ -159,6 +175,101 @@ export class StoreRepository {
       GROUP BY oi.store_id
     `);
     return new Map(rows.map((r) => [r.store_id, Number(r.booked_quantity)]));
+  }
+
+  /** 픽업 달력·슬롯 산출용 매장 정책. 활성·미삭제 매장만. */
+  async findStoreForPickupSchedule(
+    storeId: bigint,
+  ): Promise<StorePickupPolicyRow | null> {
+    return this.prisma.store.findFirst({
+      where: { id: storeId, is_active: true, deleted_at: null },
+      select: {
+        id: true,
+        pickup_slot_interval_minutes: true,
+        min_lead_time_minutes: true,
+        max_days_ahead: true,
+      },
+    });
+  }
+
+  /** 매장의 요일별 영업시간 전체(요일당 최대 1행). */
+  async findBusinessHoursForStore(
+    storeId: bigint,
+  ): Promise<StoreWeekdayBusinessHourRow[]> {
+    return this.prisma.storeBusinessHour.findMany({
+      where: { store_id: storeId, deleted_at: null },
+      select: {
+        day_of_week: true,
+        is_closed: true,
+        open_time: true,
+        close_time: true,
+      },
+    });
+  }
+
+  /** [from, to) 범위(@db.Date, UTC 자정 표현)의 특별휴무 날짜 집합("YYYY-MM-DD"). */
+  async findSpecialClosureDatesInRange(
+    storeId: bigint,
+    from: Date,
+    to: Date,
+  ): Promise<Set<string>> {
+    const rows = await this.prisma.storeSpecialClosure.findMany({
+      where: {
+        store_id: storeId,
+        closure_date: { gte: from, lt: to },
+        deleted_at: null,
+      },
+      select: { closure_date: true },
+    });
+    return new Set(rows.map((r) => r.closure_date.toISOString().slice(0, 10)));
+  }
+
+  /** [from, to) 범위의 일일 capacity 맵("YYYY-MM-DD" → capacity). 레코드 없으면 무제한 취급은 호출부 책임. */
+  async findDailyCapacitiesInRange(
+    storeId: bigint,
+    from: Date,
+    to: Date,
+  ): Promise<Map<string, number>> {
+    const rows = await this.prisma.storeDailyCapacity.findMany({
+      where: {
+        store_id: storeId,
+        capacity_date: { gte: from, lt: to },
+        deleted_at: null,
+      },
+      select: { capacity_date: true, capacity: true },
+    });
+    return new Map(
+      rows.map((r) => [r.capacity_date.toISOString().slice(0, 10), r.capacity]),
+    );
+  }
+
+  /**
+   * 픽업 시각이 [rangeStart, rangeEnd)인 KST 날짜별 예약 제작 수량(아이템 quantity 합).
+   * capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
+   * KST는 DST 없는 고정 +9h라 INTERVAL 9 HOUR 변환으로 달력일을 묶는다.
+   */
+  async sumPickupQuantitiesByKstDate(
+    storeId: bigint,
+    rangeStart: Date,
+    rangeEnd: Date,
+  ): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<
+      { pickup_date: string; booked_quantity: bigint }[]
+    >(Prisma.sql`
+      SELECT DATE_FORMAT(DATE_ADD(o.pickup_at, INTERVAL 9 HOUR), '%Y-%m-%d') AS pickup_date,
+             CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked_quantity
+      FROM order_item oi
+      JOIN \`order\` o
+        ON o.id = oi.order_id
+        AND o.deleted_at IS NULL
+        AND o.status <> 'CANCELED'
+        AND o.pickup_at >= ${rangeStart}
+        AND o.pickup_at < ${rangeEnd}
+      WHERE oi.store_id = ${storeId}
+        AND oi.deleted_at IS NULL
+      GROUP BY pickup_date
+    `);
+    return new Map(rows.map((r) => [r.pickup_date, Number(r.booked_quantity)]));
   }
 
   /** 활성 매장 존재 검증(찜 등). */
