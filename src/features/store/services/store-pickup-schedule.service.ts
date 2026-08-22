@@ -32,6 +32,11 @@ import type {
   StorePickupTimeSlots,
 } from '@/features/store/types/store-pickup-schedule-output.type';
 
+// MySQL DATE 표현 범위(1000-01-01~9999-12-31) 안에서 익월/익일 상한 계산이 넘치지
+// 않도록 연도를 제한한다. Date.UTC의 0~99년 → 1900년대 매핑 오동작도 함께 차단.
+const MIN_SCHEDULE_YEAR = 1000;
+const MAX_SCHEDULE_YEAR = 9998;
+
 /** 월/일 범위 벌크 조회 결과(달력 판정 컨텍스트). */
 interface ScheduleContext {
   hoursByWeekday: Map<number, StoreWeekdayBusinessHourRow>;
@@ -56,7 +61,7 @@ export class StorePickupScheduleService {
     yearMonth: string,
   ): Promise<StorePickupCalendar> {
     const ym = parseKstYearMonth(yearMonth);
-    if (!ym) {
+    if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
       throw new BadRequestException(
         STORE_PICKUP_SCHEDULE_ERRORS.INVALID_YEAR_MONTH,
       );
@@ -114,13 +119,16 @@ export class StorePickupScheduleService {
     if (!parsed) {
       throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
     }
+    const { year, month, day } = toKstYmd(parsed);
+    if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
+      throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
+    }
     const store = await this.repo.findStoreForPickupSchedule(storeId);
     if (!store) {
       throw new NotFoundException(STORE_PICKUP_SCHEDULE_ERRORS.STORE_NOT_FOUND);
     }
 
     const now = this.clock.now();
-    const { year, month, day } = toKstYmd(parsed);
     const ctx = await this.loadScheduleContext(
       store.id,
       new Date(Date.UTC(year, month - 1, day)),

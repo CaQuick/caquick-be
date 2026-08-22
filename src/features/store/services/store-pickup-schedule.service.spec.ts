@@ -277,6 +277,23 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('DB date 표현 범위 밖 연도는 거절한다', async () => {
+      const store = await createStore(prisma);
+
+      // 0~99년은 Date.UTC가 1900년대로 매핑해 엉뚱한 세기를 반환하므로 차단
+      await expect(
+        service.storePickupCalendar(store.id, '0000-01'),
+      ).rejects.toThrow(BadRequestException);
+      // MySQL DATE 하한(1000-01-01) 미만
+      await expect(
+        service.storePickupCalendar(store.id, '0999-01'),
+      ).rejects.toThrow(BadRequestException);
+      // 9999-12는 익월 상한 계산이 DATE 상한(9999-12-31)을 넘는다
+      await expect(
+        service.storePickupCalendar(store.id, '9999-12'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('없거나 비활성 매장은 NOT_FOUND다', async () => {
       const inactive = await createStore(prisma, { is_active: false });
 
@@ -381,6 +398,15 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.storePickupTimeSlots(store.id, '20260918'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('DB date 표현 범위 밖 연도는 거절한다', async () => {
+      const store = await createStore(prisma);
+
+      // 9999-12-31은 익일 상한 계산이 DATE 상한(9999-12-31)을 넘는다
+      await expect(
+        service.storePickupTimeSlots(store.id, '9999-12-31'),
       ).rejects.toThrow(BadRequestException);
     });
 
