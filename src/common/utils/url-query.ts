@@ -34,27 +34,30 @@ export function buildQueryString(queryParams: QueryParams): string {
  * ParsedQs → 안전한 QueryParams로 변환
  */
 export function toQueryParams(qs: ParsedQs | undefined): QueryParams {
-  const out: QueryParams = {};
-  if (!qs) return out;
+  if (!qs) return {};
 
+  const entries: [string, string | string[]][] = [];
   for (const [key, raw] of Object.entries(qs)) {
-    // 쿼리 키는 사용자 입력이라 프로토타입 오염 위험 키를 속성으로 쓰지 않는다
-    // (CodeQL js/remote-property-injection). Set 대신 직접 비교를 쓰는 이유:
-    // CodeQL이 sanitizer로 인식하는 패턴이 명시적 키 비교이기 때문.
+    // 쿼리 키는 사용자 입력이라 프로토타입 오염 위험 키는 변환에서 제외한다
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
       continue;
     }
     if (raw === undefined || raw === null) continue;
 
     if (Array.isArray(raw)) {
-      out[key] = raw.map((v) =>
-        typeof v === 'string' ? v : JSON.stringify(v),
-      );
+      entries.push([
+        key,
+        raw.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))),
+      ]);
     } else if (typeof raw === 'string') {
-      out[key] = raw;
+      entries.push([key, raw]);
     } else {
-      out[key] = JSON.stringify(raw);
+      entries.push([key, JSON.stringify(raw)]);
     }
   }
-  return out;
+  // 할당식 속성 쓰기(out[key]=...) 대신 Object.fromEntries를 쓴다 —
+  // define-property 의미라 __proto__류 키로도 프로토타입을 오염시킬 수 없고,
+  // CodeQL js/remote-property-injection이 키 블록리스트를 sanitizer로
+  // 인식하지 않는 문제(main 재분석에서 확인)도 소스 제거로 해소된다.
+  return Object.fromEntries(entries);
 }
