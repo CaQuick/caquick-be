@@ -1,0 +1,31 @@
+extend type Query {
+  """매장별 월 픽업 가능 날짜. 없거나 비활성/삭제 매장이면 NOT_FOUND. 비로그인 접근 가능. yearMonth: "YYYY-MM" """
+  storePickupCalendar(storeId: ID!, yearMonth: String!): StorePickupCalendar!
+  """매장별 선택 날짜의 픽업 시간 슬롯. date: "YYYY-MM-DD" """
+  storePickupTimeSlots(storeId: ID!, date: String!): StorePickupTimeSlots!
+}
+
+"""매장별 월 픽업 달력(상품 상세 픽업 일정 선택용)."""
+type StorePickupCalendar {
+  yearMonth: String!
+  days: [StorePickupDay!]!
+}
+
+type StorePickupDay {
+  date: String!
+  selectable: Boolean!
+  """선택 불가 사유. PAST | OUT_OF_RANGE | CLOSED(휴무·영업요일 아님·당일 잔여 슬롯 없음) | CAPACITY_FULL. 선택 가능 시 null."""
+  reason: String
+}
+
+"""매장별 특정 날짜의 픽업 시간 슬롯. 영업하지 않는 날은 빈 배열."""
+type StorePickupTimeSlots {
+  date: String!
+  morning: [StorePickupSlot!]!
+  afternoon: [StorePickupSlot!]!
+}
+
+type StorePickupSlot {
+  time: String!
+  available: Boolean!
+}
