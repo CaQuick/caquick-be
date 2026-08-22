@@ -57,7 +57,7 @@ describe('url-query', () => {
         constructor: 'y',
         prototype: 'z',
         safe: 'ok',
-      } as never);
+      });
       expect(result).toEqual({ safe: 'ok' });
       expect(Object.keys(result)).toEqual(['safe']);
     });
