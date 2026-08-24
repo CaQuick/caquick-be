@@ -5,6 +5,7 @@ import {
   NotificationEvent,
   NotificationType,
   OrderStatus,
+  Prisma,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
@@ -41,6 +42,19 @@ export interface OngoingOrderRow {
   }[];
 }
 
+/**
+ * 일일 capacity 원자 검사 조건. 트랜잭션 안에서 capacity 행을 잠그고
+ * 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다.
+ */
+export interface DailyCapacityGuard {
+  storeId: bigint;
+  /** @db.Date 비교용(해당 KST 달력일의 UTC 자정 표현). */
+  dateOnlyUtc: Date;
+  /** pickup_at 범위 비교용 KST 자정 경계. */
+  dayStartUtc: Date;
+  dayEndUtc: Date;
+}
+
 /** 주문 생성 입력(스냅샷 값은 서비스가 계산해 전달). */
 export interface CreateSubmittedOrderArgs {
   accountId: bigint;
@@ -52,6 +66,8 @@ export interface CreateSubmittedOrderArgs {
   discountPrice: number;
   totalPrice: number;
   submittedAt: Date;
+  /** null이면 capacity 원자 검사 생략(호출부가 무제한으로 판단한 경우는 없음 — 항상 전달 권장). */
+  capacityGuard: DailyCapacityGuard | null;
   item: {
     storeId: bigint;
     productId: bigint;
@@ -110,14 +126,70 @@ export class OrderRepository {
 
   /**
    * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
-   * 중첩 create 한 번으로 원자적으로 만든다. SUBMITTED는 알림 미발송
+   * 트랜잭션으로 원자 생성한다. SUBMITTED는 알림 미발송
    * (알림은 판매자 상태 변경부터 — orderStatusToNotificationEvent 규칙).
+   * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를
+   * 재집계해, 동시 주문이 마지막 잔여를 함께 차지하는 race를 차단한다.
+   * capacity 초과면 null을 반환한다(호출부가 도메인 에러로 변환).
    * order_number unique 충돌(P2002)은 호출부가 재시도한다.
    */
   async createSubmittedOrder(
     args: CreateSubmittedOrderArgs,
+  ): Promise<CreatedOrderRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (args.capacityGuard) {
+        const exceeded = await this.isCapacityExceededLocked(
+          tx,
+          args.capacityGuard,
+          args.item.quantity,
+        );
+        if (exceeded) return null;
+      }
+      return this.insertSubmittedOrder(tx, args);
+    });
+  }
+
+  /**
+   * capacity 행 잠금 후 잔여 재검사. 레코드가 없으면 무제한(검사 통과).
+   * FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다.
+   */
+  private async isCapacityExceededLocked(
+    tx: Prisma.TransactionClient,
+    guard: DailyCapacityGuard,
+    quantity: number,
+  ): Promise<boolean> {
+    const capacityRows = await tx.$queryRaw<{ capacity: number }[]>(Prisma.sql`
+      SELECT capacity
+      FROM store_daily_capacity
+      WHERE store_id = ${guard.storeId}
+        AND capacity_date = ${guard.dateOnlyUtc}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `);
+    const capacity = capacityRows[0]?.capacity;
+    if (capacity === undefined) return false;
+
+    const bookedRows = await tx.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
+      SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked
+      FROM order_item oi
+      JOIN \`order\` o
+        ON o.id = oi.order_id
+        AND o.deleted_at IS NULL
+        AND o.status <> 'CANCELED'
+        AND o.pickup_at >= ${guard.dayStartUtc}
+        AND o.pickup_at < ${guard.dayEndUtc}
+      WHERE oi.store_id = ${guard.storeId}
+        AND oi.deleted_at IS NULL
+    `);
+    const booked = Number(bookedRows[0]?.booked ?? 0);
+    return booked + quantity > capacity;
+  }
+
+  private async insertSubmittedOrder(
+    tx: Prisma.TransactionClient,
+    args: CreateSubmittedOrderArgs,
   ): Promise<CreatedOrderRow> {
-    return this.prisma.order.create({
+    return tx.order.create({
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,

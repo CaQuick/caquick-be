@@ -439,6 +439,89 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(ok.status).toBe('SUBMITTED');
     });
 
+    it('32비트 초과·음수 금액은 커밋 전에 거절한다', async () => {
+      const store = await makeOpenStore();
+      const buyer = await makeBuyer();
+      // 10억 × 3 = 30억 → GraphQL Int(2,147,483,647) 초과
+      const expensive = await createProduct(prisma, {
+        store_id: store.id,
+        regular_price: 1_000_000_000,
+      });
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: expensive.id.toString(), quantity: 3 }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      // 음수 델타가 상품가를 초과 → 음수 금액
+      const cheap = await createProduct(prisma, {
+        store_id: store.id,
+        regular_price: 20000,
+      });
+      const group = await prisma.productOptionGroup.create({
+        data: {
+          product_id: cheap.id,
+          name: '할인',
+          is_required: true,
+          min_select: 1,
+          max_select: 1,
+        },
+      });
+      const negativeItem = await prisma.productOptionItem.create({
+        data: {
+          option_group_id: group.id,
+          title: '과도한 할인',
+          price_delta: -30000,
+        },
+      });
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            productId: cheap.id.toString(),
+            optionItemIds: [negativeItem.id.toString()],
+          }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('동시 주문이 마지막 capacity 잔여를 함께 차지하지 못한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyerA = await makeBuyer();
+      const buyerB = await makeBuyer();
+      await prisma.storeDailyCapacity.create({
+        data: {
+          store_id: store.id,
+          capacity_date: new Date(Date.UTC(2026, 8, 18)),
+          capacity: 1,
+        },
+      });
+
+      // 둘 다 사전 검사는 통과하지만, 트랜잭션 내 FOR UPDATE 재검사가
+      // 직렬화해 정확히 한 건만 성공해야 한다
+      const results = await Promise.allSettled([
+        service.createOrder(
+          buyerA.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+        service.createOrder(
+          buyerB.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      const submittedCount = await prisma.order.count({
+        where: { status: 'SUBMITTED', deleted_at: null },
+      });
+      expect(submittedCount).toBe(1);
+    });
+
     it('주문번호 충돌 시 새 번호로 재시도하고, 계속 충돌하면 실패한다', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });

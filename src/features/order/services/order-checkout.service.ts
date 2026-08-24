@@ -9,7 +9,11 @@ import { Prisma } from '@prisma/client';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
-import { formatKstDate } from '@/common/utils/kst-time';
+import {
+  formatKstDate,
+  kstMidnightUtc,
+  toKstYmd,
+} from '@/common/utils/kst-time';
 import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -22,6 +26,11 @@ const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ORDER_NUMBER_RANDOM_LENGTH = 6;
 // unique 충돌은 확률적으로 희박 — 소수 재시도로 충분하다
 const ORDER_NUMBER_MAX_ATTEMPTS = 3;
+
+// GraphQL Int는 signed 32비트. 커밋 전에 금액을 이 범위로 제한해
+// "저장은 됐는데 응답 직렬화에서 실패 → 재시도 중복 주문" 경로를 차단한다.
+const MAX_ORDER_AMOUNT = 2_147_483_647;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 옵션 검증 결과(스냅샷 조립용). */
 interface ResolvedOptionSelection {
@@ -81,6 +90,19 @@ export class OrderCheckoutService {
     const subtotalPrice = (product.regular_price + deltaSum) * quantity;
     const discountPrice = (product.regular_price - effectivePrice) * quantity;
     const itemSubtotalPrice = (effectivePrice + deltaSum) * quantity;
+    // 음수(과도한 음수 델타·판매가>정가 이상 데이터)나 32비트 초과 금액은
+    // unsigned 컬럼/GraphQL Int에서 깨진다 — 커밋 전에 거절한다
+    for (const amount of [subtotalPrice, discountPrice, itemSubtotalPrice]) {
+      if (
+        !Number.isSafeInteger(amount) ||
+        amount < 0 ||
+        amount > MAX_ORDER_AMOUNT
+      ) {
+        throw new BadRequestException(
+          ORDER_CHECKOUT_ERRORS.ORDER_AMOUNT_OUT_OF_RANGE,
+        );
+      }
+    }
 
     const submittedAt = this.clock.now();
     const created = await this.createWithOrderNumberRetry({
@@ -92,6 +114,7 @@ export class OrderCheckoutService {
       discountPrice,
       totalPrice: itemSubtotalPrice,
       submittedAt,
+      capacityGuard: this.buildCapacityGuard(product.store_id, input.pickupAt),
       item: {
         storeId: product.store_id,
         productId: product.id,
@@ -110,6 +133,18 @@ export class OrderCheckoutService {
       status: created.status,
       pickupAt: created.pickup_at,
       totalPrice: created.total_price,
+    };
+  }
+
+  /** capacity 원자 검사 조건(픽업 KST 달력일 기준). */
+  private buildCapacityGuard(storeId: bigint, pickupAt: Date) {
+    const { year, month, day } = toKstYmd(pickupAt);
+    const dayStartUtc = kstMidnightUtc(year, month, day);
+    return {
+      storeId,
+      dateOnlyUtc: new Date(Date.UTC(year, month - 1, day)),
+      dayStartUtc,
+      dayEndUtc: new Date(dayStartUtc.getTime() + DAY_MS),
     };
   }
 
@@ -203,10 +238,17 @@ export class OrderCheckoutService {
   ) {
     for (let attempt = 0; attempt < ORDER_NUMBER_MAX_ATTEMPTS; attempt += 1) {
       try {
-        return await this.orderRepo.createSubmittedOrder({
+        const created = await this.orderRepo.createSubmittedOrder({
           ...args,
           orderNumber: this.generateOrderNumber(args.submittedAt),
         });
+        if (created === null) {
+          // 트랜잭션 내 capacity 재검사에서 잔여 부족 판정(동시 주문 race 차단)
+          throw new BadRequestException(
+            ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE,
+          );
+        }
+        return created;
       } catch (error) {
         const isUniqueViolation =
           error instanceof Prisma.PrismaClientKnownRequestError &&
