@@ -179,6 +179,72 @@ export class StorePickupScheduleService {
     };
   }
 
+  /**
+   * 특정 픽업 일시가 예약 가능한지 판정한다(주문 생성 재검증용).
+   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과
+   * capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다.
+   * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
+   */
+  async isPickupSlotAvailable(args: {
+    storeId: bigint;
+    pickupAt: Date;
+    additionalQuantity?: number;
+  }): Promise<boolean> {
+    const store = await this.repo.findStoreForPickupSchedule(args.storeId);
+    if (!store) return false;
+
+    // 슬롯은 분 단위 시작 시각 포인트 — 초 이하가 남아 있으면 슬롯 정합 실패
+    if (
+      args.pickupAt.getUTCSeconds() !== 0 ||
+      args.pickupAt.getUTCMilliseconds() !== 0
+    ) {
+      return false;
+    }
+
+    const now = this.clock.now();
+    const { year, month, day } = toKstYmd(args.pickupAt);
+    if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) return false;
+
+    const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
+    const ctx = await this.loadScheduleContext(
+      store.id,
+      dateOnlyUtc,
+      new Date(Date.UTC(year, month - 1, day + 1)),
+      kstMidnightUtc(year, month, day),
+      kstMidnightUtc(year, month, day + 1),
+    );
+
+    if (this.evaluateDay(store, ctx, now, year, month, day) !== null) {
+      return false;
+    }
+
+    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가
+    // (명세 외 정책 결정: capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석)
+    const dateKey = dateOnlyUtc.toISOString().slice(0, 10);
+    const capacity = ctx.capacities.get(dateKey);
+    const booked = ctx.bookedByDate.get(dateKey) ?? 0;
+    const quantity = args.additionalQuantity ?? 1;
+    if (capacity !== undefined && booked + quantity > capacity) return false;
+
+    const hour = ctx.hoursByWeekday.get(dateOnlyUtc.getUTCDay());
+    if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
+      return false;
+    }
+
+    const isToday = kstDayDiff(now, args.pickupAt) === 0;
+    const slots = this.buildDaySlots(
+      store,
+      hour.open_time,
+      hour.close_time,
+      isToday,
+      now,
+    );
+    const pickupMinutes = kstMinutesOfDay(args.pickupAt);
+    return slots.some(
+      (slot) => slot.available && slotMinutes(slot) === pickupMinutes,
+    );
+  }
+
   private async loadScheduleContext(
     storeId: bigint,
     fromDateOnly: Date,

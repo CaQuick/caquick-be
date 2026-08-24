@@ -69,6 +69,8 @@ export interface ProductDetailRow {
   regular_price: number;
   sale_price: number | null;
   currency: string;
+  // 주문 생성(checkout)의 제작 소요시간 검증용
+  preparation_time_minutes: number;
   images: { image_url: string }[];
   option_groups: {
     id: bigint;
@@ -905,6 +907,7 @@ export class ProductRepository {
         regular_price: true,
         sale_price: true,
         currency: true,
+        preparation_time_minutes: true,
         images: {
           where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },

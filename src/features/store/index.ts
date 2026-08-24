@@ -8,6 +8,9 @@ export {
   RANKING_VALID_ORDER_STATUSES,
 } from '@/features/store/constants/store-ranking.constants';
 export { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
+// 매장 픽업 가능 판정. 주문 생성(order feature)이 픽업 일시 재검증에 사용한다 —
+// 판정 규칙은 store feature에 유지한다(달력·슬롯 조회와 단일 소스).
+export { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
 export {
   popularityScore,
   type StoreMetrics,
