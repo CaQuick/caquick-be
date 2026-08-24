@@ -55,4 +55,17 @@ describe('CreateOrderInput', () => {
     const errors = await validate(build({ ...VALID, buyerName: '' }));
     expect(errors[0].property).toBe('buyerName');
   });
+
+  it('buyerPhone은 010-XXXX-XXXX 형식만 허용한다', async () => {
+    expect(
+      (await validate(build({ ...VALID, buyerPhone: 'abc' })))[0].property,
+    ).toBe('buyerPhone');
+    expect(
+      (await validate(build({ ...VALID, buyerPhone: '01000001111' })))[0]
+        .property,
+    ).toBe('buyerPhone');
+    expect(
+      await validate(build({ ...VALID, buyerPhone: '010-0000-1111' })),
+    ).toHaveLength(0);
+  });
 });

@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AccountType, Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
@@ -63,6 +65,8 @@ export class OrderCheckoutService {
     const optionItemIds = input.optionItemIds.map((id) => parseId(id));
     const quantity = input.quantity ?? 1;
 
+    const buyerProfile = await this.requireActiveBuyer(accountId);
+
     const product = await this.productRepo.findProductDetailById(productId);
     if (!product) {
       throw new NotFoundException(ORDER_CHECKOUT_ERRORS.PRODUCT_NOT_FOUND);
@@ -74,7 +78,7 @@ export class OrderCheckoutService {
     }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
-    const buyer = await this.resolveBuyer(accountId, input);
+    const buyer = this.resolveBuyerInfo(buyerProfile, input);
 
     const now = this.clock.now();
     // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
@@ -220,20 +224,40 @@ export class OrderCheckoutService {
     return selections;
   }
 
-  /** 주문자 정보: input 우선, 없으면 프로필(닉네임·전화번호) fallback. */
-  private async resolveBuyer(
+  /**
+   * 활성 USER 계정 + 활성 프로필 강제(user feature requireActiveUser와
+   * 동일 의미론 — user는 배럴 없는 feature라 checkout 경로에 재구현).
+   * SELLER/ADMIN이 구매자 mutation으로 주문을 만드는 것을 차단한다.
+   */
+  private async requireActiveBuyer(
     accountId: bigint,
+  ): Promise<{ nickname: string; phone_number: string | null }> {
+    const account =
+      await this.orderRepo.findAccountWithProfileForCheckout(accountId);
+    if (!account) {
+      throw new UnauthorizedException(
+        ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
+      );
+    }
+    if (account.account_type !== AccountType.USER) {
+      throw new ForbiddenException(ORDER_CHECKOUT_ERRORS.BUYER_NOT_USER);
+    }
+    if (!account.user_profile || account.user_profile.deleted_at) {
+      throw new UnauthorizedException(
+        ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
+      );
+    }
+    return account.user_profile;
+  }
+
+  /** 주문자 정보: input 우선, 없으면 프로필(닉네임·전화번호) fallback. */
+  private resolveBuyerInfo(
+    profile: { nickname: string; phone_number: string | null },
     input: CreateOrderInput,
-  ): Promise<{ name: string; phone: string }> {
-    if (input.buyerName && input.buyerPhone) {
-      return { name: input.buyerName, phone: input.buyerPhone };
-    }
-    const profile = await this.orderRepo.findBuyerProfile(accountId);
-    const name = input.buyerName ?? profile?.nickname;
-    const phone = input.buyerPhone ?? profile?.phone_number ?? undefined;
-    if (!name) {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_NAME_REQUIRED);
-    }
+  ): { name: string; phone: string } {
+    // 이름은 프로필 닉네임(NOT NULL)이 최종 fallback이라 항상 존재한다
+    const name = input.buyerName ?? profile.nickname;
+    const phone = input.buyerPhone ?? profile.phone_number ?? undefined;
     if (!phone) {
       throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_PHONE_REQUIRED);
     }

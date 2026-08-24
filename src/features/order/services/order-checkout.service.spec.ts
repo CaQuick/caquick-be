@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Account, PrismaClient, Product, Store } from '@prisma/client';
 
@@ -437,6 +439,26 @@ describe('OrderCheckoutService (real DB)', () => {
         baseInput({ productId: product.id.toString(), quantity: 1 }),
       );
       expect(ok.status).toBe('SUBMITTED');
+    });
+
+    it('SELLER 계정·프로필 없는 계정은 주문할 수 없다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      const profileless = await createAccount(prisma, { account_type: 'USER' });
+
+      await expect(
+        service.createOrder(
+          seller.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.createOrder(
+          profileless.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('상품 제작 소요시간 이전 픽업 일시는 거절한다', async () => {

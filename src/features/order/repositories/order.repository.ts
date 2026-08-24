@@ -6,6 +6,7 @@ import {
   NotificationType,
   OrderStatus,
   Prisma,
+  type AccountType,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
@@ -114,13 +115,26 @@ export interface ReviewableOrderItemRow {
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 주문자 정보 fallback용 프로필 조회(닉네임·전화번호). */
-  async findBuyerProfile(
-    accountId: bigint,
-  ): Promise<{ nickname: string; phone_number: string | null } | null> {
-    return this.prisma.userProfile.findFirst({
-      where: { account_id: accountId, deleted_at: null },
-      select: { nickname: true, phone_number: true },
+  /**
+   * 구매자 검증·주문자 fallback용 계정+프로필 조회.
+   * USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론).
+   */
+  async findAccountWithProfileForCheckout(accountId: bigint): Promise<{
+    account_type: AccountType;
+    user_profile: {
+      nickname: string;
+      phone_number: string | null;
+      deleted_at: Date | null;
+    } | null;
+  } | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId, deleted_at: null },
+      select: {
+        account_type: true,
+        user_profile: {
+          select: { nickname: true, phone_number: true, deleted_at: true },
+        },
+      },
     });
   }
 
