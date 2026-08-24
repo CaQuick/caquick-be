@@ -255,8 +255,10 @@ export class OrderCheckoutService {
     profile: { nickname: string; phone_number: string | null },
     input: CreateOrderInput,
   ): { name: string; phone: string } {
-    // 이름은 프로필 닉네임(NOT NULL)이 최종 fallback이라 항상 존재한다
-    const name = input.buyerName ?? profile.nickname;
+    // 이름은 프로필 닉네임(NOT NULL)이 최종 fallback이라 항상 존재한다.
+    // 공백만 입력된 이름은 빈 표기로 커밋되지 않게 미입력으로 취급한다.
+    const trimmedName = input.buyerName?.trim();
+    const name = trimmedName || profile.nickname;
     const phone = input.buyerPhone ?? profile.phone_number ?? undefined;
     if (!phone) {
       throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_PHONE_REQUIRED);

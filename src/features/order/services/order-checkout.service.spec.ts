@@ -353,6 +353,16 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(saved.buyer_name).toBe('주문자닉네임');
       expect(saved.buyer_phone).toBe('010-9999-8888');
 
+      // 공백만 입력된 이름은 미입력으로 취급해 닉네임 fallback
+      const whitespaceName = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString(), buyerName: '   ' }),
+      );
+      const savedWhitespace = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(whitespaceName.orderId) },
+      });
+      expect(savedWhitespace.buyer_name).toBe('주문자닉네임');
+
       const phonelessBuyer = await makeBuyer(null);
       await expect(
         service.createOrder(
