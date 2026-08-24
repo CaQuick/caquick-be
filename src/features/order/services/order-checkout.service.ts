@@ -1,0 +1,241 @@
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+
+import { ClockService } from '@/common/providers/clock.service';
+import { RandomService } from '@/common/providers/random.service';
+import { parseId } from '@/common/utils/id-parser';
+import { formatKstDate } from '@/common/utils/kst-time';
+import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
+import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
+import { OrderRepository } from '@/features/order/repositories/order.repository';
+import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
+import { ProductRepository, type ProductDetailRow } from '@/features/product';
+import { StorePickupScheduleService } from '@/features/store';
+
+// 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
+const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const ORDER_NUMBER_RANDOM_LENGTH = 6;
+// unique 충돌은 확률적으로 희박 — 소수 재시도로 충분하다
+const ORDER_NUMBER_MAX_ATTEMPTS = 3;
+
+/** 옵션 검증 결과(스냅샷 조립용). */
+interface ResolvedOptionSelection {
+  optionGroupId: bigint;
+  optionItemId: bigint;
+  groupNameSnapshot: string;
+  optionTitleSnapshot: string;
+  optionPriceDeltaSnapshot: number;
+}
+
+@Injectable()
+export class OrderCheckoutService {
+  constructor(
+    private readonly orderRepo: OrderRepository,
+    private readonly productRepo: ProductRepository,
+    private readonly pickupSchedule: StorePickupScheduleService,
+    private readonly clock: ClockService,
+    private readonly random: RandomService,
+  ) {}
+
+  /**
+   * 주문 생성(정식 API의 확정 부분집합 — 커스텀 입력은 스펙 확정 후 확장).
+   * 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다.
+   */
+  async createOrder(
+    accountId: bigint,
+    input: CreateOrderInput,
+  ): Promise<CreateOrderOutput> {
+    const productId = parseId(input.productId);
+    const optionItemIds = input.optionItemIds.map((id) => parseId(id));
+    const quantity = input.quantity ?? 1;
+
+    const product = await this.productRepo.findProductDetailById(productId);
+    if (!product) {
+      throw new NotFoundException(ORDER_CHECKOUT_ERRORS.PRODUCT_NOT_FOUND);
+    }
+
+    const selections = this.resolveOptionSelections(product, optionItemIds);
+    const buyer = await this.resolveBuyer(accountId, input);
+
+    const pickupAvailable = await this.pickupSchedule.isPickupSlotAvailable({
+      storeId: product.store_id,
+      pickupAt: input.pickupAt,
+      additionalQuantity: quantity,
+    });
+    if (!pickupAvailable) {
+      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
+    }
+
+    // 가격 스냅샷: FE 제출 금액은 신뢰하지 않고 서버가 재계산한다.
+    // subtotal은 정가 기준, discount는 정가-판매가 차액 → total = 판매가 기준.
+    const deltaSum = selections.reduce(
+      (sum, selection) => sum + selection.optionPriceDeltaSnapshot,
+      0,
+    );
+    const effectivePrice = product.sale_price ?? product.regular_price;
+    const subtotalPrice = (product.regular_price + deltaSum) * quantity;
+    const discountPrice = (product.regular_price - effectivePrice) * quantity;
+    const itemSubtotalPrice = (effectivePrice + deltaSum) * quantity;
+
+    const submittedAt = this.clock.now();
+    const created = await this.createWithOrderNumberRetry({
+      accountId,
+      pickupAt: input.pickupAt,
+      buyerName: buyer.name,
+      buyerPhone: buyer.phone,
+      subtotalPrice,
+      discountPrice,
+      totalPrice: itemSubtotalPrice,
+      submittedAt,
+      item: {
+        storeId: product.store_id,
+        productId: product.id,
+        productNameSnapshot: product.name,
+        regularPriceSnapshot: product.regular_price,
+        salePriceSnapshot: product.sale_price,
+        quantity,
+        itemSubtotalPrice,
+        options: selections,
+      },
+    });
+
+    return {
+      orderId: created.id.toString(),
+      orderNumber: created.order_number,
+      status: created.status,
+      pickupAt: created.pickup_at,
+      totalPrice: created.total_price,
+    };
+  }
+
+  /**
+   * 옵션 선택 검증. 중복·타 상품 옵션을 거절하고 그룹 규칙을 확인한다.
+   * 명세 외 정책 결정: 필수 그룹은 min~max개 선택, 선택 그룹은 0개 또는 min~max개.
+   */
+  private resolveOptionSelections(
+    product: ProductDetailRow,
+    optionItemIds: bigint[],
+  ): ResolvedOptionSelection[] {
+    const uniqueIds = new Set(optionItemIds.map((id) => id.toString()));
+    if (uniqueIds.size !== optionItemIds.length) {
+      throw new BadRequestException(
+        ORDER_CHECKOUT_ERRORS.DUPLICATE_OPTION_ITEM,
+      );
+    }
+
+    const selectionByItemId = new Map<string, ResolvedOptionSelection>();
+    const groupIdByItemId = new Map<string, string>();
+    for (const group of product.option_groups) {
+      for (const item of group.option_items) {
+        selectionByItemId.set(item.id.toString(), {
+          optionGroupId: group.id,
+          optionItemId: item.id,
+          groupNameSnapshot: group.name,
+          optionTitleSnapshot: item.title,
+          optionPriceDeltaSnapshot: item.price_delta,
+        });
+        groupIdByItemId.set(item.id.toString(), group.id.toString());
+      }
+    }
+
+    const countByGroupId = new Map<string, number>();
+    const selections = optionItemIds.map((id) => {
+      const selection = selectionByItemId.get(id.toString());
+      if (!selection) {
+        throw new BadRequestException(
+          ORDER_CHECKOUT_ERRORS.INVALID_OPTION_ITEM,
+        );
+      }
+      const groupId = groupIdByItemId.get(id.toString());
+      if (groupId !== undefined) {
+        countByGroupId.set(groupId, (countByGroupId.get(groupId) ?? 0) + 1);
+      }
+      return selection;
+    });
+
+    for (const group of product.option_groups) {
+      const count = countByGroupId.get(group.id.toString()) ?? 0;
+      const withinRange =
+        count >= group.min_select && count <= group.max_select;
+      const valid = group.is_required
+        ? withinRange
+        : count === 0 || withinRange;
+      if (!valid) {
+        throw new BadRequestException(
+          ORDER_CHECKOUT_ERRORS.OPTION_GROUP_RULE_VIOLATION,
+        );
+      }
+    }
+    return selections;
+  }
+
+  /** 주문자 정보: input 우선, 없으면 프로필(닉네임·전화번호) fallback. */
+  private async resolveBuyer(
+    accountId: bigint,
+    input: CreateOrderInput,
+  ): Promise<{ name: string; phone: string }> {
+    if (input.buyerName && input.buyerPhone) {
+      return { name: input.buyerName, phone: input.buyerPhone };
+    }
+    const profile = await this.orderRepo.findBuyerProfile(accountId);
+    const name = input.buyerName ?? profile?.nickname;
+    const phone = input.buyerPhone ?? profile?.phone_number ?? undefined;
+    if (!name) {
+      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_NAME_REQUIRED);
+    }
+    if (!phone) {
+      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_PHONE_REQUIRED);
+    }
+    return { name, phone };
+  }
+
+  /** 주문번호 unique 충돌(P2002) 시 새 번호로 소수 재시도. */
+  private async createWithOrderNumberRetry(
+    args: Omit<
+      Parameters<OrderRepository['createSubmittedOrder']>[0],
+      'orderNumber'
+    >,
+  ) {
+    for (let attempt = 0; attempt < ORDER_NUMBER_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.orderRepo.createSubmittedOrder({
+          ...args,
+          orderNumber: this.generateOrderNumber(args.submittedAt),
+        });
+      } catch (error) {
+        const isUniqueViolation =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002';
+        if (!isUniqueViolation || attempt === ORDER_NUMBER_MAX_ATTEMPTS - 1) {
+          if (isUniqueViolation) {
+            throw new InternalServerErrorException(
+              ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
+            );
+          }
+          throw error;
+        }
+      }
+    }
+    // 루프는 반환/throw로만 종료된다 — 타입 좁히기용 방어
+    throw new InternalServerErrorException(
+      ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
+    );
+  }
+
+  /** 주문번호: ORD-YYYYMMDD-XXXXXX (KST 날짜 + 혼동 문자 제외 랜덤 6자리). */
+  private generateOrderNumber(at: Date): string {
+    const datePart = formatKstDate(at).replaceAll('-', '');
+    let randomPart = '';
+    for (let i = 0; i < ORDER_NUMBER_RANDOM_LENGTH; i += 1) {
+      randomPart += ORDER_NUMBER_ALPHABET.charAt(
+        this.random.int(ORDER_NUMBER_ALPHABET.length),
+      );
+    }
+    return `ORD-${datePart}-${randomPart}`;
+  }
+}

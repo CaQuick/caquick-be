@@ -41,6 +41,44 @@ export interface OngoingOrderRow {
   }[];
 }
 
+/** 주문 생성 입력(스냅샷 값은 서비스가 계산해 전달). */
+export interface CreateSubmittedOrderArgs {
+  accountId: bigint;
+  orderNumber: string;
+  pickupAt: Date;
+  buyerName: string;
+  buyerPhone: string;
+  subtotalPrice: number;
+  discountPrice: number;
+  totalPrice: number;
+  submittedAt: Date;
+  item: {
+    storeId: bigint;
+    productId: bigint;
+    productNameSnapshot: string;
+    regularPriceSnapshot: number;
+    salePriceSnapshot: number | null;
+    quantity: number;
+    itemSubtotalPrice: number;
+    options: {
+      optionGroupId: bigint;
+      optionItemId: bigint;
+      groupNameSnapshot: string;
+      optionTitleSnapshot: string;
+      optionPriceDeltaSnapshot: number;
+    }[];
+  };
+}
+
+/** 주문 생성 결과 row(생성 요약 응답용). */
+export interface CreatedOrderRow {
+  id: bigint;
+  order_number: string;
+  status: OrderStatus;
+  pickup_at: Date;
+  total_price: number;
+}
+
 /** 리뷰 작성 가능 주문 아이템 row. UserReviewService 매핑 입력. */
 export interface ReviewableOrderItemRow {
   id: bigint;
@@ -59,6 +97,75 @@ export interface ReviewableOrderItemRow {
 @Injectable()
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** 주문자 정보 fallback용 프로필 조회(닉네임·전화번호). */
+  async findBuyerProfile(
+    accountId: bigint,
+  ): Promise<{ nickname: string; phone_number: string | null } | null> {
+    return this.prisma.userProfile.findFirst({
+      where: { account_id: accountId, deleted_at: null },
+      select: { nickname: true, phone_number: true },
+    });
+  }
+
+  /**
+   * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
+   * 중첩 create 한 번으로 원자적으로 만든다. SUBMITTED는 알림 미발송
+   * (알림은 판매자 상태 변경부터 — orderStatusToNotificationEvent 규칙).
+   * order_number unique 충돌(P2002)은 호출부가 재시도한다.
+   */
+  async createSubmittedOrder(
+    args: CreateSubmittedOrderArgs,
+  ): Promise<CreatedOrderRow> {
+    return this.prisma.order.create({
+      data: {
+        account_id: args.accountId,
+        order_number: args.orderNumber,
+        status: OrderStatus.SUBMITTED,
+        pickup_at: args.pickupAt,
+        buyer_name: args.buyerName,
+        buyer_phone: args.buyerPhone,
+        subtotal_price: args.subtotalPrice,
+        discount_price: args.discountPrice,
+        total_price: args.totalPrice,
+        submitted_at: args.submittedAt,
+        items: {
+          create: {
+            store_id: args.item.storeId,
+            product_id: args.item.productId,
+            product_name_snapshot: args.item.productNameSnapshot,
+            regular_price_snapshot: args.item.regularPriceSnapshot,
+            sale_price_snapshot: args.item.salePriceSnapshot,
+            quantity: args.item.quantity,
+            item_subtotal_price: args.item.itemSubtotalPrice,
+            option_items: {
+              create: args.item.options.map((option) => ({
+                option_group_id: option.optionGroupId,
+                option_item_id: option.optionItemId,
+                group_name_snapshot: option.groupNameSnapshot,
+                option_title_snapshot: option.optionTitleSnapshot,
+                option_price_delta_snapshot: option.optionPriceDeltaSnapshot,
+              })),
+            },
+          },
+        },
+        status_histories: {
+          create: {
+            from_status: null,
+            to_status: OrderStatus.SUBMITTED,
+            changed_at: args.submittedAt,
+          },
+        },
+      },
+      select: {
+        id: true,
+        order_number: true,
+        status: true,
+        pickup_at: true,
+        total_price: true,
+      },
+    });
+  }
 
   async findOngoingOrdersByAccount(args: {
     accountId: bigint;
