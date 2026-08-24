@@ -523,6 +523,52 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).resolves.toBe(false);
     });
 
+    it('하루를 넘는 리드타임은 미래 날짜에도 적용된다', async () => {
+      // 리드 3일 → 현재(9/16 16:00) 기준 9/19 16:00 이전 슬롯은 전부 마감
+      const store = await createStore(prisma, {
+        min_lead_time_minutes: 3 * 24 * 60,
+      });
+      await openAllWeek(store);
+
+      // 9/18 14:00 — 리드타임 미달
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-18T05:00:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      // 9/19 14:00 — 여전히 미달, 9/19 16:00 — 충족
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-19T05:00:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-19T07:00:00.000Z'),
+        }),
+      ).resolves.toBe(true);
+
+      // 달력도 동일: 리드타임에 완전히 덮인 날은 CLOSED, 부분 가용 날은 선택 가능
+      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      expect(dayOf(calendar, '2026-09-18')).toMatchObject({
+        selectable: false,
+        reason: 'CLOSED',
+      });
+      expect(dayOf(calendar, '2026-09-19').selectable).toBe(true);
+
+      // 슬롯 조회도 9/19 16:00 이전은 마감 표기
+      const slots = await service.storePickupTimeSlots(store.id, '2026-09-19');
+      expect(
+        slots.afternoon.find((slot) => slot.time === '15:30')?.available,
+      ).toBe(false);
+      expect(
+        slots.afternoon.find((slot) => slot.time === '16:00')?.available,
+      ).toBe(true);
+    });
+
     it('capacity 잔여가 additionalQuantity보다 작으면 불가하다', async () => {
       const store = await createStore(prisma);
       await openAllWeek(store);

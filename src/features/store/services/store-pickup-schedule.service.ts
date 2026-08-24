@@ -156,12 +156,11 @@ export class StorePickupScheduleService {
     }
 
     const reason = this.evaluateDay(store, ctx, now, year, month, day);
-    const isToday = kstDayDiff(now, parsed) === 0;
     let slots = this.buildDaySlots(
       store,
       hour.open_time,
       hour.close_time,
-      isToday,
+      kstMidnightUtc(year, month, day),
       now,
     );
     if (reason !== null) {
@@ -231,12 +230,11 @@ export class StorePickupScheduleService {
       return false;
     }
 
-    const isToday = kstDayDiff(now, args.pickupAt) === 0;
     const slots = this.buildDaySlots(
       store,
       hour.open_time,
       hour.close_time,
-      isToday,
+      kstMidnightUtc(year, month, day),
       now,
     );
     const pickupMinutes = kstMinutesOfDay(args.pickupAt);
@@ -277,7 +275,7 @@ export class StorePickupScheduleService {
   /**
    * 해당 KST 달력일의 선택 불가 사유(null이면 선택 가능).
    * 판정 순서: 과거 → 범위 초과 → 특별휴무 → 요일 휴무/영업시간 미설정
-   * → capacity 소진 → 당일 잔여 가용 슬롯 없음.
+   * → capacity 소진 → 리드타임 반영 잔여 가용 슬롯 없음.
    */
   private evaluateDay(
     store: StorePickupPolicyRow,
@@ -309,37 +307,39 @@ export class StorePickupScheduleService {
       return STORE_PICKUP_DAY_REASON.CAPACITY_FULL;
     }
 
-    // 당일은 리드타임 반영 잔여 슬롯이 있어야 선택 가능(전역 pickupCalendar 선례와 일치)
-    if (diff === 0) {
-      const slots = this.buildDaySlots(
-        store,
-        hour.open_time,
-        hour.close_time,
-        true,
-        now,
-      );
-      if (!slots.some((slot) => slot.available)) {
-        return STORE_PICKUP_DAY_REASON.CLOSED;
-      }
+    // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가(전역 pickupCalendar 선례 확장).
+    // 리드타임이 하루를 넘으면 미래 날짜도 여기서 마감된다.
+    const slots = this.buildDaySlots(
+      store,
+      hour.open_time,
+      hour.close_time,
+      kstMidnightUtc(year, month, day),
+      now,
+    );
+    if (!slots.some((slot) => slot.available)) {
+      return STORE_PICKUP_DAY_REASON.CLOSED;
     }
     return null;
   }
 
-  /** 영업시간·매장 슬롯 간격으로 슬롯 생성. 당일만 리드타임 컷오프를 적용한다. */
+  /**
+   * 영업시간·매장 슬롯 간격으로 슬롯 생성. 리드타임 컷오프는 절대 시각
+   * (now + 리드타임) 기준이라 하루를 넘는 리드타임(최대 7일)도 미래 날짜에
+   * 올바르게 적용된다 — 당일만 컷오프하던 방식의 릴리즈 리뷰 반영.
+   */
   private buildDaySlots(
     store: StorePickupPolicyRow,
     openTime: Date,
     closeTime: Date,
-    isToday: boolean,
+    dayStartUtc: Date,
     now: Date,
   ): StorePickupSlot[] {
-    // 분 단위 절삭은 리드타임을 최대 59초 짧게 만들므로, 초가 남으면 다음 분으로 올린다
-    const hasSubMinute =
-      now.getUTCSeconds() > 0 || now.getUTCMilliseconds() > 0;
-    // 미래일은 컷오프 무력화(-Infinity + 리드타임 = -Infinity → 전 슬롯 가용)
-    const nowMinutes = isToday
-      ? kstMinutesOfDay(now) + (hasSubMinute ? 1 : 0)
-      : Number.NEGATIVE_INFINITY;
+    // 해당 날짜 자정 기준 현재 시각의 경과 분. 미래 날짜면 음수가 되어
+    // 컷오프(nowMinutes + 리드타임)가 그만큼 앞당겨진다. 분수 분은 다음 분으로
+    // 올림(분 절삭이 리드타임을 최대 59초 짧게 만들지 않도록 보수적 처리).
+    const nowMinutes = Math.ceil(
+      (now.getTime() - dayStartUtc.getTime()) / 60_000,
+    );
     return buildTodaySlots({
       openMinutes: timeColumnToMinutes(openTime),
       closeMinutes: timeColumnToMinutes(closeTime),
