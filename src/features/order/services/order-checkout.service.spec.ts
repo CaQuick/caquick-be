@@ -313,6 +313,42 @@ describe('OrderCheckoutService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('설명/이미지 필수 옵션 선택은 커스텀 확장 전까지 거절한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const group = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '레터링',
+          is_required: false,
+          min_select: 1,
+          max_select: 1,
+          option_requires_description: true,
+        },
+      });
+      const item = await prisma.productOptionItem.create({
+        data: { option_group_id: group.id, title: '문구 입력', price_delta: 0 },
+      });
+      const buyer = await makeBuyer();
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            productId: product.id.toString(),
+            optionItemIds: [item.id.toString()],
+          }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      // 해당 그룹을 선택하지 않으면 주문 가능(선택 그룹이므로)
+      const ok = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+      expect(ok.status).toBe('SUBMITTED');
+    });
+
     it('없거나 비활성 상품·비활성 매장 상품은 NOT_FOUND다', async () => {
       const buyer = await makeBuyer();
       const inactiveStore = await createStore(prisma, { is_active: false });
