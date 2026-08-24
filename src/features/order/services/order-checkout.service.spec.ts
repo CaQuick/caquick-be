@@ -439,6 +439,48 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(ok.status).toBe('SUBMITTED');
     });
 
+    it('상품 제작 소요시간 이전 픽업 일시는 거절한다', async () => {
+      const store = await makeOpenStore();
+      // 제작 26시간 — 현재(9/16 16:00) 기준 9/17 14:00(22h)은 미달, 9/18 14:00(46h)은 충족
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        preparation_time_minutes: 26 * 60,
+      });
+      const buyer = await makeBuyer();
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            productId: product.id.toString(),
+            pickupAt: new Date('2026-09-17T05:00:00.000Z'),
+          }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      const ok = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+      expect(ok.status).toBe('SUBMITTED');
+    });
+
+    it('KRW가 아닌 통화 상품은 거절한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        currency: 'USD',
+      });
+      const buyer = await makeBuyer();
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('32비트 초과·음수 금액은 커밋 전에 거절한다', async () => {
       const store = await makeOpenStore();
       const buyer = await makeBuyer();

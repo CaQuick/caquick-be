@@ -67,15 +67,26 @@ export class OrderCheckoutService {
     if (!product) {
       throw new NotFoundException(ORDER_CHECKOUT_ERRORS.PRODUCT_NOT_FOUND);
     }
+    // Order/OrderItem에 통화 스냅샷 컬럼이 없어 비 KRW 금액은 통화 정보가
+    // 소실된다 — 다국통화 스냅샷 설계 전까지 KRW만 허용(명세 외 정책 결정)
+    if (product.currency !== 'KRW') {
+      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.UNSUPPORTED_CURRENCY);
+    }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
     const buyer = await this.resolveBuyer(accountId, input);
 
-    const pickupAvailable = await this.pickupSchedule.isPickupSlotAvailable({
-      storeId: product.store_id,
-      pickupAt: input.pickupAt,
-      additionalQuantity: quantity,
-    });
+    const now = this.clock.now();
+    // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
+    const preparationDeadlineMs =
+      now.getTime() + product.preparation_time_minutes * 60_000;
+    const pickupAvailable =
+      input.pickupAt.getTime() >= preparationDeadlineMs &&
+      (await this.pickupSchedule.isPickupSlotAvailable({
+        storeId: product.store_id,
+        pickupAt: input.pickupAt,
+        additionalQuantity: quantity,
+      }));
     if (!pickupAvailable) {
       throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
     }
@@ -104,7 +115,7 @@ export class OrderCheckoutService {
       }
     }
 
-    const submittedAt = this.clock.now();
+    const submittedAt = now;
     const created = await this.createWithOrderNumberRetry({
       accountId,
       pickupAt: input.pickupAt,
