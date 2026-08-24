@@ -156,12 +156,11 @@ export class StorePickupScheduleService {
     }
 
     const reason = this.evaluateDay(store, ctx, now, year, month, day);
-    const isToday = kstDayDiff(now, parsed) === 0;
     let slots = this.buildDaySlots(
       store,
       hour.open_time,
       hour.close_time,
-      isToday,
+      kstMidnightUtc(year, month, day),
       now,
     );
     if (reason !== null) {
@@ -177,6 +176,71 @@ export class StorePickupScheduleService {
         (slot) => slotMinutes(slot) >= PICKUP_AFTERNOON_START_MINUTES,
       ),
     };
+  }
+
+  /**
+   * 특정 픽업 일시가 예약 가능한지 판정한다(주문 생성 재검증용).
+   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과
+   * capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다.
+   * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
+   */
+  async isPickupSlotAvailable(args: {
+    storeId: bigint;
+    pickupAt: Date;
+    additionalQuantity?: number;
+  }): Promise<boolean> {
+    const store = await this.repo.findStoreForPickupSchedule(args.storeId);
+    if (!store) return false;
+
+    // 슬롯은 분 단위 시작 시각 포인트 — 초 이하가 남아 있으면 슬롯 정합 실패
+    if (
+      args.pickupAt.getUTCSeconds() !== 0 ||
+      args.pickupAt.getUTCMilliseconds() !== 0
+    ) {
+      return false;
+    }
+
+    const now = this.clock.now();
+    const { year, month, day } = toKstYmd(args.pickupAt);
+    if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) return false;
+
+    const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
+    const ctx = await this.loadScheduleContext(
+      store.id,
+      dateOnlyUtc,
+      new Date(Date.UTC(year, month - 1, day + 1)),
+      kstMidnightUtc(year, month, day),
+      kstMidnightUtc(year, month, day + 1),
+    );
+
+    if (this.evaluateDay(store, ctx, now, year, month, day) !== null) {
+      return false;
+    }
+
+    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가
+    // (명세 외 정책 결정: capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석)
+    const dateKey = dateOnlyUtc.toISOString().slice(0, 10);
+    const capacity = ctx.capacities.get(dateKey);
+    const booked = ctx.bookedByDate.get(dateKey) ?? 0;
+    const quantity = args.additionalQuantity ?? 1;
+    if (capacity !== undefined && booked + quantity > capacity) return false;
+
+    const hour = ctx.hoursByWeekday.get(dateOnlyUtc.getUTCDay());
+    if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
+      return false;
+    }
+
+    const slots = this.buildDaySlots(
+      store,
+      hour.open_time,
+      hour.close_time,
+      kstMidnightUtc(year, month, day),
+      now,
+    );
+    const pickupMinutes = kstMinutesOfDay(args.pickupAt);
+    return slots.some(
+      (slot) => slot.available && slotMinutes(slot) === pickupMinutes,
+    );
   }
 
   private async loadScheduleContext(
@@ -211,7 +275,7 @@ export class StorePickupScheduleService {
   /**
    * 해당 KST 달력일의 선택 불가 사유(null이면 선택 가능).
    * 판정 순서: 과거 → 범위 초과 → 특별휴무 → 요일 휴무/영업시간 미설정
-   * → capacity 소진 → 당일 잔여 가용 슬롯 없음.
+   * → capacity 소진 → 리드타임 반영 잔여 가용 슬롯 없음.
    */
   private evaluateDay(
     store: StorePickupPolicyRow,
@@ -243,37 +307,39 @@ export class StorePickupScheduleService {
       return STORE_PICKUP_DAY_REASON.CAPACITY_FULL;
     }
 
-    // 당일은 리드타임 반영 잔여 슬롯이 있어야 선택 가능(전역 pickupCalendar 선례와 일치)
-    if (diff === 0) {
-      const slots = this.buildDaySlots(
-        store,
-        hour.open_time,
-        hour.close_time,
-        true,
-        now,
-      );
-      if (!slots.some((slot) => slot.available)) {
-        return STORE_PICKUP_DAY_REASON.CLOSED;
-      }
+    // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가(전역 pickupCalendar 선례 확장).
+    // 리드타임이 하루를 넘으면 미래 날짜도 여기서 마감된다.
+    const slots = this.buildDaySlots(
+      store,
+      hour.open_time,
+      hour.close_time,
+      kstMidnightUtc(year, month, day),
+      now,
+    );
+    if (!slots.some((slot) => slot.available)) {
+      return STORE_PICKUP_DAY_REASON.CLOSED;
     }
     return null;
   }
 
-  /** 영업시간·매장 슬롯 간격으로 슬롯 생성. 당일만 리드타임 컷오프를 적용한다. */
+  /**
+   * 영업시간·매장 슬롯 간격으로 슬롯 생성. 리드타임 컷오프는 절대 시각
+   * (now + 리드타임) 기준이라 하루를 넘는 리드타임(최대 7일)도 미래 날짜에
+   * 올바르게 적용된다 — 당일만 컷오프하던 방식의 릴리즈 리뷰 반영.
+   */
   private buildDaySlots(
     store: StorePickupPolicyRow,
     openTime: Date,
     closeTime: Date,
-    isToday: boolean,
+    dayStartUtc: Date,
     now: Date,
   ): StorePickupSlot[] {
-    // 분 단위 절삭은 리드타임을 최대 59초 짧게 만들므로, 초가 남으면 다음 분으로 올린다
-    const hasSubMinute =
-      now.getUTCSeconds() > 0 || now.getUTCMilliseconds() > 0;
-    // 미래일은 컷오프 무력화(-Infinity + 리드타임 = -Infinity → 전 슬롯 가용)
-    const nowMinutes = isToday
-      ? kstMinutesOfDay(now) + (hasSubMinute ? 1 : 0)
-      : Number.NEGATIVE_INFINITY;
+    // 해당 날짜 자정 기준 현재 시각의 경과 분. 미래 날짜면 음수가 되어
+    // 컷오프(nowMinutes + 리드타임)가 그만큼 앞당겨진다. 분수 분은 다음 분으로
+    // 올림(분 절삭이 리드타임을 최대 59초 짧게 만들지 않도록 보수적 처리).
+    const nowMinutes = Math.ceil(
+      (now.getTime() - dayStartUtc.getTime()) / 60_000,
+    );
     return buildTodaySlots({
       openMinutes: timeColumnToMinutes(openTime),
       closeMinutes: timeColumnToMinutes(closeTime),

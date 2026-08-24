@@ -5,6 +5,8 @@ import {
   NotificationEvent,
   NotificationType,
   OrderStatus,
+  Prisma,
+  type AccountType,
 } from '@prisma/client';
 
 import { PrismaService } from '@/prisma';
@@ -41,6 +43,59 @@ export interface OngoingOrderRow {
   }[];
 }
 
+/**
+ * 일일 capacity 원자 검사 조건. 트랜잭션 안에서 capacity 행을 잠그고
+ * 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다.
+ */
+export interface DailyCapacityGuard {
+  storeId: bigint;
+  /** @db.Date 비교용(해당 KST 달력일의 UTC 자정 표현). */
+  dateOnlyUtc: Date;
+  /** pickup_at 범위 비교용 KST 자정 경계. */
+  dayStartUtc: Date;
+  dayEndUtc: Date;
+}
+
+/** 주문 생성 입력(스냅샷 값은 서비스가 계산해 전달). */
+export interface CreateSubmittedOrderArgs {
+  accountId: bigint;
+  orderNumber: string;
+  pickupAt: Date;
+  buyerName: string;
+  buyerPhone: string;
+  subtotalPrice: number;
+  discountPrice: number;
+  totalPrice: number;
+  submittedAt: Date;
+  /** null이면 capacity 원자 검사 생략(호출부가 무제한으로 판단한 경우는 없음 — 항상 전달 권장). */
+  capacityGuard: DailyCapacityGuard | null;
+  item: {
+    storeId: bigint;
+    productId: bigint;
+    productNameSnapshot: string;
+    regularPriceSnapshot: number;
+    salePriceSnapshot: number | null;
+    quantity: number;
+    itemSubtotalPrice: number;
+    options: {
+      optionGroupId: bigint;
+      optionItemId: bigint;
+      groupNameSnapshot: string;
+      optionTitleSnapshot: string;
+      optionPriceDeltaSnapshot: number;
+    }[];
+  };
+}
+
+/** 주문 생성 결과 row(생성 요약 응답용). */
+export interface CreatedOrderRow {
+  id: bigint;
+  order_number: string;
+  status: OrderStatus;
+  pickup_at: Date;
+  total_price: number;
+}
+
 /** 리뷰 작성 가능 주문 아이템 row. UserReviewService 매핑 입력. */
 export interface ReviewableOrderItemRow {
   id: bigint;
@@ -59,6 +114,144 @@ export interface ReviewableOrderItemRow {
 @Injectable()
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * 구매자 검증·주문자 fallback용 계정+프로필 조회.
+   * USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론).
+   */
+  async findAccountWithProfileForCheckout(accountId: bigint): Promise<{
+    account_type: AccountType;
+    user_profile: {
+      nickname: string;
+      phone_number: string | null;
+      deleted_at: Date | null;
+    } | null;
+  } | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId, deleted_at: null },
+      select: {
+        account_type: true,
+        user_profile: {
+          select: { nickname: true, phone_number: true, deleted_at: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
+   * 트랜잭션으로 원자 생성한다. SUBMITTED는 알림 미발송
+   * (알림은 판매자 상태 변경부터 — orderStatusToNotificationEvent 규칙).
+   * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를
+   * 재집계해, 동시 주문이 마지막 잔여를 함께 차지하는 race를 차단한다.
+   * capacity 초과면 null을 반환한다(호출부가 도메인 에러로 변환).
+   * order_number unique 충돌(P2002)은 호출부가 재시도한다.
+   */
+  async createSubmittedOrder(
+    args: CreateSubmittedOrderArgs,
+  ): Promise<CreatedOrderRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (args.capacityGuard) {
+        const exceeded = await this.isCapacityExceededLocked(
+          tx,
+          args.capacityGuard,
+          args.item.quantity,
+        );
+        if (exceeded) return null;
+      }
+      return this.insertSubmittedOrder(tx, args);
+    });
+  }
+
+  /**
+   * capacity 행 잠금 후 잔여 재검사. 레코드가 없으면 무제한(검사 통과).
+   * FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다.
+   */
+  private async isCapacityExceededLocked(
+    tx: Prisma.TransactionClient,
+    guard: DailyCapacityGuard,
+    quantity: number,
+  ): Promise<boolean> {
+    const capacityRows = await tx.$queryRaw<{ capacity: number }[]>(Prisma.sql`
+      SELECT capacity
+      FROM store_daily_capacity
+      WHERE store_id = ${guard.storeId}
+        AND capacity_date = ${guard.dateOnlyUtc}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `);
+    const capacity = capacityRows[0]?.capacity;
+    if (capacity === undefined) return false;
+
+    const bookedRows = await tx.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
+      SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked
+      FROM order_item oi
+      JOIN \`order\` o
+        ON o.id = oi.order_id
+        AND o.deleted_at IS NULL
+        AND o.status <> 'CANCELED'
+        AND o.pickup_at >= ${guard.dayStartUtc}
+        AND o.pickup_at < ${guard.dayEndUtc}
+      WHERE oi.store_id = ${guard.storeId}
+        AND oi.deleted_at IS NULL
+    `);
+    const booked = Number(bookedRows[0]?.booked ?? 0);
+    return booked + quantity > capacity;
+  }
+
+  private async insertSubmittedOrder(
+    tx: Prisma.TransactionClient,
+    args: CreateSubmittedOrderArgs,
+  ): Promise<CreatedOrderRow> {
+    return tx.order.create({
+      data: {
+        account_id: args.accountId,
+        order_number: args.orderNumber,
+        status: OrderStatus.SUBMITTED,
+        pickup_at: args.pickupAt,
+        buyer_name: args.buyerName,
+        buyer_phone: args.buyerPhone,
+        subtotal_price: args.subtotalPrice,
+        discount_price: args.discountPrice,
+        total_price: args.totalPrice,
+        submitted_at: args.submittedAt,
+        items: {
+          create: {
+            store_id: args.item.storeId,
+            product_id: args.item.productId,
+            product_name_snapshot: args.item.productNameSnapshot,
+            regular_price_snapshot: args.item.regularPriceSnapshot,
+            sale_price_snapshot: args.item.salePriceSnapshot,
+            quantity: args.item.quantity,
+            item_subtotal_price: args.item.itemSubtotalPrice,
+            option_items: {
+              create: args.item.options.map((option) => ({
+                option_group_id: option.optionGroupId,
+                option_item_id: option.optionItemId,
+                group_name_snapshot: option.groupNameSnapshot,
+                option_title_snapshot: option.optionTitleSnapshot,
+                option_price_delta_snapshot: option.optionPriceDeltaSnapshot,
+              })),
+            },
+          },
+        },
+        status_histories: {
+          create: {
+            from_status: null,
+            to_status: OrderStatus.SUBMITTED,
+            changed_at: args.submittedAt,
+          },
+        },
+      },
+      select: {
+        id: true,
+        order_number: true,
+        status: true,
+        pickup_at: true,
+        total_price: true,
+      },
+    });
+  }
 
   async findOngoingOrdersByAccount(args: {
     accountId: bigint;

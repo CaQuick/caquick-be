@@ -9,6 +9,8 @@ export interface ProductOverrides {
   description?: string | null;
   regular_price?: number;
   sale_price?: number | null;
+  currency?: string;
+  preparation_time_minutes?: number;
   is_active?: boolean;
 }
 
@@ -26,6 +28,9 @@ export async function createProduct(
       description: overrides.description ?? null,
       regular_price: overrides.regular_price ?? 10000,
       sale_price: overrides.sale_price ?? null,
+      currency: overrides.currency ?? 'KRW',
+      // 스키마 기본값 180분은 당일 픽업 테스트를 방해하므로 팩토리 기본은 0
+      preparation_time_minutes: overrides.preparation_time_minutes ?? 0,
       is_active: overrides.is_active ?? true,
     },
   });

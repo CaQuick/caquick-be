@@ -69,6 +69,8 @@ export interface ProductDetailRow {
   regular_price: number;
   sale_price: number | null;
   currency: string;
+  // 주문 생성(checkout)의 제작 소요시간 검증용
+  preparation_time_minutes: number;
   images: { image_url: string }[];
   option_groups: {
     id: bigint;
@@ -77,6 +79,9 @@ export interface ProductDetailRow {
     is_required: boolean;
     min_select: number;
     max_select: number;
+    // 주문 생성(checkout)의 커스텀 필수 옵션 가드용
+    option_requires_description: boolean;
+    option_requires_image: boolean;
     sort_order: number;
     option_items: {
       id: bigint;
@@ -905,6 +910,7 @@ export class ProductRepository {
         regular_price: true,
         sale_price: true,
         currency: true,
+        preparation_time_minutes: true,
         images: {
           where: { deleted_at: null },
           orderBy: { sort_order: 'asc' },
@@ -920,6 +926,8 @@ export class ProductRepository {
             is_required: true,
             min_select: true,
             max_select: true,
+            option_requires_description: true,
+            option_requires_image: true,
             sort_order: true,
             option_items: {
               where: { is_active: true, deleted_at: null },

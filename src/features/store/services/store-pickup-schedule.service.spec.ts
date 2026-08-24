@@ -448,4 +448,165 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('isPickupSlotAvailable', () => {
+    /** 9/18(금) 14:00 KST — 전 요일 10~20시 영업 기준 유효 슬롯. */
+    const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
+
+    it('영업시간 내 정렬된 미래 슬롯은 가능하다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: VALID_PICKUP_AT,
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('초 이하가 남거나 슬롯 간격에 정렬되지 않은 시각은 불가하다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-18T05:00:30.000Z'),
+        }),
+      ).resolves.toBe(false);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-18T05:10:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      // 영업시간 밖(21:00 KST)
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-18T12:00:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('당일 리드타임 이전 슬롯·특별휴무일은 불가하다', async () => {
+      const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+      await openAllWeek(store);
+      await prisma.storeSpecialClosure.create({
+        data: {
+          store_id: store.id,
+          closure_date: new Date(Date.UTC(2026, 8, 18)),
+        },
+      });
+
+      // 오늘(9/16) 16:30 KST — 현재 16:00 + 리드 60분 미달
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-16T07:30:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      // 오늘 17:00 KST — 리드타임 충족
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-16T08:00:00.000Z'),
+        }),
+      ).resolves.toBe(true);
+      // 휴무일(9/18)
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: VALID_PICKUP_AT,
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('하루를 넘는 리드타임은 미래 날짜에도 적용된다', async () => {
+      // 리드 3일 → 현재(9/16 16:00) 기준 9/19 16:00 이전 슬롯은 전부 마감
+      const store = await createStore(prisma, {
+        min_lead_time_minutes: 3 * 24 * 60,
+      });
+      await openAllWeek(store);
+
+      // 9/18 14:00 — 리드타임 미달
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-18T05:00:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      // 9/19 14:00 — 여전히 미달, 9/19 16:00 — 충족
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-19T05:00:00.000Z'),
+        }),
+      ).resolves.toBe(false);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-19T07:00:00.000Z'),
+        }),
+      ).resolves.toBe(true);
+
+      // 달력도 동일: 리드타임에 완전히 덮인 날은 CLOSED, 부분 가용 날은 선택 가능
+      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      expect(dayOf(calendar, '2026-09-18')).toMatchObject({
+        selectable: false,
+        reason: 'CLOSED',
+      });
+      expect(dayOf(calendar, '2026-09-19').selectable).toBe(true);
+
+      // 슬롯 조회도 9/19 16:00 이전은 마감 표기
+      const slots = await service.storePickupTimeSlots(store.id, '2026-09-19');
+      expect(
+        slots.afternoon.find((slot) => slot.time === '15:30')?.available,
+      ).toBe(false);
+      expect(
+        slots.afternoon.find((slot) => slot.time === '16:00')?.available,
+      ).toBe(true);
+    });
+
+    it('capacity 잔여가 additionalQuantity보다 작으면 불가하다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+      await setCapacity(store, new Date(Date.UTC(2026, 8, 18)), 3);
+      await book(store, VALID_PICKUP_AT, 2);
+
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: VALID_PICKUP_AT,
+          additionalQuantity: 2,
+        }),
+      ).resolves.toBe(false);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: VALID_PICKUP_AT,
+          additionalQuantity: 1,
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('없거나 비활성 매장은 불가하다', async () => {
+      const inactive = await createStore(prisma, { is_active: false });
+      await openAllWeek(inactive);
+
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: 999999n,
+          pickupAt: VALID_PICKUP_AT,
+        }),
+      ).resolves.toBe(false);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: inactive.id,
+          pickupAt: VALID_PICKUP_AT,
+        }),
+      ).resolves.toBe(false);
+    });
+  });
 });

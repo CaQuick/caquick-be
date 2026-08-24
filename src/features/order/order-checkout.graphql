@@ -1,0 +1,27 @@
+extend type Mutation {
+  """주문 생성(구매자). 옵션·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다. 로그인 필수."""
+  createOrder(input: CreateOrderInput!): CreateOrderOutput!
+}
+
+"""주문 생성 입력. 커스텀 필드는 커스텀 스펙 확정 후 optional로 확장 예정."""
+input CreateOrderInput {
+  productId: ID!
+  """선택한 옵션 아이템 ID 목록. 그룹 규칙(필수/min/max)을 서버가 검증한다."""
+  optionItemIds: [ID!]!
+  """픽업 일시. 매장 정책(영업시간·휴무·capacity·리드타임·슬롯 정렬) 재검증."""
+  pickupAt: DateTime!
+  quantity: Int = 1
+  """미입력 시 프로필 닉네임 사용."""
+  buyerName: String
+  """미입력 시 프로필 전화번호 사용. 둘 다 없으면 거절."""
+  buyerPhone: String
+}
+
+"""주문 생성 결과 요약. 상세는 myOrder로 재조회."""
+type CreateOrderOutput {
+  orderId: ID!
+  orderNumber: String!
+  status: OrderStatusType!
+  pickupAt: DateTime!
+  totalPrice: Int!
+}
