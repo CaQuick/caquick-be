@@ -444,26 +444,43 @@ export class UserRepository {
   }
 
   /**
-   * 찜 추가 (멱등). 이미 있으면 그대로, soft-delete된 경우 deleted_at=null로 복원.
+   * 찜 추가 (멱등). 없으면 생성, soft-delete된 경우 복원.
+   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
+   * addedAt 표기가 재찜을 반영하되, 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은
+   * created_at을 건드리지 않아 멱등 계약을 지킨다(매장 찜 upsertStoreWishlist와 동일 정책).
    */
   async upsertWishlistItem(args: {
     accountId: bigint;
     productId: bigint;
     now: Date;
   }): Promise<void> {
-    await this.prisma.wishlistItem.upsert({
+    const restored = await this.prisma.wishlistItem.updateMany({
       where: {
-        account_id_product_id: {
+        account_id: args.accountId,
+        product_id: args.productId,
+        deleted_at: { not: null },
+      },
+      data: { deleted_at: null, created_at: args.now, updated_at: args.now },
+    });
+    if (restored.count > 0) return;
+
+    try {
+      await this.prisma.wishlistItem.create({
+        data: {
           account_id: args.accountId,
           product_id: args.productId,
         },
-      },
-      create: {
-        account_id: args.accountId,
-        product_id: args.productId,
-      },
-      update: { deleted_at: null, updated_at: args.now },
-    });
+      });
+    } catch (error) {
+      // active 찜이 이미 존재(unique 충돌) — 멱등이므로 무시
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return;
+      }
+      throw error;
+    }
   }
 
   /**
