@@ -253,6 +253,26 @@ describe('StoreWishlistService (real DB)', () => {
       ]);
     });
 
+    it('재찜(복원)한 매장은 목록 최상단으로 온다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const first = await createStore(prisma);
+      const second = await createStore(prisma);
+      await service.addStoreToWishlist(account.id, first.id.toString());
+      await new Promise((r) => setTimeout(r, 10));
+      await service.addStoreToWishlist(account.id, second.id.toString());
+      // first를 해제 후 재찜 → 재찜 시점 기준으로 second보다 앞서야 한다
+      await service.removeStoreFromWishlist(account.id, first.id.toString());
+      await new Promise((r) => setTimeout(r, 10));
+      await service.addStoreToWishlist(account.id, first.id.toString());
+
+      const result = await service.myWishlistedStores(account.id);
+
+      expect(result.items.map((i) => i.storeId)).toEqual([
+        first.id.toString(),
+        second.id.toString(),
+      ]);
+    });
+
     it('다른 사용자의 찜은 포함하지 않는다', async () => {
       const me = await createAccount(prisma, { account_type: 'USER' });
       const other = await createAccount(prisma, { account_type: 'USER' });

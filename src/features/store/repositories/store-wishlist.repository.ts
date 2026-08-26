@@ -35,7 +35,9 @@ export class StoreWishlistRepository {
         },
       },
       create: { account_id: args.accountId, store_id: args.storeId },
-      update: { deleted_at: null, updated_at: args.now },
+      // 복원(재찜) 시 created_at도 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
+      // addedAt 표기가 재찜을 반영하도록(과거 찜 시점으로 밀리는 문제 방지).
+      update: { deleted_at: null, created_at: args.now, updated_at: args.now },
     });
   }
 
