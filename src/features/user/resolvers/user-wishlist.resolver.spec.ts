@@ -85,4 +85,24 @@ describe('User Wishlist Resolver (real DB)', () => {
     expect(list2.totalCount).toBe(0);
     expect(list2.items).toEqual([]);
   });
+
+  it('myWishlistStoreGroups → 매장 그룹을 반환한다', async () => {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const store = await createStore(prisma, { store_name: '해즈케이크' });
+    const product = await createProduct(prisma, { store_id: store.id });
+    await mutationResolver.addToWishlist(
+      { accountId: account.id.toString() },
+      product.id.toString(),
+    );
+
+    const groups = await queryResolver.myWishlistStoreGroups({
+      accountId: account.id.toString(),
+    });
+
+    expect(groups.totalCount).toBe(1);
+    expect(groups.items[0].storeId).toBe(store.id.toString());
+    expect(groups.items[0].storeName).toBe('해즈케이크');
+    expect(groups.items[0].wishlistedProductCount).toBe(1);
+  });
 });
