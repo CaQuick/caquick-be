@@ -68,18 +68,37 @@ describe('UserWishlistService (real DB)', () => {
       expect(row?.deleted_at).toBeNull();
     });
 
-    it('이미 active 상태로 있으면 멱등 (true 반환, 추가 row 없음)', async () => {
+    it('이미 active 상태로 있으면 멱등 (1건 유지, created_at 불변)', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
 
       await service.addToWishlist(account.id, product.id.toString());
+      const before = await prisma.wishlistItem.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: product.id,
+          },
+        },
+      });
+      await new Promise((r) => setTimeout(r, 10));
       await service.addToWishlist(account.id, product.id.toString());
 
       const count = await prisma.wishlistItem.count({
         where: { account_id: account.id, product_id: product.id },
       });
       expect(count).toBe(1);
+      const after = await prisma.wishlistItem.findUniqueOrThrow({
+        where: {
+          account_id_product_id: {
+            account_id: account.id,
+            product_id: product.id,
+          },
+        },
+      });
+      // 더블 탭·재시도가 찜 시각(목록 정렬 기준)을 밀지 않는다
+      expect(after.created_at.getTime()).toBe(before.created_at.getTime());
     });
 
     it('soft-delete된 row가 있으면 deleted_at=null로 복원된다', async () => {
@@ -295,6 +314,27 @@ describe('UserWishlistService (real DB)', () => {
     });
 
     // offset/limit 범위 검증은 DTO (MyWishlistInput → UserPaginationInput) 로 이전됨.
+
+    it('재찜(복원)한 상품은 목록 최상단으로 온다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const first = await createProduct(prisma, { store_id: store.id });
+      const second = await createProduct(prisma, { store_id: store.id });
+      await service.addToWishlist(account.id, first.id.toString());
+      await new Promise((r) => setTimeout(r, 10));
+      await service.addToWishlist(account.id, second.id.toString());
+      // first를 해제 후 재찜 → 재찜 시점 기준으로 second보다 앞서야 한다
+      await service.removeFromWishlist(account.id, first.id.toString());
+      await new Promise((r) => setTimeout(r, 10));
+      await service.addToWishlist(account.id, first.id.toString());
+
+      const result = await service.myWishlist(account.id);
+
+      expect(result.items.map((i) => i.productId)).toEqual([
+        first.id.toString(),
+        second.id.toString(),
+      ]);
+    });
 
     it('카드 필드(storeId/regionLabel/discountRate/평점)를 매핑한다', async () => {
       const account = await setupUser();
