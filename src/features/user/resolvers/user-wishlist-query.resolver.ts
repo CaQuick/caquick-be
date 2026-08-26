@@ -1,9 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
 import { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
-import type { MyWishlistConnection } from '@/features/user/types/user-wishlist-output.type';
+import type {
+  MyWishlistConnection,
+  MyWishlistStoreGroupsConnection,
+} from '@/features/user/types/user-wishlist-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -22,5 +26,16 @@ export class UserWishlistQueryResolver {
     @Args('input') input?: MyWishlistInput,
   ): Promise<MyWishlistConnection> {
     return this.wishlistService.myWishlist(parseAccountId(user), input);
+  }
+
+  @Query('myWishlistStoreGroups')
+  myWishlistStoreGroups(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input?: MyWishlistStoreGroupsInput,
+  ): Promise<MyWishlistStoreGroupsConnection> {
+    return this.wishlistService.myWishlistStoreGroups(
+      parseAccountId(user),
+      input,
+    );
   }
 }
