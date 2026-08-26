@@ -12,6 +12,7 @@ export interface SellerStoreOutput {
   mapProvider: 'NAVER' | 'KAKAO' | 'NONE';
   websiteUrl: string | null;
   businessHoursText: string | null;
+  profileImageUrl: string | null;
   pickupSlotIntervalMinutes: number;
   minLeadTimeMinutes: number;
   maxDaysAhead: number;

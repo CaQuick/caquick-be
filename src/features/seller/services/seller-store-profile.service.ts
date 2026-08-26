@@ -154,6 +154,15 @@ export class SellerStoreProfileService
             ),
           }
         : {}),
+      // 프로필(로고) 이미지. null/빈 문자열 전달 시 제거, 미전달(undefined) 시 유지.
+      ...(input.profileImageUrl !== undefined
+        ? {
+            profile_image_url: cleanNullableText(
+              input.profileImageUrl,
+              MAX_URL_LENGTH,
+            ),
+          }
+        : {}),
     };
   }
 }
