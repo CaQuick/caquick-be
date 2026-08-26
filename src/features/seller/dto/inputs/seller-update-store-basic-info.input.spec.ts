@@ -36,4 +36,15 @@ describe('SellerUpdateStoreBasicInfoInput', () => {
     const errors = await validate(dto);
     expect(errors[0].property).toBe('storeName');
   });
+
+  it('profileImageUrl 문자열 통과', async () => {
+    const dto = build({ profileImageUrl: 'https://cdn.example.com/logo.png' });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
+  it('profileImageUrl 이 문자열이 아니면 거절', async () => {
+    const dto = build({ profileImageUrl: 123 });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('profileImageUrl');
+  });
 });

@@ -47,4 +47,8 @@ export class SellerUpdateStoreBasicInfoInput {
   @IsOptional()
   @IsString()
   businessHoursText?: string;
+
+  @IsOptional()
+  @IsString()
+  profileImageUrl?: string;
 }
