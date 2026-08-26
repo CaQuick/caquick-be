@@ -8,7 +8,9 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createOrderItem,
   createProduct,
+  createReview,
   createStore,
   createUserProfile,
 } from '@/test/factories';
@@ -293,5 +295,195 @@ describe('UserWishlistService (real DB)', () => {
     });
 
     // offset/limit 범위 검증은 DTO (MyWishlistInput → UserPaginationInput) 로 이전됨.
+
+    it('카드 필드(storeId/regionLabel/discountRate/평점)를 매핑한다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, {
+        store_name: '해즈케이크',
+        address_city: '서울',
+        address_neighborhood: '대치동',
+      });
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        regular_price: 40000,
+        sale_price: 26000,
+      });
+      const oi1 = await createOrderItem(prisma, { product_id: product.id });
+      const oi2 = await createOrderItem(prisma, { product_id: product.id });
+      await createReview(prisma, { order_item_id: oi1.id, rating: 4.5 });
+      await createReview(prisma, { order_item_id: oi2.id, rating: 5 });
+      await service.addToWishlist(account.id, product.id.toString());
+
+      const result = await service.myWishlist(account.id);
+
+      const item = result.items[0];
+      expect(item.storeId).toBe(store.id.toString());
+      expect(item.regionLabel).toBe('서울 대치동');
+      // (40000 - 26000) / 40000 = 35%
+      expect(item.discountRate).toBe(35);
+      // (4.5 + 5.0) / 2 = 4.75 → 4.8
+      expect(item.ratingAverage).toBe(4.8);
+      expect(item.reviewCount).toBe(2);
+    });
+
+    it('리뷰 없는 상품의 평점은 0.0/0건이다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        sale_price: null,
+      });
+      await service.addToWishlist(account.id, product.id.toString());
+
+      const result = await service.myWishlist(account.id);
+
+      expect(result.items[0].ratingAverage).toBe(0);
+      expect(result.items[0].reviewCount).toBe(0);
+      expect(result.items[0].discountRate).toBe(0);
+    });
+
+    it('storeId 필터로 해당 매장 찜 상품만 반환한다', async () => {
+      const account = await setupUser();
+      const storeA = await createStore(prisma);
+      const storeB = await createStore(prisma);
+      const pA = await createProduct(prisma, { store_id: storeA.id });
+      const pB = await createProduct(prisma, { store_id: storeB.id });
+      await service.addToWishlist(account.id, pA.id.toString());
+      await service.addToWishlist(account.id, pB.id.toString());
+
+      const result = await service.myWishlist(account.id, {
+        storeId: storeA.id.toString(),
+      });
+
+      expect(result.totalCount).toBe(1);
+      expect(result.items[0].productId).toBe(pA.id.toString());
+      expect(result.items[0].storeId).toBe(storeA.id.toString());
+    });
+  });
+
+  // ─── myWishlistStoreGroups ───
+  describe('myWishlistStoreGroups', () => {
+    it('매장별 찜 상품 수를 집계하고 찜 수 desc로 정렬한다', async () => {
+      const account = await setupUser();
+      const storeA = await createStore(prisma, {
+        store_name: '해즈 케이크',
+        profile_image_url: 'https://cdn.example.com/haz.png',
+      });
+      const storeB = await createStore(prisma, { store_name: '달콤 케이크' });
+      // A에 2개, B에 1개 찜 — A는 먼저 찜해도 개수 우선으로 앞에 온다
+      for (let i = 0; i < 2; i++) {
+        const p = await createProduct(prisma, { store_id: storeA.id });
+        await service.addToWishlist(account.id, p.id.toString());
+      }
+      const pB = await createProduct(prisma, { store_id: storeB.id });
+      await service.addToWishlist(account.id, pB.id.toString());
+
+      const result = await service.myWishlistStoreGroups(account.id);
+
+      expect(result.totalCount).toBe(2);
+      expect(result.items).toEqual([
+        {
+          storeId: storeA.id.toString(),
+          storeName: '해즈 케이크',
+          profileImageUrl: 'https://cdn.example.com/haz.png',
+          wishlistedProductCount: 2,
+        },
+        {
+          storeId: storeB.id.toString(),
+          storeName: '달콤 케이크',
+          profileImageUrl: null,
+          wishlistedProductCount: 1,
+        },
+      ]);
+    });
+
+    it('찜 수 동점이면 최근 찜한 매장이 먼저 온다', async () => {
+      const account = await setupUser();
+      const storeA = await createStore(prisma);
+      const storeB = await createStore(prisma);
+      const pA = await createProduct(prisma, { store_id: storeA.id });
+      const pB = await createProduct(prisma, { store_id: storeB.id });
+      await service.addToWishlist(account.id, pA.id.toString());
+      await new Promise((r) => setTimeout(r, 10));
+      await service.addToWishlist(account.id, pB.id.toString());
+
+      const result = await service.myWishlistStoreGroups(account.id);
+
+      expect(result.items.map((i) => i.storeId)).toEqual([
+        storeB.id.toString(),
+        storeA.id.toString(),
+      ]);
+    });
+
+    it('가시성은 myWishlist와 일치한다(비활성 상품·매장/soft-delete 찜 제외)', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma);
+      const visible = await createProduct(prisma, { store_id: store.id });
+      const inactivated = await createProduct(prisma, { store_id: store.id });
+      const removed = await createProduct(prisma, { store_id: store.id });
+      const inactiveStore = await createStore(prisma);
+      const orphan = await createProduct(prisma, {
+        store_id: inactiveStore.id,
+      });
+      await service.addToWishlist(account.id, visible.id.toString());
+      await service.addToWishlist(account.id, inactivated.id.toString());
+      await service.addToWishlist(account.id, removed.id.toString());
+      await service.addToWishlist(account.id, orphan.id.toString());
+      await prisma.product.update({
+        where: { id: inactivated.id },
+        data: { is_active: false },
+      });
+      await service.removeFromWishlist(account.id, removed.id.toString());
+      await prisma.store.update({
+        where: { id: inactiveStore.id },
+        data: { is_active: false },
+      });
+
+      const groups = await service.myWishlistStoreGroups(account.id);
+      const list = await service.myWishlist(account.id);
+
+      expect(groups.totalCount).toBe(1);
+      expect(groups.items[0].wishlistedProductCount).toBe(1);
+      // 그룹 카운트 합 == 상품 찜 목록 totalCount (화면 01·02 카운트 일관성)
+      const groupSum = groups.items.reduce(
+        (sum, g) => sum + g.wishlistedProductCount,
+        0,
+      );
+      expect(groupSum).toBe(list.totalCount);
+    });
+
+    it('offset/limit 페이지네이션과 hasMore를 계산한다', async () => {
+      const account = await setupUser();
+      for (let i = 0; i < 3; i++) {
+        const store = await createStore(prisma);
+        const p = await createProduct(prisma, { store_id: store.id });
+        await service.addToWishlist(account.id, p.id.toString());
+      }
+
+      const page1 = await service.myWishlistStoreGroups(account.id, {
+        offset: 0,
+        limit: 2,
+      });
+      const page2 = await service.myWishlistStoreGroups(account.id, {
+        offset: 2,
+        limit: 2,
+      });
+
+      expect(page1.items).toHaveLength(2);
+      expect(page1.totalCount).toBe(3);
+      expect(page1.hasMore).toBe(true);
+      expect(page2.items).toHaveLength(1);
+      expect(page2.hasMore).toBe(false);
+    });
+
+    it('찜이 없으면 빈 목록을 반환한다', async () => {
+      const account = await setupUser();
+
+      const result = await service.myWishlistStoreGroups(account.id);
+
+      expect(result.items).toEqual([]);
+      expect(result.totalCount).toBe(0);
+      expect(result.hasMore).toBe(false);
+    });
   });
 });
