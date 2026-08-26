@@ -380,6 +380,7 @@ export class StoreRepository {
   /** 페이지 매장들의 대표 케이크 이미지(매장당 최대 N장, 활성 상품 1장씩). */
   async findStoreCakeImages(
     storeIds: bigint[],
+    limit: number = POPULAR_STORE_CAKE_IMAGE_LIMIT,
   ): Promise<Map<bigint, string[]>> {
     if (storeIds.length === 0) return new Map();
 
@@ -396,7 +397,7 @@ export class StoreRepository {
             images: { some: { deleted_at: null } },
           },
           orderBy: { id: 'desc' },
-          take: POPULAR_STORE_CAKE_IMAGE_LIMIT,
+          take: limit,
           select: {
             images: {
               where: { deleted_at: null },
