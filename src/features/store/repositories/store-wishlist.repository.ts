@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { WISHLISTED_STORE_IMAGE_LIMIT } from '@/features/store/constants/store-wishlist.constants';
 import { PrismaService } from '@/prisma';
 
 /** 찜한 매장 목록 조회 결과 row. myWishlistedStores 매퍼 입력. */
@@ -14,7 +13,6 @@ export interface WishlistedStoreRow {
     address_city: string | null;
     address_neighborhood: string | null;
     region: { name: string } | null;
-    store_images: { image_url: string }[];
   };
 }
 
@@ -129,12 +127,6 @@ export class StoreWishlistRepository {
               address_city: true,
               address_neighborhood: true,
               region: { select: { name: true } },
-              store_images: {
-                where: { deleted_at: null },
-                orderBy: { sort_order: 'asc' },
-                take: WISHLISTED_STORE_IMAGE_LIMIT,
-                select: { image_url: true },
-              },
             },
           },
         },
