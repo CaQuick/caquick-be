@@ -356,7 +356,9 @@ model Store {
   max_days_ahead               Int @default(30) @db.UnsignedSmallInt
 
   website_url String? @db.VarChar(2048)
-  is_active   Boolean @default(true) @db.TinyInt
+  // 매장 프로필(로고) 이미지. 찜/매장별 보기 카드의 원형 프로필 표기용 (figma liked 02·04)
+  profile_image_url String? @db.VarChar(2048)
+  is_active         Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)

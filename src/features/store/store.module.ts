@@ -9,6 +9,7 @@ import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resol
 import { StoreReviewQueryResolver } from '@/features/store/resolvers/store-review-query.resolver';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
+import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
@@ -27,6 +28,7 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreReviewService,
     StoreQueryResolver,
     StoreWishlistMutationResolver,
+    StoreWishlistQueryResolver,
     StoreDetailQueryResolver,
     StoreReviewQueryResolver,
     StoreTodayPickupService,

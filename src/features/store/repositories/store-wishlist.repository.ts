@@ -1,6 +1,21 @@
 import { Injectable } from '@nestjs/common';
 
+import { WISHLISTED_STORE_IMAGE_LIMIT } from '@/features/store/constants/store-wishlist.constants';
 import { PrismaService } from '@/prisma';
+
+/** 찜한 매장 목록 조회 결과 row. myWishlistedStores 매퍼 입력. */
+export interface WishlistedStoreRow {
+  created_at: Date;
+  store: {
+    id: bigint;
+    store_name: string;
+    profile_image_url: string | null;
+    address_city: string | null;
+    address_neighborhood: string | null;
+    region: { name: string } | null;
+    store_images: { image_url: string }[];
+  };
+}
 
 @Injectable()
 export class StoreWishlistRepository {
@@ -59,6 +74,55 @@ export class StoreWishlistRepository {
       select: { store_id: true },
     });
     return new Set(rows.map((r) => r.store_id.toString()));
+  }
+
+  /**
+   * 내가 찜한 매장 목록 (찜 최신순). 비활성/soft-delete 매장은 목록·카운트 모두 제외해
+   * findWishlistedStoreIds의 가시성 조건과 일관되게 한다.
+   * soft-delete extension은 nested select에 deleted_at을 주입하지 않으므로 직접 명시한다.
+   */
+  async findWishlistedStores(args: {
+    accountId: bigint;
+    offset: number;
+    limit: number;
+  }): Promise<{ items: WishlistedStoreRow[]; totalCount: number }> {
+    const where = {
+      account_id: args.accountId,
+      deleted_at: null,
+      store: { is_active: true, deleted_at: null },
+    };
+
+    const [items, totalCount] = await this.prisma.$transaction([
+      this.prisma.storeWishlistItem.findMany({
+        where,
+        // 같은 밀리초 생성 시 페이지 경계 흔들림 방지를 위해 id를 보조 정렬키로 둔다.
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        skip: args.offset,
+        take: args.limit,
+        select: {
+          created_at: true,
+          store: {
+            select: {
+              id: true,
+              store_name: true,
+              profile_image_url: true,
+              address_city: true,
+              address_neighborhood: true,
+              region: { select: { name: true } },
+              store_images: {
+                where: { deleted_at: null },
+                orderBy: { sort_order: 'asc' },
+                take: WISHLISTED_STORE_IMAGE_LIMIT,
+                select: { image_url: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.storeWishlistItem.count({ where }),
+    ]);
+
+    return { items, totalCount };
   }
 
   /** 활성 USER 계정 여부. 매장 찜은 구매자(USER)만 가능 → 인기 랭킹 무결성 보호. */

@@ -27,6 +27,7 @@ export interface StoreRow {
   map_provider: 'NAVER' | 'KAKAO' | 'NONE';
   website_url: string | null;
   business_hours_text: string | null;
+  profile_image_url: string | null;
   pickup_slot_interval_minutes: number;
   min_lead_time_minutes: number;
   max_days_ahead: number;
@@ -76,6 +77,7 @@ export function toStoreOutput(row: StoreRow): SellerStoreOutput {
     mapProvider: row.map_provider,
     websiteUrl: row.website_url,
     businessHoursText: row.business_hours_text,
+    profileImageUrl: row.profile_image_url,
     pickupSlotIntervalMinutes: row.pickup_slot_interval_minutes,
     minLeadTimeMinutes: row.min_lead_time_minutes,
     maxDaysAhead: row.max_days_ahead,
