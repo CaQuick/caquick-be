@@ -1,6 +1,8 @@
 extend type Query {
   """내 찜 목록"""
   myWishlist(input: MyWishlistInput): MyWishlistConnection!
+  """찜 상품의 매장별 그룹 목록 (찜 상품 수 desc, 동점 시 최근 찜 순). 로그인 필요."""
+  myWishlistStoreGroups(input: MyWishlistStoreGroupsInput): MyWishlistStoreGroupsConnection!
 }
 
 extend type Mutation {
@@ -13,6 +15,8 @@ extend type Mutation {
 input MyWishlistInput {
   offset: Int = 0
   limit: Int = 20
+  """특정 매장의 찜 상품만 조회(매장별 보기 → 매장 선택 화면)."""
+  storeId: ID
 }
 
 type MyWishlistConnection {
@@ -23,10 +27,40 @@ type MyWishlistConnection {
 
 type WishlistItemSummary {
   productId: ID!
+  """소속 매장 ID(상세 이동용)."""
+  storeId: ID!
   productName: String!
   representativeImageUrl: String
   salePrice: Int
   regularPrice: Int!
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
   storeName: String!
+  """매장 위치 표기(예: 서울 대치동)."""
+  regionLabel: String
+  """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
+  ratingAverage: Float!
+  reviewCount: Int!
   addedAt: DateTime!
+}
+
+input MyWishlistStoreGroupsInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type MyWishlistStoreGroupsConnection {
+  items: [WishlistStoreGroup!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""매장별 보기 행(매장 + 찜 상품 수)"""
+type WishlistStoreGroup {
+  storeId: ID!
+  storeName: String!
+  """매장 프로필(로고) 이미지. 미등록 시 null."""
+  profileImageUrl: String
+  """이 매장에서 찜한 상품 수."""
+  wishlistedProductCount: Int!
 }
