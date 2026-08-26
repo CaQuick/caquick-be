@@ -6,7 +6,10 @@ import {
 
 import { parseId } from '@/common/utils/id-parser';
 import { STORE_WISHLIST_ERRORS } from '@/features/store/constants/store-wishlist-error-messages';
-import { DEFAULT_WISHLISTED_STORES_LIMIT } from '@/features/store/constants/store-wishlist.constants';
+import {
+  DEFAULT_WISHLISTED_STORES_LIMIT,
+  WISHLISTED_STORE_IMAGE_LIMIT,
+} from '@/features/store/constants/store-wishlist.constants';
 import type { MyWishlistedStoresInput } from '@/features/store/dto/inputs/my-wishlisted-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -60,10 +63,16 @@ export class StoreWishlistService {
       limit,
     });
 
-    // 평점은 페이지 매장들만 단일 groupBy로 집계(N+1 회피). 랭킹과 동일 소스.
-    const reviewStats = await this.storeRepo.aggregateReviewStats(
-      items.map((row) => row.store.id),
-    );
+    const storeIds = items.map((row) => row.store.id);
+    // 평점·이미지는 페이지 매장들만 집계(N+1 회피).
+    // 카드 이미지는 인기 매장 카드(PopularStore)와 동일하게 상품 대표 이미지를 쓴다(#216).
+    const [reviewStats, cakeImages] = await Promise.all([
+      this.storeRepo.aggregateReviewStats(storeIds),
+      this.storeRepo.findStoreCakeImages(
+        storeIds,
+        WISHLISTED_STORE_IMAGE_LIMIT,
+      ),
+    ]);
 
     return {
       items: items.map((row) => {
@@ -76,7 +85,7 @@ export class StoreWishlistService {
           ratingAverage: Math.round((stat?.average ?? 0) * 10) / 10,
           reviewCount: stat?.count ?? 0,
           regionLabel: buildRegionLabel(row.store),
-          imageUrls: row.store.store_images.map((image) => image.image_url),
+          imageUrls: cakeImages.get(row.store.id) ?? [],
           addedAt: row.created_at,
         };
       }),

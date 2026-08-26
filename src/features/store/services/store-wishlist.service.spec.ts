@@ -13,6 +13,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createOrderItem,
+  createProduct,
   createReview,
   createStore,
   createStoreWishlist,
@@ -142,13 +143,14 @@ describe('StoreWishlistService (real DB)', () => {
   });
 
   describe('myWishlistedStores', () => {
-    async function addImages(storeId: bigint, urls: string[]): Promise<void> {
-      await prisma.storeImage.createMany({
-        data: urls.map((url, index) => ({
-          store_id: storeId,
-          image_url: url,
-          sort_order: index,
-        })),
+    /** 상품 1개 + 대표 이미지 1장 생성(카드 이미지 소스). */
+    async function addProductWithImage(
+      storeId: bigint,
+      imageUrl: string,
+    ): Promise<void> {
+      const product = await createProduct(prisma, { store_id: storeId });
+      await prisma.productImage.create({
+        data: { product_id: product.id, image_url: imageUrl, sort_order: 0 },
       });
     }
 
@@ -186,13 +188,59 @@ describe('StoreWishlistService (real DB)', () => {
       expect(haz.addedAt).toBeInstanceOf(Date);
     });
 
-    it('대표 이미지는 sort_order asc 최대 3장, 삭제된 이미지는 제외한다', async () => {
+    it('카드 이미지는 상품 대표 이미지 최대 3장(최신 상품 우선), 이미지 없는 매장은 빈 배열이다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const store = await createStore(prisma);
-      await addImages(store.id, ['u0', 'u1', 'u2', 'u3']);
-      await prisma.storeImage.updateMany({
-        where: { store_id: store.id, image_url: 'u1' },
-        data: { deleted_at: new Date() },
+      const empty = await createStore(prisma);
+      // 상품 4개 → 최신(id desc) 3개의 대표 이미지만 포함
+      await addProductWithImage(store.id, 'u0');
+      await addProductWithImage(store.id, 'u1');
+      await addProductWithImage(store.id, 'u2');
+      await addProductWithImage(store.id, 'u3');
+      await createStoreWishlist(prisma, {
+        account_id: account.id,
+        store_id: store.id,
+      });
+      await createStoreWishlist(prisma, {
+        account_id: account.id,
+        store_id: empty.id,
+      });
+
+      const result = await service.myWishlistedStores(account.id);
+
+      const withImages = result.items.find(
+        (i) => i.storeId === store.id.toString(),
+      );
+      const withoutImages = result.items.find(
+        (i) => i.storeId === empty.id.toString(),
+      );
+      expect(withImages?.imageUrls).toEqual(['u3', 'u2', 'u1']);
+      expect(withoutImages?.imageUrls).toEqual([]);
+    });
+
+    it('삭제된 이미지·비활성 상품은 카드 이미지에서 제외한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+      await addProductWithImage(store.id, 'kept');
+      // 이미지가 soft-delete된 상품 → 이미지 보유 상품이 아니므로 제외
+      const deletedImageProduct = await createProduct(prisma, {
+        store_id: store.id,
+      });
+      await prisma.productImage.create({
+        data: {
+          product_id: deletedImageProduct.id,
+          image_url: 'deleted',
+          sort_order: 0,
+          deleted_at: new Date(),
+        },
+      });
+      // 비활성 상품 → 제외
+      const inactive = await createProduct(prisma, {
+        store_id: store.id,
+        is_active: false,
+      });
+      await prisma.productImage.create({
+        data: { product_id: inactive.id, image_url: 'inactive', sort_order: 0 },
       });
       await createStoreWishlist(prisma, {
         account_id: account.id,
@@ -201,7 +249,7 @@ describe('StoreWishlistService (real DB)', () => {
 
       const result = await service.myWishlistedStores(account.id);
 
-      expect(result.items[0].imageUrls).toEqual(['u0', 'u2', 'u3']);
+      expect(result.items[0].imageUrls).toEqual(['kept']);
     });
 
     it('평점은 소수 첫째 자리 반올림, 리뷰 없으면 0.0/0건이다', async () => {

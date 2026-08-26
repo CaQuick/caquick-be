@@ -32,7 +32,7 @@ type WishlistedStoreSummary {
   reviewCount: Int!
   """매장 위치 표기(예: 인천 청라동)."""
   regionLabel: String
-  """매장 대표 이미지(최대 3장, sort_order asc)."""
+  """대표 케이크 이미지(활성 상품 대표 이미지, 최대 3장). 인기 매장 카드와 동일 소스."""
   imageUrls: [String!]!
   """찜한 시각."""
   addedAt: DateTime!
