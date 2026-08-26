@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -150,6 +151,42 @@ describe('SellerStoreProfileService (real DB)', () => {
       expect(result.addressNeighborhood).toBe('어딘가동');
       expect(result.websiteUrl).toBe('https://example.com');
       expect(result.businessHoursText).toBe('월~금 09-18');
+    });
+
+    it('profileImageUrl을 등록·수정한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+
+      const result = await service.sellerUpdateStoreBasicInfo(account.id, {
+        profileImageUrl: 'https://cdn.example.com/logo.png',
+      });
+
+      expect(result.profileImageUrl).toBe('https://cdn.example.com/logo.png');
+      const dbStore = await prisma.store.findUniqueOrThrow({
+        where: { id: store.id },
+      });
+      expect(dbStore.profile_image_url).toBe(
+        'https://cdn.example.com/logo.png',
+      );
+    });
+
+    it('profileImageUrl에 null을 전달하면 제거하고, 미전달 시 유지한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await prisma.store.update({
+        where: { id: store.id },
+        data: { profile_image_url: 'https://cdn.example.com/old-logo.png' },
+      });
+
+      // 미전달(undefined) → 유지
+      const kept = await service.sellerUpdateStoreBasicInfo(account.id, {
+        storeName: '이름만 수정',
+      });
+      expect(kept.profileImageUrl).toBe('https://cdn.example.com/old-logo.png');
+
+      // null 전달 → 제거 (GraphQL 런타임은 명시적 null을 전달할 수 있다)
+      const removed = await service.sellerUpdateStoreBasicInfo(account.id, {
+        profileImageUrl: null,
+      } as unknown as SellerUpdateStoreBasicInfoInput);
+      expect(removed.profileImageUrl).toBeNull();
     });
   });
 });

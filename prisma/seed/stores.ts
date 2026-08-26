@@ -59,6 +59,7 @@ export async function seedStores(
       access_guide_text:
         '강남역 3번 출구에서 도보 5분, 1층 케이크 거리 안쪽입니다.',
       regular_closure_text: '매주 화요일 정기 휴무',
+      profile_image_url: 'https://placehold.co/200x200/png?text=Store+A+Logo',
       is_active: true,
       store_images: {
         create: [
@@ -108,6 +109,7 @@ export async function seedStores(
       address_neighborhood: '서교동',
       region_id: mapo.id, // 서울 마포구
       business_hours_text: '평일 11:00 ~ 21:00',
+      // B는 프로필 미등록 상태(placeholder UI 확인용) — profile_image_url 미설정
       is_active: true,
     },
   });

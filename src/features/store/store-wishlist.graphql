@@ -1,6 +1,39 @@
+extend type Query {
+  """내가 찜한 매장 목록 (찜 최신순). 비활성/삭제 매장은 제외. 로그인 필요."""
+  myWishlistedStores(input: MyWishlistedStoresInput): MyWishlistedStoresConnection!
+}
+
 extend type Mutation {
   """매장 찜 추가 (멱등: 이미 있어도 true, soft-delete된 항목은 복원). 로그인 필요."""
   addStoreToWishlist(storeId: ID!): Boolean!
   """매장 찜 해제 (멱등: 이미 없어도 true). 로그인 필요."""
   removeStoreFromWishlist(storeId: ID!): Boolean!
+}
+
+input MyWishlistedStoresInput {
+  offset: Int = 0
+  limit: Int = 20
+}
+
+type MyWishlistedStoresConnection {
+  items: [WishlistedStoreSummary!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""찜한 매장 카드"""
+type WishlistedStoreSummary {
+  storeId: ID!
+  storeName: String!
+  """매장 프로필(로고) 이미지. 미등록 시 null."""
+  profileImageUrl: String
+  """평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  """매장 대표 이미지(최대 3장, sort_order asc)."""
+  imageUrls: [String!]!
+  """찜한 시각."""
+  addedAt: DateTime!
 }

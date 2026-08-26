@@ -56,6 +56,8 @@ type SellerStore {
   mapProvider: SellerStoreMapProvider!
   websiteUrl: String
   businessHoursText: String
+  """매장 프로필(로고) 이미지 URL. 미등록 시 null."""
+  profileImageUrl: String
   pickupSlotIntervalMinutes: Int!
   minLeadTimeMinutes: Int!
   maxDaysAhead: Int!
@@ -118,6 +120,8 @@ input SellerUpdateStoreBasicInfoInput {
   mapProvider: SellerStoreMapProvider
   websiteUrl: String
   businessHoursText: String
+  """매장 프로필(로고) 이미지 URL. null 전달 시 제거."""
+  profileImageUrl: String
 }
 
 """SellerUpsertStoreBusinessHourInput 입력 타입"""
