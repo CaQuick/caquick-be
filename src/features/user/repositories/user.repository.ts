@@ -52,13 +52,15 @@ export class UserRepository {
    * count 와 list 가 같은 가시성 기준을 공유하도록 하여
    * 마이페이지 카운트 카드와 실제 목록 길이 불일치를 방지한다.
    */
-  private visibleWishlistWhere(accountId: bigint) {
+  private visibleWishlistWhere(accountId: bigint, storeId?: bigint) {
     return {
       account_id: accountId,
       deleted_at: null,
       product: {
         deleted_at: null,
         is_active: true,
+        // 매장별 보기 → 매장 선택 화면의 매장 필터
+        ...(storeId !== undefined ? { store_id: storeId } : {}),
         store: { deleted_at: null, is_active: true },
       },
     } as const;
@@ -510,21 +512,28 @@ export class UserRepository {
     accountId: bigint;
     offset: number;
     limit: number;
+    storeId?: bigint;
   }): Promise<{
     items: {
       product_id: bigint;
       created_at: Date;
       product: {
+        store_id: bigint;
         name: string;
         regular_price: number;
         sale_price: number | null;
         images: { image_url: string }[];
-        store: { store_name: string };
+        store: {
+          store_name: string;
+          address_city: string | null;
+          address_neighborhood: string | null;
+          region: { name: string } | null;
+        };
       };
     }[];
     totalCount: number;
   }> {
-    const where = this.visibleWishlistWhere(args.accountId);
+    const where = this.visibleWishlistWhere(args.accountId, args.storeId);
 
     const [rows, totalCount] = await this.prisma.$transaction([
       this.prisma.wishlistItem.findMany({
@@ -538,10 +547,18 @@ export class UserRepository {
           created_at: true,
           product: {
             select: {
+              store_id: true,
               name: true,
               regular_price: true,
               sale_price: true,
-              store: { select: { store_name: true } },
+              store: {
+                select: {
+                  store_name: true,
+                  address_city: true,
+                  address_neighborhood: true,
+                  region: { select: { name: true } },
+                },
+              },
               images: {
                 where: { deleted_at: null },
                 orderBy: { sort_order: 'asc' },
@@ -556,6 +573,44 @@ export class UserRepository {
     ]);
 
     return { items: rows, totalCount };
+  }
+
+  /**
+   * 매장별 그룹핑용 가시 찜 목록 전체 조회.
+   * WishlistItem에는 store_id가 없어(product 경유) Prisma groupBy로 매장 단위 집계가
+   * 불가능하다 → 최소 필드만 가져와 service에서 그룹핑한다(찜은 사용자당 소규모 전제).
+   * 가시성 조건은 findWishlistItems/wishlistCount와 동일(visibleWishlistWhere)해야
+   * 상품 찜 목록 totalCount와 그룹 카운트 합이 일치한다.
+   */
+  async findVisibleWishlistItemsForGrouping(accountId: bigint): Promise<
+    {
+      created_at: Date;
+      product: {
+        store: {
+          id: bigint;
+          store_name: string;
+          profile_image_url: string | null;
+        };
+      };
+    }[]
+  > {
+    return this.prisma.wishlistItem.findMany({
+      where: this.visibleWishlistWhere(accountId),
+      select: {
+        created_at: true,
+        product: {
+          select: {
+            store: {
+              select: {
+                id: true,
+                store_name: true,
+                profile_image_url: true,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   async countMyReviews(accountId: bigint): Promise<number> {
