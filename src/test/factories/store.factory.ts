@@ -17,6 +17,7 @@ export interface StoreOverrides {
   longitude?: number | null;
   map_provider?: 'NAVER' | 'KAKAO' | 'NONE';
   business_hours_text?: string | null;
+  profile_image_url?: string | null;
   access_guide_text?: string | null;
   regular_closure_text?: string | null;
   pickup_slot_interval_minutes?: number;
@@ -49,6 +50,7 @@ export async function createStore(
       longitude: overrides.longitude ?? null,
       map_provider: overrides.map_provider ?? 'NONE',
       business_hours_text: overrides.business_hours_text ?? null,
+      profile_image_url: overrides.profile_image_url ?? null,
       access_guide_text: overrides.access_guide_text ?? null,
       regular_closure_text: overrides.regular_closure_text ?? null,
       pickup_slot_interval_minutes:
