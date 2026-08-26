@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { WISHLISTED_STORE_IMAGE_LIMIT } from '@/features/store/constants/store-wishlist.constants';
 import { PrismaService } from '@/prisma';
@@ -21,24 +22,41 @@ export interface WishlistedStoreRow {
 export class StoreWishlistRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 매장 찜 추가 (멱등). 없으면 생성, soft-delete된 경우 복원. */
+  /**
+   * 매장 찜 추가 (멱등). 없으면 생성, soft-delete된 경우 복원.
+   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
+   * addedAt 표기가 재찜을 반영하되, 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은
+   * created_at을 건드리지 않아 멱등 계약을 지킨다.
+   */
   async upsertStoreWishlist(args: {
     accountId: bigint;
     storeId: bigint;
     now: Date;
   }): Promise<void> {
-    await this.prisma.storeWishlistItem.upsert({
+    const restored = await this.prisma.storeWishlistItem.updateMany({
       where: {
-        account_id_store_id: {
-          account_id: args.accountId,
-          store_id: args.storeId,
-        },
+        account_id: args.accountId,
+        store_id: args.storeId,
+        deleted_at: { not: null },
       },
-      create: { account_id: args.accountId, store_id: args.storeId },
-      // 복원(재찜) 시 created_at도 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
-      // addedAt 표기가 재찜을 반영하도록(과거 찜 시점으로 밀리는 문제 방지).
-      update: { deleted_at: null, created_at: args.now, updated_at: args.now },
+      data: { deleted_at: null, created_at: args.now, updated_at: args.now },
     });
+    if (restored.count > 0) return;
+
+    try {
+      await this.prisma.storeWishlistItem.create({
+        data: { account_id: args.accountId, store_id: args.storeId },
+      });
+    } catch (error) {
+      // active 찜이 이미 존재(unique 충돌) — 멱등이므로 무시
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return;
+      }
+      throw error;
+    }
   }
 
   /** 매장 찜 해제 (멱등). active 항목만 soft-delete. */

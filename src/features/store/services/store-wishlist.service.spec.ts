@@ -67,14 +67,33 @@ describe('StoreWishlistService (real DB)', () => {
       expect(await activeWishlistCount(account.id, store.id)).toBe(1);
     });
 
-    it('중복 추가는 멱등하다(1건 유지)', async () => {
+    it('중복 추가는 멱등하다(1건 유지, created_at 불변)', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const store = await createStore(prisma);
 
       await service.addStoreToWishlist(account.id, store.id.toString());
+      const before = await prisma.storeWishlistItem.findUniqueOrThrow({
+        where: {
+          account_id_store_id: {
+            account_id: account.id,
+            store_id: store.id,
+          },
+        },
+      });
+      await new Promise((r) => setTimeout(r, 10));
       await service.addStoreToWishlist(account.id, store.id.toString());
 
       expect(await activeWishlistCount(account.id, store.id)).toBe(1);
+      const after = await prisma.storeWishlistItem.findUniqueOrThrow({
+        where: {
+          account_id_store_id: {
+            account_id: account.id,
+            store_id: store.id,
+          },
+        },
+      });
+      // 더블 탭·재시도가 찜 시각(목록 정렬 기준)을 밀지 않는다
+      expect(after.created_at.getTime()).toBe(before.created_at.getTime());
     });
 
     it('soft-delete된 찜은 복원한다', async () => {
