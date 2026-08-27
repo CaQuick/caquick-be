@@ -3,12 +3,12 @@ import {
   AccountType,
   CustomDraftStatus,
   IdentityProvider,
-  NotificationEvent,
   NotificationType,
   Prisma,
 } from '@prisma/client';
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
+import { buildReviewLikedNotification } from '@/features/notification';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface UserAccountIdentity {
@@ -679,16 +679,14 @@ export class UserRepository {
         },
       });
 
+      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다
       await tx.notification.create({
         data: {
           account_id: review.account_id,
-          type: NotificationType.REVIEW_LIKE,
-          event: NotificationEvent.REVIEW_LIKED,
-          title: '리뷰에 좋아요가 추가되었습니다',
-          body: '회원님의 리뷰를 다른 사용자가 좋아합니다.',
           review_id: review.id,
           store_id: review.store_id,
           product_id: review.product_id,
+          ...buildReviewLikedNotification(),
         },
       });
 
