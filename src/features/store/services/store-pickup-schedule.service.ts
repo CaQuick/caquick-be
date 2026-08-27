@@ -6,7 +6,6 @@ import {
 
 import { ClockService } from '@/common/providers/clock.service';
 import {
-  kstDayDiff,
   kstMidnightUtc,
   kstMinutesOfDay,
   parseKstDate,
@@ -15,16 +14,15 @@ import {
 } from '@/common/utils/kst-time';
 import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/pickup';
 import { STORE_PICKUP_SCHEDULE_ERRORS } from '@/features/store/constants/store-pickup-schedule-error-messages';
-import { STORE_PICKUP_DAY_REASON } from '@/features/store/constants/store-pickup-schedule.constants';
 import {
   StoreRepository,
   type StorePickupPolicyRow,
   type StoreWeekdayBusinessHourRow,
 } from '@/features/store/repositories/store.repository';
 import {
-  buildTodaySlots,
-  timeColumnToMinutes,
-} from '@/features/store/services/store-today-pickup.helper';
+  evaluatePickupDay,
+  type PickupDayInput,
+} from '@/features/store/services/store-pickup-policy.helper';
 import type {
   StorePickupCalendar,
   StorePickupDay,
@@ -89,13 +87,8 @@ export class StorePickupScheduleService {
       { length: daysInMonth },
       (_, index) => {
         const day = index + 1;
-        const reason = this.evaluateDay(
-          store,
-          ctx,
-          now,
-          ym.year,
-          ym.month,
-          day,
+        const { reason } = evaluatePickupDay(
+          this.pickupDayInput(store, ctx, now, ym.year, ym.month, day),
         );
         return {
           date: new Date(Date.UTC(ym.year, ym.month - 1, day))
@@ -140,32 +133,19 @@ export class StorePickupScheduleService {
       kstMidnightUtc(year, month, day + 1),
     );
 
-    const hour = ctx.hoursByWeekday.get(
-      new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
-    );
-    if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
-      return { date, morning: [], afternoon: [] };
-    }
-    // 특별휴무도 요일 휴무와 같은 "영업하지 않는 날" — SDL 주석대로 빈 배열로 통일한다.
+    const input = this.pickupDayInput(store, ctx, now, year, month, day);
+    const result = evaluatePickupDay(input);
+    // 특별휴무도 요일 휴무·영업시간 미설정과 같은 "영업하지 않는 날" — SDL 주석대로
+    // 빈 배열로 통일한다(슬롯이 비면 요일 휴무·미설정, 영업일 무슬롯도 동일 표현).
     // (PAST/OUT_OF_RANGE/CAPACITY_FULL/당일 마감은 영업일이므로 슬롯을 마감 표기로 유지)
-    const dateKey = new Date(Date.UTC(year, month - 1, day))
-      .toISOString()
-      .slice(0, 10);
-    if (ctx.closureDates.has(dateKey)) {
+    if (input.isSpecialClosure || result.slots.length === 0) {
       return { date, morning: [], afternoon: [] };
     }
 
-    const reason = this.evaluateDay(store, ctx, now, year, month, day);
-    let slots = this.buildDaySlots(
-      store,
-      hour.open_time,
-      hour.close_time,
-      kstMidnightUtc(year, month, day),
-      now,
-    );
-    if (reason !== null) {
-      slots = slots.map((slot) => ({ ...slot, available: false }));
-    }
+    const slots =
+      result.reason !== null
+        ? result.slots.map((slot) => ({ ...slot, available: false }))
+        : result.slots;
 
     return {
       date,
@@ -213,32 +193,23 @@ export class StorePickupScheduleService {
       kstMidnightUtc(year, month, day + 1),
     );
 
-    if (this.evaluateDay(store, ctx, now, year, month, day) !== null) {
-      return false;
-    }
+    const input = this.pickupDayInput(store, ctx, now, year, month, day);
+    const result = evaluatePickupDay(input);
+    if (result.reason !== null) return false;
 
-    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가
+    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가 — 공용 판정(소진 여부)에
+    // 얹는 주문 생성 전용 확장 검사.
     // (명세 외 정책 결정: capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석)
-    const dateKey = dateOnlyUtc.toISOString().slice(0, 10);
-    const capacity = ctx.capacities.get(dateKey);
-    const booked = ctx.bookedByDate.get(dateKey) ?? 0;
     const quantity = args.additionalQuantity ?? 1;
-    if (capacity !== undefined && booked + quantity > capacity) return false;
-
-    const hour = ctx.hoursByWeekday.get(dateOnlyUtc.getUTCDay());
-    if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
+    if (
+      input.capacity !== undefined &&
+      input.booked + quantity > input.capacity
+    ) {
       return false;
     }
 
-    const slots = this.buildDaySlots(
-      store,
-      hour.open_time,
-      hour.close_time,
-      kstMidnightUtc(year, month, day),
-      now,
-    );
     const pickupMinutes = kstMinutesOfDay(args.pickupAt);
-    return slots.some(
+    return result.slots.some(
       (slot) => slot.available && slotMinutes(slot) === pickupMinutes,
     );
   }
@@ -273,80 +244,28 @@ export class StorePickupScheduleService {
   }
 
   /**
-   * 해당 KST 달력일의 선택 불가 사유(null이면 선택 가능).
-   * 판정 순서: 과거 → 범위 초과 → 특별휴무 → 요일 휴무/영업시간 미설정
-   * → capacity 소진 → 리드타임 반영 잔여 가용 슬롯 없음.
+   * 월/일 벌크 조회 컨텍스트를 해당 KST 달력일의 정책 입력으로 변환한다.
+   * 판정 자체는 공용 정책(store-pickup-policy.helper)이 담당한다.
    */
-  private evaluateDay(
+  private pickupDayInput(
     store: StorePickupPolicyRow,
     ctx: ScheduleContext,
     now: Date,
     year: number,
     month: number,
     day: number,
-  ): string | null {
+  ): PickupDayInput {
     const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
     const dateKey = dateOnlyUtc.toISOString().slice(0, 10);
-    const diff = kstDayDiff(now, kstMidnightUtc(year, month, day));
-
-    if (diff < 0) return STORE_PICKUP_DAY_REASON.PAST;
-    if (diff > store.max_days_ahead) {
-      return STORE_PICKUP_DAY_REASON.OUT_OF_RANGE;
-    }
-    if (ctx.closureDates.has(dateKey)) return STORE_PICKUP_DAY_REASON.CLOSED;
-
-    const hour = ctx.hoursByWeekday.get(dateOnlyUtc.getUTCDay());
-    if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
-      return STORE_PICKUP_DAY_REASON.CLOSED;
-    }
-
-    // capacity 레코드가 없으면 무제한으로 간주(todayPickupStores와 동일 해석)
-    const capacity = ctx.capacities.get(dateKey);
-    const booked = ctx.bookedByDate.get(dateKey) ?? 0;
-    if (capacity !== undefined && booked >= capacity) {
-      return STORE_PICKUP_DAY_REASON.CAPACITY_FULL;
-    }
-
-    // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가(전역 pickupCalendar 선례 확장).
-    // 리드타임이 하루를 넘으면 미래 날짜도 여기서 마감된다.
-    const slots = this.buildDaySlots(
+    return {
       store,
-      hour.open_time,
-      hour.close_time,
-      kstMidnightUtc(year, month, day),
+      hour: ctx.hoursByWeekday.get(dateOnlyUtc.getUTCDay()),
+      isSpecialClosure: ctx.closureDates.has(dateKey),
+      capacity: ctx.capacities.get(dateKey),
+      booked: ctx.bookedByDate.get(dateKey) ?? 0,
       now,
-    );
-    if (!slots.some((slot) => slot.available)) {
-      return STORE_PICKUP_DAY_REASON.CLOSED;
-    }
-    return null;
-  }
-
-  /**
-   * 영업시간·매장 슬롯 간격으로 슬롯 생성. 리드타임 컷오프는 절대 시각
-   * (now + 리드타임) 기준이라 하루를 넘는 리드타임(최대 7일)도 미래 날짜에
-   * 올바르게 적용된다 — 당일만 컷오프하던 방식의 릴리즈 리뷰 반영.
-   */
-  private buildDaySlots(
-    store: StorePickupPolicyRow,
-    openTime: Date,
-    closeTime: Date,
-    dayStartUtc: Date,
-    now: Date,
-  ): StorePickupSlot[] {
-    // 해당 날짜 자정 기준 현재 시각의 경과 분. 미래 날짜면 음수가 되어
-    // 컷오프(nowMinutes + 리드타임)가 그만큼 앞당겨진다. 분수 분은 다음 분으로
-    // 올림(분 절삭이 리드타임을 최대 59초 짧게 만들지 않도록 보수적 처리).
-    const nowMinutes = Math.ceil(
-      (now.getTime() - dayStartUtc.getTime()) / 60_000,
-    );
-    return buildTodaySlots({
-      openMinutes: timeColumnToMinutes(openTime),
-      closeMinutes: timeColumnToMinutes(closeTime),
-      intervalMinutes: store.pickup_slot_interval_minutes,
-      leadTimeMinutes: store.min_lead_time_minutes,
-      nowMinutes,
-    });
+      dayStartUtc: kstMidnightUtc(year, month, day),
+    };
   }
 }
 
