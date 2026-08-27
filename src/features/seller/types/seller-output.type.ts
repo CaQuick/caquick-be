@@ -146,12 +146,7 @@ export interface SellerOrderSummaryOutput {
 export interface SellerOrderStatusHistoryOutput {
   id: string;
   fromStatus:
-    | 'SUBMITTED'
-    | 'CONFIRMED'
-    | 'MADE'
-    | 'PICKED_UP'
-    | 'CANCELED'
-    | null;
+    'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED' | null;
   toStatus: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
   changedAt: Date;
   note: string | null;
@@ -276,11 +271,7 @@ export interface SellerAuditLogOutput {
   actorAccountId: string;
   storeId: string | null;
   targetType:
-    | 'STORE'
-    | 'PRODUCT'
-    | 'ORDER'
-    | 'CONVERSATION'
-    | 'CHANGE_PASSWORD';
+    'STORE' | 'PRODUCT' | 'ORDER' | 'CONVERSATION' | 'CHANGE_PASSWORD';
   targetId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
   beforeJson: string | null;

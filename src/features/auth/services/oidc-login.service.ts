@@ -119,14 +119,11 @@ export class OidcLoginService implements IOidcLoginService {
     returnTo: string;
   } {
     const expectedState = req.cookies?.[AUTH_COOKIE.OIDC_STATE] as
-      | string
-      | undefined;
+      string | undefined;
     const expectedNonce = req.cookies?.[AUTH_COOKIE.OIDC_NONCE] as
-      | string
-      | undefined;
+      string | undefined;
     const codeVerifier = req.cookies?.[AUTH_COOKIE.OIDC_CODE_VERIFIER] as
-      | string
-      | undefined;
+      string | undefined;
     const returnTo =
       (req.cookies?.[AUTH_COOKIE.OIDC_RETURN_TO] as string | undefined) ??
       this.normalizeReturnTo(undefined);

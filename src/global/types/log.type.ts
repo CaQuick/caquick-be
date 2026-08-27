@@ -149,9 +149,7 @@ export interface GraphqlExceptionLogPayload extends BaseExceptionLogPayload {
  * 일반 트랜잭션 로그에서 사용 가능한 페이로드 유니언 타입.
  */
 export type TransactionLogPayload =
-  | RestTransactionLogPayload
-  | GraphqlTransactionLogPayload
-  | BaseLogPayload;
+  RestTransactionLogPayload | GraphqlTransactionLogPayload | BaseLogPayload;
 
 /**
  * 에러 로그에서 사용 가능한 페이로드 유니언 타입.

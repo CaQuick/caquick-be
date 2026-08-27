@@ -15,6 +15,7 @@ export interface StoreCandidateRow {
   region: { name: string } | null;
   pickup_slot_interval_minutes: number;
   min_lead_time_minutes: number;
+  max_days_ahead: number;
 }
 
 /** 특정 요일의 매장 영업시간 row(오늘 픽업 슬롯 산출용). */
@@ -89,6 +90,7 @@ export class StoreRepository {
         region: { select: { name: true } },
         pickup_slot_interval_minutes: true,
         min_lead_time_minutes: true,
+        max_days_ahead: true,
       },
     });
   }
