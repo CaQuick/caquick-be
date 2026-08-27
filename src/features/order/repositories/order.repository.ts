@@ -2,13 +2,12 @@ import { Injectable } from '@nestjs/common';
 import {
   AuditActionType,
   AuditTargetType,
-  NotificationEvent,
-  NotificationType,
   OrderStatus,
   Prisma,
   type AccountType,
 } from '@prisma/client';
 
+import { buildOrderStatusNotification } from '@/features/notification';
 import { activeWhere, PrismaService } from '@/prisma';
 
 export interface MyOrderRow {
@@ -141,7 +140,7 @@ export class OrderRepository {
   /**
    * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
    * 트랜잭션으로 원자 생성한다. SUBMITTED는 알림 미발송
-   * (알림은 판매자 상태 변경부터 — orderStatusToNotificationEvent 규칙).
+   * (알림은 판매자 상태 변경부터 — buildOrderStatusNotification 규칙).
    * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를
    * 재집계해, 동시 주문이 마지막 잔여를 함께 차지하는 race를 차단한다.
    * capacity 초과면 null을 반환한다(호출부가 도메인 에러로 변환).
@@ -672,21 +671,17 @@ export class OrderRepository {
         },
       });
 
-      const notificationEvent = this.orderStatusToNotificationEvent(
+      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다
+      const notification = buildOrderStatusNotification(
+        updatedOrder.order_number,
         args.toStatus,
       );
-      if (notificationEvent) {
+      if (notification) {
         await tx.notification.create({
           data: {
             account_id: order.account_id,
-            type: NotificationType.ORDER_STATUS,
-            title: this.notificationTitleByOrderStatus(args.toStatus),
-            body: this.notificationBodyByOrderStatus(
-              updatedOrder.order_number,
-              args.toStatus,
-            ),
-            event: notificationEvent,
             order_id: order.id,
+            ...notification,
           },
         });
       }
@@ -712,43 +707,5 @@ export class OrderRepository {
 
       return updatedOrder;
     });
-  }
-
-  private orderStatusToNotificationEvent(
-    status: OrderStatus,
-  ): NotificationEvent | null {
-    if (status === OrderStatus.CONFIRMED)
-      return NotificationEvent.ORDER_CONFIRMED;
-    if (status === OrderStatus.MADE) return NotificationEvent.ORDER_MADE;
-    if (status === OrderStatus.PICKED_UP)
-      return NotificationEvent.ORDER_PICKED_UP;
-    return null;
-  }
-
-  private notificationTitleByOrderStatus(status: OrderStatus): string {
-    if (status === OrderStatus.CONFIRMED) return '주문이 확정되었습니다';
-    if (status === OrderStatus.MADE) return '주문이 제작 완료되었습니다';
-    if (status === OrderStatus.PICKED_UP) return '주문이 픽업 처리되었습니다';
-    if (status === OrderStatus.CANCELED) return '주문이 취소되었습니다';
-    return '주문 상태가 변경되었습니다';
-  }
-
-  private notificationBodyByOrderStatus(
-    orderNumber: string,
-    status: OrderStatus,
-  ): string {
-    if (status === OrderStatus.CONFIRMED) {
-      return `${orderNumber} 주문이 확정되었습니다.`;
-    }
-    if (status === OrderStatus.MADE) {
-      return `${orderNumber} 주문의 상품 제작이 완료되었습니다.`;
-    }
-    if (status === OrderStatus.PICKED_UP) {
-      return `${orderNumber} 주문이 픽업 완료 처리되었습니다.`;
-    }
-    if (status === OrderStatus.CANCELED) {
-      return `${orderNumber} 주문이 취소되었습니다.`;
-    }
-    return `${orderNumber} 주문 상태가 변경되었습니다.`;
   }
 }
