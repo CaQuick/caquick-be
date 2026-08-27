@@ -218,11 +218,7 @@ export class SellerBannerService
   ) {
     return {
       linkType: (input.linkType ?? current.link_type) as
-        | 'NONE'
-        | 'URL'
-        | 'PRODUCT'
-        | 'STORE'
-        | 'CATEGORY',
+        'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY',
       linkProductId:
         input.linkProductId !== undefined
           ? input.linkProductId

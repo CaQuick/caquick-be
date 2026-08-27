@@ -46,11 +46,7 @@ export interface AuditLogRow {
   actor_account_id: bigint;
   store_id: bigint | null;
   target_type:
-    | 'STORE'
-    | 'PRODUCT'
-    | 'ORDER'
-    | 'CONVERSATION'
-    | 'CHANGE_PASSWORD';
+    'STORE' | 'PRODUCT' | 'ORDER' | 'CONVERSATION' | 'CHANGE_PASSWORD';
   target_id: bigint;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
   before_json: Prisma.JsonValue | null;
