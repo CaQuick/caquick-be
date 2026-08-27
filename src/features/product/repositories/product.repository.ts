@@ -112,9 +112,12 @@ export class ProductRepository {
         ...(args.isActive !== undefined ? { is_active: args.isActive } : {}),
         ...(args.categoryId
           ? {
+              // include의 링크·대상 가드와 동일 — 삭제된 연결이 필터에 걸리지 않게 한다
               product_categories: {
                 some: {
                   category_id: args.categoryId,
+                  ...activeWhere,
+                  category: activeWhere,
                 },
               },
             }
@@ -126,8 +129,10 @@ export class ProductRepository {
                 {
                   product_tags: {
                     some: {
+                      ...activeWhere,
                       tag: {
                         name: { contains: args.search },
+                        ...activeWhere,
                       },
                     },
                   },
