@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 
-import { applySoftDeleteArgs } from '@/prisma/soft-delete.middleware';
+import {
+  applySoftDeleteArgs,
+  SOFT_DELETE_MODEL_NAMES,
+} from '@/prisma/soft-delete.middleware';
 
 type SoftDeleteInput = {
   model?: Prisma.ModelName;
@@ -192,5 +195,29 @@ describe('soft delete extension', () => {
       include: { UserProfile: true },
       select: { id: true, email: true },
     });
+  });
+});
+
+// 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례, 이슈 #207)을 구조로 차단한다.
+describe('SOFT_DELETE_MODELS 커버리지 (dmmf 대조)', () => {
+  const modelsWithDeletedAt = Prisma.dmmf.datamodel.models
+    .filter((model) =>
+      model.fields.some((field) => field.name === 'deleted_at'),
+    )
+    .map((model) => model.name);
+
+  it('deleted_at 컬럼을 가진 모든 모델이 목록에 등록되어 있다', () => {
+    const missing = modelsWithDeletedAt.filter(
+      (name) => !SOFT_DELETE_MODEL_NAMES.has(name as Prisma.ModelName),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('목록에 deleted_at 없는 모델이 섞여 있지 않다', () => {
+    const withDeletedAt = new Set<string>(modelsWithDeletedAt);
+    const extras = [...SOFT_DELETE_MODEL_NAMES].filter(
+      (name) => !withDeletedAt.has(name),
+    );
+    expect(extras).toEqual([]);
   });
 });
