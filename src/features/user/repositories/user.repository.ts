@@ -9,7 +9,7 @@ import {
 } from '@prisma/client';
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface UserAccountIdentity {
   provider: IdentityProvider;
@@ -37,12 +37,6 @@ export interface UserAccountWithProfile {
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private activeRelationWhere<T extends Record<string, unknown>>(
-    where: T,
-  ): T & { deleted_at: null } {
-    return { ...where, deleted_at: null };
-  }
-
   /**
    * 화면에 노출 가능한 wishlist row 조건.
    * - wishlist 자체가 active (deleted_at: null)
@@ -55,13 +49,12 @@ export class UserRepository {
   private visibleWishlistWhere(accountId: bigint, storeId?: bigint) {
     return {
       account_id: accountId,
-      deleted_at: null,
+      ...activeWhere,
       product: {
-        deleted_at: null,
-        is_active: true,
+        ...visibleWhere,
         // 매장별 보기 → 매장 선택 화면의 매장 필터
         ...(storeId !== undefined ? { store_id: storeId } : {}),
-        store: { deleted_at: null, is_active: true },
+        store: visibleWhere,
       },
     } as const;
   }
@@ -80,7 +73,7 @@ export class UserRepository {
         // soft-deleted identity는 노출 대상 아님. 최근 로그인 순으로 정렬해
         // FE가 "최근 로그인 provider" 표시할 때 별도 정렬 없이 사용 가능.
         account_identities: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: [{ last_login_at: 'desc' }, { id: 'asc' }],
           select: { provider: true, last_login_at: true },
         },
@@ -207,7 +200,7 @@ export class UserRepository {
         where: {
           account_id: args.accountId,
           revoked_at: null,
-          deleted_at: null,
+          ...activeWhere,
         },
         data: {
           revoked_at: args.now,
@@ -233,7 +226,7 @@ export class UserRepository {
     now: Date,
   ): Promise<void> {
     const identities = await tx.accountIdentity.findMany({
-      where: { account_id: accountId, deleted_at: null },
+      where: { account_id: accountId },
       select: { id: true, provider_subject: true },
     });
 
@@ -266,7 +259,7 @@ export class UserRepository {
         }),
         this.prisma.cartItem.count({
           where: {
-            cart: this.activeRelationWhere({ account_id: accountId }),
+            cart: { account_id: accountId, ...activeWhere },
           },
         }),
         this.prisma.wishlistItem.count({
@@ -350,7 +343,7 @@ export class UserRepository {
     const result = await this.prisma.notification.updateMany({
       where: {
         account_id: args.accountId,
-        deleted_at: null,
+        ...activeWhere,
         read_at: null,
       },
       data: { read_at: args.now },
@@ -402,7 +395,7 @@ export class UserRepository {
       where: {
         id: args.id,
         account_id: args.accountId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -416,7 +409,7 @@ export class UserRepository {
     const result = await this.prisma.searchHistory.updateMany({
       where: {
         account_id: args.accountId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -495,7 +488,7 @@ export class UserRepository {
       where: {
         account_id: args.accountId,
         product_id: args.productId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -577,7 +570,7 @@ export class UserRepository {
                 },
               },
               images: {
-                where: { deleted_at: null },
+                where: activeWhere,
                 orderBy: { sort_order: 'asc' },
                 take: 1,
                 select: { image_url: true },
@@ -718,7 +711,7 @@ export class UserRepository {
       where: {
         review_id: args.reviewId,
         account_id: args.accountId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: new Date() },
     });
@@ -773,7 +766,7 @@ export class UserRepository {
   }): Promise<'deleted' | 'not-found' | 'forbidden'> {
     const comment = await this.prisma.reviewComment.findFirst({
       // extension이 주입하지만 재삭제 방지 계약을 코드에서 바로 읽도록 명시한다
-      where: { id: args.commentId, deleted_at: null },
+      where: { id: args.commentId, ...activeWhere },
       select: { id: true, account_id: true },
     });
     if (!comment) return 'not-found';

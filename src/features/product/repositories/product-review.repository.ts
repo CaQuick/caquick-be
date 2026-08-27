@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type ReviewMediaType } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface ProductReviewMediaRow {
   media_type: ReviewMediaType;
@@ -76,10 +76,10 @@ export class ProductReviewRepository {
   /** 공개 리뷰 공통 가드: 리뷰·상품·매장 모두 활성. */
   private publicReviewWhere(photoOnly: boolean): Prisma.ReviewWhereInput {
     return {
-      deleted_at: null,
-      product: { is_active: true, deleted_at: null },
-      store: { is_active: true, deleted_at: null },
-      ...(photoOnly ? { media: { some: { deleted_at: null } } } : {}),
+      ...activeWhere,
+      product: visibleWhere,
+      store: visibleWhere,
+      ...(photoOnly ? { media: { some: activeWhere } } : {}),
     };
   }
 
@@ -214,7 +214,7 @@ export class ProductReviewRepository {
   > {
     if (reviewIds.length === 0) return [];
     return this.prisma.review.findMany({
-      where: { id: { in: reviewIds }, deleted_at: null },
+      where: { id: { in: reviewIds } },
       select: {
         id: true,
         store_id: true,
@@ -227,7 +227,7 @@ export class ProductReviewRepository {
           },
         },
         media: {
-          where: { deleted_at: null, media_type: 'IMAGE' },
+          where: { ...activeWhere, media_type: 'IMAGE' },
           orderBy: { sort_order: 'asc' },
           take: 1,
           select: { media_url: true },
@@ -235,7 +235,7 @@ export class ProductReviewRepository {
         order_item: {
           select: {
             free_edits: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               take: 1,
               select: { crop_image_url: true },
@@ -265,7 +265,7 @@ export class ProductReviewRepository {
   ): Promise<ProductReviewRow[]> {
     if (reviewIds.length === 0) return [];
     return this.prisma.review.findMany({
-      where: { id: { in: reviewIds }, deleted_at: null },
+      where: { id: { in: reviewIds } },
       select: {
         id: true,
         rating: true,
@@ -285,7 +285,7 @@ export class ProductReviewRepository {
           },
         },
         media: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           select: {
             media_type: true,
@@ -297,7 +297,7 @@ export class ProductReviewRepository {
         order_item: {
           select: {
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { id: 'asc' },
               select: {
                 group_name_snapshot: true,
@@ -333,7 +333,7 @@ export class ProductReviewRepository {
           },
         },
         media: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           select: {
             media_type: true,
@@ -345,7 +345,7 @@ export class ProductReviewRepository {
         order_item: {
           select: {
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { id: 'asc' },
               select: {
                 group_name_snapshot: true,
@@ -361,7 +361,7 @@ export class ProductReviewRepository {
             regular_price: true,
             sale_price: true,
             images: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               take: 1,
               select: { image_url: true },
@@ -394,7 +394,7 @@ export class ProductReviewRepository {
     if (reviewIds.length === 0) return new Map();
     const rows = await this.prisma.reviewLike.groupBy({
       by: ['review_id'],
-      where: { review_id: { in: reviewIds }, deleted_at: null },
+      where: { review_id: { in: reviewIds } },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
@@ -410,7 +410,6 @@ export class ProductReviewRepository {
       where: {
         review_id: { in: args.reviewIds },
         account_id: args.accountId,
-        deleted_at: null,
       },
       select: { review_id: true },
     });
@@ -424,7 +423,7 @@ export class ProductReviewRepository {
     if (reviewIds.length === 0) return new Map();
     const rows = await this.prisma.reviewComment.groupBy({
       by: ['review_id'],
-      where: { review_id: { in: reviewIds }, deleted_at: null },
+      where: { review_id: { in: reviewIds } },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
@@ -439,7 +438,6 @@ export class ProductReviewRepository {
     return this.prisma.reviewComment.findMany({
       where: {
         review_id: args.reviewId,
-        deleted_at: null,
         ...(args.cursor !== undefined ? { id: { gt: args.cursor } } : {}),
       },
       select: {
@@ -467,7 +465,7 @@ export class ProductReviewRepository {
   /** 리뷰 활성 댓글 수. */
   async countReviewComments(reviewId: bigint): Promise<number> {
     return this.prisma.reviewComment.count({
-      where: { review_id: reviewId, deleted_at: null },
+      where: { review_id: reviewId },
     });
   }
 }

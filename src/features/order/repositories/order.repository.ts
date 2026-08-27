@@ -9,7 +9,7 @@ import {
   type AccountType,
 } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 export interface MyOrderRow {
   id: bigint;
@@ -128,7 +128,7 @@ export class OrderRepository {
     } | null;
   } | null> {
     return this.prisma.account.findFirst({
-      where: { id: accountId, deleted_at: null },
+      where: { id: accountId },
       select: {
         account_type: true,
         user_profile: {
@@ -270,14 +270,14 @@ export class OrderRepository {
       take: args.limit,
       include: {
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
           include: {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -310,7 +310,7 @@ export class OrderRepository {
       take: args.limit,
       include: {
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
           include: {
@@ -320,7 +320,7 @@ export class OrderRepository {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -330,7 +330,7 @@ export class OrderRepository {
           },
         },
         _count: {
-          select: { items: { where: { deleted_at: null } } },
+          select: { items: { where: activeWhere } },
         },
       },
     });
@@ -365,7 +365,6 @@ export class OrderRepository {
     const rows = await this.prisma.orderItem.findMany({
       where: {
         order_id: { in: args.orderIds },
-        deleted_at: null,
         order: {
           account_id: args.accountId,
           status: OrderStatus.PICKED_UP,
@@ -393,13 +392,13 @@ export class OrderRepository {
     limit: number;
   }): Promise<{ items: ReviewableOrderItemRow[]; totalCount: number }> {
     const where = {
-      deleted_at: null,
+      ...activeWhere,
       order: {
         account_id: args.accountId,
         status: OrderStatus.PICKED_UP,
         // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
         // 않으므로 삭제된 주문의 아이템이 노출되지 않게 명시한다
-        deleted_at: null,
+        ...activeWhere,
       },
       OR: [
         { review: { is: null } },
@@ -421,7 +420,7 @@ export class OrderRepository {
           product: {
             select: {
               images: {
-                where: { deleted_at: null },
+                where: activeWhere,
                 orderBy: { sort_order: 'asc' },
                 take: 1,
                 select: { image_url: true },
@@ -452,11 +451,11 @@ export class OrderRepository {
       },
       include: {
         status_histories: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { changed_at: 'asc' },
         },
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           include: {
             store: {
@@ -473,7 +472,7 @@ export class OrderRepository {
                 business_hours_text: true,
                 website_url: true,
                 business_hours: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { day_of_week: 'asc' },
                 },
               },
@@ -481,7 +480,7 @@ export class OrderRepository {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -489,19 +488,19 @@ export class OrderRepository {
               },
             },
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { id: 'asc' },
             },
             custom_texts: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
             free_edits: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               include: {
                 attachments: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                 },
               },
