@@ -368,6 +368,9 @@ export class OrderRepository {
         order: {
           account_id: args.accountId,
           status: OrderStatus.PICKED_UP,
+          // 삭제된 주문의 아이템이 리뷰 가능으로 집계되지 않게 명시
+          // (listReviewableOrderItems와 동일 가드)
+          ...activeWhere,
         },
         OR: [
           { review: { is: null } },
@@ -557,6 +560,7 @@ export class OrderRepository {
         items: {
           some: {
             store_id: args.storeId,
+            ...activeWhere,
           },
         },
       },
@@ -572,11 +576,14 @@ export class OrderRepository {
         items: {
           some: {
             store_id: args.storeId,
+            ...activeWhere,
           },
         },
       },
+      // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
         status_histories: {
+          where: activeWhere,
           orderBy: {
             changed_at: 'desc',
           },
@@ -584,16 +591,20 @@ export class OrderRepository {
         items: {
           where: {
             store_id: args.storeId,
+            ...activeWhere,
           },
           include: {
-            option_items: true,
+            option_items: { where: activeWhere },
             custom_texts: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
             free_edits: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               include: {
                 attachments: {
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                 },
               },
