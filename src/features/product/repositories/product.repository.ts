@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { type BannerLinkType, type CategoryType, Prisma } from '@prisma/client';
 
 import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 구매자 매장 상품 카드 row. product-storefront 매퍼 입력. */
 export interface StoreProductRow {
@@ -139,7 +139,7 @@ export class ProductRepository {
       // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
@@ -153,11 +153,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -165,7 +165,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -185,8 +185,7 @@ export class ProductRepository {
       where: {
         id: productId,
         is_active: true,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store: visibleWhere,
       },
       select: { id: true },
     });
@@ -203,7 +202,7 @@ export class ProductRepository {
       // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
@@ -217,11 +216,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -229,7 +228,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -250,7 +249,7 @@ export class ProductRepository {
       // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
@@ -264,11 +263,11 @@ export class ProductRepository {
           },
         },
         option_groups: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           include: {
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -276,7 +275,7 @@ export class ProductRepository {
         custom_template: {
           include: {
             text_tokens: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -825,8 +824,7 @@ export class ProductRepository {
       where: {
         store_id: args.storeId,
         is_active: true,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store: visibleWhere,
         // 0n도 유효한 인자로 다뤄야 한다(parseId("0")=0n). truthiness 체크는 0n을
         // falsy로 떨궈 잘못된 필터를 전체조회로 만들므로 undefined로만 분기한다.
         ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
@@ -835,8 +833,8 @@ export class ProductRepository {
               product_categories: {
                 some: {
                   category_id: args.categoryId,
-                  deleted_at: null,
-                  category: { is_active: true, deleted_at: null },
+                  ...activeWhere,
+                  category: visibleWhere,
                 },
               },
             }
@@ -848,10 +846,10 @@ export class ProductRepository {
                 {
                   product_tags: {
                     some: {
-                      deleted_at: null,
+                      ...activeWhere,
                       tag: {
                         name: { contains: args.search },
-                        deleted_at: null,
+                        ...activeWhere,
                       },
                     },
                   },
@@ -868,7 +866,7 @@ export class ProductRepository {
         sale_price: true,
         currency: true,
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           take: 1,
           select: { image_url: true },
@@ -876,8 +874,8 @@ export class ProductRepository {
         product_categories: {
           // storeProductCategories와 동일하게 비활성/삭제 카테고리는 categoryIds에서 제외
           where: {
-            deleted_at: null,
-            category: { is_active: true, deleted_at: null },
+            ...activeWhere,
+            category: visibleWhere,
           },
           select: { category_id: true },
         },
@@ -898,8 +896,7 @@ export class ProductRepository {
       where: {
         id: productId,
         is_active: true,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store: visibleWhere,
       },
       select: {
         id: true,
@@ -912,12 +909,12 @@ export class ProductRepository {
         currency: true,
         preparation_time_minutes: true,
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           select: { image_url: true },
         },
         option_groups: {
-          where: { is_active: true, deleted_at: null },
+          where: visibleWhere,
           orderBy: { sort_order: 'asc' },
           select: {
             id: true,
@@ -930,7 +927,7 @@ export class ProductRepository {
             option_requires_image: true,
             sort_order: true,
             option_items: {
-              where: { is_active: true, deleted_at: null },
+              where: visibleWhere,
               orderBy: { sort_order: 'asc' },
               select: {
                 id: true,
@@ -950,7 +947,7 @@ export class ProductRepository {
   /** 상품 활성 리뷰 수(후기 탭 카운트). */
   async countProductReviews(productId: bigint): Promise<number> {
     return this.prisma.review.count({
-      where: { product_id: productId, deleted_at: null },
+      where: { product_id: productId },
     });
   }
 
@@ -963,7 +960,6 @@ export class ProductRepository {
       where: {
         account_id: args.accountId,
         product_id: args.productId,
-        deleted_at: null,
       },
       select: { id: true },
     });
@@ -981,10 +977,8 @@ export class ProductRepository {
     return this.prisma.product.findMany({
       where: {
         is_active: true,
-        deleted_at: null,
         store: {
-          is_active: true,
-          deleted_at: null,
+          ...visibleWhere,
           ...(args.regionIds && args.regionIds.length > 0
             ? { region_id: { in: args.regionIds } }
             : {}),
@@ -995,11 +989,10 @@ export class ProductRepository {
               product_categories: {
                 some: {
                   category_id: args.categoryId,
-                  deleted_at: null,
+                  ...activeWhere,
                   // 홈 칩은 EVENT 카테고리만 — STYLE/OTHER id가 오면 빈 결과로 처리
                   category: {
-                    is_active: true,
-                    deleted_at: null,
+                    ...visibleWhere,
                     category_type: 'EVENT',
                   },
                 },
@@ -1014,7 +1007,7 @@ export class ProductRepository {
         regular_price: true,
         sale_price: true,
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           take: 1,
           select: { image_url: true },
@@ -1038,7 +1031,7 @@ export class ProductRepository {
     if (productIds.length === 0) return new Map();
     const rows = await this.prisma.wishlistItem.groupBy({
       by: ['product_id'],
-      where: { product_id: { in: productIds }, deleted_at: null },
+      where: { product_id: { in: productIds } },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.product_id, r._count._all]));
@@ -1051,7 +1044,7 @@ export class ProductRepository {
     if (productIds.length === 0) return new Map();
     const rows = await this.prisma.review.groupBy({
       by: ['product_id'],
-      where: { product_id: { in: productIds }, deleted_at: null },
+      where: { product_id: { in: productIds } },
       _avg: { rating: true },
       _count: { _all: true },
     });
@@ -1076,13 +1069,12 @@ export class ProductRepository {
       by: ['product_id'],
       where: {
         product_id: { in: productIds },
-        deleted_at: null,
         order: {
           status: { in: [...RANKING_VALID_ORDER_STATUSES] },
           created_at: { gte: since },
           // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
           // 않으므로(=root read만 보정), 삭제된 주문이 랭킹을 부풀리지 않도록 명시한다.
-          deleted_at: null,
+          ...activeWhere,
         },
       },
       _count: { _all: true },
@@ -1096,7 +1088,6 @@ export class ProductRepository {
    */
   async globalReviewAverage(): Promise<number | null> {
     const agg = await this.prisma.review.aggregate({
-      where: { deleted_at: null },
       _avg: { rating: true },
     });
     return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
@@ -1114,15 +1105,13 @@ export class ProductRepository {
     return this.prisma.banner.findFirst({
       where: {
         is_active: true,
-        deleted_at: null,
         ...(args.categoryId !== undefined
           ? {
               placement: 'CATEGORY',
               link_category_id: args.categoryId,
               // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
               link_category: {
-                is_active: true,
-                deleted_at: null,
+                ...visibleWhere,
                 category_type: 'EVENT',
               },
             }
@@ -1138,18 +1127,17 @@ export class ProductRepository {
               {
                 link_type: 'PRODUCT',
                 link_product: {
-                  is_active: true,
-                  deleted_at: null,
-                  store: { is_active: true, deleted_at: null },
+                  ...visibleWhere,
+                  store: visibleWhere,
                 },
               },
               {
                 link_type: 'STORE',
-                link_store: { is_active: true, deleted_at: null },
+                link_store: visibleWhere,
               },
               {
                 link_type: 'CATEGORY',
-                link_category: { is_active: true, deleted_at: null },
+                link_category: visibleWhere,
               },
             ],
           },
@@ -1178,20 +1166,18 @@ export class ProductRepository {
     const rows = await this.prisma.product.findMany({
       where: {
         is_active: true,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
-        images: { some: { deleted_at: null } },
+        store: visibleWhere,
+        images: { some: activeWhere },
         // 0n도 유효한 인자(parseId("0")=0n) → undefined로만 분기한다.
         ...(categoryId !== undefined
           ? {
               product_categories: {
                 some: {
                   category_id: categoryId,
-                  deleted_at: null,
+                  ...activeWhere,
                   // 홈 칩은 EVENT 카테고리만 — 랭킹(findActiveCakesForRanking)과 동일 정책
                   category: {
-                    is_active: true,
-                    deleted_at: null,
+                    ...visibleWhere,
                     category_type: 'EVENT',
                   },
                 },
@@ -1219,17 +1205,15 @@ export class ProductRepository {
         id: { in: args.productIds },
         // 후보 추출과 재조회 사이에 비활성화·카테고리 해제된 상품이 노출되지 않게 재검증
         is_active: true,
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store: visibleWhere,
         ...(args.categoryId !== undefined
           ? {
               product_categories: {
                 some: {
                   category_id: args.categoryId,
-                  deleted_at: null,
+                  ...activeWhere,
                   category: {
-                    is_active: true,
-                    deleted_at: null,
+                    ...visibleWhere,
                     category_type: 'EVENT',
                   },
                 },
@@ -1241,7 +1225,7 @@ export class ProductRepository {
         id: true,
         store_id: true,
         images: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           take: 1,
           select: { image_url: true },
@@ -1258,7 +1242,6 @@ export class ProductRepository {
     return this.prisma.category.findMany({
       where: {
         is_active: true,
-        deleted_at: null,
         ...(type !== undefined ? { category_type: type } : {}),
       },
       select: {
@@ -1281,13 +1264,11 @@ export class ProductRepository {
     const grouped = await this.prisma.productCategory.groupBy({
       by: ['category_id'],
       where: {
-        deleted_at: null,
         product: {
           store_id: storeId,
-          is_active: true,
-          deleted_at: null,
+          ...visibleWhere,
           // storeProducts와 동일하게 비활성/삭제 매장은 카테고리도 노출하지 않는다
-          store: { is_active: true, deleted_at: null },
+          store: visibleWhere,
         },
       },
       _count: { _all: true },
@@ -1301,7 +1282,6 @@ export class ProductRepository {
       where: {
         id: { in: grouped.map((g) => g.category_id) },
         is_active: true,
-        deleted_at: null,
       },
       select: {
         id: true,

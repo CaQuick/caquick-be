@@ -11,7 +11,7 @@ import type {
   AccountWithProfile,
   IAccountRepository,
 } from '@/features/auth/repositories/account.repository.interface';
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 /**
  * Account / AccountIdentity / UserProfile Repository 구체 구현.
@@ -37,7 +37,7 @@ export class AccountRepository implements IAccountRepository {
         provider_subject: providerSubject,
         // soft-delete extension 은 top-level where 에만 deleted_at 을 주입한다.
         // 상위 엔티티(account)까지 활성인지는 직접 명시해야 탈퇴 계정이 새어나오지 않는다.
-        account: { deleted_at: null },
+        account: activeWhere,
       },
       include: {
         account: {

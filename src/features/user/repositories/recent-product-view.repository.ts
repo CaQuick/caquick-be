@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface RecentViewedProductRow {
   product_id: bigint;
@@ -29,11 +29,10 @@ export class RecentProductViewRepository {
   }): Promise<{ items: RecentViewedProductRow[]; totalCount: number }> {
     const where = {
       account_id: args.accountId,
-      deleted_at: null,
+      ...activeWhere,
       product: {
-        deleted_at: null,
-        is_active: true,
-        store: { deleted_at: null },
+        ...visibleWhere,
+        store: activeWhere,
       },
     };
 
@@ -47,7 +46,7 @@ export class RecentProductViewRepository {
           sale_price: true as const,
           store: { select: { store_name: true as const } },
           images: {
-            where: { deleted_at: null },
+            where: activeWhere,
             orderBy: { sort_order: 'asc' as const },
             take: 1,
             select: { image_url: true as const },
@@ -96,7 +95,7 @@ export class RecentProductViewRepository {
 
   async countByAccount(accountId: bigint): Promise<number> {
     return this.prisma.recentProductView.count({
-      where: { account_id: accountId, deleted_at: null },
+      where: { account_id: accountId },
     });
   }
 
@@ -106,7 +105,7 @@ export class RecentProductViewRepository {
     now: Date;
   }): Promise<void> {
     const oldest = await this.prisma.recentProductView.findMany({
-      where: { account_id: args.accountId, deleted_at: null },
+      where: { account_id: args.accountId },
       orderBy: { viewed_at: 'desc' },
       skip: args.maxCount,
       select: { id: true },
@@ -129,7 +128,7 @@ export class RecentProductViewRepository {
       where: {
         account_id: args.accountId,
         product_id: args.productId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -143,7 +142,7 @@ export class RecentProductViewRepository {
     const result = await this.prisma.recentProductView.updateMany({
       where: {
         account_id: args.accountId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -158,9 +157,8 @@ export class RecentProductViewRepository {
       where: {
         account_id: accountId,
         product: {
-          deleted_at: null,
-          is_active: true,
-          store: { deleted_at: null },
+          ...visibleWhere,
+          store: activeWhere,
         },
       },
       orderBy: { viewed_at: 'desc' },
@@ -177,7 +175,7 @@ export class RecentProductViewRepository {
               select: { store_name: true },
             },
             images: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               take: 1,
               select: { image_url: true },

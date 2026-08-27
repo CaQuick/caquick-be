@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '@/prisma';
+import { PrismaService, visibleWhere } from '@/prisma';
 
 export interface RegionRow {
   id: bigint;
@@ -31,14 +31,14 @@ export class RegionRepository {
   /** 1차 광역 지역 목록. hasChildren 판정을 위해 활성 2차를 1건만 동반 조회. */
   async findActiveGroups(): Promise<RegionGroupRow[]> {
     return this.prisma.region.findMany({
-      where: { level: 1, is_active: true, deleted_at: null },
+      where: { level: 1, is_active: true },
       orderBy: { sort_order: 'asc' },
       select: {
         id: true,
         name: true,
         slug: true,
         children: {
-          where: { is_active: true, deleted_at: null },
+          where: visibleWhere,
           select: { id: true },
           take: 1,
         },
@@ -53,7 +53,6 @@ export class RegionRepository {
         parent_id: parentId,
         level: 2,
         is_active: true,
-        deleted_at: null,
       },
       orderBy: { sort_order: 'asc' },
       select: {
@@ -69,7 +68,7 @@ export class RegionRepository {
   /** parentId 유효성 검증용. 활성 1차 지역 존재 여부. */
   async existsActiveGroup(id: bigint): Promise<boolean> {
     const found = await this.prisma.region.findFirst({
-      where: { id, level: 1, is_active: true, deleted_at: null },
+      where: { id, level: 1, is_active: true },
       select: { id: true },
     });
     return Boolean(found);
@@ -84,7 +83,6 @@ export class RegionRepository {
       where: {
         name: { contains: keyword },
         is_active: true,
-        deleted_at: null,
       },
       orderBy: [{ level: 'asc' }, { sort_order: 'asc' }],
       take: limit,
