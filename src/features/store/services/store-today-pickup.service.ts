@@ -2,11 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
-import {
-  kstMidnightUtc,
-  kstMinutesOfDay,
-  toKstYmd,
-} from '@/common/utils/kst-time';
+import { kstMidnightUtc, toKstYmd } from '@/common/utils/kst-time';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
@@ -16,10 +12,7 @@ import {
   type ScoredStore,
 } from '@/features/store/services/store-listing.service';
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
-import {
-  buildTodaySlots,
-  timeColumnToMinutes,
-} from '@/features/store/services/store-today-pickup.helper';
+import { evaluatePickupDay } from '@/features/store/services/store-pickup-policy.helper';
 import type {
   TodayPickupSlot,
   TodayPickupStoreConnection,
@@ -67,35 +60,22 @@ export class StoreTodayPickupService {
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),
     );
-    // 분 단위 절삭은 리드타임을 최대 59초 짧게 만들므로, 초가 남으면 다음 분으로 올린다
-    const hasSubMinute =
-      asOf.getUTCSeconds() > 0 || asOf.getUTCMilliseconds() > 0;
-    const nowMinutes = kstMinutesOfDay(asOf) + (hasSubMinute ? 1 : 0);
 
     const open: { entry: ScoredStore; slots: TodayPickupSlot[] }[] = [];
     for (const entry of scored) {
       const storeId = entry.candidate.id;
-      if (closedStoreIds.has(storeId.toString())) continue;
-
-      const hour = hourByStore.get(storeId.toString());
-      // 영업시간 미설정·휴무 요일이면 오늘 픽업 불가
-      if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
-        continue;
-      }
-
-      // capacity 레코드가 없으면 무제한으로 간주(figma 명세 외 정책 결정)
-      const capacity = capacities.get(storeId);
-      const booked = bookedCounts.get(storeId) ?? 0;
-      if (capacity !== undefined && booked >= capacity) continue;
-
-      const slots = buildTodaySlots({
-        openMinutes: timeColumnToMinutes(hour.open_time),
-        closeMinutes: timeColumnToMinutes(hour.close_time),
-        intervalMinutes: entry.candidate.pickup_slot_interval_minutes,
-        leadTimeMinutes: entry.candidate.min_lead_time_minutes,
-        nowMinutes,
+      // 판정은 공용 정책(store-pickup-policy.helper) 단일 소스 — 달력·주문 재검증과
+      // 동일 규칙. '오늘'은 PAST/OUT_OF_RANGE가 항상 통과라 사유는 제외 여부로만 쓴다.
+      const { reason, slots } = evaluatePickupDay({
+        store: entry.candidate,
+        hour: hourByStore.get(storeId.toString()),
+        isSpecialClosure: closedStoreIds.has(storeId.toString()),
+        capacity: capacities.get(storeId),
+        booked: bookedCounts.get(storeId) ?? 0,
+        now: asOf,
+        dayStartUtc,
       });
-      if (!slots.some((slot) => slot.available)) continue;
+      if (reason !== null) continue;
 
       open.push({ entry, slots });
     }

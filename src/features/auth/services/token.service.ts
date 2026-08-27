@@ -93,8 +93,7 @@ export class TokenService implements ITokenService {
     res: Response,
   ): Promise<{ accessToken: string; accountId: bigint }> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (!refreshToken) {
       throw new UnauthorizedException('Missing refresh token.');

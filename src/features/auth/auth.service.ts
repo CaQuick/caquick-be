@@ -96,8 +96,7 @@ export class AuthService {
    */
   async logout(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (refreshToken) {
       const tokenHash = this.tokens.sha256Hex(refreshToken);
