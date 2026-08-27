@@ -143,11 +143,15 @@ export class ProductRepository {
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
+          // 링크·대상 카테고리의 soft-delete 가드. is_active는 셀러 화면에서
+          // 기존 지정을 계속 보여줘야 하므로 걸지 않는다.
+          where: { ...activeWhere, category: activeWhere },
           include: {
             category: true,
           },
         },
         product_tags: {
+          where: { ...activeWhere, tag: activeWhere },
           include: {
             tag: true,
           },
@@ -206,11 +210,15 @@ export class ProductRepository {
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
+          // 링크·대상 카테고리의 soft-delete 가드. is_active는 셀러 화면에서
+          // 기존 지정을 계속 보여줘야 하므로 걸지 않는다.
+          where: { ...activeWhere, category: activeWhere },
           include: {
             category: true,
           },
         },
         product_tags: {
+          where: { ...activeWhere, tag: activeWhere },
           include: {
             tag: true,
           },
@@ -253,11 +261,15 @@ export class ProductRepository {
           orderBy: { sort_order: 'asc' },
         },
         product_categories: {
+          // 링크·대상 카테고리의 soft-delete 가드. is_active는 셀러 화면에서
+          // 기존 지정을 계속 보여줘야 하므로 걸지 않는다.
+          where: { ...activeWhere, category: activeWhere },
           include: {
             category: true,
           },
         },
         product_tags: {
+          where: { ...activeWhere, tag: activeWhere },
           include: {
             tag: true,
           },
@@ -478,6 +490,7 @@ export class ProductRepository {
           },
         },
         option_items: {
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
       },
@@ -515,6 +528,7 @@ export class ProductRepository {
       orderBy: { sort_order: 'asc' },
       include: {
         option_items: {
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
       },
@@ -662,6 +676,7 @@ export class ProductRepository {
           },
         },
         text_tokens: {
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
       },

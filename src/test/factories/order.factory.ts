@@ -19,6 +19,7 @@ export interface OrderOverrides {
   subtotal_price?: number;
   discount_price?: number;
   total_price?: number;
+  deleted_at?: Date;
 }
 
 export async function createOrder(
@@ -42,6 +43,7 @@ export async function createOrder(
       subtotal_price: overrides.subtotal_price ?? 10000,
       discount_price: overrides.discount_price ?? 0,
       total_price: overrides.total_price ?? 10000,
+      ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
 }
@@ -55,6 +57,7 @@ export interface OrderItemOverrides {
   sale_price_snapshot?: number | null;
   quantity?: number;
   item_subtotal_price?: number;
+  deleted_at?: Date;
 }
 
 export async function createOrderItem(
@@ -92,6 +95,7 @@ export async function createOrderItem(
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
       quantity: overrides.quantity ?? 1,
       item_subtotal_price: overrides.item_subtotal_price ?? 10000,
+      ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
 }

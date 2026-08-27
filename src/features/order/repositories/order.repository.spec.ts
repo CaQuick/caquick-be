@@ -180,6 +180,29 @@ describe('OrderRepository (real DB)', () => {
     });
   });
 
+  describe('findReviewableOrderIds', () => {
+    it('soft-delete된 주문의 아이템은 리뷰 가능 집계에서 제외한다', async () => {
+      const buyer = await setupBuyer();
+      const active = await createOrder(prisma, {
+        account_id: buyer.id,
+        status: 'PICKED_UP',
+      });
+      await createOrderItem(prisma, { order_id: active.id });
+      const deleted = await createOrder(prisma, {
+        account_id: buyer.id,
+        status: 'PICKED_UP',
+        deleted_at: new Date(),
+      });
+      await createOrderItem(prisma, { order_id: deleted.id });
+
+      const ids = await repo.findReviewableOrderIds({
+        accountId: buyer.id,
+        orderIds: [active.id, deleted.id],
+      });
+      expect(ids).toEqual(new Set([active.id.toString()]));
+    });
+  });
+
   describe('findOrderDetailByAccount', () => {
     it('본인 주문이면 상세 반환 (status_histories 포함)', async () => {
       const buyer = await setupBuyer();

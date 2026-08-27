@@ -209,6 +209,50 @@ describe('ProductRepository (real DB)', () => {
       });
       expect(result).toBeNull();
     });
+
+    it('soft-delete된 카테고리·태그 연결과 삭제된 대상은 제외한다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const liveCategory = await createCategory('생일');
+      const linkDeletedCategory = await createCategory('링크 삭제');
+      const deletedCategory = await createCategory('대상 삭제');
+      await prisma.productCategory.createMany({
+        data: [
+          { product_id: product.id, category_id: liveCategory.id },
+          {
+            product_id: product.id,
+            category_id: linkDeletedCategory.id,
+            deleted_at: new Date(),
+          },
+          { product_id: product.id, category_id: deletedCategory.id },
+        ],
+      });
+      await prisma.category.update({
+        where: { id: deletedCategory.id },
+        data: { deleted_at: new Date() },
+      });
+      const liveTag = await createTag('레터링');
+      const linkDeletedTag = await createTag('링크 삭제 태그');
+      await prisma.productTag.createMany({
+        data: [
+          { product_id: product.id, tag_id: liveTag.id },
+          {
+            product_id: product.id,
+            tag_id: linkDeletedTag.id,
+            deleted_at: new Date(),
+          },
+        ],
+      });
+
+      const result = await repo.findProductById({
+        productId: product.id,
+        storeId: store.id,
+      });
+      expect(result?.product_categories.map((c) => c.category.name)).toEqual([
+        '생일',
+      ]);
+      expect(result?.product_tags.map((t) => t.tag.name)).toEqual(['레터링']);
+    });
   });
 
   describe('findProductByIdIncludingInactive', () => {
@@ -441,6 +485,26 @@ describe('ProductRepository (real DB)', () => {
       expect(result.option_items).toHaveLength(1);
     });
 
+    it('findOptionGroupById·listOptionGroupsByProduct는 soft-delete된 옵션 아이템을 제외한다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const group = await createOptionGroup(product.id);
+      const live = await createOptionItem(group.id);
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: group.id,
+          title: '삭제된 항목',
+          deleted_at: new Date(),
+        },
+      });
+
+      const found = await repo.findOptionGroupById(group.id);
+      expect(found?.option_items.map((i) => i.id)).toEqual([live.id]);
+
+      const rows = await repo.listOptionGroupsByProduct(product.id);
+      expect(rows[0].option_items.map((i) => i.id)).toEqual([live.id]);
+    });
+
     it('softDeleteOptionGroup: deleted_at + is_active:false', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -555,6 +619,26 @@ describe('ProductRepository (real DB)', () => {
       expect(second.id).toBe(first.id);
       expect(second.base_image_url).toBe('https://i.example/b.png');
       expect(second.is_active).toBe(false);
+    });
+
+    it('findCustomTemplateById는 soft-delete된 텍스트 토큰을 제외한다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const tpl = await createTemplate(product.id);
+      const live = await prisma.productCustomTextToken.create({
+        data: { template_id: tpl.id, token_key: 'live', default_text: '문구' },
+      });
+      await prisma.productCustomTextToken.create({
+        data: {
+          template_id: tpl.id,
+          token_key: 'deleted',
+          default_text: '삭제',
+          deleted_at: new Date(),
+        },
+      });
+
+      const found = await repo.findCustomTemplateById(tpl.id);
+      expect(found?.text_tokens.map((t) => t.id)).toEqual([live.id]);
     });
 
     it('findCustomTemplateById + setCustomTemplateActive', async () => {
