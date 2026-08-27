@@ -64,6 +64,44 @@ describe('ProductRepository (real DB)', () => {
 
   // ─── Product list/fetch ──
   describe('listProductsByStore', () => {
+    it('삭제된 카테고리 연결·태그로는 목록 필터에 걸리지 않는다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '무관한 이름',
+      });
+      const category = await createCategory('생일');
+      await prisma.productCategory.create({
+        data: {
+          product_id: product.id,
+          category_id: category.id,
+          deleted_at: new Date(),
+        },
+      });
+      const tag = await createTag('레터링');
+      await prisma.productTag.create({
+        data: {
+          product_id: product.id,
+          tag_id: tag.id,
+          deleted_at: new Date(),
+        },
+      });
+
+      const byCategory = await repo.listProductsByStore({
+        storeId: store.id,
+        limit: 10,
+        categoryId: category.id,
+      });
+      expect(byCategory).toHaveLength(0);
+
+      const bySearch = await repo.listProductsByStore({
+        storeId: store.id,
+        limit: 10,
+        search: '레터링',
+      });
+      expect(bySearch).toHaveLength(0);
+    });
+
     it('store_id 필터 + cursor 페이지네이션', async () => {
       const storeA = await createStore(prisma);
       const storeB = await createStore(prisma);
