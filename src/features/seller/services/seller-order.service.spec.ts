@@ -158,6 +158,44 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.statusHistories).toHaveLength(1);
       expect(result.statusHistories[0].toStatus).toBe('CONFIRMED');
     });
+
+    it('soft-delete된 아이템·상태 이력은 상세에서 제외한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'CONFIRMED' });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        deleted_at: new Date(),
+      });
+      await prisma.orderStatusHistory.create({
+        data: {
+          order_id: order.id,
+          from_status: 'SUBMITTED',
+          to_status: 'CONFIRMED',
+          changed_at: new Date('2026-04-15T10:00:00Z'),
+          deleted_at: new Date(),
+        },
+      });
+
+      const result = await service.sellerOrder(account.id, order.id);
+      expect(result.items).toHaveLength(1);
+      expect(result.statusHistories).toHaveLength(0);
+    });
+
+    it('soft-delete된 아이템만 있는 주문은 상세·목록 모두에서 제외한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      await prisma.orderItem.updateMany({
+        where: { order_id: order.id },
+        data: { deleted_at: new Date() },
+      });
+
+      await expect(service.sellerOrder(account.id, order.id)).rejects.toThrow(
+        NotFoundException,
+      );
+      const list = await service.sellerOrderList(account.id);
+      expect(list.items).toHaveLength(0);
+    });
   });
 
   describe('sellerUpdateOrderStatus', () => {
