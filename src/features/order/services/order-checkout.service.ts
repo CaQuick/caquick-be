@@ -12,6 +12,7 @@ import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import {
+  DAY_MS,
   formatKstDate,
   kstMidnightUtc,
   toKstYmd,
@@ -32,7 +33,6 @@ const ORDER_NUMBER_MAX_ATTEMPTS = 3;
 // GraphQL Int는 signed 32비트. 커밋 전에 금액을 이 범위로 제한해
 // "저장은 됐는데 응답 직렬화에서 실패 → 재시도 중복 주문" 경로를 차단한다.
 const MAX_ORDER_AMOUNT = 2_147_483_647;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 옵션 검증 결과(스냅샷 조립용). */
 interface ResolvedOptionSelection {

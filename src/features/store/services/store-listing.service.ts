@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { DAY_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
@@ -18,8 +19,6 @@ import {
   type StoreMetrics,
 } from '@/features/store/services/store-ranking.helper';
 import type { PopularStoreConnection } from '@/features/store/types/store-output.type';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 점수화·정렬이 끝난 랭킹 항목. */
 export interface ScoredStore {

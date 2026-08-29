@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
-import { kstMidnightUtc, toKstYmd } from '@/common/utils/kst-time';
+import { DAY_MS, kstMidnightUtc, toKstYmd } from '@/common/utils/kst-time';
+import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
@@ -17,8 +18,6 @@ import type {
   TodayPickupSlot,
   TodayPickupStoreConnection,
 } from '@/features/store/types/store-today-pickup-output.type';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class StoreTodayPickupService {
@@ -97,8 +96,7 @@ export class StoreTodayPickupService {
     const items = page.map(({ entry, slots }) => ({
       id: entry.candidate.id.toString(),
       storeName: entry.candidate.store_name,
-      // 소수 첫째 자리까지(인기 매장 카드와 동일 표기)
-      ratingAverage: Math.round(entry.metrics.ratingAverage * 10) / 10,
+      ratingAverage: roundRatingAverage(entry.metrics.ratingAverage),
       reviewCount: entry.metrics.reviewCount,
       regionLabel: buildRegionLabel(entry.candidate),
       cakeImageUrls: imagesByStore.get(entry.candidate.id) ?? [],

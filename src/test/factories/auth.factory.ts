@@ -5,6 +5,7 @@ import type {
   PrismaClient,
 } from '@prisma/client';
 
+import { DAY_MS } from '@/common/utils/kst-time';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 
@@ -65,8 +66,7 @@ export async function createRefreshSession(
         `hash_${seq}_${'a'.repeat(64 - `hash_${seq}_`.length)}`,
       user_agent: overrides.user_agent ?? 'test-agent',
       ip_address: overrides.ip_address ?? '127.0.0.1',
-      expires_at:
-        overrides.expires_at ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expires_at: overrides.expires_at ?? new Date(Date.now() + 7 * DAY_MS),
       revoked_at: overrides.revoked_at ?? null,
     },
   });

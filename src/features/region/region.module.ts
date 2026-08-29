@@ -6,6 +6,5 @@ import { RegionService } from '@/features/region/services/region.service';
 
 @Module({
   providers: [RegionRepository, RegionService, RegionQueryResolver],
-  exports: [RegionRepository],
 })
 export class RegionModule {}
