@@ -102,7 +102,14 @@ export class OrderCheckoutService {
         additionalQuantity: quantity,
       }));
     if (!pickupAvailable) {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
+      // 같은 키의 동시 재시도가 방금 capacity를 채운 것일 수 있다 — 거절 전에
+      // 키를 재조회해, 내 주문이 이미 생성돼 있으면 실패 대신 replay로 응답한다
+      // (릴리즈 리뷰 반영: 응답 유실 재시도가 '가득 참' 실패를 받는 race 차단).
+      const raced = await this.replayAfterCapacityReject(
+        accountId,
+        input.idempotencyKey,
+      );
+      return this.toCreateOrderOutput(raced);
     }
 
     // 가격 스냅샷: FE 제출 금액은 신뢰하지 않고 서버가 재계산한다.
@@ -311,9 +318,11 @@ export class OrderCheckoutService {
           orderNumber: this.generateOrderNumber(args.submittedAt),
         });
         if (created === null) {
-          // 트랜잭션 내 capacity 재검사에서 잔여 부족 판정(동시 주문 race 차단)
-          throw new BadRequestException(
-            ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE,
+          // 트랜잭션 내 capacity 재검사에서 잔여 부족 판정(동시 주문 race 차단).
+          // 잔여를 채운 것이 같은 키의 내 주문일 수 있어 거절 전에 replay를 확인한다.
+          return this.replayAfterCapacityReject(
+            args.accountId,
+            args.idempotencyKey,
           );
         }
         return created;
@@ -348,6 +357,22 @@ export class OrderCheckoutService {
     throw new InternalServerErrorException(
       ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
     );
+  }
+
+  /**
+   * capacity 계열 거절 직전의 멱등 replay 확인. 같은 키의 주문이 있으면
+   * 그 주문을 반환하고, 없으면(진짜 잔여 부족) 픽업 불가로 거절한다.
+   */
+  private async replayAfterCapacityReject(
+    accountId: bigint,
+    idempotencyKey: string,
+  ) {
+    const existing = await this.orderRepo.findOrderByIdempotencyKey(
+      accountId,
+      idempotencyKey,
+    );
+    if (existing) return existing;
+    throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
   }
 
   /**

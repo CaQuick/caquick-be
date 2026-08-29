@@ -34,6 +34,7 @@ const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
 
 describe('OrderCheckoutService (real DB)', () => {
   let service: OrderCheckoutService;
+  let orderRepo: OrderRepository;
   let clock: ClockService;
   let random: RandomService;
   let prisma: PrismaClient;
@@ -51,6 +52,7 @@ describe('OrderCheckoutService (real DB)', () => {
       ],
     });
     service = module.get(OrderCheckoutService);
+    orderRepo = module.get(OrderRepository);
     clock = module.get(ClockService);
     random = module.get(RandomService);
     prisma = p;
@@ -729,6 +731,67 @@ describe('OrderCheckoutService (real DB)', () => {
 
       expect(orderB.orderId).not.toBe(orderA.orderId);
       expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('대소문자만 다른 키는 다른 키로 취급한다(utf8mb4_bin)', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const lower = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'checkout-a',
+          productId: product.id.toString(),
+        }),
+      );
+      const upper = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'CHECKOUT-A',
+          productId: product.id.toString(),
+        }),
+      );
+
+      expect(upper.orderId).not.toBe(lower.orderId);
+      expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('같은 키의 동시 재시도가 capacity를 채웠으면 픽업 불가 대신 replay로 응답한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await prisma.storeDailyCapacity.create({
+        data: {
+          store_id: store.id,
+          capacity_date: new Date(Date.UTC(2026, 8, 18)),
+          capacity: 1,
+        },
+      });
+
+      const first = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'race-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      // 사전 조회를 통과한 뒤 첫 요청이 커밋되는 race 재현 — 첫 조회만 miss 처리
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      const raced = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'race-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      // capacity가 가득 찼지만 채운 것이 내 주문 — 실패 대신 기존 주문 반환
+      expect(raced).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
     });
 
     it('검증 실패 요청은 키를 소모하지 않아 같은 키로 재시도해 성공한다', async () => {
