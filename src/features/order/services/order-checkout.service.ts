@@ -65,6 +65,16 @@ export class OrderCheckoutService {
     const optionItemIds = input.optionItemIds.map((id) => parseId(id));
     const quantity = input.quantity ?? 1;
 
+    // 멱등 replay: 같은 (계정, 키)의 주문이 있으면 검증·생성 없이 그 결과를
+    // 반환한다 — 원 요청 시점의 검증을 이미 통과한 주문이다(이슈 #212).
+    const replayed = await this.orderRepo.findOrderByIdempotencyKey(
+      accountId,
+      input.idempotencyKey,
+    );
+    if (replayed) {
+      return this.toCreateOrderOutput(replayed);
+    }
+
     const buyerProfile = await this.requireActiveBuyer(accountId);
 
     const product = await this.productRepo.findProductDetailById(productId);
@@ -122,6 +132,7 @@ export class OrderCheckoutService {
     const submittedAt = now;
     const created = await this.createWithOrderNumberRetry({
       accountId,
+      idempotencyKey: input.idempotencyKey,
       pickupAt: input.pickupAt,
       buyerName: buyer.name,
       buyerPhone: buyer.phone,
@@ -142,12 +153,22 @@ export class OrderCheckoutService {
       },
     });
 
+    return this.toCreateOrderOutput(created);
+  }
+
+  private toCreateOrderOutput(row: {
+    id: bigint;
+    order_number: string;
+    status: CreateOrderOutput['status'];
+    pickup_at: Date;
+    total_price: number;
+  }): CreateOrderOutput {
     return {
-      orderId: created.id.toString(),
-      orderNumber: created.order_number,
-      status: created.status,
-      pickupAt: created.pickup_at,
-      totalPrice: created.total_price,
+      orderId: row.id.toString(),
+      orderNumber: row.order_number,
+      status: row.status,
+      pickupAt: row.pickup_at,
+      totalPrice: row.total_price,
     };
   }
 
@@ -300,6 +321,19 @@ export class OrderCheckoutService {
         const isUniqueViolation =
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === 'P2002';
+        // 멱등 키 unique 충돌 = 같은 키의 동시 중복 제출. 사전 조회를 둘 다
+        // 통과한 race라, 먼저 생성된 주문을 조회해 replay로 반환한다(이슈 #212).
+        if (isUniqueViolation && this.isIdempotencyConflict(error)) {
+          const existing = await this.orderRepo.findOrderByIdempotencyKey(
+            args.accountId,
+            args.idempotencyKey,
+          );
+          if (existing) return existing;
+          // 생성 직후 소실(soft-delete 등) — 재시도 유도가 안전하다
+          throw new InternalServerErrorException(
+            ORDER_CHECKOUT_ERRORS.IDEMPOTENT_REPLAY_FAILED,
+          );
+        }
         if (!isUniqueViolation || attempt === ORDER_NUMBER_MAX_ATTEMPTS - 1) {
           if (isUniqueViolation) {
             throw new InternalServerErrorException(
@@ -314,6 +348,17 @@ export class OrderCheckoutService {
     throw new InternalServerErrorException(
       ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
     );
+  }
+
+  /**
+   * P2002 충돌이 멱등 키 unique(uk_order_account_idempotency)에서 난 것인지 판별.
+   * MySQL은 meta.target에 제약 이름을 담는다 — 그 외(주문번호 등)는 재시도 대상.
+   */
+  private isIdempotencyConflict(
+    error: Prisma.PrismaClientKnownRequestError,
+  ): boolean {
+    const target = error.meta?.target;
+    return typeof target === 'string' && target.includes('idempotency');
   }
 
   /** 주문번호: ORD-YYYYMMDD-XXXXXX (KST 날짜 + 혼동 문자 제외 랜덤 6자리). */

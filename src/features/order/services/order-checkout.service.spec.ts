@@ -158,8 +158,13 @@ describe('OrderCheckoutService (real DB)', () => {
     return account;
   }
 
+  // 호출마다 새 키 — 한 케이스에서 createOrder를 여러 번 부를 때 의도치 않은
+  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다
+  let idemSeq = 0;
   function baseInput(overrides: Partial<CreateOrderInput>): CreateOrderInput {
+    idemSeq += 1;
     return {
+      idempotencyKey: `idem-key-${idemSeq}`,
       productId: '0',
       optionItemIds: [],
       pickupAt: VALID_PICKUP_AT,
@@ -655,6 +660,103 @@ describe('OrderCheckoutService (real DB)', () => {
           baseInput({ productId: product.id.toString() }),
         ),
       ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('같은 키 재요청은 새 주문 없이 기존 주문을 반환한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const input = baseInput({
+        idempotencyKey: 'fixed-idem-key-01',
+        productId: product.id.toString(),
+      });
+
+      const first = await service.createOrder(buyer.id, input);
+      const replayed = await service.createOrder(buyer.id, input);
+
+      expect(replayed).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('같은 키면 입력이 달라도 기존 주문을 반환한다(입력 비교 없음)', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const first = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'fixed-idem-key-02',
+          productId: product.id.toString(),
+          quantity: 1,
+        }),
+      );
+      const replayed = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'fixed-idem-key-02',
+          productId: product.id.toString(),
+          quantity: 3,
+        }),
+      );
+
+      // 수량 3의 새 주문이 아니라 수량 1로 만든 기존 주문의 결과가 그대로 온다
+      expect(replayed.orderId).toBe(first.orderId);
+      expect(replayed.totalPrice).toBe(first.totalPrice);
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('다른 계정의 같은 키는 서로 간섭하지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyerA = await makeBuyer();
+      const buyerB = await makeBuyer();
+
+      const orderA = await service.createOrder(
+        buyerA.id,
+        baseInput({
+          idempotencyKey: 'shared-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+      const orderB = await service.createOrder(
+        buyerB.id,
+        baseInput({
+          idempotencyKey: 'shared-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      expect(orderB.orderId).not.toBe(orderA.orderId);
+      expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('검증 실패 요청은 키를 소모하지 않아 같은 키로 재시도해 성공한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      // 과거 픽업 일시로 실패 — 주문 row가 안 생기므로 키도 저장되지 않는다
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            idempotencyKey: 'retry-after-fail-key',
+            productId: product.id.toString(),
+            pickupAt: new Date('2026-09-01T05:00:00.000Z'),
+          }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      const retried = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'retry-after-fail-key',
+          productId: product.id.toString(),
+        }),
+      );
+      expect(retried.status).toBe('SUBMITTED');
+      expect(await prisma.order.count()).toBe(1);
     });
   });
 });

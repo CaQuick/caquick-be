@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Length,
   Matches,
   Max,
   MaxLength,
@@ -14,6 +15,12 @@ import {
 import { ORDER_BUYER_PHONE_REGEX } from '@/features/order/constants/order.constants';
 
 export class CreateOrderInput {
+  // 정책: 8~64자, 공백 문자 불가(이슈 #212 사용자 확정 — 형식은 길이만 제한).
+  @IsString()
+  @Length(8, 64)
+  @Matches(/^\S+$/)
+  idempotencyKey!: string;
+
   @IsString()
   @IsNotEmpty()
   productId!: string;

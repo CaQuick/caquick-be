@@ -88,6 +88,7 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
     const user = { accountId: account.id.toString() } as JwtUser;
 
     const result = await resolver.createOrder(user, {
+      idempotencyKey: 'resolver-idem-key-1',
       productId: product.id.toString(),
       optionItemIds: [],
       pickupAt: new Date('2026-09-18T05:00:00.000Z'), // 9/18(금) 14:00 KST
