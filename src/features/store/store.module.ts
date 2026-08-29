@@ -37,6 +37,6 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StorePickupScheduleQueryResolver,
   ],
   // StorePickupScheduleService는 주문 생성(order feature)의 픽업 일시 재검증이 소비한다
-  exports: [StoreRepository, StorePickupScheduleService],
+  exports: [StorePickupScheduleService],
 })
 export class StoreModule {}

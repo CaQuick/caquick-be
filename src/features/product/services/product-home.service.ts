@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
+import { DAY_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_POPULAR_CAKES_LIMIT,
   DEFAULT_RANDOM_CAKES_LIMIT,
@@ -28,8 +29,6 @@ import {
   RANKING_RECENT_ORDER_DAYS,
   type StoreMetrics,
 } from '@/features/store';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class ProductHomeService {

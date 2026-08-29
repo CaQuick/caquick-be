@@ -38,7 +38,12 @@ import {
   type ISellerCredentialService,
 } from '@/features/auth/services/seller-credential.service.interface';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
-import { CurrentUser, JwtAuthGuard, type JwtUser } from '@/global/auth';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '@/global/auth';
 
 /**
  * 인증 관련 REST 컨트롤러
@@ -370,14 +375,6 @@ export class AuthController {
       req,
     });
     res.status(200).json({ ok: true });
-  }
-}
-
-function parseAccountId(user: JwtUser): bigint {
-  try {
-    return BigInt(user.accountId);
-  } catch {
-    throw new BadRequestException('Invalid account id.');
   }
 }
 

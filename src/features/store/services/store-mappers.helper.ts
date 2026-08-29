@@ -1,3 +1,4 @@
+import { roundRatingAverage } from '@/common/utils/rating';
 import type { StoreCandidateRow } from '@/features/store/repositories/store.repository';
 import type { StoreMetrics } from '@/features/store/services/store-ranking.helper';
 import type { PopularStore } from '@/features/store/types/store-output.type';
@@ -26,8 +27,7 @@ export function toPopularStore(
     id: row.id.toString(),
     rank,
     storeName: row.store_name,
-    // 소수 첫째 자리까지(예: 4.666 → 4.7)
-    ratingAverage: Math.round(metrics.ratingAverage * 10) / 10,
+    ratingAverage: roundRatingAverage(metrics.ratingAverage),
     reviewCount: metrics.reviewCount,
     regionLabel: buildRegionLabel(row),
     cakeImageUrls,

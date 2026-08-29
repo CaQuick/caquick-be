@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 
+import { isRecord } from '@/common/utils/type-guards';
+
 // deleted_at 컬럼을 가진 모든 모델이 등록되어야 한다 — 스키마와의 일치는
 // soft-delete.middleware.spec.ts의 dmmf 대조 테스트가 강제한다.
 // (Region은 모델 추가 시 이 목록 갱신이 누락됐던 사례 — 이슈 #207에서 보강)
@@ -79,10 +81,6 @@ type SoftDeleteQueryContext = {
   args?: unknown;
   query: (args: unknown) => Promise<unknown>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function hasOwnKey(target: Record<string, unknown>, key: string): boolean {
   return Object.hasOwn(target, key);

@@ -5,6 +5,7 @@ import type {
   PrismaClient,
 } from '@prisma/client';
 
+import { DAY_MS } from '@/common/utils/kst-time';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';
@@ -36,8 +37,7 @@ export async function createOrder(
       account_id: accountId,
       order_number: overrides.order_number ?? `ORD-${Date.now()}-${seq}`,
       status: overrides.status ?? 'SUBMITTED',
-      pickup_at:
-        overrides.pickup_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
+      pickup_at: overrides.pickup_at ?? new Date(Date.now() + DAY_MS),
       buyer_name: overrides.buyer_name ?? `Buyer ${seq}`,
       buyer_phone: overrides.buyer_phone ?? '010-0000-0000',
       subtotal_price: overrides.subtotal_price ?? 10000,

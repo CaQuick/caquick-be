@@ -1,3 +1,4 @@
+import { roundRatingAverage } from '@/common/utils/rating';
 import type {
   StoreDetailRow,
   StoreReviewStat,
@@ -8,7 +9,7 @@ import type { StoreDetail } from '@/features/store/types/store-detail-output.typ
 /** 소수 첫째 자리 반올림(예: 4.666 → 4.7). 리뷰 없으면 0. */
 function toRatingAverage(stat: StoreReviewStat | undefined): number {
   if (!stat) return 0;
-  return Math.round(stat.average * 10) / 10;
+  return roundRatingAverage(stat.average);
 }
 
 /** Decimal(위/경도)을 number로. null은 유지. */

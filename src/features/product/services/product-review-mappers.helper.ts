@@ -10,6 +10,7 @@ import type {
   ReviewCommentItem,
   ReviewDetailProduct,
 } from '@/features/product/types/product-review-output.type';
+import { buildRegionLabel } from '@/features/store';
 
 /** 리뷰별 집계값(좋아요/댓글/isLiked) 매퍼 입력. */
 export interface ProductReviewStats {
@@ -59,17 +60,6 @@ export function toProductReview(
     })),
     createdAt: row.created_at,
   };
-}
-
-/** 매장 위치 표기. address_city/neighborhood 우선, 없으면 region명. */
-function buildRegionLabel(
-  store: ReviewDetailProductRow['store'],
-): string | null {
-  const parts = [store.address_city, store.address_neighborhood].filter(
-    (part): part is string => Boolean(part),
-  );
-  if (parts.length > 0) return parts.join(' ');
-  return store.region?.name ?? null;
 }
 
 export function toReviewDetailProduct(

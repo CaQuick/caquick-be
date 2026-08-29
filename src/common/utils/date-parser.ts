@@ -9,7 +9,10 @@ export function toDate(raw?: Date | string | null): Date | undefined {
   return date;
 }
 
-export function toDateRequired(raw: Date | string, field: string): Date {
+export function toDateRequired(
+  raw: Date | string | null | undefined,
+  field: string,
+): Date {
   const date = toDate(raw);
   if (!date) throw new BadRequestException(`${field} is required.`);
   return date;

@@ -2,5 +2,4 @@
 export {
   buildOrderStatusNotification,
   buildReviewLikedNotification,
-  type NotificationPayload,
 } from '@/features/notification/services/notification-payloads.helper';

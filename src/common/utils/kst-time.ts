@@ -6,7 +6,7 @@
  * 필요한 호출부는 now를 주입해 결정적으로 테스트한다.
  */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 function pad2(value: number): string {
   return value.toString().padStart(2, '0');
