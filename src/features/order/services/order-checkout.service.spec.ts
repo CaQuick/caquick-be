@@ -34,6 +34,7 @@ const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
 
 describe('OrderCheckoutService (real DB)', () => {
   let service: OrderCheckoutService;
+  let orderRepo: OrderRepository;
   let clock: ClockService;
   let random: RandomService;
   let prisma: PrismaClient;
@@ -51,6 +52,7 @@ describe('OrderCheckoutService (real DB)', () => {
       ],
     });
     service = module.get(OrderCheckoutService);
+    orderRepo = module.get(OrderRepository);
     clock = module.get(ClockService);
     random = module.get(RandomService);
     prisma = p;
@@ -158,8 +160,13 @@ describe('OrderCheckoutService (real DB)', () => {
     return account;
   }
 
+  // 호출마다 새 키 — 한 케이스에서 createOrder를 여러 번 부를 때 의도치 않은
+  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다
+  let idemSeq = 0;
   function baseInput(overrides: Partial<CreateOrderInput>): CreateOrderInput {
+    idemSeq += 1;
     return {
+      idempotencyKey: `idem-key-${idemSeq}`,
       productId: '0',
       optionItemIds: [],
       pickupAt: VALID_PICKUP_AT,
@@ -655,6 +662,164 @@ describe('OrderCheckoutService (real DB)', () => {
           baseInput({ productId: product.id.toString() }),
         ),
       ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('같은 키 재요청은 새 주문 없이 기존 주문을 반환한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const input = baseInput({
+        idempotencyKey: 'fixed-idem-key-01',
+        productId: product.id.toString(),
+      });
+
+      const first = await service.createOrder(buyer.id, input);
+      const replayed = await service.createOrder(buyer.id, input);
+
+      expect(replayed).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('같은 키면 입력이 달라도 기존 주문을 반환한다(입력 비교 없음)', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const first = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'fixed-idem-key-02',
+          productId: product.id.toString(),
+          quantity: 1,
+        }),
+      );
+      const replayed = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'fixed-idem-key-02',
+          productId: product.id.toString(),
+          quantity: 3,
+        }),
+      );
+
+      // 수량 3의 새 주문이 아니라 수량 1로 만든 기존 주문의 결과가 그대로 온다
+      expect(replayed.orderId).toBe(first.orderId);
+      expect(replayed.totalPrice).toBe(first.totalPrice);
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('다른 계정의 같은 키는 서로 간섭하지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyerA = await makeBuyer();
+      const buyerB = await makeBuyer();
+
+      const orderA = await service.createOrder(
+        buyerA.id,
+        baseInput({
+          idempotencyKey: 'shared-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+      const orderB = await service.createOrder(
+        buyerB.id,
+        baseInput({
+          idempotencyKey: 'shared-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      expect(orderB.orderId).not.toBe(orderA.orderId);
+      expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('대소문자만 다른 키는 다른 키로 취급한다(utf8mb4_bin)', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const lower = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'checkout-a',
+          productId: product.id.toString(),
+        }),
+      );
+      const upper = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'CHECKOUT-A',
+          productId: product.id.toString(),
+        }),
+      );
+
+      expect(upper.orderId).not.toBe(lower.orderId);
+      expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('같은 키의 동시 재시도가 capacity를 채웠으면 픽업 불가 대신 replay로 응답한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await prisma.storeDailyCapacity.create({
+        data: {
+          store_id: store.id,
+          capacity_date: new Date(Date.UTC(2026, 8, 18)),
+          capacity: 1,
+        },
+      });
+
+      const first = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'race-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      // 사전 조회를 통과한 뒤 첫 요청이 커밋되는 race 재현 — 첫 조회만 miss 처리
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      const raced = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'race-idem-key',
+          productId: product.id.toString(),
+        }),
+      );
+
+      // capacity가 가득 찼지만 채운 것이 내 주문 — 실패 대신 기존 주문 반환
+      expect(raced).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('검증 실패 요청은 키를 소모하지 않아 같은 키로 재시도해 성공한다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      // 과거 픽업 일시로 실패 — 주문 row가 안 생기므로 키도 저장되지 않는다
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            idempotencyKey: 'retry-after-fail-key',
+            productId: product.id.toString(),
+            pickupAt: new Date('2026-09-01T05:00:00.000Z'),
+          }),
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      const retried = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'retry-after-fail-key',
+          productId: product.id.toString(),
+        }),
+      );
+      expect(retried.status).toBe('SUBMITTED');
+      expect(await prisma.order.count()).toBe(1);
     });
   });
 });

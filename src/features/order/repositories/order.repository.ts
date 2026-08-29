@@ -59,6 +59,7 @@ export interface DailyCapacityGuard {
 export interface CreateSubmittedOrderArgs {
   accountId: bigint;
   orderNumber: string;
+  idempotencyKey: string;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
@@ -206,6 +207,7 @@ export class OrderRepository {
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
+        idempotency_key: args.idempotencyKey,
         status: OrderStatus.SUBMITTED,
         pickup_at: args.pickupAt,
         buyer_name: args.buyerName,
@@ -242,6 +244,26 @@ export class OrderRepository {
           },
         },
       },
+      select: {
+        id: true,
+        order_number: true,
+        status: true,
+        pickup_at: true,
+        total_price: true,
+      },
+    });
+  }
+
+  /**
+   * 멱등 키로 기존 주문 조회(replay 응답 재구성용, 이슈 #212).
+   * 상태가 이후 변경됐어도 현재 row를 그대로 반환한다.
+   */
+  async findOrderByIdempotencyKey(
+    accountId: bigint,
+    idempotencyKey: string,
+  ): Promise<CreatedOrderRow | null> {
+    return this.prisma.order.findFirst({
+      where: { account_id: accountId, idempotency_key: idempotencyKey },
       select: {
         id: true,
         order_number: true,
