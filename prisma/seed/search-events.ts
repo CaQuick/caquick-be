@@ -2,8 +2,9 @@
  * 검색 집계 이벤트 + 인기 검색어 스냅샷 시드(검색 진입 화면 검증용).
  *
  * - 이벤트는 시드 유저 소유(account_id)로만 만들어 resetSeedScope가 유저 기준으로 정리한다.
- * - 스냅샷은 이벤트에서 파생되는 캐시라 시드마다 전량 재생성한다(직전 정각 + 현재 정각 2개,
- *   순위 변동 UP/DOWN/SAME/NEW가 모두 보이도록 구성).
+ * - 스냅샷은 시드가 쓰는 두 정각(직전·현재)만 지우고 재생성한다 — 다른 시각대의
+ *   기존 스냅샷은 시드 데이터가 아니므로 보존한다(릴리즈 리뷰 반영).
+ *   순위 변동 UP/DOWN/SAME/NEW가 모두 보이도록 구성.
  */
 import type { PrismaClient } from '@prisma/client';
 
@@ -63,7 +64,9 @@ export async function seedSearchEvents(
     ),
   });
 
-  await prisma.searchKeywordRankSnapshot.deleteMany();
+  await prisma.searchKeywordRankSnapshot.deleteMany({
+    where: { ranked_at: { in: [previousAt, rankedAt] } },
+  });
   await prisma.searchKeywordRankSnapshot.createMany({
     data: [
       ...PREVIOUS_RANKING.map((keyword, i) => ({
