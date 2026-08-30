@@ -98,6 +98,22 @@ describe('SellerBannerService (real DB)', () => {
   });
 
   describe('sellerCreateBanner', () => {
+    it('placement=SEARCH(검색 진입 배너)로 생성할 수 있다', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+
+      const created = await service.sellerCreateBanner(account.id, {
+        placement: 'SEARCH',
+        imageUrl: 'https://i.example/search.png',
+        linkType: 'NONE',
+      });
+
+      expect(created.placement).toBe('SEARCH');
+      const row = await prisma.banner.findUniqueOrThrow({
+        where: { id: BigInt(created.id) },
+      });
+      expect(row.placement).toBe('SEARCH');
+    });
+
     it('linkType=URL인데 linkUrl 없음 → BadRequestException', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(

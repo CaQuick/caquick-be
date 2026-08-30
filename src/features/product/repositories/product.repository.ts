@@ -41,6 +41,25 @@ export interface CakeCandidateRow {
   };
 }
 
+/** 상품 검색 후보 row(정렬·필터는 service 메모리 파이프라인). */
+export interface ProductSearchCandidateRow extends CakeCandidateRow {
+  created_at: Date;
+}
+
+/** 상품 검색 조건(정규화된 단어 목록 + 필터). */
+export interface ProductSearchFilter {
+  /** 상품명 또는 태그명에 모두 포함돼야 하는 단어(AND). */
+  words: string[];
+  /** 상황별(EVENT) 카테고리 — 그룹 내 OR. */
+  eventCategoryIds?: bigint[];
+  /** 스타일별(STYLE) 카테고리 — 그룹 내 OR, 상황별과 AND. */
+  styleCategoryIds?: bigint[];
+  /** 표시가(sale ?? regular) 하한/상한. */
+  minPrice?: number;
+  maxPrice?: number;
+  regionIds?: bigint[];
+}
+
 /** 홈 배너 row. */
 export interface HomeBannerRow {
   id: bigint;
@@ -1044,6 +1063,75 @@ export class ProductRepository {
     });
   }
 
+  /**
+   * 상품 검색 후보 전량(활성 상품 + 활성 매장). 정렬 기준이 다양하고 인기/판매순이
+   * 메모리 점수화라 후보를 모두 로드한 뒤 service가 정렬·페이지를 자른다
+   * (인기 매장과 동일 트레이드오프 — 상품 수가 커지면 정렬별 DB 페이지네이션으로 분리).
+   */
+  async findProductSearchCandidates(
+    filter: ProductSearchFilter,
+  ): Promise<ProductSearchCandidateRow[]> {
+    return this.prisma.product.findMany({
+      where: buildProductSearchWhere(filter),
+      select: {
+        id: true,
+        store_id: true,
+        name: true,
+        regular_price: true,
+        sale_price: true,
+        created_at: true,
+        images: {
+          where: activeWhere,
+          orderBy: { sort_order: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+        store: {
+          select: {
+            store_name: true,
+            address_city: true,
+            address_neighborhood: true,
+            region: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /** 상품 검색 조건에 맞는 상품의 가격만(히스토그램용). 후보 조건과 단일 소스. */
+  async findProductSearchPrices(
+    filter: ProductSearchFilter,
+  ): Promise<{ regular_price: number; sale_price: number | null }[]> {
+    return this.prisma.product.findMany({
+      where: buildProductSearchWhere(filter),
+      select: { regular_price: true, sale_price: true },
+    });
+  }
+
+  /** 상품 검색 결과 수(검색 요약 탭 카운트). 후보 조건과 단일 소스. */
+  async countProductSearch(filter: ProductSearchFilter): Promise<number> {
+    return this.prisma.product.count({
+      where: buildProductSearchWhere(filter),
+    });
+  }
+
+  /** 주어진 productIds 중 사용자가 찜한 product_id 집합(string). 단일 IN 쿼리(N+1 회피). */
+  async findWishlistedProductIds(args: {
+    accountId: bigint;
+    productIds: bigint[];
+  }): Promise<Set<string>> {
+    if (args.productIds.length === 0) return new Set();
+    const rows = await this.prisma.wishlistItem.findMany({
+      where: {
+        account_id: args.accountId,
+        product_id: { in: args.productIds },
+      },
+      select: { product_id: true },
+    });
+    return new Set(rows.map((r) => r.product_id.toString()));
+  }
+
   /** 상품별 활성 찜 수. */
   async aggregateProductWishlistCounts(
     productIds: bigint[],
@@ -1103,6 +1191,31 @@ export class ProductRepository {
   }
 
   /**
+   * 상품별 최근 판매 수량 합(OrderItem.quantity). 인기 점수와 동일한 유효 주문 상태·
+   * 주문 생성 시각(created_at) 기준. 실시간 판매 Best·판매순 정렬이 공유한다.
+   */
+  async aggregateProductSoldQuantities(
+    productIds: bigint[],
+    since: Date,
+  ): Promise<Map<bigint, number>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.prisma.orderItem.groupBy({
+      by: ['product_id'],
+      where: {
+        product_id: { in: productIds },
+        order: {
+          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
+          created_at: { gte: since },
+          // nested relation filter에는 soft-delete가 주입되지 않으므로 명시
+          ...activeWhere,
+        },
+      },
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.product_id, r._sum.quantity ?? 0]));
+  }
+
+  /**
    * 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null.
    * store feature의 globalReviewAverage와 동일 정의(전 도메인 공용 prior).
    */
@@ -1122,23 +1235,39 @@ export class ProductRepository {
     categoryId?: bigint;
     now: Date;
   }): Promise<HomeBannerRow | null> {
+    return this.findFirstBanner(
+      args.categoryId !== undefined
+        ? {
+            placement: 'CATEGORY',
+            link_category_id: args.categoryId,
+            // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
+            link_category: {
+              ...visibleWhere,
+              category_type: 'EVENT',
+            },
+          }
+        : { placement: 'HOME_MAIN' },
+      args.now,
+    );
+  }
+
+  /** 검색 진입 화면 배너 1건(placement=SEARCH). 노출 조건은 홈 배너와 동일. */
+  async findSearchBanner(now: Date): Promise<HomeBannerRow | null> {
+    return this.findFirstBanner({ placement: 'SEARCH' }, now);
+  }
+
+  /** 지면 조건 + 활성·노출 기간·링크 대상 활성까지 확인한 배너 1건(sort_order asc). */
+  private findFirstBanner(
+    placementWhere: Prisma.BannerWhereInput,
+    now: Date,
+  ): Promise<HomeBannerRow | null> {
     return this.prisma.banner.findFirst({
       where: {
         is_active: true,
-        ...(args.categoryId !== undefined
-          ? {
-              placement: 'CATEGORY',
-              link_category_id: args.categoryId,
-              // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
-              link_category: {
-                ...visibleWhere,
-                category_type: 'EVENT',
-              },
-            }
-          : { placement: 'HOME_MAIN' }),
-        OR: [{ starts_at: null }, { starts_at: { lte: args.now } }],
+        ...placementWhere,
+        OR: [{ starts_at: null }, { starts_at: { lte: now } }],
         AND: [
-          { OR: [{ ends_at: null }, { ends_at: { gt: args.now } }] },
+          { OR: [{ ends_at: null }, { ends_at: { gt: now } }] },
           {
             // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
             // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다
@@ -1320,4 +1449,69 @@ export class ProductRepository {
       product_count: countByCategory.get(category.id) ?? 0,
     }));
   }
+}
+
+/**
+ * 상품 검색 where. 단어별 (상품명 ∨ 태그명) contains를 AND로 묶고, 카테고리 그룹은
+ * 그룹 내 OR·그룹 간 AND, 가격은 표시가(sale ?? regular) 기준(정책 확정).
+ * 카테고리 id의 타입(EVENT/STYLE)은 검증하지 않는다 — FE가 categories(type)에서 받은
+ * id만 넘긴다는 전제(자체 판단). nested relation은 soft-delete 자동 주입이 없어 명시한다.
+ */
+export function buildProductSearchWhere(
+  filter: ProductSearchFilter,
+): Prisma.ProductWhereInput {
+  const conditions: Prisma.ProductWhereInput[] = filter.words.map((word) => ({
+    OR: [
+      { name: { contains: word } },
+      {
+        product_tags: {
+          some: {
+            ...activeWhere,
+            tag: { name: { contains: word }, ...activeWhere },
+          },
+        },
+      },
+    ],
+  }));
+
+  for (const categoryIds of [
+    filter.eventCategoryIds,
+    filter.styleCategoryIds,
+  ]) {
+    if (categoryIds && categoryIds.length > 0) {
+      conditions.push({
+        product_categories: {
+          some: {
+            category_id: { in: categoryIds },
+            ...activeWhere,
+            category: visibleWhere,
+          },
+        },
+      });
+    }
+  }
+
+  if (filter.minPrice !== undefined || filter.maxPrice !== undefined) {
+    const range = {
+      ...(filter.minPrice !== undefined ? { gte: filter.minPrice } : {}),
+      ...(filter.maxPrice !== undefined ? { lte: filter.maxPrice } : {}),
+    };
+    conditions.push({
+      OR: [
+        { sale_price: { not: null, ...range } },
+        { sale_price: null, regular_price: range },
+      ],
+    });
+  }
+
+  return {
+    is_active: true,
+    store: {
+      ...visibleWhere,
+      ...(filter.regionIds && filter.regionIds.length > 0
+        ? { region_id: { in: filter.regionIds } }
+        : {}),
+    },
+    AND: conditions,
+  };
 }

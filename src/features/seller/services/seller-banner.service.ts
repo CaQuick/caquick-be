@@ -443,6 +443,7 @@ export class SellerBannerService
     if (raw === 'HOME_SUB') return BannerPlacement.HOME_SUB;
     if (raw === 'CATEGORY') return BannerPlacement.CATEGORY;
     if (raw === 'STORE') return BannerPlacement.STORE;
+    if (raw === 'SEARCH') return BannerPlacement.SEARCH;
     throw new BadRequestException(INVALID_BANNER_PLACEMENT);
   }
 

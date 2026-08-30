@@ -1,0 +1,16 @@
+extend type Query {
+  """검색 결과 '전체' 탭 카운트(상품/매장). 필터·정렬 없이 키워드(+지역)만 반영. '전체 N'은 FE가 합산. 비로그인 접근 가능."""
+  searchSummary(input: SearchSummaryInput!): SearchSummary!
+}
+
+input SearchSummaryInput {
+  """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
+  keyword: String!
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+}
+
+type SearchSummary {
+  productCount: Int!
+  storeCount: Int!
+}

@@ -42,6 +42,17 @@ export class StoreListingService {
     rankedAt: Date,
   ): Promise<ScoredStore[]> {
     const candidates = await this.repo.findActiveStoresForRanking(regionIds);
+    return this.scoreStores(candidates, rankedAt);
+  }
+
+  /**
+   * 주어진 후보 매장의 주문·찜·평점을 집계해 점수화·정렬한다.
+   * 키워드 매장 검색(후보를 검색어로 좁힌 뒤)도 같은 인기순을 쓴다.
+   */
+  async scoreStores<T extends StoreCandidateRow>(
+    candidates: T[],
+    rankedAt: Date,
+  ): Promise<ScoredCandidate<T>[]> {
     if (candidates.length === 0) return [];
 
     const storeIds = candidates.map((c) => c.id);

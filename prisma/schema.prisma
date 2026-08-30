@@ -90,6 +90,7 @@ enum BannerPlacement {
   HOME_SUB
   CATEGORY
   STORE
+  SEARCH // 검색 진입 화면 인기 검색어 아래 배너 슬롯(figma search 05)
 }
 
 enum BannerLinkType {
@@ -1244,6 +1245,27 @@ model SearchEvent {
   @@index([category_id, created_at], map: "idx_search_event_category_created")
   @@index([deleted_at], map: "idx_search_event_deleted_at")
   @@map("search_event")
+}
+
+/**
+ * 인기 검색어 시간별 스냅샷(검색 진입 화면 TOP10 + 순위 변동).
+ * 매시 정각 크론이 직전 24h SearchEvent를 keyword별 집계해 TOP20을 저장한다.
+ * 불변 로그 성격이라 soft-delete(deleted_at)를 두지 않는다(보관 무제한 — 사용자 확정).
+ */
+model SearchKeywordRankSnapshot {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  // 정각(시 단위 절삭) 기준 시각. 같은 ranked_at은 1회만 생성(멱등)
+  ranked_at    DateTime @db.DateTime(3)
+  rank         Int      @db.UnsignedSmallInt
+  keyword      String   @db.VarChar(200)
+  search_count Int      @db.UnsignedInt
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([ranked_at, rank], map: "uk_search_keyword_rank_snapshot")
+  @@index([ranked_at], map: "idx_search_keyword_rank_snapshot_ranked_at")
+  @@map("search_keyword_rank_snapshot")
 }
 
 /**

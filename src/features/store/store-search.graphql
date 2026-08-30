@@ -1,0 +1,37 @@
+extend type Query {
+  """키워드 매장 검색(검색 결과 매장 탭). 매장명에 단어별 AND 부분일치, 인기순 고정. 비로그인 접근 가능."""
+  searchStores(input: SearchStoresInput!): SearchStoreConnection!
+}
+
+input SearchStoresInput {
+  """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
+  keyword: String!
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+  offset: Int = 0
+  """조회 개수(최대 50)."""
+  limit: Int = 20
+}
+
+type SearchStoreConnection {
+  items: [SearchStore!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""검색 결과 매장 카드(로고·평점·지역·대표 케이크 이미지·찜)."""
+type SearchStore {
+  id: ID!
+  storeName: String!
+  """매장 프로필(로고) 이미지. 미등록 시 null."""
+  profileImageUrl: String
+  """평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """매장 위치 표기(예: 서울 용산구)."""
+  regionLabel: String
+  """대표 케이크 이미지(활성 상품 대표 이미지, 최대 4장). 인기 매장 카드와 동일 소스."""
+  cakeImageUrls: [String!]!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+}

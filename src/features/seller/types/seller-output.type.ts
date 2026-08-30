@@ -250,7 +250,7 @@ export interface SellerFaqTopicOutput {
 
 export interface SellerBannerOutput {
   id: string;
-  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE';
+  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE' | 'SEARCH';
   title: string | null;
   imageUrl: string;
   linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';

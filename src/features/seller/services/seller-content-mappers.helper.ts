@@ -25,7 +25,7 @@ export interface FaqTopicRow {
 
 export interface BannerRow {
   id: bigint;
-  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE';
+  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE' | 'SEARCH';
   title: string | null;
   image_url: string;
   link_type: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';

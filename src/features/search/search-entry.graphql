@@ -1,0 +1,55 @@
+extend type Query {
+  """검색 진입 화면 '인기 검색어' TOP10(매시 정각 스냅샷 기준, 순위 변동 포함). 스냅샷이 없으면 빈 목록 + rankedAt null. 비로그인 접근 가능."""
+  popularSearchKeywords(input: PopularSearchKeywordsInput): PopularSearchKeywordsResult!
+
+  """검색 진입 화면 '실시간 판매 Best'(최근 24시간 유효 주문 수량 합 desc, 판매 0건 제외). 비로그인 접근 가능."""
+  realtimeBestCakes(input: RealtimeBestCakesInput): RealtimeBestCakesResult!
+
+  """검색 진입 화면 배너(placement=SEARCH) 1건. 등록된 배너가 없으면 null(FE placeholder 처리). 비로그인 접근 가능."""
+  searchBanner: HomeBanner
+}
+
+extend type Mutation {
+  """검색 실행 기록. 로그인 시 최근 검색어(SearchHistory) 갱신 + 인기 검색어 집계 이벤트 기록, 비로그인 시 집계 이벤트만. 검색 실행 시 1회 호출(탭 전환·페이지네이션에는 호출하지 않는다)."""
+  recordSearch(keyword: String!): Boolean!
+}
+
+input PopularSearchKeywordsInput {
+  """노출 개수(최대 20 — 스냅샷 저장 상한)."""
+  limit: Int = 10
+}
+
+"""직전 스냅샷 대비 순위 변동."""
+enum SearchKeywordTrend {
+  UP
+  DOWN
+  SAME
+  NEW
+}
+
+type PopularSearchKeywordsResult {
+  items: [PopularSearchKeyword!]!
+  """스냅샷 기준 시각(정각). 화면의 'YY.MM.DD HH:mm 기준' 표기. 스냅샷이 없으면 null."""
+  rankedAt: DateTime
+}
+
+type PopularSearchKeyword {
+  """순위(1부터)."""
+  rank: Int!
+  keyword: String!
+  trend: SearchKeywordTrend!
+  """집계 윈도우(직전 24시간) 내 검색 횟수."""
+  searchCount: Int!
+}
+
+input RealtimeBestCakesInput {
+  """카드 수(최대 20)."""
+  limit: Int = 10
+}
+
+"""실시간 판매 Best. 카드는 홈 인기 케이크와 동일 타입(지역·매장명·케이크명·가격·할인율)."""
+type RealtimeBestCakesResult {
+  items: [PopularCake!]!
+  """집계 기준 시각(호출 시점). 화면의 'YY.MM.DD HH:mm 기준' 표기."""
+  rankedAt: DateTime!
+}

@@ -57,6 +57,8 @@ enum SellerBannerPlacement {
   HOME_SUB
   CATEGORY
   STORE
+  """검색 진입 화면 배너 슬롯"""
+  SEARCH
 }
 
 """SellerBannerLinkType 열거형"""
