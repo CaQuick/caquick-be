@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type ReviewMediaType } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface StoreReviewMediaRow {
   media_type: ReviewMediaType;
@@ -36,10 +36,10 @@ export class StoreReviewRepository {
   /** 매장 공개 리뷰 공통 가드: 리뷰·매장 활성(photoOnly면 활성 미디어 존재). */
   private publicReviewWhere(photoOnly: boolean): Prisma.ReviewWhereInput {
     return {
-      deleted_at: null,
+      ...activeWhere,
       // storeDetail과 동일하게 비활성/삭제 매장의 리뷰는 노출하지 않는다
-      store: { is_active: true, deleted_at: null },
-      ...(photoOnly ? { media: { some: { deleted_at: null } } } : {}),
+      store: visibleWhere,
+      ...(photoOnly ? { media: { some: activeWhere } } : {}),
     };
   }
 
@@ -119,7 +119,7 @@ export class StoreReviewRepository {
   ): Promise<StoreReviewRow[]> {
     if (reviewIds.length === 0) return [];
     return this.prisma.review.findMany({
-      where: { id: { in: reviewIds }, deleted_at: null },
+      where: { id: { in: reviewIds } },
       select: {
         id: true,
         rating: true,
@@ -134,7 +134,7 @@ export class StoreReviewRepository {
         },
         order_item: { select: { product_name_snapshot: true } },
         media: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
           select: {
             media_type: true,
@@ -165,7 +165,7 @@ export class StoreReviewRepository {
     if (reviewIds.length === 0) return new Map();
     const rows = await this.prisma.reviewLike.groupBy({
       by: ['review_id'],
-      where: { review_id: { in: reviewIds }, deleted_at: null },
+      where: { review_id: { in: reviewIds } },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
@@ -181,7 +181,6 @@ export class StoreReviewRepository {
       where: {
         review_id: { in: args.reviewIds },
         account_id: args.accountId,
-        deleted_at: null,
       },
       select: { review_id: true },
     });

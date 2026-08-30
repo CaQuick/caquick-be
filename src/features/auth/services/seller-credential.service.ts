@@ -131,8 +131,7 @@ export class SellerCredentialService implements ISellerCredentialService {
 
   async logoutSeller(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (!refreshToken)
       throw new UnauthorizedException('Missing refresh token.');

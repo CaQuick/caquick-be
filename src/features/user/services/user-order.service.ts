@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 
 import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
+import { sliceOverfetched } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
 import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
 import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
@@ -35,8 +36,7 @@ export class UserOrderService {
       }),
     ]);
 
-    const hasMore = orders.length > limit;
-    const sliced = hasMore ? orders.slice(0, limit) : orders;
+    const { items: sliced, hasMore } = sliceOverfetched(orders, limit);
 
     // N+1 회피: PICKED_UP + 미작성 리뷰가 있는 order id 집합을 단일 IN 쿼리로 조회
     const reviewableOrderIds =

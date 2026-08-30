@@ -5,6 +5,7 @@ import type {
   PrismaClient,
 } from '@prisma/client';
 
+import { DAY_MS } from '@/common/utils/kst-time';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';
@@ -19,6 +20,8 @@ export interface OrderOverrides {
   subtotal_price?: number;
   discount_price?: number;
   total_price?: number;
+  deleted_at?: Date;
+  idempotency_key?: string;
 }
 
 export async function createOrder(
@@ -35,13 +38,16 @@ export async function createOrder(
       account_id: accountId,
       order_number: overrides.order_number ?? `ORD-${Date.now()}-${seq}`,
       status: overrides.status ?? 'SUBMITTED',
-      pickup_at:
-        overrides.pickup_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
+      pickup_at: overrides.pickup_at ?? new Date(Date.now() + DAY_MS),
       buyer_name: overrides.buyer_name ?? `Buyer ${seq}`,
       buyer_phone: overrides.buyer_phone ?? '010-0000-0000',
       subtotal_price: overrides.subtotal_price ?? 10000,
       discount_price: overrides.discount_price ?? 0,
       total_price: overrides.total_price ?? 10000,
+      ...(overrides.idempotency_key
+        ? { idempotency_key: overrides.idempotency_key }
+        : {}),
+      ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
 }
@@ -55,6 +61,7 @@ export interface OrderItemOverrides {
   sale_price_snapshot?: number | null;
   quantity?: number;
   item_subtotal_price?: number;
+  deleted_at?: Date;
 }
 
 export async function createOrderItem(
@@ -92,6 +99,7 @@ export async function createOrderItem(
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
       quantity: overrides.quantity ?? 1,
       item_subtotal_price: overrides.item_subtotal_price ?? 10000,
+      ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
 }

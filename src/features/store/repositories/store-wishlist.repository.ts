@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 찜한 매장 목록 조회 결과 row. myWishlistedStores 매퍼 입력. */
 export interface WishlistedStoreRow {
@@ -67,7 +67,7 @@ export class StoreWishlistRepository {
       where: {
         account_id: args.accountId,
         store_id: args.storeId,
-        deleted_at: null,
+        ...activeWhere,
       },
       data: { deleted_at: args.now },
     });
@@ -86,8 +86,7 @@ export class StoreWishlistRepository {
       where: {
         account_id: args.accountId,
         store_id: { in: args.storeIds },
-        deleted_at: null,
-        store: { is_active: true, deleted_at: null },
+        store: visibleWhere,
       },
       select: { store_id: true },
     });
@@ -106,8 +105,8 @@ export class StoreWishlistRepository {
   }): Promise<{ items: WishlistedStoreRow[]; totalCount: number }> {
     const where = {
       account_id: args.accountId,
-      deleted_at: null,
-      store: { is_active: true, deleted_at: null },
+      ...activeWhere,
+      store: visibleWhere,
     };
 
     const [items, totalCount] = await this.prisma.$transaction([
@@ -140,7 +139,7 @@ export class StoreWishlistRepository {
   /** 활성 USER 계정 여부. 매장 찜은 구매자(USER)만 가능 → 인기 랭킹 무결성 보호. */
   async isActiveUserAccount(accountId: bigint): Promise<boolean> {
     const account = await this.prisma.account.findFirst({
-      where: { id: accountId, account_type: 'USER', deleted_at: null },
+      where: { id: accountId, account_type: 'USER' },
       select: { id: true },
     });
     return Boolean(account);

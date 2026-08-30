@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { toDate, toDateRequired } from '@/common/utils/date-parser';
+import {
+  toDate,
+  toDateRequired,
+  utcDateOnly,
+} from '@/common/utils/date-parser';
 
 describe('date-parser', () => {
   describe('toDate', () => {
@@ -59,6 +63,14 @@ describe('date-parser', () => {
     it('유효한 날짜면 Date를 반환해야 한다', () => {
       const result = toDateRequired('2024-01-01', 'testField');
       expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('utcDateOnly', () => {
+    it('시간 부분을 버리고 UTC 자정으로 정규화한다', () => {
+      expect(
+        utcDateOnly(new Date('2026-08-30T13:45:12.345Z')).toISOString(),
+      ).toBe('2026-08-30T00:00:00.000Z');
     });
   });
 });

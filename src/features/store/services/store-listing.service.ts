@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { DAY_MS } from '@/common/utils/kst-time';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
@@ -14,19 +16,13 @@ import {
 } from '@/features/store/repositories/store.repository';
 import { toPopularStore } from '@/features/store/services/store-mappers.helper';
 import {
-  popularityScore,
-  type StoreMetrics,
+  scoreAndSortByPopularity,
+  type ScoredCandidate,
 } from '@/features/store/services/store-ranking.helper';
 import type { PopularStoreConnection } from '@/features/store/types/store-output.type';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /** 점수화·정렬이 끝난 랭킹 항목. */
-export interface ScoredStore {
-  candidate: StoreCandidateRow;
-  metrics: StoreMetrics;
-  score: number;
-}
+export type ScoredStore = ScoredCandidate<StoreCandidateRow>;
 
 @Injectable()
 export class StoreListingService {
@@ -62,26 +58,11 @@ export class StoreListingService {
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 
-    const scored = candidates.map((candidate) => {
-      const review = reviewStats.get(candidate.id);
-      const metrics: StoreMetrics = {
-        recentOrderCount: orderCounts.get(candidate.id) ?? 0,
-        wishlistCount: wishlistCounts.get(candidate.id) ?? 0,
-        ratingAverage: review?.average ?? 0,
-        reviewCount: review?.count ?? 0,
-      };
-      return { candidate, metrics, score: popularityScore(metrics, prior) };
-    });
-
-    // 점수 desc → 리뷰수 desc → id desc (안정적 동점 처리)
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.metrics.reviewCount !== a.metrics.reviewCount) {
-        return b.metrics.reviewCount - a.metrics.reviewCount;
-      }
-      return b.candidate.id > a.candidate.id ? 1 : -1;
-    });
-    return scored;
+    return scoreAndSortByPopularity(
+      candidates,
+      { wishlistCounts, reviewStats, recentOrderCounts: orderCounts },
+      prior,
+    );
   }
 
   /**
@@ -128,7 +109,7 @@ export class StoreListingService {
     return {
       items,
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
       rankedAt,
     };
   }

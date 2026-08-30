@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ReviewMediaType } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 @Injectable()
 export class ReviewRepository {
@@ -25,7 +25,7 @@ export class ReviewRepository {
             id: true,
             name: true,
             images: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               take: 1,
               select: { image_url: true },
@@ -118,7 +118,7 @@ export class ReviewRepository {
               select: {
                 id: true,
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -128,7 +128,7 @@ export class ReviewRepository {
           },
         },
         media: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { sort_order: 'asc' },
         },
       },
@@ -158,7 +158,7 @@ export class ReviewRepository {
                 select: {
                   id: true,
                   images: {
-                    where: { deleted_at: null },
+                    where: activeWhere,
                     orderBy: { sort_order: 'asc' },
                     take: 1,
                     select: { image_url: true },
@@ -168,7 +168,7 @@ export class ReviewRepository {
             },
           },
           media: {
-            where: { deleted_at: null },
+            where: activeWhere,
             orderBy: { sort_order: 'asc' },
           },
         },
@@ -189,7 +189,7 @@ export class ReviewRepository {
         where: {
           id: args.reviewId,
           account_id: args.accountId,
-          deleted_at: null,
+          ...activeWhere,
         },
         data: { deleted_at: args.now },
       });
@@ -198,7 +198,7 @@ export class ReviewRepository {
         await tx.reviewMedia.updateMany({
           where: {
             review_id: args.reviewId,
-            deleted_at: null,
+            ...activeWhere,
           },
           data: { deleted_at: args.now },
         });
@@ -207,7 +207,7 @@ export class ReviewRepository {
         await tx.reviewComment.updateMany({
           where: {
             review_id: args.reviewId,
-            deleted_at: null,
+            ...activeWhere,
           },
           data: { deleted_at: args.now },
         });

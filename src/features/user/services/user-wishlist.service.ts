@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
+import { roundRatingAverage } from '@/common/utils/rating';
 import { calcDiscountRate, ProductRepository } from '@/features/product';
 import { buildRegionLabel } from '@/features/store';
 import { USER_WISHLIST_ERRORS } from '@/features/user/constants/user-wishlist-error-messages';
@@ -98,14 +100,13 @@ export class UserWishlistService extends UserBaseService {
           ),
           storeName: row.product.store.store_name,
           regionLabel: buildRegionLabel(row.product.store),
-          // 소수 첫째 자리까지(예: 4.666 → 4.7). 매장 평점 표기와 동일 정책.
-          ratingAverage: Math.round((stat?.average ?? 0) * 10) / 10,
+          ratingAverage: roundRatingAverage(stat?.average ?? 0),
           reviewCount: stat?.count ?? 0,
           addedAt: row.created_at,
         };
       }),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 
@@ -170,7 +171,7 @@ export class UserWishlistService extends UserBaseService {
         wishlistedProductCount: group.count,
       })),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 }

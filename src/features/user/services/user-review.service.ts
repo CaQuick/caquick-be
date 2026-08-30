@@ -7,6 +7,7 @@ import {
 import { OrderStatus, ReviewMediaType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
 import { buildRegionLabel } from '@/features/store';
 import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
@@ -82,7 +83,7 @@ export class UserReviewService {
         pickedUpAt: item.order?.picked_up_at ?? null,
       })),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 
@@ -155,7 +156,7 @@ export class UserReviewService {
     return {
       items: items.map((r) => this.mapReview(r)),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 

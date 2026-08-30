@@ -6,7 +6,7 @@
  * 필요한 호출부는 now를 주입해 결정적으로 테스트한다.
  */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 function pad2(value: number): string {
   return value.toString().padStart(2, '0');
@@ -31,6 +31,36 @@ export function toKstYmd(date: Date): KstYmd {
 /** KST 기준 (year, month, day) 자정에 해당하는 UTC Date. month는 1-12. */
 export function kstMidnightUtc(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month - 1, day) - KST_OFFSET_MS);
+}
+
+/** 해당 KST 달력일의 요일·날짜 경계 묶음(이슈 #226 — 산출 로직 단일 소스). */
+export interface KstDayBoundaries {
+  /** 요일 0(일)~6(토). */
+  weekday: number;
+  /** `@db.Date` 컬럼 비교용 — 해당 KST 달력일의 UTC 자정 표현. */
+  dateOnlyUtc: Date;
+  /** DateTime 범위 비교용 — 해당 KST 달력일 자정(UTC 시각). */
+  dayStartUtc: Date;
+  /** 다음날 KST 자정(미포함 상한). */
+  dayEndUtc: Date;
+}
+
+/** at이 속한 KST 달력일의 요일과 날짜 경계 3종을 산출한다. */
+export function kstDayBoundaries(at: Date): KstDayBoundaries {
+  const { year, month, day } = toKstYmd(at);
+  const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
+  const dayStartUtc = kstMidnightUtc(year, month, day);
+  return {
+    weekday: dateOnlyUtc.getUTCDay(),
+    dateOnlyUtc,
+    dayStartUtc,
+    dayEndUtc: new Date(dayStartUtc.getTime() + DAY_MS),
+  };
+}
+
+/** 해당 연·월(1-12)의 말일. */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 /** KST 기준 "YYYY-MM-DD" 문자열. */

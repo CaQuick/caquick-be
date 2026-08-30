@@ -42,3 +42,49 @@ export function popularityScore(
     RANKING_WEIGHTS.rating * bayes
   );
 }
+
+/** 후보별 집계값 묶음(후보 id 키 Map). */
+export interface PopularityAggregates {
+  wishlistCounts: Map<bigint, number>;
+  reviewStats: Map<bigint, { average: number; count: number }>;
+  recentOrderCounts: Map<bigint, number>;
+}
+
+export interface ScoredCandidate<T> {
+  candidate: T;
+  metrics: StoreMetrics;
+  score: number;
+}
+
+/**
+ * 후보 목록을 인기 점수화하고 점수 desc → 리뷰수 desc → id desc로 정렬한다
+ * (안정적 동점 처리). 인기 매장·인기 케이크가 동일 정책을 공유한다(이슈 #226).
+ */
+export function scoreAndSortByPopularity<T extends { id: bigint }>(
+  candidates: T[],
+  aggregates: PopularityAggregates,
+  globalAverage: number,
+): ScoredCandidate<T>[] {
+  const scored = candidates.map((candidate) => {
+    const review = aggregates.reviewStats.get(candidate.id);
+    const metrics: StoreMetrics = {
+      recentOrderCount: aggregates.recentOrderCounts.get(candidate.id) ?? 0,
+      wishlistCount: aggregates.wishlistCounts.get(candidate.id) ?? 0,
+      ratingAverage: review?.average ?? 0,
+      reviewCount: review?.count ?? 0,
+    };
+    return {
+      candidate,
+      metrics,
+      score: popularityScore(metrics, globalAverage),
+    };
+  });
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.metrics.reviewCount !== a.metrics.reviewCount) {
+      return b.metrics.reviewCount - a.metrics.reviewCount;
+    }
+    return b.candidate.id > a.candidate.id ? 1 : -1;
+  });
+  return scored;
+}

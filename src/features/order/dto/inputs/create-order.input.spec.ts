@@ -10,6 +10,7 @@ function build(plain: object): CreateOrderInput {
 }
 
 const VALID = {
+  idempotencyKey: 'a1b2c3d4-e5f6',
   productId: '1',
   optionItemIds: ['10', '11'],
   pickupAt: new Date('2026-09-18T05:00:00.000Z'),
@@ -30,6 +31,21 @@ describe('CreateOrderInput', () => {
       }),
     );
     expect(errors).toHaveLength(0);
+  });
+
+  it('idempotencyKey는 8자 미만·64자 초과·공백 포함을 거절한다', async () => {
+    for (const idempotencyKey of ['short7k', 'k'.repeat(65), 'has space-key']) {
+      const errors = await validate(build({ ...VALID, idempotencyKey }));
+      expect(errors.map((e) => e.property)).toContain('idempotencyKey');
+    }
+  });
+
+  it('idempotencyKey 경계 길이(8자·64자)는 통과한다', async () => {
+    for (const idempotencyKey of ['k'.repeat(8), 'k'.repeat(64)]) {
+      expect(await validate(build({ ...VALID, idempotencyKey }))).toHaveLength(
+        0,
+      );
+    }
   });
 
   it('optionItemIds가 배열이 아니면 거절한다', async () => {

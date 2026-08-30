@@ -905,6 +905,10 @@ model Order {
   picked_up_at DateTime? @db.DateTime(3)
   canceled_at  DateTime? @db.DateTime(3)
 
+  // 클라이언트 재시도 중복 생성 방지 키(이슈 #212). 기존 row 호환을 위해 nullable
+  // (MySQL unique는 NULL 중복 허용) — 신규 주문은 항상 저장한다.
+  idempotency_key String? @db.VarChar(64)
+
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
@@ -915,6 +919,7 @@ model Order {
   items            OrderItem[]
   notifications    Notification[]
 
+  @@unique([account_id, idempotency_key], map: "uk_order_account_idempotency")
   @@index([account_id], map: "idx_order_account")
   @@index([status, created_at], map: "idx_order_status")
   @@index([pickup_at], map: "idx_order_pickup_at")

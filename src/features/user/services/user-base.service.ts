@@ -3,8 +3,8 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AccountType } from '@prisma/client';
 
+import { utcDateOnly } from '@/common/utils/date-parser';
 import {
   DEFAULT_PAGINATION_LIMIT,
   MAX_NICKNAME_LENGTH,
@@ -16,6 +16,7 @@ import {
 } from '@/features/user/constants/user.constants';
 import type { UserAccountWithProfile } from '@/features/user/repositories/user.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
+import { evaluateActiveUserAccount } from '@/features/user/services/user-account-policy.helper';
 import type { MePayload } from '@/features/user/types/user-output.type';
 
 export type ActiveUserAccount = UserAccountWithProfile & {
@@ -34,17 +35,19 @@ export abstract class UserBaseService {
     const account = await this.repo.findAccountWithProfile(accountId, {
       withDeleted: true,
     });
-    if (!account) throw new UnauthorizedException('Account not found.');
-    if (account.deleted_at) {
-      throw new UnauthorizedException('Account is deleted.');
+    // 판정 분기는 공용 정책(user-account-policy.helper) 단일 소스 — 메시지 매핑만 여기서
+    switch (evaluateActiveUserAccount(account)) {
+      case 'ACCOUNT_NOT_FOUND':
+        throw new UnauthorizedException('Account not found.');
+      case 'ACCOUNT_DELETED':
+        throw new UnauthorizedException('Account is deleted.');
+      case 'NOT_USER':
+        throw new ForbiddenException('Only USER account is allowed.');
+      case 'PROFILE_INACTIVE':
+        throw new UnauthorizedException('User profile not found.');
+      case null:
+        return account as ActiveUserAccount;
     }
-    if (account.account_type !== AccountType.USER) {
-      throw new ForbiddenException('Only USER account is allowed.');
-    }
-    if (!account.user_profile || account.user_profile.deleted_at) {
-      throw new UnauthorizedException('User profile not found.');
-    }
-    return account as ActiveUserAccount;
   }
 
   protected toMePayload(account: ActiveUserAccount): MePayload {
@@ -111,18 +114,13 @@ export abstract class UserBaseService {
     }
     // DB가 @db.Date(시간 무시) + GraphQL DateTime이 ISO string을 UTC로 해석하므로
     // timezone 독립적으로 UTC 자정 기준으로 정규화한다.
-    const normalized = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-    );
+    const normalized = utcDateOnly(date);
     if (normalized < MIN_BIRTH_DATE) {
       throw new BadRequestException(
         'birthDate is too old (before 1900-01-01).',
       );
     }
-    const now = new Date();
-    const todayUtc = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
+    const todayUtc = utcDateOnly(new Date());
     if (normalized > todayUtc) {
       throw new BadRequestException('birthDate cannot be in the future.');
     }

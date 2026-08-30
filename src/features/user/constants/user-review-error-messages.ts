@@ -1,7 +1,4 @@
 export const USER_REVIEW_ERRORS = {
-  INVALID_RATING: '별점은 1.0~5.0 사이, 0.5 단위여야 합니다.',
-  CONTENT_TOO_SHORT: '리뷰는 최소 20자 이상이어야 합니다.',
-  CONTENT_TOO_LONG: '리뷰는 최대 1000자까지 작성 가능합니다.',
   TOO_MANY_IMAGES: '사진은 최대 10장까지 첨부할 수 있습니다.',
   TOO_MANY_VIDEOS: '동영상은 최대 1개까지 첨부할 수 있습니다.',
   ORDER_ITEM_NOT_FOUND: '주문 아이템을 찾을 수 없습니다.',

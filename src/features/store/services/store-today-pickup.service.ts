@@ -2,11 +2,9 @@ import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
-import {
-  kstMidnightUtc,
-  kstMinutesOfDay,
-  toKstYmd,
-} from '@/common/utils/kst-time';
+import { kstDayBoundaries } from '@/common/utils/kst-time';
+import { hasMoreByOffset } from '@/common/utils/pagination';
+import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
@@ -16,16 +14,11 @@ import {
   type ScoredStore,
 } from '@/features/store/services/store-listing.service';
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
-import {
-  buildTodaySlots,
-  timeColumnToMinutes,
-} from '@/features/store/services/store-today-pickup.helper';
+import { evaluatePickupDay } from '@/features/store/services/store-pickup-policy.helper';
 import type {
   TodayPickupSlot,
   TodayPickupStoreConnection,
 } from '@/features/store/types/store-today-pickup-output.type';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class StoreTodayPickupService {
@@ -56,7 +49,9 @@ export class StoreTodayPickupService {
     }
 
     const storeIds = scored.map((s) => s.candidate.id);
-    const { weekday, dateOnlyUtc, dayStartUtc, dayEndUtc } = todayKst(asOf);
+    // seller가 저장한 closure/capacity 날짜는 UTC date 부분으로 기록되는 전제(dateOnlyUtc 비교)
+    const { weekday, dateOnlyUtc, dayStartUtc, dayEndUtc } =
+      kstDayBoundaries(asOf);
     const [businessHours, closedStoreIds, capacities, bookedCounts] =
       await Promise.all([
         this.repo.findBusinessHoursByWeekday(storeIds, weekday),
@@ -67,35 +62,22 @@ export class StoreTodayPickupService {
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),
     );
-    // 분 단위 절삭은 리드타임을 최대 59초 짧게 만들므로, 초가 남으면 다음 분으로 올린다
-    const hasSubMinute =
-      asOf.getUTCSeconds() > 0 || asOf.getUTCMilliseconds() > 0;
-    const nowMinutes = kstMinutesOfDay(asOf) + (hasSubMinute ? 1 : 0);
 
     const open: { entry: ScoredStore; slots: TodayPickupSlot[] }[] = [];
     for (const entry of scored) {
       const storeId = entry.candidate.id;
-      if (closedStoreIds.has(storeId.toString())) continue;
-
-      const hour = hourByStore.get(storeId.toString());
-      // 영업시간 미설정·휴무 요일이면 오늘 픽업 불가
-      if (!hour || hour.is_closed || !hour.open_time || !hour.close_time) {
-        continue;
-      }
-
-      // capacity 레코드가 없으면 무제한으로 간주(figma 명세 외 정책 결정)
-      const capacity = capacities.get(storeId);
-      const booked = bookedCounts.get(storeId) ?? 0;
-      if (capacity !== undefined && booked >= capacity) continue;
-
-      const slots = buildTodaySlots({
-        openMinutes: timeColumnToMinutes(hour.open_time),
-        closeMinutes: timeColumnToMinutes(hour.close_time),
-        intervalMinutes: entry.candidate.pickup_slot_interval_minutes,
-        leadTimeMinutes: entry.candidate.min_lead_time_minutes,
-        nowMinutes,
+      // 판정은 공용 정책(store-pickup-policy.helper) 단일 소스 — 달력·주문 재검증과
+      // 동일 규칙. '오늘'은 PAST/OUT_OF_RANGE가 항상 통과라 사유는 제외 여부로만 쓴다.
+      const { reason, slots } = evaluatePickupDay({
+        store: entry.candidate,
+        hour: hourByStore.get(storeId.toString()),
+        isSpecialClosure: closedStoreIds.has(storeId.toString()),
+        capacity: capacities.get(storeId),
+        booked: bookedCounts.get(storeId) ?? 0,
+        now: asOf,
+        dayStartUtc,
       });
-      if (!slots.some((slot) => slot.available)) continue;
+      if (reason !== null) continue;
 
       open.push({ entry, slots });
     }
@@ -117,8 +99,7 @@ export class StoreTodayPickupService {
     const items = page.map(({ entry, slots }) => ({
       id: entry.candidate.id.toString(),
       storeName: entry.candidate.store_name,
-      // 소수 첫째 자리까지(인기 매장 카드와 동일 표기)
-      ratingAverage: Math.round(entry.metrics.ratingAverage * 10) / 10,
+      ratingAverage: roundRatingAverage(entry.metrics.ratingAverage),
       reviewCount: entry.metrics.reviewCount,
       regionLabel: buildRegionLabel(entry.candidate),
       cakeImageUrls: imagesByStore.get(entry.candidate.id) ?? [],
@@ -129,32 +110,8 @@ export class StoreTodayPickupService {
     return {
       items,
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
       asOf,
     };
   }
-}
-
-/**
- * asOf 기준 KST '오늘'의 요일과 날짜 경계.
- * - dateOnlyUtc: @db.Date 컬럼 비교용(해당 KST 달력일의 UTC 자정 표현).
- *   seller가 저장한 closure/capacity 날짜도 UTC date 부분으로 기록되는 전제.
- * - dayStartUtc/dayEndUtc: pickup_at(DateTime) 범위 비교용(KST 자정 경계).
- */
-function todayKst(asOf: Date): {
-  weekday: number;
-  dateOnlyUtc: Date;
-  dayStartUtc: Date;
-  dayEndUtc: Date;
-} {
-  const { year, month, day } = toKstYmd(asOf);
-  const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
-  const dayStartUtc = kstMidnightUtc(year, month, day);
-  const dayEndUtc = new Date(dayStartUtc.getTime() + DAY_MS);
-  return {
-    weekday: dateOnlyUtc.getUTCDay(),
-    dateOnlyUtc,
-    dayStartUtc,
-    dayEndUtc,
-  };
 }

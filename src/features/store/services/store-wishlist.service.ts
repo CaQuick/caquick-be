@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
+import { roundRatingAverage } from '@/common/utils/rating';
 import { STORE_WISHLIST_ERRORS } from '@/features/store/constants/store-wishlist-error-messages';
 import {
   DEFAULT_WISHLISTED_STORES_LIMIT,
@@ -81,8 +83,7 @@ export class StoreWishlistService {
           storeId: row.store.id.toString(),
           storeName: row.store.store_name,
           profileImageUrl: row.store.profile_image_url,
-          // 소수 첫째 자리까지(예: 4.666 → 4.7). toPopularStore와 동일 정책.
-          ratingAverage: Math.round((stat?.average ?? 0) * 10) / 10,
+          ratingAverage: roundRatingAverage(stat?.average ?? 0),
           reviewCount: stat?.count ?? 0,
           regionLabel: buildRegionLabel(row.store),
           imageUrls: cakeImages.get(row.store.id) ?? [],
@@ -90,7 +91,7 @@ export class StoreWishlistService {
         };
       }),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 

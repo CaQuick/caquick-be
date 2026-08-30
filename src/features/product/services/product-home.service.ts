@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
+import { DAY_MS } from '@/common/utils/kst-time';
+import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import {
   DEFAULT_POPULAR_CAKES_LIMIT,
   DEFAULT_RANDOM_CAKES_LIMIT,
@@ -24,12 +26,9 @@ import type {
 } from '@/features/product/types/product-home-output.type';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
-  popularityScore,
   RANKING_RECENT_ORDER_DAYS,
-  type StoreMetrics,
+  scoreAndSortByPopularity,
 } from '@/features/store';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class ProductHomeService {
@@ -79,25 +78,12 @@ export class ProductHomeService {
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 
-    const scored = candidates.map((candidate) => {
-      const review = reviewStats.get(candidate.id);
-      const metrics: StoreMetrics = {
-        recentOrderCount: orderCounts.get(candidate.id) ?? 0,
-        wishlistCount: wishlistCounts.get(candidate.id) ?? 0,
-        ratingAverage: review?.average ?? 0,
-        reviewCount: review?.count ?? 0,
-      };
-      return { candidate, metrics, score: popularityScore(metrics, prior) };
-    });
-
-    // 점수 desc → 리뷰수 desc → id desc (인기 매장과 동일한 안정적 동점 처리)
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.metrics.reviewCount !== a.metrics.reviewCount) {
-        return b.metrics.reviewCount - a.metrics.reviewCount;
-      }
-      return b.candidate.id > a.candidate.id ? 1 : -1;
-    });
+    // 점수화·정렬은 인기 매장과 동일 정책(scoreAndSortByPopularity) 단일 소스
+    const scored = scoreAndSortByPopularity(
+      candidates,
+      { wishlistCounts, reviewStats, recentOrderCounts: orderCounts },
+      prior,
+    );
 
     const items = scored
       .slice(0, limit)
@@ -135,12 +121,8 @@ export class ProductHomeService {
         reviewId: row.id.toString(),
         storeId: row.store_id.toString(),
         rank: items.length + 1,
-        // 탈퇴(soft-delete) 작성자는 닉네임을 노출하지 않는다(익명화 정책)
-        authorNickname:
-          row.account.user_profile &&
-          row.account.user_profile.deleted_at === null
-            ? row.account.user_profile.nickname
-            : null,
+        authorNickname: anonymizeReviewAuthor(row.account.user_profile)
+          .nickname,
         reviewText: row.content,
         likeCount: entry.likeCount,
         beforeImageUrl,

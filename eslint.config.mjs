@@ -1,7 +1,8 @@
 // @ts-check
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import importPlugin from 'eslint-plugin-import';
+import importX from 'eslint-plugin-import-x';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import boundaries from 'eslint-plugin-boundaries';
 import prettierRecommended from 'eslint-plugin-prettier/recommended';
 import { defineConfig } from 'eslint/config';
@@ -38,7 +39,7 @@ export default defineConfig(
         tsconfigRootDir: __dirname,
       },
     },
-    plugins: { import: importPlugin },
+    plugins: { 'import-x': importX },
     rules: {
       'prettier/prettier': ["error", { "endOfLine": "auto" }],
       '@typescript-eslint/no-unused-vars': [
@@ -53,7 +54,7 @@ export default defineConfig(
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-floating-promises': 'off',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      'import/order': [
+      'import-x/order': [
         'warn',
         {
           'newlines-between': 'always',
@@ -61,9 +62,23 @@ export default defineConfig(
         },
       ],
       // 순환 참조 금지 (P2-3). 현재 위반 0건 — 회귀 방지용.
-      'import/no-cycle': ['error', { ignoreExternal: true }],
+      'import-x/no-cycle': ['error', { ignoreExternal: true }],
     },
     settings: {
+      // import-x 권장 방식(resolver-next): 리졸버 인스턴스를 직접 넘긴다.
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: path.join(__dirname, 'tsconfig.json'),
+        }),
+      ],
+      // .ts 파싱 설정이 없으면 import 그래프를 만들지 못해 no-cycle이 아무것도
+      // 잡지 못한다(마이그레이션 전 eslint-plugin-import 시절부터의 구멍).
+      'import-x/parsers': {
+        '@typescript-eslint/parser': ['.ts', '.mts', '.cts'],
+      },
+      // eslint-plugin-boundaries는 eslint-module-utils를 통해 이 키를 읽는다 —
+      // import-x로 옮기면서 지우면 `@/` 별칭을 해석하지 못해 경계 강제가
+      // 조용히 무력화된다(마이그레이션 중 실제로 재현·확인함). 유지 필수.
       'import/resolver': {
         typescript: { project: path.join(__dirname, 'tsconfig.json') },
       },
@@ -163,28 +178,51 @@ export default defineConfig(
     files: ['src/**/*.ts'],
     plugins: { boundaries },
     settings: {
+      // mode는 v7에서 deprecated — 'folder'가 기본값이라 생략한다.
       'boundaries/elements': [
-        { type: 'common', pattern: 'src/common', mode: 'folder' },
-        { type: 'config', pattern: 'src/config', mode: 'folder' },
-        { type: 'prisma', pattern: 'src/prisma', mode: 'folder' },
-        { type: 'global', pattern: 'src/global', mode: 'folder' },
+        { type: 'common', pattern: 'src/common' },
+        { type: 'config', pattern: 'src/config' },
+        { type: 'prisma', pattern: 'src/prisma' },
+        { type: 'global', pattern: 'src/global' },
         {
           type: 'feature',
           pattern: 'src/features/*',
-          mode: 'folder',
           capture: ['family'],
         },
       ],
       'boundaries/ignore': ['**/*.spec.ts', '**/*.test.ts'],
     },
     rules: {
-      'boundaries/entry-point': [
+      // v7 권장 룰(deprecated entry-point 대체, 이슈 #135). 엔티티 셀렉터로
+      // "무엇을(to.element) 어느 파일 경로로(to.file) 가져올 수 있는가"를 기술한다.
+      // 같은 element 내부 import는 검사 대상이 아니고(checkInternals 기본 false),
+      // src 루트(app.module/main — 미분류)의 import도 검사하지 않는다(기존과 동일).
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
-          rules: [
-            { target: ['common', 'config', 'prisma', 'global'], allow: '**' },
-            { target: ['feature'], allow: 'index.ts' },
+          policies: [
+            // 공용 레이어는 내부 경로 제한 없이 허용
+            {
+              from: { element: { type: '*' } },
+              allow: {
+                to: {
+                  element: { types: ['common', 'config', 'prisma', 'global'] },
+                },
+              },
+            },
+            // 다른 feature는 배럴(feature 루트의 index.ts)로만.
+            // '**/index.ts'가 아니라 경로를 고정한다 — 중첩 index.ts(예:
+            // repositories/index.ts)를 통한 우회까지 막기 위함.
+            {
+              from: { element: { type: '*' } },
+              allow: {
+                to: {
+                  element: { type: 'feature' },
+                  file: { path: 'src/features/*/index.ts' },
+                },
+              },
+            },
           ],
         },
       ],

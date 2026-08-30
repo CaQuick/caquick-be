@@ -2,14 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   AuditActionType,
   AuditTargetType,
-  NotificationEvent,
-  NotificationType,
   OrderStatus,
   Prisma,
   type AccountType,
 } from '@prisma/client';
 
-import { PrismaService } from '@/prisma';
+import { buildOrderStatusNotification } from '@/features/notification';
+import { activeWhere, PrismaService } from '@/prisma';
 
 export interface MyOrderRow {
   id: bigint;
@@ -60,6 +59,7 @@ export interface DailyCapacityGuard {
 export interface CreateSubmittedOrderArgs {
   accountId: bigint;
   orderNumber: string;
+  idempotencyKey: string;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
@@ -128,7 +128,7 @@ export class OrderRepository {
     } | null;
   } | null> {
     return this.prisma.account.findFirst({
-      where: { id: accountId, deleted_at: null },
+      where: { id: accountId },
       select: {
         account_type: true,
         user_profile: {
@@ -141,7 +141,7 @@ export class OrderRepository {
   /**
    * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
    * 트랜잭션으로 원자 생성한다. SUBMITTED는 알림 미발송
-   * (알림은 판매자 상태 변경부터 — orderStatusToNotificationEvent 규칙).
+   * (알림은 판매자 상태 변경부터 — buildOrderStatusNotification 규칙).
    * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를
    * 재집계해, 동시 주문이 마지막 잔여를 함께 차지하는 race를 차단한다.
    * capacity 초과면 null을 반환한다(호출부가 도메인 에러로 변환).
@@ -207,6 +207,7 @@ export class OrderRepository {
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
+        idempotency_key: args.idempotencyKey,
         status: OrderStatus.SUBMITTED,
         pickup_at: args.pickupAt,
         buyer_name: args.buyerName,
@@ -253,6 +254,47 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * 멱등 키로 기존 주문 조회(replay 응답 재구성용, 이슈 #212).
+   * 상태가 이후 변경됐어도 현재 row를 그대로 반환한다.
+   */
+  async findOrderByIdempotencyKey(
+    accountId: bigint,
+    idempotencyKey: string,
+  ): Promise<CreatedOrderRow | null> {
+    return this.prisma.order.findFirst({
+      where: { account_id: accountId, idempotency_key: idempotencyKey },
+      select: {
+        id: true,
+        order_number: true,
+        status: true,
+        pickup_at: true,
+        total_price: true,
+      },
+    });
+  }
+
+  /**
+   * 해당 멱등 키가 soft-delete된 주문에 점유돼 있는지 확인(릴리즈 리뷰 반영).
+   * MySQL unique(uk_order_account_idempotency)는 deleted_at을 보지 않으므로,
+   * 삭제된 주문도 키를 계속 점유한다 — 이 경우 같은 키로는 영영 생성이 불가하다.
+   * soft-delete 포함 조회가 목적이라 extension이 주입하는 활성 필터를 우회한다.
+   */
+  async existsDeletedOrderWithIdempotencyKey(
+    accountId: bigint,
+    idempotencyKey: string,
+  ): Promise<boolean> {
+    const found = await this.prisma.order.findFirst({
+      where: {
+        account_id: accountId,
+        idempotency_key: idempotencyKey,
+        deleted_at: { not: null },
+      },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
   async findOngoingOrdersByAccount(args: {
     accountId: bigint;
     since: Date;
@@ -270,14 +312,14 @@ export class OrderRepository {
       take: args.limit,
       include: {
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
           include: {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -310,7 +352,7 @@ export class OrderRepository {
       take: args.limit,
       include: {
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
           include: {
@@ -320,7 +362,7 @@ export class OrderRepository {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -330,7 +372,7 @@ export class OrderRepository {
           },
         },
         _count: {
-          select: { items: { where: { deleted_at: null } } },
+          select: { items: { where: activeWhere } },
         },
       },
     });
@@ -365,10 +407,12 @@ export class OrderRepository {
     const rows = await this.prisma.orderItem.findMany({
       where: {
         order_id: { in: args.orderIds },
-        deleted_at: null,
         order: {
           account_id: args.accountId,
           status: OrderStatus.PICKED_UP,
+          // 삭제된 주문의 아이템이 리뷰 가능으로 집계되지 않게 명시
+          // (listReviewableOrderItems와 동일 가드)
+          ...activeWhere,
         },
         OR: [
           { review: { is: null } },
@@ -393,13 +437,13 @@ export class OrderRepository {
     limit: number;
   }): Promise<{ items: ReviewableOrderItemRow[]; totalCount: number }> {
     const where = {
-      deleted_at: null,
+      ...activeWhere,
       order: {
         account_id: args.accountId,
         status: OrderStatus.PICKED_UP,
         // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
         // 않으므로 삭제된 주문의 아이템이 노출되지 않게 명시한다
-        deleted_at: null,
+        ...activeWhere,
       },
       OR: [
         { review: { is: null } },
@@ -421,7 +465,7 @@ export class OrderRepository {
           product: {
             select: {
               images: {
-                where: { deleted_at: null },
+                where: activeWhere,
                 orderBy: { sort_order: 'asc' },
                 take: 1,
                 select: { image_url: true },
@@ -452,11 +496,11 @@ export class OrderRepository {
       },
       include: {
         status_histories: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { changed_at: 'asc' },
         },
         items: {
-          where: { deleted_at: null },
+          where: activeWhere,
           orderBy: { id: 'asc' },
           include: {
             store: {
@@ -473,7 +517,7 @@ export class OrderRepository {
                 business_hours_text: true,
                 website_url: true,
                 business_hours: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { day_of_week: 'asc' },
                 },
               },
@@ -481,7 +525,7 @@ export class OrderRepository {
             product: {
               select: {
                 images: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                   take: 1,
                   select: { image_url: true },
@@ -489,19 +533,19 @@ export class OrderRepository {
               },
             },
             option_items: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { id: 'asc' },
             },
             custom_texts: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
             free_edits: {
-              where: { deleted_at: null },
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               include: {
                 attachments: {
-                  where: { deleted_at: null },
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                 },
               },
@@ -558,6 +602,7 @@ export class OrderRepository {
         items: {
           some: {
             store_id: args.storeId,
+            ...activeWhere,
           },
         },
       },
@@ -573,11 +618,14 @@ export class OrderRepository {
         items: {
           some: {
             store_id: args.storeId,
+            ...activeWhere,
           },
         },
       },
+      // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
         status_histories: {
+          where: activeWhere,
           orderBy: {
             changed_at: 'desc',
           },
@@ -585,16 +633,20 @@ export class OrderRepository {
         items: {
           where: {
             store_id: args.storeId,
+            ...activeWhere,
           },
           include: {
-            option_items: true,
+            option_items: { where: activeWhere },
             custom_texts: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
             free_edits: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
               include: {
                 attachments: {
+                  where: activeWhere,
                   orderBy: { sort_order: 'asc' },
                 },
               },
@@ -662,21 +714,17 @@ export class OrderRepository {
         },
       });
 
-      const notificationEvent = this.orderStatusToNotificationEvent(
+      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다
+      const notification = buildOrderStatusNotification(
+        updatedOrder.order_number,
         args.toStatus,
       );
-      if (notificationEvent) {
+      if (notification) {
         await tx.notification.create({
           data: {
             account_id: order.account_id,
-            type: NotificationType.ORDER_STATUS,
-            title: this.notificationTitleByOrderStatus(args.toStatus),
-            body: this.notificationBodyByOrderStatus(
-              updatedOrder.order_number,
-              args.toStatus,
-            ),
-            event: notificationEvent,
             order_id: order.id,
+            ...notification,
           },
         });
       }
@@ -702,43 +750,5 @@ export class OrderRepository {
 
       return updatedOrder;
     });
-  }
-
-  private orderStatusToNotificationEvent(
-    status: OrderStatus,
-  ): NotificationEvent | null {
-    if (status === OrderStatus.CONFIRMED)
-      return NotificationEvent.ORDER_CONFIRMED;
-    if (status === OrderStatus.MADE) return NotificationEvent.ORDER_MADE;
-    if (status === OrderStatus.PICKED_UP)
-      return NotificationEvent.ORDER_PICKED_UP;
-    return null;
-  }
-
-  private notificationTitleByOrderStatus(status: OrderStatus): string {
-    if (status === OrderStatus.CONFIRMED) return '주문이 확정되었습니다';
-    if (status === OrderStatus.MADE) return '주문이 제작 완료되었습니다';
-    if (status === OrderStatus.PICKED_UP) return '주문이 픽업 처리되었습니다';
-    if (status === OrderStatus.CANCELED) return '주문이 취소되었습니다';
-    return '주문 상태가 변경되었습니다';
-  }
-
-  private notificationBodyByOrderStatus(
-    orderNumber: string,
-    status: OrderStatus,
-  ): string {
-    if (status === OrderStatus.CONFIRMED) {
-      return `${orderNumber} 주문이 확정되었습니다.`;
-    }
-    if (status === OrderStatus.MADE) {
-      return `${orderNumber} 주문의 상품 제작이 완료되었습니다.`;
-    }
-    if (status === OrderStatus.PICKED_UP) {
-      return `${orderNumber} 주문이 픽업 완료 처리되었습니다.`;
-    }
-    if (status === OrderStatus.CANCELED) {
-      return `${orderNumber} 주문이 취소되었습니다.`;
-    }
-    return `${orderNumber} 주문 상태가 변경되었습니다.`;
   }
 }

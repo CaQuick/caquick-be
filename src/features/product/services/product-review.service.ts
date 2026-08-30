@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { sliceCursorPage } from '@/common/utils/pagination';
 import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import {
   DEFAULT_PRODUCT_REVIEWS_LIMIT,
@@ -115,14 +116,13 @@ export class ProductReviewService {
       this.repo.countReviewComments(reviewId),
     ]);
 
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
+    const page = sliceCursorPage(rows, limit, (last) => last.id.toString());
 
     return {
-      items: page.map((row) => toReviewCommentItem(row, accountId)),
+      items: page.items.map((row) => toReviewCommentItem(row, accountId)),
       totalCount,
-      hasMore,
-      nextCursor: hasMore ? page[page.length - 1].id.toString() : null,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
@@ -153,13 +153,15 @@ export class ProductReviewService {
           ? this.parseLikesCursor(args.cursorRaw)
           : undefined,
       });
-      const hasMore = rows.length > args.limit;
-      const page = hasMore ? rows.slice(0, args.limit) : rows;
-      const last = page[page.length - 1];
+      const page = sliceCursorPage(
+        rows,
+        args.limit,
+        (last) => `${last.likeCount}:${last.id.toString()}`,
+      );
       return {
-        pageIds: page.map((row) => row.id),
-        hasMore,
-        nextCursor: hasMore ? `${last.likeCount}:${last.id.toString()}` : null,
+        pageIds: page.items.map((row) => row.id),
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor,
       };
     }
 
@@ -169,12 +171,11 @@ export class ProductReviewService {
       limit: args.limit,
       cursor: args.cursorRaw ? parseId(args.cursorRaw) : undefined,
     });
-    const hasMore = ids.length > args.limit;
-    const pageIds = hasMore ? ids.slice(0, args.limit) : ids;
+    const page = sliceCursorPage(ids, args.limit, (last) => last.toString());
     return {
-      pageIds,
-      hasMore,
-      nextCursor: hasMore ? pageIds[pageIds.length - 1].toString() : null,
+      pageIds: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 
