@@ -271,6 +271,9 @@ describe('ProductRepository (real DB)', () => {
       });
       const liveTag = await createTag('레터링');
       const linkDeletedTag = await createTag('링크 삭제 태그');
+      // 대상(tag) 자체가 삭제된 케이스 — 링크는 살아 있어 include의
+      // `tag: activeWhere`가 없으면 노출된다(가드 무검증 방지)
+      const deletedTag = await createTag('대상 삭제 태그');
       await prisma.productTag.createMany({
         data: [
           { product_id: product.id, tag_id: liveTag.id },
@@ -279,7 +282,12 @@ describe('ProductRepository (real DB)', () => {
             tag_id: linkDeletedTag.id,
             deleted_at: new Date(),
           },
+          { product_id: product.id, tag_id: deletedTag.id },
         ],
+      });
+      await prisma.tag.update({
+        where: { id: deletedTag.id },
+        data: { deleted_at: new Date() },
       });
 
       const result = await repo.findProductById({
