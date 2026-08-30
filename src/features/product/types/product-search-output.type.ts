@@ -23,3 +23,16 @@ export interface SearchProductConnection {
   totalCount: number;
   hasMore: boolean;
 }
+
+export interface SearchPriceBucket {
+  minPrice: number;
+  maxPrice: number | null;
+  count: number;
+}
+
+export interface SearchProductFacets {
+  buckets: SearchPriceBucket[];
+  minPrice: number | null;
+  maxPrice: number | null;
+  totalCount: number;
+}

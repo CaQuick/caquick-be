@@ -1099,6 +1099,16 @@ export class ProductRepository {
     });
   }
 
+  /** 상품 검색 조건에 맞는 상품의 가격만(히스토그램용). 후보 조건과 단일 소스. */
+  async findProductSearchPrices(
+    filter: ProductSearchFilter,
+  ): Promise<{ regular_price: number; sale_price: number | null }[]> {
+    return this.prisma.product.findMany({
+      where: buildProductSearchWhere(filter),
+      select: { regular_price: true, sale_price: true },
+    });
+  }
+
   /** 상품 검색 결과 수(검색 요약 탭 카운트). 후보 조건과 단일 소스. */
   async countProductSearch(filter: ProductSearchFilter): Promise<number> {
     return this.prisma.product.count({

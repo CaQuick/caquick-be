@@ -67,4 +67,16 @@ describe('ProductSearchQueryResolver (real DB)', () => {
 
     expect(result.items[0].isWishlisted).toBe(true);
   });
+
+  it('searchProductFacets: 가격 분포를 반환한다', async () => {
+    await createProduct(prisma, {
+      name: '리졸버 케이크',
+      regular_price: 12000,
+    });
+
+    const result = await resolver.searchProductFacets({ keyword: '리졸버' });
+
+    expect(result.totalCount).toBe(1);
+    expect(result.buckets.find((b) => b.minPrice === 10000)?.count).toBe(1);
+  });
 });
