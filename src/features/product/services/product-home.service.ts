@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
+import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import {
   DEFAULT_POPULAR_CAKES_LIMIT,
   DEFAULT_RANDOM_CAKES_LIMIT,
@@ -134,12 +135,8 @@ export class ProductHomeService {
         reviewId: row.id.toString(),
         storeId: row.store_id.toString(),
         rank: items.length + 1,
-        // 탈퇴(soft-delete) 작성자는 닉네임을 노출하지 않는다(익명화 정책)
-        authorNickname:
-          row.account.user_profile &&
-          row.account.user_profile.deleted_at === null
-            ? row.account.user_profile.nickname
-            : null,
+        authorNickname: anonymizeReviewAuthor(row.account.user_profile)
+          .nickname,
         reviewText: row.content,
         likeCount: entry.likeCount,
         beforeImageUrl,
