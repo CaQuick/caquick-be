@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ProductModule } from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
@@ -12,6 +13,7 @@ import { SearchKeywordRankService } from '@/features/search/services/search-keyw
  * 크론(@nestjs/schedule)은 AppModule의 ScheduleModule.forRoot()가 활성화한다.
  */
 @Module({
+  imports: [ProductModule],
   providers: [
     SearchRepository,
     SearchEntryService,

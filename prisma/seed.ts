@@ -11,6 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 
+import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
 import { seedCustomDrafts } from './seed/custom-drafts';
 import { resetSeedScope } from './seed/idempotent';
@@ -70,6 +71,9 @@ async function main(): Promise<void> {
 
     log('검색 이벤트 + 인기 검색어 스냅샷 시드 중...');
     await seedSearchEvents(prisma, { users });
+
+    log('배너 시드 중...');
+    await seedBanners(prisma);
 
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {

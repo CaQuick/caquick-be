@@ -90,6 +90,7 @@ enum BannerPlacement {
   HOME_SUB
   CATEGORY
   STORE
+  SEARCH // 검색 진입 화면 인기 검색어 아래 배너 슬롯(figma search 05)
 }
 
 enum BannerLinkType {

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { ProductBestSellerService, ProductRepository } from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
@@ -9,7 +10,13 @@ import { SearchKeywordRankService } from '@/features/search/services/search-keyw
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createKeywordRankSnapshot } from '@/test/factories';
+import {
+  createAccount,
+  createKeywordRankSnapshot,
+  createOrder,
+  createOrderItem,
+  createProduct,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 /**
@@ -29,6 +36,8 @@ describe('SearchEntry Resolvers (real DB)', () => {
         SearchEntryService,
         SearchKeywordRankService,
         SearchRepository,
+        ProductBestSellerService,
+        ProductRepository,
         ClockService,
       ],
     });
@@ -81,5 +90,24 @@ describe('SearchEntry Resolvers (real DB)', () => {
 
     expect(await prisma.searchEvent.count()).toBe(1);
     expect(await prisma.searchHistory.count()).toBe(0);
+  });
+
+  it('realtimeBestCakes: 판매된 상품을 수량순으로 반환한다', async () => {
+    const product = await createProduct(prisma, { name: '베스트' });
+    const order = await createOrder(prisma, { status: 'CONFIRMED' });
+    await createOrderItem(prisma, {
+      order_id: order.id,
+      product_id: product.id,
+      quantity: 2,
+    });
+
+    const result = await queryResolver.realtimeBestCakes({ limit: 5 });
+
+    expect(result.items.map((i) => i.name)).toEqual(['베스트']);
+    expect(result.rankedAt).toBeInstanceOf(Date);
+  });
+
+  it('searchBanner: 등록된 SEARCH 배너가 없으면 null', async () => {
+    expect(await queryResolver.searchBanner()).toBeNull();
   });
 });

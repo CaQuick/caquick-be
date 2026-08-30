@@ -2,11 +2,16 @@ import { BadRequestException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { ProductRepository } from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createSearchHistory } from '@/test/factories';
+import {
+  createAccount,
+  createSearchHistory,
+  createStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('SearchEntryService (real DB)', () => {
@@ -16,7 +21,12 @@ describe('SearchEntryService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [SearchEntryService, SearchRepository, ClockService],
+      providers: [
+        SearchEntryService,
+        SearchRepository,
+        ProductRepository,
+        ClockService,
+      ],
     });
     service = module.get(SearchEntryService);
     clock = module.get(ClockService);
@@ -118,6 +128,48 @@ describe('SearchEntryService (real DB)', () => {
       await expect(service.recordSearch('a'.repeat(201))).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('searchBanner', () => {
+    const now = new Date('2026-08-31T03:00:00.000Z');
+
+    async function makeBanner(
+      overrides: Partial<Parameters<typeof prisma.banner.create>[0]['data']>,
+    ) {
+      return prisma.banner.create({
+        data: {
+          placement: 'SEARCH',
+          image_url: 'https://img/search.png',
+          link_type: 'NONE',
+          ...overrides,
+        },
+      });
+    }
+
+    it('placement=SEARCH 활성 배너를 sort_order 순으로 1건 반환한다', async () => {
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      await makeBanner({ image_url: 'https://img/second.png', sort_order: 2 });
+      await makeBanner({ image_url: 'https://img/first.png', sort_order: 1 });
+      await makeBanner({ placement: 'HOME_MAIN', image_url: 'https://img/home.png' });
+
+      const banner = await service.searchBanner();
+
+      expect(banner).toMatchObject({
+        imageUrl: 'https://img/first.png',
+        linkType: 'NONE',
+      });
+    });
+
+    it('노출 기간 밖·비활성·링크 대상이 내려간 배너는 건너뛴다', async () => {
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      await makeBanner({ starts_at: new Date('2026-09-01T00:00:00.000Z') });
+      await makeBanner({ ends_at: new Date('2026-08-01T00:00:00.000Z') });
+      await makeBanner({ is_active: false });
+      const closedStore = await createStore(prisma, { is_active: false });
+      await makeBanner({ link_type: 'STORE', link_store_id: closedStore.id });
+
+      expect(await service.searchBanner()).toBeNull();
     });
   });
 });
