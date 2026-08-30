@@ -274,6 +274,27 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * 해당 멱등 키가 soft-delete된 주문에 점유돼 있는지 확인(릴리즈 리뷰 반영).
+   * MySQL unique(uk_order_account_idempotency)는 deleted_at을 보지 않으므로,
+   * 삭제된 주문도 키를 계속 점유한다 — 이 경우 같은 키로는 영영 생성이 불가하다.
+   * soft-delete 포함 조회가 목적이라 extension이 주입하는 활성 필터를 우회한다.
+   */
+  async existsDeletedOrderWithIdempotencyKey(
+    accountId: bigint,
+    idempotencyKey: string,
+  ): Promise<boolean> {
+    const found = await this.prisma.order.findFirst({
+      where: {
+        account_id: accountId,
+        idempotency_key: idempotencyKey,
+        deleted_at: { not: null },
+      },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
   async findOngoingOrdersByAccount(args: {
     accountId: bigint;
     since: Date;

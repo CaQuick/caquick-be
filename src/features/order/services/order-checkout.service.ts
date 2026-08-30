@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -325,7 +326,21 @@ export class OrderCheckoutService {
             args.idempotencyKey,
           );
           if (existing) return existing;
-          // 생성 직후 소실(soft-delete 등) — 재시도 유도가 안전하다
+          // 활성 주문이 없는데 키 unique가 충돌했다면 soft-delete된 주문이 키를
+          // 점유한 경우다 — MySQL unique는 deleted_at을 보지 않는다. 같은 키로는
+          // 몇 번을 재시도해도 동일하게 실패하므로, 재시도를 유도하지 말고
+          // 새 주문서(새 키)로 유도한다(릴리즈 리뷰 반영, PR #237).
+          const heldByDeleted =
+            await this.orderRepo.existsDeletedOrderWithIdempotencyKey(
+              args.accountId,
+              args.idempotencyKey,
+            );
+          if (heldByDeleted) {
+            throw new ConflictException(
+              ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
+            );
+          }
+          // 그 외(조회 직후 하드 삭제 등 극단적 race)는 재시도가 유효할 수 있다
           throw new InternalServerErrorException(
             ORDER_CHECKOUT_ERRORS.IDEMPOTENT_REPLAY_FAILED,
           );

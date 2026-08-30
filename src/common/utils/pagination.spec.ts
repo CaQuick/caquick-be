@@ -20,6 +20,13 @@ describe('pagination utils', () => {
       });
       expect(sliceOverfetched([], 2)).toEqual({ items: [], hasMore: false });
     });
+
+    it('음수 limit은 0으로 정규화한다(마지막 항목을 떨어뜨리지 않는다)', () => {
+      expect(sliceOverfetched([1, 2, 3], -1)).toEqual({
+        items: [],
+        hasMore: true,
+      });
+    });
   });
 
   describe('sliceCursorPage', () => {
@@ -57,6 +64,10 @@ describe('pagination utils', () => {
       expect(hasMoreByOffset(0, 20, 21)).toBe(true);
       expect(hasMoreByOffset(0, 20, 20)).toBe(false);
       expect(hasMoreByOffset(20, 20, 21)).toBe(false);
+    });
+
+    it('음수 limit은 0으로 정규화한다(빈 목록에서 true가 되지 않는다)', () => {
+      expect(hasMoreByOffset(0, -1, 0)).toBe(false);
     });
   });
 });

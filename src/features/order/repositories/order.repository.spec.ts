@@ -38,6 +38,43 @@ describe('OrderRepository (real DB)', () => {
     return createAccount(prisma, { account_type: 'USER' });
   }
 
+  describe('멱등 키 조회', () => {
+    it('활성 주문 조회는 soft-delete된 주문을 반환하지 않는다', async () => {
+      const buyer = await setupBuyer();
+      await createOrder(prisma, {
+        account_id: buyer.id,
+        idempotency_key: 'k-deleted',
+        deleted_at: new Date(),
+      });
+
+      expect(
+        await repo.findOrderByIdempotencyKey(buyer.id, 'k-deleted'),
+      ).toBeNull();
+    });
+
+    it('키 점유 확인은 soft-delete된 주문을 찾아낸다(extension 우회 계약)', async () => {
+      const buyer = await setupBuyer();
+      await createOrder(prisma, {
+        account_id: buyer.id,
+        idempotency_key: 'k-deleted',
+        deleted_at: new Date(),
+      });
+      await createOrder(prisma, {
+        account_id: buyer.id,
+        idempotency_key: 'k-active',
+      });
+
+      // MySQL unique는 deleted_at을 보지 않아 삭제된 주문도 키를 계속 점유한다
+      expect(
+        await repo.existsDeletedOrderWithIdempotencyKey(buyer.id, 'k-deleted'),
+      ).toBe(true);
+      // 활성 주문이 쥔 키는 '삭제가 점유' 케이스가 아니다
+      expect(
+        await repo.existsDeletedOrderWithIdempotencyKey(buyer.id, 'k-active'),
+      ).toBe(false);
+    });
+  });
+
   describe('findOngoingOrdersByAccount', () => {
     it('SUBMITTED/CONFIRMED/MADE 상태 주문만 since 이후로 반환하고 PICKED_UP/CANCELED 제외', async () => {
       const buyer = await setupBuyer();

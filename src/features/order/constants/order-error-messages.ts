@@ -17,4 +17,6 @@ export const ORDER_CHECKOUT_ERRORS = {
     '주문번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
   IDEMPOTENT_REPLAY_FAILED:
     '이미 처리 중인 주문을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+  IDEMPOTENCY_KEY_UNAVAILABLE:
+    '이 요청 키로는 주문을 만들 수 없습니다. 주문서를 새로 열어 다시 시도해 주세요.',
 } as const;
