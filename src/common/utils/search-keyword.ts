@@ -30,7 +30,9 @@ export function normalizeSearchKeyword(
 ): NormalizeSearchKeywordResult {
   const keyword = raw.trim().replace(/\s+/g, ' ');
   if (keyword.length === 0) return { ok: false, reason: 'EMPTY' };
-  if (keyword.length > SEARCH_KEYWORD_MAX_LENGTH) {
+  // MySQL VarChar(200)은 문자(코드 포인트) 수 기준 — UTF-16 단위(.length)로 세면
+  // 서로게이트 쌍(이모지 등)이 2로 계산돼 저장 가능한 검색어를 거절한다(릴리즈 리뷰 반영)
+  if ([...keyword].length > SEARCH_KEYWORD_MAX_LENGTH) {
     return { ok: false, reason: 'TOO_LONG' };
   }
   return { ok: true, keyword };

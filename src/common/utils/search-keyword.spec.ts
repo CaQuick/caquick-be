@@ -27,6 +27,15 @@ describe('search-keyword utils', () => {
       });
     });
 
+    it('길이는 코드 포인트 기준이다(이모지 200개는 허용, 201개는 거절)', () => {
+      expect(
+        normalizeSearchKeyword('😀'.repeat(SEARCH_KEYWORD_MAX_LENGTH)).ok,
+      ).toBe(true);
+      expect(
+        normalizeSearchKeyword('😀'.repeat(SEARCH_KEYWORD_MAX_LENGTH + 1)),
+      ).toEqual({ ok: false, reason: 'TOO_LONG' });
+    });
+
     it('정규화 후 200자를 넘으면 TOO_LONG으로 거절한다', () => {
       const raw = 'a'.repeat(SEARCH_KEYWORD_MAX_LENGTH + 1);
       expect(normalizeSearchKeyword(raw)).toEqual({
