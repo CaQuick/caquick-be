@@ -1103,6 +1103,31 @@ export class ProductRepository {
   }
 
   /**
+   * 상품별 최근 판매 수량 합(OrderItem.quantity). 인기 점수와 동일한 유효 주문 상태·
+   * 주문 생성 시각(created_at) 기준. 실시간 판매 Best·판매순 정렬이 공유한다.
+   */
+  async aggregateProductSoldQuantities(
+    productIds: bigint[],
+    since: Date,
+  ): Promise<Map<bigint, number>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.prisma.orderItem.groupBy({
+      by: ['product_id'],
+      where: {
+        product_id: { in: productIds },
+        order: {
+          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
+          created_at: { gte: since },
+          // nested relation filter에는 soft-delete가 주입되지 않으므로 명시
+          ...activeWhere,
+        },
+      },
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.product_id, r._sum.quantity ?? 0]));
+  }
+
+  /**
    * 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null.
    * store feature의 globalReviewAverage와 동일 정의(전 도메인 공용 prior).
    */
@@ -1122,23 +1147,39 @@ export class ProductRepository {
     categoryId?: bigint;
     now: Date;
   }): Promise<HomeBannerRow | null> {
+    return this.findFirstBanner(
+      args.categoryId !== undefined
+        ? {
+            placement: 'CATEGORY',
+            link_category_id: args.categoryId,
+            // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
+            link_category: {
+              ...visibleWhere,
+              category_type: 'EVENT',
+            },
+          }
+        : { placement: 'HOME_MAIN' },
+      args.now,
+    );
+  }
+
+  /** 검색 진입 화면 배너 1건(placement=SEARCH). 노출 조건은 홈 배너와 동일. */
+  async findSearchBanner(now: Date): Promise<HomeBannerRow | null> {
+    return this.findFirstBanner({ placement: 'SEARCH' }, now);
+  }
+
+  /** 지면 조건 + 활성·노출 기간·링크 대상 활성까지 확인한 배너 1건(sort_order asc). */
+  private findFirstBanner(
+    placementWhere: Prisma.BannerWhereInput,
+    now: Date,
+  ): Promise<HomeBannerRow | null> {
     return this.prisma.banner.findFirst({
       where: {
         is_active: true,
-        ...(args.categoryId !== undefined
-          ? {
-              placement: 'CATEGORY',
-              link_category_id: args.categoryId,
-              // 랭킹과 동일하게 홈 칩은 EVENT 카테고리만 — 비EVENT id면 배너도 없음
-              link_category: {
-                ...visibleWhere,
-                category_type: 'EVENT',
-              },
-            }
-          : { placement: 'HOME_MAIN' }),
-        OR: [{ starts_at: null }, { starts_at: { lte: args.now } }],
+        ...placementWhere,
+        OR: [{ starts_at: null }, { starts_at: { lte: now } }],
         AND: [
-          { OR: [{ ends_at: null }, { ends_at: { gt: args.now } }] },
+          { OR: [{ ends_at: null }, { ends_at: { gt: now } }] },
           {
             // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
             // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다

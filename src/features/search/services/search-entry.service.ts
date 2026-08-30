@@ -2,6 +2,11 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { normalizeSearchKeyword } from '@/common/utils/search-keyword';
+import {
+  type HomeBanner,
+  ProductRepository,
+  toHomeBanner,
+} from '@/features/product';
 import { SEARCH_ERROR_MESSAGES } from '@/features/search/constants/search-error-messages';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 
@@ -9,8 +14,15 @@ import { SearchRepository } from '@/features/search/repositories/search.reposito
 export class SearchEntryService {
   constructor(
     private readonly repo: SearchRepository,
+    private readonly productRepo: ProductRepository,
     private readonly clock: ClockService,
   ) {}
+
+  /** 검색 진입 배너(placement=SEARCH). 없으면 null — 홈 배너와 동일하게 fallback 없음. */
+  async searchBanner(): Promise<HomeBanner | null> {
+    const row = await this.productRepo.findSearchBanner(this.clock.now());
+    return row ? toHomeBanner(row) : null;
+  }
 
   /**
    * 검색 실행 기록. 정규화(trim·공백 축약)된 검색어를 저장해 최근 검색어·인기 검색어가

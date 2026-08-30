@@ -12,6 +12,7 @@ const BANNER_PLACEMENTS = [
   'HOME_SUB',
   'CATEGORY',
   'STORE',
+  'SEARCH',
 ] as const;
 type SellerBannerPlacement = (typeof BANNER_PLACEMENTS)[number];
 

@@ -4,6 +4,7 @@
  * 시드는 다음 식별자들로만 자기 영역을 구분한다:
  *   - 유저 이메일: SEED_USER_EMAIL_PREFIX (`seed-user-`)
  *   - 매장 이름:    SEED_STORE_NAME_PREFIX (`[SEED] `)
+ *   - 배너 제목:    SEED_BANNER_TITLE_PREFIX (`[SEED] `)
  *
  * 정리 시 위 prefix에 매칭되는 row와 그 종속 데이터(주문/리뷰/찜/...)를
  * 삭제한 뒤 다시 삽입하므로, 수동으로 만든 다른 데이터는 보존된다.
@@ -12,8 +13,14 @@ import type { PrismaClient } from '@prisma/client';
 
 export const SEED_USER_EMAIL_PREFIX = 'seed-user-';
 export const SEED_STORE_NAME_PREFIX = '[SEED] ';
+export const SEED_BANNER_TITLE_PREFIX = '[SEED] ';
 
 export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
+  // 배너(링크 NONE, FK 없음)
+  await prisma.banner.deleteMany({
+    where: { title: { startsWith: SEED_BANNER_TITLE_PREFIX } },
+  });
+
   const seedUsers = await prisma.account.findMany({
     where: { email: { startsWith: SEED_USER_EMAIL_PREFIX } },
     select: { id: true },

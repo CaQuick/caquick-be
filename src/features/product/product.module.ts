@@ -7,6 +7,7 @@ import { ProductDetailQueryResolver } from '@/features/product/resolvers/product
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductReviewQueryResolver } from '@/features/product/resolvers/product-review-query.resolver';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
+import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
@@ -27,7 +28,9 @@ import { ProductStorefrontService } from '@/features/product/services/product-st
     ProductCategoryQueryResolver,
     ProductHomeService,
     ProductHomeQueryResolver,
+    ProductBestSellerService,
   ],
-  exports: [ProductRepository],
+  // ProductBestSellerService는 검색 진입 화면(search feature)의 실시간 판매 Best가 소비한다
+  exports: [ProductRepository, ProductBestSellerService],
 })
 export class ProductModule {}
