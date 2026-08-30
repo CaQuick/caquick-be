@@ -151,7 +151,10 @@ describe('SearchEntryService (real DB)', () => {
       jest.spyOn(clock, 'now').mockReturnValue(now);
       await makeBanner({ image_url: 'https://img/second.png', sort_order: 2 });
       await makeBanner({ image_url: 'https://img/first.png', sort_order: 1 });
-      await makeBanner({ placement: 'HOME_MAIN', image_url: 'https://img/home.png' });
+      await makeBanner({
+        placement: 'HOME_MAIN',
+        image_url: 'https://img/home.png',
+      });
 
       const banner = await service.searchBanner();
 

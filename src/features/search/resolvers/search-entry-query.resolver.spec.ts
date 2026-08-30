@@ -1,7 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
-import { ProductBestSellerService, ProductRepository } from '@/features/product';
+import {
+  ProductBestSellerService,
+  ProductRepository,
+} from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
