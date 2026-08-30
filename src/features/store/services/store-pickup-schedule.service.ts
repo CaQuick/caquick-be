@@ -6,6 +6,7 @@ import {
 
 import { ClockService } from '@/common/providers/clock.service';
 import {
+  daysInMonth,
   kstMidnightUtc,
   kstMinutesOfDay,
   parseKstDate,
@@ -73,7 +74,7 @@ export class StorePickupScheduleService {
     }
 
     const now = this.clock.now();
-    const daysInMonth = new Date(Date.UTC(ym.year, ym.month, 0)).getUTCDate();
+    const dayCount = daysInMonth(ym.year, ym.month);
     // 조회는 월 범위 벌크 4회로 끝내고, 날짜 루프에서는 추가 쿼리를 내지 않는다
     const ctx = await this.loadScheduleContext(
       store.id,
@@ -84,7 +85,7 @@ export class StorePickupScheduleService {
     );
 
     const days: StorePickupDay[] = Array.from(
-      { length: daysInMonth },
+      { length: dayCount },
       (_, index) => {
         const day = index + 1;
         const { reason } = evaluatePickupDay(

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import {
   formatKstDate,
+  daysInMonth,
   formatMinutesOfDay,
   kstDayDiff,
   kstMidnightUtc,
@@ -39,7 +40,7 @@ export class PickupSlotService {
       throw new BadRequestException(PICKUP_ERRORS.INVALID_YEAR_MONTH);
     }
 
-    const daysInMonth = new Date(Date.UTC(ym.year, ym.month, 0)).getUTCDate();
+    const dayCount = daysInMonth(ym.year, ym.month);
 
     // 오늘은 현재시각+리드타임 이후 가용 슬롯이 하나라도 있어야 선택 가능
     // (없으면 pickupTimeSlots가 전부 마감 → 캘린더도 선택 불가로 일치시킨다)
@@ -47,7 +48,7 @@ export class PickupSlotService {
     const lastSlotMinutes = PICKUP_CLOSE_MINUTES - PICKUP_SLOT_INTERVAL_MINUTES;
     const todayHasSlot = cutoffMinutes <= lastSlotMinutes;
 
-    const days = Array.from({ length: daysInMonth }, (_, index) => {
+    const days = Array.from({ length: dayCount }, (_, index) => {
       const day = index + 1;
       const date = kstMidnightUtc(ym.year, ym.month, day);
       const diff = kstDayDiff(now, date);

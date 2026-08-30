@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { utcDateOnly } from '@/common/utils/date-parser';
 import {
   DEFAULT_PAGINATION_LIMIT,
   MAX_NICKNAME_LENGTH,
@@ -113,18 +114,13 @@ export abstract class UserBaseService {
     }
     // DB가 @db.Date(시간 무시) + GraphQL DateTime이 ISO string을 UTC로 해석하므로
     // timezone 독립적으로 UTC 자정 기준으로 정규화한다.
-    const normalized = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-    );
+    const normalized = utcDateOnly(date);
     if (normalized < MIN_BIRTH_DATE) {
       throw new BadRequestException(
         'birthDate is too old (before 1900-01-01).',
       );
     }
-    const now = new Date();
-    const todayUtc = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
+    const todayUtc = utcDateOnly(new Date());
     if (normalized > todayUtc) {
       throw new BadRequestException('birthDate cannot be in the future.');
     }

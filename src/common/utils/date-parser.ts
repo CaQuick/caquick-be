@@ -9,6 +9,13 @@ export function toDate(raw?: Date | string | null): Date | undefined {
   return date;
 }
 
+/** 시간 부분을 버리고 UTC 자정으로 정규화(@db.Date 비교/저장용). */
+export function utcDateOnly(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
 export function toDateRequired(
   raw: Date | string | null | undefined,
   field: string,

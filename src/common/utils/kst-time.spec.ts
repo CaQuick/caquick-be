@@ -1,6 +1,8 @@
 import {
+  daysInMonth,
   formatKstDate,
   formatMinutesOfDay,
+  kstDayBoundaries,
   kstDayDiff,
   kstMidnightUtc,
   kstMinutesOfDay,
@@ -88,6 +90,26 @@ describe('kst-time', () => {
       expect(formatMinutesOfDay(630)).toBe('10:30');
       expect(formatMinutesOfDay(0)).toBe('00:00');
       expect(formatMinutesOfDay(1170)).toBe('19:30');
+    });
+  });
+
+  describe('kstDayBoundaries', () => {
+    it('KST 달력일의 요일·날짜 경계 3종을 산출한다', () => {
+      // 2026-09-10(KST, 목요일). UTC 20시는 KST 다음날 05시 — KST 달력일 기준 확인
+      const at = new Date('2026-09-09T20:00:00Z');
+      const b = kstDayBoundaries(at);
+      expect(b.weekday).toBe(4);
+      expect(b.dateOnlyUtc.toISOString()).toBe('2026-09-10T00:00:00.000Z');
+      expect(b.dayStartUtc.toISOString()).toBe('2026-09-09T15:00:00.000Z');
+      expect(b.dayEndUtc.toISOString()).toBe('2026-09-10T15:00:00.000Z');
+    });
+  });
+
+  describe('daysInMonth', () => {
+    it('말일을 계산한다(윤년 포함)', () => {
+      expect(daysInMonth(2026, 9)).toBe(30);
+      expect(daysInMonth(2026, 2)).toBe(28);
+      expect(daysInMonth(2028, 2)).toBe(29);
     });
   });
 });

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
-import { DAY_MS, kstMidnightUtc, toKstYmd } from '@/common/utils/kst-time';
+import { kstDayBoundaries } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
@@ -49,7 +49,9 @@ export class StoreTodayPickupService {
     }
 
     const storeIds = scored.map((s) => s.candidate.id);
-    const { weekday, dateOnlyUtc, dayStartUtc, dayEndUtc } = todayKst(asOf);
+    // seller가 저장한 closure/capacity 날짜는 UTC date 부분으로 기록되는 전제(dateOnlyUtc 비교)
+    const { weekday, dateOnlyUtc, dayStartUtc, dayEndUtc } =
+      kstDayBoundaries(asOf);
     const [businessHours, closedStoreIds, capacities, bookedCounts] =
       await Promise.all([
         this.repo.findBusinessHoursByWeekday(storeIds, weekday),
@@ -112,28 +114,4 @@ export class StoreTodayPickupService {
       asOf,
     };
   }
-}
-
-/**
- * asOf 기준 KST '오늘'의 요일과 날짜 경계.
- * - dateOnlyUtc: @db.Date 컬럼 비교용(해당 KST 달력일의 UTC 자정 표현).
- *   seller가 저장한 closure/capacity 날짜도 UTC date 부분으로 기록되는 전제.
- * - dayStartUtc/dayEndUtc: pickup_at(DateTime) 범위 비교용(KST 자정 경계).
- */
-function todayKst(asOf: Date): {
-  weekday: number;
-  dateOnlyUtc: Date;
-  dayStartUtc: Date;
-  dayEndUtc: Date;
-} {
-  const { year, month, day } = toKstYmd(asOf);
-  const dateOnlyUtc = new Date(Date.UTC(year, month - 1, day));
-  const dayStartUtc = kstMidnightUtc(year, month, day);
-  const dayEndUtc = new Date(dayStartUtc.getTime() + DAY_MS);
-  return {
-    weekday: dateOnlyUtc.getUTCDay(),
-    dateOnlyUtc,
-    dayStartUtc,
-    dayEndUtc,
-  };
 }
