@@ -7,6 +7,14 @@
  * (SearchHistory/SearchEvent.keyword 컬럼 길이). 대소문자는 MySQL collation(ci)에 맡긴다.
  */
 
+import { BadRequestException } from '@nestjs/common';
+
+/** 검색어 검증 실패 메시지. 검색 기록·상품/매장 검색이 공유한다. */
+export const SEARCH_KEYWORD_ERROR_MESSAGES = {
+  KEYWORD_EMPTY: '검색어를 입력해 주세요.',
+  KEYWORD_TOO_LONG: '검색어는 200자 이하여야 합니다.',
+} as const;
+
 /** 정규화된 검색어 최대 길이(keyword 컬럼 VarChar(200)). */
 export const SEARCH_KEYWORD_MAX_LENGTH = 200;
 
@@ -34,4 +42,24 @@ export function normalizeSearchKeyword(
  */
 export function splitSearchWords(normalizedKeyword: string): string[] {
   return [...new Set(normalizedKeyword.split(' ').filter((w) => w !== ''))];
+}
+
+export interface ParsedSearchKeyword {
+  /** 정규화된 검색어(기록·집계 키). */
+  keyword: string;
+  /** AND 매칭용 단어 목록. */
+  words: string[];
+}
+
+/** 경계(service)에서 쓰는 정규화 + 검증. 실패는 400(id-parser와 동일한 방어 방식). */
+export function parseSearchKeyword(raw: string): ParsedSearchKeyword {
+  const result = normalizeSearchKeyword(raw);
+  if (!result.ok) {
+    throw new BadRequestException(
+      result.reason === 'EMPTY'
+        ? SEARCH_KEYWORD_ERROR_MESSAGES.KEYWORD_EMPTY
+        : SEARCH_KEYWORD_ERROR_MESSAGES.KEYWORD_TOO_LONG,
+    );
+  }
+  return { keyword: result.keyword, words: splitSearchWords(result.keyword) };
 }

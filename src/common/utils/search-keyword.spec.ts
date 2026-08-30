@@ -1,5 +1,8 @@
+import { BadRequestException } from '@nestjs/common';
+
 import {
   normalizeSearchKeyword,
+  parseSearchKeyword,
   SEARCH_KEYWORD_MAX_LENGTH,
   splitSearchWords,
 } from '@/common/utils/search-keyword';
@@ -44,6 +47,22 @@ describe('search-keyword utils', () => {
 
     it('단어 하나면 그대로 반환한다', () => {
       expect(splitSearchWords('레터링')).toEqual(['레터링']);
+    });
+  });
+
+  describe('parseSearchKeyword', () => {
+    it('정규화된 검색어와 단어 목록을 함께 돌려준다', () => {
+      expect(parseSearchKeyword(' 딸기  케이크 ')).toEqual({
+        keyword: '딸기 케이크',
+        words: ['딸기', '케이크'],
+      });
+    });
+
+    it('빈 검색어·길이 초과는 400', () => {
+      expect(() => parseSearchKeyword(' ')).toThrow(BadRequestException);
+      expect(() => parseSearchKeyword('a'.repeat(201))).toThrow(
+        BadRequestException,
+      );
     });
   });
 });
