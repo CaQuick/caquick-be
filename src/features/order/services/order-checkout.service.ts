@@ -11,12 +11,7 @@ import { Prisma } from '@prisma/client';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
-import {
-  DAY_MS,
-  formatKstDate,
-  kstMidnightUtc,
-  toKstYmd,
-} from '@/common/utils/kst-time';
+import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
 import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -182,14 +177,8 @@ export class OrderCheckoutService {
 
   /** capacity 원자 검사 조건(픽업 KST 달력일 기준). */
   private buildCapacityGuard(storeId: bigint, pickupAt: Date) {
-    const { year, month, day } = toKstYmd(pickupAt);
-    const dayStartUtc = kstMidnightUtc(year, month, day);
-    return {
-      storeId,
-      dateOnlyUtc: new Date(Date.UTC(year, month - 1, day)),
-      dayStartUtc,
-      dayEndUtc: new Date(dayStartUtc.getTime() + DAY_MS),
-    };
+    const { dateOnlyUtc, dayStartUtc, dayEndUtc } = kstDayBoundaries(pickupAt);
+    return { storeId, dateOnlyUtc, dayStartUtc, dayEndUtc };
   }
 
   /**
