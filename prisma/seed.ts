@@ -19,6 +19,7 @@ import { seedOrders } from './seed/orders';
 import { seedRecentViews } from './seed/recent-views';
 import { seedRegions } from './seed/regions';
 import { seedReviews } from './seed/reviews';
+import { seedSearchEvents } from './seed/search-events';
 import { seedSearchHistory } from './seed/search-history';
 import { seedStores } from './seed/stores';
 import { seedUsers } from './seed/users';
@@ -66,6 +67,9 @@ async function main(): Promise<void> {
 
     log('검색 히스토리 시드 중...');
     await seedSearchHistory(prisma, { users });
+
+    log('검색 이벤트 + 인기 검색어 스냅샷 시드 중...');
+    await seedSearchEvents(prisma, { users });
 
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {

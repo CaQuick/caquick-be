@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import type { Request, Response } from 'express';
 
@@ -23,6 +24,7 @@ import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
 import { PickupModule } from '@/features/pickup';
 import { RegionModule } from '@/features/region';
+import { SearchModule } from '@/features/search/search.module';
 import { SellerModule } from '@/features/seller/seller.module';
 import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
@@ -56,6 +58,8 @@ import { PrismaModule } from '@/prisma';
     AuthGlobalModule,
     GraphqlGlobalModule,
     StorageModule,
+    // 인기 검색어 스냅샷 크론(SearchModule) 활성화
+    ScheduleModule.forRoot(),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
@@ -90,6 +94,7 @@ import { PrismaModule } from '@/prisma';
     AuthModule,
     PickupModule,
     RegionModule,
+    SearchModule,
     StoreModule,
     UserModule,
     SellerModule,
