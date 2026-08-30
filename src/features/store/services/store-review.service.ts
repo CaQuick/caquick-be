@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { sliceCursorPage } from '@/common/utils/pagination';
 import { STORE_REVIEW_ERRORS } from '@/features/store/constants/store-review-error-messages';
 import { DEFAULT_STORE_REVIEWS_LIMIT } from '@/features/store/constants/store-review.constants';
 import type { StoreReviewsInput } from '@/features/store/dto/inputs/store-reviews.input';
@@ -79,13 +80,15 @@ export class StoreReviewService {
           ? this.parseLikesCursor(args.cursorRaw)
           : undefined,
       });
-      const hasMore = rows.length > args.limit;
-      const page = hasMore ? rows.slice(0, args.limit) : rows;
-      const last = page[page.length - 1];
+      const page = sliceCursorPage(
+        rows,
+        args.limit,
+        (last) => `${last.likeCount}:${last.id.toString()}`,
+      );
       return {
-        pageIds: page.map((row) => row.id),
-        hasMore,
-        nextCursor: hasMore ? `${last.likeCount}:${last.id.toString()}` : null,
+        pageIds: page.items.map((row) => row.id),
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor,
       };
     }
 
@@ -95,12 +98,11 @@ export class StoreReviewService {
       limit: args.limit,
       cursor: args.cursorRaw ? parseId(args.cursorRaw) : undefined,
     });
-    const hasMore = ids.length > args.limit;
-    const pageIds = hasMore ? ids.slice(0, args.limit) : ids;
+    const page = sliceCursorPage(ids, args.limit, (last) => last.toString());
     return {
-      pageIds,
-      hasMore,
-      nextCursor: hasMore ? pageIds[pageIds.length - 1].toString() : null,
+      pageIds: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 

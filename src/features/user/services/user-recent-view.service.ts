@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ProductRepository } from '@/features/product';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
@@ -54,7 +55,7 @@ export class UserRecentViewService {
         isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
       })),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 

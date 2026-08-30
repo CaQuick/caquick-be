@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import type { MyNotificationsInput } from '@/features/user/dto/inputs/my-notifications.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
@@ -43,7 +44,7 @@ export class UserNotificationService extends UserBaseService {
         createdAt: item.created_at,
       })),
       totalCount: result.totalCount,
-      hasMore: offset + limit < result.totalCount,
+      hasMore: hasMoreByOffset(offset, limit, result.totalCount),
     };
   }
 

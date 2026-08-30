@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { STORE_WISHLIST_ERRORS } from '@/features/store/constants/store-wishlist-error-messages';
 import {
@@ -90,7 +91,7 @@ export class StoreWishlistService {
         };
       }),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 

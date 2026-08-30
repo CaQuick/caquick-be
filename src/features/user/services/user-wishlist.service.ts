@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { calcDiscountRate, ProductRepository } from '@/features/product';
 import { buildRegionLabel } from '@/features/store';
@@ -105,7 +106,7 @@ export class UserWishlistService extends UserBaseService {
         };
       }),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 
@@ -170,7 +171,7 @@ export class UserWishlistService extends UserBaseService {
         wishlistedProductCount: group.count,
       })),
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 }

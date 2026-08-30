@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS, kstMidnightUtc, toKstYmd } from '@/common/utils/kst-time';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
@@ -107,7 +108,7 @@ export class StoreTodayPickupService {
     return {
       items,
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
       asOf,
     };
   }
