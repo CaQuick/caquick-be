@@ -12,13 +12,19 @@ export interface CursorPage<T> {
   nextCursor: string | null;
 }
 
-/** `take: limit + 1` 초과 조회 결과를 페이지와 잔여 여부로 자른다. */
+/**
+ * `take: limit + 1` 초과 조회 결과를 페이지와 잔여 여부로 자른다.
+ * 음수 limit은 0으로 정규화한다 — slice(0, -1)이 마지막 항목을 떨어뜨리는
+ * 형태로 조용히 동작하지 않게 한다(호출부는 DTO 검증을 거치지만 범용 유틸이라
+ * 방어를 둔다. 릴리즈 리뷰 반영, PR #237).
+ */
 export function sliceOverfetched<T>(
   rows: T[],
   limit: number,
 ): { items: T[]; hasMore: boolean } {
-  const hasMore = rows.length > limit;
-  return { items: hasMore ? rows.slice(0, limit) : rows, hasMore };
+  const safeLimit = Math.max(0, limit);
+  const hasMore = rows.length > safeLimit;
+  return { items: hasMore ? rows.slice(0, safeLimit) : rows, hasMore };
 }
 
 /** 초과 조회 결과 → 커서 페이지. 다음 커서는 페이지 마지막 행에서 계산한다. */
@@ -37,11 +43,11 @@ export function sliceCursorPage<T>(
   };
 }
 
-/** offset 페이지네이션의 잔여 여부. */
+/** offset 페이지네이션의 잔여 여부. 음수 limit은 0으로 정규화한다. */
 export function hasMoreByOffset(
   offset: number,
   limit: number,
   totalCount: number,
 ): boolean {
-  return offset + limit < totalCount;
+  return offset + Math.max(0, limit) < totalCount;
 }

@@ -9,6 +9,7 @@ import type { Account, PrismaClient, Product, Store } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
+import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
@@ -731,6 +732,52 @@ describe('OrderCheckoutService (real DB)', () => {
 
       expect(orderB.orderId).not.toBe(orderA.orderId);
       expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('soft-delete된 주문이 키를 점유하면 재시도 유도 대신 새 주문서를 안내한다', async () => {
+      // MySQL unique는 deleted_at을 보지 않아 삭제된 주문도 키를 계속 점유한다.
+      // 사전 조회는 활성 주문만 보므로 통과 → INSERT에서 P2002 → 같은 키로는
+      // 영영 실패. 재시도를 유도하는 500 대신 409로 새 키 사용을 알린다.
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const created = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'deleted-holder-key',
+          productId: product.id.toString(),
+        }),
+      );
+      await prisma.order.update({
+        where: { id: BigInt(created.orderId) },
+        data: { deleted_at: new Date() },
+      });
+
+      const retry = () =>
+        service.createOrder(
+          buyer.id,
+          baseInput({
+            idempotencyKey: 'deleted-holder-key',
+            productId: product.id.toString(),
+          }),
+        );
+      // BadRequest여야 GraphQL 코드가 BAD_USER_INPUT으로 나간다 — 500(재시도
+      // 유도)으로 보이면 클라이언트가 같은 키로 재시도해 같은 실패를 반복한다
+      await expect(retry()).rejects.toThrow(BadRequestException);
+      await expect(retry()).rejects.toThrow(
+        ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
+      );
+
+      // 새 키로는 정상 생성된다(키 단위 문제임을 확인)
+      const retried = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'fresh-key-after-delete',
+          productId: product.id.toString(),
+        }),
+      );
+      expect(retried.orderId).not.toBe(created.orderId);
     });
 
     it('대소문자만 다른 키는 다른 키로 취급한다(utf8mb4_bin)', async () => {

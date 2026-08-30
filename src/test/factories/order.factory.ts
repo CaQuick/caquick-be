@@ -21,6 +21,7 @@ export interface OrderOverrides {
   discount_price?: number;
   total_price?: number;
   deleted_at?: Date;
+  idempotency_key?: string;
 }
 
 export async function createOrder(
@@ -43,6 +44,9 @@ export async function createOrder(
       subtotal_price: overrides.subtotal_price ?? 10000,
       discount_price: overrides.discount_price ?? 0,
       total_price: overrides.total_price ?? 10000,
+      ...(overrides.idempotency_key
+        ? { idempotency_key: overrides.idempotency_key }
+        : {}),
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
