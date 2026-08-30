@@ -116,6 +116,11 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       where: { account_id: { in: userIds } },
     });
 
+    // 검색 집계 이벤트(시드 유저 소유분만) — 스냅샷은 파생 캐시라 seedSearchEvents가 전량 재생성
+    await prisma.searchEvent.deleteMany({
+      where: { account_id: { in: userIds } },
+    });
+
     // 카트
     const userCarts = await prisma.cart.findMany({
       where: { account_id: { in: userIds } },
