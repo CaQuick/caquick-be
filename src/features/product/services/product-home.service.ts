@@ -26,9 +26,8 @@ import type {
 } from '@/features/product/types/product-home-output.type';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
-  popularityScore,
   RANKING_RECENT_ORDER_DAYS,
-  type StoreMetrics,
+  scoreAndSortByPopularity,
 } from '@/features/store';
 
 @Injectable()
@@ -79,25 +78,12 @@ export class ProductHomeService {
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 
-    const scored = candidates.map((candidate) => {
-      const review = reviewStats.get(candidate.id);
-      const metrics: StoreMetrics = {
-        recentOrderCount: orderCounts.get(candidate.id) ?? 0,
-        wishlistCount: wishlistCounts.get(candidate.id) ?? 0,
-        ratingAverage: review?.average ?? 0,
-        reviewCount: review?.count ?? 0,
-      };
-      return { candidate, metrics, score: popularityScore(metrics, prior) };
-    });
-
-    // 점수 desc → 리뷰수 desc → id desc (인기 매장과 동일한 안정적 동점 처리)
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.metrics.reviewCount !== a.metrics.reviewCount) {
-        return b.metrics.reviewCount - a.metrics.reviewCount;
-      }
-      return b.candidate.id > a.candidate.id ? 1 : -1;
-    });
+    // 점수화·정렬은 인기 매장과 동일 정책(scoreAndSortByPopularity) 단일 소스
+    const scored = scoreAndSortByPopularity(
+      candidates,
+      { wishlistCounts, reviewStats, recentOrderCounts: orderCounts },
+      prior,
+    );
 
     const items = scored
       .slice(0, limit)

@@ -2,6 +2,7 @@ import { RANKING_BAYESIAN_M } from '@/features/store/constants/store-ranking.con
 import {
   bayesianRating,
   popularityScore,
+  scoreAndSortByPopularity,
 } from '@/features/store/services/store-ranking.helper';
 
 describe('store-ranking.helper', () => {
@@ -54,6 +55,53 @@ describe('store-ranking.helper', () => {
       const at110 = popularityScore({ ...base, recentOrderCount: 110 }, 0);
       // 같은 +10 증가라도 낮은 구간(0→10)의 상승폭이 높은 구간(100→110)보다 크다
       expect(at10 - at0).toBeGreaterThan(at110 - at100);
+    });
+  });
+
+  describe('scoreAndSortByPopularity', () => {
+    const emptyAggregates = {
+      wishlistCounts: new Map<bigint, number>(),
+      reviewStats: new Map<bigint, { average: number; count: number }>(),
+      recentOrderCounts: new Map<bigint, number>(),
+    };
+
+    it('집계값을 조립해 점수 내림차순으로 정렬한다', () => {
+      const result = scoreAndSortByPopularity(
+        [{ id: 1n }, { id: 2n }],
+        {
+          ...emptyAggregates,
+          recentOrderCounts: new Map([
+            [1n, 1],
+            [2n, 100],
+          ]),
+        },
+        0,
+      );
+      expect(result.map((r) => r.candidate.id)).toEqual([2n, 1n]);
+      expect(result[0].metrics.recentOrderCount).toBe(100);
+    });
+
+    it('동점이면 리뷰수 desc → id desc로 안정 정렬한다', () => {
+      const result = scoreAndSortByPopularity(
+        [{ id: 1n }, { id: 3n }, { id: 2n }],
+        emptyAggregates,
+        0,
+      );
+      expect(result.map((r) => r.candidate.id)).toEqual([3n, 2n, 1n]);
+    });
+
+    it('집계 미존재 후보는 0으로 채운다', () => {
+      const [entry] = scoreAndSortByPopularity(
+        [{ id: 7n }],
+        emptyAggregates,
+        4.0,
+      );
+      expect(entry.metrics).toEqual({
+        recentOrderCount: 0,
+        wishlistCount: 0,
+        ratingAverage: 0,
+        reviewCount: 0,
+      });
     });
   });
 });
