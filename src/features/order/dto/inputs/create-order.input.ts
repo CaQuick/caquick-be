@@ -12,7 +12,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { ORDER_BUYER_PHONE_REGEX } from '@/features/order/constants/order.constants';
+import { PHONE_REGEX } from '@/features/user';
 
 export class CreateOrderInput {
   // 정책: 8~64자, 공백 문자 불가(이슈 #212 사용자 확정 — 형식은 길이만 제한).
@@ -48,6 +48,6 @@ export class CreateOrderInput {
   @IsString()
   // 프로필 전화번호와 동일 정책(010-XXXX-XXXX 고정) — 임의 문자열이
   // 검증된 프로필 값을 덮어쓰지 못하게 형식을 강제한다
-  @Matches(ORDER_BUYER_PHONE_REGEX)
+  @Matches(PHONE_REGEX)
   buyerPhone?: string;
 }

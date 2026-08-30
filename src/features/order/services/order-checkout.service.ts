@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AccountType, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
@@ -23,6 +23,7 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
+import { evaluateActiveUserAccount } from '@/features/user';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -263,8 +264,9 @@ export class OrderCheckoutService {
   }
 
   /**
-   * 활성 USER 계정 + 활성 프로필 강제(user feature requireActiveUser와
-   * 동일 의미론 — user는 배럴 없는 feature라 checkout 경로에 재구현).
+   * 활성 USER 계정 + 활성 프로필 강제. 판정 분기는 user feature의 공용 정책
+   * (evaluateActiveUserAccount) 단일 소스를 소비하고, 실패 사유 → 주문 도메인
+   * 에러 메시지 매핑만 여기서 한다.
    * SELLER/ADMIN이 구매자 mutation으로 주문을 만드는 것을 차단한다.
    */
   private async requireActiveBuyer(
@@ -272,15 +274,11 @@ export class OrderCheckoutService {
   ): Promise<{ nickname: string; phone_number: string | null }> {
     const account =
       await this.orderRepo.findAccountWithProfileForCheckout(accountId);
-    if (!account) {
-      throw new UnauthorizedException(
-        ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
-      );
-    }
-    if (account.account_type !== AccountType.USER) {
+    const failure = evaluateActiveUserAccount(account);
+    if (failure === 'NOT_USER') {
       throw new ForbiddenException(ORDER_CHECKOUT_ERRORS.BUYER_NOT_USER);
     }
-    if (!account.user_profile || account.user_profile.deleted_at) {
+    if (failure !== null || !account?.user_profile) {
       throw new UnauthorizedException(
         ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
       );
