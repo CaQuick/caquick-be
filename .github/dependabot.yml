@@ -48,20 +48,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "ts-jest"
         update-types: ["version-update:semver-major"]
-      # ESLint 생태계: eslint / typescript-eslint / eslint-plugin-* 는 같이 움직여야 함
-      # (eslint-plugin-import와 typescript-eslint가 eslint 신메이저를 늦게 지원)
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@eslint/*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-plugin-*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-config-*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "typescript-eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@typescript-eslint/*"
-        update-types: ["version-update:semver-major"]
+      # (ESLint 생태계 ignore는 이슈 #59에서 해제 — eslint 10 마이그레이션으로
+      #  eslint-plugin-import를 import-x로 교체하면서 신메이저를 늦게 지원하던
+      #  블로커가 사라졌다. 이후 eslint 신메이저가 나왔을 때 플러그인이 아직
+      #  못 따라오면 해당 PR의 CI가 실패하는데, 그때는 개별 PR을 닫고 이번처럼
+      #  묶음 마이그레이션 PR로 처리한다.)
       # TypeScript 메이저: rootDir/strict 검증 강화 등 tsconfig & 코드 변경 필요
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
