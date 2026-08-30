@@ -1,0 +1,65 @@
+extend type Query {
+  """키워드 상품 검색(검색 결과 상품 탭). 상품명·태그명에 단어별 AND 부분일치. 비로그인 접근 가능."""
+  searchProducts(input: SearchProductsInput!): SearchProductConnection!
+}
+
+"""상품 검색 정렬. 시안 '추천순' 라벨은 POPULAR(기본)로 해석한다."""
+enum ProductSearchSort {
+  """인기순(최근 주문·찜·베이지안 평점 — 인기 케이크와 동일 산식)."""
+  POPULAR
+  """등록순(최신 등록 우선)."""
+  LATEST
+  """판매순(최근 30일 유효 주문 수량 합)."""
+  BEST_SELLING
+  """낮은 가격순(표시가 = salePrice ?? regularPrice)."""
+  PRICE_ASC
+  """높은 가격순."""
+  PRICE_DESC
+}
+
+input SearchProductsInput {
+  """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
+  keyword: String!
+  """상황별(EVENT) 카테고리 ID 다중 선택(그룹 내 OR). 비우면 '전체'."""
+  eventCategoryIds: [ID!]
+  """스타일별(STYLE) 카테고리 ID 다중 선택(그룹 내 OR, 상황별과는 AND). 비우면 '전체'."""
+  styleCategoryIds: [ID!]
+  """최저가(원, 표시가 기준). 비우면 하한 없음."""
+  minPrice: Int
+  """최고가(원, 표시가 기준). 비우면 상한 없음('7만원 이상'). minPrice보다 작으면 400."""
+  maxPrice: Int
+  """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
+  regionIds: [ID!]
+  sort: ProductSearchSort = POPULAR
+  offset: Int = 0
+  """조회 개수(최대 50)."""
+  limit: Int = 20
+}
+
+type SearchProductConnection {
+  items: [SearchProduct!]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+"""검색 결과 상품 카드. 가격 뒤 '~' 표기는 FE 장식(옵션 가격 가변 안내)."""
+type SearchProduct {
+  id: ID!
+  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
+  storeId: ID!
+  name: String!
+  """대표 이미지(sort_order 최소). 없으면 null."""
+  thumbnailUrl: String
+  storeName: String!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  regularPrice: Int!
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+  """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
+  ratingAverage: Float!
+  reviewCount: Int!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+}

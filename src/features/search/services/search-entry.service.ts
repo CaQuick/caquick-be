@@ -1,13 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
-import { normalizeSearchKeyword } from '@/common/utils/search-keyword';
+import { parseSearchKeyword } from '@/common/utils/search-keyword';
 import {
   type HomeBanner,
   ProductRepository,
   toHomeBanner,
 } from '@/features/product';
-import { SEARCH_ERROR_MESSAGES } from '@/features/search/constants/search-error-messages';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 
 @Injectable()
@@ -29,22 +28,12 @@ export class SearchEntryService {
    * 같은 키로 모이게 한다. 비로그인(accountId undefined)은 집계 이벤트만 남긴다.
    */
   async recordSearch(rawKeyword: string, accountId?: bigint): Promise<boolean> {
-    const keyword = this.requireKeyword(rawKeyword);
+    const { keyword } = parseSearchKeyword(rawKeyword);
     await this.repo.recordSearch({
       accountId: accountId ?? null,
       keyword,
       now: this.clock.now(),
     });
     return true;
-  }
-
-  private requireKeyword(raw: string): string {
-    const result = normalizeSearchKeyword(raw);
-    if (result.ok) return result.keyword;
-    throw new BadRequestException(
-      result.reason === 'EMPTY'
-        ? SEARCH_ERROR_MESSAGES.KEYWORD_EMPTY
-        : SEARCH_ERROR_MESSAGES.KEYWORD_TOO_LONG,
-    );
   }
 }

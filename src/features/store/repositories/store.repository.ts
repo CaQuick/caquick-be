@@ -18,6 +18,18 @@ export interface StoreCandidateRow {
   max_days_ahead: number;
 }
 
+/** 매장 검색 후보 row(랭킹 후보 + 로고). */
+export interface StoreSearchCandidateRow extends StoreCandidateRow {
+  profile_image_url: string | null;
+}
+
+/** 매장 검색 조건. */
+export interface StoreSearchFilter {
+  /** 매장명에 모두 포함돼야 하는 단어(AND). */
+  words: string[];
+  regionIds?: bigint[];
+}
+
 /** 특정 요일의 매장 영업시간 row(오늘 픽업 슬롯 산출용). */
 export interface StoreTodayBusinessHourRow {
   store_id: bigint;
@@ -92,6 +104,35 @@ export class StoreRepository {
         max_days_ahead: true,
       },
     });
+  }
+
+  /**
+   * 매장 검색 후보 전량(활성 매장). 인기순 점수화가 메모리라 후보를 모두 로드한다
+   * (findActiveStoresForRanking과 동일 트레이드오프).
+   */
+  async findStoreSearchCandidates(
+    filter: StoreSearchFilter,
+  ): Promise<StoreSearchCandidateRow[]> {
+    return this.prisma.store.findMany({
+      where: buildStoreSearchWhere(filter),
+      select: {
+        id: true,
+        store_name: true,
+        address_city: true,
+        address_neighborhood: true,
+        region: { select: { name: true } },
+        pickup_slot_interval_minutes: true,
+        min_lead_time_minutes: true,
+        max_days_ahead: true,
+        profile_image_url: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /** 매장 검색 결과 수(검색 요약 탭 카운트). 후보 조건과 단일 소스. */
+  async countStoreSearch(filter: StoreSearchFilter): Promise<number> {
+    return this.prisma.store.count({ where: buildStoreSearchWhere(filter) });
   }
 
   /** 특정 요일(0=일~6=토)의 매장별 영업시간. */
@@ -409,4 +450,17 @@ export class StoreRepository {
 
     return new Map(entries);
   }
+}
+
+/** 매장 검색 where. 단어별 매장명 contains AND + 활성 + 지역(정책 확정). */
+export function buildStoreSearchWhere(
+  filter: StoreSearchFilter,
+): Prisma.StoreWhereInput {
+  return {
+    is_active: true,
+    ...(filter.regionIds && filter.regionIds.length > 0
+      ? { region_id: { in: filter.regionIds } }
+      : {}),
+    AND: filter.words.map((word) => ({ store_name: { contains: word } })),
+  };
 }
