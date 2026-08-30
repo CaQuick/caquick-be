@@ -1,3 +1,4 @@
+import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import type {
   ProductReviewRow,
   ReviewAuthorRow,
@@ -24,14 +25,7 @@ function toAuthor(account: ReviewAuthorRow): {
   nickname: string | null;
   profileImageUrl: string | null;
 } {
-  const profile = account.user_profile;
-  if (!profile || profile.deleted_at !== null) {
-    return { nickname: null, profileImageUrl: null };
-  }
-  return {
-    nickname: profile.nickname,
-    profileImageUrl: profile.profile_image_url,
-  };
+  return anonymizeReviewAuthor(account.user_profile);
 }
 
 export function toProductReview(
