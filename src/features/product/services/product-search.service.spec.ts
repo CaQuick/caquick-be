@@ -424,4 +424,55 @@ describe('ProductSearchService (real DB)', () => {
       expect(await service.countProducts({ words: ['케이크'] })).toBe(2);
     });
   });
+
+  describe('searchProductFacets', () => {
+    it('가격 조건을 제외한 조건으로 표시가 분포·최저/최고가·건수를 낸다', async () => {
+      const store = await createStore(prisma);
+      await makeCake(store, '케이크 3만', { regular_price: 30000 });
+      await makeCake(store, '케이크 할인 4만', {
+        regular_price: 60000,
+        sale_price: 40000,
+      });
+      await makeCake(store, '케이크 4.5만', { regular_price: 45000 });
+      await makeCake(store, '케이크 8만', { regular_price: 80000 });
+      await makeCake(store, '타르트', { regular_price: 1000 });
+
+      const facets = await service.searchProductFacets({ keyword: '케이크' });
+
+      expect(facets.totalCount).toBe(4);
+      expect(facets.minPrice).toBe(30000);
+      expect(facets.maxPrice).toBe(80000);
+      const countAt = (min: number) =>
+        facets.buckets.find((b) => b.minPrice === min)?.count;
+      expect(countAt(30000)).toBe(1);
+      expect(countAt(40000)).toBe(1);
+      expect(countAt(45000)).toBe(1);
+      expect(countAt(70000)).toBe(1);
+      expect(countAt(0)).toBe(0);
+    });
+
+    it('카테고리·지역 조건을 반영하고 결과가 없으면 min/max null', async () => {
+      const store = await createStore(prisma);
+      const birthday = await makeCake(store, '케이크 생일', {
+        regular_price: 20000,
+      });
+      const birthdayId = await categorize(birthday, 'EVENT', '생일');
+      await makeCake(store, '케이크 기타', { regular_price: 50000 });
+
+      const filtered = await service.searchProductFacets({
+        keyword: '케이크',
+        eventCategoryIds: [birthdayId.toString()],
+      });
+      expect(filtered.totalCount).toBe(1);
+      expect(filtered.minPrice).toBe(20000);
+
+      const empty = await service.searchProductFacets({ keyword: '없음' });
+      expect(empty).toMatchObject({
+        totalCount: 0,
+        minPrice: null,
+        maxPrice: null,
+      });
+      expect(empty.buckets).toHaveLength(15);
+    });
+  });
 });

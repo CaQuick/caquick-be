@@ -12,6 +12,7 @@ import {
   MAX_SEARCH_PAGE_LIMIT,
   type ProductSearchSort,
 } from '@/features/product/constants/product-search.constants';
+import type { SearchProductFacetsInput } from '@/features/product/dto/inputs/search-product-facets.input';
 import type { SearchProductsInput } from '@/features/product/dto/inputs/search-products.input';
 import {
   ProductRepository,
@@ -19,10 +20,14 @@ import {
   type ProductSearchFilter,
 } from '@/features/product/repositories/product.repository';
 import {
+  buildPriceBuckets,
   displayPrice,
   toSearchProduct,
 } from '@/features/product/services/product-search-mappers.helper';
-import type { SearchProductConnection } from '@/features/product/types/product-search-output.type';
+import type {
+  SearchProductConnection,
+  SearchProductFacets,
+} from '@/features/product/types/product-search-output.type';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -88,12 +93,52 @@ export class ProductSearchService {
     };
   }
 
+  /**
+   * 가격대 시트 히스토그램. 가격 조건을 뺀 나머지 조건(키워드·카테고리·지역)으로 표시가를
+   * 모아 5,000원 버킷으로 센다. 상품 수 소규모 전제의 메모리 집계(자체 판단 — 규모가 커지면
+   * SQL FLOOR 그룹핑으로 전환). 'N개 상품보기' 카운트는 searchProducts.totalCount를 쓴다.
+   */
+  async searchProductFacets(
+    input: SearchProductFacetsInput,
+  ): Promise<SearchProductFacets> {
+    const filter = this.toFilter({
+      ...input,
+      minPrice: undefined,
+      maxPrice: undefined,
+    });
+    const rows = await this.repo.findProductSearchPrices(filter);
+    const prices = rows.map(displayPrice);
+    // spread(Math.min(...prices))는 대략 12만 개 이상에서 인자 개수 한도로 터진다 — 순회로 방어
+    let minPrice: number | null = null;
+    let maxPrice: number | null = null;
+    for (const price of prices) {
+      if (minPrice === null || price < minPrice) minPrice = price;
+      if (maxPrice === null || price > maxPrice) maxPrice = price;
+    }
+    return {
+      buckets: buildPriceBuckets(prices),
+      minPrice,
+      maxPrice,
+      totalCount: prices.length,
+    };
+  }
+
   /** 검색 요약 탭의 상품 건수(필터·정렬 없이 키워드+지역). */
   countProducts(scope: ProductSearchScope): Promise<number> {
     return this.repo.countProductSearch(scope);
   }
 
-  private toFilter(input: SearchProductsInput): ProductSearchFilter {
+  private toFilter(
+    input: Pick<
+      SearchProductsInput,
+      | 'keyword'
+      | 'eventCategoryIds'
+      | 'styleCategoryIds'
+      | 'minPrice'
+      | 'maxPrice'
+      | 'regionIds'
+    >,
+  ): ProductSearchFilter {
     const { words } = parseSearchKeyword(input.keyword);
     if (
       input.minPrice !== undefined &&

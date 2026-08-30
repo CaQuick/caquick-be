@@ -1,9 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { SearchProductFacetsInput } from '@/features/product/dto/inputs/search-product-facets.input';
 import { SearchProductsInput } from '@/features/product/dto/inputs/search-products.input';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
-import type { SearchProductConnection } from '@/features/product/types/product-search-output.type';
+import type {
+  SearchProductConnection,
+  SearchProductFacets,
+} from '@/features/product/types/product-search-output.type';
 import {
   CurrentUser,
   OptionalJwtAuthGuard,
@@ -27,5 +31,12 @@ export class ProductSearchQueryResolver {
   ): Promise<SearchProductConnection> {
     const accountId = user ? parseAccountId(user) : undefined;
     return this.service.searchProducts(input, accountId);
+  }
+
+  @Query('searchProductFacets')
+  searchProductFacets(
+    @Args('input') input: SearchProductFacetsInput,
+  ): Promise<SearchProductFacets> {
+    return this.service.searchProductFacets(input);
   }
 }
