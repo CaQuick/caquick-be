@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import { sliceCursorPage } from '@/common/utils/pagination';
 import { DEFAULT_STORE_PRODUCTS_LIMIT } from '@/features/product/constants/product-storefront.constants';
 import type { StoreProductsInput } from '@/features/product/dto/inputs/store-products.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -31,13 +32,12 @@ export class ProductStorefrontService {
       search: search ? search : undefined,
     });
 
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
+    const page = sliceCursorPage(rows, limit, (last) => last.id.toString());
 
     return {
-      items: page.map(toStoreProduct),
-      hasMore,
-      nextCursor: hasMore ? page[page.length - 1].id.toString() : null,
+      items: page.items.map(toStoreProduct),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
@@ -127,7 +128,7 @@ export class StoreListingService {
     return {
       items,
       totalCount,
-      hasMore: offset + limit < totalCount,
+      hasMore: hasMoreByOffset(offset, limit, totalCount),
       rankedAt,
     };
   }

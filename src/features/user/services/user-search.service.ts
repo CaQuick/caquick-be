@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { hasMoreByOffset } from '@/common/utils/pagination';
 import type { MySearchHistoriesInput } from '@/features/user/dto/inputs/my-search-histories.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
@@ -31,7 +32,7 @@ export class UserSearchService extends UserBaseService {
         lastUsedAt: item.last_used_at,
       })),
       totalCount: result.totalCount,
-      hasMore: offset + limit < result.totalCount,
+      hasMore: hasMoreByOffset(offset, limit, result.totalCount),
     };
   }
 
