@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -336,7 +335,11 @@ export class OrderCheckoutService {
               args.idempotencyKey,
             );
           if (heldByDeleted) {
-            throw new ConflictException(
+            // 409가 아니라 400을 쓴다 — GraphQL 필터의 STATUS_TO_CODE에 409
+            // 매핑이 없어 INTERNAL_SERVER_ERROR로 나가고, 그러면 클라이언트가
+            // 일시 장애로 오인해 같은 키로 재시도한다(릴리즈 리뷰 반영).
+            // BAD_USER_INPUT이 "입력을 고쳐 다시 보내라"는 이 상황과도 맞다.
+            throw new BadRequestException(
               ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
             );
           }

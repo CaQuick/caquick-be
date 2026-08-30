@@ -754,15 +754,20 @@ describe('OrderCheckoutService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      await expect(
+      const retry = () =>
         service.createOrder(
           buyer.id,
           baseInput({
             idempotencyKey: 'deleted-holder-key',
             productId: product.id.toString(),
           }),
-        ),
-      ).rejects.toThrow(ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE);
+        );
+      // BadRequest여야 GraphQL 코드가 BAD_USER_INPUT으로 나간다 — 500(재시도
+      // 유도)으로 보이면 클라이언트가 같은 키로 재시도해 같은 실패를 반복한다
+      await expect(retry()).rejects.toThrow(BadRequestException);
+      await expect(retry()).rejects.toThrow(
+        ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
+      );
 
       // 새 키로는 정상 생성된다(키 단위 문제임을 확인)
       const retried = await service.createOrder(
