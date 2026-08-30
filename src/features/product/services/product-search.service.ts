@@ -108,10 +108,17 @@ export class ProductSearchService {
     });
     const rows = await this.repo.findProductSearchPrices(filter);
     const prices = rows.map(displayPrice);
+    // spread(Math.min(...prices))는 대략 12만 개 이상에서 인자 개수 한도로 터진다 — 순회로 방어
+    let minPrice: number | null = null;
+    let maxPrice: number | null = null;
+    for (const price of prices) {
+      if (minPrice === null || price < minPrice) minPrice = price;
+      if (maxPrice === null || price > maxPrice) maxPrice = price;
+    }
     return {
       buckets: buildPriceBuckets(prices),
-      minPrice: prices.length > 0 ? Math.min(...prices) : null,
-      maxPrice: prices.length > 0 ? Math.max(...prices) : null,
+      minPrice,
+      maxPrice,
       totalCount: prices.length,
     };
   }
