@@ -64,15 +64,22 @@ export class SearchKeywordRankService {
         ? Promise.resolve([])
         : this.repo.listSnapshotRows(previousAt),
     ]);
+    // GROUP BY는 collation(ci) 기준으로 묶여 스냅샷마다 대표 표기(대소문자)가 다를 수
+    // 있다('3d' ↔ '3D'). JS Map은 대소문자를 구분하므로 소문자 키로 비교해 같은
+    // 검색어가 NEW로 오판되지 않게 방어한다(릴리즈 리뷰 반영 — collation 완전 동치는
+    // 아니지만 실사용 대표 케이스).
     const previousRankByKeyword = new Map(
-      previous.map((row) => [row.keyword, row.rank]),
+      previous.map((row) => [row.keyword.toLowerCase(), row.rank]),
     );
 
     return {
       items: current.map((row) => ({
         rank: row.rank,
         keyword: row.keyword,
-        trend: resolveTrend(row.rank, previousRankByKeyword.get(row.keyword)),
+        trend: resolveTrend(
+          row.rank,
+          previousRankByKeyword.get(row.keyword.toLowerCase()),
+        ),
         searchCount: row.search_count,
       })),
       rankedAt,

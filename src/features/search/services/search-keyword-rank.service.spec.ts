@@ -162,6 +162,24 @@ describe('SearchKeywordRankService (real DB)', () => {
       ]);
     });
 
+    it('직전 스냅샷과 대소문자 표기가 달라도 같은 검색어로 비교한다(NEW 오판 방지)', async () => {
+      await createKeywordRankSnapshot(prisma, {
+        ranked_at: PREV_AT,
+        keywords: [{ keyword: '3D' }, { keyword: '케이크' }],
+      });
+      await createKeywordRankSnapshot(prisma, {
+        ranked_at: RANKED_AT,
+        keywords: [{ keyword: '케이크' }, { keyword: '3d' }],
+      });
+
+      const result = await service.popularSearchKeywords();
+
+      expect(result.items.map((i) => [i.keyword, i.trend])).toEqual([
+        ['케이크', 'UP'],
+        ['3d', 'DOWN'],
+      ]);
+    });
+
     it('직전 스냅샷이 없으면 전부 NEW', async () => {
       await createKeywordRankSnapshot(prisma, {
         ranked_at: RANKED_AT,
