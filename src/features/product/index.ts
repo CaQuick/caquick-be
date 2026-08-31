@@ -15,7 +15,4 @@ export { toHomeBanner } from '@/features/product/services/product-home-mappers.h
 export type { RealtimeBestCakesResult } from '@/features/product/types/product-best-seller-output.type';
 export type { HomeBanner } from '@/features/product/types/product-home-output.type';
 // 검색 요약(search feature)의 상품 건수. 검색 조건은 product feature의 where 빌더가 단일 소스.
-export {
-  ProductSearchService,
-  type ProductSearchScope,
-} from '@/features/product/services/product-search.service';
+export { ProductSearchService } from '@/features/product/services/product-search.service';
