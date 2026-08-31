@@ -3,7 +3,12 @@
   "compilerOptions": {
     // TS 6부터 출력 레이아웃 기준 디렉터리 명시 필수(TS5011). 기존 공통 소스
     // 디렉터리와 동일한 ./src라 dist 산출 구조는 변하지 않는다.
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // rootDir 지정 시 TS는 tsbuildinfo 경로를 resolve(outDir, relative(rootDir, config))로
+    // 계산해 dist 밖(루트)에 만든다. 그러면 deleteOutDir이 dist만 지우고 캐시는 살아남아
+    // tsc가 "전부 최신"으로 오판 → emit 0건 → dist/main.js가 사라진다. dist 안으로 고정해
+    // 캐시가 산출물과 같은 생명주기를 갖게 한다.
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
