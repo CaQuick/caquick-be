@@ -67,10 +67,16 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-      - name: Build
+      - name: Build (연속 2회 — 증분 캐시 오염 회귀 검출)
         run: |
           yarn graphql:docs
           yarn build
+          # 왜 2회인가: deleteOutDir이 dist를 지우는데 tsbuildinfo가 dist 밖에 있으면
+          # 캐시만 살아남아 tsc가 "전부 최신"으로 오판, emit을 건너뛰고 dist가 빈 채로
+          # 남는다. clean 체크아웃 1회 빌드로는 이 상태가 재현되지 않아 PR #259 회귀가
+          # 8일간 CI를 그대로 통과했다. 2회차가 그 상태를 만들어 준다.
+          yarn build
+          test -f dist/main.js
 
   coverage-report:
     if: github.event_name == 'pull_request'
