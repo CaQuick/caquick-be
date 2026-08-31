@@ -67,4 +67,16 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
       path.join('dist', 'main.js'),
     );
   });
+
+  it('빌드 설정이 .js를 실제로 방출하도록 되어 있다', () => {
+    const { options } = parseBuildTsconfig();
+
+    // 왜: 위 두 단언은 "설정상 어디로 나가야 하는가"만 본다. noEmit이나
+    // emitDeclarationOnly가 켜지면 getOutputFileNames는 이론상 경로를 그대로
+    // 돌려주므로 단언은 통과하는데 nest build는 exit 0으로 아무것도(또는 .d.ts만)
+    // 내보내지 않는다. 실측: noEmit → .js 0개, emitDeclarationOnly → .js 0개
+    // /.d.ts 396개. 둘 다 dist/main.js 부재로 이어지므로 함께 막는다.
+    expect(options.noEmit ?? false).toBe(false);
+    expect(options.emitDeclarationOnly ?? false).toBe(false);
+  });
 });
