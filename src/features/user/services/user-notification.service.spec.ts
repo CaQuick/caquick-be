@@ -192,6 +192,12 @@ describe('UserNotificationService (real DB)', () => {
       await expect(
         service.myNotifications(account.id, { cursor: '9000000000000000:1' }),
       ).rejects.toThrow(BadRequestException);
+      // UNSIGNED BIGINT 상한을 넘는 id
+      await expect(
+        service.myNotifications(account.id, {
+          cursor: `1700000000000:${'9'.repeat(30)}`,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('3개월 지난 알림은 목록·totalCount에서 제외한다', async () => {

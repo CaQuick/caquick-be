@@ -30,3 +30,6 @@ export const MAX_REVIEW_COMMENT_LENGTH = 500;
 // figma notification-center: "최근 3개월 내의 알림만 확인할 수 있어요."
 // 삭제가 아니라 조회 필터로만 강제한다(사용자 확정 정책).
 export const NOTIFICATION_VISIBLE_MONTHS = 3;
+
+// DB UNSIGNED BIGINT 상한(2^64-1). 커서 등 외부 입력 id의 범위 방어에 쓴다.
+export const MAX_UNSIGNED_BIGINT = 18446744073709551615n;

@@ -8,6 +8,7 @@ import { sliceCursorPage } from '@/common/utils/pagination';
 import { USER_NOTIFICATION_ERRORS } from '@/features/user/constants/user-notification-error-messages';
 import {
   DEFAULT_PAGINATION_LIMIT,
+  MAX_UNSIGNED_BIGINT,
   NOTIFICATION_VISIBLE_MONTHS,
 } from '@/features/user/constants/user.constants';
 import type { MyNotificationsInput } from '@/features/user/dto/inputs/my-notifications.input';
@@ -124,6 +125,12 @@ export class UserNotificationService extends UserBaseService {
     if (Number.isNaN(createdAt.getTime())) {
       throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
     }
-    return { createdAt, id: BigInt(match[2]) };
+    const id = BigInt(match[2]);
+    // id 컬럼은 UNSIGNED BIGINT — 그 최댓값을 넘는 값도 커넥터 범위 오류로
+    // 번지기 전에 형식 오류로 거부한다.
+    if (id > MAX_UNSIGNED_BIGINT) {
+      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
+    }
+    return { createdAt, id };
   }
 }
