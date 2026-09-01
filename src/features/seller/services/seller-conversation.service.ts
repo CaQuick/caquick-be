@@ -16,7 +16,11 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { ConversationRepository } from '@/features/conversation';
+import {
+  ConversationEventsService,
+  ConversationRepository,
+  toEventPreview,
+} from '@/features/conversation';
 import {
   BODY_HTML_REQUIRED,
   BODY_TEXT_REQUIRED,
@@ -48,6 +52,7 @@ export class SellerConversationService extends SellerBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly conversationEvents: ConversationEventsService,
   ) {
     super(repo, auditLogs);
   }
@@ -156,7 +161,72 @@ export class SellerConversationService extends SellerBaseService {
       },
     });
 
-    return this.toConversationMessageOutput(row);
+    const output = this.toConversationMessageOutput(row);
+    await this.publishSellerReplyEvents({
+      conversation,
+      storeId: ctx.storeId,
+      message: output,
+    });
+
+    return output;
+  }
+
+  /**
+   * 실시간 이벤트 발행 — 대화방 메시지 + 구매자·판매자 목록 갱신.
+   * 저장 트랜잭션 밖의 부수효과라 실패해도 답장 자체는 성공으로 남는다.
+   */
+  private async publishSellerReplyEvents(args: {
+    conversation: {
+      id: bigint;
+      account_id: bigint;
+      last_read_at: Date | null;
+    };
+    storeId: bigint;
+    message: SellerConversationMessageOutput;
+  }): Promise<void> {
+    const message = {
+      id: args.message.id,
+      conversationId: args.message.conversationId,
+      senderType: args.message.senderType,
+      bodyFormat: args.message.bodyFormat,
+      bodyText: args.message.bodyText,
+      bodyHtml: args.message.bodyHtml,
+      createdAt: args.message.createdAt,
+    };
+    const preview = toEventPreview(message);
+    const lastMessageAtIso = args.message.createdAt.toISOString();
+
+    const [store, [extras]] = await Promise.all([
+      this.conversationRepository.findStoreNameById(args.storeId),
+      this.conversationRepository.getConversationListExtras([
+        {
+          id: args.conversation.id,
+          last_read_at: args.conversation.last_read_at,
+        },
+      ]),
+    ]);
+
+    await this.conversationEvents.publishMessagesAdded([message]);
+    await this.conversationEvents.publishBuyerListUpdate(
+      args.conversation.account_id.toString(),
+      {
+        conversationId: args.conversation.id.toString(),
+        storeId: args.storeId.toString(),
+        storeName: store?.store_name ?? '',
+        lastMessagePreview: preview,
+        lastMessageAt: lastMessageAtIso,
+        unreadCount: extras?.unreadCount ?? 0,
+      },
+    );
+    await this.conversationEvents.publishSellerListUpdate(
+      args.storeId.toString(),
+      {
+        conversationId: args.conversation.id.toString(),
+        accountId: args.conversation.account_id.toString(),
+        lastMessagePreview: preview,
+        lastMessageAt: lastMessageAtIso,
+      },
+    );
   }
 
   private toConversationBodyFormat(raw: string): ConversationBodyFormat {

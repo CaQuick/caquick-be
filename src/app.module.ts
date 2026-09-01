@@ -13,13 +13,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import type { Request, Response } from 'express';
 
 import { CommonModule } from '@/common/common.module';
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
+import redisConfig from '@/config/redis.config';
 import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
@@ -31,9 +31,11 @@ import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
 import { UserModule } from '@/features/user/user.module';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
+import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
+import { PubSubModule } from '@/global/pubsub';
 import {
   RequestContextMiddleware,
   RequestContextModule,
@@ -46,7 +48,14 @@ import { PrismaModule } from '@/prisma';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [authConfig, databaseConfig, docsConfig, oidcConfig, s3Config],
+      load: [
+        authConfig,
+        databaseConfig,
+        docsConfig,
+        oidcConfig,
+        redisConfig,
+        s3Config,
+      ],
     }),
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public'),
@@ -58,6 +67,7 @@ import { PrismaModule } from '@/prisma';
     LoggerModule,
     AuthGlobalModule,
     GraphqlGlobalModule,
+    PubSubModule,
     StorageModule,
     // 인기 검색어 스냅샷 크론(SearchModule) 활성화
     ScheduleModule.forRoot(),
@@ -73,21 +83,17 @@ import { PrismaModule } from '@/prisma';
               : join(process.cwd(), 'src/features/**/*.graphql'),
           ],
           playground: false,
+          // 실시간 subscription(graphql-ws). 인증은 connectionParams →
+          // buildGraphqlContext가 HTTP 헤더로 이식해 기존 JWT 가드를 재사용한다.
+          subscriptions: {
+            'graphql-ws': true,
+          },
           plugins: [
             isProd
               ? ApolloServerPluginLandingPageDisabled()
               : ApolloServerPluginLandingPageLocalDefault({ embed: true }),
           ],
-          context: ({
-            req,
-            res,
-          }: {
-            req: Request;
-            res?: Response;
-          }): {
-            req: Request;
-            res?: Response;
-          } => ({ req, res }),
+          context: buildGraphqlContext,
         };
       },
     }),

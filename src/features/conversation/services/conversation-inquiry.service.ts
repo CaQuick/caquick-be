@@ -12,6 +12,8 @@ import {
   type ConversationMessageEntry,
 } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
+import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import {
   renderGreeting,
   toConversationMessageOutput,
@@ -24,7 +26,10 @@ import type {
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {
-  constructor(repo: ConversationRepository) {
+  constructor(
+    repo: ConversationRepository,
+    private readonly events: ConversationEventsService,
+  ) {
     super(repo);
   }
 
@@ -151,10 +156,64 @@ export class ConversationInquiryService extends ConversationBaseService {
       entries: args.entries,
     });
 
+    const messages = result.messages.map(toConversationMessageOutput);
+    await this.publishBuyerSendEvents({
+      accountId: args.accountId,
+      storeId: args.storeId,
+      storeName: args.storeName,
+      conversationId: result.conversationId,
+      messages,
+    });
+
     return {
       conversationId: result.conversationId.toString(),
-      messages: result.messages.map(toConversationMessageOutput),
+      messages,
     };
+  }
+
+  /**
+   * 실시간 이벤트 발행 — 대화방 메시지 + 양측 목록/배지 갱신.
+   * 저장 트랜잭션 밖의 부수효과라 실패해도 전송 자체는 성공으로 남는다
+   * (구독자는 폴백 재조회 가능).
+   */
+  private async publishBuyerSendEvents(args: {
+    accountId: bigint;
+    storeId: bigint;
+    storeName: string;
+    conversationId: bigint;
+    messages: ConversationMessagesPayload['messages'];
+  }): Promise<void> {
+    const lastMessage = args.messages[args.messages.length - 1];
+    if (!lastMessage) return;
+    // 시각은 repository가 잠금 아래 채번한 저장 시각을 그대로 쓴다
+    const lastMessageAtIso = lastMessage.createdAt.toISOString();
+
+    const conversation = await this.repo.findConversationByAccountAndStore({
+      accountId: args.accountId,
+      storeId: args.storeId,
+    });
+    const [extras] = conversation
+      ? await this.repo.getConversationListExtras([
+          { id: conversation.id, last_read_at: conversation.last_read_at },
+        ])
+      : [undefined];
+
+    const preview = toEventPreview(lastMessage);
+    await this.events.publishMessagesAdded(args.messages);
+    await this.events.publishBuyerListUpdate(args.accountId.toString(), {
+      conversationId: args.conversationId.toString(),
+      storeId: args.storeId.toString(),
+      storeName: args.storeName,
+      lastMessagePreview: preview,
+      lastMessageAt: lastMessageAtIso,
+      unreadCount: extras?.unreadCount ?? 0,
+    });
+    await this.events.publishSellerListUpdate(args.storeId.toString(), {
+      conversationId: args.conversationId.toString(),
+      accountId: args.accountId.toString(),
+      lastMessagePreview: preview,
+      lastMessageAt: lastMessageAtIso,
+    });
   }
 
   private async requireInquiryStore(storeId: bigint) {

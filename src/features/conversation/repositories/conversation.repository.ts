@@ -295,6 +295,35 @@ export class ConversationRepository {
     });
   }
 
+  /** 이벤트 payload용 매장명 단건 조회. */
+  async findStoreNameById(storeId: bigint) {
+    return this.prisma.store.findFirst({
+      where: { id: storeId, deleted_at: undefined },
+      select: { store_name: true },
+    });
+  }
+
+  /** subscription 구독 권한 판정용 — 대화 소유 구매자/해당 매장 판매자 확인. */
+  async findConversationAccess(conversationId: bigint) {
+    return this.prisma.storeConversation.findFirst({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        account_id: true,
+        store_id: true,
+        store: { select: { seller_account_id: true } },
+      },
+    });
+  }
+
+  /** 판매자 구독 대상 매장(활성) 조회. */
+  async findStoreBySellerAccount(sellerAccountId: bigint) {
+    return this.prisma.store.findFirst({
+      where: { seller_account_id: sellerAccountId, ...activeWhere },
+      select: { id: true },
+    });
+  }
+
   /**
    * 구매자 메시지 저장. 대화가 없으면 같은 트랜잭션에서 생성하고, 인사말은
    * "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.

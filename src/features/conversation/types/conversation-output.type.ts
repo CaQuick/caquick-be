@@ -63,3 +63,33 @@ export interface ConversationMessageConnection {
   hasMore: boolean;
   nextCursor: string | null;
 }
+
+/**
+ * subscription 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO
+ * 문자열로 나른다(DateTime 스칼라가 문자열도 직렬화 가능).
+ */
+export interface ConversationMessageEvent {
+  id: string;
+  conversationId: string;
+  senderType: ConversationSenderType;
+  bodyFormat: ConversationBodyFormat;
+  bodyText: string | null;
+  bodyHtml: string | null;
+  createdAt: string;
+}
+
+export interface ConversationListUpdateEvent {
+  conversationId: string;
+  storeId: string;
+  storeName: string;
+  lastMessagePreview: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
+}
+
+export interface SellerConversationListUpdateEvent {
+  conversationId: string;
+  accountId: string;
+  lastMessagePreview: string | null;
+  lastMessageAt: string;
+}
