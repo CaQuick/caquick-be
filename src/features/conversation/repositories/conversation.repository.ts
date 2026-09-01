@@ -129,8 +129,13 @@ export class ConversationRepository {
   }
 
   /**
-   * 구매자 메시지 저장. 대화가 없으면 먼저 생성하고, 새로 생성한 경우에만
-   * 인사말(STORE 발신)을 유저 메시지보다 앞서 저장한다 — 인사말은 대화당 1회.
+   * 구매자 메시지 저장. 대화가 없으면 같은 트랜잭션에서 생성하고, 인사말은
+   * "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.
+   *
+   * 대화 생성과 메시지 저장을 한 트랜잭션으로 묶는다 — 대화 row가 먼저
+   * 커밋되면 판매자 목록에 빈 대화가 노출되고, 이후 메시지 저장이 실패하면
+   * 유령 대화가 남는다(리뷰 반영). 실패 시 전체가 롤백되므로 재시도에서
+   * 인사말 계약도 유지된다.
    */
   async createBuyerMessages(args: {
     accountId: bigint;
@@ -139,21 +144,15 @@ export class ConversationRepository {
     entries: ConversationMessageEntry[];
     now: Date;
   }) {
-    // 대화 확보는 메시지 트랜잭션 밖에서 수행한다 — REPEATABLE READ 스냅샷
-    // 안에서 P2002 복구 재조회를 하면 경쟁 트랜잭션이 커밋한 row가 보이지
-    // 않을 수 있다(리뷰 반영). 메시지 삽입 전에 대화 row가 확정되면 충분하고,
-    // 이후 메시지 트랜잭션이 실패해도 빈 대화 row는 목록에 노출되지 않는다
-    // (last_message_at null).
-    const { conversation } = await this.getOrCreateConversation(args);
-
     return this.prisma.$transaction(async (tx) => {
-      // 첫 메시지 초기화(인사말) 직렬화 — 대화 row를 잠근 뒤 실제 메시지
-      // 수로 인사말 필요 여부를 판정한다(리뷰 반영). "생성 여부" 플래그는
-      // 동시 첫 전송·생성 후 실패 재시도에서 인사말 계약(항상 첫 메시지)을
-      // 깨뜨린다. raw SQL이라 soft-delete 필터는 무관(id 지정 잠금).
-      await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${conversation.id} FOR UPDATE`;
+      const conversationId = await this.lockOrCreateConversation(tx, args);
+
+      // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
+      // 동시 첫 전송·실패 재시도에서 인사말 계약(항상 첫 메시지)을 깨뜨린다.
+      // 위에서 row를 잠갔거나(기존 대화) 본 트랜잭션이 만들었으므로(신규)
+      // count 판정은 직렬화된다.
       const messageCount = await tx.storeConversationMessage.count({
-        where: { conversation_id: conversation.id },
+        where: { conversation_id: conversationId },
       });
 
       const toCreate: ConversationMessageEntry[] = [
@@ -178,7 +177,7 @@ export class ConversationRepository {
         messages.push(
           await tx.storeConversationMessage.create({
             data: {
-              conversation_id: conversation.id,
+              conversation_id: conversationId,
               sender_type: entry.senderType,
               sender_account_id: entry.senderAccountId,
               body_format: entry.bodyFormat,
@@ -191,7 +190,7 @@ export class ConversationRepository {
       }
 
       await tx.storeConversation.update({
-        where: { id: conversation.id },
+        where: { id: conversationId },
         data: {
           last_message_at: args.now,
           updated_at: args.now,
@@ -202,52 +201,62 @@ export class ConversationRepository {
         },
       });
 
-      return { conversationId: conversation.id, messages };
+      return { conversationId, messages };
     });
   }
 
   /**
-   * (account_id, store_id) 대화 확보. 유니크 제약은 soft-delete row도 잡으므로
-   * 조회 범위를 제약과 동일하게(삭제 포함, deleted_at 필터 명시 해제) 맞춘다.
-   * 동시 첫 전송 레이스는 P2002 후 새 문장(새 스냅샷) 재조회로 승자 row를 얻는다.
+   * 트랜잭션 안에서 (account_id, store_id) 대화를 잠그거나 생성한다.
+   * - 기존 대화: id FOR UPDATE 잠금(초기화 직렬화). 유니크 제약은 soft-delete
+   *   row도 잡으므로 조회 범위를 제약과 동일하게(deleted_at 필터 해제) 맞춘다.
+   * - 부재: 본 트랜잭션에서 생성. 동시 첫 전송의 패자는 승자 커밋 후 P2002를
+   *   받는데, REPEATABLE READ 스냅샷의 일반 재조회는 승자 row를 못 볼 수 있어
+   *   FOR UPDATE 잠금 조회(locking read — MVCC 스냅샷 우회, 최신 커밋을 읽음)로
+   *   복구한다.
    */
-  private async getOrCreateConversation(args: {
-    accountId: bigint;
-    storeId: bigint;
-    now: Date;
-  }) {
+  private async lockOrCreateConversation(
+    tx: Prisma.TransactionClient,
+    args: { accountId: bigint; storeId: bigint; now: Date },
+  ): Promise<bigint> {
+    const lockExisting = async (): Promise<bigint | null> => {
+      const rows = await tx.$queryRaw<{ id: bigint }[]>`
+        SELECT id FROM store_conversation
+        WHERE account_id = ${args.accountId} AND store_id = ${args.storeId}
+        FOR UPDATE`;
+      return rows[0]?.id ?? null;
+    };
+
     const existing = await this.prisma.storeConversation.findFirst({
       where: {
         account_id: args.accountId,
         store_id: args.storeId,
         deleted_at: undefined,
       },
+      select: { id: true },
     });
-    if (existing) return { conversation: existing };
+    if (existing) {
+      const locked = await lockExisting();
+      if (locked !== null) return locked;
+      // 조회와 잠금 사이 hard delete는 운영상 없는 경로 — 생성 재시도로 폴백
+    }
 
     try {
-      const conversation = await this.prisma.storeConversation.create({
+      const created = await tx.storeConversation.create({
         data: {
           account_id: args.accountId,
           store_id: args.storeId,
           created_at: args.now,
         },
+        select: { id: true },
       });
-      return { conversation };
+      return created.id;
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
       ) {
-        const conversation =
-          await this.prisma.storeConversation.findFirstOrThrow({
-            where: {
-              account_id: args.accountId,
-              store_id: args.storeId,
-              deleted_at: undefined,
-            },
-          });
-        return { conversation };
+        const locked = await lockExisting();
+        if (locked !== null) return locked;
       }
       throw e;
     }
