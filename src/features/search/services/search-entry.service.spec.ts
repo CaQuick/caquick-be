@@ -9,6 +9,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createProduct,
   createSearchHistory,
   createStore,
 } from '@/test/factories';
@@ -161,6 +162,9 @@ describe('SearchEntryService (real DB)', () => {
       expect(banner).toMatchObject({
         imageUrl: 'https://img/first.png',
         linkType: 'NONE',
+        linkProductId: null,
+        linkProductStoreId: null,
+        linkStoreId: null,
       });
     });
 
@@ -173,6 +177,37 @@ describe('SearchEntryService (real DB)', () => {
       await makeBanner({ link_type: 'STORE', link_store_id: closedStore.id });
 
       expect(await service.searchBanner()).toBeNull();
+    });
+
+    // FE 상품 상세 경로가 /store/{storeId}/products/{productId}라 소속 매장 ID가 없으면
+    // PRODUCT 링크 배너의 이동 경로를 조립할 수 없다
+    it('linkType=PRODUCT 배너는 상품의 소속 매장 ID를 함께 반환한다', async () => {
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      await makeBanner({ link_type: 'PRODUCT', link_product_id: product.id });
+
+      const banner = await service.searchBanner();
+
+      expect(banner).toMatchObject({
+        linkType: 'PRODUCT',
+        linkProductId: product.id.toString(),
+        linkProductStoreId: store.id.toString(),
+        // STORE 이동 목적지 필드는 PRODUCT 링크에서 비어 있어야 한다(용도 구분)
+        linkStoreId: null,
+      });
+    });
+
+    it('linkType=STORE 배너는 linkProductStoreId를 채우지 않는다', async () => {
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      const store = await createStore(prisma);
+      await makeBanner({ link_type: 'STORE', link_store_id: store.id });
+
+      expect(await service.searchBanner()).toMatchObject({
+        linkType: 'STORE',
+        linkStoreId: store.id.toString(),
+        linkProductStoreId: null,
+      });
     });
   });
 });
