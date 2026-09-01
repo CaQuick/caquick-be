@@ -144,24 +144,33 @@ export class ConversationRepository {
     // 않을 수 있다(리뷰 반영). 메시지 삽입 전에 대화 row가 확정되면 충분하고,
     // 이후 메시지 트랜잭션이 실패해도 빈 대화 row는 목록에 노출되지 않는다
     // (last_message_at null).
-    const { conversation, created } = await this.getOrCreateConversation(args);
-
-    const toCreate: ConversationMessageEntry[] = [
-      ...(created
-        ? [
-            {
-              senderType: ConversationSenderType.STORE,
-              senderAccountId: null,
-              bodyFormat: ConversationBodyFormat.TEXT,
-              bodyText: args.greetingBodyText,
-              bodyHtml: null,
-            },
-          ]
-        : []),
-      ...args.entries,
-    ];
+    const { conversation } = await this.getOrCreateConversation(args);
 
     return this.prisma.$transaction(async (tx) => {
+      // 첫 메시지 초기화(인사말) 직렬화 — 대화 row를 잠근 뒤 실제 메시지
+      // 수로 인사말 필요 여부를 판정한다(리뷰 반영). "생성 여부" 플래그는
+      // 동시 첫 전송·생성 후 실패 재시도에서 인사말 계약(항상 첫 메시지)을
+      // 깨뜨린다. raw SQL이라 soft-delete 필터는 무관(id 지정 잠금).
+      await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${conversation.id} FOR UPDATE`;
+      const messageCount = await tx.storeConversationMessage.count({
+        where: { conversation_id: conversation.id },
+      });
+
+      const toCreate: ConversationMessageEntry[] = [
+        ...(messageCount === 0
+          ? [
+              {
+                senderType: ConversationSenderType.STORE,
+                senderAccountId: null,
+                bodyFormat: ConversationBodyFormat.TEXT,
+                bodyText: args.greetingBodyText,
+                bodyHtml: null,
+              },
+            ]
+          : []),
+        ...args.entries,
+      ];
+
       // createMany는 생성 row를 돌려주지 않아 순서 보존 개별 create로 저장한다
       // (한 호출당 최대 3건이라 비용 문제 없음)
       const messages = [];
@@ -214,7 +223,7 @@ export class ConversationRepository {
         deleted_at: undefined,
       },
     });
-    if (existing) return { conversation: existing, created: false };
+    if (existing) return { conversation: existing };
 
     try {
       const conversation = await this.prisma.storeConversation.create({
@@ -224,7 +233,7 @@ export class ConversationRepository {
           created_at: args.now,
         },
       });
-      return { conversation, created: true };
+      return { conversation };
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -238,7 +247,7 @@ export class ConversationRepository {
               deleted_at: undefined,
             },
           });
-        return { conversation, created: false };
+        return { conversation };
       }
       throw e;
     }

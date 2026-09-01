@@ -233,9 +233,12 @@ describe('ConversationInquiryService (real DB)', () => {
 
       // 유니크 제약 범위(삭제 포함)와 동일하게 기존 row를 찾아 이어간다
       expect(result.conversationId).toBe(softDeleted.id.toString());
-      // 기존 대화 재사용이므로 인사말은 다시 저장하지 않는다
-      expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].senderType).toBe('USER');
+      // 인사말 여부는 "메시지 0건" 기준 — 빈 대화 재사용이면 인사말부터 저장한다
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages.map((m) => m.senderType)).toEqual([
+        'STORE',
+        'USER',
+      ]);
       // 재사용 시 복구 — 삭제 상태로 두면 어느 조회에도 잡히지 않는다
       const restored = await prisma.storeConversation.findUniqueOrThrow({
         where: { id: softDeleted.id },
