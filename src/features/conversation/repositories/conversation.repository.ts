@@ -296,6 +296,69 @@ export class ConversationRepository {
   }
 
   /**
+   * 목록 갱신 이벤트용 대화 스냅샷 — 한 트랜잭션(단일 REPEATABLE READ
+   * 스냅샷)에서 대화·매장명·최신 메시지·안읽음 수를 함께 읽는다. 독립
+   * 조회로 쪼개면 경쟁 커밋이 끼어들어 "B의 미리보기 + A의 시각" 같은
+   * 혼합 상태가 이벤트로 나갈 수 있다(리뷰 반영).
+   */
+  async getConversationEventSnapshot(conversationId: bigint) {
+    return this.prisma.$transaction(async (tx) => {
+      const conversation = await tx.storeConversation.findFirst({
+        where: { id: conversationId, deleted_at: undefined },
+        select: {
+          id: true,
+          account_id: true,
+          store_id: true,
+          last_message_at: true,
+          last_read_at: true,
+          store: { select: { store_name: true } },
+        },
+      });
+      if (!conversation) return null;
+
+      const [lastMessage, unreadCount] = await Promise.all([
+        tx.storeConversationMessage.findFirst({
+          where: { conversation_id: conversationId },
+          orderBy: { id: 'desc' },
+          select: { body_format: true, body_text: true, body_html: true },
+        }),
+        tx.storeConversationMessage.count({
+          where: {
+            conversation_id: conversationId,
+            sender_type: { not: ConversationSenderType.USER },
+            ...(conversation.last_read_at
+              ? { created_at: { gt: conversation.last_read_at } }
+              : {}),
+          },
+        }),
+      ]);
+
+      return { conversation, lastMessage, unreadCount };
+    });
+  }
+
+  /** subscription 구독 권한 판정용 — 대화 소유 구매자/해당 매장 판매자 확인. */
+  async findConversationAccess(conversationId: bigint) {
+    return this.prisma.storeConversation.findFirst({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        account_id: true,
+        store_id: true,
+        store: { select: { seller_account_id: true } },
+      },
+    });
+  }
+
+  /** 판매자 구독 대상 매장(활성) 조회. */
+  async findStoreBySellerAccount(sellerAccountId: bigint) {
+    return this.prisma.store.findFirst({
+      where: { seller_account_id: sellerAccountId, ...activeWhere },
+      select: { id: true },
+    });
+  }
+
+  /**
    * 구매자 메시지 저장. 대화가 없으면 같은 트랜잭션에서 생성하고, 인사말은
    * "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.
    *

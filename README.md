@@ -269,6 +269,7 @@ yarn start:dev
 | --- | --- |
 | **서버** | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL` |
 | **DB** | `DATABASE_URL` |
+| **Redis (선택)** | `REDIS_URL` — GraphQL subscription PubSub. 미설정 시 `redis://localhost:6379`(로컬 docker-compose) |
 | **JWT / Auth** | `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE` |
 | **OIDC (Google)** | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL` |
 | **OIDC (Kakao)** | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL` |

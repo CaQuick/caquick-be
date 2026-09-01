@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -12,6 +12,9 @@ import {
   type ConversationMessageEntry,
 } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
+import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
+import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import {
   renderGreeting,
   toConversationMessageOutput,
@@ -24,7 +27,12 @@ import type {
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {
-  constructor(repo: ConversationRepository) {
+  private readonly logger = new Logger(ConversationInquiryService.name);
+
+  constructor(
+    repo: ConversationRepository,
+    private readonly events: ConversationEventsService,
+  ) {
     super(repo);
   }
 
@@ -151,10 +159,94 @@ export class ConversationInquiryService extends ConversationBaseService {
       entries: args.entries,
     });
 
+    const messages = result.messages.map(toConversationMessageOutput);
+    await this.publishBuyerSendEvents({
+      accountId: args.accountId,
+      storeId: args.storeId,
+      storeName: args.storeName,
+      conversationId: result.conversationId,
+      messages,
+    });
+
     return {
       conversationId: result.conversationId.toString(),
-      messages: result.messages.map(toConversationMessageOutput),
+      messages,
     };
+  }
+
+  /**
+   * 실시간 이벤트 발행 — 대화방 메시지 + 양측 목록/배지 갱신.
+   * 저장 트랜잭션 밖의 부수효과라 실패해도 전송 자체는 성공으로 남는다
+   * (구독자는 폴백 재조회 가능).
+   */
+  private async publishBuyerSendEvents(args: {
+    accountId: bigint;
+    storeId: bigint;
+    storeName: string;
+    conversationId: bigint;
+    messages: ConversationMessagesPayload['messages'];
+  }): Promise<void> {
+    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 여기서 나는
+    // 예외가 mutation을 실패로 둔갑시키면 클라이언트 재시도로 중복 전송이
+    // 난다(리뷰 반영). 실패는 경고 로그만 남긴다.
+    try {
+      await this.doPublishBuyerSendEvents(args);
+    } catch (e) {
+      this.logger.warn(
+        `대화 이벤트 발행 실패 (conversationId=${args.conversationId}): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  private async doPublishBuyerSendEvents(args: {
+    accountId: bigint;
+    storeId: bigint;
+    storeName: string;
+    conversationId: bigint;
+    messages: ConversationMessagesPayload['messages'];
+  }): Promise<void> {
+    const lastMessage = args.messages[args.messages.length - 1];
+    if (!lastMessage) return;
+
+    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 단일 트랜잭션 스냅샷
+    // 으로 다시 읽어 조립한다 — 독립 조회로 쪼개면 경쟁 커밋이 끼어들어
+    // 혼합 상태(남의 미리보기 + 내 시각)가 나갈 수 있다(리뷰 반영).
+    // 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
+    const snapshot = await this.repo.getConversationEventSnapshot(
+      args.conversationId,
+    );
+
+    const preview = snapshot
+      ? toLastMessagePreview(snapshot.lastMessage)
+      : toEventPreview(lastMessage);
+    const lastMessageAtIso = (
+      snapshot?.conversation.last_message_at ?? lastMessage.createdAt
+    ).toISOString();
+    const lastReadAtIso =
+      snapshot?.conversation.last_read_at?.toISOString() ?? null;
+    const unreadCount = snapshot?.unreadCount ?? 0;
+    // 매장명도 스냅샷 값을 우선한다 — 최초 조회 후 개명되면 최신 메시지
+    // 상태에 옛 이름이 실려 나갈 수 있다(리뷰 반영)
+    const storeName = snapshot?.conversation.store.store_name ?? args.storeName;
+
+    await this.events.publishMessagesAdded(args.messages);
+    await this.events.publishBuyerListUpdate(args.accountId.toString(), {
+      conversationId: args.conversationId.toString(),
+      storeId: args.storeId.toString(),
+      storeName,
+      lastMessagePreview: preview,
+      lastMessageAt: lastMessageAtIso,
+      lastReadAt: lastReadAtIso,
+      unreadCount,
+    });
+    await this.events.publishSellerListUpdate(args.storeId.toString(), {
+      conversationId: args.conversationId.toString(),
+      accountId: args.accountId.toString(),
+      lastMessagePreview: preview,
+      lastMessageAt: lastMessageAtIso,
+    });
   }
 
   private async requireInquiryStore(storeId: bigint) {

@@ -1,13 +1,16 @@
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
+import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ConversationRepository } from '@/features/conversation';
+import { ConversationEventsService } from '@/features/conversation';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerConversationMutationResolver } from '@/features/seller/resolvers/seller-conversation-mutation.resolver';
 import { SellerConversationQueryResolver } from '@/features/seller/resolvers/seller-conversation-query.resolver';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
@@ -26,6 +29,8 @@ describe('Seller Conversation Resolvers (real DB)', () => {
         SellerConversationService,
         SellerRepository,
         ConversationRepository,
+        ConversationEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

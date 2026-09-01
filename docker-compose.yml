@@ -25,5 +25,17 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: caquick-redis
+    # GraphQL subscription PubSub 백엔드. 영속화 불필요(휘발성 이벤트 브로커).
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   caquick-mysql-data:

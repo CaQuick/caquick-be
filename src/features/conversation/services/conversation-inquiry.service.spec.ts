@@ -5,9 +5,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
+import { PubSub } from 'graphql-subscriptions';
 
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -23,7 +26,13 @@ describe('ConversationInquiryService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ConversationInquiryService, ConversationRepository],
+      providers: [
+        ConversationInquiryService,
+        ConversationRepository,
+        ConversationEventsService,
+        // 발행 경로 실검증은 events service spec(실 Redis) 담당 — 여기선 in-memory
+        { provide: PUB_SUB, useValue: new PubSub() },
+      ],
     });
     service = module.get(ConversationInquiryService);
     prisma = p;
