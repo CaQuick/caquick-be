@@ -143,7 +143,6 @@ export class SellerConversationService extends SellerBaseService {
         bodyFormat,
         bodyText,
         bodyHtml,
-        now: new Date(),
       });
 
     await this.auditLogs.createAuditLog({

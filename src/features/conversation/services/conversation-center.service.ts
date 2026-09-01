@@ -107,23 +107,14 @@ export class ConversationCenterService extends ConversationBaseService {
       ? parseIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
       : undefined;
 
-    const [rows, totalCount] = await Promise.all([
-      this.repo.listConversationMessages({ conversationId, limit, cursor }),
-      this.repo.countConversationMessages(conversationId),
-    ]);
-
-    // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 여기서
-    // last_read_at을 갱신한다(조회의 의도적 쓰기 부수효과, 사용자 확정 정책).
-    // 마커는 벽시계가 아니라 실제 내려준 최신 메시지 시각까지만 전진 —
-    // 조회 직후 커밋된(응답에 없는) 메시지가 읽음 처리되는 레이스 방지.
-    // created_at 밀리초 동률 메시지는 다음 조회에서 함께 내려가므로 허용.
-    const newestFetched = rows[0];
-    if (newestFetched) {
-      await this.repo.markConversationRead({
-        conversationId,
-        readAt: newestFetched.created_at,
-      });
-    }
+    // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 조회
+    // 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과, 사용자 확정
+    // 정책). 전송 경로와 같은 잠금·마커 정합은 repository가 담당한다.
+    const { rows, totalCount } = await this.repo.listBuyerMessagesAndMarkRead({
+      conversationId,
+      limit,
+      cursor,
+    });
 
     const page = sliceCursorPage(rows, limit, (last) => last.id.toString());
 

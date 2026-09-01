@@ -149,7 +149,6 @@ export class ConversationInquiryService extends ConversationBaseService {
         storeName: args.storeName,
       }),
       entries: args.entries,
-      now: new Date(),
     });
 
     return {
