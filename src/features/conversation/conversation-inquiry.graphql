@@ -1,0 +1,95 @@
+extend type Query {
+  """
+  문의 채팅 진입 컨텍스트(구매자). 매장 프로필·상담시간·치환 완료 인사말·질문 칩을
+  한 번에 내려준다. 아직 대화가 없어도 조회 가능하며 그 경우 conversationId는 null.
+  """
+  storeInquiryContext(storeId: ID!): StoreInquiryContext!
+}
+
+extend type Mutation {
+  """
+  구매자 텍스트 메시지 전송. 해당 매장과의 대화가 없으면 이 시점에 생성하고,
+  치환 완료된 인사말을 매장 메시지로 먼저 저장한 뒤 유저 메시지를 저장한다.
+  """
+  sendConversationMessage(input: SendConversationMessageInput!): ConversationMessagesPayload!
+  """
+  질문 칩(FAQ) 전송. 유저 메시지(칩 제목)와 매장 자동응답(FAQ 답변 HTML)을
+  한 트랜잭션으로 저장한다. 첫 전송이면 대화 생성 + 인사말 저장도 함께 수행.
+  """
+  sendConversationFaqMessage(input: SendConversationFaqMessageInput!): ConversationMessagesPayload!
+}
+
+"""대화 메시지 발신자 유형"""
+enum ConversationSenderType {
+  USER
+  STORE
+  SYSTEM
+}
+
+"""대화 메시지 본문 형식"""
+enum ConversationBodyFormat {
+  TEXT
+  HTML
+}
+
+"""문의 채팅 진입 컨텍스트"""
+type StoreInquiryContext {
+  storeId: ID!
+  storeName: String!
+  """매장 프로필(로고) 이미지 URL. 미등록 시 null"""
+  profileImageUrl: String
+  """요일별 상담시간(영업시간과 동일 정책). FE가 "월/화/수… 10:00~18:00" 형식으로 조합"""
+  businessHours: [InquiryBusinessHour!]!
+  """닉네임·매장명 치환이 끝난 인사말"""
+  greetingMessage: String!
+  """질문 칩 목록(활성 FAQ, 노출 순서대로)"""
+  faqTopics: [InquiryFaqTopic!]!
+  """기존 대화가 있으면 그 ID, 없으면 null"""
+  conversationId: ID
+}
+
+"""요일별 상담시간"""
+type InquiryBusinessHour {
+  """0=일 ~ 6=토"""
+  dayOfWeek: Int!
+  isClosed: Boolean!
+  """오픈 시각 "HH:mm". 휴무면 null"""
+  openTime: String
+  """마감 시각 "HH:mm". 휴무면 null"""
+  closeTime: String
+}
+
+"""질문 칩(매장 FAQ)"""
+type InquiryFaqTopic {
+  id: ID!
+  title: String!
+}
+
+"""대화 메시지"""
+type ConversationMessage {
+  id: ID!
+  conversationId: ID!
+  senderType: ConversationSenderType!
+  bodyFormat: ConversationBodyFormat!
+  bodyText: String
+  bodyHtml: String
+  createdAt: DateTime!
+}
+
+"""메시지 전송 결과. 이번 호출로 저장된 메시지들을 생성 순으로 담는다(첫 전송이면 인사말 포함)"""
+type ConversationMessagesPayload {
+  conversationId: ID!
+  messages: [ConversationMessage!]!
+}
+
+"""구매자 텍스트 메시지 전송 입력"""
+input SendConversationMessageInput {
+  storeId: ID!
+  bodyText: String!
+}
+
+"""질문 칩(FAQ) 전송 입력"""
+input SendConversationFaqMessageInput {
+  storeId: ID!
+  faqTopicId: ID!
+}

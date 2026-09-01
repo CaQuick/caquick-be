@@ -13,6 +13,7 @@ export interface SellerStoreOutput {
   websiteUrl: string | null;
   businessHoursText: string | null;
   profileImageUrl: string | null;
+  greetingMessage: string | null;
   pickupSlotIntervalMinutes: number;
   minLeadTimeMinutes: number;
   maxDaysAhead: number;

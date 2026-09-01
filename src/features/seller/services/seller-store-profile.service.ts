@@ -12,6 +12,7 @@ import {
 import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_ADDRESS_CITY_LENGTH,
+  MAX_GREETING_MESSAGE_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
   MAX_ADDRESS_FULL_LENGTH,
   MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
@@ -160,6 +161,15 @@ export class SellerStoreProfileService
             profile_image_url: cleanNullableText(
               input.profileImageUrl,
               MAX_URL_LENGTH,
+            ),
+          }
+        : {}),
+      // 빈 문자열은 null 저장 → 문의 채팅에서 서버 기본 인사말로 되돌아간다
+      ...(input.greetingMessage !== undefined
+        ? {
+            greeting_message: cleanNullableText(
+              input.greetingMessage,
+              MAX_GREETING_MESSAGE_LENGTH,
             ),
           }
         : {}),

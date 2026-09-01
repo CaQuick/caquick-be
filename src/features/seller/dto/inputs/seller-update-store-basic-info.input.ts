@@ -51,4 +51,8 @@ export class SellerUpdateStoreBasicInfoInput {
   @IsOptional()
   @IsString()
   profileImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  greetingMessage?: string;
 }
