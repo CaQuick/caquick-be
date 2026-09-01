@@ -295,11 +295,45 @@ export class ConversationRepository {
     });
   }
 
-  /** 이벤트 payload용 매장명 단건 조회. */
-  async findStoreNameById(storeId: bigint) {
-    return this.prisma.store.findFirst({
-      where: { id: storeId, deleted_at: undefined },
-      select: { store_name: true },
+  /**
+   * 목록 갱신 이벤트용 대화 스냅샷 — 한 트랜잭션(단일 REPEATABLE READ
+   * 스냅샷)에서 대화·매장명·최신 메시지·안읽음 수를 함께 읽는다. 독립
+   * 조회로 쪼개면 경쟁 커밋이 끼어들어 "B의 미리보기 + A의 시각" 같은
+   * 혼합 상태가 이벤트로 나갈 수 있다(리뷰 반영).
+   */
+  async getConversationEventSnapshot(conversationId: bigint) {
+    return this.prisma.$transaction(async (tx) => {
+      const conversation = await tx.storeConversation.findFirst({
+        where: { id: conversationId, deleted_at: undefined },
+        select: {
+          id: true,
+          account_id: true,
+          store_id: true,
+          last_message_at: true,
+          last_read_at: true,
+          store: { select: { store_name: true } },
+        },
+      });
+      if (!conversation) return null;
+
+      const [lastMessage, unreadCount] = await Promise.all([
+        tx.storeConversationMessage.findFirst({
+          where: { conversation_id: conversationId },
+          orderBy: { id: 'desc' },
+          select: { body_format: true, body_text: true, body_html: true },
+        }),
+        tx.storeConversationMessage.count({
+          where: {
+            conversation_id: conversationId,
+            sender_type: { not: ConversationSenderType.USER },
+            ...(conversation.last_read_at
+              ? { created_at: { gt: conversation.last_read_at } }
+              : {}),
+          },
+        }),
+      ]);
+
+      return { conversation, lastMessage, unreadCount };
     });
   }
 

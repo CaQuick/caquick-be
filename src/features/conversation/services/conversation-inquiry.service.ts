@@ -187,26 +187,21 @@ export class ConversationInquiryService extends ConversationBaseService {
     const lastMessage = args.messages[args.messages.length - 1];
     if (!lastMessage) return;
 
-    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 다시 읽어 조립한다 —
-    // 동시 전송에서 잠금 해제 후 발행 순서가 커밋 순서와 어긋나도, 늦게
-    // 발행된 이벤트가 과거 미리보기/시각으로 화면을 되돌리지 않는다
-    // (리뷰 반영). 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
-    const conversation = await this.repo.findConversationByAccountAndStore({
-      accountId: args.accountId,
-      storeId: args.storeId,
-    });
-    const [extras] = conversation
-      ? await this.repo.getConversationListExtras([
-          { id: conversation.id, last_read_at: conversation.last_read_at },
-        ])
-      : [undefined];
+    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 단일 트랜잭션 스냅샷
+    // 으로 다시 읽어 조립한다 — 독립 조회로 쪼개면 경쟁 커밋이 끼어들어
+    // 혼합 상태(남의 미리보기 + 내 시각)가 나갈 수 있다(리뷰 반영).
+    // 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
+    const snapshot = await this.repo.getConversationEventSnapshot(
+      args.conversationId,
+    );
 
-    const preview = extras
-      ? toLastMessagePreview(extras.lastMessage)
+    const preview = snapshot
+      ? toLastMessagePreview(snapshot.lastMessage)
       : toEventPreview(lastMessage);
     const lastMessageAtIso = (
-      conversation?.last_message_at ?? lastMessage.createdAt
+      snapshot?.conversation.last_message_at ?? lastMessage.createdAt
     ).toISOString();
+    const unreadCount = snapshot?.unreadCount ?? 0;
 
     await this.events.publishMessagesAdded(args.messages);
     await this.events.publishBuyerListUpdate(args.accountId.toString(), {
@@ -215,7 +210,7 @@ export class ConversationInquiryService extends ConversationBaseService {
       storeName: args.storeName,
       lastMessagePreview: preview,
       lastMessageAt: lastMessageAtIso,
-      unreadCount: extras?.unreadCount ?? 0,
+      unreadCount,
     });
     await this.events.publishSellerListUpdate(args.storeId.toString(), {
       conversationId: args.conversationId.toString(),

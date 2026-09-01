@@ -194,29 +194,20 @@ export class SellerConversationService extends SellerBaseService {
       bodyHtml: args.message.bodyHtml,
       createdAt: args.message.createdAt,
     };
-    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 다시 읽어 조립한다 —
-    // 동시 전송에서 발행 순서가 커밋 순서와 어긋나도 늦은 이벤트가 과거
-    // 상태로 화면을 되돌리지 않는다(리뷰 반영). 메시지 스트림은 id 정렬.
-    const [store, fresh] = await Promise.all([
-      this.conversationRepository.findStoreNameById(args.storeId),
-      this.conversationRepository.findConversationByIdAndStore({
-        conversationId: args.conversation.id,
-        storeId: args.storeId,
-      }),
-    ]);
-    const [extras] =
-      await this.conversationRepository.getConversationListExtras([
-        {
-          id: args.conversation.id,
-          last_read_at: fresh?.last_read_at ?? args.conversation.last_read_at,
-        },
-      ]);
-    const preview = extras
-      ? toLastMessagePreview(extras.lastMessage)
+    // 목록 이벤트는 발행 시점의 최신 커밋 상태를 단일 트랜잭션 스냅샷으로
+    // 조립한다 — 독립 조회로 쪼개면 경쟁 커밋이 끼어들어 혼합 상태가 나갈
+    // 수 있다(리뷰 반영). 메시지 스트림은 id 정렬.
+    const snapshot =
+      await this.conversationRepository.getConversationEventSnapshot(
+        args.conversation.id,
+      );
+    const preview = snapshot
+      ? toLastMessagePreview(snapshot.lastMessage)
       : toEventPreview(message);
     const lastMessageAtIso = (
-      fresh?.last_message_at ?? args.message.createdAt
+      snapshot?.conversation.last_message_at ?? args.message.createdAt
     ).toISOString();
+    const storeName = snapshot?.conversation.store.store_name ?? '';
 
     await this.conversationEvents.publishMessagesAdded([message]);
     await this.conversationEvents.publishBuyerListUpdate(
@@ -224,10 +215,10 @@ export class SellerConversationService extends SellerBaseService {
       {
         conversationId: args.conversation.id.toString(),
         storeId: args.storeId.toString(),
-        storeName: store?.store_name ?? '',
+        storeName,
         lastMessagePreview: preview,
         lastMessageAt: lastMessageAtIso,
-        unreadCount: extras?.unreadCount ?? 0,
+        unreadCount: snapshot?.unreadCount ?? 0,
       },
     );
     await this.conversationEvents.publishSellerListUpdate(
