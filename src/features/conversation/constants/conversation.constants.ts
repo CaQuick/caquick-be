@@ -9,3 +9,8 @@ export const DEFAULT_GREETING_TEMPLATE =
 
 // 구매자 텍스트 메시지 상한. 판매자 측 MAX_CONVERSATION_BODY_TEXT_LENGTH와 동일 정책.
 export const MAX_INQUIRY_BODY_TEXT_LENGTH = 2000;
+
+// 대화 목록/채팅 상세 페이지네이션 기본값(상한 50은 DTO가 검증)
+export const DEFAULT_CONVERSATION_LIST_LIMIT = 20;
+export const DEFAULT_CONVERSATION_MESSAGES_LIMIT = 30;
+export const MAX_CONVERSATION_PAGE_LIMIT = 50;

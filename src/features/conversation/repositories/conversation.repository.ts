@@ -129,6 +129,108 @@ export class ConversationRepository {
   }
 
   /**
+   * 구매자 대화 목록 페이지. (last_message_at, id) desc 키셋.
+   * 대화는 첫 메시지 전송 시에만 생성되지만, 방어적으로 메시지 없는
+   * 대화(last_message_at null)는 목록에서 제외한다 — 커서 정렬 키가 없다.
+   */
+  async listConversationsByAccount(args: {
+    accountId: bigint;
+    limit: number;
+    cursor?: { lastMessageAt: Date; id: bigint };
+  }) {
+    const where: Prisma.StoreConversationWhereInput = {
+      account_id: args.accountId,
+      last_message_at: { not: null },
+    };
+    return this.prisma.storeConversation.findMany({
+      where: args.cursor
+        ? {
+            AND: [
+              where,
+              {
+                OR: [
+                  { last_message_at: { lt: args.cursor.lastMessageAt } },
+                  {
+                    last_message_at: args.cursor.lastMessageAt,
+                    id: { lt: args.cursor.id },
+                  },
+                ],
+              },
+            ],
+          }
+        : where,
+      orderBy: [{ last_message_at: 'desc' }, { id: 'desc' }],
+      take: args.limit + 1,
+      include: {
+        store: { select: { store_name: true, profile_image_url: true } },
+      },
+    });
+  }
+
+  async countConversationsByAccount(accountId: bigint): Promise<number> {
+    return this.prisma.storeConversation.count({
+      where: { account_id: accountId, last_message_at: { not: null } },
+    });
+  }
+
+  /**
+   * 목록 아이템 부가 정보 — 대화별 마지막 메시지와 안읽은 수신 메시지 수.
+   * 안읽음 = last_read_at 이후 도착한, 내가 보낸 것이 아닌 메시지.
+   * 페이지 크기(≤50) 만큼의 소규모 병렬 조회라 per-row 쿼리로 충분하다.
+   */
+  async getConversationListExtras(
+    rows: { id: bigint; last_read_at: Date | null }[],
+  ) {
+    return Promise.all(
+      rows.map(async (row) => {
+        const [lastMessage, unreadCount] = await Promise.all([
+          this.prisma.storeConversationMessage.findFirst({
+            where: { conversation_id: row.id },
+            orderBy: { id: 'desc' },
+            select: { body_format: true, body_text: true, body_html: true },
+          }),
+          this.prisma.storeConversationMessage.count({
+            where: {
+              conversation_id: row.id,
+              sender_type: { not: ConversationSenderType.USER },
+              ...(row.last_read_at
+                ? { created_at: { gt: row.last_read_at } }
+                : {}),
+            },
+          }),
+        ]);
+        return { conversationId: row.id, lastMessage, unreadCount };
+      }),
+    );
+  }
+
+  async findConversationByIdAndAccount(args: {
+    conversationId: bigint;
+    accountId: bigint;
+  }) {
+    return this.prisma.storeConversation.findFirst({
+      where: { id: args.conversationId, account_id: args.accountId },
+    });
+  }
+
+  async countConversationMessages(conversationId: bigint): Promise<number> {
+    return this.prisma.storeConversationMessage.count({
+      where: { conversation_id: conversationId },
+    });
+  }
+
+  /** 구매자 읽음 처리 — last_read_at 갱신(메시지 조회의 부수효과로 호출된다). */
+  async markConversationRead(args: {
+    conversationId: bigint;
+    now: Date;
+  }): Promise<void> {
+    await this.prisma.storeConversation.update({
+      where: { id: args.conversationId },
+      data: { last_read_at: args.now },
+    });
+  }
+
+  /**
    * 구매자 메시지 저장. 대화가 없으면 같은 트랜잭션에서 생성하고, 인사말은
    * "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.
    *
