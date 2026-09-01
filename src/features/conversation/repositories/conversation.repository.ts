@@ -226,7 +226,11 @@ export class ConversationRepository {
       return rows[0]?.id ?? null;
     };
 
-    const existing = await this.prisma.storeConversation.findFirst({
+    // 사전 조회도 tx 경유 — 트랜잭션 안에서 루트 클라이언트를 쓰면 풀
+    // 커넥션을 2개 점유해 동시 전송이 풀을 소진하면 상호 대기가 난다(리뷰
+    // 반영). tx 스냅샷이 경쟁 커밋을 못 봐도 create → P2002 → 잠금 조회
+    // 경로가 복구하므로 안전하다.
+    const existing = await tx.storeConversation.findFirst({
       where: {
         account_id: args.accountId,
         store_id: args.storeId,
