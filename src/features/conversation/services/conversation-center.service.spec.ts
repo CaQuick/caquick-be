@@ -75,8 +75,7 @@ describe('ConversationCenterService (real DB)', () => {
         sender_type: args.senderType ?? 'STORE',
         sender_account_id: args.senderAccountId ?? null,
         body_format: args.bodyFormat ?? 'TEXT',
-        body_text:
-          args.bodyText === undefined ? '메시지' : args.bodyText,
+        body_text: args.bodyText === undefined ? '메시지' : args.bodyText,
         body_html: args.bodyHtml ?? null,
         created_at: args.createdAt ?? new Date(),
       },
@@ -266,6 +265,58 @@ describe('ConversationCenterService (real DB)', () => {
       expect(saved.last_read_at).not.toBeNull();
       const list = await service.myConversations(buyer.id);
       expect(list.items[0].unreadCount).toBe(0);
+    });
+
+    it('과거 페이지 조회로는 읽음 마커가 후퇴하지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const conv = await makeConversation({
+        accountId: buyer.id,
+        storeId: store.id,
+        lastReadAt: null,
+      });
+      await addMessage({ conversationId: conv.id, createdAt: hoursAgo(2) });
+      await addMessage({ conversationId: conv.id, createdAt: hoursAgo(1) });
+
+      // 첫 페이지(최신) → 마커 = 최신 메시지 시각
+      const page1 = await service.conversationMessages(
+        buyer.id,
+        conv.id.toString(),
+        { limit: 1 },
+      );
+      const afterFirst = await prisma.storeConversation.findUniqueOrThrow({
+        where: { id: conv.id },
+      });
+      expect(afterFirst.last_read_at?.getTime()).toBe(
+        new Date(page1.items[0].createdAt).getTime(),
+      );
+
+      // 과거 페이지 조회 — 더 오래된 메시지 시각으로 후퇴하면 안 된다
+      await service.conversationMessages(buyer.id, conv.id.toString(), {
+        limit: 1,
+        cursor: page1.nextCursor!,
+      });
+      const afterSecond = await prisma.storeConversation.findUniqueOrThrow({
+        where: { id: conv.id },
+      });
+      expect(afterSecond.last_read_at?.getTime()).toBe(
+        afterFirst.last_read_at?.getTime(),
+      );
+    });
+
+    it('UNSIGNED BIGINT 상한을 넘는 메시지 커서는 거절한다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const conv = await makeConversation({
+        accountId: buyer.id,
+        storeId: store.id,
+      });
+
+      await expect(
+        service.conversationMessages(buyer.id, conv.id.toString(), {
+          cursor: '9'.repeat(30),
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('남의 대화·없는 대화는 NotFoundException', async () => {

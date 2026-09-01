@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 
 import {
   buildTimestampIdCursor,
+  parseIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 
@@ -46,5 +47,20 @@ describe('keyset-cursor', () => {
     expect(
       parseTimestampIdCursor('1700000000000:18446744073709551615', ERR).id,
     ).toBe(18446744073709551615n);
+  });
+
+  describe('parseIdCursor', () => {
+    it('정상 id는 bigint로 파싱하고 상한 자체는 허용한다', () => {
+      expect(parseIdCursor('42', ERR)).toBe(42n);
+      expect(parseIdCursor('18446744073709551615', ERR)).toBe(
+        18446744073709551615n,
+      );
+    });
+
+    it('형식 불일치·UNSIGNED BIGINT 상한 초과를 거부한다', () => {
+      for (const raw of ['abc', '-1', '', '1.5', '9'.repeat(30)]) {
+        expect(() => parseIdCursor(raw, ERR)).toThrow(BadRequestException);
+      }
+    });
   });
 });

@@ -45,3 +45,19 @@ export function parseTimestampIdCursor(
 export function buildTimestampIdCursor(timestamp: Date, id: bigint): string {
   return `${timestamp.getTime()}:${id.toString()}`;
 }
+
+/**
+ * 숫자 id 단독 커서 파싱. parseId와 달리 DB UNSIGNED BIGINT 상한까지
+ * 검증한다 — 상한 초과 값이 커넥터 범위 오류로 번지는 것을 형식 오류로
+ * 선제 거부한다.
+ */
+export function parseIdCursor(raw: string, errorMessage: string): bigint {
+  if (!/^\d+$/.test(raw)) {
+    throw new BadRequestException(errorMessage);
+  }
+  const id = BigInt(raw);
+  if (id > MAX_UNSIGNED_BIGINT) {
+    throw new BadRequestException(errorMessage);
+  }
+  return id;
+}

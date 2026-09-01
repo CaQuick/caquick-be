@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
+  parseIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
@@ -100,7 +101,11 @@ export class ConversationCenterService extends ConversationBaseService {
     }
 
     const limit = input?.limit ?? DEFAULT_CONVERSATION_MESSAGES_LIMIT;
-    const cursor = input?.cursor ? parseId(input.cursor) : undefined;
+    // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로
+    // 번진다 — 상한까지 검증하는 커서 전용 파서를 쓴다(리뷰 반영)
+    const cursor = input?.cursor
+      ? parseIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
+      : undefined;
 
     const [rows, totalCount] = await Promise.all([
       this.repo.listConversationMessages({ conversationId, limit, cursor }),
@@ -109,7 +114,16 @@ export class ConversationCenterService extends ConversationBaseService {
 
     // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 여기서
     // last_read_at을 갱신한다(조회의 의도적 쓰기 부수효과, 사용자 확정 정책).
-    await this.repo.markConversationRead({ conversationId, now: new Date() });
+    // 마커는 벽시계가 아니라 실제 내려준 최신 메시지 시각까지만 전진 —
+    // 조회 직후 커밋된(응답에 없는) 메시지가 읽음 처리되는 레이스 방지.
+    // created_at 밀리초 동률 메시지는 다음 조회에서 함께 내려가므로 허용.
+    const newestFetched = rows[0];
+    if (newestFetched) {
+      await this.repo.markConversationRead({
+        conversationId,
+        readAt: newestFetched.created_at,
+      });
+    }
 
     const page = sliceCursorPage(rows, limit, (last) => last.id.toString());
 

@@ -176,32 +176,65 @@ export class ConversationRepository {
   /**
    * 목록 아이템 부가 정보 — 대화별 마지막 메시지와 안읽은 수신 메시지 수.
    * 안읽음 = last_read_at 이후 도착한, 내가 보낸 것이 아닌 메시지.
-   * 페이지 크기(≤50) 만큼의 소규모 병렬 조회라 per-row 쿼리로 충분하다.
+   * per-row 쿼리는 페이지 50건 기준 100쿼리로 풀을 압박한다(리뷰 반영) —
+   * 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의
+   * 고정 3쿼리로 배치한다.
    */
   async getConversationListExtras(
     rows: { id: bigint; last_read_at: Date | null }[],
   ) {
-    return Promise.all(
-      rows.map(async (row) => {
-        const [lastMessage, unreadCount] = await Promise.all([
-          this.prisma.storeConversationMessage.findFirst({
-            where: { conversation_id: row.id },
-            orderBy: { id: 'desc' },
-            select: { body_format: true, body_text: true, body_html: true },
-          }),
-          this.prisma.storeConversationMessage.count({
-            where: {
-              conversation_id: row.id,
-              sender_type: { not: ConversationSenderType.USER },
-              ...(row.last_read_at
-                ? { created_at: { gt: row.last_read_at } }
-                : {}),
+    if (rows.length === 0) return [];
+    const ids = rows.map((row) => row.id);
+
+    const latestIdRows = await this.prisma.storeConversationMessage.groupBy({
+      by: ['conversation_id'],
+      where: { conversation_id: { in: ids } },
+      _max: { id: true },
+    });
+    const latestIds = latestIdRows
+      .map((row) => row._max.id)
+      .filter((id): id is bigint => id !== null);
+
+    const [latestMessages, unreadGroups] = await Promise.all([
+      latestIds.length > 0
+        ? this.prisma.storeConversationMessage.findMany({
+            where: { id: { in: latestIds } },
+            select: {
+              conversation_id: true,
+              body_format: true,
+              body_text: true,
+              body_html: true,
             },
-          }),
-        ]);
-        return { conversationId: row.id, lastMessage, unreadCount };
+          })
+        : Promise.resolve([]),
+      this.prisma.storeConversationMessage.groupBy({
+        by: ['conversation_id'],
+        where: {
+          sender_type: { not: ConversationSenderType.USER },
+          // 대화별 last_read_at이 달라 조건을 OR 분기로 배치한다(페이지 ≤50)
+          OR: rows.map((row) => ({
+            conversation_id: row.id,
+            ...(row.last_read_at
+              ? { created_at: { gt: row.last_read_at } }
+              : {}),
+          })),
+        },
+        _count: { _all: true },
       }),
+    ]);
+
+    const lastMessageById = new Map(
+      latestMessages.map((m) => [m.conversation_id.toString(), m]),
     );
+    const unreadById = new Map(
+      unreadGroups.map((g) => [g.conversation_id.toString(), g._count._all]),
+    );
+
+    return rows.map((row) => ({
+      conversationId: row.id,
+      lastMessage: lastMessageById.get(row.id.toString()) ?? null,
+      unreadCount: unreadById.get(row.id.toString()) ?? 0,
+    }));
   }
 
   async findConversationByIdAndAccount(args: {
@@ -219,14 +252,23 @@ export class ConversationRepository {
     });
   }
 
-  /** 구매자 읽음 처리 — last_read_at 갱신(메시지 조회의 부수효과로 호출된다). */
+  /**
+   * 구매자 읽음 처리 — 메시지 조회의 부수효과로 호출된다.
+   * 마커는 벽시계가 아니라 "실제로 내려준 최신 메시지의 created_at"까지만
+   * 전진시킨다(리뷰 반영) — 조회 후 커밋된 메시지가 응답에 없는데도 읽음
+   * 처리되는 레이스 방지. 과거 페이지 조회로 마커가 후퇴하지 않도록
+   * 단조 증가 조건을 건다.
+   */
   async markConversationRead(args: {
     conversationId: bigint;
-    now: Date;
+    readAt: Date;
   }): Promise<void> {
-    await this.prisma.storeConversation.update({
-      where: { id: args.conversationId },
-      data: { last_read_at: args.now },
+    await this.prisma.storeConversation.updateMany({
+      where: {
+        id: args.conversationId,
+        OR: [{ last_read_at: null }, { last_read_at: { lt: args.readAt } }],
+      },
+      data: { last_read_at: args.readAt },
     });
   }
 
