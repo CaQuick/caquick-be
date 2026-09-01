@@ -311,7 +311,8 @@ export class ConversationRepository {
     entries: ConversationMessageEntry[];
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const conversationId = await this.lockOrCreateConversation(tx, args);
+      const conversation = await this.lockOrCreateConversation(tx, args);
+      const conversationId = conversation.id;
       // 메시지 시각은 대화 잠금 획득 "이후"에 채번한다 — 잠금 밖에서 미리
       // 받은 시각은 커밋 순서와 어긋나, 늦게 커밋된 과거 시각 메시지가
       // 읽음 마커(last_read_at)를 건너뛰는 레이스를 만든다(리뷰 반영).
@@ -320,26 +321,32 @@ export class ConversationRepository {
 
       // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
       // 동시 첫 전송·실패 재시도에서 인사말 계약(항상 첫 메시지)을 깨뜨린다.
-      // 위에서 row를 잠갔거나(기존 대화) 본 트랜잭션이 만들었으므로(신규)
-      // count 판정은 직렬화된다.
-      const messageCount = await tx.storeConversationMessage.count({
-        where: { conversation_id: conversationId },
-      });
+      // 잠금 조회(FOR SHARE)로 최신 커밋 기준으로 센다(스냅샷 우회).
+      const messageCountRows = await tx.$queryRaw<{ c: bigint }[]>`
+        SELECT COUNT(*) AS c FROM store_conversation_message
+        WHERE conversation_id = ${conversationId} AND deleted_at IS NULL
+        FOR SHARE`;
+      const messageCount = Number(messageCountRows[0]?.c ?? 0n);
 
       // 이번 전송 "이전"의 미읽음 수신 메시지 — 읽음 마커 전진 가능 여부 판정용.
-      const current = await tx.storeConversation.findFirst({
-        where: { id: conversationId, deleted_at: undefined },
-        select: { last_read_at: true },
-      });
-      const pendingUnread = await tx.storeConversationMessage.count({
-        where: {
-          conversation_id: conversationId,
-          sender_type: { not: ConversationSenderType.USER },
-          ...(current?.last_read_at
-            ? { created_at: { gt: current.last_read_at } }
-            : {}),
-        },
-      });
+      // 잠금 조회(FOR SHARE)로 최신 커밋을 읽는다 — 트랜잭션 초입의 일반
+      // 조회가 만든 REPEATABLE READ 스냅샷은 잠금 대기 중 커밋된 판매자
+      // 답장을 못 본다(리뷰 반영). raw라 soft-delete 필터를 수동 명시.
+      const unreadRows = conversation.lastReadAt
+        ? await tx.$queryRaw<{ c: bigint }[]>`
+            SELECT COUNT(*) AS c FROM store_conversation_message
+            WHERE conversation_id = ${conversationId}
+              AND sender_type <> 'USER'
+              AND deleted_at IS NULL
+              AND created_at > ${conversation.lastReadAt}
+            FOR SHARE`
+        : await tx.$queryRaw<{ c: bigint }[]>`
+            SELECT COUNT(*) AS c FROM store_conversation_message
+            WHERE conversation_id = ${conversationId}
+              AND sender_type <> 'USER'
+              AND deleted_at IS NULL
+            FOR SHARE`;
+      const pendingUnread = Number(unreadRows[0]?.c ?? 0n);
 
       const toCreate: ConversationMessageEntry[] = [
         ...(messageCount === 0
@@ -409,13 +416,21 @@ export class ConversationRepository {
   private async lockOrCreateConversation(
     tx: Prisma.TransactionClient,
     args: { accountId: bigint; storeId: bigint },
-  ): Promise<bigint> {
-    const lockExisting = async (): Promise<bigint | null> => {
-      const rows = await tx.$queryRaw<{ id: bigint }[]>`
-        SELECT id FROM store_conversation
+  ): Promise<{ id: bigint; lastReadAt: Date | null }> {
+    // 잠금 조회가 돌려준 last_read_at을 그대로 쓴다 — 잠금 대기 중 커밋된
+    // 변경까지 반영된 최신 값이다(일반 조회의 스냅샷과 달리).
+    const lockExisting = async (): Promise<{
+      id: bigint;
+      lastReadAt: Date | null;
+    } | null> => {
+      const rows = await tx.$queryRaw<
+        { id: bigint; last_read_at: Date | null }[]
+      >`
+        SELECT id, last_read_at FROM store_conversation
         WHERE account_id = ${args.accountId} AND store_id = ${args.storeId}
         FOR UPDATE`;
-      return rows[0]?.id ?? null;
+      const row = rows[0];
+      return row ? { id: row.id, lastReadAt: row.last_read_at } : null;
     };
 
     // 사전 조회도 tx 경유 — 트랜잭션 안에서 루트 클라이언트를 쓰면 풀
@@ -444,7 +459,7 @@ export class ConversationRepository {
         },
         select: { id: true },
       });
-      return created.id;
+      return { id: created.id, lastReadAt: null };
     } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
