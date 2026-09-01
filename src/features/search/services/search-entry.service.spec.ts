@@ -198,6 +198,28 @@ describe('SearchEntryService (real DB)', () => {
       });
     });
 
+    // Banner 스키마에 링크 필드 상호 배타 제약이 없어 stale 값이 남을 수 있고,
+    // findFirstBanner의 where는 NONE/URL 배너의 link_*_id를 보지 않는다
+    it('linkType=NONE 배너에 stale 링크 값이 남아 있어도 노출하지 않는다', async () => {
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      await makeBanner({
+        link_type: 'NONE',
+        link_url: 'https://stale.caquick.dev',
+        link_product_id: product.id,
+        link_store_id: store.id,
+      });
+
+      expect(await service.searchBanner()).toMatchObject({
+        linkType: 'NONE',
+        linkUrl: null,
+        linkProductId: null,
+        linkProductStoreId: null,
+        linkStoreId: null,
+      });
+    });
+
     it('linkType=STORE 배너는 linkProductStoreId를 채우지 않는다', async () => {
       jest.spyOn(clock, 'now').mockReturnValue(now);
       const store = await createStore(prisma);
