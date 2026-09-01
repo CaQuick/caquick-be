@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -48,6 +49,8 @@ import type {
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {
+  private readonly logger = new Logger(SellerConversationService.name);
+
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
@@ -177,6 +180,28 @@ export class SellerConversationService extends SellerBaseService {
    * 저장 트랜잭션 밖의 부수효과라 실패해도 답장 자체는 성공으로 남는다.
    */
   private async publishSellerReplyEvents(args: {
+    conversation: {
+      id: bigint;
+      account_id: bigint;
+      last_read_at: Date | null;
+    };
+    storeId: bigint;
+    message: SellerConversationMessageOutput;
+  }): Promise<void> {
+    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 예외가
+    // 이미 저장된 답장을 실패로 둔갑시키면 재시도 중복이 난다(리뷰 반영).
+    try {
+      await this.doPublishSellerReplyEvents(args);
+    } catch (e) {
+      this.logger.warn(
+        `대화 이벤트 발행 실패 (conversationId=${args.conversation.id}): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  private async doPublishSellerReplyEvents(args: {
     conversation: {
       id: bigint;
       account_id: bigint;

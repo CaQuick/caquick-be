@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -27,6 +27,8 @@ import type {
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {
+  private readonly logger = new Logger(ConversationInquiryService.name);
+
   constructor(
     repo: ConversationRepository,
     private readonly events: ConversationEventsService,
@@ -178,6 +180,27 @@ export class ConversationInquiryService extends ConversationBaseService {
    * (구독자는 폴백 재조회 가능).
    */
   private async publishBuyerSendEvents(args: {
+    accountId: bigint;
+    storeId: bigint;
+    storeName: string;
+    conversationId: bigint;
+    messages: ConversationMessagesPayload['messages'];
+  }): Promise<void> {
+    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 여기서 나는
+    // 예외가 mutation을 실패로 둔갑시키면 클라이언트 재시도로 중복 전송이
+    // 난다(리뷰 반영). 실패는 경고 로그만 남긴다.
+    try {
+      await this.doPublishBuyerSendEvents(args);
+    } catch (e) {
+      this.logger.warn(
+        `대화 이벤트 발행 실패 (conversationId=${args.conversationId}): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  private async doPublishBuyerSendEvents(args: {
     accountId: bigint;
     storeId: bigint;
     storeName: string;

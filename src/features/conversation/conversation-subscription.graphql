@@ -10,7 +10,11 @@ extend type Subscription {
   sellerConversationUpdated: SellerConversationListUpdate!
 }
 
-"""구매자 대화 목록 갱신 이벤트"""
+"""
+구매자 대화 목록 갱신 이벤트.
+이벤트 간 도착 순서는 보장되지 않는다 — 구독자는 lastMessageAt을 비교해
+이미 표시 중인 상태보다 오래된 이벤트를 폐기해야 한다(메시지 스트림은 id 기준).
+"""
 type ConversationListUpdate {
   conversationId: ID!
   storeId: ID!
@@ -22,7 +26,7 @@ type ConversationListUpdate {
   unreadCount: Int!
 }
 
-"""판매자 대화 목록 갱신 이벤트"""
+"""판매자 대화 목록 갱신 이벤트. 도착 순서 비보장 — lastMessageAt 기준 폐기 규칙 동일."""
 type SellerConversationListUpdate {
   conversationId: ID!
   accountId: ID!
