@@ -13,6 +13,10 @@ import { BadRequestException } from '@nestjs/common';
 // DB UNSIGNED BIGINT 상한(2^64-1). 외부 입력 id의 범위 방어에 쓴다.
 export const MAX_UNSIGNED_BIGINT = 18446744073709551615n;
 
+// MySQL DATETIME 상한(9999-12-31 23:59:59.999 UTC). JS Date는 ±275760년까지
+// 허용해 그 사이 값이 커넥터 변환 오류로 번진다 — 커서 timestamp 상한.
+export const MAX_MYSQL_DATETIME_MS = Date.UTC(9999, 11, 31, 23, 59, 59, 999);
+
 export interface TimestampIdCursor {
   timestamp: Date;
   id: bigint;
@@ -31,7 +35,10 @@ export function parseTimestampIdCursor(
     throw new BadRequestException(errorMessage);
   }
   const timestamp = new Date(timestampMs);
-  if (Number.isNaN(timestamp.getTime())) {
+  if (
+    Number.isNaN(timestamp.getTime()) ||
+    timestampMs > MAX_MYSQL_DATETIME_MS
+  ) {
     throw new BadRequestException(errorMessage);
   }
   const id = BigInt(match[2]);

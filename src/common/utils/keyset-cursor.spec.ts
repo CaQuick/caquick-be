@@ -39,6 +39,17 @@ describe('keyset-cursor', () => {
     );
   });
 
+  it('MySQL DATETIME 상한(9999년)을 넘는 timestamp를 거부한다', () => {
+    // 연도 10000 — JS Date로는 유효하지만 MySQL DATETIME 범위 밖
+    expect(() => parseTimestampIdCursor('253402300800000:1', ERR)).toThrow(
+      BadRequestException,
+    );
+    // 상한 자체는 허용
+    expect(
+      parseTimestampIdCursor('253402300799999:1', ERR).timestamp.getTime(),
+    ).toBe(253402300799999);
+  });
+
   it('UNSIGNED BIGINT 상한을 넘는 id를 거부한다', () => {
     expect(() =>
       parseTimestampIdCursor(`1700000000000:${'9'.repeat(30)}`, ERR),
