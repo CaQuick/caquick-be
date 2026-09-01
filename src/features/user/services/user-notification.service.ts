@@ -118,6 +118,12 @@ export class UserNotificationService extends UserBaseService {
     if (!Number.isSafeInteger(createdAtMs)) {
       throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
     }
-    return { createdAt: new Date(createdAtMs), id: BigInt(match[2]) };
+    const createdAt = new Date(createdAtMs);
+    // 안전 정수여도 Date 지원 범위(±8.64e15ms) 밖이면 Invalid Date가 되어
+    // Prisma 필터에서 내부 오류로 번진다 — 형식 오류로 선제 거부한다.
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
+    }
+    return { createdAt, id: BigInt(match[2]) };
   }
 }

@@ -188,6 +188,10 @@ describe('UserNotificationService (real DB)', () => {
       await expect(
         service.myNotifications(account.id, { cursor: `${'9'.repeat(30)}:1` }),
       ).rejects.toThrow(BadRequestException);
+      // 안전 정수지만 Date 지원 범위(±8.64e15ms)를 넘는 timestamp
+      await expect(
+        service.myNotifications(account.id, { cursor: '9000000000000000:1' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('3개월 지난 알림은 목록·totalCount에서 제외한다', async () => {
