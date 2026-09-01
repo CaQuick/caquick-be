@@ -37,7 +37,7 @@ describe('toNotificationItem', () => {
     });
   });
 
-  it('직접 연결(store/product/review)을 우선 사용한다', () => {
+  it('주문이 없는 알림(리뷰 좋아요)은 직접 연결의 현재 상품명을 쓴다', () => {
     const item = toNotificationItem(
       baseRow({
         event: 'REVIEW_LIKED',
@@ -46,17 +46,6 @@ describe('toNotificationItem', () => {
         review_id: BigInt(30),
         store: { store_name: '달콤 케이크' },
         product: { name: '크리스마스 케이크' },
-        // 직접 컬럼이 있으면 order 폴백은 쓰지 않는다
-        order: {
-          items: [
-            {
-              store_id: BigInt(99),
-              product_id: BigInt(98),
-              product_name_snapshot: '스냅샷',
-              store: { store_name: '다른 매장' },
-            },
-          ],
-        },
       }),
     );
 
@@ -67,6 +56,38 @@ describe('toNotificationItem', () => {
       productId: '20',
       productName: '크리스마스 케이크',
       reviewId: '30',
+    });
+  });
+
+  it('주문 연결 알림은 product 직접 연결이 있어도 상품명은 스냅샷을 우선한다', () => {
+    const item = toNotificationItem(
+      baseRow({
+        event: 'ORDER_CONFIRMED',
+        order_id: BigInt(5),
+        store_id: BigInt(10),
+        product_id: BigInt(20),
+        store: { store_name: '달콤 케이크' },
+        // 체크아웃 이후 개명된 현재 상품명 — 알림에는 노출되면 안 된다
+        product: { name: '개명된 케이크' },
+        order: {
+          items: [
+            {
+              store_id: BigInt(10),
+              product_id: BigInt(20),
+              product_name_snapshot: '주문 시점 상품명',
+              store: { store_name: '달콤 케이크' },
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(item).toMatchObject({
+      orderId: '5',
+      storeId: '10',
+      storeName: '달콤 케이크',
+      productId: '20',
+      productName: '주문 시점 상품명',
     });
   });
 
