@@ -188,6 +188,10 @@ describe('ConversationInquiryService (real DB)', () => {
       });
       expect(result.conversationId).toBe(conversation.id.toString());
       expect(conversation.last_message_at).not.toBeNull();
+      // 응답으로 인사말까지 즉시 표시되므로 여기까지 읽음 처리돼야 한다
+      expect(conversation.last_read_at?.getTime()).toBe(
+        conversation.last_message_at?.getTime(),
+      );
       expect(await messagesOf(conversation.id)).toHaveLength(2);
     });
 
@@ -213,6 +217,40 @@ describe('ConversationInquiryService (real DB)', () => {
       // 계정당 매장당 대화 1개 유지(중복 생성 없음)
       expect(conversations).toHaveLength(1);
       expect(await messagesOf(conversations[0].id)).toHaveLength(3);
+    });
+
+    it('미읽음 판매자 답장이 있는 대화에 전송해도 읽음 마커를 전진시키지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '첫 문의',
+      });
+      const conversation = await prisma.storeConversation.findFirstOrThrow({
+        where: { account_id: buyer.id, store_id: store.id },
+      });
+      // 판매자 답장(미읽음) 도착 재현
+      await prisma.storeConversationMessage.create({
+        data: {
+          conversation_id: conversation.id,
+          sender_type: 'STORE',
+          body_format: 'TEXT',
+          body_text: '아직 안 읽은 답장',
+          created_at: new Date(Date.now() + 1000),
+        },
+      });
+      const markerBefore = conversation.last_read_at;
+
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '추가 문의',
+      });
+
+      // 백로그가 있으면 마커 유지 — 안 본 답장이 읽음 처리되면 안 된다
+      const after = await prisma.storeConversation.findUniqueOrThrow({
+        where: { id: conversation.id },
+      });
+      expect(after.last_read_at?.getTime()).toBe(markerBefore?.getTime());
     });
 
     it('soft-delete된 대화가 있으면 유니크 충돌 없이 그 대화를 재사용한다', async () => {

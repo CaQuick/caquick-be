@@ -125,7 +125,6 @@ describe('ConversationRepository (real DB)', () => {
     it('메시지 생성 시 conversation.last_message_at/updated_at을 트랜잭션 안에서 갱신한다', async () => {
       const { store, conversation } = await setupConversation();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
-      const now = new Date('2026-04-22T12:00:00Z');
 
       const message = await repo.createSellerConversationMessage({
         conversationId: conversation.id,
@@ -133,7 +132,6 @@ describe('ConversationRepository (real DB)', () => {
         bodyFormat: 'TEXT',
         bodyText: '판매자 응답',
         bodyHtml: null,
-        now,
       });
 
       expect(message.sender_type).toBe('STORE');
@@ -143,8 +141,9 @@ describe('ConversationRepository (real DB)', () => {
       const updatedConv = await prisma.storeConversation.findUniqueOrThrow({
         where: { id: conversation.id },
       });
-      expect(updatedConv.last_message_at?.toISOString()).toBe(
-        now.toISOString(),
+      // 시각은 대화 잠금 아래에서 repository가 채번한다 — 메시지와 동일해야 함
+      expect(updatedConv.last_message_at?.getTime()).toBe(
+        message.created_at.getTime(),
       );
       expect(updatedConv.store_id).toBe(store.id);
     });

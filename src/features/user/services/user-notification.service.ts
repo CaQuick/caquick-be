@@ -1,14 +1,13 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
+import {
+  buildTimestampIdCursor,
+  parseTimestampIdCursor,
+} from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
 import { USER_NOTIFICATION_ERRORS } from '@/features/user/constants/user-notification-error-messages';
 import {
   DEFAULT_PAGINATION_LIMIT,
-  MAX_UNSIGNED_BIGINT,
   NOTIFICATION_VISIBLE_MONTHS,
 } from '@/features/user/constants/user.constants';
 import type { MyNotificationsInput } from '@/features/user/dto/inputs/my-notifications.input';
@@ -55,10 +54,8 @@ export class UserNotificationService extends UserBaseService {
     });
 
     // (created_at, id) desc 정렬과 결합된 커서 — 정렬이 바뀌면 무효다.
-    const page = sliceCursorPage(
-      result.items,
-      limit,
-      (last) => `${last.created_at.getTime()}:${last.id.toString()}`,
+    const page = sliceCursorPage(result.items, limit, (last) =>
+      buildTimestampIdCursor(last.created_at, last.id),
     );
 
     return {
@@ -106,31 +103,15 @@ export class UserNotificationService extends UserBaseService {
     return since;
   }
 
-  /** 커서 파싱: "<createdAtMs>:<id>". 형식·안전 정수 범위를 벗어나면 거부. */
+  /** 커서 파싱: "<createdAtMs>:<id>". 형식·범위 방어는 공용 유틸이 담당. */
   private parseNotificationCursor(raw: string): {
     createdAt: Date;
     id: bigint;
   } {
-    const match = /^(\d+):(\d+)$/.exec(raw);
-    if (!match) {
-      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
-    }
-    const createdAtMs = Number(match[1]);
-    if (!Number.isSafeInteger(createdAtMs)) {
-      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
-    }
-    const createdAt = new Date(createdAtMs);
-    // 안전 정수여도 Date 지원 범위(±8.64e15ms) 밖이면 Invalid Date가 되어
-    // Prisma 필터에서 내부 오류로 번진다 — 형식 오류로 선제 거부한다.
-    if (Number.isNaN(createdAt.getTime())) {
-      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
-    }
-    const id = BigInt(match[2]);
-    // id 컬럼은 UNSIGNED BIGINT — 그 최댓값을 넘는 값도 커넥터 범위 오류로
-    // 번지기 전에 형식 오류로 거부한다.
-    if (id > MAX_UNSIGNED_BIGINT) {
-      throw new BadRequestException(USER_NOTIFICATION_ERRORS.INVALID_CURSOR);
-    }
-    return { createdAt, id };
+    const cursor = parseTimestampIdCursor(
+      raw,
+      USER_NOTIFICATION_ERRORS.INVALID_CURSOR,
+    );
+    return { createdAt: cursor.timestamp, id: cursor.id };
   }
 }

@@ -39,3 +39,27 @@ export interface ConversationMessagesPayload {
   conversationId: string;
   messages: ConversationMessageOutput[];
 }
+
+export interface MyConversationItemOutput {
+  id: string;
+  storeId: string;
+  storeName: string;
+  storeProfileImageUrl: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: Date;
+  unreadCount: number;
+}
+
+export interface MyConversationConnection {
+  items: MyConversationItemOutput[];
+  totalCount: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface ConversationMessageConnection {
+  items: ConversationMessageOutput[];
+  totalCount: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}

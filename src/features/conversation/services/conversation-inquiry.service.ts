@@ -1,9 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -16,6 +11,7 @@ import {
   ConversationRepository,
   type ConversationMessageEntry,
 } from '@/features/conversation/repositories/conversation.repository';
+import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import {
   renderGreeting,
   toConversationMessageOutput,
@@ -25,11 +21,12 @@ import type {
   ConversationMessagesPayload,
   StoreInquiryContextOutput,
 } from '@/features/conversation/types/conversation-output.type';
-import { evaluateActiveUserAccount } from '@/features/user';
 
 @Injectable()
-export class ConversationInquiryService {
-  constructor(private readonly repo: ConversationRepository) {}
+export class ConversationInquiryService extends ConversationBaseService {
+  constructor(repo: ConversationRepository) {
+    super(repo);
+  }
 
   async storeInquiryContext(
     accountId: bigint,
@@ -152,34 +149,12 @@ export class ConversationInquiryService {
         storeName: args.storeName,
       }),
       entries: args.entries,
-      now: new Date(),
     });
 
     return {
       conversationId: result.conversationId.toString(),
       messages: result.messages.map(toConversationMessageOutput),
     };
-  }
-
-  /** user feature의 활성 USER 판정 정책을 공유한다(메시지 매핑만 도메인별). */
-  private async requireActiveUser(
-    accountId: bigint,
-  ): Promise<{ nickname: string }> {
-    const account = await this.repo.findUserAccountForInquiry(accountId);
-    switch (evaluateActiveUserAccount(account)) {
-      case 'ACCOUNT_NOT_FOUND':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.ACCOUNT_NOT_FOUND);
-      case 'ACCOUNT_DELETED':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.ACCOUNT_DELETED);
-      case 'NOT_USER':
-        throw new ForbiddenException(CONVERSATION_ERRORS.NOT_USER);
-      case 'PROFILE_INACTIVE':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.PROFILE_INACTIVE);
-      case null:
-        break;
-    }
-    // evaluate 통과 시 user_profile 존재가 보장된다
-    return { nickname: account!.user_profile!.nickname };
   }
 
   private async requireInquiryStore(storeId: bigint) {
