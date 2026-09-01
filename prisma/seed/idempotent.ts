@@ -109,6 +109,21 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     });
 
     // 알림
+    // 대화(메시지 → 본체). 시드 유저 소유 대화만 정리한다
+    const userConversations = await prisma.storeConversation.findMany({
+      where: { account_id: { in: userIds } },
+      select: { id: true },
+    });
+    const userConversationIds = userConversations.map((c) => c.id);
+    if (userConversationIds.length > 0) {
+      await prisma.storeConversationMessage.deleteMany({
+        where: { conversation_id: { in: userConversationIds } },
+      });
+      await prisma.storeConversation.deleteMany({
+        where: { id: { in: userConversationIds } },
+      });
+    }
+
     await prisma.notification.deleteMany({
       where: { account_id: { in: userIds } },
     });
@@ -243,6 +258,24 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
 
       await prisma.product.deleteMany({ where: { id: { in: productIds } } });
     }
+
+    // 시드 매장을 참조하는 대화(다른 유저 소유 포함)와 FAQ — store FK 선정리
+    const storeConversations = await prisma.storeConversation.findMany({
+      where: { store_id: { in: storeIds } },
+      select: { id: true },
+    });
+    const storeConversationIds = storeConversations.map((c) => c.id);
+    if (storeConversationIds.length > 0) {
+      await prisma.storeConversationMessage.deleteMany({
+        where: { conversation_id: { in: storeConversationIds } },
+      });
+      await prisma.storeConversation.deleteMany({
+        where: { id: { in: storeConversationIds } },
+      });
+    }
+    await prisma.storeFaqTopic.deleteMany({
+      where: { store_id: { in: storeIds } },
+    });
 
     await prisma.storeBusinessHour.deleteMany({
       where: { store_id: { in: storeIds } },

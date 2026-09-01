@@ -359,6 +359,8 @@ model Store {
   website_url String? @db.VarChar(2048)
   // 매장 프로필(로고) 이미지. 찜/매장별 보기 카드의 원형 프로필 표기용 (figma liked 02·04)
   profile_image_url String? @db.VarChar(2048)
+  // 문의 채팅 인사말 템플릿({nickname}/{storeName} 치환). null이면 서버 기본 문구 (figma notification-center)
+  greeting_message String? @db.VarChar(500)
   is_active         Boolean @default(true) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)

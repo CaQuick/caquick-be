@@ -188,5 +188,28 @@ describe('SellerStoreProfileService (real DB)', () => {
       } as unknown as SellerUpdateStoreBasicInfoInput);
       expect(removed.profileImageUrl).toBeNull();
     });
+
+    it('greetingMessage를 설정하고, 빈 문자열이면 null로 되돌린다(기본 인사말 사용)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+
+      const set = await service.sellerUpdateStoreBasicInfo(account.id, {
+        greetingMessage: '{nickname}님 반가워요! {storeName}입니다.',
+      });
+      expect(set.greetingMessage).toBe(
+        '{nickname}님 반가워요! {storeName}입니다.',
+      );
+      const dbStore = await prisma.store.findUniqueOrThrow({
+        where: { id: store.id },
+      });
+      expect(dbStore.greeting_message).toBe(
+        '{nickname}님 반가워요! {storeName}입니다.',
+      );
+
+      // 빈 문자열 → null 저장(문의 채팅은 서버 기본 문구로 동작)
+      const cleared = await service.sellerUpdateStoreBasicInfo(account.id, {
+        greetingMessage: '   ',
+      });
+      expect(cleared.greetingMessage).toBeNull();
+    });
   });
 });

@@ -122,6 +122,8 @@ input SellerUpdateStoreBasicInfoInput {
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. null 전달 시 제거."""
   profileImageUrl: String
+  """문의 채팅 인사말 템플릿. 빈 문자열이면 기본 문구로 되돌린다(null 저장)."""
+  greetingMessage: String
 }
 
 """SellerUpsertStoreBusinessHourInput 입력 타입"""

@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 
 import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
+import { seedConversations } from './seed/conversations';
 import { seedCustomDrafts } from './seed/custom-drafts';
 import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
@@ -62,6 +63,9 @@ async function main(): Promise<void> {
 
     log('알림 시드 중...');
     await seedNotifications(prisma, { users, stores, orders });
+
+    log('대화 + FAQ 시드 중...');
+    await seedConversations(prisma, { users, stores });
 
     log('커스텀 드래프트 시드 중...');
     await seedCustomDrafts(prisma, { users, stores });
