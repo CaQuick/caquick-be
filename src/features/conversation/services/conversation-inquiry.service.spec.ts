@@ -236,6 +236,11 @@ describe('ConversationInquiryService (real DB)', () => {
       // 기존 대화 재사용이므로 인사말은 다시 저장하지 않는다
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0].senderType).toBe('USER');
+      // 재사용 시 복구 — 삭제 상태로 두면 어느 조회에도 잡히지 않는다
+      const restored = await prisma.storeConversation.findUniqueOrThrow({
+        where: { id: softDeleted.id },
+      });
+      expect(restored.deleted_at).toBeNull();
     });
 
     it('공백뿐인 본문·2000자 초과 본문은 거절한다', async () => {

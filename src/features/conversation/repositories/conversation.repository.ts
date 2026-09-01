@@ -129,11 +129,8 @@ export class ConversationRepository {
   }
 
   /**
-   * 구매자 메시지 저장. 대화가 없으면 이 트랜잭션에서 생성하고, 그 경우에만
-   * 인사말(STORE 발신)을 유저 메시지보다 먼저 저장한다 — 인사말은 대화당 1회.
-   *
-   * 동시 첫 전송 레이스: findFirst 이후 create가 (account_id, store_id) 유니크에
-   * 걸릴 수 있다 → P2002면 기존 대화를 다시 찾아 인사말 없이 이어간다.
+   * 구매자 메시지 저장. 대화가 없으면 먼저 생성하고, 새로 생성한 경우에만
+   * 인사말(STORE 발신)을 유저 메시지보다 앞서 저장한다 — 인사말은 대화당 1회.
    */
   async createBuyerMessages(args: {
     accountId: bigint;
@@ -142,62 +139,29 @@ export class ConversationRepository {
     entries: ConversationMessageEntry[];
     now: Date;
   }) {
-    return this.prisma.$transaction(async (tx) => {
-      // (account_id, store_id) 유니크는 soft-delete된 row도 잡는다 — 조회를
-      // 활성만으로 좁히면 삭제 row 존재 시 create가 항상 P2002로 터지므로,
-      // deleted_at 필터를 명시 해제(undefined)해 유니크 제약과 같은 범위로 찾는다.
-      let conversation = await tx.storeConversation.findFirst({
-        where: {
-          account_id: args.accountId,
-          store_id: args.storeId,
-          deleted_at: undefined,
-        },
-      });
+    // 대화 확보는 메시지 트랜잭션 밖에서 수행한다 — REPEATABLE READ 스냅샷
+    // 안에서 P2002 복구 재조회를 하면 경쟁 트랜잭션이 커밋한 row가 보이지
+    // 않을 수 있다(리뷰 반영). 메시지 삽입 전에 대화 row가 확정되면 충분하고,
+    // 이후 메시지 트랜잭션이 실패해도 빈 대화 row는 목록에 노출되지 않는다
+    // (last_message_at null).
+    const { conversation, created } = await this.getOrCreateConversation(args);
 
-      let withGreeting = false;
-      if (!conversation) {
-        try {
-          conversation = await tx.storeConversation.create({
-            data: {
-              account_id: args.accountId,
-              store_id: args.storeId,
-              created_at: args.now,
+    const toCreate: ConversationMessageEntry[] = [
+      ...(created
+        ? [
+            {
+              senderType: ConversationSenderType.STORE,
+              senderAccountId: null,
+              bodyFormat: ConversationBodyFormat.TEXT,
+              bodyText: args.greetingBodyText,
+              bodyHtml: null,
             },
-          });
-          withGreeting = true;
-        } catch (e) {
-          if (
-            e instanceof Prisma.PrismaClientKnownRequestError &&
-            e.code === 'P2002'
-          ) {
-            conversation = await tx.storeConversation.findFirstOrThrow({
-              where: {
-                account_id: args.accountId,
-                store_id: args.storeId,
-                deleted_at: undefined,
-              },
-            });
-          } else {
-            throw e;
-          }
-        }
-      }
+          ]
+        : []),
+      ...args.entries,
+    ];
 
-      const toCreate: ConversationMessageEntry[] = [
-        ...(withGreeting
-          ? [
-              {
-                senderType: ConversationSenderType.STORE,
-                senderAccountId: null,
-                bodyFormat: ConversationBodyFormat.TEXT,
-                bodyText: args.greetingBodyText,
-                bodyHtml: null,
-              },
-            ]
-          : []),
-        ...args.entries,
-      ];
-
+    return this.prisma.$transaction(async (tx) => {
       // createMany는 생성 row를 돌려주지 않아 순서 보존 개별 create로 저장한다
       // (한 호출당 최대 3건이라 비용 문제 없음)
       const messages = [];
@@ -219,11 +183,65 @@ export class ConversationRepository {
 
       await tx.storeConversation.update({
         where: { id: conversation.id },
-        data: { last_message_at: args.now, updated_at: args.now },
+        data: {
+          last_message_at: args.now,
+          updated_at: args.now,
+          // soft-delete된 대화를 재사용한 경우 복구한다 — 삭제 상태로 두면
+          // 구매자·판매자 어느 조회에도 잡히지 않아 메시지가 유실돼 보인다
+          // (리뷰 반영). 평상시엔 이미 null이라 no-op.
+          deleted_at: null,
+        },
       });
 
       return { conversationId: conversation.id, messages };
     });
+  }
+
+  /**
+   * (account_id, store_id) 대화 확보. 유니크 제약은 soft-delete row도 잡으므로
+   * 조회 범위를 제약과 동일하게(삭제 포함, deleted_at 필터 명시 해제) 맞춘다.
+   * 동시 첫 전송 레이스는 P2002 후 새 문장(새 스냅샷) 재조회로 승자 row를 얻는다.
+   */
+  private async getOrCreateConversation(args: {
+    accountId: bigint;
+    storeId: bigint;
+    now: Date;
+  }) {
+    const existing = await this.prisma.storeConversation.findFirst({
+      where: {
+        account_id: args.accountId,
+        store_id: args.storeId,
+        deleted_at: undefined,
+      },
+    });
+    if (existing) return { conversation: existing, created: false };
+
+    try {
+      const conversation = await this.prisma.storeConversation.create({
+        data: {
+          account_id: args.accountId,
+          store_id: args.storeId,
+          created_at: args.now,
+        },
+      });
+      return { conversation, created: true };
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        const conversation =
+          await this.prisma.storeConversation.findFirstOrThrow({
+            where: {
+              account_id: args.accountId,
+              store_id: args.storeId,
+              deleted_at: undefined,
+            },
+          });
+        return { conversation, created: false };
+      }
+      throw e;
+    }
   }
 
   async createSellerConversationMessage(args: {

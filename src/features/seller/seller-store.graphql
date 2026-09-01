@@ -58,6 +58,8 @@ type SellerStore {
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. 미등록 시 null."""
   profileImageUrl: String
+  """문의 채팅 인사말 템플릿({nickname}/{storeName} 치환). null이면 기본 문구."""
+  greetingMessage: String
   pickupSlotIntervalMinutes: Int!
   minLeadTimeMinutes: Int!
   maxDaysAhead: Int!
