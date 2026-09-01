@@ -96,6 +96,7 @@ describe('ConversationEventsService (real Redis)', () => {
       storeName: '해즈 케이크',
       lastMessagePreview: '답변 드리겠습니다',
       lastMessageAt: '2026-08-01T12:00:00.000Z',
+      lastReadAt: null,
       unreadCount: 2,
     });
     await service.publishSellerListUpdate('3', {
@@ -128,6 +129,7 @@ describe('ConversationEventsService (real Redis)', () => {
         storeName: '매장',
         lastMessagePreview: null,
         lastMessageAt: '2026-08-01T12:00:00.000Z',
+        lastReadAt: null,
         unreadCount: 0,
       }),
     ).resolves.toBeUndefined();

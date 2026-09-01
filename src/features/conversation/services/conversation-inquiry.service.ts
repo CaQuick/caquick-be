@@ -224,15 +224,21 @@ export class ConversationInquiryService extends ConversationBaseService {
     const lastMessageAtIso = (
       snapshot?.conversation.last_message_at ?? lastMessage.createdAt
     ).toISOString();
+    const lastReadAtIso =
+      snapshot?.conversation.last_read_at?.toISOString() ?? null;
     const unreadCount = snapshot?.unreadCount ?? 0;
+    // 매장명도 스냅샷 값을 우선한다 — 최초 조회 후 개명되면 최신 메시지
+    // 상태에 옛 이름이 실려 나갈 수 있다(리뷰 반영)
+    const storeName = snapshot?.conversation.store.store_name ?? args.storeName;
 
     await this.events.publishMessagesAdded(args.messages);
     await this.events.publishBuyerListUpdate(args.accountId.toString(), {
       conversationId: args.conversationId.toString(),
       storeId: args.storeId.toString(),
-      storeName: args.storeName,
+      storeName,
       lastMessagePreview: preview,
       lastMessageAt: lastMessageAtIso,
+      lastReadAt: lastReadAtIso,
       unreadCount,
     });
     await this.events.publishSellerListUpdate(args.storeId.toString(), {

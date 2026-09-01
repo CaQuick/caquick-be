@@ -84,6 +84,7 @@ export interface ConversationListUpdateEvent {
   storeName: string;
   lastMessagePreview: string | null;
   lastMessageAt: string;
+  lastReadAt: string | null;
   unreadCount: number;
 }
 

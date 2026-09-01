@@ -233,6 +233,8 @@ export class SellerConversationService extends SellerBaseService {
       snapshot?.conversation.last_message_at ?? args.message.createdAt
     ).toISOString();
     const storeName = snapshot?.conversation.store.store_name ?? '';
+    const lastReadAtIso =
+      snapshot?.conversation.last_read_at?.toISOString() ?? null;
 
     await this.conversationEvents.publishMessagesAdded([message]);
     await this.conversationEvents.publishBuyerListUpdate(
@@ -243,6 +245,7 @@ export class SellerConversationService extends SellerBaseService {
         storeName,
         lastMessagePreview: preview,
         lastMessageAt: lastMessageAtIso,
+        lastReadAt: lastReadAtIso,
         unreadCount: snapshot?.unreadCount ?? 0,
       },
     );
