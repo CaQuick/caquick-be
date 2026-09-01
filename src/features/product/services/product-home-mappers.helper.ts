@@ -17,6 +17,7 @@ export function toHomeBanner(row: HomeBannerRow): HomeBanner {
     linkType: row.link_type,
     linkUrl: row.link_url,
     linkProductId: row.link_product_id?.toString() ?? null,
+    linkProductStoreId: row.link_product?.store_id.toString() ?? null,
     linkStoreId: row.link_store_id?.toString() ?? null,
     linkCategoryId: row.link_category_id?.toString() ?? null,
   };

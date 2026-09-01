@@ -10,6 +10,7 @@ export interface HomeBanner {
   linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
   linkUrl: string | null;
   linkProductId: string | null;
+  linkProductStoreId: string | null;
   linkStoreId: string | null;
   linkCategoryId: string | null;
 }

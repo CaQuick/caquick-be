@@ -68,6 +68,8 @@ export interface HomeBannerRow {
   link_type: BannerLinkType;
   link_url: string | null;
   link_product_id: bigint | null;
+  /** linkType=PRODUCT 상세 URL 구성용 소속 매장. 그 외 linkType이면 null. */
+  link_product: { store_id: bigint } | null;
   link_store_id: bigint | null;
   link_category_id: bigint | null;
 }
@@ -1299,6 +1301,10 @@ export class ProductRepository {
         link_type: true,
         link_url: true,
         link_product_id: true,
+        // 상세 URL(/store/{storeId}/products/{id}) 구성용 소속 매장 —
+        // where가 link_product를 visibleWhere + store: visibleWhere로 이미 게이트하므로
+        // nested select에 활성 조건을 중복하지 않는다.
+        link_product: { select: { store_id: true } },
         link_store_id: true,
         link_category_id: true,
       },
