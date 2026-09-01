@@ -61,7 +61,7 @@ async function main(): Promise<void> {
     await seedRecentViews(prisma, { users, stores });
 
     log('알림 시드 중...');
-    await seedNotifications(prisma, { users });
+    await seedNotifications(prisma, { users, stores, orders });
 
     log('커스텀 드래프트 시드 중...');
     await seedCustomDrafts(prisma, { users, stores });

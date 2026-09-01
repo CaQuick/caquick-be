@@ -17,8 +17,8 @@ describe('notification-payloads.helper', () => {
       ).toEqual({
         type: NotificationType.ORDER_STATUS,
         event: NotificationEvent.ORDER_CONFIRMED,
-        title: '주문이 확정되었습니다',
-        body: 'ORD-1 주문이 확정되었습니다.',
+        title: '주문확정',
+        body: 'ORD-1 주문이 확정되었어요.',
       });
     });
 
@@ -26,16 +26,16 @@ describe('notification-payloads.helper', () => {
       expect(buildOrderStatusNotification('ORD-2', OrderStatus.MADE)).toEqual({
         type: NotificationType.ORDER_STATUS,
         event: NotificationEvent.ORDER_MADE,
-        title: '주문이 제작 완료되었습니다',
-        body: 'ORD-2 주문의 상품 제작이 완료되었습니다.',
+        title: '제작완료',
+        body: 'ORD-2 주문하신 케이크 제작이 완료되었어요.',
       });
       expect(
         buildOrderStatusNotification('ORD-3', OrderStatus.PICKED_UP),
       ).toEqual({
         type: NotificationType.ORDER_STATUS,
         event: NotificationEvent.ORDER_PICKED_UP,
-        title: '주문이 픽업 처리되었습니다',
-        body: 'ORD-3 주문이 픽업 완료 처리되었습니다.',
+        title: '픽업완료',
+        body: 'ORD-3 케이크 픽업이 완료되었어요.',
       });
     });
 
@@ -54,8 +54,8 @@ describe('notification-payloads.helper', () => {
       expect(buildReviewLikedNotification()).toEqual({
         type: NotificationType.REVIEW_LIKE,
         event: NotificationEvent.REVIEW_LIKED,
-        title: '리뷰에 좋아요가 추가되었습니다',
-        body: '회원님의 리뷰를 다른 사용자가 좋아합니다.',
+        title: '리뷰 좋아요',
+        body: '다른 사람이 내가 남긴 리뷰를 좋아했어요.',
       });
     });
   });
