@@ -12,6 +12,7 @@ import {
   type ConversationMessageEntry,
 } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
+import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
 import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import {
@@ -185,9 +186,11 @@ export class ConversationInquiryService extends ConversationBaseService {
   }): Promise<void> {
     const lastMessage = args.messages[args.messages.length - 1];
     if (!lastMessage) return;
-    // 시각은 repository가 잠금 아래 채번한 저장 시각을 그대로 쓴다
-    const lastMessageAtIso = lastMessage.createdAt.toISOString();
 
+    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 다시 읽어 조립한다 —
+    // 동시 전송에서 잠금 해제 후 발행 순서가 커밋 순서와 어긋나도, 늦게
+    // 발행된 이벤트가 과거 미리보기/시각으로 화면을 되돌리지 않는다
+    // (리뷰 반영). 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
     const conversation = await this.repo.findConversationByAccountAndStore({
       accountId: args.accountId,
       storeId: args.storeId,
@@ -198,7 +201,13 @@ export class ConversationInquiryService extends ConversationBaseService {
         ])
       : [undefined];
 
-    const preview = toEventPreview(lastMessage);
+    const preview = extras
+      ? toLastMessagePreview(extras.lastMessage)
+      : toEventPreview(lastMessage);
+    const lastMessageAtIso = (
+      conversation?.last_message_at ?? lastMessage.createdAt
+    ).toISOString();
+
     await this.events.publishMessagesAdded(args.messages);
     await this.events.publishBuyerListUpdate(args.accountId.toString(), {
       conversationId: args.conversationId.toString(),

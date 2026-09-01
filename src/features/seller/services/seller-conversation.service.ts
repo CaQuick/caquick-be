@@ -20,6 +20,7 @@ import {
   ConversationEventsService,
   ConversationRepository,
   toEventPreview,
+  toLastMessagePreview,
 } from '@/features/conversation';
 import {
   BODY_HTML_REQUIRED,
@@ -193,18 +194,29 @@ export class SellerConversationService extends SellerBaseService {
       bodyHtml: args.message.bodyHtml,
       createdAt: args.message.createdAt,
     };
-    const preview = toEventPreview(message);
-    const lastMessageAtIso = args.message.createdAt.toISOString();
-
-    const [store, [extras]] = await Promise.all([
+    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 다시 읽어 조립한다 —
+    // 동시 전송에서 발행 순서가 커밋 순서와 어긋나도 늦은 이벤트가 과거
+    // 상태로 화면을 되돌리지 않는다(리뷰 반영). 메시지 스트림은 id 정렬.
+    const [store, fresh] = await Promise.all([
       this.conversationRepository.findStoreNameById(args.storeId),
-      this.conversationRepository.getConversationListExtras([
+      this.conversationRepository.findConversationByIdAndStore({
+        conversationId: args.conversation.id,
+        storeId: args.storeId,
+      }),
+    ]);
+    const [extras] =
+      await this.conversationRepository.getConversationListExtras([
         {
           id: args.conversation.id,
-          last_read_at: args.conversation.last_read_at,
+          last_read_at: fresh?.last_read_at ?? args.conversation.last_read_at,
         },
-      ]),
-    ]);
+      ]);
+    const preview = extras
+      ? toLastMessagePreview(extras.lastMessage)
+      : toEventPreview(message);
+    const lastMessageAtIso = (
+      fresh?.last_message_at ?? args.message.createdAt
+    ).toISOString();
 
     await this.conversationEvents.publishMessagesAdded([message]);
     await this.conversationEvents.publishBuyerListUpdate(

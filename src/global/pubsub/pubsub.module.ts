@@ -23,7 +23,11 @@ import { PUB_SUB } from '@/global/pubsub/pubsub.constants';
         const options: RedisOptions = {
           // Redis 미기동 시 부팅을 막지 않고 재시도만 한다(로컬 DX)
           retryStrategy: (times: number) => Math.min(times * 500, 5000),
-          maxRetriesPerRequest: null,
+          // 발행은 DB 커밋 이후의 부수효과 — 무한 재시도(null)로 두면 Redis
+          // 장애 시 mutation 응답이 매달린다(리뷰 반영). 짧게 실패시키고
+          // 실패 처리는 발행부(try/catch)가 담당한다.
+          maxRetriesPerRequest: 2,
+          enableOfflineQueue: false,
         };
         return new RedisPubSub({
           publisher: new Redis(redisConfig.url, options),

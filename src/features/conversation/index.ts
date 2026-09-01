@@ -4,3 +4,4 @@ export { ConversationRepository } from '@/features/conversation/repositories/con
 // subscription 이벤트 발행/구독 어댑터 — 판매자 답장(seller feature)도 같은 토픽을 쓴다.
 export { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 export { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
+export { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';

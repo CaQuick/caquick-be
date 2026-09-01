@@ -3,6 +3,7 @@
  * payload가 구독자에게 그대로 도착하는지까지 확인한다(DB 불필요).
  */
 import { RedisPubSub } from 'graphql-redis-subscriptions';
+import type { PubSubEngine } from 'graphql-subscriptions';
 import Redis from 'ioredis';
 import { GenericContainer, type StartedTestContainer } from 'testcontainers';
 
@@ -112,5 +113,36 @@ describe('ConversationEventsService (real Redis)', () => {
       accountId: '7',
       lastMessagePreview: '픽업 문의',
     });
+  });
+
+  it('발행 실패는 삼킨다 — 커밋된 전송을 Redis 장애가 실패로 만들지 않는다', async () => {
+    const failing = {
+      publish: jest.fn().mockRejectedValue(new Error('redis down')),
+    } as unknown as PubSubEngine;
+    const failingService = new ConversationEventsService(failing);
+
+    await expect(
+      failingService.publishBuyerListUpdate('1', {
+        conversationId: '1',
+        storeId: '2',
+        storeName: '매장',
+        lastMessagePreview: null,
+        lastMessageAt: '2026-08-01T12:00:00.000Z',
+        unreadCount: 0,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      failingService.publishMessagesAdded([
+        {
+          id: '1',
+          conversationId: '1',
+          senderType: 'USER',
+          bodyFormat: 'TEXT',
+          bodyText: '문의',
+          bodyHtml: null,
+          createdAt: new Date(),
+        },
+      ]),
+    ).resolves.toBeUndefined();
   });
 });

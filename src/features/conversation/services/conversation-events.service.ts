@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PubSubEngine } from 'graphql-subscriptions';
 
 import { toConversationMessageEvent } from '@/features/conversation/services/conversation-events-mappers.helper';
@@ -16,7 +16,26 @@ import { PUB_SUB } from '@/global/pubsub';
  */
 @Injectable()
 export class ConversationEventsService {
+  private readonly logger = new Logger(ConversationEventsService.name);
+
   constructor(@Inject(PUB_SUB) private readonly pubSub: PubSubEngine) {}
+
+  /**
+   * 발행은 DB 커밋 이후의 부수효과 — Redis 장애가 이미 성공한 전송을
+   * 실패로 둔갑시키면 클라이언트 재시도로 중복 전송이 난다(리뷰 반영).
+   * 실패는 경고 로그만 남기고 삼킨다(구독자는 재조회 폴백).
+   */
+  private async safePublish(topic: string, payload: unknown): Promise<void> {
+    try {
+      await this.pubSub.publish(topic, payload);
+    } catch (e) {
+      this.logger.warn(
+        `subscription publish 실패 (topic=${topic}): ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
 
   private messageTopic(conversationId: string): string {
     return `conversation.message.${conversationId}`;
@@ -35,7 +54,7 @@ export class ConversationEventsService {
     messages: ConversationMessageOutput[],
   ): Promise<void> {
     for (const message of messages) {
-      await this.pubSub.publish(
+      await this.safePublish(
         this.messageTopic(message.conversationId),
         toConversationMessageEvent(message),
       );
@@ -46,14 +65,14 @@ export class ConversationEventsService {
     accountId: string,
     event: ConversationListUpdateEvent,
   ): Promise<void> {
-    await this.pubSub.publish(this.buyerTopic(accountId), event);
+    await this.safePublish(this.buyerTopic(accountId), event);
   }
 
   async publishSellerListUpdate(
     storeId: string,
     event: SellerConversationListUpdateEvent,
   ): Promise<void> {
-    await this.pubSub.publish(this.sellerTopic(storeId), event);
+    await this.safePublish(this.sellerTopic(storeId), event);
   }
 
   messageAddedIterator(conversationId: string): AsyncIterator<unknown> {
