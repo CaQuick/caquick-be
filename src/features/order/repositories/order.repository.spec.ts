@@ -552,6 +552,9 @@ describe('OrderRepository (real DB)', () => {
       expect(notifications).toHaveLength(1);
       expect(notifications[0].event).toBe('ORDER_CONFIRMED');
       expect(notifications[0].account_id).toBe(buyer.id);
+      // 알림센터 서브라인·딥링크용 연관 ID까지 저장한다
+      expect(notifications[0].store_id).toBe(store.id);
+      expect(notifications[0].product_id).not.toBeNull();
 
       const auditLogs = await prisma.auditLog.findMany({
         where: { target_id: order.id, target_type: 'ORDER' },
