@@ -188,6 +188,10 @@ describe('ConversationInquiryService (real DB)', () => {
       });
       expect(result.conversationId).toBe(conversation.id.toString());
       expect(conversation.last_message_at).not.toBeNull();
+      // 응답으로 인사말까지 즉시 표시되므로 여기까지 읽음 처리돼야 한다
+      expect(conversation.last_read_at?.getTime()).toBe(
+        conversation.last_message_at?.getTime(),
+      );
       expect(await messagesOf(conversation.id)).toHaveLength(2);
     });
 

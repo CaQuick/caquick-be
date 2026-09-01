@@ -365,6 +365,11 @@ export class ConversationRepository {
         data: {
           last_message_at: now,
           updated_at: now,
+          // 이번 mutation 응답으로 인사말·FAQ 자동응답까지 구매자에게 즉시
+          // 표시되므로, 여기까지를 읽음으로 전진시킨다 — 방금 받은 자동응답이
+          // 목록 미읽음 배지로 잡히는 불일치 방지(리뷰 반영). 항상 최신
+          // 시각이라 단조 증가 조건이 필요 없다.
+          last_read_at: now,
           // soft-delete된 대화를 재사용한 경우 복구한다 — 삭제 상태로 두면
           // 구매자·판매자 어느 조회에도 잡히지 않아 메시지가 유실돼 보인다
           // (리뷰 반영). 평상시엔 이미 null이라 no-op.
