@@ -380,7 +380,7 @@ export class ConversationRepository {
       // 앱 호스트 시계는 다중 인스턴스에서 노드 간 오차로 잠금 순서와
       // 어긋날 수 있다(릴리즈 리뷰 반영). DB가 단일 시계 소스이므로
       // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다.
-      const now = await this.fetchDbNow(tx);
+      const now = await this.fetchMonotonicNow(tx, conversationId);
 
       // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
       // 동시 첫 전송·실패 재시도에서 인사말 계약(항상 첫 메시지)을 깨뜨린다.
@@ -467,12 +467,28 @@ export class ConversationRepository {
     });
   }
 
-  /** DB 시계(NOW(3)) 조회 — 인스턴스 간 단일 시계 소스. 잠금 획득 후 호출 전제. */
-  private async fetchDbNow(tx: Prisma.TransactionClient): Promise<Date> {
-    const rows = await tx.$queryRaw<{ now: Date }[]>`SELECT NOW(3) AS now`;
+  /**
+   * 대화 단위 단조 시각 채번 — 인스턴스 간 단일 시계(DB NOW(3))를 쓰되,
+   * 해당 대화의 기존 last_message_at/last_read_at보다 1ms 이상 뒤로 보정한다.
+   * 앱 시계로 찍힌 과거 row(시계가 DB보다 앞섰던 노드)가 남아 있어도 새
+   * 메시지가 마커보다 과거/동률 시각을 받아 안읽음 판정(created_at >
+   * last_read_at)에서 누락되지 않는다(릴리즈 리뷰 반영). 잠금 획득 후 호출 전제.
+   */
+  private async fetchMonotonicNow(
+    tx: Prisma.TransactionClient,
+    conversationId: bigint,
+  ): Promise<Date> {
+    const rows = await tx.$queryRaw<{ now: Date }[]>`
+      SELECT GREATEST(
+        NOW(3),
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_message_at), NOW(3)),
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_read_at), NOW(3))
+      ) AS now
+      FROM store_conversation
+      WHERE id = ${conversationId}`;
     const now = rows[0]?.now;
     if (!(now instanceof Date)) {
-      // 드라이버가 Date 매핑에 실패하는 비정상 경로 — 전송을 막지 않는다
+      // row 부재/드라이버 매핑 실패의 비정상 경로 — 전송을 막지 않는다
       return new Date();
     }
     return now;
@@ -558,7 +574,7 @@ export class ConversationRepository {
       // 채번해 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커
       // 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약, 릴리즈 리뷰 반영).
       await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
-      const now = await this.fetchDbNow(tx);
+      const now = await this.fetchMonotonicNow(tx, args.conversationId);
 
       const message = await tx.storeConversationMessage.create({
         data: {

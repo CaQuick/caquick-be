@@ -147,5 +147,29 @@ describe('ConversationRepository (real DB)', () => {
       );
       expect(updatedConv.store_id).toBe(store.id);
     });
+
+    it('기존 마커가 미래 시각이어도 새 메시지는 그보다 뒤 시각을 받는다(시계 컷오버 보정)', async () => {
+      const { conversation } = await setupConversation();
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      // 앱 시계가 앞섰던 노드가 남긴 미래 마커 재현
+      const futureMarker = new Date(Date.now() + 60 * 60 * 1000);
+      await prisma.storeConversation.update({
+        where: { id: conversation.id },
+        data: { last_read_at: futureMarker, last_message_at: futureMarker },
+      });
+
+      const message = await repo.createSellerConversationMessage({
+        conversationId: conversation.id,
+        sellerAccountId: seller.id,
+        bodyFormat: 'TEXT',
+        bodyText: '컷오버 이후 답장',
+        bodyHtml: null,
+      });
+
+      // created_at > last_read_at 이어야 안읽음 판정에서 누락되지 않는다
+      expect(message.created_at.getTime()).toBeGreaterThan(
+        futureMarker.getTime(),
+      );
+    });
   });
 });
