@@ -376,11 +376,11 @@ export class ConversationRepository {
     return this.prisma.$transaction(async (tx) => {
       const conversation = await this.lockOrCreateConversation(tx, args);
       const conversationId = conversation.id;
-      // 메시지 시각은 대화 잠금 획득 "이후"에 채번한다 — 잠금 밖에서 미리
-      // 받은 시각은 커밋 순서와 어긋나, 늦게 커밋된 과거 시각 메시지가
-      // 읽음 마커(last_read_at)를 건너뛰는 레이스를 만든다(리뷰 반영).
-      // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다(NTP 전제).
-      const now = new Date();
+      // 메시지 시각은 대화 잠금 획득 "이후" DB 시계(NOW(3))로 채번한다 —
+      // 앱 호스트 시계는 다중 인스턴스에서 노드 간 오차로 잠금 순서와
+      // 어긋날 수 있다(릴리즈 리뷰 반영). DB가 단일 시계 소스이므로
+      // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다.
+      const now = await this.fetchMonotonicNow(tx, conversationId);
 
       // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
       // 동시 첫 전송·실패 재시도에서 인사말 계약(항상 첫 메시지)을 깨뜨린다.
@@ -468,6 +468,37 @@ export class ConversationRepository {
   }
 
   /**
+   * 대화 단위 단조 시각 채번 — 인스턴스 간 단일 시계(DB NOW(3))를 쓰되,
+   * 해당 대화의 기존 last_message_at/last_read_at보다 1ms 이상 뒤로 보정한다.
+   * 앱 시계로 찍힌 과거 row(시계가 DB보다 앞섰던 노드)가 남아 있어도 새
+   * 메시지가 마커보다 과거/동률 시각을 받아 안읽음 판정(created_at >
+   * last_read_at)에서 누락되지 않는다(릴리즈 리뷰 반영). 잠금 획득 후 호출 전제.
+   */
+  private async fetchMonotonicNow(
+    tx: Prisma.TransactionClient,
+    conversationId: bigint,
+  ): Promise<Date> {
+    // FOR UPDATE 잠금 조회 — 일반 조회는 트랜잭션 초입 스냅샷을 읽어,
+    // 잠금 대기 중 커밋된 마커 갱신을 놓칠 수 있다(릴리즈 리뷰 반영).
+    // row는 이미 본 트랜잭션이 잠갔으므로 추가 대기는 없다.
+    const rows = await tx.$queryRaw<{ now: Date }[]>`
+      SELECT GREATEST(
+        NOW(3),
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_message_at), NOW(3)),
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_read_at), NOW(3))
+      ) AS now
+      FROM store_conversation
+      WHERE id = ${conversationId}
+      FOR UPDATE`;
+    const now = rows[0]?.now;
+    if (!(now instanceof Date)) {
+      // row 부재/드라이버 매핑 실패의 비정상 경로 — 전송을 막지 않는다
+      return new Date();
+    }
+    return now;
+  }
+
+  /**
    * 트랜잭션 안에서 (account_id, store_id) 대화를 잠그거나 생성한다.
    * - 기존 대화: id FOR UPDATE 잠금(초기화 직렬화). 유니크 제약은 soft-delete
    *   row도 잡으므로 조회 범위를 제약과 동일하게(deleted_at 필터 해제) 맞춘다.
@@ -543,10 +574,11 @@ export class ConversationRepository {
     bodyHtml: string | null;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 시각을 채번해
-      // 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커 정합).
+      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 DB 시계로 시각을
+      // 채번해 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커
+      // 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약, 릴리즈 리뷰 반영).
       await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
-      const now = new Date();
+      const now = await this.fetchMonotonicNow(tx, args.conversationId);
 
       const message = await tx.storeConversationMessage.create({
         data: {
