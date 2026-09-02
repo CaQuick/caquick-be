@@ -37,15 +37,30 @@ export async function seedConversations(
   });
 
   const faqRows = [
-    { title: '날짜 변경', answer_html: '<p>픽업 1일 전까지 채팅으로 요청해 주시면 일정 확인 후 변경해 드려요.</p>' },
+    {
+      title: '날짜 변경',
+      answer_html:
+        '<p>픽업 1일 전까지 채팅으로 요청해 주시면 일정 확인 후 변경해 드려요.</p>',
+    },
     {
       title: '케이크 보관 방법',
       answer_html:
         '<p>🎂 <strong>케이크 보관 방법</strong></p><ul><li>냉장보관시 최대 3일</li><li>생크림 케이크는 당일 드시는 걸 권장해요</li></ul>',
     },
-    { title: '가게 위치 정보', answer_html: '<p>매장 상세의 찾아오는 길 안내를 확인해 주세요.</p>' },
-    { title: '제일 많이 물어보는 질문', answer_html: '<p>레터링 문구는 주문 시 요청사항에 남겨 주시면 반영돼요.</p>' },
-    { title: '예약 가능 일정', answer_html: '<p>캘린더에서 픽업 가능 날짜·시간대를 확인할 수 있어요.</p>' },
+    {
+      title: '가게 위치 정보',
+      answer_html: '<p>매장 상세의 찾아오는 길 안내를 확인해 주세요.</p>',
+    },
+    {
+      title: '제일 많이 물어보는 질문',
+      answer_html:
+        '<p>레터링 문구는 주문 시 요청사항에 남겨 주시면 반영돼요.</p>',
+    },
+    {
+      title: '예약 가능 일정',
+      answer_html:
+        '<p>캘린더에서 픽업 가능 날짜·시간대를 확인할 수 있어요.</p>',
+    },
   ];
   const faqs = [] as { id: bigint; title: string; answer_html: string }[];
   for (const [i, row] of faqRows.entries()) {
