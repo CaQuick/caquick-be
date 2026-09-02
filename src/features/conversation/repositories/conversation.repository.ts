@@ -129,20 +129,52 @@ export class ConversationRepository {
   }
 
   /**
-   * 구매자 대화 목록 페이지. (last_message_at, id) desc 키셋.
-   * 대화는 첫 메시지 전송 시에만 생성되지만, 방어적으로 메시지 없는
-   * 대화(last_message_at null)는 목록에서 제외한다 — 커서 정렬 키가 없다.
+   * 구매자 대화 목록 페이지 + 부가 정보(마지막 메시지·안읽음 수)를 한
+   * 트랜잭션(단일 REPEATABLE READ 스냅샷)으로 읽는다 — 조회를 쪼개면
+   * 사이에 커밋된 메시지가 미리보기/안읽음 수에만 반영되고 정렬 기준·
+   * 커서(lastMessageAt)는 과거 값으로 남는 혼합 상태가 나갈 수 있다
+   * (릴리즈 리뷰 반영).
    */
-  async listConversationsByAccount(args: {
+  async getConversationPageWithExtras(args: {
     accountId: bigint;
     limit: number;
     cursor?: { lastMessageAt: Date; id: bigint };
   }) {
+    return this.prisma.$transaction(async (tx) => {
+      const [rows, totalCount] = await Promise.all([
+        this.listConversationsByAccount(tx, args),
+        this.countConversationsByAccount(tx, args.accountId),
+      ]);
+      // 초과분(limit+1)은 hasMore 판정용 — 부가 정보는 페이지 항목만 조회
+      const extras = await this.getConversationListExtras(
+        tx,
+        rows.slice(0, args.limit).map((row) => ({
+          id: row.id,
+          last_read_at: row.last_read_at,
+        })),
+      );
+      return { rows, totalCount, extras };
+    });
+  }
+
+  /**
+   * 구매자 대화 목록 페이지. (last_message_at, id) desc 키셋.
+   * 대화는 첫 메시지 전송 시에만 생성되지만, 방어적으로 메시지 없는
+   * 대화(last_message_at null)는 목록에서 제외한다 — 커서 정렬 키가 없다.
+   */
+  private async listConversationsByAccount(
+    tx: Prisma.TransactionClient,
+    args: {
+      accountId: bigint;
+      limit: number;
+      cursor?: { lastMessageAt: Date; id: bigint };
+    },
+  ) {
     const where: Prisma.StoreConversationWhereInput = {
       account_id: args.accountId,
       last_message_at: { not: null },
     };
-    return this.prisma.storeConversation.findMany({
+    return tx.storeConversation.findMany({
       where: args.cursor
         ? {
             AND: [
@@ -167,8 +199,11 @@ export class ConversationRepository {
     });
   }
 
-  async countConversationsByAccount(accountId: bigint): Promise<number> {
-    return this.prisma.storeConversation.count({
+  private async countConversationsByAccount(
+    tx: Prisma.TransactionClient,
+    accountId: bigint,
+  ): Promise<number> {
+    return tx.storeConversation.count({
       where: { account_id: accountId, last_message_at: { not: null } },
     });
   }
@@ -180,13 +215,14 @@ export class ConversationRepository {
    * 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의
    * 고정 3쿼리로 배치한다.
    */
-  async getConversationListExtras(
+  private async getConversationListExtras(
+    tx: Prisma.TransactionClient,
     rows: { id: bigint; last_read_at: Date | null }[],
   ) {
     if (rows.length === 0) return [];
     const ids = rows.map((row) => row.id);
 
-    const latestIdRows = await this.prisma.storeConversationMessage.groupBy({
+    const latestIdRows = await tx.storeConversationMessage.groupBy({
       by: ['conversation_id'],
       where: { conversation_id: { in: ids } },
       _max: { id: true },
@@ -197,7 +233,7 @@ export class ConversationRepository {
 
     const [latestMessages, unreadGroups] = await Promise.all([
       latestIds.length > 0
-        ? this.prisma.storeConversationMessage.findMany({
+        ? tx.storeConversationMessage.findMany({
             where: { id: { in: latestIds } },
             select: {
               conversation_id: true,
@@ -207,7 +243,7 @@ export class ConversationRepository {
             },
           })
         : Promise.resolve([]),
-      this.prisma.storeConversationMessage.groupBy({
+      tx.storeConversationMessage.groupBy({
         by: ['conversation_id'],
         where: {
           sender_type: { not: ConversationSenderType.USER },
