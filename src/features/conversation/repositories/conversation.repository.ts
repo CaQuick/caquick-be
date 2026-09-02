@@ -376,11 +376,11 @@ export class ConversationRepository {
     return this.prisma.$transaction(async (tx) => {
       const conversation = await this.lockOrCreateConversation(tx, args);
       const conversationId = conversation.id;
-      // 메시지 시각은 대화 잠금 획득 "이후"에 채번한다 — 잠금 밖에서 미리
-      // 받은 시각은 커밋 순서와 어긋나, 늦게 커밋된 과거 시각 메시지가
-      // 읽음 마커(last_read_at)를 건너뛰는 레이스를 만든다(리뷰 반영).
-      // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다(NTP 전제).
-      const now = new Date();
+      // 메시지 시각은 대화 잠금 획득 "이후" DB 시계(NOW(3))로 채번한다 —
+      // 앱 호스트 시계는 다중 인스턴스에서 노드 간 오차로 잠금 순서와
+      // 어긋날 수 있다(릴리즈 리뷰 반영). DB가 단일 시계 소스이므로
+      // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다.
+      const now = await this.fetchDbNow(tx);
 
       // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
       // 동시 첫 전송·실패 재시도에서 인사말 계약(항상 첫 메시지)을 깨뜨린다.
@@ -467,6 +467,17 @@ export class ConversationRepository {
     });
   }
 
+  /** DB 시계(NOW(3)) 조회 — 인스턴스 간 단일 시계 소스. 잠금 획득 후 호출 전제. */
+  private async fetchDbNow(tx: Prisma.TransactionClient): Promise<Date> {
+    const rows = await tx.$queryRaw<{ now: Date }[]>`SELECT NOW(3) AS now`;
+    const now = rows[0]?.now;
+    if (!(now instanceof Date)) {
+      // 드라이버가 Date 매핑에 실패하는 비정상 경로 — 전송을 막지 않는다
+      return new Date();
+    }
+    return now;
+  }
+
   /**
    * 트랜잭션 안에서 (account_id, store_id) 대화를 잠그거나 생성한다.
    * - 기존 대화: id FOR UPDATE 잠금(초기화 직렬화). 유니크 제약은 soft-delete
@@ -543,10 +554,11 @@ export class ConversationRepository {
     bodyHtml: string | null;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 시각을 채번해
-      // 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커 정합).
+      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 DB 시계로 시각을
+      // 채번해 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커
+      // 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약, 릴리즈 리뷰 반영).
       await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
-      const now = new Date();
+      const now = await this.fetchDbNow(tx);
 
       const message = await tx.storeConversationMessage.create({
         data: {
