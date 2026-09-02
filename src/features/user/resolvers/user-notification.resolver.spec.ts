@@ -53,7 +53,7 @@ describe('User Notification Resolvers (real DB)', () => {
 
     const result = await queryResolver.myNotifications(
       { accountId: account.id.toString() },
-      { unreadOnly: true, offset: 0, limit: 10 },
+      { unreadOnly: true, limit: 10 },
     );
 
     expect(result.totalCount).toBe(1);

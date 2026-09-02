@@ -125,7 +125,6 @@ describe('ConversationRepository (real DB)', () => {
     it('메시지 생성 시 conversation.last_message_at/updated_at을 트랜잭션 안에서 갱신한다', async () => {
       const { store, conversation } = await setupConversation();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
-      const now = new Date('2026-04-22T12:00:00Z');
 
       const message = await repo.createSellerConversationMessage({
         conversationId: conversation.id,
@@ -133,7 +132,6 @@ describe('ConversationRepository (real DB)', () => {
         bodyFormat: 'TEXT',
         bodyText: '판매자 응답',
         bodyHtml: null,
-        now,
       });
 
       expect(message.sender_type).toBe('STORE');
@@ -143,10 +141,35 @@ describe('ConversationRepository (real DB)', () => {
       const updatedConv = await prisma.storeConversation.findUniqueOrThrow({
         where: { id: conversation.id },
       });
-      expect(updatedConv.last_message_at?.toISOString()).toBe(
-        now.toISOString(),
+      // 시각은 대화 잠금 아래에서 repository가 채번한다 — 메시지와 동일해야 함
+      expect(updatedConv.last_message_at?.getTime()).toBe(
+        message.created_at.getTime(),
       );
       expect(updatedConv.store_id).toBe(store.id);
+    });
+
+    it('기존 마커가 미래 시각이어도 새 메시지는 그보다 뒤 시각을 받는다(시계 컷오버 보정)', async () => {
+      const { conversation } = await setupConversation();
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      // 앱 시계가 앞섰던 노드가 남긴 미래 마커 재현
+      const futureMarker = new Date(Date.now() + 60 * 60 * 1000);
+      await prisma.storeConversation.update({
+        where: { id: conversation.id },
+        data: { last_read_at: futureMarker, last_message_at: futureMarker },
+      });
+
+      const message = await repo.createSellerConversationMessage({
+        conversationId: conversation.id,
+        sellerAccountId: seller.id,
+        bodyFormat: 'TEXT',
+        bodyText: '컷오버 이후 답장',
+        bodyHtml: null,
+      });
+
+      // created_at > last_read_at 이어야 안읽음 판정에서 누락되지 않는다
+      expect(message.created_at.getTime()).toBeGreaterThan(
+        futureMarker.getTime(),
+      );
     });
   });
 });

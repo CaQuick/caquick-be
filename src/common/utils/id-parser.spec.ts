@@ -24,6 +24,12 @@ describe('id-parser', () => {
     expect(() => parseId('   ')).toThrow(BadRequestException);
   });
 
+  it('UNSIGNED BIGINT 상한(2^64-1)을 넘으면 BadRequestException을 던진다', () => {
+    expect(parseId('18446744073709551615')).toBe(18446744073709551615n);
+    expect(() => parseId('18446744073709551616')).toThrow(BadRequestException);
+    expect(() => parseId('9'.repeat(30))).toThrow(BadRequestException);
+  });
+
   it('음수이면 BadRequestException을 던진다', () => {
     expect(() => parseId('-1')).toThrow(BadRequestException);
   });

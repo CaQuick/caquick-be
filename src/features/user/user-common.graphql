@@ -10,3 +10,11 @@ enum NotificationType {
   SYSTEM
   MARKETING
 }
+
+"""알림 이벤트. 알림센터의 아이콘·라벨 매핑 기준 (figma notification-center)"""
+enum NotificationEvent {
+  REVIEW_LIKED
+  ORDER_CONFIRMED
+  ORDER_MADE
+  ORDER_PICKED_UP
+}

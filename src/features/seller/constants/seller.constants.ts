@@ -60,4 +60,6 @@ export const MAX_BANNER_TITLE_LENGTH = 200;
 // ── 대화 ──
 
 export const MAX_CONVERSATION_BODY_TEXT_LENGTH = 2000;
+// 문의 채팅 인사말 템플릿(store.greeting_message VARCHAR(500)과 동일 상한)
+export const MAX_GREETING_MESSAGE_LENGTH = 500;
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;

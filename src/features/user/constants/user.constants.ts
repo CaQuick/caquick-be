@@ -24,3 +24,9 @@ export const MAX_PAGINATION_LIMIT = 50;
 // ── 리뷰 댓글 ──
 
 export const MAX_REVIEW_COMMENT_LENGTH = 500;
+
+// ── 알림 ──
+
+// figma notification-center: "최근 3개월 내의 알림만 확인할 수 있어요."
+// 삭제가 아니라 조회 필터로만 강제한다(사용자 확정 정책).
+export const NOTIFICATION_VISIBLE_MONTHS = 3;

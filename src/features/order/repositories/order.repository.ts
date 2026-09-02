@@ -720,10 +720,19 @@ export class OrderRepository {
         args.toStatus,
       );
       if (notification) {
+        // 알림센터 서브라인·딥링크용 연관 ID. 주문은 단일 상품 구조라
+        // 첫 item으로 상품이 확정된다(다상품 확장 시 재검토).
+        const firstItem = await tx.orderItem.findFirst({
+          where: { order_id: order.id },
+          orderBy: { id: 'asc' },
+          select: { product_id: true },
+        });
         await tx.notification.create({
           data: {
             account_id: order.account_id,
             order_id: order.id,
+            store_id: args.storeId,
+            product_id: firstItem?.product_id ?? null,
             ...notification,
           },
         });

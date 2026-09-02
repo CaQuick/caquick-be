@@ -1,4 +1,8 @@
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -8,6 +12,11 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createNotification,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createReview,
+  createStore,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -39,6 +48,11 @@ describe('UserNotificationService (real DB)', () => {
     return account;
   }
 
+  // 3개월 노출 필터가 "지금" 기준이라 케이스 날짜도 상대 시각으로 만든다
+  function daysAgo(days: number): Date {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  }
+
   // ─── viewerCounts ───
   describe('viewerCounts', () => {
     it('미읽 알림 수 / 장바구니 / 위시리스트 수를 반환한다', async () => {
@@ -59,6 +73,19 @@ describe('UserNotificationService (real DB)', () => {
       expect(result.wishlistCount).toBe(0);
     });
 
+    it('3개월 지난 미읽 알림은 배지 수에서 제외한다(목록과 일치)', async () => {
+      const account = await setupUser();
+      await createNotification(prisma, { account_id: account.id });
+      await createNotification(prisma, {
+        account_id: account.id,
+        created_at: daysAgo(100),
+      });
+
+      const result = await service.viewerCounts(account.id);
+
+      expect(result.unreadNotificationCount).toBe(1);
+    });
+
     it('계정이 없으면 UnauthorizedException을 던진다', async () => {
       await expect(service.viewerCounts(BigInt(999999))).rejects.toThrow(
         UnauthorizedException,
@@ -75,26 +102,30 @@ describe('UserNotificationService (real DB)', () => {
         account_id: account.id,
         title: '오래된',
         body: '바디1',
-        created_at: new Date('2026-04-01'),
+        created_at: daysAgo(2),
       });
       const newer = await createNotification(prisma, {
         account_id: account.id,
         title: '최근',
         body: '바디2',
-        created_at: new Date('2026-04-20'),
+        event: 'ORDER_CONFIRMED',
+        created_at: daysAgo(1),
       });
 
-      const result = await service.myNotifications(account.id, {
-        offset: 0,
-        limit: 10,
-      });
+      const result = await service.myNotifications(account.id, { limit: 10 });
 
       expect(result.totalCount).toBe(2);
       expect(result.hasMore).toBe(false);
+      expect(result.nextCursor).toBeNull();
       expect(result.items[0].id).toBe(newer.id.toString());
       expect(result.items[1].id).toBe(older.id.toString());
       expect(result.items[0].title).toBe('최근');
+      expect(result.items[0].event).toBe('ORDER_CONFIRMED');
       expect(result.items[0].readAt).toBeNull();
+      // 연관 엔티티가 없는 알림은 부가 필드가 모두 null
+      expect(result.items[0].storeId).toBeNull();
+      expect(result.items[0].storeName).toBeNull();
+      expect(result.items[0].productName).toBeNull();
     });
 
     it('unreadOnly=true면 read_at이 null인 것만 반환한다', async () => {
@@ -107,7 +138,6 @@ describe('UserNotificationService (real DB)', () => {
 
       const result = await service.myNotifications(account.id, {
         unreadOnly: true,
-        offset: 0,
         limit: 10,
       });
 
@@ -115,23 +145,143 @@ describe('UserNotificationService (real DB)', () => {
       expect(result.items[0].readAt).toBeNull();
     });
 
-    it('offset + limit < totalCount면 hasMore true', async () => {
+    it('커서로 다음 페이지를 이어간다 — 같은 created_at은 id로 타이브레이크', async () => {
       const account = await setupUser();
+      const sameMoment = daysAgo(1);
+      const ids: bigint[] = [];
       for (let i = 0; i < 3; i++) {
-        await createNotification(prisma, {
+        const n = await createNotification(prisma, {
           account_id: account.id,
-          created_at: new Date(2026, 3, 20 - i),
+          created_at: sameMoment,
         });
+        ids.push(n.id);
       }
+      const idDesc = [...ids].sort((a, b) => (a < b ? 1 : -1));
 
-      const result = await service.myNotifications(account.id, {
-        offset: 0,
+      const page1 = await service.myNotifications(account.id, { limit: 2 });
+      expect(page1.totalCount).toBe(3);
+      expect(page1.hasMore).toBe(true);
+      expect(page1.nextCursor).not.toBeNull();
+      expect(page1.items.map((i) => i.id)).toEqual([
+        idDesc[0].toString(),
+        idDesc[1].toString(),
+      ]);
+
+      const page2 = await service.myNotifications(account.id, {
         limit: 2,
+        cursor: page1.nextCursor!,
+      });
+      expect(page2.items.map((i) => i.id)).toEqual([idDesc[2].toString()]);
+      expect(page2.hasMore).toBe(false);
+      expect(page2.nextCursor).toBeNull();
+      // totalCount는 커서와 무관하게 전체 기준을 유지한다
+      expect(page2.totalCount).toBe(3);
+    });
+
+    it('형식이 잘못된 커서는 거절한다', async () => {
+      const account = await setupUser();
+
+      await expect(
+        service.myNotifications(account.id, { cursor: 'abc' }),
+      ).rejects.toThrow(BadRequestException);
+      // 자릿수 폭탄 — Number 변환 시 안전 정수 범위를 벗어나는 값
+      await expect(
+        service.myNotifications(account.id, { cursor: `${'9'.repeat(30)}:1` }),
+      ).rejects.toThrow(BadRequestException);
+      // 안전 정수지만 Date 지원 범위(±8.64e15ms)를 넘는 timestamp
+      await expect(
+        service.myNotifications(account.id, { cursor: '9000000000000000:1' }),
+      ).rejects.toThrow(BadRequestException);
+      // UNSIGNED BIGINT 상한을 넘는 id
+      await expect(
+        service.myNotifications(account.id, {
+          cursor: `1700000000000:${'9'.repeat(30)}`,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('3개월 지난 알림은 목록·totalCount에서 제외한다', async () => {
+      const account = await setupUser();
+      const recent = await createNotification(prisma, {
+        account_id: account.id,
+        created_at: daysAgo(80),
+      });
+      await createNotification(prisma, {
+        account_id: account.id,
+        created_at: daysAgo(100),
       });
 
-      expect(result.totalCount).toBe(3);
-      expect(result.hasMore).toBe(true);
-      expect(result.items).toHaveLength(2);
+      const result = await service.myNotifications(account.id);
+
+      expect(result.totalCount).toBe(1);
+      expect(result.items.map((i) => i.id)).toEqual([recent.id.toString()]);
+    });
+
+    it('직접 연결된 매장·상품·리뷰 정보를 노출한다(리뷰 좋아요 형태)', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, { store_name: '달콤 케이크' });
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '크리스마스 케이크',
+      });
+      const review = await createReview(prisma, {
+        order_item_id: (
+          await createOrderItem(prisma, { product_id: product.id })
+        ).id,
+      });
+
+      const notif = await createNotification(prisma, {
+        account_id: account.id,
+        type: 'REVIEW_LIKE',
+        event: 'REVIEW_LIKED',
+        store_id: store.id,
+        product_id: product.id,
+        review_id: review.id,
+      });
+
+      const result = await service.myNotifications(account.id);
+
+      const item = result.items.find((i) => i.id === notif.id.toString());
+      expect(item).toMatchObject({
+        event: 'REVIEW_LIKED',
+        storeId: store.id.toString(),
+        storeName: '달콤 케이크',
+        productId: product.id.toString(),
+        productName: '크리스마스 케이크',
+        reviewId: review.id.toString(),
+      });
+    });
+
+    it('연관 ID가 없는 과거 주문 알림은 order.items로 매장·상품을 보강한다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, { store_name: '해즈 케이크' });
+      const product = await createProduct(prisma, { store_id: store.id });
+      const order = await createOrder(prisma, { account_id: account.id });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+        product_name_snapshot: '주문 시점 상품명',
+      });
+
+      const notif = await createNotification(prisma, {
+        account_id: account.id,
+        type: 'ORDER_STATUS',
+        event: 'ORDER_PICKED_UP',
+        order_id: order.id,
+        // store_id / product_id 미저장 — 과거 데이터 재현
+      });
+
+      const result = await service.myNotifications(account.id);
+
+      const item = result.items.find((i) => i.id === notif.id.toString());
+      expect(item).toMatchObject({
+        orderId: order.id.toString(),
+        storeId: store.id.toString(),
+        storeName: '해즈 케이크',
+        productId: product.id.toString(),
+        // 주문 폴백의 상품명은 스냅샷을 쓴다(상품 삭제·개명에도 안전)
+        productName: '주문 시점 상품명',
+      });
     });
 
     it('다른 계정의 알림은 섞여 나오지 않는다', async () => {

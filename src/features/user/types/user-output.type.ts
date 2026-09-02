@@ -1,6 +1,7 @@
 import type {
   AccountType,
   IdentityProvider,
+  NotificationEvent,
   NotificationType,
 } from '@prisma/client';
 
@@ -35,8 +36,15 @@ export interface ViewerCounts {
 export interface NotificationItem {
   id: string;
   type: NotificationType;
+  event: NotificationEvent | null;
   title: string;
   body: string;
+  orderId: string | null;
+  storeId: string | null;
+  productId: string | null;
+  reviewId: string | null;
+  storeName: string | null;
+  productName: string | null;
   readAt: Date | null;
   createdAt: Date;
 }
@@ -45,6 +53,7 @@ export interface NotificationConnection {
   items: NotificationItem[];
   totalCount: number;
   hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface SearchHistoryItem {

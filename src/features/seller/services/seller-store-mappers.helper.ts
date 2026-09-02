@@ -28,6 +28,7 @@ export interface StoreRow {
   website_url: string | null;
   business_hours_text: string | null;
   profile_image_url: string | null;
+  greeting_message: string | null;
   pickup_slot_interval_minutes: number;
   min_lead_time_minutes: number;
   max_days_ahead: number;
@@ -78,6 +79,7 @@ export function toStoreOutput(row: StoreRow): SellerStoreOutput {
     websiteUrl: row.website_url,
     businessHoursText: row.business_hours_text,
     profileImageUrl: row.profile_image_url,
+    greetingMessage: row.greeting_message,
     pickupSlotIntervalMinutes: row.pickup_slot_interval_minutes,
     minLeadTimeMinutes: row.min_lead_time_minutes,
     maxDaysAhead: row.max_days_ahead,

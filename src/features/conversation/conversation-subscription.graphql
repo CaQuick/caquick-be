@@ -1,0 +1,40 @@
+extend type Subscription {
+  """
+  대화방 신규 메시지 실시간 구독. 구매자(대화 소유자)와 판매자(해당 매장
+  소유자)만 구독할 수 있다. 인증은 graphql-ws connectionParams.authorization.
+  """
+  conversationMessageAdded(conversationId: ID!): ConversationMessage!
+  """구매자 대화 목록/배지 갱신 이벤트(새 메시지 도착 시)."""
+  myConversationUpdated: ConversationListUpdate!
+  """판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시)."""
+  sellerConversationUpdated: SellerConversationListUpdate!
+}
+
+"""
+구매자 대화 목록 갱신 이벤트.
+이벤트 간 도착 순서는 보장되지 않는다 — 구독자는 (lastMessageAt, lastReadAt)을
+사전식으로 비교해 이미 표시 중인 상태보다 오래된 이벤트를 폐기해야 한다.
+읽음 처리는 lastReadAt만 전진시키므로, 읽음 이후 도착한 지연 이벤트도 이 비교로
+걸러진다(메시지 스트림은 id 기준).
+"""
+type ConversationListUpdate {
+  conversationId: ID!
+  storeId: ID!
+  storeName: String!
+  """마지막 메시지 미리보기(HTML은 태그 제거)"""
+  lastMessagePreview: String
+  lastMessageAt: DateTime!
+  """이벤트 스냅샷 시점의 구매자 마지막 읽음 시각(폐기 규칙 비교용)"""
+  lastReadAt: DateTime
+  """이벤트 시점의 안읽은 수신 메시지 수"""
+  unreadCount: Int!
+}
+
+"""판매자 대화 목록 갱신 이벤트. 도착 순서 비보장 — lastMessageAt 기준 폐기 규칙 동일."""
+type SellerConversationListUpdate {
+  conversationId: ID!
+  accountId: ID!
+  """마지막 메시지 미리보기(HTML은 태그 제거)"""
+  lastMessagePreview: String
+  lastMessageAt: DateTime!
+}
