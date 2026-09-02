@@ -18,6 +18,10 @@ describe('conversation-center-mappers.helper', () => {
         'A & B <3>',
       );
     });
+
+    it('이중 이스케이프는 한 번만 복원한다(&amp;lt; → &lt;)', () => {
+      expect(stripHtmlToPreview('&amp;lt;b&amp;gt;')).toBe('&lt;b&gt;');
+    });
   });
 
   describe('toLastMessagePreview', () => {
