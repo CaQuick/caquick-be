@@ -140,21 +140,26 @@ export class ConversationRepository {
     limit: number;
     cursor?: { lastMessageAt: Date; id: bigint };
   }) {
-    return this.prisma.$transaction(async (tx) => {
-      const [rows, totalCount] = await Promise.all([
-        this.listConversationsByAccount(tx, args),
-        this.countConversationsByAccount(tx, args.accountId),
-      ]);
-      // 초과분(limit+1)은 hasMore 판정용 — 부가 정보는 페이지 항목만 조회
-      const extras = await this.getConversationListExtras(
-        tx,
-        rows.slice(0, args.limit).map((row) => ({
-          id: row.id,
-          last_read_at: row.last_read_at,
-        })),
-      );
-      return { rows, totalCount, extras };
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [rows, totalCount] = await Promise.all([
+          this.listConversationsByAccount(tx, args),
+          this.countConversationsByAccount(tx, args.accountId),
+        ]);
+        // 초과분(limit+1)은 hasMore 판정용 — 부가 정보는 페이지 항목만 조회
+        const extras = await this.getConversationListExtras(
+          tx,
+          rows.slice(0, args.limit).map((row) => ({
+            id: row.id,
+            last_read_at: row.last_read_at,
+          })),
+        );
+        return { rows, totalCount, extras };
+      },
+      // 단일 스냅샷 보장은 REPEATABLE READ 전제 — 서버/세션 기본값이
+      // READ COMMITTED면 문장마다 새 스냅샷이라 명시로 고정한다(리뷰 반영)
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   /**
