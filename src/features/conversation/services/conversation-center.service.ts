@@ -40,27 +40,25 @@ export class ConversationCenterService extends ConversationBaseService {
       ? parseTimestampIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
       : undefined;
 
-    const [rows, totalCount] = await Promise.all([
-      this.repo.listConversationsByAccount({
+    // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로
+    // 읽는다 — 조회 사이에 커밋된 메시지로 미리보기와 정렬 기준·커서가
+    // 어긋나는 혼합 상태 방지(릴리즈 리뷰 반영).
+    const { rows, totalCount, extras } =
+      await this.repo.getConversationPageWithExtras({
         accountId,
         limit,
         cursor: cursor
           ? { lastMessageAt: cursor.timestamp, id: cursor.id }
           : undefined,
-      }),
-      this.repo.countConversationsByAccount(accountId),
-    ]);
+      });
 
     // last_message_at desc 정렬과 결합된 커서 — 새 메시지 도착으로 대화가
     // 위로 떠오르면 다음 페이지에 다시 나타날 수 있다(목록 새로고침 전제).
     const page = sliceCursorPage(rows, limit, (last) =>
-      // listConversationsByAccount가 last_message_at null을 제외하므로 항상 존재
+      // 목록 조회가 last_message_at null을 제외하므로 항상 존재
       buildTimestampIdCursor(last.last_message_at!, last.id),
     );
 
-    const extras = await this.repo.getConversationListExtras(
-      page.items.map((row) => ({ id: row.id, last_read_at: row.last_read_at })),
-    );
     const extraById = new Map(
       extras.map((e) => [e.conversationId.toString(), e]),
     );
