@@ -94,12 +94,18 @@ export class UserNotificationService extends UserBaseService {
   }
 
   /**
-   * "최근 3개월" 노출 하한. setMonth 롤오버(예: 5/31 → 3/1 아님, 3/3)로
-   * 말일 경계가 며칠 어긋날 수 있으나 안내 문구 수준의 정밀도로 충분하다.
+   * "최근 3개월" 노출 하한. setMonth는 대상 월에 없는 날짜를 다음 달로
+   * 롤오버시키므로(예: 5/31 → 3/3) 하한이 며칠 늦어져 알림이 일찍 숨는다 —
+   * 롤오버가 감지되면 대상 월의 말일로 클램프한다(릴리즈 리뷰 반영).
    */
   private notificationVisibleSince(): Date {
     const since = new Date();
+    const dayOfMonth = since.getDate();
     since.setMonth(since.getMonth() - NOTIFICATION_VISIBLE_MONTHS);
+    if (since.getDate() !== dayOfMonth) {
+      // 롤오버 발생 — setDate(0)은 이전 달(=대상 월)의 말일로 되돌린다
+      since.setDate(0);
+    }
     return since;
   }
 
