@@ -478,6 +478,9 @@ export class ConversationRepository {
     tx: Prisma.TransactionClient,
     conversationId: bigint,
   ): Promise<Date> {
+    // FOR UPDATE 잠금 조회 — 일반 조회는 트랜잭션 초입 스냅샷을 읽어,
+    // 잠금 대기 중 커밋된 마커 갱신을 놓칠 수 있다(릴리즈 리뷰 반영).
+    // row는 이미 본 트랜잭션이 잠갔으므로 추가 대기는 없다.
     const rows = await tx.$queryRaw<{ now: Date }[]>`
       SELECT GREATEST(
         NOW(3),
@@ -485,7 +488,8 @@ export class ConversationRepository {
         COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_read_at), NOW(3))
       ) AS now
       FROM store_conversation
-      WHERE id = ${conversationId}`;
+      WHERE id = ${conversationId}
+      FOR UPDATE`;
     const now = rows[0]?.now;
     if (!(now instanceof Date)) {
       // row 부재/드라이버 매핑 실패의 비정상 경로 — 전송을 막지 않는다
