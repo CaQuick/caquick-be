@@ -1,12 +1,12 @@
 extend type Query {
-  """내 매장 주문 목록을 조회한다."""
+  """내 매장 주문 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerOrderList(input: SellerOrderListInput): SellerOrderConnection!
-  """내 매장 주문 상세를 조회한다."""
+  """내 매장 주문 상세를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerOrder(orderId: ID!): SellerOrderDetail!
 }
 
 extend type Mutation {
-  """주문 상태를 변경한다."""
+  """주문 상태를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateOrderStatus(input: SellerUpdateOrderStatusInput!): SellerOrderSummary!
 }
 

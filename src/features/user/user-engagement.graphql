@@ -1,11 +1,11 @@
 extend type Mutation {
-  """리뷰 좋아요"""
+  """리뷰 좋아요. 로그인 필수."""
   likeReview(reviewId: ID!): Boolean!
-  """리뷰 좋아요 해제(멱등: 좋아요가 없어도 true)"""
+  """리뷰 좋아요 해제(멱등: 좋아요가 없어도 true). 로그인 필수."""
   unlikeReview(reviewId: ID!): Boolean!
-  """리뷰 댓글 작성"""
+  """리뷰 댓글 작성. 로그인 필수."""
   writeReviewComment(input: WriteReviewCommentInput!): MyReviewComment!
-  """내 리뷰 댓글 삭제(soft). 본인 댓글만 가능."""
+  """내 리뷰 댓글 삭제(soft). 로그인 필수. 본인 댓글만 가능."""
   deleteMyReviewComment(commentId: ID!): Boolean!
 }
 

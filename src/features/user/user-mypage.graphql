@@ -1,5 +1,5 @@
 extend type Query {
-  """마이페이지 메인 화면 집계 데이터"""
+  """마이페이지 메인 화면 집계 데이터. 로그인 필수. 본인 데이터만 대상이 된다."""
   myPageOverview: MyPageOverview!
 }
 

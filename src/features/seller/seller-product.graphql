@@ -1,59 +1,59 @@
 extend type Query {
-  """내 매장 상품 목록을 조회한다."""
+  """내 매장 상품 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerProducts(input: SellerProductListInput): SellerProductConnection!
-  """내 매장 상품 상세를 조회한다."""
+  """내 매장 상품 상세를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerProduct(productId: ID!): SellerProduct!
 }
 
 extend type Mutation {
-  """내 매장 상품을 생성한다."""
+  """내 매장 상품을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateProduct(input: SellerCreateProductInput!): SellerProduct!
-  """내 매장 상품을 수정한다."""
+  """내 매장 상품을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateProduct(input: SellerUpdateProductInput!): SellerProduct!
-  """내 매장 상품을 삭제한다."""
+  """내 매장 상품을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteProduct(productId: ID!): Boolean!
-  """내 매장 상품 활성 상태를 변경한다."""
+  """내 매장 상품 활성 상태를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerSetProductActive(input: SellerSetProductActiveInput!): SellerProduct!
 
-  """상품 이미지를 추가한다."""
+  """상품 이미지를 추가한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerAddProductImage(input: SellerAddProductImageInput!): SellerProductImage!
-  """상품 이미지를 삭제한다."""
+  """상품 이미지를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteProductImage(imageId: ID!): Boolean!
-  """상품 이미지 순서를 변경한다."""
+  """상품 이미지 순서를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerReorderProductImages(input: SellerReorderProductImagesInput!): [SellerProductImage!]!
 
-  """상품 카테고리 연결을 설정한다."""
+  """상품 카테고리 연결을 설정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerSetProductCategories(input: SellerSetProductCategoriesInput!): SellerProduct!
-  """상품 태그 연결을 설정한다."""
+  """상품 태그 연결을 설정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerSetProductTags(input: SellerSetProductTagsInput!): SellerProduct!
 
-  """상품 옵션 그룹을 생성한다."""
+  """상품 옵션 그룹을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateOptionGroup(input: SellerCreateOptionGroupInput!): SellerOptionGroup!
-  """상품 옵션 그룹을 수정한다."""
+  """상품 옵션 그룹을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateOptionGroup(input: SellerUpdateOptionGroupInput!): SellerOptionGroup!
-  """상품 옵션 그룹을 삭제한다."""
+  """상품 옵션 그룹을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteOptionGroup(optionGroupId: ID!): Boolean!
-  """상품 옵션 그룹 순서를 변경한다."""
+  """상품 옵션 그룹 순서를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerReorderOptionGroups(input: SellerReorderOptionGroupsInput!): [SellerOptionGroup!]!
 
-  """상품 옵션 아이템을 생성한다."""
+  """상품 옵션 아이템을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateOptionItem(input: SellerCreateOptionItemInput!): SellerOptionItem!
-  """상품 옵션 아이템을 수정한다."""
+  """상품 옵션 아이템을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateOptionItem(input: SellerUpdateOptionItemInput!): SellerOptionItem!
-  """상품 옵션 아이템을 삭제한다."""
+  """상품 옵션 아이템을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteOptionItem(optionItemId: ID!): Boolean!
-  """상품 옵션 아이템 순서를 변경한다."""
+  """상품 옵션 아이템 순서를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerReorderOptionItems(input: SellerReorderOptionItemsInput!): [SellerOptionItem!]!
 
-  """상품 커스텀 템플릿을 등록 또는 수정한다."""
+  """상품 커스텀 템플릿을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertProductCustomTemplate(input: SellerUpsertProductCustomTemplateInput!): SellerCustomTemplate!
-  """상품 커스텀 템플릿 활성 상태를 변경한다."""
+  """상품 커스텀 템플릿 활성 상태를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerSetProductCustomTemplateActive(input: SellerSetProductCustomTemplateActiveInput!): SellerCustomTemplate!
-  """커스텀 텍스트 토큰을 등록 또는 수정한다."""
+  """커스텀 텍스트 토큰을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertProductCustomTextToken(input: SellerUpsertProductCustomTextTokenInput!): SellerCustomTextToken!
-  """커스텀 텍스트 토큰을 삭제한다."""
+  """커스텀 텍스트 토큰을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteProductCustomTextToken(tokenId: ID!): Boolean!
-  """커스텀 텍스트 토큰 순서를 변경한다."""
+  """커스텀 텍스트 토큰 순서를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerReorderProductCustomTextTokens(input: SellerReorderProductCustomTextTokensInput!): [SellerCustomTextToken!]!
 }
 

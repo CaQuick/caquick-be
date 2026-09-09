@@ -1,14 +1,14 @@
 extend type Query {
-  """내 찜 목록"""
+  """내 찜 목록. 로그인 필수. 본인 데이터만 대상이 된다."""
   myWishlist(input: MyWishlistInput): MyWishlistConnection!
   """찜 상품의 매장별 그룹 목록 (찜 상품 수 desc, 동점 시 최근 찜 순). 로그인 필요."""
   myWishlistStoreGroups(input: MyWishlistStoreGroupsInput): MyWishlistStoreGroupsConnection!
 }
 
 extend type Mutation {
-  """찜 추가 (멱등: 이미 있어도 true 반환, soft-delete된 항목은 복원)"""
+  """찜 추가 (멱등: 이미 있어도 true 반환, soft-delete된 항목은 복원). 로그인 필수. 본인 데이터만 대상이 된다."""
   addToWishlist(productId: ID!): Boolean!
-  """찜 해제 (멱등: 이미 없어도 true 반환)"""
+  """찜 해제 (멱등: 이미 없어도 true 반환). 로그인 필수. 본인 데이터만 대상이 된다."""
   removeFromWishlist(productId: ID!): Boolean!
 }
 

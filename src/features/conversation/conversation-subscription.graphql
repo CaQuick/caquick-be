@@ -4,9 +4,12 @@ extend type Subscription {
   소유자)만 구독할 수 있다. 인증은 graphql-ws connectionParams.authorization.
   """
   conversationMessageAdded(conversationId: ID!): ConversationMessage!
-  """구매자 대화 목록/배지 갱신 이벤트(새 메시지 도착 시)."""
+  """구매자 대화 목록/배지 갱신 이벤트(새 메시지 도착 시). 로그인 필수. 본인 데이터만 대상이 된다."""
   myConversationUpdated: ConversationListUpdate!
-  """판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시)."""
+  """
+판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시).
+활성 매장을 보유한 판매자만 구독할 수 있다. 매장이 없거나 비활성·삭제 상태면 NOT_FOUND.
+"""
   sellerConversationUpdated: SellerConversationListUpdate!
 }
 

@@ -1,25 +1,25 @@
 extend type Query {
-  """내 매장 FAQ 목록을 조회한다."""
+  """내 매장 FAQ 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerFaqTopics: [SellerFaqTopic!]!
-  """내 매장 배너 목록을 조회한다."""
+  """내 매장 배너 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerBanners(input: SellerCursorInput): SellerBannerConnection!
-  """내 매장 감사 로그 목록을 조회한다."""
+  """내 매장 감사 로그 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerAuditLogs(input: SellerAuditLogListInput): SellerAuditLogConnection!
 }
 
 extend type Mutation {
-  """FAQ 항목을 생성한다."""
+  """FAQ 항목을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateFaqTopic(input: SellerCreateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 수정한다."""
+  """FAQ 항목을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateFaqTopic(input: SellerUpdateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 삭제한다."""
+  """FAQ 항목을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteFaqTopic(topicId: ID!): Boolean!
 
-  """배너를 생성한다."""
+  """배너를 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateBanner(input: SellerCreateBannerInput!): SellerBanner!
-  """배너를 수정한다."""
+  """배너를 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateBanner(input: SellerUpdateBannerInput!): SellerBanner!
-  """배너를 삭제한다."""
+  """배너를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteBanner(bannerId: ID!): Boolean!
 }
 

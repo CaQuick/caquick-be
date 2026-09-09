@@ -1,28 +1,28 @@
 extend type Query {
-  """내 매장 정보를 조회한다."""
+  """내 매장 정보를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerMyStore: SellerStore!
-  """내 매장 요일별 영업시간 목록을 조회한다."""
+  """내 매장 요일별 영업시간 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreBusinessHours: [SellerStoreBusinessHour!]!
-  """내 매장 특별휴무 목록을 조회한다."""
+  """내 매장 특별휴무 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreSpecialClosures(input: SellerCursorInput): SellerStoreSpecialClosureConnection!
-  """내 매장 일별 생산 가능 수량 목록을 조회한다."""
+  """내 매장 일별 생산 가능 수량 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreDailyCapacities(input: SellerDateCursorInput): SellerStoreDailyCapacityConnection!
 }
 
 extend type Mutation {
-  """내 매장 기본 정보를 수정한다."""
+  """내 매장 기본 정보를 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateStoreBasicInfo(input: SellerUpdateStoreBasicInfoInput!): SellerStore!
-  """내 매장 영업시간을 등록 또는 수정한다."""
+  """내 매장 영업시간을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreBusinessHour(input: SellerUpsertStoreBusinessHourInput!): SellerStoreBusinessHour!
-  """내 매장 특별휴무를 등록 또는 수정한다."""
+  """내 매장 특별휴무를 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreSpecialClosure(input: SellerUpsertStoreSpecialClosureInput!): SellerStoreSpecialClosure!
-  """내 매장 특별휴무를 삭제한다."""
+  """내 매장 특별휴무를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteStoreSpecialClosure(closureId: ID!): Boolean!
-  """내 매장 픽업 정책을 수정한다."""
+  """내 매장 픽업 정책을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdatePickupPolicy(input: SellerUpdatePickupPolicyInput!): SellerStore!
-  """내 매장 일별 생산 가능 수량을 등록 또는 수정한다."""
+  """내 매장 일별 생산 가능 수량을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreDailyCapacity(input: SellerUpsertStoreDailyCapacityInput!): SellerStoreDailyCapacity!
-  """내 매장 일별 생산 가능 수량을 삭제한다."""
+  """내 매장 일별 생산 가능 수량을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteStoreDailyCapacity(capacityId: ID!): Boolean!
 }
 

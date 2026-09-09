@@ -2,6 +2,7 @@ extend type Query {
   """
   문의 채팅 진입 컨텍스트(구매자). 매장 프로필·상담시간·치환 완료 인사말·질문 칩을
   한 번에 내려준다. 아직 대화가 없어도 조회 가능하며 그 경우 conversationId는 null.
+  로그인 필수.
   """
   storeInquiryContext(storeId: ID!): StoreInquiryContext!
 }
@@ -10,11 +11,13 @@ extend type Mutation {
   """
   구매자 텍스트 메시지 전송. 해당 매장과의 대화가 없으면 이 시점에 생성하고,
   치환 완료된 인사말을 매장 메시지로 먼저 저장한 뒤 유저 메시지를 저장한다.
+  로그인 필수.
   """
   sendConversationMessage(input: SendConversationMessageInput!): ConversationMessagesPayload!
   """
   질문 칩(FAQ) 전송. 유저 메시지(칩 제목)와 매장 자동응답(FAQ 답변 HTML)을
   한 트랜잭션으로 저장한다. 첫 전송이면 대화 생성 + 인사말 저장도 함께 수행.
+  로그인 필수.
   """
   sendConversationFaqMessage(input: SendConversationFaqMessageInput!): ConversationMessagesPayload!
 }
