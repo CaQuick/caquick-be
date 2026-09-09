@@ -3,7 +3,8 @@ extend type Query {
   myConversations(input: MyConversationsInput): MyConversationConnection!
   """
   채팅 상세 메시지 목록(최신순 키셋 커서). 구매자 본인 대화만 조회 가능하며,
-  조회 시 last_read_at을 현재 시각으로 갱신한다(안읽음 배지 해소 부수효과).
+  조회 시 last_read_at을 이번에 반환한 최신 메시지의 작성 시각까지 끌어올린다
+  (안읽음 배지 해소 부수효과). 반환할 메시지가 없으면 갱신하지 않는다.
   로그인 필수.
   """
   conversationMessages(conversationId: ID!, input: ConversationMessagesInput): ConversationMessageConnection!

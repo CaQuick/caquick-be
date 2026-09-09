@@ -35,9 +35,9 @@ type StorePickupDay {
 type StorePickupTimeSlots {
   """요청한 날짜. "YYYY-MM-DD" (KST)."""
   date: String!
-  """12:00 이전 슬롯."""
+  """오전 슬롯. 12:00 이전(12:00은 afternoon에 들어간다)."""
   morning: [StorePickupSlot!]!
-  """12:00 이후 슬롯."""
+  """오후 슬롯. 12:00 포함, 이후."""
   afternoon: [StorePickupSlot!]!
 }
 

@@ -218,11 +218,11 @@ type SellerProductConnection {
 
 """상품 목록 조회 조건. 필터는 AND로 결합되고 미지정 필터는 적용되지 않는다."""
 input SellerProductListInput {
-  """한 번에 가져올 개수. 기본 20, 1~100으로 보정된다."""
+  """한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_REQUEST."""
   limit: Int = 20
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
-  """노출 여부 필터. 미지정 시 노출·미노출을 모두 포함한다."""
+  """노출 여부 필터. 미지정 시 활성 상품만 반환한다(기본 true)."""
   isActive: Boolean
   """카테고리 필터. 해당 카테고리가 연결된 상품만."""
   categoryId: ID

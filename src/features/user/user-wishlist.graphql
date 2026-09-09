@@ -41,7 +41,7 @@ type WishlistItemSummary {
   productName: String!
   """대표 상품 이미지. 없으면 null."""
   representativeImageUrl: String
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가다."""
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
   salePrice: Int
   """정가(원)."""
   regularPrice: Int!

@@ -28,7 +28,10 @@ type CreateOrderOutput {
   orderId: ID!
   """주문번호. 화면·문의에 쓰는 식별자."""
   orderNumber: String!
-  """생성 직후 상태. 항상 SUBMITTED다."""
+  """
+  주문 상태. 새로 생성된 경우 SUBMITTED다. 같은 idempotencyKey로 재시도하면 기존
+  주문을 그대로 돌려주므로 그 사이 진행된 상태(CONFIRMED·MADE·PICKED_UP 등)일 수 있다.
+  """
   status: OrderStatusType!
   """확정된 픽업 일시. 서버가 매장 정책으로 재검증한 값이다."""
   pickupAt: DateTime!

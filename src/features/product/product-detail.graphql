@@ -18,7 +18,7 @@ type ProductDetail {
   images: [String!]!
   """정가(원)."""
   regularPrice: Int!
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가다."""
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
   salePrice: Int
   """할인율(0~100). salePrice 없으면 0."""
   discountRate: Int!
