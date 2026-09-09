@@ -102,6 +102,7 @@ input UpdateMyProfileImageInput {
 
 """닉네임 사용 가능 여부"""
 type NicknameAvailability {
+  """사용 가능 여부. false면 reason에 사유가 담긴다."""
   available: Boolean!
   """미통과 시 이유"""
   reason: String
@@ -109,14 +110,20 @@ type NicknameAvailability {
 
 """프로필 이미지 업로드 URL 발급 입력"""
 input CreateProfileImageUploadUrlInput {
+  """업로드할 파일의 MIME 타입(예: image/jpeg)."""
   contentType: String!
+  """업로드할 파일 크기(바이트)."""
   contentLength: Int!
 }
 
 """프로필 이미지 업로드 URL 결과"""
 type ProfileImageUploadUrl {
+  """파일을 PUT할 Presigned URL. 만료 전에 써야 한다."""
   uploadUrl: String!
+  """업로드 완료 후 접근 가능한 URL. updateMyProfileImage에 그대로 넘긴다."""
   publicUrl: String!
+  """스토리지 객체 키."""
   key: String!
+  """uploadUrl 만료까지 남은 시간(초)."""
   expiresInSeconds: Int!
 }

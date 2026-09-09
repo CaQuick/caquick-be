@@ -9,8 +9,11 @@ extend type Query {
 """매장 상품 카테고리(사이드바 항목)."""
 type StoreProductCategory {
   id: ID!
+  """카테고리명. 섹션 제목으로 쓴다."""
   name: String!
+  """분류 축."""
   categoryType: CategoryType!
+  """섹션 노출 순서. 오름차순."""
   sortOrder: Int!
   """이 매장의 해당 카테고리 활성 상품 수."""
   productCount: Int!
@@ -26,6 +29,7 @@ enum CategoryType {
   OTHER
 }
 
+"""매장 상품 목록 조회 조건. 필터는 AND로 결합된다."""
 input StoreProductsInput {
   storeId: ID!
   """특정 카테고리 섹션만. 비우면 전체."""
@@ -34,27 +38,36 @@ input StoreProductsInput {
   search: String
   """이전 페이지 마지막 항목 id(이후부터 조회)."""
   cursor: ID
+  """한 번에 가져올 개수. 기본 20."""
   limit: Int = 20
 }
 
 """매장 상품 목록(커서 기반)."""
 type StoreProductConnection {
+  """상품 카드. 등록 최신순으로 온다."""
   items: [StoreProduct!]!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
 """매장 상품 카드."""
 type StoreProduct {
   id: ID!
+  """상품명."""
   name: String!
+  """상품 설명. 미등록 시 null."""
   description: String
   """대표 이미지(sort_order 최소). 없으면 null."""
   thumbnailUrl: String
+  """정가(원)."""
   regularPrice: Int!
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가다."""
   salePrice: Int
   """할인율(0~100). salePrice 없으면 0."""
   discountRate: Int!
+  """통화 코드(ISO 4217). 현재는 KRW만 쓴다."""
   currency: String!
   """소속 카테고리 ID(FE 섹션 그룹핑/스크롤 스파이용)."""
   categoryIds: [ID!]!

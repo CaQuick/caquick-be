@@ -7,15 +7,20 @@ extend type Query {
   searchRegions(input: SearchRegionsInput!): [RegionSearchResult!]!
 }
 
+"""지역 자동검색 입력."""
 input SearchRegionsInput {
+  """검색어. 1·2차 지역명 모두를 대상으로 부분일치 검색한다."""
   keyword: String!
+  """한 번에 가져올 개수. 기본 20."""
   limit: Int = 20
 }
 
 """1차 광역 지역 (예: 서울 북부, 인천)"""
 type RegionGroup {
   id: ID!
+  """화면에 노출되는 1차 지역명."""
   name: String!
+  """URL·쿼리에 쓰는 영문 식별자."""
   slug: String!
   """하위 2차 지역 보유 여부 (전국 등은 false)"""
   hasChildren: Boolean!
@@ -24,16 +29,23 @@ type RegionGroup {
 """2차 시군구 지역 (예: 강남구, 수원시영통구)"""
 type Region {
   id: ID!
+  """상위 1차 지역 ID. 최상위면 null."""
   parentId: ID
+  """화면에 노출되는 2차 지역명."""
   name: String!
+  """URL·쿼리에 쓰는 영문 식별자."""
   slug: String!
+  """지역 계층 깊이. 1=광역, 2=시군구."""
   level: Int!
 }
 
 """지역 검색 결과. 동명 시군구 구분을 위해 상위 지역명을 동반."""
 type RegionSearchResult {
   id: ID!
+  """매칭된 지역명."""
   name: String!
+  """상위 1차 지역명. 동명 시군구를 구분하는 용도이며 1차 지역이면 null."""
   parentName: String
+  """지역 계층 깊이. 1=광역, 2=시군구."""
   level: Int!
 }

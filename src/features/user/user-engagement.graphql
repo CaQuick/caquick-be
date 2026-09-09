@@ -9,6 +9,7 @@ extend type Mutation {
   deleteMyReviewComment(commentId: ID!): Boolean!
 }
 
+"""리뷰 댓글 작성 입력."""
 input WriteReviewCommentInput {
   reviewId: ID!
   """1~500자"""
@@ -19,6 +20,8 @@ input WriteReviewCommentInput {
 type MyReviewComment {
   id: ID!
   reviewId: ID!
+  """댓글 본문."""
   content: String!
+  """작성 시각."""
   createdAt: DateTime!
 }

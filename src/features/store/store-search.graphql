@@ -3,30 +3,38 @@ extend type Query {
   searchStores(input: SearchStoresInput!): SearchStoreConnection!
 }
 
+"""매장 검색 조건. 커서가 아니라 오프셋 방식이다."""
 input SearchStoresInput {
   """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
   keyword: String!
   """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
   regionIds: [ID!]
+  """건너뛸 개수. 기본 0."""
   offset: Int = 0
   """조회 개수(최대 50)."""
   limit: Int = 20
 }
 
+"""매장 검색 결과 목록."""
 type SearchStoreConnection {
+  """매장 카드. 인기순으로 온다 — 찜 수·리뷰 통계·최근 주문 수로 산출하며 검색어 관련도는 반영하지 않는다."""
   items: [SearchStore!]!
+  """조건에 맞는 전체 매장 수. 탭 카운트에 쓴다."""
   totalCount: Int!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
 }
 
 """검색 결과 매장 카드(로고·평점·지역·대표 케이크 이미지·찜)."""
 type SearchStore {
   id: ID!
+  """매장명."""
   storeName: String!
   """매장 프로필(로고) 이미지. 미등록 시 null."""
   profileImageUrl: String
   """평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
   ratingAverage: Float!
+  """리뷰 수."""
   reviewCount: Int!
   """매장 위치 표기(예: 서울 용산구)."""
   regionLabel: String
