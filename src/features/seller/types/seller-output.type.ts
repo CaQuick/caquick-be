@@ -285,4 +285,10 @@ export interface SellerAuditLogOutput {
 export interface SellerCursorConnection<T> {
   items: T[];
   nextCursor: string | null;
+  /** 다음 페이지 존재 여부. limit+1 조회 결과로 판정하므로 추가 쿼리가 없다. */
+  hasMore: boolean;
+  /**
+   * 조건에 맞는 전체 건수. 감사 로그처럼 누적량이 커 COUNT가 부담인 목록은 내리지 않는다.
+   */
+  totalCount?: number;
 }

@@ -103,6 +103,47 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.items[0].status).toBe('CONFIRMED');
     });
 
+    it('결과가 0건이면 totalCount 0, hasMore false', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      const result = await service.sellerOrderList(account.id);
+      expect(result).toMatchObject({ totalCount: 0, hasMore: false });
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('정확히 limit개면 hasMore false, 초과하면 true', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createStoreOrder(store.id);
+      await createStoreOrder(store.id);
+
+      const exact = await service.sellerOrderList(account.id, { limit: 2 });
+      expect(exact.items).toHaveLength(2);
+      expect(exact.hasMore).toBe(false);
+      expect(exact.nextCursor).toBeNull();
+
+      const partial = await service.sellerOrderList(account.id, { limit: 1 });
+      expect(partial.items).toHaveLength(1);
+      expect(partial.hasMore).toBe(true);
+      expect(partial.nextCursor).not.toBeNull();
+    });
+
+    it('totalCount는 페이지가 아니라 필터 전체 건수다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createStoreOrder(store.id, { status: 'SUBMITTED' });
+      await createStoreOrder(store.id, { status: 'SUBMITTED' });
+      await createStoreOrder(store.id, { status: 'CONFIRMED' });
+
+      // limit으로 잘라도 totalCount는 조건에 맞는 전체를 센다
+      const paged = await service.sellerOrderList(account.id, { limit: 1 });
+      expect(paged.items).toHaveLength(1);
+      expect(paged.totalCount).toBe(3);
+
+      // 필터는 totalCount에도 반영된다
+      const filtered = await service.sellerOrderList(account.id, {
+        status: 'SUBMITTED',
+      });
+      expect(filtered.totalCount).toBe(2);
+    });
+
     it('잘못된 status enum이면 BadRequestException', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(

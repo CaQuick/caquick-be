@@ -46,19 +46,28 @@ export class SellerProductQueryService
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.productRepository.listProductsByStore({
+    const filters = {
       storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
       isActive: input?.isActive ?? true,
       categoryId: input?.categoryId ? parseId(input.categoryId) : undefined,
       search: input?.search?.trim() || undefined,
-    });
+    };
+
+    const [rows, totalCount] = await Promise.all([
+      this.productRepository.listProductsByStore({
+        ...filters,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.productRepository.countProductsByStore(filters),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toProductOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 

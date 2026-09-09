@@ -33,6 +33,10 @@ type SellerOrderSummary {
 type SellerOrderConnection {
   """주문 카드. 최신 주문이 먼저 온다."""
   items: [SellerOrderSummary!]!
+  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
+  totalCount: Int!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다. 불투명 토큰이라 값의 형식에 의존하지 않는다."""
   nextCursor: ID
 }

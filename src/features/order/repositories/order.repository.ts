@@ -559,6 +559,67 @@ export class OrderRepository {
     });
   }
 
+  /** 매장 주문 목록의 필터 조건. 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다(커서 제외). */
+  private storeOrderScopeWhere(args: {
+    storeId: bigint;
+    status?: OrderStatus;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+    fromPickupAt?: Date;
+    toPickupAt?: Date;
+    search?: string;
+  }): Prisma.OrderWhereInput {
+    return {
+      ...(args.status ? { status: args.status } : {}),
+      ...(args.fromCreatedAt || args.toCreatedAt
+        ? {
+            created_at: {
+              ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
+              ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
+            },
+          }
+        : {}),
+      ...(args.fromPickupAt || args.toPickupAt
+        ? {
+            pickup_at: {
+              ...(args.fromPickupAt ? { gte: args.fromPickupAt } : {}),
+              ...(args.toPickupAt ? { lte: args.toPickupAt } : {}),
+            },
+          }
+        : {}),
+      ...(args.search
+        ? {
+            OR: [
+              { order_number: { contains: args.search } },
+              { buyer_name: { contains: args.search } },
+              { buyer_phone: { contains: args.search } },
+            ],
+          }
+        : {}),
+      items: {
+        some: {
+          store_id: args.storeId,
+          ...activeWhere,
+        },
+      },
+    };
+  }
+
+  /** 매장 주문 전체 건수(커서 무관). */
+  async countOrdersByStore(args: {
+    storeId: bigint;
+    status?: OrderStatus;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+    fromPickupAt?: Date;
+    toPickupAt?: Date;
+    search?: string;
+  }): Promise<number> {
+    return this.prisma.order.count({
+      where: this.storeOrderScopeWhere(args),
+    });
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
@@ -573,38 +634,7 @@ export class OrderRepository {
     return this.prisma.order.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...(args.status ? { status: args.status } : {}),
-        ...(args.fromCreatedAt || args.toCreatedAt
-          ? {
-              created_at: {
-                ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
-                ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
-              },
-            }
-          : {}),
-        ...(args.fromPickupAt || args.toPickupAt
-          ? {
-              pickup_at: {
-                ...(args.fromPickupAt ? { gte: args.fromPickupAt } : {}),
-                ...(args.toPickupAt ? { lte: args.toPickupAt } : {}),
-              },
-            }
-          : {}),
-        ...(args.search
-          ? {
-              OR: [
-                { order_number: { contains: args.search } },
-                { buyer_name: { contains: args.search } },
-                { buyer_phone: { contains: args.search } },
-              ],
-            }
-          : {}),
-        items: {
-          some: {
-            store_id: args.storeId,
-            ...activeWhere,
-          },
-        },
+        ...this.storeOrderScopeWhere(args),
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,

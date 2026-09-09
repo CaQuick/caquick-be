@@ -118,6 +118,61 @@ export interface ProductDetailRow {
 @Injectable()
 export class ProductRepository {
   constructor(private readonly prisma: PrismaService) {}
+  /** 상품 목록의 필터 조건. 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다(커서 제외). */
+  private storeProductScopeWhere(args: {
+    storeId: bigint;
+    isActive?: boolean;
+    categoryId?: bigint;
+    search?: string;
+  }): Prisma.ProductWhereInput {
+    return {
+      store_id: args.storeId,
+      ...(args.isActive !== undefined ? { is_active: args.isActive } : {}),
+      ...(args.categoryId
+        ? {
+            // include의 링크·대상 가드와 동일 — 삭제된 연결이 필터에 걸리지 않게 한다
+            product_categories: {
+              some: {
+                category_id: args.categoryId,
+                ...activeWhere,
+                category: activeWhere,
+              },
+            },
+          }
+        : {}),
+      ...(args.search
+        ? {
+            OR: [
+              { name: { contains: args.search } },
+              {
+                product_tags: {
+                  some: {
+                    ...activeWhere,
+                    tag: {
+                      name: { contains: args.search },
+                      ...activeWhere,
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  /** 상품 전체 건수(커서 무관). */
+  async countProductsByStore(args: {
+    storeId: bigint;
+    isActive?: boolean;
+    categoryId?: bigint;
+    search?: string;
+  }): Promise<number> {
+    return this.prisma.product.count({
+      where: this.storeProductScopeWhere(args),
+    });
+  }
+
   async listProductsByStore(args: {
     storeId: bigint;
     limit: number;
@@ -128,39 +183,8 @@ export class ProductRepository {
   }) {
     return this.prisma.product.findMany({
       where: {
-        store_id: args.storeId,
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...(args.isActive !== undefined ? { is_active: args.isActive } : {}),
-        ...(args.categoryId
-          ? {
-              // include의 링크·대상 가드와 동일 — 삭제된 연결이 필터에 걸리지 않게 한다
-              product_categories: {
-                some: {
-                  category_id: args.categoryId,
-                  ...activeWhere,
-                  category: activeWhere,
-                },
-              },
-            }
-          : {}),
-        ...(args.search
-          ? {
-              OR: [
-                { name: { contains: args.search } },
-                {
-                  product_tags: {
-                    some: {
-                      ...activeWhere,
-                      tag: {
-                        name: { contains: args.search },
-                        ...activeWhere,
-                      },
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
+        ...this.storeProductScopeWhere(args),
       },
       // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
       include: {
