@@ -1,11 +1,12 @@
 import {
+  CATEGORIES,
   collectCoverage,
   findViolations,
   isExemptFieldName,
   isPlaceholderDescription,
   percentOf,
 } from './sdl-description-coverage';
-import type { Category, Coverage } from './sdl-description-coverage';
+import type { Baseline, Category, Coverage } from './sdl-description-coverage';
 
 // DB 불필요한 순수 단위 테스트. SDL 문자열만으로 검증한다.
 describe('sdl-description-coverage', () => {
@@ -152,50 +153,81 @@ describe('sdl-description-coverage', () => {
   });
 
   describe('findViolations', () => {
-    const thresholds = Object.fromEntries(
-      ['rootField', 'rootArgScalar', 'inputType', 'inputField', 'outputType', 'outputField', 'enumType', 'enumValue'].map(
-        (c) => [c, 0],
-      ),
-    ) as Record<Category, number>;
+    /** 모든 카테고리를 "회귀 없음"으로 두고, 검사할 카테고리만 덮어쓴다. */
+    function baselineOf(
+      overrides: Partial<Record<Category, Baseline>> = {},
+    ): Record<Category, Baseline> {
+      const base = CATEGORIES.reduce(
+        (acc, category) => {
+          acc[category] = { documented: 0, total: 0 };
+          return acc;
+        },
+        {} as Record<Category, Baseline>,
+      );
+      return { ...base, ...overrides };
+    }
 
-    it('임계치 미달 항목만 돌려준다', () => {
-      const coverage = coverageOf(`
-        extend type Query {
-          productDetail(productId: ID!): String!
-        }
-      `);
-      expect(findViolations(coverage, { ...thresholds, rootField: 100 })).toMatchObject([
-        { category: 'rootField', actual: 0, threshold: 100 },
-      ]);
-      expect(findViolations(coverage, thresholds)).toEqual([]);
-    });
+    const oneRootField = `
+      extend type Query {
+        productDetail(productId: ID!): String!
+      }
+    `;
 
-    it('기준선을 분수로 잡으면 미기재 1건 추가도 잡아낸다', () => {
-      // 정수 %로 내림하면 그만큼 여유분이 생겨 회귀가 통과한다.
-      // 예: 185/603=30.68%에 임계 30을 걸면 185/616=30.03%도 통과.
-      const baseline = (100 * 185) / 603;
-      const regressed = { documented: 185, total: 604, missing: [] };
-      expect(percentOf(regressed)).toBeLessThan(baseline);
-
-      const coverage = coverageOf(`
-        """설명 있음."""
-        type A { """값.""" one: String, two: String, three: String, four: String }
-      `);
-      // 1/4 = 25% < 1/3 = 33.33%
-      const previous = (100 * 1) / 3;
+    it('기준선을 만족하면 위반이 없다', () => {
+      const coverage = coverageOf(oneRootField);
       expect(
-        findViolations(coverage, { ...thresholds, outputField: previous }),
-      ).toMatchObject([{ category: 'outputField' }]);
+        findViolations(coverage, baselineOf({ rootField: { documented: 0, total: 1 } })),
+      ).toEqual([]);
     });
 
-    it('실측치를 그대로 임계치로 박아도 자기 자신에게 걸리지 않는다', () => {
-      // 임계치를 달성치로 고정하는 운용이라 부동소수 오차 방어가 필요하다
+    it('커버리지 비율이 떨어지면 ratio 위반으로 잡는다', () => {
+      // 설명이 있던 필드가 사라져 비율만 내려가는 경우 (미기재 건수는 그대로)
+      const coverage = coverageOf(oneRootField);
+      const violations = findViolations(
+        coverage,
+        baselineOf({ rootField: { documented: 1, total: 2 } }),
+      );
+      expect(violations).toMatchObject([{ category: 'rootField', reason: 'ratio' }]);
+    });
+
+    it('미기재 건수가 늘면 count 위반으로 잡는다', () => {
       const coverage = coverageOf(`
         """설명 있음."""
         type A { """값.""" one: String, two: String, three: String }
       `);
-      const actual = percentOf(coverage.outputField); // 1/3 = 33.33...
-      expect(findViolations(coverage, { ...thresholds, outputField: actual })).toEqual([]);
+      // 기준선 1/2(미기재 1) → 실제 1/3(미기재 2)
+      expect(
+        findViolations(coverage, baselineOf({ outputField: { documented: 1, total: 2 } })),
+      ).toMatchObject([{ category: 'outputField', reason: 'count' }]);
+    });
+
+    it('기준선이 0%인 카테고리도 미기재 추가를 막는다', () => {
+      // 비율만 보면 0/6 → 0/7도 0% >= 0%라 통과해 게이트가 성립하지 않는다
+      const coverage = coverageOf(`
+        extend type Query {
+          """검색."""
+          search(keyword: String!, cursor: String): String!
+        }
+      `);
+      expect(percentOf(coverage.rootArgScalar)).toBe(0);
+      expect(
+        findViolations(coverage, baselineOf({ rootArgScalar: { documented: 0, total: 1 } })),
+      ).toMatchObject([{ category: 'rootArgScalar', reason: 'count' }]);
+      // 기준선이 같은 미기재 2건이면 통과
+      expect(
+        findViolations(coverage, baselineOf({ rootArgScalar: { documented: 0, total: 2 } })),
+      ).toEqual([]);
+    });
+
+    it('실측치를 그대로 기준선으로 박아도 자기 자신에게 걸리지 않는다', () => {
+      // 기준선을 실측 분수로 고정하는 운용이라 부동소수 오차 방어가 필요하다
+      const coverage = coverageOf(`
+        """설명 있음."""
+        type A { """값.""" one: String, two: String, three: String }
+      `);
+      expect(
+        findViolations(coverage, baselineOf({ outputField: { documented: 1, total: 3 } })),
+      ).toEqual([]);
     });
   });
 });

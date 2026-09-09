@@ -16,12 +16,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 
-import type { Category, SdlFile } from './sdl-description-coverage';
+import type { Baseline, Category, SdlFile } from './sdl-description-coverage';
 import {
   CATEGORIES,
   CATEGORY_LABELS,
   collectCoverage,
   findViolations,
+  missingCountOf,
   percentOf,
 } from './sdl-description-coverage';
 
@@ -43,7 +44,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
  *
  * 커버리지를 올렸다면 `yarn docs:check --report`가 찍어 주는 수치로 갱신한다.
  */
-const BASELINE: Record<Category, { documented: number; total: number }> = {
+const BASELINE: Record<Category, Baseline> = {
   rootField: { documented: 130, total: 130 },
   rootArgScalar: { documented: 0, total: 6 },
   inputType: { documented: 13, total: 72 },
@@ -53,14 +54,6 @@ const BASELINE: Record<Category, { documented: number; total: number }> = {
   enumType: { documented: 12, total: 23 },
   enumValue: { documented: 10, total: 81 },
 };
-
-const THRESHOLDS: Record<Category, number> = CATEGORIES.reduce(
-  (acc, category) => {
-    acc[category] = percentOf({ ...BASELINE[category], missing: [] });
-    return acc;
-  },
-  {} as Record<Category, number>,
-);
 
 const args = new Set(process.argv.slice(2));
 const REPORT_ONLY = args.has('--report');
@@ -104,12 +97,15 @@ function main(): void {
   console.log('');
   for (const category of CATEGORIES) {
     const stat = coverage[category];
+    const baseline = BASELINE[category];
     const actual = percentOf(stat);
-    const threshold = THRESHOLDS[category];
+    const threshold = percentOf({ ...baseline, missing: [] });
     const label = CATEGORY_LABELS[category].padEnd(22, ' ');
     const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(9);
     console.log(
-      `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  (기준 ${String(BASELINE[category].documented)}/${String(BASELINE[category].total)} = ${threshold.toFixed(1)}%)`,
+      `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  ` +
+        `(기준 ${String(baseline.documented)}/${String(baseline.total)} = ${threshold.toFixed(1)}%, ` +
+        `미기재 ${String(stat.missing.length)}/${String(missingCountOf(baseline))})`,
     );
   }
   console.log('');
@@ -119,16 +115,19 @@ function main(): void {
     return;
   }
 
-  const violations = findViolations(coverage, THRESHOLDS);
+  const violations = findViolations(coverage, BASELINE);
   if (violations.length === 0) {
     console.log('[docs:check] 통과');
     return;
   }
 
   for (const violation of violations) {
+    const detail =
+      violation.reason === 'count'
+        ? `미기재 ${String(violation.actualMissing)}건 > 기준선 ${String(violation.baselineMissing)}건`
+        : `커버리지 ${violation.actual.toFixed(1)}% < 기준선 ${violation.threshold.toFixed(1)}%`;
     console.error(
-      `\n[COVERAGE_BELOW_THRESHOLD] ${CATEGORY_LABELS[violation.category]}: ` +
-        `${violation.actual.toFixed(1)}% < ${violation.threshold.toFixed(1)}%`,
+      `\n[DOC_COVERAGE_REGRESSION] ${CATEGORY_LABELS[violation.category]}: ${detail}`,
     );
     console.error(`  설명이 없는 요소 ${String(violation.missing.length)}건:`);
     for (const item of violation.missing) {

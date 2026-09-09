@@ -73,7 +73,10 @@ const SCALAR_TYPE_NAMES = new Set([
  *
  * 왜 제외하는가: 전부 채우게 하면 "상품 ID" 같은 무의미한 설명이 수백 개 생긴다.
  * order-checkout.graphql이 이미 비자명 필드(idempotencyKey·pickupAt)에만 근거를
- * 적고 productId·quantity는 비워 뒀는데, 단순 유무 집계는 그 판단에 벌점을 준다.
+ * 적고 productId는 비워 뒀는데, 단순 유무 집계는 그 판단에 벌점을 준다.
+ *
+ * quantity처럼 맥락에 따라 단위·상한 설명이 필요한 이름은 일부러 넣지 않았다 —
+ * 제외 목록이 넓어지면 설명이 필요한 자리를 가린다.
  *
  * 제외는 분모에서 빼는 것일 뿐 작성을 막지 않는다 — 맥락이 필요하면 자유롭게 단다.
  */
@@ -277,35 +280,67 @@ export function percentOf(stat: CategoryStat): number {
   return (stat.documented / stat.total) * 100;
 }
 
+export interface Baseline {
+  documented: number;
+  total: number;
+}
+
 export interface Violation {
   category: Category;
+  /** 'ratio' 커버리지 비율 하락 · 'count' 미기재 건수 증가 */
+  reason: 'ratio' | 'count';
   actual: number;
   threshold: number;
+  actualMissing: number;
+  baselineMissing: number;
   missing: string[];
 }
 
+export function missingCountOf(baseline: Baseline): number {
+  return baseline.total - baseline.documented;
+}
+
 /**
- * 임계치 미달 항목을 돌려준다.
+ * 기준선 대비 회귀를 찾는다. 두 조건을 함께 건다.
  *
- * 소수 셋째 자리에서 비교한다 — 임계치를 실측치로 고정하는 운용이라
- * 부동소수 오차로 자기 자신에게 걸리는 걸 막아야 한다.
+ * 1. 미기재 건수가 기준선보다 늘면 실패.
+ * 2. 커버리지 비율이 기준선보다 떨어지면 실패.
+ *
+ * 왜 둘 다인가: 비율만 보면 기준선이 0%인 카테고리를 영영 못 막는다
+ * (0/6 → 0/7도 0% >= 0%라 통과). 건수만 보면 설명이 있던 필드를 지워 비율이
+ * 떨어지는 회귀를 놓친다.
+ *
+ * 비율 비교는 소수 여유(1e-9)를 둔다 — 기준선을 실측 분수로 고정하는 운용이라
+ * 부동소수 오차로 자기 자신에게 걸리면 안 된다.
  */
 export function findViolations(
   coverage: Coverage,
-  thresholds: Record<Category, number>,
+  baselines: Record<Category, Baseline>,
 ): Violation[] {
   const violations: Violation[] = [];
   for (const category of CATEGORIES) {
     const stat = coverage[category];
+    const baseline = baselines[category];
     const actual = percentOf(stat);
-    const threshold = thresholds[category];
+    const threshold = percentOf({ ...baseline, missing: [] });
+    const actualMissing = stat.missing.length;
+    const baselineMissing = missingCountOf(baseline);
+
+    const base = {
+      category,
+      actual,
+      threshold,
+      actualMissing,
+      baselineMissing,
+      missing: stat.missing,
+    };
+
+    if (actualMissing > baselineMissing) {
+      violations.push({ ...base, reason: 'count' });
+      continue;
+    }
     if (actual + 1e-9 < threshold) {
-      violations.push({
-        category,
-        actual,
-        threshold,
-        missing: stat.missing,
-      });
+      violations.push({ ...base, reason: 'ratio' });
     }
   }
   return violations;
