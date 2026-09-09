@@ -47,6 +47,14 @@ jobs:
       - name: DTO ↔ SDL sync check (warning during migration)
         run: yarn dto:check --warning
 
+      # SDL description 커버리지 게이트. 임계치는 현재 달성치로 고정돼 있어
+      # 회귀만 차단한다 — 설명 없는 필드를 새로 추가하면 여기서 걸린다.
+      - name: SDL description coverage check
+        run: yarn docs:check
+
+      - name: Script unit tests
+        run: yarn test:scripts
+
       # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 validate(pre-push)뿐 아니라
       # 보호된 check status에서도 강제해야 --no-verify/Husky 미설치 환경의 우회를 막는다.
       - name: Architecture check (dependency-cruiser)
