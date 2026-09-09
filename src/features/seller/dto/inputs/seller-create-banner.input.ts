@@ -23,7 +23,7 @@ const BANNER_LINK_TYPES = [
   'STORE',
   'CATEGORY',
 ] as const;
-type SellerBannerLinkType = (typeof BANNER_LINK_TYPES)[number];
+type BannerLinkType = (typeof BANNER_LINK_TYPES)[number];
 
 /**
  * 배너 생성 입력.
@@ -44,7 +44,7 @@ export class SellerCreateBannerInput {
 
   @IsOptional()
   @IsIn(BANNER_LINK_TYPES)
-  linkType?: SellerBannerLinkType;
+  linkType?: BannerLinkType;
 
   @IsOptional()
   @IsString()

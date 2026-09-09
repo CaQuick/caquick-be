@@ -34,13 +34,6 @@ input SellerDateCursorInput {
   toDate: DateTime
 }
 
-"""SellerStoreMapProvider 열거형"""
-enum SellerStoreMapProvider {
-  NAVER
-  KAKAO
-  NONE
-}
-
 """SellerStore 타입"""
 type SellerStore {
   id: ID!
@@ -53,7 +46,7 @@ type SellerStore {
   addressNeighborhood: String
   latitude: String
   longitude: String
-  mapProvider: SellerStoreMapProvider!
+  mapProvider: StoreMapProvider!
   websiteUrl: String
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. 미등록 시 null."""
@@ -119,7 +112,7 @@ input SellerUpdateStoreBasicInfoInput {
   addressNeighborhood: String
   latitude: String
   longitude: String
-  mapProvider: SellerStoreMapProvider
+  mapProvider: StoreMapProvider
   websiteUrl: String
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. null 전달 시 제거."""

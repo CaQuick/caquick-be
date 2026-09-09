@@ -10,18 +10,6 @@ extend type Mutation {
   sellerSendConversationMessage(input: SellerSendConversationMessageInput!): SellerConversationMessage!
 }
 
-enum SellerConversationSenderType {
-  USER
-  STORE
-  SYSTEM
-}
-
-"""SellerConversationBodyFormat 열거형"""
-enum SellerConversationBodyFormat {
-  TEXT
-  HTML
-}
-
 """SellerConversation 타입"""
 type SellerConversation {
   id: ID!
@@ -42,9 +30,9 @@ type SellerConversationConnection {
 type SellerConversationMessage {
   id: ID!
   conversationId: ID!
-  senderType: SellerConversationSenderType!
+  senderType: ConversationSenderType!
   senderAccountId: ID
-  bodyFormat: SellerConversationBodyFormat!
+  bodyFormat: ConversationBodyFormat!
   bodyText: String
   bodyHtml: String
   createdAt: DateTime!
@@ -59,7 +47,7 @@ type SellerConversationMessageConnection {
 """SellerSendConversationMessageInput 입력 타입"""
 input SellerSendConversationMessageInput {
   conversationId: ID!
-  bodyFormat: SellerConversationBodyFormat!
+  bodyFormat: ConversationBodyFormat!
   bodyText: String
   bodyHtml: String
 }

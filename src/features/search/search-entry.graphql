@@ -21,9 +21,13 @@ input PopularSearchKeywordsInput {
 
 """직전 스냅샷 대비 순위 변동."""
 enum SearchKeywordTrend {
+  """직전 스냅샷보다 순위가 올랐다."""
   UP
+  """직전 스냅샷보다 순위가 내렸다."""
   DOWN
+  """직전 스냅샷과 순위가 같다."""
   SAME
+  """직전 스냅샷에 없던 신규 진입. 상승(UP)과 구분된다."""
   NEW
 }
 

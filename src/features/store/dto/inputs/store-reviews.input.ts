@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 
 export const STORE_REVIEW_SORTS = ['LATEST', 'LIKES'] as const;
-export type StoreReviewSort = (typeof STORE_REVIEW_SORTS)[number];
+export type ReviewSort = (typeof STORE_REVIEW_SORTS)[number];
 
 export class StoreReviewsInput {
   @IsString()
@@ -23,7 +23,7 @@ export class StoreReviewsInput {
 
   @IsOptional()
   @IsIn(STORE_REVIEW_SORTS)
-  sort?: StoreReviewSort;
+  sort?: ReviewSort;
 
   @IsOptional()
   @IsString()

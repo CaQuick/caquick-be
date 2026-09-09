@@ -53,21 +53,20 @@ input SellerUpdateFaqTopicInput {
 
 """SellerBannerPlacement 열거형"""
 enum SellerBannerPlacement {
+  """홈 '상황별 인기 케이크' 배너. 카테고리 칩이 '전체'일 때 노출된다."""
   HOME_MAIN
-  HOME_SUB
+  """
+  홈 '상황별 인기 케이크' 배너 중 특정 카테고리 칩을 선택했을 때 노출되는 것.
+  해당 카테고리로 연결된 배너만 뽑히므로 linkCategoryId를 함께 지정해야 한다.
+  카테고리 진입 화면의 배너가 아니다.
+  """
   CATEGORY
-  STORE
   """검색 진입 화면 배너 슬롯"""
   SEARCH
-}
-
-"""SellerBannerLinkType 열거형"""
-enum SellerBannerLinkType {
-  NONE
-  URL
-  PRODUCT
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
+  HOME_SUB
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
   STORE
-  CATEGORY
 }
 
 """SellerBanner 타입"""
@@ -76,7 +75,7 @@ type SellerBanner {
   placement: SellerBannerPlacement!
   title: String
   imageUrl: String!
-  linkType: SellerBannerLinkType!
+  linkType: BannerLinkType!
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -100,7 +99,7 @@ input SellerCreateBannerInput {
   placement: SellerBannerPlacement!
   title: String
   imageUrl: String!
-  linkType: SellerBannerLinkType = NONE
+  linkType: BannerLinkType = NONE
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -117,7 +116,7 @@ input SellerUpdateBannerInput {
   placement: SellerBannerPlacement
   title: String
   imageUrl: String
-  linkType: SellerBannerLinkType
+  linkType: BannerLinkType
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -128,20 +127,29 @@ input SellerUpdateBannerInput {
   isActive: Boolean
 }
 
-"""SellerAuditTargetType 열거형"""
+"""감사 로그가 가리키는 대상 종류."""
 enum SellerAuditTargetType {
+  """매장 정보·영업시간·픽업 정책 등 매장 설정."""
   STORE
+  """상품과 그 하위(이미지·옵션·커스텀 템플릿)."""
   PRODUCT
+  """주문. 주로 상태 변경이 기록된다."""
   ORDER
+  """구매자 문의 대화."""
   CONVERSATION
+  """판매자 비밀번호 변경. targetId에는 비밀번호를 바꾼 판매자 본인의 계정 ID가 들어간다."""
   CHANGE_PASSWORD
 }
 
-"""SellerAuditActionType 열거형"""
+"""감사 로그에 기록된 행위 종류."""
 enum SellerAuditActionType {
+  """생성."""
   CREATE
+  """수정."""
   UPDATE
+  """삭제(soft-delete 포함)."""
   DELETE
+  """상태 전이. 주문 상태 변경·노출 여부 전환이 여기 해당한다."""
   STATUS_CHANGE
 }
 
