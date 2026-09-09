@@ -222,7 +222,7 @@ input SellerProductListInput {
   limit: Int = 20
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
-  """노출 여부 필터. 미지정 시 노출·미노출을 모두 포함한다."""
+  """노출 여부 필터. 미지정 시 활성 상품만 반환한다(기본 true)."""
   isActive: Boolean
   """카테고리 필터. 해당 카테고리가 연결된 상품만."""
   categoryId: ID
