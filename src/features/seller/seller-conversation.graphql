@@ -16,16 +16,16 @@ type SellerConversation {
   """대화 상대인 구매자 계정 ID."""
   accountId: ID!
   storeId: ID!
-  """마지막 메시지 시각. 메시지가 없으면 null. 목록 정렬과 무관하다(정렬은 id 최신순)."""
+  """마지막 메시지 시각. 메시지가 없으면 null. 목록 정렬 기준은 이 값이 아니라 updated_at이다."""
   lastMessageAt: DateTime
   """판매자가 이 대화방을 마지막으로 읽은 시각. 읽은 적이 없으면 null."""
   lastReadAt: DateTime
   updatedAt: DateTime!
 }
 
-"""대화방 목록 페이지. 최신 대화방이 먼저 온다."""
+"""대화방 목록 페이지. 최근에 갱신된(updated_at 기준) 대화방이 먼저 온다."""
 type SellerConversationConnection {
-  """대화방. 최신 대화방이 먼저 온다."""
+  """대화방. 최근에 갱신된 순으로 온다."""
   items: [SellerConversation!]!
   """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
