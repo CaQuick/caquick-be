@@ -85,8 +85,8 @@ describe('sdl-description-coverage', () => {
         input SomeInput { """값.""" value: String }
       `);
       // yearMonth만 대상 — storeId는 식별자, input은 input 객체
-      expect(coverage.rootArgScalar).toMatchObject({ documented: 0, total: 1 });
-      expect(coverage.rootArgScalar.missing).toEqual([
+      expect(coverage.fieldArg).toMatchObject({ documented: 0, total: 1 });
+      expect(coverage.fieldArg.missing).toEqual([
         'test.graphql: Query.pickupCalendar(yearMonth)',
       ]);
     });
@@ -102,8 +102,8 @@ describe('sdl-description-coverage', () => {
         }
         input SearchInput { """값.""" value: String }
       `);
-      expect(coverage.rootArgScalar).toMatchObject({ documented: 0, total: 2 });
-      expect(coverage.rootArgScalar.missing).toEqual([
+      expect(coverage.fieldArg).toMatchObject({ documented: 0, total: 2 });
+      expect(coverage.fieldArg.missing).toEqual([
         'test.graphql: Query.search(url)',
         'test.graphql: Query.search(sort)',
       ]);
@@ -192,12 +192,8 @@ describe('sdl-description-coverage', () => {
   });
 
 
-  // 게이트 전수 점검. 설명을 붙일 수 있는 SDL 자리를 빠짐없이 나열하고, 각 자리에
-  // 설명 없는 요소를 하나씩 넣어 게이트가 실제로 잡아내는지 본다.
-  //
-  // 왜 이 형태인가: "현재 스키마에서 통과한다"는 오탐이 없다는 뜻일 뿐, 막아야 할 것을
-  // 막는다는 증거가 아니다. 실제로 이 표를 만들고서야 필드 인자·union·scalar 자리가
-  // 집계에서 통째로 빠져 있던 걸 찾았다. 새 자리가 생기면 여기에 줄을 추가한다.
+  // 설명을 붙일 수 있는 SDL 자리를 빠짐없이 나열하고, 각 자리에 설명 없는 요소를
+  // 넣어 게이트가 잡아내는지 본다. 새 자리가 생기면 여기에 줄을 추가한다.
   describe('설명을 붙일 수 있는 모든 자리를 빠짐없이 집계한다', () => {
     const SITES: [name: string, sdl: string, expected: string][] = [
       ['object type 선언', 'type A { """f.""" f: String }', 'A'],
@@ -231,7 +227,6 @@ describe('sdl-description-coverage', () => {
 
   describe('처리하지 않은 SDL 구문', () => {
     it('모르는 정의 종류를 만나면 조용히 넘기지 않고 예외를 던진다', () => {
-      // 손으로 적은 자리 목록은 반드시 빠지는 게 생긴다(directive를 그렇게 놓쳤다).
       // 새 구문이 들어오면 집계에서 통째로 빠지는 대신 여기서 터져야 한다.
       const alien = {
         kind: 'AlienDefinition',
@@ -243,10 +238,9 @@ describe('sdl-description-coverage', () => {
       ).toThrow('처리하지 않은 SDL 정의 종류: AlienDefinition');
     });
 
-    // 분류 목록을 손으로 적으면 반드시 빠진다 — directive를 그렇게 놓쳤고
-    // extend scalar/union도 같은 이유로 예외를 터뜨렸다. 그래서 목록을 내가 적지 않고
-    // graphql 패키지의 Kind에서 파생해, 모든 kind가 "집계됨" 또는 "의도적 제외" 중
-    // 하나로 분류돼 있는지 확인한다. graphql 버전이 올라 새 kind가 생기면 여기서 걸린다.
+    // 분류 목록을 손으로 적으면 빠지는 kind가 생긴다. graphql 패키지의 Kind에서
+    // 파생해 모든 kind가 "집계됨" 또는 "의도적 제외" 중 하나인지 확인한다 —
+    // graphql 버전이 올라 새 kind가 생기면 여기서 걸린다.
     it('SDL에 올 수 있는 모든 정의 kind가 집계 또는 제외로 분류돼 있다', () => {
       const { Kind } = jest.requireActual<typeof import('graphql')>('graphql');
       const definitionKinds = Object.values(Kind).filter((k) =>
@@ -353,13 +347,13 @@ describe('sdl-description-coverage', () => {
           search(keyword: String!, cursor: String): String!
         }
       `);
-      expect(percentOf(coverage.rootArgScalar)).toBe(0);
+      expect(percentOf(coverage.fieldArg)).toBe(0);
       expect(
-        findViolations(coverage, baselineOf({ rootArgScalar: { documented: 0, total: 1 } })),
-      ).toMatchObject([{ category: 'rootArgScalar', reason: 'count' }]);
+        findViolations(coverage, baselineOf({ fieldArg: { documented: 0, total: 1 } })),
+      ).toMatchObject([{ category: 'fieldArg', reason: 'count' }]);
       // 기준선이 같은 미기재 2건이면 통과
       expect(
-        findViolations(coverage, baselineOf({ rootArgScalar: { documented: 0, total: 2 } })),
+        findViolations(coverage, baselineOf({ fieldArg: { documented: 0, total: 2 } })),
       ).toEqual([]);
     });
 

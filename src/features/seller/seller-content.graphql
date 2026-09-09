@@ -245,7 +245,10 @@ type SellerAuditLog {
   createdAt: DateTime!
 }
 
-"""감사 로그 목록 페이지. 최신 기록이 먼저 온다."""
+"""
+감사 로그 목록 페이지. 최신 기록이 먼저 온다.
+누적형 로그라 매 조회 COUNT가 부담이므로 totalCount는 내려주지 않는다.
+"""
 type SellerAuditLogConnection {
   """감사 로그. 최신 기록이 먼저 온다."""
   items: [SellerAuditLog!]!
@@ -254,8 +257,6 @@ type SellerAuditLogConnection {
   """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
-
-# totalCount는 두지 않는다 — 감사 로그는 누적형이라 매 조회 COUNT가 부담이다.
 
 """감사 로그 조회 조건."""
 input SellerAuditLogListInput {

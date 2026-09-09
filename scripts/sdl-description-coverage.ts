@@ -21,7 +21,7 @@ import { Kind, parse } from 'graphql';
 /** 문서 트리 깊이 순. 게이트 출력도 이 순서를 따른다. */
 export const CATEGORIES = [
   'rootField',
-  'rootArgScalar',
+  'fieldArg',
   'inputType',
   'inputField',
   'outputType',
@@ -34,7 +34,7 @@ export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   rootField: 'Query/Mutation 필드',
-  rootArgScalar: '필드 인자(비 input)',
+  fieldArg: '필드 인자(비 input)',
   inputType: 'input 타입 선언',
   inputField: 'input 필드',
   outputType: '출력 type 선언',
@@ -78,16 +78,11 @@ export const IGNORED_KINDS = new Set<string>([
 ]);
 
 /**
- * 이름만으로 의미가 자명해 설명을 요구하지 않는 필드.
+ * 이름만으로 의미가 자명해 설명을 요구하지 않는 필드. 분모에서 빠질 뿐 작성을 막지 않는다.
  *
- * 왜 제외하는가: 전부 채우게 하면 "상품 ID" 같은 무의미한 설명이 수백 개 생긴다.
- * order-checkout.graphql이 이미 비자명 필드(idempotencyKey·pickupAt)에만 근거를
- * 적고 productId는 비워 뒀는데, 단순 유무 집계는 그 판단에 벌점을 준다.
- *
- * quantity처럼 맥락에 따라 단위·상한 설명이 필요한 이름은 일부러 넣지 않았다 —
- * 제외 목록이 넓어지면 설명이 필요한 자리를 가린다.
- *
- * 제외는 분모에서 빼는 것일 뿐 작성을 막지 않는다 — 맥락이 필요하면 자유롭게 단다.
+ * 전부 채우게 하면 "상품 ID" 같은 무의미한 설명만 늘어난다. 반대로 목록을 넓히면
+ * 설명이 필요한 자리를 가리므로(`quantity`는 단위·상한이 필요할 수 있어 넣지 않았다)
+ * 이름만으로 대상이 특정되는 것에 한정한다.
  */
 const EXEMPT_FIELD_NAMES = new Set([
   'id',
@@ -106,9 +101,8 @@ export function isExemptFieldName(name: string): boolean {
 /**
  * 타입 이름을 되풀이하기만 하는 자동생성형 설명인지.
  *
- * 왜 필요한가: seller SDL에 `"""SellerOrderSummary 타입"""` 같은 설명이 70건 있다.
- * 파서는 description이 있으므로 "문서화됨"으로 세지만 전달되는 정보는 0이다.
- * 이걸 걸러내지 않으면 임계치가 거짓 안전을 준다.
+ * `"""SellerOrderSummary 타입"""`처럼 이름만 되풀이하는 설명은 파서에 "문서화됨"으로
+ * 잡히지만 전달되는 정보가 없다. 미기재로 세지 않으면 기준선이 거짓 안전을 준다.
  */
 export function isPlaceholderDescription(
   typeName: string,
@@ -141,12 +135,8 @@ function namedTypeOf(node: InputValueDefinitionNode): string {
 }
 
 /**
- * SDL에 선언된 input 객체 타입명을 모은다.
- *
- * 왜 스칼라 allowlist가 아닌가: 하드코딩한 스칼라 목록은 `scalar URL` 같은 커스텀
- * 스칼라가 추가되면 그 타입 인자를 통째로 집계에서 빠뜨린다. "input 객체가 아니면
- * 대상"으로 뒤집으면 커스텀 스칼라도 enum 인자도 자동으로 포함된다 — 둘 다 설명을
- * 적을 자리가 인자뿐이라 원래 대상이어야 한다.
+ * SDL에 선언된 input 객체 타입명을 모은다. 인자 집계는 "input 객체가 아니면 대상"으로
+ * 판정하므로, 커스텀 스칼라나 enum 타입 인자가 추가돼도 목록을 손대지 않아도 된다.
  */
 function collectInputTypeNames(documents: DocumentNode[]): Set<string> {
   const names = new Set<string>();
@@ -189,6 +179,13 @@ export function collectCoverage(files: SdlFile[]): Coverage {
   return coverage;
 }
 
+type Recorder = (
+  category: Category,
+  file: string,
+  label: string,
+  hasDescription: boolean,
+) => void;
+
 /**
  * 필드 인자를 기록한다. 루트든 아니든 인자는 설명을 적을 자리가 인자뿐이라 규칙이 같다.
  *
@@ -205,7 +202,7 @@ function recordFieldArgs(
     if (inputTypeNames.has(namedTypeOf(arg))) continue;
     if (isExemptFieldName(arg.name.value)) continue;
     record(
-      'rootArgScalar',
+      'fieldArg',
       file,
       `${ownerLabel}.${field.name.value}(${arg.name.value})`,
       Boolean(arg.description?.value.trim()),
@@ -213,12 +210,41 @@ function recordFieldArgs(
   }
 }
 
-type Recorder = (
-  category: Category,
+/** 출력 타입(object·interface)의 필드와 그 인자를 기록한다. 정의든 확장이든 규칙이 같다. */
+function recordOutputFields(
+  fields: readonly FieldDefinitionNode[] | undefined,
+  typeName: string,
   file: string,
-  label: string,
-  hasDescription: boolean,
-) => void;
+  record: Recorder,
+  inputTypeNames: Set<string>,
+): void {
+  for (const field of fields ?? []) {
+    recordFieldArgs(field, typeName, file, record, inputTypeNames);
+    if (isExemptFieldName(field.name.value)) continue;
+    record(
+      'outputField',
+      file,
+      `${typeName}.${field.name.value}`,
+      Boolean(field.description?.value.trim()),
+    );
+  }
+}
+
+/** 선언 설명은 정의에만 붙는다 — 확장 노드는 필드·값만 센다. */
+function recordTypeDeclaration(
+  category: Category,
+  typeName: string,
+  file: string,
+  description: string | undefined,
+  record: Recorder,
+): void {
+  record(
+    category,
+    file,
+    typeName,
+    !isPlaceholderDescription(typeName, description ?? ''),
+  );
+}
 
 export function collectDefinition(
   def: DefinitionNode,
@@ -252,16 +278,7 @@ export function collectDefinition(
         !isPlaceholderDescription(typeName, def.description?.value ?? ''),
       );
     }
-    for (const field of def.fields ?? []) {
-      recordFieldArgs(field, typeName, file, record, inputTypeNames);
-      if (isExemptFieldName(field.name.value)) continue;
-      record(
-        'outputField',
-        file,
-        `${typeName}.${field.name.value}`,
-        Boolean(field.description?.value.trim()),
-      );
-    }
+    recordOutputFields(def.fields, typeName, file, record, inputTypeNames);
     return;
   }
 
@@ -279,16 +296,7 @@ export function collectDefinition(
         !isPlaceholderDescription(typeName, def.description?.value ?? ''),
       );
     }
-    for (const field of def.fields ?? []) {
-      recordFieldArgs(field, typeName, file, record, inputTypeNames);
-      if (isExemptFieldName(field.name.value)) continue;
-      record(
-        'outputField',
-        file,
-        `${typeName}.${field.name.value}`,
-        Boolean(field.description?.value.trim()),
-      );
-    }
+    recordOutputFields(def.fields, typeName, file, record, inputTypeNames);
     return;
   }
 
@@ -330,7 +338,7 @@ export function collectDefinition(
       if (inputTypeNames.has(namedTypeOf(arg))) continue;
       if (isExemptFieldName(arg.name.value)) continue;
       record(
-        'rootArgScalar',
+        'fieldArg',
         file,
         `@${typeName}(${arg.name.value})`,
         Boolean(arg.description?.value.trim()),
@@ -380,9 +388,8 @@ export function collectDefinition(
 
   if (IGNORED_KINDS.has(def.kind)) return;
 
-  // 여기 오면 이 스크립트가 모르는 SDL 구문이다. 조용히 넘기면 그 구문으로 추가된
-  // 요소가 집계에서 통째로 빠져 게이트가 무력화된다. 손으로 적은 목록은 반드시
-  // 빠지는 자리가 생기므로(directive를 그렇게 놓쳤다) 구조로 막는다.
+  // 모르는 SDL 구문. 조용히 넘기면 그 구문으로 추가된 요소가 집계에서 통째로 빠져
+  // 게이트가 무력화되므로, 분류를 강제하기 위해 실패시킨다.
   throw new Error(
     `[docs:check] 처리하지 않은 SDL 정의 종류: ${def.kind} (${file}). ` +
       '집계 대상이면 collectDefinition에, 아니면 IGNORED_KINDS에 근거와 함께 추가하라.',

@@ -4,9 +4,8 @@
  * 왜: 설명 없는 필드를 추가해도 CI가 통과한다. dto:check가 SDL↔DTO 동기화를
  * 도구로 강제하듯, 문서 커버리지도 게이트로 받친다. (이슈 #250)
  *
- * 운용 방침: 요소별 임계치를 **현재 달성치로 고정**해 회귀만 차단한다. 신규 API에는
- * 문서화를 강제하고, 남은 부채는 임계치를 올려가며 갚는다. 커버리지를 올렸다면
- * THRESHOLDS도 함께 올린다 — `--report`가 현재 수치를 그대로 뽑아 준다.
+ * 운용 방침: 기준선을 현재 달성치로 고정해 회귀만 차단한다. 커버리지가 바뀌면
+ * BASELINE도 함께 갱신한다 — `--report`가 그대로 옮겨 적을 수치를 찍어 준다.
  *
  * 사용: yarn docs:check [--report] [--warning]
  *   --report   임계치 검사 없이 현재 커버리지만 출력 (임계치 갱신용)
@@ -32,21 +31,15 @@ const SDL_FILE_EXT = '.graphql';
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
 
 /**
- * 회귀 차단 기준선. 2026-09-10 실측 스냅샷을 {문서화된 수, 전체 수} 그대로 둔다.
+ * 회귀 차단 기준선. {문서화된 수, 전체 수} 스냅샷을 그대로 둔다.
  *
- * 왜 정수 %가 아닌 분수인가: 임계치를 내림하면 그만큼 여유분이 생겨 회귀가 통과한다.
- * 예컨대 출력 필드 185/603(30.68%)에 임계 30%를 걸면 미기재 13건을 더 넣어도
- * 185/616 = 30.03%라 게이트를 빠져나간다. 분수를 그대로 기준으로 삼아야
- * "커버리지 비율이 내려가면 실패"가 성립한다.
- *
- * 자명한 필드(id·createdAt·*Id)는 분모에서 빠지고, 타입 이름만 되풀이하는
- * 플레이스홀더 설명은 미기재로 센다.
- *
- * 커버리지를 올렸다면 `yarn docs:check --report`가 찍어 주는 수치로 갱신한다.
+ * 정수 %로 내림하면 그 차이만큼 여유분이 생겨 회귀가 통과하므로 분수를 기준으로 삼는다.
+ * 자명한 필드(id·createdAt·*Id)는 분모에서 빠지고, 타입 이름만 되풀이하는 설명은
+ * 미기재로 센다.
  */
 const BASELINE: Record<Category, Baseline> = {
   rootField: { documented: 130, total: 130 },
-  rootArgScalar: { documented: 6, total: 6 },
+  fieldArg: { documented: 6, total: 6 },
   inputType: { documented: 72, total: 72 },
   inputField: { documented: 227, total: 227 },
   outputType: { documented: 134, total: 134 },
