@@ -226,7 +226,7 @@ input SellerProductListInput {
   isActive: Boolean
   """카테고리 필터. 해당 카테고리가 연결된 상품만."""
   categoryId: ID
-  """상품명 부분일치 검색."""
+  """상품명 또는 연결된 태그명 부분일치 검색. 둘 중 하나만 맞아도 포함된다."""
   search: String
 }
 

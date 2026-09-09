@@ -225,7 +225,7 @@ type SellerAuditLog {
   id: ID!
   """조작한 계정 ID."""
   actorAccountId: ID!
-  """대상 매장 ID. 매장에 속하지 않는 조작(비밀번호 변경 등)이면 null."""
+  """대상 매장 ID. 판매자가 매장을 보유하면 채워지고, 보유하지 않은 상태의 조작에서만 null이다."""
   storeId: ID
   """조작 대상 종류."""
   targetType: SellerAuditTargetType!
