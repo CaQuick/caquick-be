@@ -31,21 +31,36 @@ const SDL_FILE_EXT = '.graphql';
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
 
 /**
- * 요소별 최소 커버리지(%).
+ * 회귀 차단 기준선. 2026-09-10 실측 스냅샷을 {문서화된 수, 전체 수} 그대로 둔다.
  *
- * 2026-09-10 기준 실측치로 고정했다. 자명한 필드(id·createdAt·*Id)는 분모에서
- * 빠지고, 타입 이름만 되풀이하는 플레이스홀더 설명은 미기재로 센다.
+ * 왜 정수 %가 아닌 분수인가: 임계치를 내림하면 그만큼 여유분이 생겨 회귀가 통과한다.
+ * 예컨대 출력 필드 185/603(30.68%)에 임계 30%를 걸면 미기재 13건을 더 넣어도
+ * 185/616 = 30.03%라 게이트를 빠져나간다. 분수를 그대로 기준으로 삼아야
+ * "커버리지 비율이 내려가면 실패"가 성립한다.
+ *
+ * 자명한 필드(id·createdAt·*Id)는 분모에서 빠지고, 타입 이름만 되풀이하는
+ * 플레이스홀더 설명은 미기재로 센다.
+ *
+ * 커버리지를 올렸다면 `yarn docs:check --report`가 찍어 주는 수치로 갱신한다.
  */
-const THRESHOLDS: Record<Category, number> = {
-  rootField: 100,
-  rootArgScalar: 0,
-  inputType: 18,
-  inputField: 21,
-  outputType: 49,
-  outputField: 30,
-  enumType: 52,
-  enumValue: 12,
+const BASELINE: Record<Category, { documented: number; total: number }> = {
+  rootField: { documented: 130, total: 130 },
+  rootArgScalar: { documented: 0, total: 6 },
+  inputType: { documented: 13, total: 72 },
+  inputField: { documented: 49, total: 227 },
+  outputType: { documented: 66, total: 133 },
+  outputField: { documented: 185, total: 603 },
+  enumType: { documented: 12, total: 23 },
+  enumValue: { documented: 10, total: 81 },
 };
+
+const THRESHOLDS: Record<Category, number> = CATEGORIES.reduce(
+  (acc, category) => {
+    acc[category] = percentOf({ ...BASELINE[category], missing: [] });
+    return acc;
+  },
+  {} as Record<Category, number>,
+);
 
 const args = new Set(process.argv.slice(2));
 const REPORT_ONLY = args.has('--report');
@@ -94,7 +109,7 @@ function main(): void {
     const label = CATEGORY_LABELS[category].padEnd(22, ' ');
     const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(9);
     console.log(
-      `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  (임계 ${String(threshold)}%)`,
+      `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  (기준 ${String(BASELINE[category].documented)}/${String(BASELINE[category].total)} = ${threshold.toFixed(1)}%)`,
     );
   }
   console.log('');
@@ -113,7 +128,7 @@ function main(): void {
   for (const violation of violations) {
     console.error(
       `\n[COVERAGE_BELOW_THRESHOLD] ${CATEGORY_LABELS[violation.category]}: ` +
-        `${violation.actual.toFixed(1)}% < ${String(violation.threshold)}%`,
+        `${violation.actual.toFixed(1)}% < ${violation.threshold.toFixed(1)}%`,
     );
     console.error(`  설명이 없는 요소 ${String(violation.missing.length)}건:`);
     for (const item of violation.missing) {

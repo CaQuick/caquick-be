@@ -170,6 +170,24 @@ describe('sdl-description-coverage', () => {
       expect(findViolations(coverage, thresholds)).toEqual([]);
     });
 
+    it('기준선을 분수로 잡으면 미기재 1건 추가도 잡아낸다', () => {
+      // 정수 %로 내림하면 그만큼 여유분이 생겨 회귀가 통과한다.
+      // 예: 185/603=30.68%에 임계 30을 걸면 185/616=30.03%도 통과.
+      const baseline = (100 * 185) / 603;
+      const regressed = { documented: 185, total: 604, missing: [] };
+      expect(percentOf(regressed)).toBeLessThan(baseline);
+
+      const coverage = coverageOf(`
+        """설명 있음."""
+        type A { """값.""" one: String, two: String, three: String, four: String }
+      `);
+      // 1/4 = 25% < 1/3 = 33.33%
+      const previous = (100 * 1) / 3;
+      expect(
+        findViolations(coverage, { ...thresholds, outputField: previous }),
+      ).toMatchObject([{ category: 'outputField' }]);
+    });
+
     it('실측치를 그대로 임계치로 박아도 자기 자신에게 걸리지 않는다', () => {
       // 임계치를 달성치로 고정하는 운용이라 부동소수 오차 방어가 필요하다
       const coverage = coverageOf(`
