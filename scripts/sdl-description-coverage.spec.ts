@@ -8,6 +8,7 @@ import {
   percentOf,
 } from './sdl-description-coverage';
 import type { Baseline, Category, Coverage } from './sdl-description-coverage';
+import { IGNORED_KINDS } from './sdl-description-coverage';
 
 // DB 불필요한 순수 단위 테스트. SDL 문자열만으로 검증한다.
 describe('sdl-description-coverage', () => {
@@ -240,6 +241,43 @@ describe('sdl-description-coverage', () => {
       expect(() =>
         collectDefinition(alien, 't.graphql', () => undefined, new Set()),
       ).toThrow('처리하지 않은 SDL 정의 종류: AlienDefinition');
+    });
+
+    // 분류 목록을 손으로 적으면 반드시 빠진다 — directive를 그렇게 놓쳤고
+    // extend scalar/union도 같은 이유로 예외를 터뜨렸다. 그래서 목록을 내가 적지 않고
+    // graphql 패키지의 Kind에서 파생해, 모든 kind가 "집계됨" 또는 "의도적 제외" 중
+    // 하나로 분류돼 있는지 확인한다. graphql 버전이 올라 새 kind가 생기면 여기서 걸린다.
+    it('SDL에 올 수 있는 모든 정의 kind가 집계 또는 제외로 분류돼 있다', () => {
+      const { Kind } = jest.requireActual<typeof import('graphql')>('graphql');
+      const definitionKinds = Object.values(Kind).filter((k) =>
+        /(?:Definition|Extension)$/.test(k),
+      );
+      // 상위 노드 안에서만 등장해 최상위 분류 대상이 아닌 것들
+      const nested = new Set<string>([
+        Kind.FIELD_DEFINITION,
+        Kind.INPUT_VALUE_DEFINITION,
+        Kind.ENUM_VALUE_DEFINITION,
+        Kind.VARIABLE_DEFINITION,
+        Kind.OPERATION_TYPE_DEFINITION,
+      ]);
+
+      const unclassified = definitionKinds
+        .filter((k) => !nested.has(k))
+        .filter((kind) => {
+          if (IGNORED_KINDS.has(kind)) return false;
+          const node = {
+            kind,
+            name: { kind: 'Name', value: 'X' },
+          } as unknown as Parameters<typeof collectDefinition>[0];
+          try {
+            collectDefinition(node, 't.graphql', () => undefined, new Set());
+            return false;
+          } catch {
+            return true;
+          }
+        });
+
+      expect(unclassified).toEqual([]);
     });
 
     it('schema 선언은 의도적으로 집계하지 않는다', () => {

@@ -64,11 +64,15 @@ const ROOT_TYPES = new Set(['Query', 'Mutation', 'Subscription']);
  * 의도적으로 집계하지 않는 정의 종류.
  *
  * schema 선언은 루트 타입을 이름짓는 배선일 뿐 프론트가 소비하는 API 요소가 아니다.
+ * scalar·union·directive 확장은 설명을 붙일 자리가 없다(각각 directive·멤버·인자만 더한다).
  * 실행 문서(query/fragment)는 SDL 파일에 오지 않지만 파서가 같은 문법을 받으므로 함께 둔다.
  */
-const IGNORED_KINDS = new Set<string>([
+export const IGNORED_KINDS = new Set<string>([
   Kind.SCHEMA_DEFINITION,
   Kind.SCHEMA_EXTENSION,
+  Kind.SCALAR_TYPE_EXTENSION,
+  Kind.UNION_TYPE_EXTENSION,
+  Kind.DIRECTIVE_EXTENSION,
   Kind.OPERATION_DEFINITION,
   Kind.FRAGMENT_DEFINITION,
 ]);
