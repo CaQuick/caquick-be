@@ -1,6 +1,7 @@
 import {
   CATEGORIES,
   collectCoverage,
+  collectDefinition,
   findViolations,
   isExemptFieldName,
   isPlaceholderDescription,
@@ -216,12 +217,38 @@ describe('sdl-description-coverage', () => {
       ['interface 확장 필드', '"""N.""" interface N { """f.""" f: String } extend interface N { g: String }', 'N.g'],
       ['union 선언', '"""A.""" type A { """f.""" f: String } union U = A', 'U'],
       ['scalar 선언', 'scalar S', 'S'],
+      ['directive 선언', 'directive @d on FIELD_DEFINITION', '@d'],
+      ['directive 인자', '"""d.""" directive @d(bad: String) on FIELD_DEFINITION', '@d(bad)'],
     ];
 
     it.each(SITES)('%s', (_site, sdl, expected) => {
       const coverage = coverageOf(sdl);
       const missing = CATEGORIES.flatMap((c) => coverage[c].missing);
       expect(missing).toContain(`test.graphql: ${expected}`);
+    });
+  });
+
+  describe('처리하지 않은 SDL 구문', () => {
+    it('모르는 정의 종류를 만나면 조용히 넘기지 않고 예외를 던진다', () => {
+      // 손으로 적은 자리 목록은 반드시 빠지는 게 생긴다(directive를 그렇게 놓쳤다).
+      // 새 구문이 들어오면 집계에서 통째로 빠지는 대신 여기서 터져야 한다.
+      const alien = {
+        kind: 'AlienDefinition',
+        name: { kind: 'Name', value: 'X' },
+      } as unknown as Parameters<typeof collectDefinition>[0];
+
+      expect(() =>
+        collectDefinition(alien, 't.graphql', () => undefined, new Set()),
+      ).toThrow('처리하지 않은 SDL 정의 종류: AlienDefinition');
+    });
+
+    it('schema 선언은 의도적으로 집계하지 않는다', () => {
+      const coverage = coverageOf(`
+        schema { query: Query }
+        extend type Query { """q.""" q: String }
+      `);
+      const missing = CATEGORIES.flatMap((c) => coverage[c].missing);
+      expect(missing).toEqual([]);
     });
   });
 

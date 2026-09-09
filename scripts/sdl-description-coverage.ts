@@ -61,6 +61,19 @@ export interface SdlFile {
 const ROOT_TYPES = new Set(['Query', 'Mutation', 'Subscription']);
 
 /**
+ * 의도적으로 집계하지 않는 정의 종류.
+ *
+ * schema 선언은 루트 타입을 이름짓는 배선일 뿐 프론트가 소비하는 API 요소가 아니다.
+ * 실행 문서(query/fragment)는 SDL 파일에 오지 않지만 파서가 같은 문법을 받으므로 함께 둔다.
+ */
+const IGNORED_KINDS = new Set<string>([
+  Kind.SCHEMA_DEFINITION,
+  Kind.SCHEMA_EXTENSION,
+  Kind.OPERATION_DEFINITION,
+  Kind.FRAGMENT_DEFINITION,
+]);
+
+/**
  * 이름만으로 의미가 자명해 설명을 요구하지 않는 필드.
  *
  * 왜 제외하는가: 전부 채우게 하면 "상품 ID" 같은 무의미한 설명이 수백 개 생긴다.
@@ -203,7 +216,7 @@ type Recorder = (
   hasDescription: boolean,
 ) => void;
 
-function collectDefinition(
+export function collectDefinition(
   def: DefinitionNode,
   file: string,
   record: Recorder,
@@ -300,6 +313,28 @@ function collectDefinition(
     return;
   }
 
+  // directive는 선언 설명과 인자 설명이 유일한 문서다.
+  if (def.kind === Kind.DIRECTIVE_DEFINITION) {
+    const typeName = def.name.value;
+    record(
+      'outputType',
+      file,
+      `@${typeName}`,
+      !isPlaceholderDescription(typeName, def.description?.value ?? ''),
+    );
+    for (const arg of def.arguments ?? []) {
+      if (inputTypeNames.has(namedTypeOf(arg))) continue;
+      if (isExemptFieldName(arg.name.value)) continue;
+      record(
+        'rootArgScalar',
+        file,
+        `@${typeName}(${arg.name.value})`,
+        Boolean(arg.description?.value.trim()),
+      );
+    }
+    return;
+  }
+
   // union·scalar는 필드가 없어 선언 설명이 유일한 문서다.
   if (
     def.kind === Kind.UNION_TYPE_DEFINITION ||
@@ -336,7 +371,18 @@ function collectDefinition(
         Boolean(value.description?.value.trim()),
       );
     }
+    return;
   }
+
+  if (IGNORED_KINDS.has(def.kind)) return;
+
+  // 여기 오면 이 스크립트가 모르는 SDL 구문이다. 조용히 넘기면 그 구문으로 추가된
+  // 요소가 집계에서 통째로 빠져 게이트가 무력화된다. 손으로 적은 목록은 반드시
+  // 빠지는 자리가 생기므로(directive를 그렇게 놓쳤다) 구조로 막는다.
+  throw new Error(
+    `[docs:check] 처리하지 않은 SDL 정의 종류: ${def.kind} (${file}). ` +
+      '집계 대상이면 collectDefinition에, 아니면 IGNORED_KINDS에 근거와 함께 추가하라.',
+  );
 }
 
 export function percentOf(stat: CategoryStat): number {
