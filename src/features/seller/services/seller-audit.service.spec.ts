@@ -56,6 +56,28 @@ describe('SellerAuditService (real DB)', () => {
       expect(result.items[0].storeId).toBe(store.id.toString());
     });
 
+    it('hasMore는 내려주되 totalCount는 내리지 않는다', async () => {
+      // 감사 로그는 누적형이라 매 조회 COUNT를 피한다(의도된 예외).
+      const { account } = await setupSellerWithStore(prisma);
+      await faqService.sellerCreateFaqTopic(account.id, {
+        title: 'F1',
+        answerHtml: '<p>x</p>',
+      });
+      await faqService.sellerCreateFaqTopic(account.id, {
+        title: 'F2',
+        answerHtml: '<p>x</p>',
+      });
+
+      const partial = await service.sellerAuditLogs(account.id, { limit: 1 });
+      expect(partial.items).toHaveLength(1);
+      expect(partial.hasMore).toBe(true);
+      expect(partial.totalCount).toBeUndefined();
+
+      const all = await service.sellerAuditLogs(account.id, { limit: 50 });
+      expect(all.hasMore).toBe(false);
+      expect(all.totalCount).toBeUndefined();
+    });
+
     it('targetType 필터링이 동작한다', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await faqService.sellerCreateFaqTopic(account.id, {

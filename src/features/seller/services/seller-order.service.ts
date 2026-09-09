@@ -87,10 +87,8 @@ export class SellerOrderService extends SellerBaseService {
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.orderRepository.listOrdersByStore({
+    const filters = {
       storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
       status: input?.status
         ? this.orderDomainService.parseStatus(input.status)
         : undefined,
@@ -99,12 +97,23 @@ export class SellerOrderService extends SellerBaseService {
       fromPickupAt: toDate(input?.fromPickupAt),
       toPickupAt: toDate(input?.toPickupAt),
       search: input?.search?.trim() || undefined,
-    });
+    };
+
+    const [rows, totalCount] = await Promise.all([
+      this.orderRepository.listOrdersByStore({
+        ...filters,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.orderRepository.countOrdersByStore(filters),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toOrderSummaryOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 

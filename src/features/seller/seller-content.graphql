@@ -126,6 +126,10 @@ type SellerBanner {
 type SellerBannerConnection {
   """배너. 최신 등록이 먼저 온다."""
   items: [SellerBanner!]!
+  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
+  totalCount: Int!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
@@ -245,9 +249,13 @@ type SellerAuditLog {
 type SellerAuditLogConnection {
   """감사 로그. 최신 기록이 먼저 온다."""
   items: [SellerAuditLog!]!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
+
+# totalCount는 두지 않는다 — 감사 로그는 누적형이라 매 조회 COUNT가 부담이다.
 
 """감사 로그 조회 조건."""
 input SellerAuditLogListInput {

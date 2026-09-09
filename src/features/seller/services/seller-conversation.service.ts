@@ -70,16 +70,21 @@ export class SellerConversationService extends SellerBaseService {
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.conversationRepository.listConversationsByStore({
-      storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
-    });
+    const [rows, totalCount] = await Promise.all([
+      this.conversationRepository.listConversationsByStore({
+        storeId: ctx.storeId,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.conversationRepository.countConversationsByStore(ctx.storeId),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toConversationOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 
@@ -101,16 +106,21 @@ export class SellerConversationService extends SellerBaseService {
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.conversationRepository.listConversationMessages({
-      conversationId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
-    });
+    const [rows, totalCount] = await Promise.all([
+      this.conversationRepository.listConversationMessages({
+        conversationId,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.conversationRepository.countConversationMessages(conversationId),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toConversationMessageOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 

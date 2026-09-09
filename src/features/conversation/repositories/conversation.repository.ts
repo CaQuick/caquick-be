@@ -35,6 +35,13 @@ export class ConversationRepository {
     });
   }
 
+  /** 판매자 대화방 전체 수(커서 무관). 목록 where와 커서 조건만 다르다. */
+  async countConversationsByStore(storeId: bigint): Promise<number> {
+    return this.prisma.storeConversation.count({
+      where: { store_id: storeId },
+    });
+  }
+
   async findConversationByIdAndStore(args: {
     conversationId: bigint;
     storeId: bigint;
@@ -59,6 +66,13 @@ export class ConversationRepository {
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
+    });
+  }
+
+  /** 대화방 메시지 전체 수(커서 무관). */
+  async countConversationMessages(conversationId: bigint): Promise<number> {
+    return this.prisma.storeConversationMessage.count({
+      where: { conversation_id: conversationId },
     });
   }
 
