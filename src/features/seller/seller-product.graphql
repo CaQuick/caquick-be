@@ -229,7 +229,7 @@ input SellerProductListInput {
   limit: Int = 20
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
-  """노출 여부 필터. 미지정 시 활성 상품만 반환한다(기본 true)."""
+  """노출 여부 필터. 생략하면 서버가 활성 상품만 반환한다(SDL 기본값이 아니라 서비스 기본 동작)."""
   isActive: Boolean
   """카테고리 필터. 해당 카테고리가 연결된 상품만."""
   categoryId: ID
@@ -358,7 +358,7 @@ input SellerUpdateOptionGroupInput {
   name: String
   """그룹 안내 문구."""
   description: String
-  """필수 선택 여부."""
+  """미선택 허용 여부. false면 0개도 유효하다."""
   isRequired: Boolean
   """최소 선택 개수."""
   minSelect: Int
