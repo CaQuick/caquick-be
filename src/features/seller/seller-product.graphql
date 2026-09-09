@@ -296,7 +296,7 @@ input SellerAddProductImageInput {
 
 """
 상품 이미지 순서 변경 입력. 배열 순서가 곧 새 노출 순서다.
-**현재 이미지 전부를 빠짐없이 담아야 하며**, 개수가 다르거나 남의 이미지 ID가 섞이면 BAD_REQUEST.
+현재 이미지 전부를 빠짐없이 담아야 하며, 개수가 다르거나 남의 이미지 ID가 섞이면 BAD_REQUEST.
 """
 input SellerReorderProductImagesInput {
   productId: ID!
@@ -305,7 +305,7 @@ input SellerReorderProductImagesInput {
 }
 
 """
-상품 카테고리 연결 설정 입력. 전달한 목록으로 **통째로 교체**한다
+상품 카테고리 연결 설정 입력. 전달한 목록으로 통째로 교체한다
 (빈 배열이면 연결을 모두 끊는다).
 """
 input SellerSetProductCategoriesInput {
