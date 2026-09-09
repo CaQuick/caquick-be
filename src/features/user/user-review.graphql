@@ -84,7 +84,7 @@ type MyReviewMedia {
 enum ReviewMediaType {
   """이미지."""
   IMAGE
-  """동영상. 목록에서는 thumbnailUrl로 대표 프레임을 보여준다."""
+  """동영상. thumbnailUrl이 있으면 대표 프레임으로 쓰지만 필수가 아니라 없을 수 있다."""
   VIDEO
 }
 

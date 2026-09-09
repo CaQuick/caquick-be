@@ -53,16 +53,20 @@ input SellerUpdateFaqTopicInput {
 
 """SellerBannerPlacement 열거형"""
 enum SellerBannerPlacement {
-  """홈 상단 메인 배너 슬롯."""
+  """홈 '상황별 인기 케이크' 배너. 카테고리 칩이 '전체'일 때 노출된다."""
   HOME_MAIN
-  """홈 하위 섹션 배너 슬롯."""
-  HOME_SUB
-  """카테고리 진입 화면 배너 슬롯."""
+  """
+  홈 '상황별 인기 케이크' 배너 중 특정 카테고리 칩을 선택했을 때 노출되는 것.
+  해당 카테고리로 연결된 배너만 뽑히므로 linkCategoryId를 함께 지정해야 한다.
+  카테고리 진입 화면의 배너가 아니다.
+  """
   CATEGORY
-  """매장 상세 배너 슬롯."""
-  STORE
   """검색 진입 화면 배너 슬롯"""
   SEARCH
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
+  HOME_SUB
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
+  STORE
 }
 
 """SellerBanner 타입"""
