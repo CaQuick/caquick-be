@@ -12,6 +12,10 @@ import {
 } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
+import {
+  buildTimestampIdCursor,
+  parseTimestampIdCursor,
+} from '@/common/utils/keyset-cursor';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -28,11 +32,13 @@ import {
   BODY_TEXT_REQUIRED,
   CONVERSATION_NOT_FOUND,
   INVALID_BODY_FORMAT,
+  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
 } from '@/features/seller/constants/seller.constants';
+import type { SellerConversationListInput } from '@/features/seller/dto/inputs/seller-conversation-list.input';
 import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
 import {
@@ -60,30 +66,41 @@ export class SellerConversationService extends SellerBaseService {
   ) {
     super(repo, auditLogs);
   }
+  /**
+   * 대화 목록은 (updated_at, id) desc 정렬이라 커서도 두 값을 함께 담는다.
+   * id 단독 커서로는 정렬 순서와 무관한 행을 잘라내 목록에서 빠지는 대화가 생긴다.
+   */
   async sellerConversations(
     accountId: bigint,
-    input?: SellerCursorInput,
+    input?: SellerConversationListInput,
   ): Promise<SellerCursorConnection<SellerConversationOutput>> {
     const ctx = await this.requireSellerContext(accountId);
-    const normalized = normalizeCursorInput({
-      limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
-    });
+    const limit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
+    const cursor = input?.cursor
+      ? parseTimestampIdCursor(input.cursor, INVALID_CURSOR)
+      : undefined;
 
     const [rows, totalCount] = await Promise.all([
       this.conversationRepository.listConversationsByStore({
         storeId: ctx.storeId,
-        limit: normalized.limit,
-        cursor: normalized.cursor,
+        limit,
+        ...(cursor
+          ? { cursor: { updatedAt: cursor.timestamp, id: cursor.id } }
+          : {}),
       }),
       this.conversationRepository.countConversationsByStore(ctx.storeId),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items[items.length - 1];
     return {
-      items: paged.items.map((row) => this.toConversationOutput(row)),
-      nextCursor: paged.nextCursor,
-      hasMore: paged.hasMore,
+      items: items.map((row) => this.toConversationOutput(row)),
+      nextCursor:
+        hasMore && last
+          ? buildTimestampIdCursor(last.updated_at, last.id)
+          : null,
+      hasMore,
       totalCount,
     };
   }
