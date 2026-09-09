@@ -364,9 +364,9 @@ input SellerUpdateOptionGroupInput {
   minSelect: Int
   """최대 선택 개수."""
   maxSelect: Int
-  """구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다."""
+  """구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다. 현재는 켜면 해당 옵션 주문이 거절된다."""
   optionRequiresDescription: Boolean
-  """구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다."""
+  """구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다. 현재는 켜면 해당 옵션 주문이 거절된다."""
   optionRequiresImage: Boolean
   """노출 순서."""
   sortOrder: Int
