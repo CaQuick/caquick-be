@@ -86,9 +86,9 @@ type SellerOptionItem {
   optionGroupId: ID!
   """선택지 이름."""
   title: String!
-  """선택지 설명. 소속 그룹의 optionRequiresDescription이 true면 필수다."""
+  """선택지 설명. 미등록 시 null."""
   description: String
-  """선택지 이미지 URL. 소속 그룹의 optionRequiresImage가 true면 필수다."""
+  """선택지 이미지 URL. 미등록 시 null."""
   imageUrl: String
   """이 선택지를 고를 때 더해지는 금액(원). 음수면 할인으로 동작한다."""
   priceDelta: Int!
@@ -109,15 +109,22 @@ type SellerOptionGroup {
   name: String!
   """그룹 안내 문구(상품 상세 옵션 섹션 인트로)."""
   description: String
-  """필수 선택 여부. true면 이 그룹에서 최소 1개를 골라야 주문이 된다."""
+  """미선택 허용 여부. false면 0개도 유효하고, true면 선택 개수가 minSelect~maxSelect 범위 안이어야 한다."""
   isRequired: Boolean!
   """최소 선택 개수."""
   minSelect: Int!
-  """최대 선택 개수. minSelect와 같으면 단일 선택처럼 동작한다."""
+  """최대 선택 개수. minSelect와 함께 허용 개수를 정한다(둘 다 1이면 단일 선택)."""
   maxSelect: Int!
-  """true면 이 그룹의 선택지에 description이 필수다."""
+  """
+  선택지에 구매자 커스텀 입력(설명)이 필요한 그룹인지.
+  현재는 커스텀 체크아웃이 확장되기 전이라, 이 값이 true인 그룹의 옵션을 고르면
+  주문이 거절된다(잠정 가드). 켜기 전에 주문 가능 여부를 확인해야 한다.
+  """
   optionRequiresDescription: Boolean!
-  """true면 이 그룹의 선택지에 imageUrl이 필수다."""
+  """
+  선택지에 구매자 커스텀 입력(이미지)이 필요한 그룹인지.
+  optionRequiresDescription과 마찬가지로 현재는 true인 그룹의 옵션 선택이 거절된다.
+  """
   optionRequiresImage: Boolean!
   """상품 안에서의 그룹 노출 순서. 오름차순."""
   sortOrder: Int!
@@ -328,17 +335,17 @@ input SellerCreateOptionGroupInput {
   name: String!
   """그룹 안내 문구."""
   description: String
-  """필수 선택 여부. 기본 true."""
+  """미선택 허용 여부. 기본 true(미선택 불가)."""
   isRequired: Boolean = true
   """최소 선택 개수. 기본 1."""
   minSelect: Int = 1
-  """최대 선택 개수. 기본 1(단일 선택)."""
+  """최대 선택 개수. 기본 1. minSelect와 함께 허용 개수를 정한다."""
   maxSelect: Int = 1
-  """true면 이 그룹의 선택지에 설명이 필수가 된다. 기본 false."""
+  """구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다. 기본 false. 현재는 켜면 해당 옵션 주문이 거절된다."""
   optionRequiresDescription: Boolean = false
-  """true면 이 그룹의 선택지에 이미지가 필수가 된다. 기본 false."""
+  """구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다. 기본 false. 현재는 켜면 해당 옵션 주문이 거절된다."""
   optionRequiresImage: Boolean = false
-  """노출 순서. 미지정 시 맨 뒤."""
+  """노출 순서. 미지정 시 0이 들어간다(맨 뒤가 아니다)."""
   sortOrder: Int
   """노출 여부. 기본 true."""
   isActive: Boolean = true
@@ -357,9 +364,9 @@ input SellerUpdateOptionGroupInput {
   minSelect: Int
   """최대 선택 개수."""
   maxSelect: Int
-  """true면 이 그룹의 선택지에 설명이 필수가 된다."""
+  """구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다."""
   optionRequiresDescription: Boolean
-  """true면 이 그룹의 선택지에 이미지가 필수가 된다."""
+  """구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다."""
   optionRequiresImage: Boolean
   """노출 순서."""
   sortOrder: Int
@@ -382,13 +389,13 @@ input SellerCreateOptionItemInput {
   optionGroupId: ID!
   """선택지 이름."""
   title: String!
-  """선택지 설명. 그룹이 optionRequiresDescription이면 필수."""
+  """선택지 설명."""
   description: String
-  """선택지 이미지 URL. 그룹이 optionRequiresImage면 필수."""
+  """선택지 이미지 URL."""
   imageUrl: String
   """추가 금액(원). 기본 0이고 음수면 할인으로 동작한다."""
   priceDelta: Int = 0
-  """노출 순서. 미지정 시 맨 뒤."""
+  """노출 순서. 미지정 시 0이 들어간다(맨 뒤가 아니다)."""
   sortOrder: Int
   """노출 여부. 기본 true."""
   isActive: Boolean = true
@@ -448,7 +455,7 @@ input SellerUpsertProductCustomTextTokenInput {
   defaultText: String!
   """입력 가능한 최대 글자 수. 기본 30."""
   maxLength: Int = 30
-  """입력 화면 노출 순서. 미지정 시 맨 뒤."""
+  """입력 화면 노출 순서. 미지정 시 0이 들어간다(맨 뒤가 아니다)."""
   sortOrder: Int
   """필수 입력 여부. 기본 true."""
   isRequired: Boolean = true
