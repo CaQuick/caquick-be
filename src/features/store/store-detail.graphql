@@ -33,10 +33,3 @@ type StoreDetail {
   accessGuideText: String
   websiteUrl: String
 }
-
-"""매장 지도 연동 provider."""
-enum StoreMapProvider {
-  NAVER
-  KAKAO
-  NONE
-}

@@ -1,7 +1,7 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
 const BODY_FORMATS = ['TEXT', 'HTML'] as const;
-type SellerConversationBodyFormat = (typeof BODY_FORMATS)[number];
+type ConversationBodyFormat = (typeof BODY_FORMATS)[number];
 
 /**
  * 판매자 채팅 메시지 전송 입력.
@@ -14,7 +14,7 @@ export class SellerSendConversationMessageInput {
   conversationId!: string;
 
   @IsIn(BODY_FORMATS)
-  bodyFormat!: SellerConversationBodyFormat;
+  bodyFormat!: ConversationBodyFormat;
 
   @IsOptional()
   @IsString()

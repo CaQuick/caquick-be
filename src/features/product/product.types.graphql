@@ -1,0 +1,26 @@
+"""
+배너 클릭 시 이동할 대상 타입. 구매자 노출·판매자 관리 API가 공용으로 쓴다.
+
+값에 따라 채워지는 링크 필드가 정해져 있고, **나머지 링크 필드는 서버가 null로
+비워서 내려준다.** 클라이언트는 linkType을 보고 해당 필드만 읽으면 된다.
+"""
+enum BannerLinkType {
+  """이동 없음. 링크 필드가 전부 null이다."""
+  NONE
+  """`linkUrl`만 채워진다."""
+  URL
+  """`linkProductId`와 `linkProductStoreId`가 함께 채워진다 — 상품 상세 경로에 매장 ID가 필요하다."""
+  PRODUCT
+  """`linkStoreId`만 채워진다."""
+  STORE
+  """`linkCategoryId`만 채워진다."""
+  CATEGORY
+}
+
+"""리뷰 목록 정렬. 상품 리뷰·매장 리뷰가 공용으로 쓴다."""
+enum ReviewSort {
+  """최신순."""
+  LATEST
+  """좋아요순(동률이면 최신순)."""
+  LIKES
+}

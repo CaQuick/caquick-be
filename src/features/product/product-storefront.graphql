@@ -18,8 +18,11 @@ type StoreProductCategory {
 
 """상품 카테고리 분류."""
 enum CategoryType {
+  """상황·이벤트 기준 분류(생일, 기념일 등). 홈 화면 칩에는 이 분류만 노출된다."""
   EVENT
+  """디자인·스타일 기준 분류."""
   STYLE
+  """위 둘로 분류되지 않는 경우의 fallback. DB enum에는 없고 응답에서만 쓰인다."""
   OTHER
 }
 

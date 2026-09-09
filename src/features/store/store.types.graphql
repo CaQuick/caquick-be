@@ -33,3 +33,13 @@ type PopularStore {
   """로그인 사용자의 찜 여부(비로그인 시 false)."""
   isWishlisted: Boolean!
 }
+
+"""매장 지도 연동 provider. 구매자·판매자 API가 공용으로 쓴다."""
+enum StoreMapProvider {
+  """네이버 지도 딥링크를 쓴다."""
+  NAVER
+  """카카오맵 딥링크를 쓴다."""
+  KAKAO
+  """지도 연결 없음. 지도 진입 동선을 노출하지 않는다."""
+  NONE
+}

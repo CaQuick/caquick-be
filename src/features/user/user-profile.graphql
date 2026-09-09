@@ -36,7 +36,9 @@ type MePayload {
 
 """소셜 로그인 Provider 종류"""
 enum IdentityProvider {
+  """구글 OIDC."""
   GOOGLE
+  """카카오 OIDC."""
   KAKAO
 }
 

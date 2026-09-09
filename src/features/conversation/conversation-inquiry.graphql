@@ -19,19 +19,6 @@ extend type Mutation {
   sendConversationFaqMessage(input: SendConversationFaqMessageInput!): ConversationMessagesPayload!
 }
 
-"""대화 메시지 발신자 유형"""
-enum ConversationSenderType {
-  USER
-  STORE
-  SYSTEM
-}
-
-"""대화 메시지 본문 형식"""
-enum ConversationBodyFormat {
-  TEXT
-  HTML
-}
-
 """문의 채팅 진입 컨텍스트"""
 type StoreInquiryContext {
   storeId: ID!

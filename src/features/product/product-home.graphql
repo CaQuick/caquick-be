@@ -47,21 +47,12 @@ type PopularCakesResult {
   rankedAt: DateTime!
 }
 
-"""배너 클릭 이동 대상 타입."""
-enum HomeBannerLinkType {
-  NONE
-  URL
-  PRODUCT
-  STORE
-  CATEGORY
-}
-
 """홈 카테고리 대표 배너. linkType에 대응하는 링크 필드 하나만 채워진다."""
 type HomeBanner {
   id: ID!
   imageUrl: String!
   title: String
-  linkType: HomeBannerLinkType!
+  linkType: BannerLinkType!
   """linkType=URL일 때 이동 URL."""
   linkUrl: String
   """linkType=PRODUCT일 때 상품 ID."""

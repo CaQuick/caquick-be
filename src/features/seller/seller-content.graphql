@@ -53,21 +53,16 @@ input SellerUpdateFaqTopicInput {
 
 """SellerBannerPlacement 열거형"""
 enum SellerBannerPlacement {
+  """홈 상단 메인 배너 슬롯."""
   HOME_MAIN
+  """홈 하위 섹션 배너 슬롯."""
   HOME_SUB
+  """카테고리 진입 화면 배너 슬롯."""
   CATEGORY
+  """매장 상세 배너 슬롯."""
   STORE
   """검색 진입 화면 배너 슬롯"""
   SEARCH
-}
-
-"""SellerBannerLinkType 열거형"""
-enum SellerBannerLinkType {
-  NONE
-  URL
-  PRODUCT
-  STORE
-  CATEGORY
 }
 
 """SellerBanner 타입"""
@@ -76,7 +71,7 @@ type SellerBanner {
   placement: SellerBannerPlacement!
   title: String
   imageUrl: String!
-  linkType: SellerBannerLinkType!
+  linkType: BannerLinkType!
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -100,7 +95,7 @@ input SellerCreateBannerInput {
   placement: SellerBannerPlacement!
   title: String
   imageUrl: String!
-  linkType: SellerBannerLinkType = NONE
+  linkType: BannerLinkType = NONE
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -117,7 +112,7 @@ input SellerUpdateBannerInput {
   placement: SellerBannerPlacement
   title: String
   imageUrl: String
-  linkType: SellerBannerLinkType
+  linkType: BannerLinkType
   linkUrl: String
   linkProductId: ID
   linkStoreId: ID
@@ -128,20 +123,29 @@ input SellerUpdateBannerInput {
   isActive: Boolean
 }
 
-"""SellerAuditTargetType 열거형"""
+"""감사 로그가 가리키는 대상 종류."""
 enum SellerAuditTargetType {
+  """매장 정보·영업시간·픽업 정책 등 매장 설정."""
   STORE
+  """상품과 그 하위(이미지·옵션·커스텀 템플릿)."""
   PRODUCT
+  """주문. 주로 상태 변경이 기록된다."""
   ORDER
+  """구매자 문의 대화."""
   CONVERSATION
+  """판매자 비밀번호 변경. 대상 리소스가 없어 targetId가 null이다."""
   CHANGE_PASSWORD
 }
 
-"""SellerAuditActionType 열거형"""
+"""감사 로그에 기록된 행위 종류."""
 enum SellerAuditActionType {
+  """생성."""
   CREATE
+  """수정."""
   UPDATE
+  """삭제(soft-delete 포함)."""
   DELETE
+  """상태 전이. 주문 상태 변경·노출 여부 전환이 여기 해당한다."""
   STATUS_CHANGE
 }
 

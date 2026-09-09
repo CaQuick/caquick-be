@@ -80,8 +80,11 @@ type MyReviewMedia {
   sortOrder: Int!
 }
 
+"""리뷰 첨부 미디어 종류."""
 enum ReviewMediaType {
+  """이미지."""
   IMAGE
+  """동영상. 목록에서는 thumbnailUrl로 대표 프레임을 보여준다."""
   VIDEO
 }
 
