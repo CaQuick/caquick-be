@@ -8,7 +8,8 @@ extend type Subscription {
   myConversationUpdated: ConversationListUpdate!
   """
 판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시).
-활성 매장을 보유한 판매자만 구독할 수 있다. 매장이 없거나 비활성·삭제 상태면 NOT_FOUND.
+삭제되지 않은 매장을 보유한 판매자만 구독할 수 있다. 매장이 없거나 삭제됐으면 NOT_FOUND.
+비활성(is_active=false) 매장은 구독이 유지된다 — 노출만 꺼진 사이에도 고객 문의는 받아야 한다.
 """
   sellerConversationUpdated: SellerConversationListUpdate!
 }
