@@ -22,7 +22,7 @@ enum CategoryType {
   EVENT
   """디자인·스타일 기준 분류."""
   STYLE
-  """위 둘로 분류되지 않는 경우의 fallback. DB enum에는 없고 응답에서만 쓰인다."""
+  """위 둘로 분류되지 않는 그 밖의 분류. 조회 필터로도 쓸 수 있다."""
   OTHER
 }
 

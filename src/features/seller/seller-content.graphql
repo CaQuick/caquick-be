@@ -133,7 +133,7 @@ enum SellerAuditTargetType {
   ORDER
   """구매자 문의 대화."""
   CONVERSATION
-  """판매자 비밀번호 변경. 대상 리소스가 없어 targetId가 null이다."""
+  """판매자 비밀번호 변경. targetId에는 비밀번호를 바꾼 판매자 본인의 계정 ID가 들어간다."""
   CHANGE_PASSWORD
 }
 
