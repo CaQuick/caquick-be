@@ -73,6 +73,33 @@ describe('ConversationRepository (real DB)', () => {
       expect(rows.map((r) => r.id)).toEqual([older.id]);
     });
 
+    it('updated_at이 같으면 id 내림차순으로 이어서 끊는다', async () => {
+      // 커서의 보조 키 분기(updated_at 동률 → id < cursor.id)를 타는 케이스.
+      // 서로 다른 updated_at만 쓰면 이 분기가 한 번도 실행되지 않는다.
+      const store = await createStore(prisma);
+      const sameTime = new Date('2026-09-05T00:00:00Z');
+      const make = async () => {
+        const customer = await createAccount(prisma, { account_type: 'USER' });
+        return prisma.storeConversation.create({
+          data: {
+            account_id: customer.id,
+            store_id: store.id,
+            updated_at: sameTime,
+          },
+        });
+      };
+      const first = await make();
+      const second = await make();
+      expect(second.id > first.id).toBe(true);
+
+      const rows = await repo.listConversationsByStore({
+        storeId: store.id,
+        limit: 10,
+        cursor: { updatedAt: sameTime, id: second.id },
+      });
+      expect(rows.map((r) => r.id)).toEqual([first.id]);
+    });
+
     it('id가 더 큰 오래된 대화도 커서 페이지에서 빠지지 않는다', async () => {
       // 정렬은 updated_at desc인데 커서가 id 단독이면 `id < cursor`가 정렬과
       // 무관한 행을 잘라내, id가 큰 오래된 대화가 목록에서 영영 빠졌다.
