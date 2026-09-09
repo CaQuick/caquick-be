@@ -15,6 +15,7 @@ input CreateOrderInput {
   optionItemIds: [ID!]!
   """픽업 일시. 매장 정책(영업시간·휴무·capacity·리드타임·슬롯 정렬) 재검증."""
   pickupAt: DateTime!
+  """주문 수량. 기본 1."""
   quantity: Int = 1
   """미입력 시 프로필 닉네임 사용."""
   buyerName: String
@@ -25,8 +26,12 @@ input CreateOrderInput {
 """주문 생성 결과 요약. 상세는 myOrder로 재조회."""
 type CreateOrderOutput {
   orderId: ID!
+  """주문번호. 화면·문의에 쓰는 식별자."""
   orderNumber: String!
+  """생성 직후 상태. 항상 SUBMITTED다."""
   status: OrderStatusType!
+  """확정된 픽업 일시. 서버가 매장 정책으로 재검증한 값이다."""
   pickupAt: DateTime!
+  """서버가 스냅샷한 최종 결제 금액(원). 클라이언트 계산값이 아니다."""
   totalPrice: Int!
 }

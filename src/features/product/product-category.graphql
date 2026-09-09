@@ -3,6 +3,7 @@ extend type Query {
   categories(input: CategoriesInput): [CategoryItem!]!
 }
 
+"""전역 카테고리 조회 조건."""
 input CategoriesInput {
   """EVENT | STYLE | OTHER. 비우면 전체."""
   type: CategoryType
@@ -11,7 +12,10 @@ input CategoriesInput {
 """전역 카테고리 항목. '전체' 칩은 카테고리가 아니라 FE 가상 칩(필터 미적용)이라 포함하지 않는다."""
 type CategoryItem {
   id: ID!
+  """카테고리명. 칩에 그대로 노출된다."""
   name: String!
+  """분류 축. 홈 칩에는 EVENT만 노출된다."""
   categoryType: CategoryType!
+  """노출 순서. 오름차순."""
   sortOrder: Int!
 }

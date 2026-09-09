@@ -23,9 +23,11 @@ extend type Subscription {
 type ConversationListUpdate {
   conversationId: ID!
   storeId: ID!
+  """매장명."""
   storeName: String!
   """마지막 메시지 미리보기(HTML은 태그 제거)"""
   lastMessagePreview: String
+  """마지막 메시지 시각. 폐기 규칙의 1차 비교 키다."""
   lastMessageAt: DateTime!
   """이벤트 스냅샷 시점의 구매자 마지막 읽음 시각(폐기 규칙 비교용)"""
   lastReadAt: DateTime
@@ -36,8 +38,10 @@ type ConversationListUpdate {
 """판매자 대화 목록 갱신 이벤트. 도착 순서 비보장 — lastMessageAt 기준 폐기 규칙 동일."""
 type SellerConversationListUpdate {
   conversationId: ID!
+  """대화 상대인 구매자 계정 ID."""
   accountId: ID!
   """마지막 메시지 미리보기(HTML은 태그 제거)"""
   lastMessagePreview: String
+  """마지막 메시지 시각. 폐기 규칙의 비교 키다."""
   lastMessageAt: DateTime!
 }

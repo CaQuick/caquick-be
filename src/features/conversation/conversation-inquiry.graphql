@@ -25,6 +25,7 @@ extend type Mutation {
 """문의 채팅 진입 컨텍스트"""
 type StoreInquiryContext {
   storeId: ID!
+  """매장명."""
   storeName: String!
   """매장 프로필(로고) 이미지 URL. 미등록 시 null"""
   profileImageUrl: String
@@ -42,6 +43,7 @@ type StoreInquiryContext {
 type InquiryBusinessHour {
   """0=일 ~ 6=토"""
   dayOfWeek: Int!
+  """해당 요일 휴무 여부. true면 openTime·closeTime이 null이다."""
   isClosed: Boolean!
   """오픈 시각 "HH:mm". 휴무면 null"""
   openTime: String
@@ -52,6 +54,7 @@ type InquiryBusinessHour {
 """질문 칩(매장 FAQ)"""
 type InquiryFaqTopic {
   id: ID!
+  """칩에 노출되는 질문 제목. 전송하면 이 문구가 유저 메시지로 저장된다."""
   title: String!
 }
 
@@ -59,27 +62,38 @@ type InquiryFaqTopic {
 type ConversationMessage {
   id: ID!
   conversationId: ID!
+  """발신 주체. 말풍선 좌우 배치 기준이다."""
   senderType: ConversationSenderType!
+  """본문 형식. 이 값에 따라 bodyText·bodyHtml 중 하나가 채워진다."""
   bodyFormat: ConversationBodyFormat!
+  """평문 본문. bodyFormat이 TEXT일 때 채워진다."""
   bodyText: String
+  """서식 본문. bodyFormat이 HTML일 때 채워진다."""
   bodyHtml: String
+  """발송 시각. 메시지 스트림 정렬은 id 기준이다."""
   createdAt: DateTime!
 }
 
 """메시지 전송 결과. 이번 호출로 저장된 메시지들을 생성 순으로 담는다(첫 전송이면 인사말 포함)"""
 type ConversationMessagesPayload {
+  """대화방 ID. 첫 전송이면 이번에 생성된 대화방 ID다."""
   conversationId: ID!
+  """이번 호출로 저장된 메시지. 생성 순이며 첫 전송이면 인사말이 맨 앞에 온다."""
   messages: [ConversationMessage!]!
 }
 
 """구매자 텍스트 메시지 전송 입력"""
 input SendConversationMessageInput {
+  """문의할 매장 ID. 대화방이 없으면 이 호출에서 생성된다."""
   storeId: ID!
+  """보낼 평문 메시지."""
   bodyText: String!
 }
 
 """질문 칩(FAQ) 전송 입력"""
 input SendConversationFaqMessageInput {
+  """문의할 매장 ID. 대화방이 없으면 이 호출에서 생성된다."""
   storeId: ID!
+  """선택한 질문 칩 ID. storeInquiryContext.faqTopics가 준 값을 쓴다."""
   faqTopicId: ID!
 }

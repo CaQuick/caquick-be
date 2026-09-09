@@ -13,6 +13,7 @@ type MyPageOverview {
   recentViewedProducts: [RecentViewedProductSummary!]!
 }
 
+"""마이페이지 상단 카운트 카드."""
 type MyPageCounts {
   """진행중 + 저장된 커스텀 드래프트 수"""
   customDraftCount: Int!
@@ -24,11 +25,16 @@ type MyPageCounts {
   myReviewCount: Int!
 }
 
+"""진행중 주문 요약 카드. 픽업 완료·취소는 제외된다."""
 type OngoingOrderSummary {
   orderId: ID!
+  """주문번호."""
   orderNumber: String!
+  """현재 주문 상태."""
   status: OrderStatusType!
+  """주문 생성 시각."""
   createdAt: DateTime!
+  """픽업 예정 일시."""
   pickupAt: DateTime!
   """첫 번째 OrderItem 기준 대표 상품명"""
   representativeProductName: String!
@@ -38,13 +44,20 @@ type OngoingOrderSummary {
   totalPrice: Int!
 }
 
+"""최근 본 상품 카드."""
 type RecentViewedProductSummary {
   productId: ID!
+  """상품명."""
   productName: String!
+  """대표 상품 이미지. 없으면 null."""
   representativeImageUrl: String
+  """할인가(원). 할인이 없으면 null."""
   salePrice: Int
+  """정가(원)."""
   regularPrice: Int!
+  """매장명."""
   storeName: String!
+  """마지막으로 본 시각. 목록 정렬 기준이다."""
   viewedAt: DateTime!
   """현재 사용자의 찜 여부"""
   isWishlisted: Boolean!

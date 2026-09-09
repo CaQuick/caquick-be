@@ -17,6 +17,7 @@ enum ProductSearchSort {
   PRICE_DESC
 }
 
+"""상품 검색 조건. 필터 그룹 간에는 AND, 그룹 안에서는 OR로 결합된다."""
 input SearchProductsInput {
   """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
   keyword: String!
@@ -30,15 +31,21 @@ input SearchProductsInput {
   maxPrice: Int
   """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
   regionIds: [ID!]
+  """정렬 기준. 기본 인기순."""
   sort: ProductSearchSort = POPULAR
+  """건너뛸 개수. 기본 0."""
   offset: Int = 0
   """조회 개수(최대 50)."""
   limit: Int = 20
 }
 
+"""상품 검색 결과 목록."""
 type SearchProductConnection {
+  """상품 카드. 요청한 sort 순서로 온다."""
   items: [SearchProduct!]!
+  """조건에 맞는 전체 상품 수. 탭 카운트에 쓴다."""
   totalCount: Int!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
 }
 
@@ -47,18 +54,23 @@ type SearchProduct {
   id: ID!
   """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
   storeId: ID!
+  """상품명."""
   name: String!
   """대표 이미지(sort_order 최소). 없으면 null."""
   thumbnailUrl: String
+  """매장명."""
   storeName: String!
   """매장 위치 표기(예: 인천 청라동)."""
   regionLabel: String
+  """정가(원)."""
   regularPrice: Int!
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가다."""
   salePrice: Int
   """할인율(0~100). salePrice 없으면 0."""
   discountRate: Int!
   """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
   ratingAverage: Float!
+  """리뷰 수."""
   reviewCount: Int!
   """로그인 사용자의 찜 여부(비로그인 시 false)."""
   isWishlisted: Boolean!
@@ -69,6 +81,7 @@ extend type Query {
   searchProductFacets(input: SearchProductFacetsInput!): SearchProductFacets!
 }
 
+"""가격 분포 조회 조건. 가격 필터만 빼고 상품 검색과 같은 조건을 받는다."""
 input SearchProductFacetsInput {
   """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
   keyword: String!
@@ -82,6 +95,7 @@ input SearchProductFacetsInput {
 
 """가격 분포. 버킷은 5,000원 고정 폭으로 0원부터 70,000원까지, 마지막은 '70,000원 이상'(maxPrice null)."""
 type SearchProductFacets {
+  """가격 버킷. minPrice 오름차순으로 온다."""
   buckets: [SearchPriceBucket!]!
   """조건에 맞는 상품의 최저 표시가. 결과 없으면 null."""
   minPrice: Int
@@ -93,7 +107,10 @@ type SearchProductFacets {
 
 """가격 버킷 [minPrice, maxPrice). maxPrice null = 상한 없음."""
 type SearchPriceBucket {
+  """구간 하한(원, 포함)."""
   minPrice: Int!
+  """구간 상한(원, 미포함). null이면 상한 없는 마지막 구간이다."""
   maxPrice: Int
+  """이 구간에 속한 상품 수."""
   count: Int!
 }

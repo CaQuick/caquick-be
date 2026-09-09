@@ -6,11 +6,13 @@ extend type Query {
 """매장 상세 헤더(구매자용)."""
 type StoreDetail {
   id: ID!
+  """매장명."""
   storeName: String!
   """매장 위치 표기(예: 인천 청라동)."""
   regionLabel: String
   """평균 평점(0.0~5.0, 소수 첫째 자리)."""
   ratingAverage: Float!
+  """리뷰 수."""
   reviewCount: Int!
   """로그인 사용자의 찜 여부(비로그인 시 false)."""
   isWishlisted: Boolean!
@@ -24,6 +26,7 @@ type StoreDetail {
   latitude: Float
   """경도(지도). 미설정 시 null."""
   longitude: Float
+  """지도 진입에 쓸 provider."""
   mapProvider: StoreMapProvider!
   """영업시간 표기 텍스트(예: 10:00AM ~ 19:00PM)."""
   businessHoursText: String
@@ -31,5 +34,6 @@ type StoreDetail {
   regularClosureText: String
   """찾아오는 길 안내."""
   accessGuideText: String
+  """매장 홈페이지·SNS URL. 미등록 시 null."""
   websiteUrl: String
 }

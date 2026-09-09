@@ -20,6 +20,7 @@ extend type Mutation {
   ): Boolean!
 }
 
+"""인기 검색어 조회 조건."""
 input PopularSearchKeywordsInput {
   """노출 개수(최대 20 — 스냅샷 저장 상한)."""
   limit: Int = 10
@@ -37,21 +38,27 @@ enum SearchKeywordTrend {
   NEW
 }
 
+"""인기 검색어 스냅샷. 정각마다 갱신된다."""
 type PopularSearchKeywordsResult {
+  """순위 오름차순."""
   items: [PopularSearchKeyword!]!
   """스냅샷 기준 시각(정각). 화면의 'YY.MM.DD HH:mm 기준' 표기. 스냅샷이 없으면 null."""
   rankedAt: DateTime
 }
 
+"""인기 검색어 1건."""
 type PopularSearchKeyword {
   """순위(1부터)."""
   rank: Int!
+  """정규화된 검색어."""
   keyword: String!
+  """직전 스냅샷 대비 순위 변동."""
   trend: SearchKeywordTrend!
   """집계 윈도우(직전 24시간) 내 검색 횟수."""
   searchCount: Int!
 }
 
+"""실시간 판매 Best 조회 조건."""
 input RealtimeBestCakesInput {
   """카드 수(최대 20)."""
   limit: Int = 10
@@ -59,6 +66,7 @@ input RealtimeBestCakesInput {
 
 """실시간 판매 Best. 카드는 홈 인기 케이크와 동일 타입(지역·매장명·케이크명·가격·할인율)."""
 type RealtimeBestCakesResult {
+  """판매 Best 카드. 순위 오름차순."""
   items: [PopularCake!]!
   """집계 기준 시각(호출 시점). 화면의 'YY.MM.DD HH:mm 기준' 표기."""
   rankedAt: DateTime!

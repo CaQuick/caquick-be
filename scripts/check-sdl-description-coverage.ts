@@ -46,13 +46,13 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
  */
 const BASELINE: Record<Category, Baseline> = {
   rootField: { documented: 130, total: 130 },
-  rootArgScalar: { documented: 0, total: 6 },
-  inputType: { documented: 13, total: 72 },
-  inputField: { documented: 49, total: 227 },
-  outputType: { documented: 67, total: 134 },
-  outputField: { documented: 185, total: 603 },
-  enumType: { documented: 12, total: 23 },
-  enumValue: { documented: 10, total: 81 },
+  rootArgScalar: { documented: 6, total: 6 },
+  inputType: { documented: 72, total: 72 },
+  inputField: { documented: 227, total: 227 },
+  outputType: { documented: 134, total: 134 },
+  outputField: { documented: 603, total: 603 },
+  enumType: { documented: 17, total: 17 },
+  enumValue: { documented: 61, total: 61 },
 };
 
 const args = new Set(process.argv.slice(2));

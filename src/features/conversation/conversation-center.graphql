@@ -19,9 +19,11 @@ input MyConversationsInput {
 
 """대화 목록 응답"""
 type MyConversationConnection {
+  """대화방 카드. 마지막 메시지가 최근인 순으로 온다."""
   items: [MyConversationItem!]!
   """전체 대화 수"""
   totalCount: Int!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
   """다음 페이지 커서. 없으면 null"""
   nextCursor: String
@@ -32,11 +34,13 @@ type MyConversationItem {
   """대화 ID"""
   id: ID!
   storeId: ID!
+  """매장명."""
   storeName: String!
   """매장 프로필(로고) 이미지 URL. 미등록 시 null"""
   storeProfileImageUrl: String
   """마지막 메시지 미리보기(HTML 메시지는 태그 제거 plain text)"""
   lastMessagePreview: String
+  """마지막 메시지 시각. 목록 정렬 기준이다."""
   lastMessageAt: DateTime!
   """읽지 않은 수신 메시지 수(매장명 옆 "(3)" 표기용)"""
   unreadCount: Int!
@@ -52,9 +56,11 @@ input ConversationMessagesInput {
 
 """채팅 상세 메시지 응답(최신순)"""
 type ConversationMessageConnection {
+  """메시지. 최신순으로 오므로 화면에서는 역순으로 쌓는다."""
   items: [ConversationMessage!]!
   """대화 전체 메시지 수"""
   totalCount: Int!
+  """더 과거 메시지가 남아 있는지."""
   hasMore: Boolean!
   """다음(더 과거) 페이지 커서. 없으면 null"""
   nextCursor: String

@@ -3,24 +3,30 @@ extend type Query {
   storeReviews(input: StoreReviewsInput!): StoreReviewConnection!
 }
 
+"""매장 리뷰 목록 조회 조건."""
 input StoreReviewsInput {
   storeId: ID!
   """true면 사진(미디어) 있는 리뷰만(사진후기 그리드)."""
   photoOnly: Boolean = false
+  """정렬 기준. 기본 최신순. 정렬을 바꾸면 기존 cursor는 무효다."""
   sort: ReviewSort = LATEST
   """이전 페이지의 nextCursor 값(불투명 토큰). 동일 sort에서만 유효."""
   cursor: ID
+  """한 번에 가져올 개수. 기본 20."""
   limit: Int = 20
 }
 
 """매장 리뷰 목록(커서 기반)."""
 type StoreReviewConnection {
+  """리뷰. 요청한 sort 순서로 온다."""
   items: [StoreReview!]!
   """전체 리뷰 수(후기 탭 카운트). 0이면 빈 상태."""
   totalCount: Int!
   """사진 리뷰 수(사진후기 카운트)."""
   photoTotalCount: Int!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다. 정렬을 바꾸면 기존 커서는 무효다."""
   nextCursor: ID
 }
 
@@ -29,8 +35,11 @@ type StoreReview {
   id: ID!
   """평점(0.0~5.0)."""
   rating: Float!
+  """리뷰 본문. 없으면 null."""
   content: String
+  """첨부 미디어. 없으면 빈 배열."""
   media: [StoreReviewMedia!]!
+  """좋아요 수."""
   likeCount: Int!
   """로그인 사용자의 좋아요 여부(비로그인 시 false)."""
   isLiked: Boolean!
@@ -38,13 +47,18 @@ type StoreReview {
   authorNickname: String
   """연결 상품명(주문 시점 스냅샷)."""
   productName: String!
+  """작성 시각. 최신순 정렬 기준이다."""
   createdAt: DateTime!
 }
 
 """매장 리뷰 첨부 미디어."""
 type StoreReviewMedia {
+  """미디어 종류."""
   mediaType: ReviewMediaType!
+  """미디어 원본 URL."""
   mediaUrl: String!
+  """동영상 대표 프레임 URL. 이미지면 null일 수 있다."""
   thumbnailUrl: String
+  """노출 순서. 오름차순."""
   sortOrder: Int!
 }
