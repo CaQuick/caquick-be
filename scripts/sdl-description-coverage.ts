@@ -134,7 +134,10 @@ function collectInputTypeNames(documents: DocumentNode[]): Set<string> {
   const names = new Set<string>();
   for (const doc of documents) {
     for (const def of doc.definitions) {
-      if (def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION) {
+      if (
+        def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION ||
+        def.kind === Kind.INPUT_OBJECT_TYPE_EXTENSION
+      ) {
         names.add(def.name.value);
       }
     }
@@ -230,14 +233,20 @@ function collectDefinition(
     return;
   }
 
-  if (def.kind === Kind.INTERFACE_TYPE_DEFINITION) {
+  if (
+    def.kind === Kind.INTERFACE_TYPE_DEFINITION ||
+    def.kind === Kind.INTERFACE_TYPE_EXTENSION
+  ) {
     const typeName = def.name.value;
-    record(
-      'outputType',
-      file,
-      typeName,
-      !isPlaceholderDescription(typeName, def.description?.value ?? ''),
-    );
+    // 확장에는 타입 선언 설명을 붙일 수 없으므로 선언은 정의에서만 센다.
+    if (def.kind === Kind.INTERFACE_TYPE_DEFINITION) {
+      record(
+        'outputType',
+        file,
+        typeName,
+        !isPlaceholderDescription(typeName, def.description?.value ?? ''),
+      );
+    }
     for (const field of def.fields ?? []) {
       if (isExemptFieldName(field.name.value)) continue;
       record(
@@ -250,14 +259,19 @@ function collectDefinition(
     return;
   }
 
-  if (def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION) {
+  if (
+    def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION ||
+    def.kind === Kind.INPUT_OBJECT_TYPE_EXTENSION
+  ) {
     const typeName = def.name.value;
-    record(
-      'inputType',
-      file,
-      typeName,
-      !isPlaceholderDescription(typeName, def.description?.value ?? ''),
-    );
+    if (def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION) {
+      record(
+        'inputType',
+        file,
+        typeName,
+        !isPlaceholderDescription(typeName, def.description?.value ?? ''),
+      );
+    }
     for (const field of def.fields ?? []) {
       if (isExemptFieldName(field.name.value)) continue;
       record(
@@ -270,14 +284,19 @@ function collectDefinition(
     return;
   }
 
-  if (def.kind === Kind.ENUM_TYPE_DEFINITION) {
+  if (
+    def.kind === Kind.ENUM_TYPE_DEFINITION ||
+    def.kind === Kind.ENUM_TYPE_EXTENSION
+  ) {
     const typeName = def.name.value;
-    record(
-      'enumType',
-      file,
-      typeName,
-      !isPlaceholderDescription(typeName, def.description?.value ?? ''),
-    );
+    if (def.kind === Kind.ENUM_TYPE_DEFINITION) {
+      record(
+        'enumType',
+        file,
+        typeName,
+        !isPlaceholderDescription(typeName, def.description?.value ?? ''),
+      );
+    }
     for (const value of def.values ?? []) {
       record(
         'enumValue',

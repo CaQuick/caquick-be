@@ -150,6 +150,31 @@ describe('sdl-description-coverage', () => {
       ]);
     });
 
+    it('확장 문법으로 추가된 필드·값도 집계한다', () => {
+      // extend를 건너뛰면 확장으로 들어온 신규 요소가 게이트를 그냥 통과한다
+      const coverage = coverageOf(`
+        """목록 입력."""
+        input MyListInput { """개수.""" limit: Int }
+        extend input MyListInput { cursor: String }
+
+        """정렬."""
+        enum Sort { """최신순.""" LATEST }
+        extend enum Sort { OLDEST }
+
+        """카드."""
+        type Card { """제목.""" title: String }
+        extend type Card { subtitle: String }
+      `);
+      expect(coverage.inputField).toMatchObject({ documented: 1, total: 2 });
+      expect(coverage.inputField.missing).toEqual(['test.graphql: MyListInput.cursor']);
+      expect(coverage.enumValue).toMatchObject({ documented: 1, total: 2 });
+      expect(coverage.outputField).toMatchObject({ documented: 1, total: 2 });
+      // 선언 설명은 확장에 붙일 수 없으므로 정의 1건씩만 센다
+      expect(coverage.inputType).toMatchObject({ documented: 1, total: 1 });
+      expect(coverage.enumType).toMatchObject({ documented: 1, total: 1 });
+      expect(coverage.outputType).toMatchObject({ documented: 1, total: 1 });
+    });
+
     it('input 타입 선언과 필드를 집계한다', () => {
       const coverage = coverageOf(`
         """목록 입력."""
