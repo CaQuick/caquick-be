@@ -10,45 +10,63 @@ extend type Mutation {
   sellerSendConversationMessage(input: SellerSendConversationMessageInput!): SellerConversationMessage!
 }
 
-"""SellerConversation 타입"""
+"""구매자 1명과의 대화방. 매장당 구매자별로 하나씩 생긴다."""
 type SellerConversation {
   id: ID!
+  """대화 상대인 구매자 계정 ID."""
   accountId: ID!
   storeId: ID!
+  """마지막 메시지 시각. 메시지가 없으면 null. 목록 정렬 기준은 이 값이 아니라 updated_at이다."""
   lastMessageAt: DateTime
+  """판매자가 이 대화방을 마지막으로 읽은 시각. 읽은 적이 없으면 null."""
   lastReadAt: DateTime
   updatedAt: DateTime!
 }
 
-"""SellerConversationConnection 타입"""
+"""대화방 목록 페이지. 최근에 갱신된(updated_at 기준) 대화방이 먼저 온다."""
 type SellerConversationConnection {
+  """대화방. 최근에 갱신된 순으로 온다."""
   items: [SellerConversation!]!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerConversationMessage 타입"""
+"""대화 메시지 1건. bodyFormat에 따라 bodyText 또는 bodyHtml 하나만 채워진다."""
 type SellerConversationMessage {
   id: ID!
   conversationId: ID!
+  """발신 주체. 말풍선 좌우 배치 기준이다."""
   senderType: ConversationSenderType!
+  """보낸 계정 ID. senderType이 SYSTEM이면 null이다."""
   senderAccountId: ID
+  """본문 형식. 이 값에 따라 bodyText·bodyHtml 중 하나가 채워진다."""
   bodyFormat: ConversationBodyFormat!
+  """평문 본문. bodyFormat이 TEXT일 때 채워진다."""
   bodyText: String
+  """서식 본문. bodyFormat이 HTML일 때 채워진다."""
   bodyHtml: String
+  """발송 시각."""
   createdAt: DateTime!
 }
 
-"""SellerConversationMessageConnection 타입"""
+"""대화 메시지 목록 페이지. 최신 메시지가 먼저 온다."""
 type SellerConversationMessageConnection {
+  """메시지. 최신 메시지가 먼저 온다."""
   items: [SellerConversationMessage!]!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerSendConversationMessageInput 입력 타입"""
+"""
+판매자 메시지 발송 입력. bodyFormat에 맞는 본문 필드가 비어 있으면 BAD_REQUEST.
+내 매장의 대화방이 아니면 NOT_FOUND.
+"""
 input SellerSendConversationMessageInput {
   conversationId: ID!
+  """본문 형식. 이 값에 따라 아래 둘 중 어느 필드가 필수인지 정해진다."""
   bodyFormat: ConversationBodyFormat!
+  """평문 본문(최대 2000자). bodyFormat이 TEXT면 필수."""
   bodyText: String
+  """서식 본문(최대 100000자). bodyFormat이 HTML이면 필수."""
   bodyHtml: String
 }
-

@@ -23,35 +23,51 @@ extend type Mutation {
   sellerDeleteBanner(bannerId: ID!): Boolean!
 }
 
+"""매장 FAQ 항목. 문의 채팅에서 자동응답 카드로 노출된다."""
 type SellerFaqTopic {
   id: ID!
   storeId: ID!
+  """FAQ 질문 제목. 채팅에서 버튼 라벨로 쓰인다."""
   title: String!
+  """FAQ 답변 본문(HTML). 서버 측 sanitize는 아직 적용돼 있지 않다."""
   answerHtml: String!
+  """노출 순서. 오름차순이고 같으면 id 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 구매자에게 보이지 않는다."""
   isActive: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerCreateFaqTopicInput 입력 타입"""
+"""FAQ 항목 생성 입력."""
 input SellerCreateFaqTopicInput {
+  """FAQ 질문 제목."""
   title: String!
+  """FAQ 답변 본문(HTML)."""
   answerHtml: String!
+  """노출 순서. 미지정 시 서버가 정한 기본값이 들어간다."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateFaqTopicInput 입력 타입"""
+"""FAQ 항목 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateFaqTopicInput {
   topicId: ID!
+  """FAQ 질문 제목."""
   title: String
+  """FAQ 답변 본문(HTML)."""
   answerHtml: String
+  """노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
-"""SellerBannerPlacement 열거형"""
+"""
+배너가 노출될 자리. 구매자 API가 실제로 읽는 값은 HOME_MAIN·CATEGORY·SEARCH 셋뿐이고,
+나머지는 아직 소비처가 없는 예약값이다.
+"""
 enum SellerBannerPlacement {
   """홈 '상황별 인기 케이크' 배너. 카테고리 칩이 '전체'일 때 노출된다."""
   HOME_MAIN
@@ -69,61 +85,105 @@ enum SellerBannerPlacement {
   STORE
 }
 
-"""SellerBanner 타입"""
+"""
+매장 배너. linkType이 어느 링크 필드를 읽어야 할지 정한다.
+
+판매자 조회는 저장된 값을 그대로 반환하므로, linkType을 바꾸기 전에 넣어 둔 값이
+다른 링크 필드에 남아 있을 수 있다. 표시·이동 판단은 linkType을 기준으로 한다
+(구매자 조회에서는 서버가 나머지를 null로 비운다).
+"""
 type SellerBanner {
   id: ID!
+  """노출 슬롯."""
   placement: SellerBannerPlacement!
+  """배너 문구. 미입력 시 null."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String!
+  """이동 대상 타입. 이 값에 따라 아래 링크 필드 중 하나만 채워진다."""
   linkType: BannerLinkType!
+  """이동할 URL. linkType이 URL일 때 쓰는 값."""
   linkUrl: String
+  """이동할 상품 ID. linkType이 PRODUCT일 때 쓰는 값."""
   linkProductId: ID
+  """이동할 매장 ID. linkType이 STORE일 때 쓰는 값."""
   linkStoreId: ID
+  """이동할 카테고리 ID. linkType이 CATEGORY일 때 쓰는 값."""
   linkCategoryId: ID
+  """노출 시작 일시. null이면 시작 제한 없음."""
   startsAt: DateTime
+  """노출 종료 일시. null이면 종료 제한 없음."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서. 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 기간 안이어도 나오지 않는다."""
   isActive: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerBannerConnection 타입"""
+"""배너 목록 페이지. 최신 등록이 먼저 온다."""
 type SellerBannerConnection {
+  """배너. 최신 등록이 먼저 온다."""
   items: [SellerBanner!]!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerCreateBannerInput 입력 타입"""
+"""배너 생성 입력. linkType에 맞는 링크 필드를 함께 보내야 한다."""
 input SellerCreateBannerInput {
+  """노출 슬롯."""
   placement: SellerBannerPlacement!
+  """배너 문구."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String!
+  """이동 대상 타입. 기본 NONE(이동 없음)."""
   linkType: BannerLinkType = NONE
+  """linkType이 URL일 때 쓸 이동 URL."""
   linkUrl: String
+  """linkType이 PRODUCT일 때 쓸 상품 ID."""
   linkProductId: ID
+  """linkType이 STORE일 때 쓸 매장 ID."""
   linkStoreId: ID
+  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
   linkCategoryId: ID
+  """노출 시작 일시. 생략 시 시작 제한 없음."""
   startsAt: DateTime
+  """노출 종료 일시. 생략 시 종료 제한 없음."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateBannerInput 입력 타입"""
+"""배너 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateBannerInput {
   bannerId: ID!
+  """노출 슬롯."""
   placement: SellerBannerPlacement
+  """배너 문구."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String
+  """이동 대상 타입."""
   linkType: BannerLinkType
+  """linkType이 URL일 때 쓸 이동 URL."""
   linkUrl: String
+  """linkType이 PRODUCT일 때 쓸 상품 ID."""
   linkProductId: ID
+  """linkType이 STORE일 때 쓸 매장 ID."""
   linkStoreId: ID
+  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
   linkCategoryId: ID
+  """노출 시작 일시."""
   startsAt: DateTime
+  """노출 종료 일시."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
@@ -153,30 +213,48 @@ enum SellerAuditActionType {
   STATUS_CHANGE
 }
 
-"""SellerAuditLog 타입"""
+"""
+판매자 조작 감사 로그 1건. 매장 설정·상품·주문 변경 이력을 남긴다.
+로그는 누적만 되고 수정·삭제되지 않는다.
+"""
 type SellerAuditLog {
   id: ID!
+  """조작한 계정 ID."""
   actorAccountId: ID!
+  """대상 매장 ID. 매장에 속하지 않는 조작(비밀번호 변경 등)이면 null."""
   storeId: ID
+  """조작 대상 종류."""
   targetType: SellerAuditTargetType!
+  """대상 리소스 ID."""
   targetId: ID!
+  """기록된 행위 종류."""
   action: SellerAuditActionType!
+  """변경 전 값(JSON 문자열). 생성 조작이면 null."""
   beforeJson: String
+  """변경 후 값(JSON 문자열). 삭제 조작이면 null일 수 있다."""
   afterJson: String
+  """요청 IP. 수집하지 못했으면 null."""
   ipAddress: String
+  """요청 User-Agent. 수집하지 못했으면 null."""
   userAgent: String
+  """기록 시각."""
   createdAt: DateTime!
 }
 
-"""SellerAuditLogConnection 타입"""
+"""감사 로그 목록 페이지. 최신 기록이 먼저 온다."""
 type SellerAuditLogConnection {
+  """감사 로그. 최신 기록이 먼저 온다."""
   items: [SellerAuditLog!]!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerAuditLogListInput 입력 타입"""
+"""감사 로그 조회 조건."""
 input SellerAuditLogListInput {
+  """한 번에 가져올 개수. 기본 20, 1~100으로 보정된다."""
   limit: Int = 20
+  """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
+  """대상 종류 필터. 미지정 시 전체."""
   targetType: SellerAuditTargetType
 }
