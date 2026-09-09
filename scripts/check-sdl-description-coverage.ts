@@ -49,7 +49,7 @@ const BASELINE: Record<Category, Baseline> = {
   rootArgScalar: { documented: 0, total: 6 },
   inputType: { documented: 13, total: 72 },
   inputField: { documented: 49, total: 227 },
-  outputType: { documented: 66, total: 133 },
+  outputType: { documented: 67, total: 134 },
   outputField: { documented: 185, total: 603 },
   enumType: { documented: 12, total: 23 },
   enumValue: { documented: 10, total: 81 },

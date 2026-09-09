@@ -13,6 +13,7 @@
 import type {
   DefinitionNode,
   DocumentNode,
+  FieldDefinitionNode,
   InputValueDefinitionNode,
 } from 'graphql';
 import { Kind, parse } from 'graphql';
@@ -33,7 +34,7 @@ export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   rootField: 'Query/Mutation 필드',
-  rootArgScalar: '루트 인자(비 input)',
+  rootArgScalar: '필드 인자(비 input)',
   inputType: 'input 타입 선언',
   inputField: 'input 필드',
   outputType: '출력 type 선언',
@@ -171,6 +172,30 @@ export function collectCoverage(files: SdlFile[]): Coverage {
   return coverage;
 }
 
+/**
+ * 필드 인자를 기록한다. 루트든 아니든 인자는 설명을 적을 자리가 인자뿐이라 규칙이 같다.
+ *
+ * input 객체 인자만 제외한다 — 그쪽은 input 타입 선언·필드에 설명을 두면 된다.
+ */
+function recordFieldArgs(
+  field: FieldDefinitionNode,
+  ownerLabel: string,
+  file: string,
+  record: Recorder,
+  inputTypeNames: Set<string>,
+): void {
+  for (const arg of field.arguments ?? []) {
+    if (inputTypeNames.has(namedTypeOf(arg))) continue;
+    if (isExemptFieldName(arg.name.value)) continue;
+    record(
+      'rootArgScalar',
+      file,
+      `${ownerLabel}.${field.name.value}(${arg.name.value})`,
+      Boolean(arg.description?.value.trim()),
+    );
+  }
+}
+
 type Recorder = (
   category: Category,
   file: string,
@@ -197,18 +222,7 @@ function collectDefinition(
           `${typeName}.${field.name.value}`,
           Boolean(field.description?.value.trim()),
         );
-        for (const arg of field.arguments ?? []) {
-          // input 객체 인자는 설명을 input 타입 쪽에 두면 되므로 게이트 대상이 아니다.
-          // 그 외(스칼라·ID·커스텀 스칼라·enum)는 인자 설명 외에 적을 자리가 없다.
-          if (inputTypeNames.has(namedTypeOf(arg))) continue;
-          if (isExemptFieldName(arg.name.value)) continue;
-          record(
-            'rootArgScalar',
-            file,
-            `${typeName}.${field.name.value}(${arg.name.value})`,
-            Boolean(arg.description?.value.trim()),
-          );
-        }
+        recordFieldArgs(field, typeName, file, record, inputTypeNames);
       }
       return;
     }
@@ -222,6 +236,7 @@ function collectDefinition(
       );
     }
     for (const field of def.fields ?? []) {
+      recordFieldArgs(field, typeName, file, record, inputTypeNames);
       if (isExemptFieldName(field.name.value)) continue;
       record(
         'outputField',
@@ -248,6 +263,7 @@ function collectDefinition(
       );
     }
     for (const field of def.fields ?? []) {
+      recordFieldArgs(field, typeName, file, record, inputTypeNames);
       if (isExemptFieldName(field.name.value)) continue;
       record(
         'outputField',
@@ -281,6 +297,21 @@ function collectDefinition(
         Boolean(field.description?.value.trim()),
       );
     }
+    return;
+  }
+
+  // union·scalar는 필드가 없어 선언 설명이 유일한 문서다.
+  if (
+    def.kind === Kind.UNION_TYPE_DEFINITION ||
+    def.kind === Kind.SCALAR_TYPE_DEFINITION
+  ) {
+    const typeName = def.name.value;
+    record(
+      'outputType',
+      file,
+      typeName,
+      !isPlaceholderDescription(typeName, def.description?.value ?? ''),
+    );
     return;
   }
 

@@ -189,6 +189,42 @@ describe('sdl-description-coverage', () => {
     });
   });
 
+
+  // 게이트 전수 점검. 설명을 붙일 수 있는 SDL 자리를 빠짐없이 나열하고, 각 자리에
+  // 설명 없는 요소를 하나씩 넣어 게이트가 실제로 잡아내는지 본다.
+  //
+  // 왜 이 형태인가: "현재 스키마에서 통과한다"는 오탐이 없다는 뜻일 뿐, 막아야 할 것을
+  // 막는다는 증거가 아니다. 실제로 이 표를 만들고서야 필드 인자·union·scalar 자리가
+  // 집계에서 통째로 빠져 있던 걸 찾았다. 새 자리가 생기면 여기에 줄을 추가한다.
+  describe('설명을 붙일 수 있는 모든 자리를 빠짐없이 집계한다', () => {
+    const SITES: [name: string, sdl: string, expected: string][] = [
+      ['object type 선언', 'type A { """f.""" f: String }', 'A'],
+      ['object type 필드', '"""A.""" type A { f: String }', 'A.f'],
+      ['object type 필드의 인자', '"""A.""" type A { """f.""" f(bad: String): String }', 'A.f(bad)'],
+      ['root 필드', 'extend type Query { q: String }', 'Query.q'],
+      ['root 필드의 인자', 'extend type Query { """q.""" q(bad: String): String }', 'Query.q(bad)'],
+      ['object 확장 필드', '"""A.""" type A { """f.""" f: String } extend type A { g: String }', 'A.g'],
+      ['object 확장 필드의 인자', '"""A.""" type A { """f.""" f: String } extend type A { """g.""" g(bad: String): String }', 'A.g(bad)'],
+      ['input 선언', 'input I { """v.""" v: String }', 'I'],
+      ['input 필드', '"""I.""" input I { v: String }', 'I.v'],
+      ['input 확장 필드', '"""I.""" input I { """v.""" v: String } extend input I { w: String }', 'I.w'],
+      ['enum 선언', 'enum E { """A.""" A }', 'E'],
+      ['enum 값', '"""E.""" enum E { A }', 'E.A'],
+      ['enum 확장 값', '"""E.""" enum E { """A.""" A } extend enum E { B }', 'E.B'],
+      ['interface 선언', 'interface N { """f.""" f: String }', 'N'],
+      ['interface 필드', '"""N.""" interface N { f: String }', 'N.f'],
+      ['interface 확장 필드', '"""N.""" interface N { """f.""" f: String } extend interface N { g: String }', 'N.g'],
+      ['union 선언', '"""A.""" type A { """f.""" f: String } union U = A', 'U'],
+      ['scalar 선언', 'scalar S', 'S'],
+    ];
+
+    it.each(SITES)('%s', (_site, sdl, expected) => {
+      const coverage = coverageOf(sdl);
+      const missing = CATEGORIES.flatMap((c) => coverage[c].missing);
+      expect(missing).toContain(`test.graphql: ${expected}`);
+    });
+  });
+
   describe('percentOf', () => {
     it('분모가 0이면 100%로 본다', () => {
       expect(percentOf({ documented: 0, total: 0, missing: [] })).toBe(100);
