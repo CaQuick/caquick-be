@@ -57,265 +57,413 @@ extend type Mutation {
   sellerReorderProductCustomTextTokens(input: SellerReorderProductCustomTextTokensInput!): [SellerCustomTextToken!]!
 }
 
+"""상품에 연결된 카테고리."""
 type SellerCategory {
   id: ID!
+  """카테고리명."""
   name: String!
 }
 
-"""SellerTag 타입"""
+"""상품에 연결된 태그."""
 type SellerTag {
   id: ID!
+  """태그명."""
   name: String!
 }
 
-"""SellerProductImage 타입"""
+"""상품 이미지 1장."""
 type SellerProductImage {
   id: ID!
+  """이미지 URL."""
   imageUrl: String!
+  """노출 순서. 오름차순이고 가장 앞이 대표 이미지다."""
   sortOrder: Int!
 }
 
-"""SellerOptionItem 타입"""
+"""옵션 그룹에 속한 선택지 1개."""
 type SellerOptionItem {
   id: ID!
   optionGroupId: ID!
+  """선택지 이름."""
   title: String!
+  """선택지 설명. 소속 그룹의 optionRequiresDescription이 true면 필수다."""
   description: String
+  """선택지 이미지 URL. 소속 그룹의 optionRequiresImage가 true면 필수다."""
   imageUrl: String
+  """이 선택지를 고를 때 더해지는 금액(원). 음수면 할인으로 동작한다."""
   priceDelta: Int!
+  """그룹 안에서의 노출 순서. 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 구매자가 고를 수 없다."""
   isActive: Boolean!
 }
 
-"""SellerOptionGroup 타입"""
+"""
+상품 옵션 그룹. 구매자는 이 그룹 단위로 선택지를 고르고, 주문 생성 시 서버가
+필수·최소·최대 선택 규칙을 재검증한다.
+"""
 type SellerOptionGroup {
   id: ID!
   productId: ID!
+  """그룹명(상품 상세의 옵션 섹션 제목)."""
   name: String!
   """그룹 안내 문구(상품 상세 옵션 섹션 인트로)."""
   description: String
+  """필수 선택 여부. true면 이 그룹에서 최소 1개를 골라야 주문이 된다."""
   isRequired: Boolean!
+  """최소 선택 개수."""
   minSelect: Int!
+  """최대 선택 개수. minSelect와 같으면 단일 선택처럼 동작한다."""
   maxSelect: Int!
+  """true면 이 그룹의 선택지에 description이 필수다."""
   optionRequiresDescription: Boolean!
+  """true면 이 그룹의 선택지에 imageUrl이 필수다."""
   optionRequiresImage: Boolean!
+  """상품 안에서의 그룹 노출 순서. 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 구매자에게 그룹 자체가 보이지 않는다."""
   isActive: Boolean!
+  """이 그룹의 선택지. sortOrder 오름차순."""
   optionItems: [SellerOptionItem!]!
 }
 
-"""SellerCustomTextToken 타입"""
+"""커스텀 케이크 문구 슬롯 1개. 구매자가 이 자리에 문구를 입력한다."""
 type SellerCustomTextToken {
   id: ID!
   templateId: ID!
+  """슬롯 식별 키. 주문 시 스냅샷으로 남아 어느 자리 문구인지 구분한다."""
   tokenKey: String!
+  """구매자가 입력하지 않았을 때 쓸 기본 문구."""
   defaultText: String!
+  """입력 가능한 최대 글자 수."""
   maxLength: Int!
+  """입력 화면에서의 노출 순서. 오름차순."""
   sortOrder: Int!
+  """필수 입력 여부."""
   isRequired: Boolean!
+  """
+  베이스 이미지 위에서 문구가 놓일 가로 위치. 미지정 시 null이고 배치는 클라이언트가 정한다.
+  """
   posX: Int
+  """베이스 이미지 위에서 문구가 놓일 세로 위치. 미지정 시 null."""
   posY: Int
+  """문구 영역 너비. 미지정 시 null."""
   width: Int
+  """문구 영역 높이. 미지정 시 null."""
   height: Int
 }
 
-"""SellerCustomTemplate 타입"""
+"""
+상품 커스텀 템플릿. 베이스 이미지 위에 문구 슬롯을 올려 구매자가 문구를 넣게 한다.
+상품당 1개다.
+"""
 type SellerCustomTemplate {
   id: ID!
   productId: ID!
+  """문구를 올릴 바탕 이미지 URL."""
   baseImageUrl: String!
+  """활성 여부. false면 구매자 화면에 커스텀 입력이 열리지 않는다."""
   isActive: Boolean!
+  """문구 슬롯. sortOrder 오름차순."""
   textTokens: [SellerCustomTextToken!]!
 }
 
-"""SellerProduct 타입"""
+"""내 매장 상품. 목록·상세 모두 이 타입으로 내려온다."""
 type SellerProduct {
   id: ID!
   storeId: ID!
+  """상품명."""
   name: String!
+  """상품 설명."""
   description: String
+  """구매 전 안내 문구(주의사항 등)."""
   purchaseNotice: String
+  """정가(원)."""
   regularPrice: Int!
+  """할인가(원). null이면 할인이 없고 정가가 표시가다."""
   salePrice: Int
+  """통화 코드(ISO 4217, 대문자 3자). 현재는 KRW만 쓴다."""
   currency: String!
+  """커스텀 도안의 바탕 이미지 URL. 커스텀을 쓰지 않으면 null."""
   baseDesignImageUrl: String
+  """제작 소요 시간(분). 픽업 가능 시각 계산의 리드타임에 반영된다."""
   preparationTimeMinutes: Int!
+  """노출 여부. false면 구매자 화면에 나오지 않는다."""
   isActive: Boolean!
+  """상품 이미지. sortOrder 오름차순이고 첫 장이 대표 이미지다."""
   images: [SellerProductImage!]!
+  """연결된 카테고리. 없으면 빈 배열."""
   categories: [SellerCategory!]!
+  """연결된 태그. 없으면 빈 배열."""
   tags: [SellerTag!]!
+  """옵션 그룹. sortOrder 오름차순이며 비활성 그룹도 포함된다."""
   optionGroups: [SellerOptionGroup!]!
+  """커스텀 템플릿. 등록하지 않았으면 null."""
   customTemplate: SellerCustomTemplate
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerProductConnection 타입"""
+"""상품 목록 페이지. 최신 등록이 먼저 온다."""
 type SellerProductConnection {
+  """상품. 최신 등록이 먼저 온다."""
   items: [SellerProduct!]!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerProductListInput 입력 타입"""
+"""상품 목록 조회 조건. 필터는 AND로 결합되고 미지정 필터는 적용되지 않는다."""
 input SellerProductListInput {
+  """한 번에 가져올 개수. 기본 20, 1~100으로 보정된다."""
   limit: Int = 20
+  """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
+  """노출 여부 필터. 미지정 시 노출·미노출을 모두 포함한다."""
   isActive: Boolean
+  """카테고리 필터. 해당 카테고리가 연결된 상품만."""
   categoryId: ID
+  """상품명 부분일치 검색."""
   search: String
 }
 
-"""SellerCreateProductInput 입력 타입"""
+"""
+상품 생성 입력. 이미지·옵션·카테고리는 생성 후 각 전용 mutation으로 붙인다
+(대표 이미지 1장만 여기서 함께 등록한다).
+"""
 input SellerCreateProductInput {
+  """상품명."""
   name: String!
+  """대표 이미지 URL. 상품 생성과 함께 첫 이미지로 등록된다."""
   initialImageUrl: String!
+  """상품 설명."""
   description: String
+  """구매 전 안내 문구."""
   purchaseNotice: String
+  """정가(원)."""
   regularPrice: Int!
+  """할인가(원). 생략하면 할인 없음."""
   salePrice: Int
+  """통화 코드(ISO 4217, 대문자 3자). 기본 KRW."""
   currency: String = "KRW"
+  """커스텀 도안의 바탕 이미지 URL."""
   baseDesignImageUrl: String
+  """제작 소요 시간(분). 기본 180."""
   preparationTimeMinutes: Int = 180
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateProductInput 입력 타입"""
+"""상품 수정 입력. 전달한 필드만 변경된다(부분 수정). 노출 여부는 별도 mutation을 쓴다."""
 input SellerUpdateProductInput {
   productId: ID!
+  """상품명."""
   name: String
+  """상품 설명."""
   description: String
+  """구매 전 안내 문구."""
   purchaseNotice: String
+  """정가(원)."""
   regularPrice: Int
+  """할인가(원)."""
   salePrice: Int
+  """통화 코드(ISO 4217, 대문자 3자)."""
   currency: String
+  """커스텀 도안의 바탕 이미지 URL."""
   baseDesignImageUrl: String
+  """제작 소요 시간(분)."""
   preparationTimeMinutes: Int
 }
 
-"""SellerSetProductActiveInput 입력 타입"""
+"""상품 노출 여부 변경 입력."""
 input SellerSetProductActiveInput {
   productId: ID!
+  """true면 구매자 화면에 노출한다."""
   isActive: Boolean!
 }
 
-"""SellerAddProductImageInput 입력 타입"""
+"""상품 이미지 추가 입력."""
 input SellerAddProductImageInput {
   productId: ID!
+  """추가할 이미지 URL."""
   imageUrl: String!
+  """노출 순서. 미지정 시 맨 뒤에 붙는다."""
   sortOrder: Int
 }
 
-"""SellerReorderProductImagesInput 입력 타입"""
+"""
+상품 이미지 순서 변경 입력. 배열 순서가 곧 새 노출 순서다.
+**현재 이미지 전부를 빠짐없이 담아야 하며**, 개수가 다르거나 남의 이미지 ID가 섞이면 BAD_REQUEST.
+"""
 input SellerReorderProductImagesInput {
   productId: ID!
+  """새 순서대로 나열한 이미지 ID 전체."""
   imageIds: [ID!]!
 }
 
-"""SellerSetProductCategoriesInput 입력 타입"""
+"""
+상품 카테고리 연결 설정 입력. 전달한 목록으로 **통째로 교체**한다
+(빈 배열이면 연결을 모두 끊는다).
+"""
 input SellerSetProductCategoriesInput {
   productId: ID!
+  """연결할 카테고리 ID 전체."""
   categoryIds: [ID!]!
 }
 
-"""SellerSetProductTagsInput 입력 타입"""
+"""상품 태그 연결 설정 입력. 전달한 목록으로 통째로 교체한다."""
 input SellerSetProductTagsInput {
   productId: ID!
+  """연결할 태그 ID 전체."""
   tagIds: [ID!]!
 }
 
-"""SellerCreateOptionGroupInput 입력 타입"""
+"""옵션 그룹 생성 입력."""
 input SellerCreateOptionGroupInput {
   productId: ID!
+  """그룹명."""
   name: String!
+  """그룹 안내 문구."""
   description: String
+  """필수 선택 여부. 기본 true."""
   isRequired: Boolean = true
+  """최소 선택 개수. 기본 1."""
   minSelect: Int = 1
+  """최대 선택 개수. 기본 1(단일 선택)."""
   maxSelect: Int = 1
+  """true면 이 그룹의 선택지에 설명이 필수가 된다. 기본 false."""
   optionRequiresDescription: Boolean = false
+  """true면 이 그룹의 선택지에 이미지가 필수가 된다. 기본 false."""
   optionRequiresImage: Boolean = false
+  """노출 순서. 미지정 시 맨 뒤."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateOptionGroupInput 입력 타입"""
+"""옵션 그룹 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateOptionGroupInput {
   optionGroupId: ID!
+  """그룹명."""
   name: String
+  """그룹 안내 문구."""
   description: String
+  """필수 선택 여부."""
   isRequired: Boolean
+  """최소 선택 개수."""
   minSelect: Int
+  """최대 선택 개수."""
   maxSelect: Int
+  """true면 이 그룹의 선택지에 설명이 필수가 된다."""
   optionRequiresDescription: Boolean
+  """true면 이 그룹의 선택지에 이미지가 필수가 된다."""
   optionRequiresImage: Boolean
+  """노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
-"""SellerReorderOptionGroupsInput 입력 타입"""
+"""
+옵션 그룹 순서 변경 입력. 배열 순서가 곧 새 노출 순서이고, 해당 상품의 그룹
+전부를 빠짐없이 담아야 한다.
+"""
 input SellerReorderOptionGroupsInput {
   productId: ID!
+  """새 순서대로 나열한 옵션 그룹 ID 전체."""
   optionGroupIds: [ID!]!
 }
 
-"""SellerCreateOptionItemInput 입력 타입"""
+"""옵션 선택지 생성 입력."""
 input SellerCreateOptionItemInput {
   optionGroupId: ID!
+  """선택지 이름."""
   title: String!
+  """선택지 설명. 그룹이 optionRequiresDescription이면 필수."""
   description: String
+  """선택지 이미지 URL. 그룹이 optionRequiresImage면 필수."""
   imageUrl: String
+  """추가 금액(원). 기본 0이고 음수면 할인으로 동작한다."""
   priceDelta: Int = 0
+  """노출 순서. 미지정 시 맨 뒤."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateOptionItemInput 입력 타입"""
+"""옵션 선택지 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateOptionItemInput {
   optionItemId: ID!
+  """선택지 이름."""
   title: String
+  """선택지 설명."""
   description: String
+  """선택지 이미지 URL."""
   imageUrl: String
+  """추가 금액(원)."""
   priceDelta: Int
+  """노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
-"""SellerReorderOptionItemsInput 입력 타입"""
+"""
+옵션 선택지 순서 변경 입력. 배열 순서가 곧 새 노출 순서이고, 해당 그룹의 선택지
+전부를 빠짐없이 담아야 한다.
+"""
 input SellerReorderOptionItemsInput {
   optionGroupId: ID!
+  """새 순서대로 나열한 선택지 ID 전체."""
   optionItemIds: [ID!]!
 }
 
-"""SellerUpsertProductCustomTemplateInput 입력 타입"""
+"""커스텀 템플릿 등록·수정 입력. 상품당 1개라 같은 상품에 다시 보내면 덮어쓴다."""
 input SellerUpsertProductCustomTemplateInput {
   productId: ID!
+  """문구를 올릴 바탕 이미지 URL."""
   baseImageUrl: String!
+  """활성 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerSetProductCustomTemplateActiveInput 입력 타입"""
+"""커스텀 템플릿 활성 상태 변경 입력."""
 input SellerSetProductCustomTemplateActiveInput {
   templateId: ID!
+  """true면 구매자 화면에 커스텀 입력이 열린다."""
   isActive: Boolean!
 }
 
-"""SellerUpsertProductCustomTextTokenInput 입력 타입"""
+"""커스텀 문구 슬롯 등록·수정 입력."""
 input SellerUpsertProductCustomTextTokenInput {
+  """수정할 슬롯 ID. 생략하면 새로 등록한다."""
   tokenId: ID
   templateId: ID!
+  """슬롯 식별 키. 주문 스냅샷에 그대로 남는다."""
   tokenKey: String!
+  """구매자가 입력하지 않았을 때 쓸 기본 문구."""
   defaultText: String!
+  """입력 가능한 최대 글자 수. 기본 30."""
   maxLength: Int = 30
+  """입력 화면 노출 순서. 미지정 시 맨 뒤."""
   sortOrder: Int
+  """필수 입력 여부. 기본 true."""
   isRequired: Boolean = true
+  """베이스 이미지 위 가로 위치. 생략 시 배치를 클라이언트가 정한다."""
   posX: Int
+  """베이스 이미지 위 세로 위치."""
   posY: Int
+  """문구 영역 너비."""
   width: Int
+  """문구 영역 높이."""
   height: Int
 }
 
-"""SellerReorderProductCustomTextTokensInput 입력 타입"""
+"""
+커스텀 문구 슬롯 순서 변경 입력. 배열 순서가 곧 새 노출 순서이고, 해당 템플릿의
+슬롯 전부를 빠짐없이 담아야 한다.
+"""
 input SellerReorderProductCustomTextTokensInput {
   templateId: ID!
+  """새 순서대로 나열한 슬롯 ID 전체."""
   tokenIds: [ID!]!
 }
-
