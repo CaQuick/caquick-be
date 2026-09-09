@@ -109,7 +109,7 @@ type SellerOptionGroup {
   name: String!
   """그룹 안내 문구(상품 상세 옵션 섹션 인트로)."""
   description: String
-  """미선택 허용 여부. false면 0개도 유효하고, true면 선택 개수가 minSelect~maxSelect 범위 안이어야 한다."""
+  """필수 선택 여부. true면 선택 개수가 minSelect~maxSelect 범위 안이어야 하고, false면 0개 선택도 허용된다."""
   isRequired: Boolean!
   """최소 선택 개수."""
   minSelect: Int!
@@ -335,7 +335,7 @@ input SellerCreateOptionGroupInput {
   name: String!
   """그룹 안내 문구."""
   description: String
-  """미선택 허용 여부. 기본 true(미선택 불가)."""
+  """필수 선택 여부. 기본 true. false면 0개 선택도 허용된다."""
   isRequired: Boolean = true
   """최소 선택 개수. 기본 1."""
   minSelect: Int = 1
@@ -358,7 +358,7 @@ input SellerUpdateOptionGroupInput {
   name: String
   """그룹 안내 문구."""
   description: String
-  """미선택 허용 여부. false면 0개도 유효하다."""
+  """필수 선택 여부. false면 0개 선택도 허용된다."""
   isRequired: Boolean
   """최소 선택 개수."""
   minSelect: Int

@@ -39,11 +39,11 @@ type ProductDetailOptionGroup {
   name: String!
   """그룹 안내 문구(섹션 인트로)."""
   description: String
-  """필수 선택 여부. true면 이 그룹에서 최소 1개를 골라야 주문이 된다."""
+  """필수 선택 여부. true면 선택 개수가 minSelect~maxSelect 범위 안이어야 하고, false면 0개 선택도 허용된다."""
   isRequired: Boolean!
   """최소 선택 개수."""
   minSelect: Int!
-  """최대 선택 개수. minSelect와 같으면 단일 선택처럼 동작한다."""
+  """최대 선택 개수. minSelect와 함께 허용 개수를 정한다(둘 다 1이면 단일 선택)."""
   maxSelect: Int!
   """섹션 노출 순서. 오름차순."""
   sortOrder: Int!
