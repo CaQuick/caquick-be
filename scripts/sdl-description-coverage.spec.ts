@@ -74,7 +74,7 @@ describe('sdl-description-coverage', () => {
       expect(coverage.rootField.missing).toEqual(['test.graphql: Query.storeDetail']);
     });
 
-    it('스칼라 루트 인자만 집계하고 식별자 인자는 제외한다', () => {
+    it('input 객체가 아닌 루트 인자만 집계하고 식별자 인자는 제외한다', () => {
       const coverage = coverageOf(`
         extend type Query {
           """픽업 달력."""
@@ -86,6 +86,24 @@ describe('sdl-description-coverage', () => {
       expect(coverage.rootArgScalar).toMatchObject({ documented: 0, total: 1 });
       expect(coverage.rootArgScalar.missing).toEqual([
         'test.graphql: Query.pickupCalendar(yearMonth)',
+      ]);
+    });
+
+    it('커스텀 스칼라·enum 인자도 대상에 넣는다', () => {
+      // 하드코딩 allowlist였다면 URL·Sort 인자가 통째로 빠졌을 자리
+      const coverage = coverageOf(`
+        scalar URL
+        enum Sort { LATEST }
+        extend type Query {
+          """검색."""
+          search(url: URL!, sort: Sort, input: SearchInput): String!
+        }
+        input SearchInput { """값.""" value: String }
+      `);
+      expect(coverage.rootArgScalar).toMatchObject({ documented: 0, total: 2 });
+      expect(coverage.rootArgScalar.missing).toEqual([
+        'test.graphql: Query.search(url)',
+        'test.graphql: Query.search(sort)',
       ]);
     });
 

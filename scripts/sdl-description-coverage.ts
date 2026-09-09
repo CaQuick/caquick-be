@@ -10,7 +10,11 @@
  * 검증할 수 있다.
  */
 
-import type { DefinitionNode, InputValueDefinitionNode } from 'graphql';
+import type {
+  DefinitionNode,
+  DocumentNode,
+  InputValueDefinitionNode,
+} from 'graphql';
 import { Kind, parse } from 'graphql';
 
 /** 문서 트리 깊이 순. 게이트 출력도 이 순서를 따른다. */
@@ -29,7 +33,7 @@ export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   rootField: 'Query/Mutation 필드',
-  rootArgScalar: '루트 인자(스칼라·ID)',
+  rootArgScalar: '루트 인자(비 input)',
   inputType: 'input 타입 선언',
   inputField: 'input 필드',
   outputType: '출력 type 선언',
@@ -54,19 +58,6 @@ export interface SdlFile {
 }
 
 const ROOT_TYPES = new Set(['Query', 'Mutation', 'Subscription']);
-
-/**
- * input 객체가 아니라 스칼라로 취급할 타입명.
- * 커스텀 스칼라를 추가하면 여기에도 넣어야 한다.
- */
-const SCALAR_TYPE_NAMES = new Set([
-  'String',
-  'Int',
-  'Float',
-  'Boolean',
-  'ID',
-  'DateTime',
-]);
 
 /**
  * 이름만으로 의미가 자명해 설명을 요구하지 않는 필드.
@@ -131,8 +122,30 @@ function namedTypeOf(node: InputValueDefinitionNode): string {
   return type.name.value;
 }
 
+/**
+ * SDL에 선언된 input 객체 타입명을 모은다.
+ *
+ * 왜 스칼라 allowlist가 아닌가: 하드코딩한 스칼라 목록은 `scalar URL` 같은 커스텀
+ * 스칼라가 추가되면 그 타입 인자를 통째로 집계에서 빠뜨린다. "input 객체가 아니면
+ * 대상"으로 뒤집으면 커스텀 스칼라도 enum 인자도 자동으로 포함된다 — 둘 다 설명을
+ * 적을 자리가 인자뿐이라 원래 대상이어야 한다.
+ */
+function collectInputTypeNames(documents: DocumentNode[]): Set<string> {
+  const names = new Set<string>();
+  for (const doc of documents) {
+    for (const def of doc.definitions) {
+      if (def.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION) {
+        names.add(def.name.value);
+      }
+    }
+  }
+  return names;
+}
+
 export function collectCoverage(files: SdlFile[]): Coverage {
   const coverage = emptyCoverage();
+  const documents = files.map((file) => parse(file.sdl));
+  const inputTypeNames = collectInputTypeNames(documents);
 
   const record = (
     category: Category,
@@ -146,11 +159,11 @@ export function collectCoverage(files: SdlFile[]): Coverage {
     else stat.missing.push(`${file}: ${label}`);
   };
 
-  for (const { path, sdl } of files) {
-    for (const def of parse(sdl).definitions) {
-      collectDefinition(def, path, record);
+  files.forEach(({ path }, index) => {
+    for (const def of documents[index].definitions) {
+      collectDefinition(def, path, record, inputTypeNames);
     }
-  }
+  });
 
   return coverage;
 }
@@ -166,6 +179,7 @@ function collectDefinition(
   def: DefinitionNode,
   file: string,
   record: Recorder,
+  inputTypeNames: Set<string>,
 ): void {
   if (
     def.kind === Kind.OBJECT_TYPE_DEFINITION ||
@@ -182,8 +196,8 @@ function collectDefinition(
         );
         for (const arg of field.arguments ?? []) {
           // input 객체 인자는 설명을 input 타입 쪽에 두면 되므로 게이트 대상이 아니다.
-          // 스칼라·ID 인자는 인자 설명 외에 형식을 적을 자리가 없다.
-          if (!SCALAR_TYPE_NAMES.has(namedTypeOf(arg))) continue;
+          // 그 외(스칼라·ID·커스텀 스칼라·enum)는 인자 설명 외에 적을 자리가 없다.
+          if (inputTypeNames.has(namedTypeOf(arg))) continue;
           if (isExemptFieldName(arg.name.value)) continue;
           record(
             'rootArgScalar',
