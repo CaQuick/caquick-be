@@ -1,20 +1,26 @@
 extend type Query {
   """현재 로그인한 유저 정보 조회"""
   me: MePayload!
-  """닉네임 중복 확인"""
-  checkNicknameAvailability(nickname: String!): NicknameAvailability!
+  """닉네임 중복 확인. 로그인 필수."""
+  checkNicknameAvailability(
+    """
+    검사할 닉네임. 앞뒤 공백을 제거한 뒤 2~20자, 한글·영문·숫자·언더스코어만 허용한다.
+    규칙 위반은 예외가 아니라 available=false와 reason으로 돌려준다.
+    """
+    nickname: String!
+  ): NicknameAvailability!
 }
 
 extend type Mutation {
-  """온보딩 완료 처리(필수 정보 입력)"""
+  """온보딩 완료 처리(필수 정보 입력). 로그인 필수. 본인 데이터만 대상이 된다."""
   completeOnboarding(input: CompleteOnboardingInput!): MePayload!
-  """프로필 정보 수정"""
+  """프로필 정보 수정. 로그인 필수. 본인 데이터만 대상이 된다."""
   updateMyProfile(input: UpdateMyProfileInput!): MePayload!
-  """프로필 이미지 URL 업데이트"""
+  """프로필 이미지 URL 업데이트. 로그인 필수. 본인 데이터만 대상이 된다."""
   updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
-  """회원 탈퇴(soft delete)"""
+  """회원 탈퇴(soft delete). 로그인 필수. 본인 데이터만 대상이 된다."""
   deleteMyAccount: Boolean!
-  """프로필 이미지 업로드용 Presigned URL 발급"""
+  """프로필 이미지 업로드용 Presigned URL 발급. 로그인 필수. 본인 데이터만 대상이 된다."""
   createProfileImageUploadUrl(input: CreateProfileImageUploadUrlInput!): ProfileImageUploadUrl!
 }
 

@@ -1,9 +1,9 @@
 extend type Query {
-  """내가 작성한 리뷰 목록"""
+  """내가 작성한 리뷰 목록. 로그인 필수. 본인 데이터만 대상이 된다."""
   myReviews(input: MyReviewsInput): MyReviewConnection!
-  """리뷰 작성 가능한 주문 아이템 목록(마이페이지 '리뷰 남기기' 탭). 픽업 완료 + 활성 리뷰 미존재."""
+  """리뷰 작성 가능한 주문 아이템 목록(마이페이지 '리뷰 남기기' 탭). 픽업 완료 + 활성 리뷰 미존재. 로그인 필수. 본인 데이터만 대상이 된다."""
   myReviewableOrderItems(input: MyReviewableOrderItemsInput): MyReviewableOrderItemConnection!
-  """주문 아이템에 대한 리뷰 작성 가능 여부 및 기존 리뷰"""
+  """주문 아이템에 대한 리뷰 작성 가능 여부 및 기존 리뷰. 로그인 필수. 본인 데이터만 대상이 된다."""
   myReviewForOrderItem(orderItemId: ID!): MyReviewOrNull!
 }
 
@@ -35,11 +35,11 @@ type MyReviewableOrderItem {
 }
 
 extend type Mutation {
-  """리뷰 미디어 업로드용 Presigned URL 발급"""
+  """리뷰 미디어 업로드용 Presigned URL 발급. 로그인 필수."""
   createReviewMediaUploadUrl(input: CreateReviewMediaUploadUrlInput!): ReviewMediaUploadUrl!
-  """리뷰 작성"""
+  """리뷰 작성. 로그인 필수."""
   writeReview(input: WriteReviewInput!): MyReview!
-  """내 리뷰 삭제(soft)"""
+  """내 리뷰 삭제(soft). 로그인 필수. 본인 데이터만 대상이 된다."""
   deleteMyReview(reviewId: ID!): Boolean!
 }
 

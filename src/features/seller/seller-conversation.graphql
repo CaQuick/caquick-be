@@ -1,12 +1,12 @@
 extend type Query {
-  """내 매장 대화방 목록을 조회한다."""
+  """내 매장 대화방 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerConversations(input: SellerCursorInput): SellerConversationConnection!
-  """대화방 메시지 목록을 조회한다."""
+  """대화방 메시지 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerConversationMessages(conversationId: ID!, input: SellerCursorInput): SellerConversationMessageConnection!
 }
 
 extend type Mutation {
-  """판매자 메시지를 발송한다."""
+  """판매자 메시지를 발송한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerSendConversationMessage(input: SellerSendConversationMessageInput!): SellerConversationMessage!
 }
 

@@ -1,9 +1,10 @@
 extend type Query {
-  """알림센터 대화 탭 목록(구매자). 마지막 메시지 최신순."""
+  """알림센터 대화 탭 목록(구매자). 마지막 메시지 최신순. 로그인 필수. 본인 데이터만 대상이 된다."""
   myConversations(input: MyConversationsInput): MyConversationConnection!
   """
   채팅 상세 메시지 목록(최신순 키셋 커서). 구매자 본인 대화만 조회 가능하며,
   조회 시 last_read_at을 현재 시각으로 갱신한다(안읽음 배지 해소 부수효과).
+  로그인 필수.
   """
   conversationMessages(conversationId: ID!, input: ConversationMessagesInput): ConversationMessageConnection!
 }

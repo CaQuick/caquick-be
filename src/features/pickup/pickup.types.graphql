@@ -1,8 +1,14 @@
 extend type Query {
   """월별 픽업 가능 날짜 (홈 전역 정책 기준). yearMonth: "YYYY-MM" """
-  pickupCalendar(yearMonth: String!): PickupCalendar!
+  pickupCalendar(
+    """대상 연월. "YYYY-MM" 형식(KST 기준). 예: "2026-09". 형식이 어긋나면 BAD_REQUEST."""
+    yearMonth: String!
+  ): PickupCalendar!
   """선택 날짜의 픽업 시간 슬롯. date: "YYYY-MM-DD" """
-  pickupTimeSlots(date: String!): PickupTimeSlots!
+  pickupTimeSlots(
+    """대상 날짜. "YYYY-MM-DD" 형식(KST 기준). 예: "2026-09-10". 형식이 어긋나면 BAD_REQUEST."""
+    date: String!
+  ): PickupTimeSlots!
 }
 
 type PickupCalendar {
