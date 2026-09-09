@@ -64,11 +64,11 @@ type ConversationMessage {
   conversationId: ID!
   """발신 주체. 말풍선 좌우 배치 기준이다."""
   senderType: ConversationSenderType!
-  """본문 형식. 이 값에 따라 bodyText·bodyHtml 중 하나가 채워진다."""
+  """본문 형식. 읽어야 할 본문 필드를 가리킨다."""
   bodyFormat: ConversationBodyFormat!
-  """평문 본문. bodyFormat이 TEXT일 때 채워진다."""
+  """평문 본문. bodyFormat이 TEXT면 이 값을 쓴다."""
   bodyText: String
-  """서식 본문. bodyFormat이 HTML일 때 채워진다."""
+  """서식 본문. bodyFormat이 HTML이면 이 값을 쓴다."""
   bodyHtml: String
   """발송 시각. 메시지 스트림 정렬은 id 기준이다."""
   createdAt: DateTime!
