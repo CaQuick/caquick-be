@@ -125,3 +125,28 @@ export interface AdminStoreDetailOutput {
   productCount: number;
   orderItemCount: number;
 }
+
+export interface AdminProductOutput {
+  id: string;
+  storeId: string;
+  storeName: string;
+  name: string;
+  regularPrice: number;
+  salePrice: number | null;
+  currency: string;
+  baseDesignImageUrl: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AdminProductDetailOutput {
+  product: AdminProductOutput;
+  storeIsActive: boolean;
+  description: string | null;
+  purchaseNotice: string | null;
+  preparationTimeMinutes: number;
+  imageUrls: string[];
+  reviewCount: number;
+  orderItemCount: number;
+}

@@ -29,6 +29,34 @@ export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
 
+/** 상품 행 + 소속 매장명. */
+export type AdminProductRow = Prisma.ProductGetPayload<{
+  include: typeof productInclude;
+}>;
+/** 상품 상세 행 + 매장 상태·이미지·집계(삭제 제외). */
+export type AdminProductDetailRow = Prisma.ProductGetPayload<{
+  include: typeof productDetailInclude;
+}>;
+
+const productInclude = {
+  store: { select: { store_name: true, is_active: true } },
+} as const;
+
+// orderBy 배열은 as const로 readonly가 되면 Prisma 타입과 어긋나 satisfies로 고정한다
+const productDetailInclude = {
+  store: { select: { store_name: true, is_active: true } },
+  images: {
+    select: { image_url: true, deleted_at: true },
+    orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+  },
+  _count: {
+    select: {
+      reviews: { where: activeWhere },
+      order_items: { where: activeWhere },
+    },
+  },
+} satisfies Prisma.ProductInclude;
+
 /** 매장 상세 행 + 소유 판매자 요약 + 집계(삭제 제외). */
 export type AdminStoreDetailRow = Prisma.StoreGetPayload<{
   include: typeof storeDetailInclude;
@@ -749,6 +777,80 @@ export class AdminRepository {
       });
       await this.auditLogs.createAuditLog(audit(before, after), tx);
       return { row: after, changed: true };
+    });
+  }
+
+  // ── 상품 ──
+
+  private productFilterWhere(filter: {
+    keyword?: string;
+    storeId?: bigint;
+    isActive?: boolean;
+  }): Prisma.ProductWhereInput {
+    return {
+      ...(filter.keyword ? { name: { contains: filter.keyword } } : {}),
+      ...(filter.storeId ? { store_id: filter.storeId } : {}),
+      ...(filter.isActive !== undefined ? { is_active: filter.isActive } : {}),
+    };
+  }
+
+  async listProducts(args: {
+    keyword?: string;
+    storeId?: bigint;
+    isActive?: boolean;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminProductRow[]> {
+    return this.prisma.product.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.productFilterWhere(args),
+      },
+      include: productInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countProducts(filter: {
+    keyword?: string;
+    storeId?: bigint;
+    isActive?: boolean;
+  }): Promise<number> {
+    return this.prisma.product.count({
+      where: this.productFilterWhere(filter),
+    });
+  }
+
+  async findProductById(productId: bigint): Promise<AdminProductRow | null> {
+    return this.prisma.product.findFirst({
+      where: { id: productId },
+      include: productInclude,
+    });
+  }
+
+  async findProductDetailById(
+    productId: bigint,
+  ): Promise<AdminProductDetailRow | null> {
+    return this.prisma.product.findFirst({
+      where: { id: productId },
+      include: productDetailInclude,
+    });
+  }
+
+  /** 노출 토글 + 감사 기록을 한 트랜잭션으로. */
+  async setProductActive(
+    args: { productId: bigint; isActive: boolean },
+    audit: (row: AdminProductRow) => AuditEntry,
+  ): Promise<AdminProductRow> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.product.update({
+        where: { id: args.productId },
+        data: { is_active: args.isActive },
+        include: productInclude,
+      });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
     });
   }
 }

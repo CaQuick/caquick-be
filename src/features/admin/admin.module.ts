@@ -5,6 +5,8 @@ import { AdminAccountMutationResolver } from '@/features/admin/resolvers/admin-a
 import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-account-query.resolver';
 import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
+import { AdminProductMutationResolver } from '@/features/admin/resolvers/admin-product-mutation.resolver';
+import { AdminProductQueryResolver } from '@/features/admin/resolvers/admin-product-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/admin/resolvers/admin-seller-mutation.resolver';
 import { AdminSellerQueryResolver } from '@/features/admin/resolvers/admin-seller-query.resolver';
 import { AdminStoreMutationResolver } from '@/features/admin/resolvers/admin-store-mutation.resolver';
@@ -13,6 +15,7 @@ import { AdminUserMutationResolver } from '@/features/admin/resolvers/admin-user
 import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
+import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AdminUserService } from '@/features/admin/services/admin-user.service';
@@ -31,6 +34,7 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminSellerService,
     AdminUserService,
     AdminStoreService,
+    AdminProductService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -41,6 +45,8 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminUserMutationResolver,
     AdminStoreQueryResolver,
     AdminStoreMutationResolver,
+    AdminProductQueryResolver,
+    AdminProductMutationResolver,
   ],
 })
 export class AdminModule {}
