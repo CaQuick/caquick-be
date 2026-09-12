@@ -7,7 +7,11 @@ import {
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 import argon2 from 'argon2';
 
-import { parseDecimalOrNull } from '@/common/utils/decimal-parser';
+import {
+  LATITUDE_RANGE,
+  LONGITUDE_RANGE,
+  parseDecimalOrNull,
+} from '@/common/utils/decimal-parser';
 import {
   nextCursorOf,
   normalizeCursorInput,
@@ -169,10 +173,12 @@ export class AdminSellerService extends AdminBaseService {
         latitude: parseDecimalOrNull(
           input.store.latitude,
           INVALID_DECIMAL_VALUE,
+          LATITUDE_RANGE,
         ),
         longitude: parseDecimalOrNull(
           input.store.longitude,
           INVALID_DECIMAL_VALUE,
+          LONGITUDE_RANGE,
         ),
         map_provider: input.store.mapProvider ?? 'NONE',
       },

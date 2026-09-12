@@ -299,11 +299,17 @@ describe('AdminSellerService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('좌표가 숫자가 아니면 BadRequestException', async () => {
+    it.each([
+      ['숫자 아님', { latitude: 'north' }],
+      ['NaN', { latitude: 'NaN' }],
+      ['Infinity', { longitude: 'Infinity' }],
+      ['위도 범위 밖', { latitude: '91' }],
+      ['경도 범위 밖', { longitude: '-180.5' }],
+    ])('좌표 %s이면 BadRequestException', async (_label, coords) => {
       await expect(
         service.adminCreateSeller(await admin(), {
           ...validInput,
-          store: { ...validInput.store, latitude: 'north' },
+          store: { ...validInput.store, ...coords },
         }),
       ).rejects.toThrow(BadRequestException);
     });
