@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -21,6 +22,8 @@ import {
   ACCOUNT_NOT_FOUND,
   CANNOT_CHANGE_ADMIN_STATUS,
   CANNOT_CHANGE_OWN_STATUS,
+  ONLY_ACTIVE_CAN_BE_SUSPENDED,
+  ONLY_SUSPENDED_CAN_BE_REINSTATED,
   USER_NOT_FOUND,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
@@ -128,7 +131,26 @@ export class AdminUserService extends AdminBaseService {
     }
 
     // 같은 상태면 멱등 — 감사 기록도 남기지 않는다
-    if (target.status !== change.to) {
+    if (target.status === change.to) {
+      return {
+        accountId: target.id.toString(),
+        accountType: target.account_type,
+        status: change.to,
+      };
+    }
+    // 전이는 ACTIVE ⇄ SUSPENDED만. PENDING(승인 전)을 정지했다 복구하면 승인 없이 ACTIVE가 되므로 막는다
+    const from =
+      change.to === AccountStatus.SUSPENDED
+        ? AccountStatus.ACTIVE
+        : AccountStatus.SUSPENDED;
+    if (target.status !== from) {
+      throw new BadRequestException(
+        change.to === AccountStatus.SUSPENDED
+          ? ONLY_ACTIVE_CAN_BE_SUSPENDED
+          : ONLY_SUSPENDED_CAN_BE_REINSTATED,
+      );
+    }
+    {
       await this.repo.updateAccountStatus({
         accountId: target.id,
         status: change.to,

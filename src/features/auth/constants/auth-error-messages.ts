@@ -24,4 +24,6 @@ export const AUTH_ERROR_MESSAGES = {
   CURRENT_PASSWORD_INVALID: 'Current password is invalid.',
   /** 새 비밀번호가 현재와 같음 */
   PASSWORD_UNCHANGED: 'New password must be different from current password.',
+  /** 정지·대기 계정에는 세션을 발급·회전하지 않는다 */
+  ACCOUNT_NOT_ACTIVE: 'Account is not active.',
 } as const;

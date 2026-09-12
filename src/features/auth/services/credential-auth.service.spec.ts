@@ -163,7 +163,8 @@ describe('CredentialAuthService', () => {
             account: {
               id: BigInt(10),
               account_type: role,
-              status: 'PENDING',
+              // ACTIVE가 아니면 RefreshSessionRepository가 세션 발급을 거부한다(실DB spec)
+              status: 'ACTIVE',
               store: null,
             },
           }),
@@ -172,7 +173,7 @@ describe('CredentialAuthService', () => {
         const result = await login({ role });
 
         expect(result.accessToken).toBe('mock-access-token');
-        expect(result.accountStatus).toBe('PENDING');
+        expect(result.accountStatus).toBe('ACTIVE');
         expect(result.mustChangePassword).toBe(true);
         expect(credentials.updateLastLogin).toHaveBeenCalledWith(
           BigInt(10),

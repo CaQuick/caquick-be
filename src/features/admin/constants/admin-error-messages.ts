@@ -14,6 +14,10 @@ export const CANNOT_CHANGE_OWN_STATUS =
   'Cannot change your own account status.';
 export const CANNOT_CHANGE_ADMIN_STATUS =
   'Cannot change the status of an ADMIN account.';
+export const ONLY_ACTIVE_CAN_BE_SUSPENDED =
+  'Only an ACTIVE account can be suspended.';
+export const ONLY_SUSPENDED_CAN_BE_REINSTATED =
+  'Only a SUSPENDED account can be reinstated.';
 
 // ── 매장 ──
 

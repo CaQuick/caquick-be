@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
@@ -315,6 +319,20 @@ describe('AdminUserService (real DB)', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('PENDING 계정은 정지할 수 없다(BadRequestException) — 복구 시 승인 없이 ACTIVE가 되는 경로 차단', async () => {
+      const pending = await createAccount(prisma, {
+        account_type: 'USER',
+        status: 'PENDING',
+      });
+      await expect(
+        service.adminSuspendAccount(await admin(), {
+          accountId: pending.id.toString(),
+          reason: 'x',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(await statusOf(pending.id)).toBe('PENDING');
+    });
+
     it('감사 기록이 실패하면 상태 변경도 롤백된다(같은 트랜잭션)', async () => {
       const user = await makeUser();
       const auditLogs = service['auditLogs'];
@@ -361,6 +379,17 @@ describe('AdminUserService (real DB)', () => {
       expect(
         await prisma.auditLog.count({ where: { target_id: user.id } }),
       ).toBe(0);
+    });
+
+    it('PENDING 계정은 복구할 수 없다(BadRequestException)', async () => {
+      const pending = await createAccount(prisma, {
+        account_type: 'USER',
+        status: 'PENDING',
+      });
+      await expect(
+        service.adminReinstateAccount(await admin(), pending.id),
+      ).rejects.toThrow(BadRequestException);
+      expect(await statusOf(pending.id)).toBe('PENDING');
     });
 
     it('ADMIN 계정은 FORBIDDEN', async () => {
