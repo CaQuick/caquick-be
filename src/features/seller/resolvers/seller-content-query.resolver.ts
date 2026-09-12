@@ -24,12 +24,15 @@ import type {
 import {
   CurrentUser,
   JwtAuthGuard,
+  Roles,
+  RolesGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
 
 @Resolver('Query')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SELLER')
 export class SellerContentQueryResolver {
   constructor(
     @Inject(SELLER_FAQ_SERVICE)

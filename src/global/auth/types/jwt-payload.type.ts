@@ -20,5 +20,8 @@ export interface AccessTokenPayload {
  */
 export interface JwtUser {
   accountId: string;
-  accountType?: 'USER' | 'SELLER' | 'ADMIN';
+  accountType?: AccountRole;
 }
+
+/** 인가에 쓰는 계정 타입. Prisma AccountType과 값이 같다(global은 prisma에 의존하지 않는다). */
+export type AccountRole = 'USER' | 'SELLER' | 'ADMIN';

@@ -5,6 +5,8 @@ import { ConversationSubscriptionService } from '@/features/conversation/service
 import {
   CurrentUser,
   JwtAuthGuard,
+  Roles,
+  RolesGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
@@ -42,6 +44,9 @@ export class ConversationSubscriptionResolver {
     return this.subscriptionService.subscribeMyConversationUpdates(accountId);
   }
 
+  // 구매자 구독과 한 클래스라 메서드 단위로 판매자만 허용한다.
+  @UseGuards(RolesGuard)
+  @Roles('SELLER')
   @Subscription('sellerConversationUpdated', passthrough)
   sellerConversationUpdated(
     @CurrentUser() user: JwtUser,

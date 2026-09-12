@@ -7,12 +7,15 @@ import type { SellerConversationMessageOutput } from '@/features/seller/types/se
 import {
   CurrentUser,
   JwtAuthGuard,
+  Roles,
+  RolesGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
 
 @Resolver('Mutation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SELLER')
 export class SellerConversationMutationResolver {
   constructor(
     private readonly conversationService: SellerConversationService,
