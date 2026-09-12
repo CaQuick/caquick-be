@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 import argon2 from 'argon2';
 
 import {
@@ -80,7 +79,8 @@ export class AdminAccountService extends AdminBaseService {
     input: AdminCreateAdminInput,
   ): Promise<AdminAccountOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const username = input.username.trim();
+    // username은 DTO(USERNAME_PATTERN)가 공백을 거절하므로 여기서 다듬지 않는다
+    const { username } = input;
     // 사전 조회로 흔한 중복을 잡고, 경쟁·soft-delete 잔재는 repository의 P2002 매핑이 막는다
     if (await this.repo.existsCredentialUsername(username)) {
       throw new BadRequestException(USERNAME_TAKEN);
@@ -89,20 +89,13 @@ export class AdminAccountService extends AdminBaseService {
     const passwordHash = await argon2.hash(input.password, {
       type: argon2.argon2id,
     });
+    // 감사 기록은 repository가 같은 트랜잭션에 남긴다
     const created = await this.repo.createAdminAccount({
+      actorAccountId: ctx.accountId,
       username,
       passwordHash,
       email: cleanNullableText(input.email, MAX_EMAIL_LENGTH),
       name: cleanNullableText(input.name, MAX_ACCOUNT_NAME_LENGTH),
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: null,
-      targetType: AuditTargetType.ACCOUNT,
-      targetId: created.id,
-      action: AuditActionType.CREATE,
-      afterJson: { accountType: 'ADMIN', username },
     });
 
     return toAdminAccountOutput(created);

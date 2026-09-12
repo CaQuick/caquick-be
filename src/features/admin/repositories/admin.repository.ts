@@ -1,7 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { AccountType, Prisma } from '@prisma/client';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  AccountType,
+  AuditActionType,
+  AuditTargetType,
+  Prisma,
+} from '@prisma/client';
 
 import { USERNAME_TAKEN } from '@/features/admin/constants/admin-error-messages';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { PrismaService } from '@/prisma';
 
 /** 관리자 계정 행 + 자격증명 요약. 목록·상세·생성이 같은 모양을 쓴다. */
@@ -29,7 +38,11 @@ const adminAccountInclude = {
 
 @Injectable()
 export class AdminRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
 
   async findAdminAccountContext(accountId: bigint) {
     return this.prisma.account.findFirst({
@@ -77,11 +90,13 @@ export class AdminRepository {
   }
 
   /**
-   * 계정 + 자격증명을 한 트랜잭션으로 만든다.
+   * 계정 + 자격증명 + 감사 기록을 한 트랜잭션으로 만든다 — 특권 계정이 감사 기록 없이
+   * 남는 상태를 막는다(감사 기록 실패 시 계정도 롤백).
    * username unique 충돌(P2002)은 사전 조회를 지나친 경쟁·soft-delete 잔재 케이스라
    * 여기서 도메인 예외로 좁힌다(Prisma 원문 에러는 소스 경로가 500 본문으로 샌다).
    */
   async createAdminAccount(args: {
+    actorAccountId: bigint;
     username: string;
     passwordHash: string;
     email: string | null;
@@ -105,6 +120,17 @@ export class AdminRepository {
             must_change_password: true,
           },
         });
+        await this.auditLogs.createAuditLog(
+          {
+            actorAccountId: args.actorAccountId,
+            storeId: null,
+            targetType: AuditTargetType.ACCOUNT,
+            targetId: account.id,
+            action: AuditActionType.CREATE,
+            afterJson: { accountType: 'ADMIN', username: args.username },
+          },
+          tx,
+        );
         return tx.account.findFirstOrThrow({
           where: { id: account.id },
           include: adminAccountInclude,

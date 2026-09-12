@@ -215,19 +215,38 @@ describe('AdminAccountService (real DB)', () => {
       });
     });
 
-    it('username 앞뒤 공백은 잘라 저장하고 email/name 빈 문자열은 null', async () => {
+    it('email/name 빈 문자열은 null로 저장한다', async () => {
       const actor = await makeAdmin();
 
       const result = await service.adminCreateAdmin(actor, {
         ...validInput,
-        username: '  spaced.admin  ',
         email: '   ',
         name: '',
       });
 
-      expect(result.username).toBe('spaced.admin');
       expect(result.email).toBeNull();
       expect(result.name).toBeNull();
+    });
+
+    it('감사 기록이 실패하면 계정·자격증명도 롤백된다(같은 트랜잭션)', async () => {
+      const actor = await makeAdmin();
+      const auditLogs = service['auditLogs'];
+      const spy = jest
+        .spyOn(auditLogs, 'createAuditLog')
+        .mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(service.adminCreateAdmin(actor, validInput)).rejects.toThrow(
+        'audit down',
+      );
+      expect(
+        await prisma.accountCredential.findUnique({
+          where: { username: validInput.username },
+        }),
+      ).toBeNull();
+      expect(
+        await prisma.account.count({ where: { account_type: 'ADMIN' } }),
+      ).toBe(1);
+      spy.mockRestore();
     });
 
     it('이미 쓰이는 username이면 BadRequestException', async () => {
