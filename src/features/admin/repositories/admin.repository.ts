@@ -3,6 +3,9 @@ import {
   AccountType,
   AuditActionType,
   AuditTargetType,
+  type Banner,
+  type BannerPlacement,
+  type CategoryType,
   Prisma,
 } from '@prisma/client';
 
@@ -11,7 +14,10 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { PrismaService } from '@/prisma';
+import { PrismaService, visibleWhere } from '@/prisma';
+
+/** 조작과 함께 남길 감사 기록 인자. */
+export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 
 /** 관리자 계정 행 + 자격증명 요약. 목록·상세·생성이 같은 모양을 쓴다. */
 export type AdminAccountRow = Prisma.AccountGetPayload<{
@@ -145,5 +151,115 @@ export class AdminRepository {
       }
       throw error;
     }
+  }
+
+  // ── 배너 ──
+
+  private bannerFilterWhere(filter: {
+    placement?: BannerPlacement;
+    isActive?: boolean;
+  }): Prisma.BannerWhereInput {
+    return {
+      ...(filter.placement ? { placement: filter.placement } : {}),
+      ...(filter.isActive !== undefined ? { is_active: filter.isActive } : {}),
+    };
+  }
+
+  async listBanners(args: {
+    placement?: BannerPlacement;
+    isActive?: boolean;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<Banner[]> {
+    return this.prisma.banner.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.bannerFilterWhere(args),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  /** 목록과 같은 조건(커서 제외)으로 센다. */
+  async countBanners(filter: {
+    placement?: BannerPlacement;
+    isActive?: boolean;
+  }): Promise<number> {
+    return this.prisma.banner.count({ where: this.bannerFilterWhere(filter) });
+  }
+
+  async findBannerById(bannerId: bigint): Promise<Banner | null> {
+    return this.prisma.banner.findFirst({ where: { id: bannerId } });
+  }
+
+  // 조작과 감사 기록을 한 트랜잭션으로 — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
+
+  async createBanner(
+    data: Prisma.BannerUncheckedCreateInput,
+    audit: (row: Banner) => AuditEntry,
+  ): Promise<Banner> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.banner.create({ data });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
+    });
+  }
+
+  async updateBanner(
+    args: { bannerId: bigint; data: Prisma.BannerUpdateInput },
+    audit: (row: Banner) => AuditEntry,
+  ): Promise<Banner> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.banner.update({
+        where: { id: args.bannerId },
+        data: args.data,
+      });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
+    });
+  }
+
+  async softDeleteBanner(bannerId: bigint, audit: AuditEntry): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.banner.update({
+        where: { id: bannerId },
+        data: { deleted_at: new Date() },
+      });
+      await this.auditLogs.createAuditLog(audit, tx);
+    });
+  }
+
+  // ── 링크 대상 노출 가능 확인 ──
+  // 구매자 배너 조회(findFirstBanner)가 대상을 visibleWhere로 게이트하므로, 저장 시점에도
+  // 같은 기준으로 확인해 "저장은 됐는데 절대 안 보이는" 배너를 막는다. 루트 READ라 삭제는 자동 제외.
+
+  async isProductVisible(productId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.product.findFirst({
+        where: { id: productId, is_active: true, store: visibleWhere },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  async isStoreVisible(storeId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.store.findFirst({
+        where: { id: storeId, is_active: true },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  /** 노출 가능한 카테고리의 종류. 없거나 비활성이면 null. */
+  async findVisibleCategoryType(
+    categoryId: bigint,
+  ): Promise<CategoryType | null> {
+    const row = await this.prisma.category.findFirst({
+      where: { id: categoryId, is_active: true },
+      select: { category_type: true },
+    });
+    return row?.category_type ?? null;
   }
 }

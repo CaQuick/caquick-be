@@ -3,7 +3,10 @@ import { Module } from '@nestjs/common';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminAccountMutationResolver } from '@/features/admin/resolvers/admin-account-mutation.resolver';
 import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-account-query.resolver';
+import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
+import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
+import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AuditLogModule } from '@/features/audit-log';
 
 /**
@@ -15,8 +18,11 @@ import { AuditLogModule } from '@/features/audit-log';
   providers: [
     AdminRepository,
     AdminAccountService,
+    AdminBannerService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
+    AdminContentQueryResolver,
+    AdminContentMutationResolver,
   ],
 })
 export class AdminModule {}

@@ -9,3 +9,26 @@ export const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
 
 export const MAX_EMAIL_LENGTH = 320;
 export const MAX_ACCOUNT_NAME_LENGTH = 100;
+
+// ── 배너 ──
+
+export const MAX_URL_LENGTH = 2048;
+export const MAX_BANNER_TITLE_LENGTH = 200;
+/** SDL BannerPlacement와 1:1. DTO @IsIn 검증용. */
+export const BANNER_PLACEMENTS = [
+  'HOME_MAIN',
+  'HOME_SUB',
+  'CATEGORY',
+  'STORE',
+  'SEARCH',
+] as const;
+export type BannerPlacementValue = (typeof BANNER_PLACEMENTS)[number];
+/** SDL BannerLinkType와 1:1. */
+export const BANNER_LINK_TYPES = [
+  'NONE',
+  'URL',
+  'PRODUCT',
+  'STORE',
+  'CATEGORY',
+] as const;
+export type BannerLinkTypeValue = (typeof BANNER_LINK_TYPES)[number];
