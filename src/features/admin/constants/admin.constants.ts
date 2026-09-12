@@ -49,3 +49,12 @@ export type StoreMapProviderValue = (typeof STORE_MAP_PROVIDERS)[number];
 // ── 계정 상태 변경 ──
 
 export const MAX_REASON_LENGTH = 500;
+
+// ── 카테고리·태그 마스터 ──
+
+/** SDL CategoryType과 1:1. */
+export const CATEGORY_TYPES = ['EVENT', 'STYLE', 'OTHER'] as const;
+export type CategoryTypeValue = (typeof CATEGORY_TYPES)[number];
+export const MAX_CATEGORY_NAME_LENGTH = 100;
+export const MAX_CATEGORY_DESCRIPTION_LENGTH = 255;
+export const MAX_TAG_NAME_LENGTH = 80;

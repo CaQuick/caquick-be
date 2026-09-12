@@ -3,6 +3,7 @@ import type {
   AccountType,
   BannerLinkType,
   BannerPlacement,
+  CategoryType,
   IdentityProvider,
   StoreMapProvider,
 } from '@prisma/client';
@@ -149,4 +150,24 @@ export interface AdminProductDetailOutput {
   imageUrls: string[];
   reviewCount: number;
   orderItemCount: number;
+}
+
+export interface AdminCategoryOutput {
+  id: string;
+  categoryType: CategoryType;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  productCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AdminTagOutput {
+  id: string;
+  name: string;
+  productCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }

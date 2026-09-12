@@ -23,6 +23,14 @@ export const ONLY_SUSPENDED_CAN_BE_REINSTATED =
 
 export const STORE_NOT_FOUND = 'Store not found.';
 export const PRODUCT_NOT_FOUND = 'Product not found.';
+
+// ── 카테고리·태그 ──
+
+export const CATEGORY_NOT_FOUND = 'Category not found.';
+export const CATEGORY_NAME_TAKEN =
+  'Category name is already used in this type.';
+export const TAG_NOT_FOUND = 'Tag not found.';
+export const TAG_NAME_TAKEN = 'Tag name is already used.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
