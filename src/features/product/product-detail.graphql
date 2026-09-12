@@ -22,7 +22,7 @@ type ProductDetail {
   salePrice: Int
   """할인율(0~100). salePrice 없으면 0."""
   discountRate: Int!
-  """통화 코드(ISO 4217). 현재는 KRW만 쓴다."""
+  """통화 코드(ISO 4217). 저장된 값을 그대로 돌려주며, 현재 KRW만 주문 가능하다."""
   currency: String!
   """후기 탭 카운트."""
   reviewCount: Int!
