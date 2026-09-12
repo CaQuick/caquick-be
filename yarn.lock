@@ -7400,7 +7400,7 @@ __metadata:
     eslint-plugin-prettier: "npm:^5.5.6"
     express: "npm:^5.2.1"
     globals: "npm:^17.11.0"
-    graphql: "npm:^16.14.0"
+    graphql: "npm:^17.0.2"
     graphql-redis-subscriptions: "npm:^2.7.0"
     graphql-subscriptions: "npm:^3.0.0"
     graphql-ws: "npm:^6.2.1"
@@ -10488,17 +10488,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql@npm:^16.14.0":
-  version: 16.14.0
-  resolution: "graphql@npm:16.14.0"
-  checksum: 10c0/baaa368fcfeb7bf2cdf94b9f31bf916e97eaa9e7e82148a7046f31cbd49b760b38190f22393b024cbdd9ca0f4f46287515de0136b6a0cc164074b36ad7b50618
-  languageName: node
-  linkType: hard
-
 "graphql@npm:^16.3.0":
   version: 16.12.0
   resolution: "graphql@npm:16.12.0"
   checksum: 10c0/b6fffa4e8a4e4a9933ebe85e7470b346dbf49050c1a482fac5e03e4a1a7bed2ecd3a4c97e29f04457af929464bc5e4f2aac991090c2f320111eef26e902a5c75
+  languageName: node
+  linkType: hard
+
+"graphql@npm:^17.0.2":
+  version: 17.0.2
+  resolution: "graphql@npm:17.0.2"
+  checksum: 10c0/766546216b891439ed09fd8584963df2013e26f2f79f096036eaaa2788c38964e049c8a142d68e3afdabdd8bbe70042639e83f0f4b82edbc7c6850421f072bb6
   languageName: node
   linkType: hard
 
