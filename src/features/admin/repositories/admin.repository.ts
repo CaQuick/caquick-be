@@ -8,6 +8,7 @@ import {
   type BannerPlacement,
   type CategoryType,
   Prisma,
+  type Store,
 } from '@prisma/client';
 
 import { USERNAME_TAKEN } from '@/features/admin/constants/admin-error-messages';
@@ -24,6 +25,29 @@ export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
+
+/** 매장 상세 행 + 소유 판매자 요약 + 집계(삭제 제외). */
+export type AdminStoreDetailRow = Prisma.StoreGetPayload<{
+  include: typeof storeDetailInclude;
+}>;
+
+const storeDetailInclude = {
+  seller_account: {
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      status: true,
+      credential: { select: { username: true, deleted_at: true } },
+    },
+  },
+  _count: {
+    select: {
+      products: { where: activeWhere },
+      order_items: { where: activeWhere },
+    },
+  },
+} as const;
 
 /** 구매자 계정 행 + 프로필·연동 소셜·활동 집계. */
 export type AdminUserRow = Prisma.AccountGetPayload<{
@@ -593,6 +617,73 @@ export class AdminRepository {
       }
       await this.auditLogs.createAuditLog(args.audit, tx);
       return { changed: true };
+    });
+  }
+
+  // ── 매장 ──
+
+  private storeFilterWhere(filter: {
+    keyword?: string;
+    isActive?: boolean;
+    regionId?: bigint;
+  }): Prisma.StoreWhereInput {
+    return {
+      ...(filter.keyword ? { store_name: { contains: filter.keyword } } : {}),
+      ...(filter.isActive !== undefined ? { is_active: filter.isActive } : {}),
+      ...(filter.regionId ? { region_id: filter.regionId } : {}),
+    };
+  }
+
+  async listStores(args: {
+    keyword?: string;
+    isActive?: boolean;
+    regionId?: bigint;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<Store[]> {
+    return this.prisma.store.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.storeFilterWhere(args),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countStores(filter: {
+    keyword?: string;
+    isActive?: boolean;
+    regionId?: bigint;
+  }): Promise<number> {
+    return this.prisma.store.count({ where: this.storeFilterWhere(filter) });
+  }
+
+  async findStoreById(storeId: bigint): Promise<Store | null> {
+    return this.prisma.store.findFirst({ where: { id: storeId } });
+  }
+
+  async findStoreDetailById(
+    storeId: bigint,
+  ): Promise<AdminStoreDetailRow | null> {
+    return this.prisma.store.findFirst({
+      where: { id: storeId },
+      include: storeDetailInclude,
+    });
+  }
+
+  /** 매장 갱신 + 감사 기록을 한 트랜잭션으로. */
+  async updateStore(
+    args: { storeId: bigint; data: Prisma.StoreUpdateInput },
+    audit: (row: Store) => AuditEntry,
+  ): Promise<Store> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.store.update({
+        where: { id: args.storeId },
+        data: args.data,
+      });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
     });
   }
 }

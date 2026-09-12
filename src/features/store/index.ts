@@ -15,3 +15,8 @@ export { scoreAndSortByPopularity } from '@/features/store/services/store-rankin
 export { StoreSearchService } from '@/features/store/services/store-search.service';
 // 매장·사업자 텍스트 컬럼 길이. 판매자(내 매장 수정)와 관리자(온보딩·대리 수정)가 공유한다.
 export * from '@/features/store/constants/store-field-limits';
+// 매장 기본 정보 부분 수정 규칙(길이·좌표·null 처리). 판매자 수정과 관리자 대리 수정이 같은 함수를 쓴다.
+export {
+  buildStoreBasicInfoUpdateData,
+  type StoreBasicInfoPatch,
+} from '@/features/store/services/store-basic-info.helper';
