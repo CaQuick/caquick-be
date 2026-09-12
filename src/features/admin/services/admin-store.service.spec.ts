@@ -236,6 +236,21 @@ describe('AdminStoreService (real DB)', () => {
       expect(cleared.regionId).toBeNull();
     });
 
+    it('regionId 빈 문자열은 해제가 아니라 BadRequestException(기존 연결 유지)', async () => {
+      const region = await district();
+      const store = await createStore(prisma, { region_id: region.id });
+      await expect(
+        service.adminUpdateStoreBasicInfo(await admin(), {
+          storeId: store.id.toString(),
+          regionId: '',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      const row = await prisma.store.findUniqueOrThrow({
+        where: { id: store.id },
+      });
+      expect(row.region_id).toBe(region.id);
+    });
+
     it.each([
       ['1차 지역', async () => (await createRegion(prisma, { level: 1 })).id],
       [

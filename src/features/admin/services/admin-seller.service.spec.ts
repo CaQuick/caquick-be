@@ -299,6 +299,15 @@ describe('AdminSellerService (real DB)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('regionId 빈 문자열은 BadRequestException(값 없음으로 보지 않는다)', async () => {
+      await expect(
+        service.adminCreateSeller(await admin(), {
+          ...validInput,
+          store: { ...validInput.store, regionId: '' },
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it.each([
       ['숫자 아님', { latitude: 'north' }],
       ['NaN', { latitude: 'NaN' }],
