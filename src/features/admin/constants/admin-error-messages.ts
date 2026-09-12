@@ -22,6 +22,7 @@ export const ONLY_SUSPENDED_CAN_BE_REINSTATED =
 // ── 매장 ──
 
 export const STORE_NOT_FOUND = 'Store not found.';
+export const PRODUCT_NOT_FOUND = 'Product not found.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
