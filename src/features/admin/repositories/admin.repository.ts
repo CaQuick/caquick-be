@@ -556,19 +556,35 @@ export class AdminRepository {
     });
   }
 
-  /** 상태 변경 + (정지 시) 세션 폐기 + 감사 기록을 한 트랜잭션으로. */
+  /**
+   * 상태 변경 + (정지 시) 세션 폐기 + 감사 기록을 한 트랜잭션으로.
+   * 갱신은 기대한 출발 상태(from)일 때만 적용한다 — 두 관리자가 동시에 정지하면 서비스의 사전
+   * 검사는 둘 다 통과하므로, 여기서 조건부 갱신으로 하나만 커밋·감사되게 한다.
+   * @returns changed=false면 이미 목표 상태였다(멱등, 감사 없음)
+   */
   async updateAccountStatus(args: {
     accountId: bigint;
-    status: AccountStatus;
+    from: AccountStatus;
+    to: AccountStatus;
     revokeSessions: boolean;
     audit: AuditEntry;
-  }): Promise<void> {
+    /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 메시지 */
+    invalidTransitionMessage: string;
+  }): Promise<{ changed: boolean }> {
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.account.update({
-        where: { id: args.accountId },
-        data: { status: args.status, updated_at: now },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.account.updateMany({
+        where: { id: args.accountId, status: args.from, ...activeWhere },
+        data: { status: args.to, updated_at: now },
       });
+      if (updated.count === 0) {
+        const current = await tx.account.findFirst({
+          where: { id: args.accountId },
+          select: { status: true },
+        });
+        if (current?.status === args.to) return { changed: false };
+        throw new BadRequestException(args.invalidTransitionMessage);
+      }
       if (args.revokeSessions) {
         await tx.authRefreshSession.updateMany({
           where: { account_id: args.accountId, revoked_at: null },
@@ -576,6 +592,7 @@ export class AdminRepository {
         });
       }
       await this.auditLogs.createAuditLog(args.audit, tx);
+      return { changed: true };
     });
   }
 }
