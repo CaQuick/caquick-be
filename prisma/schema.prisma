@@ -114,6 +114,16 @@ enum AuditTargetType {
   ORDER
   CONVERSATION
   CHANGE_PASSWORD
+  // 이하 관리자 조작 대상. 판매자 감사 로그 조회는 위 5종만 보여준다.
+  ACCOUNT
+  BANNER
+  CATEGORY
+  TAG
+  REGION
+  REVIEW
+  REVIEW_COMMENT
+  REVIEW_REPORT
+  NOTIFICATION
 }
 
 enum AuditActionType {

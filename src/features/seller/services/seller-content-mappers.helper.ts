@@ -1,5 +1,9 @@
-import { Prisma } from '@prisma/client';
+import { type AuditTargetType, Prisma } from '@prisma/client';
 
+import {
+  SELLER_AUDIT_TARGET_TYPES,
+  type SellerAuditTargetType,
+} from '@/features/seller/constants/seller.constants';
 import type {
   SellerAuditLogOutput,
   SellerBannerOutput,
@@ -45,8 +49,7 @@ export interface AuditLogRow {
   id: bigint;
   actor_account_id: bigint;
   store_id: bigint | null;
-  target_type:
-    'STORE' | 'PRODUCT' | 'ORDER' | 'CONVERSATION' | 'CHANGE_PASSWORD';
+  target_type: AuditTargetType;
   target_id: bigint;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
   before_json: Prisma.JsonValue | null;
@@ -94,7 +97,7 @@ export function toAuditLogOutput(row: AuditLogRow): SellerAuditLogOutput {
     id: row.id.toString(),
     actorAccountId: row.actor_account_id.toString(),
     storeId: row.store_id?.toString() ?? null,
-    targetType: row.target_type,
+    targetType: toSellerAuditTargetType(row.target_type),
     targetId: row.target_id.toString(),
     action: row.action,
     beforeJson: row.before_json ? JSON.stringify(row.before_json) : null,
@@ -103,4 +106,15 @@ export function toAuditLogOutput(row: AuditLogRow): SellerAuditLogOutput {
     userAgent: row.user_agent,
     createdAt: row.created_at,
   };
+}
+
+/**
+ * 저장된 대상 종류를 판매자 화면 enum으로 좁힌다. 조회 쿼리가 이미 걸러 주므로
+ * 여기 걸리면 repository 필터가 풀린 것이다 — 조용히 넘기지 않고 실패시킨다.
+ */
+function toSellerAuditTargetType(raw: AuditTargetType): SellerAuditTargetType {
+  if ((SELLER_AUDIT_TARGET_TYPES as readonly string[]).includes(raw)) {
+    return raw as SellerAuditTargetType;
+  }
+  throw new Error(`Unexpected audit target type for seller view: ${raw}`);
 }

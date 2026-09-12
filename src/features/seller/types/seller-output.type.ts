@@ -1,3 +1,5 @@
+import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
+
 export interface SellerStoreOutput {
   id: string;
   sellerAccountId: string;
@@ -271,8 +273,7 @@ export interface SellerAuditLogOutput {
   id: string;
   actorAccountId: string;
   storeId: string | null;
-  targetType:
-    'STORE' | 'PRODUCT' | 'ORDER' | 'CONVERSATION' | 'CHANGE_PASSWORD';
+  targetType: SellerAuditTargetType;
   targetId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
   beforeJson: string | null;
