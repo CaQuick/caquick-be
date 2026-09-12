@@ -8,13 +8,16 @@ extend type Query {
 extend type Mutation {
   """
   배너를 등록한다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
-  linkType에 맞는 링크 필드만 보내야 하며, 무관한 링크 필드가 섞이면 BAD_USER_INPUT.
-  링크 대상(상품·매장·카테고리)이 없거나 삭제됐으면 NOT_FOUND.
+  저장 시점에 구매자 조회가 뽑을 수 있는 상태인지 검증한다:
+  linkType에 맞는 링크 필드만 보내야 하며 무관한 필드가 섞이면 BAD_USER_INPUT,
+  링크 대상(상품·매장·카테고리)이 없거나 비활성·삭제 상태면 NOT_FOUND(상품은 소속 매장까지),
+  CATEGORY 지면은 EVENT 카테고리 링크가 필수, startsAt은 endsAt보다 앞서야 한다(BAD_USER_INPUT).
   """
   adminCreateBanner(input: AdminCreateBannerInput!): AdminBanner!
   """
-  배너를 수정한다. 전달한 필드만 바뀐다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  배너를 수정한다. 전달한 필드만 바뀌며, 검증은 현재 값과 병합한 최종 상태로 한다(규칙은 adminCreateBanner와 동일).
   linkType을 바꾸면 이전 타입의 링크 필드는 null로 정리된다. 배너가 없으면 NOT_FOUND.
+  placement·imageUrl·linkType·sortOrder·isActive는 null을 보낼 수 없다(BAD_USER_INPUT) — 생략만 가능.
   """
   adminUpdateBanner(input: AdminUpdateBannerInput!): AdminBanner!
   """배너를 삭제(soft-delete)한다. 없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN."""

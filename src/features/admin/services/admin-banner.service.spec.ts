@@ -237,6 +237,135 @@ describe('AdminBannerService (real DB)', () => {
       },
     );
 
+    // 노출 가능성(visibleWhere) 전수 — 구매자 조회가 거르는 대상은 저장 시점에 거절
+    it.each([
+      [
+        '비활성 상품',
+        async () => ({
+          linkType: 'PRODUCT' as const,
+          linkProductId: (
+            await createProduct(prisma, { is_active: false })
+          ).id.toString(),
+        }),
+      ],
+      [
+        '활성 상품이지만 매장이 비활성',
+        async () => {
+          const store = await createStore(prisma, { is_active: false });
+          return {
+            linkType: 'PRODUCT' as const,
+            linkProductId: (
+              await createProduct(prisma, { store_id: store.id })
+            ).id.toString(),
+          };
+        },
+      ],
+      [
+        '비활성 매장',
+        async () => ({
+          linkType: 'STORE' as const,
+          linkStoreId: (
+            await createStore(prisma, { is_active: false })
+          ).id.toString(),
+        }),
+      ],
+      [
+        '비활성 카테고리',
+        async () => ({
+          linkType: 'CATEGORY' as const,
+          linkCategoryId: (
+            await createCategory(prisma, { is_active: false })
+          ).id.toString(),
+        }),
+      ],
+    ])('%s 링크는 NotFoundException(노출 불가)', async (_label, makeLink) => {
+      await expect(
+        service.adminCreateBanner(await admin(), {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+          ...(await makeLink()),
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('CATEGORY 지면은 linkType CATEGORY가 아니면 BadRequestException', async () => {
+      await expect(
+        service.adminCreateBanner(await admin(), {
+          placement: 'CATEGORY',
+          imageUrl: 'https://i.example/x.png',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('CATEGORY 지면에 EVENT가 아닌 카테고리를 연결하면 BadRequestException', async () => {
+      const style = await createCategory(prisma, { category_type: 'STYLE' });
+      await expect(
+        service.adminCreateBanner(await admin(), {
+          placement: 'CATEGORY',
+          imageUrl: 'https://i.example/x.png',
+          linkType: 'CATEGORY',
+          linkCategoryId: style.id.toString(),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('CATEGORY 지면 + EVENT 카테고리 링크는 허용된다', async () => {
+      const event = await createCategory(prisma, { category_type: 'EVENT' });
+      const result = await service.adminCreateBanner(await admin(), {
+        placement: 'CATEGORY',
+        imageUrl: 'https://i.example/x.png',
+        linkType: 'CATEGORY',
+        linkCategoryId: event.id.toString(),
+      });
+      expect(result.linkCategoryId).toBe(event.id.toString());
+    });
+
+    it('HOME_MAIN 지면은 STYLE 카테고리 링크도 허용된다(EVENT 제한은 CATEGORY 지면만)', async () => {
+      const style = await createCategory(prisma, { category_type: 'STYLE' });
+      const result = await service.adminCreateBanner(await admin(), {
+        placement: 'HOME_MAIN',
+        imageUrl: 'https://i.example/x.png',
+        linkType: 'CATEGORY',
+        linkCategoryId: style.id.toString(),
+      });
+      expect(result.placement).toBe('HOME_MAIN');
+    });
+
+    it.each([
+      [
+        '역전',
+        new Date('2026-10-02T00:00:00Z'),
+        new Date('2026-10-01T00:00:00Z'),
+      ],
+      [
+        '동일',
+        new Date('2026-10-01T00:00:00Z'),
+        new Date('2026-10-01T00:00:00Z'),
+      ],
+    ])(
+      '노출 기간 %s이면 BadRequestException',
+      async (_label, startsAt, endsAt) => {
+        await expect(
+          service.adminCreateBanner(await admin(), {
+            placement: 'HOME_MAIN',
+            imageUrl: 'https://i.example/x.png',
+            startsAt,
+            endsAt,
+          }),
+        ).rejects.toThrow(BadRequestException);
+      },
+    );
+
+    it('한쪽만 있는 노출 기간은 허용된다', async () => {
+      const result = await service.adminCreateBanner(await admin(), {
+        placement: 'HOME_MAIN',
+        imageUrl: 'https://i.example/x.png',
+        endsAt: new Date('2026-12-31T00:00:00Z'),
+      });
+      expect(result.startsAt).toBeNull();
+      expect(result.endsAt).not.toBeNull();
+    });
+
     it('linkType=PRODUCT인데 삭제된 상품이면 NotFoundException', async () => {
       const product = await createProduct(prisma);
       await prisma.product.update({
@@ -394,6 +523,34 @@ describe('AdminBannerService (real DB)', () => {
           linkStoreId: '999999',
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('병합 결과로 검증한다: 기존 startsAt보다 앞선 endsAt만 보내면 BadRequestException', async () => {
+      const banner = await prisma.banner.create({
+        data: {
+          placement: 'HOME_MAIN',
+          image_url: 'https://i.example/b.png',
+          starts_at: new Date('2026-10-10T00:00:00Z'),
+        },
+      });
+
+      await expect(
+        service.adminUpdateBanner(await admin(), {
+          bannerId: banner.id.toString(),
+          endsAt: new Date('2026-10-01T00:00:00Z'),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('병합 결과로 검증한다: 링크 NONE인 배너를 CATEGORY 지면으로만 바꾸면 BadRequestException', async () => {
+      const banner = await makeBanner({ placement: 'HOME_MAIN' });
+
+      await expect(
+        service.adminUpdateBanner(await admin(), {
+          bannerId: banner.id.toString(),
+          placement: 'CATEGORY',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('linkType 미변경 + 같은 타입의 링크 필드 부분 수정은 허용된다', async () => {

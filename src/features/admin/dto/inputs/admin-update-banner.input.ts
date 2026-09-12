@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  ValidateIf,
 } from 'class-validator';
 
 import {
@@ -14,11 +15,20 @@ import {
   type BannerPlacementValue,
 } from '@/features/admin/constants/admin.constants';
 
+/**
+ * 부분 수정 입력. GraphQL은 nullable 필드에 null을 허용하는데 @IsOptional은 null도 건너뛴다.
+ * 컬럼이 non-null인 속성(placement·imageUrl·linkType·sortOrder·isActive)은 "미지정"만
+ * 허용하고 명시적 null은 거절한다 — 서비스에서 trim()/Prisma non-null 위반으로 500이 나지 않게.
+ * 지울 수 있는 속성(title·링크 값·기간)은 null이 의도된 값이라 @IsOptional을 유지한다.
+ */
+const ifPresent = (field: keyof AdminUpdateBannerInput) =>
+  ValidateIf((o: AdminUpdateBannerInput) => o[field] !== undefined);
+
 export class AdminUpdateBannerInput {
   @IsString()
   bannerId!: string;
 
-  @IsOptional()
+  @ifPresent('placement')
   @IsIn(BANNER_PLACEMENTS)
   placement?: BannerPlacementValue;
 
@@ -26,11 +36,11 @@ export class AdminUpdateBannerInput {
   @IsString()
   title?: string;
 
-  @IsOptional()
+  @ifPresent('imageUrl')
   @IsString()
   imageUrl?: string;
 
-  @IsOptional()
+  @ifPresent('linkType')
   @IsIn(BANNER_LINK_TYPES)
   linkType?: BannerLinkTypeValue;
 
@@ -58,11 +68,11 @@ export class AdminUpdateBannerInput {
   @IsDate()
   endsAt?: Date;
 
-  @IsOptional()
+  @ifPresent('sortOrder')
   @IsInt()
   sortOrder?: number;
 
-  @IsOptional()
+  @ifPresent('isActive')
   @IsBoolean()
   isActive?: boolean;
 }

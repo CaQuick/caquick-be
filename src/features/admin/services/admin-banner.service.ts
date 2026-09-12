@@ -9,6 +9,7 @@ import {
   AuditTargetType,
   type Banner,
   type BannerLinkType,
+  type BannerPlacement,
   type Prisma,
 } from '@prisma/client';
 
@@ -24,12 +25,15 @@ import {
 } from '@/common/utils/text-cleaner';
 import {
   BANNER_NOT_FOUND,
-  LINK_CATEGORY_NOT_FOUND,
+  CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK,
+  CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
+  INVALID_EXPOSURE_WINDOW,
+  LINK_CATEGORY_NOT_VISIBLE,
   LINK_CATEGORY_REQUIRED,
   LINK_FIELDS_MISMATCH,
-  LINK_PRODUCT_NOT_FOUND,
+  LINK_PRODUCT_NOT_VISIBLE,
   LINK_PRODUCT_REQUIRED,
-  LINK_STORE_NOT_FOUND,
+  LINK_STORE_NOT_VISIBLE,
   LINK_STORE_REQUIRED,
   LINK_URL_REQUIRED,
 } from '@/features/admin/constants/admin-error-messages';
@@ -61,9 +65,18 @@ interface BannerLinkValues {
   linkUrl: string | null;
 }
 
+/** 저장 직전의 최종 노출 조건. 생성은 입력 그대로, 수정은 현재 값과 병합한 결과다. */
+interface BannerExposure extends BannerLinkValues {
+  placement: BannerPlacement;
+  startsAt: Date | null;
+  endsAt: Date | null;
+}
+
 /**
- * 플랫폼 배너 관리. 판매자 배너 API에서 이관 — 매장 소속 제한이 없고, 링크 대상은
- * 존재·미삭제만 확인한다(비활성 대상은 허용: 노출 시점에 구매자 쿼리가 거른다).
+ * 플랫폼 배너 관리. 판매자 배너 API에서 이관 — 매장 소속 제한이 없다.
+ * 저장 시점에 "구매자 조회(findFirstBanner)가 뽑을 수 있는 상태"인지 확인한다 —
+ * 링크 대상 노출 가능(visibleWhere), CATEGORY 지면은 EVENT 카테고리 링크, 노출 기간 순서.
+ * 저장 후 대상이 내려가는 건 노출 시점에 구매자 쿼리가 거른다.
  */
 @Injectable()
 export class AdminBannerService extends AdminBaseService {
@@ -128,17 +141,23 @@ export class AdminBannerService extends AdminBaseService {
         : null,
       linkUrl: input.linkUrl ?? null,
     };
-    await this.validateLinkTarget(resolved);
+    const exposure: BannerExposure = {
+      ...resolved,
+      placement: input.placement,
+      startsAt: toDate(input.startsAt) ?? null,
+      endsAt: toDate(input.endsAt) ?? null,
+    };
+    await this.validateExposure(exposure);
 
     const row = await this.repo.createBanner(
       {
-        placement: input.placement,
+        placement: exposure.placement,
         title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
         image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
         ...this.buildBannerLinkFields(resolved),
         link_type: linkType,
-        starts_at: toDate(input.startsAt) ?? null,
-        ends_at: toDate(input.endsAt) ?? null,
+        starts_at: exposure.startsAt,
+        ends_at: exposure.endsAt,
         sort_order: input.sortOrder ?? 0,
         is_active: input.isActive ?? true,
       },
@@ -168,7 +187,19 @@ export class AdminBannerService extends AdminBaseService {
     this.assertInputLinkFieldsMatch(intendedLinkType, input);
 
     const resolved = this.resolveNextLinkValues(input, current);
-    await this.validateLinkTarget(resolved);
+    // 병합된 최종 상태로 검증한다 — 입력만 보면 기존 값과 조합해 노출 불가 상태가 될 수 있다
+    await this.validateExposure({
+      ...resolved,
+      placement: input.placement ?? current.placement,
+      startsAt:
+        input.startsAt !== undefined
+          ? (toDate(input.startsAt) ?? null)
+          : current.starts_at,
+      endsAt:
+        input.endsAt !== undefined
+          ? (toDate(input.endsAt) ?? null)
+          : current.ends_at,
+    });
 
     const row = await this.repo.updateBanner(
       {
@@ -324,40 +355,61 @@ export class AdminBannerService extends AdminBaseService {
     }
   }
 
-  /** linkType이 요구하는 값이 있고, 그 대상이 존재(미삭제)하는지 확인한다. */
-  private async validateLinkTarget(args: BannerLinkValues): Promise<void> {
-    switch (args.linkType) {
+  /**
+   * 저장하려는 최종 상태가 구매자 조회에서 뽑힐 수 있는지 확인한다.
+   * - 노출 기간: startsAt < endsAt (둘 다 있을 때)
+   * - 링크 대상: findFirstBanner와 같은 visibleWhere 기준(활성·미삭제, 상품은 매장까지)
+   * - CATEGORY 지면: 홈 칩 배너는 EVENT 카테고리 링크로만 뽑히므로 linkType CATEGORY + EVENT 필수
+   */
+  private async validateExposure(final: BannerExposure): Promise<void> {
+    if (final.startsAt && final.endsAt && final.startsAt >= final.endsAt) {
+      throw new BadRequestException(INVALID_EXPOSURE_WINDOW);
+    }
+    if (final.placement === 'CATEGORY' && final.linkType !== 'CATEGORY') {
+      throw new BadRequestException(CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK);
+    }
+
+    switch (final.linkType) {
       case 'NONE':
         return;
       case 'URL':
-        if (!args.linkUrl || args.linkUrl.trim().length === 0) {
+        if (!final.linkUrl || final.linkUrl.trim().length === 0) {
           throw new BadRequestException(LINK_URL_REQUIRED);
         }
         return;
       case 'PRODUCT':
-        if (!args.linkProductId) {
+        if (!final.linkProductId) {
           throw new BadRequestException(LINK_PRODUCT_REQUIRED);
         }
-        if (!(await this.repo.existsProduct(args.linkProductId))) {
-          throw new NotFoundException(LINK_PRODUCT_NOT_FOUND);
+        if (!(await this.repo.isProductVisible(final.linkProductId))) {
+          throw new NotFoundException(LINK_PRODUCT_NOT_VISIBLE);
         }
         return;
       case 'STORE':
-        if (!args.linkStoreId) {
+        if (!final.linkStoreId) {
           throw new BadRequestException(LINK_STORE_REQUIRED);
         }
-        if (!(await this.repo.existsStore(args.linkStoreId))) {
-          throw new NotFoundException(LINK_STORE_NOT_FOUND);
+        if (!(await this.repo.isStoreVisible(final.linkStoreId))) {
+          throw new NotFoundException(LINK_STORE_NOT_VISIBLE);
         }
         return;
-      case 'CATEGORY':
-        if (!args.linkCategoryId) {
+      case 'CATEGORY': {
+        if (!final.linkCategoryId) {
           throw new BadRequestException(LINK_CATEGORY_REQUIRED);
         }
-        if (!(await this.repo.existsCategory(args.linkCategoryId))) {
-          throw new NotFoundException(LINK_CATEGORY_NOT_FOUND);
+        const categoryType = await this.repo.findVisibleCategoryType(
+          final.linkCategoryId,
+        );
+        if (!categoryType) {
+          throw new NotFoundException(LINK_CATEGORY_NOT_VISIBLE);
+        }
+        if (final.placement === 'CATEGORY' && categoryType !== 'EVENT') {
+          throw new BadRequestException(
+            CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
+          );
         }
         return;
+      }
     }
   }
 

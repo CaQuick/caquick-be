@@ -5,6 +5,7 @@ import {
   AuditTargetType,
   type Banner,
   type BannerPlacement,
+  type CategoryType,
   Prisma,
 } from '@prisma/client';
 
@@ -13,7 +14,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { PrismaService } from '@/prisma';
+import { PrismaService, visibleWhere } from '@/prisma';
 
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
@@ -229,32 +230,36 @@ export class AdminRepository {
     });
   }
 
-  // ── 링크 대상 존재 확인(루트 READ라 soft-delete는 자동 제외) ──
+  // ── 링크 대상 노출 가능 확인 ──
+  // 구매자 배너 조회(findFirstBanner)가 대상을 visibleWhere로 게이트하므로, 저장 시점에도
+  // 같은 기준으로 확인해 "저장은 됐는데 절대 안 보이는" 배너를 막는다. 루트 READ라 삭제는 자동 제외.
 
-  async existsProduct(productId: bigint): Promise<boolean> {
+  async isProductVisible(productId: bigint): Promise<boolean> {
     return (
       (await this.prisma.product.findFirst({
-        where: { id: productId },
+        where: { id: productId, is_active: true, store: visibleWhere },
         select: { id: true },
       })) !== null
     );
   }
 
-  async existsStore(storeId: bigint): Promise<boolean> {
+  async isStoreVisible(storeId: bigint): Promise<boolean> {
     return (
       (await this.prisma.store.findFirst({
-        where: { id: storeId },
+        where: { id: storeId, is_active: true },
         select: { id: true },
       })) !== null
     );
   }
 
-  async existsCategory(categoryId: bigint): Promise<boolean> {
-    return (
-      (await this.prisma.category.findFirst({
-        where: { id: categoryId },
-        select: { id: true },
-      })) !== null
-    );
+  /** 노출 가능한 카테고리의 종류. 없거나 비활성이면 null. */
+  async findVisibleCategoryType(
+    categoryId: bigint,
+  ): Promise<CategoryType | null> {
+    const row = await this.prisma.category.findFirst({
+      where: { id: categoryId, is_active: true },
+      select: { category_type: true },
+    });
+    return row?.category_type ?? null;
   }
 }
