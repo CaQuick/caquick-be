@@ -20,18 +20,47 @@ export interface ConversationMessageEntry {
 export class ConversationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * 판매자 대화 목록 페이지. (updated_at, id) desc 키셋.
+   *
+   * 커서가 id 단독이면 정렬 순서와 무관한 행을 잘라내 목록에서 영영 빠지는
+   * 대화가 생긴다 — 정렬 키를 그대로 커서에 담는다. schema.prisma의
+   * [store_id, updated_at] 인덱스가 이 정렬을 받친다.
+   */
   async listConversationsByStore(args: {
     storeId: bigint;
     limit: number;
-    cursor?: bigint;
+    cursor?: { updatedAt: Date; id: bigint };
   }) {
+    const scope: Prisma.StoreConversationWhereInput = {
+      store_id: args.storeId,
+    };
     return this.prisma.storeConversation.findMany({
-      where: {
-        store_id: args.storeId,
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-      },
+      where: args.cursor
+        ? {
+            AND: [
+              scope,
+              {
+                OR: [
+                  { updated_at: { lt: args.cursor.updatedAt } },
+                  {
+                    updated_at: args.cursor.updatedAt,
+                    id: { lt: args.cursor.id },
+                  },
+                ],
+              },
+            ],
+          }
+        : scope,
       orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
       take: args.limit + 1,
+    });
+  }
+
+  /** 판매자 대화방 전체 수(커서 무관). 목록 where와 커서 조건만 다르다. */
+  async countConversationsByStore(storeId: bigint): Promise<number> {
+    return this.prisma.storeConversation.count({
+      where: { store_id: storeId },
     });
   }
 
@@ -59,6 +88,13 @@ export class ConversationRepository {
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
+    });
+  }
+
+  /** 대화방 메시지 전체 수(커서 무관). */
+  async countConversationMessages(conversationId: bigint): Promise<number> {
+    return this.prisma.storeConversationMessage.count({
+      where: { conversation_id: conversationId },
     });
   }
 

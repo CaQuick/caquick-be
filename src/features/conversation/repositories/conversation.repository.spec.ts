@@ -50,23 +50,93 @@ describe('ConversationRepository (real DB)', () => {
       expect(rows[0].id).not.toBe(b.conversation.id);
     });
 
-    it('cursor보다 id가 작은 row만 반환 (내림차순 페이지네이션)', async () => {
-      const customer = await createAccount(prisma, { account_type: 'USER' });
+    it('커서 이후 페이지만 반환한다 ((updated_at, id) desc 키셋)', async () => {
       const store = await createStore(prisma);
-      const c1 = await prisma.storeConversation.create({
-        data: { account_id: customer.id, store_id: store.id },
-      });
-      const customer2 = await createAccount(prisma, { account_type: 'USER' });
-      const c2 = await prisma.storeConversation.create({
-        data: { account_id: customer2.id, store_id: store.id },
-      });
+      const make = async (updatedAt: Date) => {
+        const customer = await createAccount(prisma, { account_type: 'USER' });
+        return prisma.storeConversation.create({
+          data: {
+            account_id: customer.id,
+            store_id: store.id,
+            updated_at: updatedAt,
+          },
+        });
+      };
+      const newer = await make(new Date('2026-09-03T00:00:00Z'));
+      const older = await make(new Date('2026-09-01T00:00:00Z'));
 
       const rows = await repo.listConversationsByStore({
         storeId: store.id,
         limit: 10,
-        cursor: c2.id,
+        cursor: { updatedAt: newer.updated_at, id: newer.id },
       });
-      expect(rows.map((r) => r.id)).toEqual([c1.id]);
+      expect(rows.map((r) => r.id)).toEqual([older.id]);
+    });
+
+    it('updated_at이 같으면 id 내림차순으로 이어서 끊는다', async () => {
+      // 커서의 보조 키 분기(updated_at 동률 → id < cursor.id)를 타는 케이스.
+      // 서로 다른 updated_at만 쓰면 이 분기가 한 번도 실행되지 않는다.
+      const store = await createStore(prisma);
+      const sameTime = new Date('2026-09-05T00:00:00Z');
+      const make = async () => {
+        const customer = await createAccount(prisma, { account_type: 'USER' });
+        return prisma.storeConversation.create({
+          data: {
+            account_id: customer.id,
+            store_id: store.id,
+            updated_at: sameTime,
+          },
+        });
+      };
+      const first = await make();
+      const second = await make();
+      expect(second.id > first.id).toBe(true);
+
+      const rows = await repo.listConversationsByStore({
+        storeId: store.id,
+        limit: 10,
+        cursor: { updatedAt: sameTime, id: second.id },
+      });
+      expect(rows.map((r) => r.id)).toEqual([first.id]);
+    });
+
+    it('id가 더 큰 오래된 대화도 커서 페이지에서 빠지지 않는다', async () => {
+      // 정렬은 updated_at desc인데 커서가 id 단독이면 `id < cursor`가 정렬과
+      // 무관한 행을 잘라내, id가 큰 오래된 대화가 목록에서 영영 빠졌다.
+      const store = await createStore(prisma);
+      const make = async (updatedAt: Date) => {
+        const customer = await createAccount(prisma, { account_type: 'USER' });
+        return prisma.storeConversation.create({
+          data: {
+            account_id: customer.id,
+            store_id: store.id,
+            updated_at: updatedAt,
+          },
+        });
+      };
+      // 나중에 만들어 id가 크지만 updated_at은 가장 오래된 대화
+      const first = await make(new Date('2026-09-03T00:00:00Z'));
+      const second = await make(new Date('2026-09-02T00:00:00Z'));
+      const lastById = await make(new Date('2026-09-01T00:00:00Z'));
+      expect(lastById.id > first.id).toBe(true);
+
+      const page1 = await repo.listConversationsByStore({
+        storeId: store.id,
+        limit: 2,
+      });
+      expect(page1.map((r) => r.id)).toEqual([
+        first.id,
+        second.id,
+        lastById.id,
+      ]);
+
+      const cursorRow = page1[1];
+      const page2 = await repo.listConversationsByStore({
+        storeId: store.id,
+        limit: 2,
+        cursor: { updatedAt: cursorRow.updated_at, id: cursorRow.id },
+      });
+      expect(page2.map((r) => r.id)).toEqual([lastById.id]);
     });
   });
 

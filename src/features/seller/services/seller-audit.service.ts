@@ -58,6 +58,8 @@ export class SellerAuditService
     return {
       items: paged.items.map((row) => toAuditLogOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      // totalCount는 내리지 않는다 — 감사 로그는 누적형이라 매 조회 COUNT가 부담이다
     };
   }
 

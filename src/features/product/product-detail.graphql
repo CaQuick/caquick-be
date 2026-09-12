@@ -8,16 +8,21 @@ type ProductDetail {
   id: ID!
   """소속 매장 ID(주문/매장 이동용)."""
   storeId: ID!
+  """상품명."""
   name: String!
+  """상품 설명. 미등록 시 null."""
   description: String
   """구매 전 필독사항."""
   purchaseNotice: String
   """상품 이미지(캐러셀·썸네일, sort_order asc)."""
   images: [String!]!
+  """정가(원)."""
   regularPrice: Int!
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
   salePrice: Int
   """할인율(0~100). salePrice 없으면 0."""
   discountRate: Int!
+  """통화 코드(ISO 4217). 저장된 값을 그대로 돌려주며, 현재 KRW만 주문 가능하다."""
   currency: String!
   """후기 탭 카운트."""
   reviewCount: Int!
@@ -30,23 +35,33 @@ type ProductDetail {
 """상품 상세 옵션 섹션(그룹)."""
 type ProductDetailOptionGroup {
   id: ID!
+  """그룹명(섹션 제목)."""
   name: String!
   """그룹 안내 문구(섹션 인트로)."""
   description: String
+  """필수 선택 여부. true면 선택 개수가 minSelect~maxSelect 범위 안이어야 하고, false면 0개 선택도 허용된다."""
   isRequired: Boolean!
+  """최소 선택 개수."""
   minSelect: Int!
+  """최대 선택 개수. minSelect와 함께 허용 개수를 정한다(둘 다 1이면 단일 선택)."""
   maxSelect: Int!
+  """섹션 노출 순서. 오름차순."""
   sortOrder: Int!
+  """이 그룹의 선택지. 활성 항목만 온다."""
   items: [ProductDetailOptionItem!]!
 }
 
 """상품 상세 옵션 항목."""
 type ProductDetailOptionItem {
   id: ID!
+  """선택지 이름."""
   title: String!
+  """선택지 설명. 미등록 시 null."""
   description: String
+  """선택지 이미지 URL. 미등록 시 null."""
   imageUrl: String
   """옵션 선택 시 가격 증감(원)."""
   priceDelta: Int!
+  """그룹 안에서의 노출 순서. 오름차순."""
   sortOrder: Int!
 }

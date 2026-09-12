@@ -27,9 +27,11 @@
     "graphql:codegen": "graphql-codegen --config codegen.yml",
     "graphql:docs": "spectaql -c spectaql.yml",
     "dto:check": "ts-node -r tsconfig-paths/register scripts/check-graphql-dto-sync.ts",
+    "docs:check": "ts-node -r tsconfig-paths/register scripts/check-sdl-description-coverage.ts",
+    "test:scripts": "jest --config jest.scripts.config.js",
     "arch:check": "depcruise --config .dependency-cruiser.cjs src",
     "knip": "knip --no-config-hints",
-    "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn arch:check && yarn test:cov",
+    "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn docs:check && yarn arch:check && yarn test:scripts && yarn test:cov",
     "prepare": "husky"
   },
   "prisma": {

@@ -1,126 +1,173 @@
 extend type Query {
-  """내 매장 정보를 조회한다."""
+  """내 매장 정보를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerMyStore: SellerStore!
-  """내 매장 요일별 영업시간 목록을 조회한다."""
+  """내 매장 요일별 영업시간 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreBusinessHours: [SellerStoreBusinessHour!]!
-  """내 매장 특별휴무 목록을 조회한다."""
+  """내 매장 특별휴무 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreSpecialClosures(input: SellerCursorInput): SellerStoreSpecialClosureConnection!
-  """내 매장 일별 생산 가능 수량 목록을 조회한다."""
+  """내 매장 일별 생산 가능 수량 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreDailyCapacities(input: SellerDateCursorInput): SellerStoreDailyCapacityConnection!
 }
 
 extend type Mutation {
-  """내 매장 기본 정보를 수정한다."""
+  """내 매장 기본 정보를 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateStoreBasicInfo(input: SellerUpdateStoreBasicInfoInput!): SellerStore!
-  """내 매장 영업시간을 등록 또는 수정한다."""
+  """내 매장 영업시간을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreBusinessHour(input: SellerUpsertStoreBusinessHourInput!): SellerStoreBusinessHour!
-  """내 매장 특별휴무를 등록 또는 수정한다."""
+  """내 매장 특별휴무를 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreSpecialClosure(input: SellerUpsertStoreSpecialClosureInput!): SellerStoreSpecialClosure!
-  """내 매장 특별휴무를 삭제한다."""
+  """내 매장 특별휴무를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteStoreSpecialClosure(closureId: ID!): Boolean!
-  """내 매장 픽업 정책을 수정한다."""
+  """내 매장 픽업 정책을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdatePickupPolicy(input: SellerUpdatePickupPolicyInput!): SellerStore!
-  """내 매장 일별 생산 가능 수량을 등록 또는 수정한다."""
+  """내 매장 일별 생산 가능 수량을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpsertStoreDailyCapacity(input: SellerUpsertStoreDailyCapacityInput!): SellerStoreDailyCapacity!
-  """내 매장 일별 생산 가능 수량을 삭제한다."""
+  """내 매장 일별 생산 가능 수량을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteStoreDailyCapacity(capacityId: ID!): Boolean!
 }
 
-"""SellerDateCursorInput 입력 타입"""
+"""날짜 범위 필터가 붙은 커서 목록 입력. 일별 생산 수량 조회에 쓴다."""
 input SellerDateCursorInput {
+  """한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
+  """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
+  """조회 시작 날짜(이상). 미지정 시 하한 없음."""
   fromDate: DateTime
+  """조회 종료 날짜(이하). 미지정 시 상한 없음."""
   toDate: DateTime
 }
 
-"""SellerStoreMapProvider 열거형"""
-enum SellerStoreMapProvider {
-  NAVER
-  KAKAO
-  NONE
-}
-
-"""SellerStore 타입"""
+"""내 매장 정보. 구매자에게 노출되는 매장 상세와 같은 원본을 판매자 시점으로 본 것이다."""
 type SellerStore {
   id: ID!
+  """이 매장을 소유한 판매자 계정 ID."""
   sellerAccountId: ID!
+  """매장명."""
   storeName: String!
+  """매장 대표 연락처."""
   storePhone: String!
+  """전체 주소 문자열. 화면에 그대로 노출된다."""
   addressFull: String!
+  """시·도 단위. 지역 필터·표기에 쓰이며 매핑되지 않았으면 null."""
   addressCity: String
+  """시·군·구 단위. 매핑되지 않았으면 null."""
   addressDistrict: String
+  """읍·면·동 단위. 매핑되지 않았으면 null."""
   addressNeighborhood: String
+  """위도. 정밀도 손실을 피하려고 문자열로 내려준다. 좌표 미등록 시 null."""
   latitude: String
+  """경도. 정밀도 손실을 피하려고 문자열로 내려준다. 좌표 미등록 시 null."""
   longitude: String
-  mapProvider: SellerStoreMapProvider!
+  """지도 진입에 쓸 provider."""
+  mapProvider: StoreMapProvider!
+  """매장 홈페이지·SNS URL. 미등록 시 null."""
   websiteUrl: String
+  """영업시간 안내 문구(자유 입력). 요일별 영업시간과 별개로 화면에 그대로 노출된다."""
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. 미등록 시 null."""
   profileImageUrl: String
   """문의 채팅 인사말 템플릿({nickname}/{storeName} 치환). null이면 기본 문구."""
   greetingMessage: String
+  """픽업 예약 시간 슬롯 간격(분). 이 간격으로 예약 가능 시각이 생성된다."""
   pickupSlotIntervalMinutes: Int!
+  """최소 리드타임(분). 지금부터 이 시간 이후의 슬롯만 예약할 수 있다."""
   minLeadTimeMinutes: Int!
+  """예약 가능 범위(일). 오늘부터 이 일수까지의 날짜만 달력에 열린다."""
   maxDaysAhead: Int!
+  """매장 노출 여부. false면 구매자 화면에 나오지 않는다."""
   isActive: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerStoreBusinessHour 타입"""
+"""요일별 정기 영업시간. 요일마다 최대 1건이다."""
 type SellerStoreBusinessHour {
   id: ID!
+  """요일. 0=일요일 ~ 6=토요일."""
   dayOfWeek: Int!
+  """해당 요일 정기 휴무 여부. true면 openTime·closeTime은 의미가 없다."""
   isClosed: Boolean!
+  """영업 시작 시각. 시:분:초만 의미가 있고 날짜 부분은 쓰지 않는다. 휴무일이면 null."""
   openTime: DateTime
+  """영업 종료 시각. 시:분:초만 의미가 있고 날짜 부분은 쓰지 않는다. 휴무일이면 null."""
   closeTime: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerStoreSpecialClosure 타입"""
+"""특정 날짜의 임시 휴무. 요일별 정기 영업시간보다 우선한다."""
 type SellerStoreSpecialClosure {
   id: ID!
+  """휴무 날짜. 날짜 부분만 의미가 있다."""
   closureDate: DateTime!
+  """휴무 사유. 미입력 시 null."""
   reason: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerStoreSpecialClosureConnection 타입"""
+"""특별휴무 목록 페이지."""
 type SellerStoreSpecialClosureConnection {
+  """특별휴무. 최신 등록이 먼저 온다."""
   items: [SellerStoreSpecialClosure!]!
+  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
+  totalCount: Int!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerStoreDailyCapacity 타입"""
+"""특정 날짜의 생산 가능 수량. 미설정 날짜는 수량 제한이 없다."""
 type SellerStoreDailyCapacity {
   id: ID!
+  """대상 날짜. 날짜 부분만 의미가 있다."""
   capacityDate: DateTime!
+  """그날 받을 수 있는 최대 주문 수량. 예약분이 이 수를 채우면 달력에서 닫힌다."""
   capacity: Int!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerStoreDailyCapacityConnection 타입"""
+"""일별 생산 가능 수량 목록 페이지."""
 type SellerStoreDailyCapacityConnection {
+  """일별 생산 수량 설정. 최신 등록이 먼저 온다."""
   items: [SellerStoreDailyCapacity!]!
+  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
+  totalCount: Int!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerUpdateStoreBasicInfoInput 입력 타입"""
+"""
+매장 기본 정보 수정 입력. 모든 필드가 선택이며, 전달한 필드만 변경된다
+(부분 수정). 전달하지 않은 필드는 기존 값을 유지한다.
+"""
 input SellerUpdateStoreBasicInfoInput {
+  """매장명."""
   storeName: String
+  """매장 대표 연락처."""
   storePhone: String
+  """전체 주소 문자열."""
   addressFull: String
+  """시·도 단위."""
   addressCity: String
+  """시·군·구 단위."""
   addressDistrict: String
+  """읍·면·동 단위."""
   addressNeighborhood: String
+  """위도. 정밀도 손실을 피하려고 문자열로 받는다."""
   latitude: String
+  """경도. 정밀도 손실을 피하려고 문자열로 받는다."""
   longitude: String
-  mapProvider: SellerStoreMapProvider
+  """지도 진입에 쓸 provider."""
+  mapProvider: StoreMapProvider
+  """매장 홈페이지·SNS URL."""
   websiteUrl: String
+  """영업시간 안내 문구(자유 입력)."""
   businessHoursText: String
   """매장 프로필(로고) 이미지 URL. null 전달 시 제거."""
   profileImageUrl: String
@@ -128,31 +175,50 @@ input SellerUpdateStoreBasicInfoInput {
   greetingMessage: String
 }
 
-"""SellerUpsertStoreBusinessHourInput 입력 타입"""
+"""
+요일별 영업시간 등록·수정 입력. dayOfWeek 기준으로 upsert되므로 같은 요일을 다시
+보내면 덮어쓴다.
+"""
 input SellerUpsertStoreBusinessHourInput {
+  """요일. 0=일요일 ~ 6=토요일."""
   dayOfWeek: Int!
+  """정기 휴무 여부. true면 openTime·closeTime을 보내지 않아도 된다."""
   isClosed: Boolean!
+  """영업 시작 시각. 시:분:초만 저장된다."""
   openTime: DateTime
+  """영업 종료 시각. 시:분:초만 저장된다."""
   closeTime: DateTime
 }
 
-"""SellerUpsertStoreSpecialClosureInput 입력 타입"""
+"""특별휴무 등록·수정 입력."""
 input SellerUpsertStoreSpecialClosureInput {
+  """수정할 특별휴무 ID. 생략하면 새로 등록한다."""
   closureId: ID
+  """휴무 날짜. 날짜 부분만 저장된다."""
   closureDate: DateTime!
+  """휴무 사유."""
   reason: String
 }
 
-"""SellerUpdatePickupPolicyInput 입력 타입"""
+"""
+픽업 정책 수정 입력. 세 값이 함께 픽업 달력·시간 슬롯 생성 규칙을 이룬다.
+범위를 벗어나면 BAD_USER_INPUT.
+"""
 input SellerUpdatePickupPolicyInput {
+  """픽업 예약 시간 슬롯 간격(분)."""
   pickupSlotIntervalMinutes: Int!
+  """최소 리드타임(분). 지금부터 이 시간 이후의 슬롯만 열린다."""
   minLeadTimeMinutes: Int!
+  """예약 가능 범위(일). 오늘부터 이 일수까지 달력이 열린다."""
   maxDaysAhead: Int!
 }
 
-"""SellerUpsertStoreDailyCapacityInput 입력 타입"""
+"""일별 생산 가능 수량 등록·수정 입력."""
 input SellerUpsertStoreDailyCapacityInput {
+  """수정할 수량 설정 ID. 생략하면 새로 등록한다."""
   capacityId: ID
+  """대상 날짜. 날짜 부분만 저장된다."""
   capacityDate: DateTime!
+  """그날 받을 수 있는 최대 주문 수량."""
   capacity: Int!
 }

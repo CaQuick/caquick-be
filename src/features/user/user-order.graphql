@@ -1,7 +1,7 @@
 extend type Query {
-  """내 주문 목록 조회"""
+  """내 주문 목록 조회. 로그인 필수. 본인 데이터만 대상이 된다."""
   myOrders(input: MyOrdersInput): MyOrderConnection!
-  """내 주문 상세 조회"""
+  """내 주문 상세 조회. 로그인 필수. 본인 데이터만 대상이 된다."""
   myOrder(orderId: ID!): MyOrderDetail!
 }
 
@@ -9,23 +9,32 @@ extend type Query {
 input MyOrdersInput {
   """상태 필터 (복수 선택 가능). 미지정 시 전체"""
   statuses: [OrderStatusType!]
+  """건너뛸 개수. 기본 0."""
   offset: Int = 0
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 
 """주문 목록 응답"""
 type MyOrderConnection {
+  """주문 카드. 최신 주문이 먼저 온다."""
   items: [MyOrderSummary!]!
+  """전체 주문 수. 상태 필터를 적용한 뒤의 총계이며 offset·limit과 무관하다."""
   totalCount: Int!
+  """다음 페이지 존재 여부."""
   hasMore: Boolean!
 }
 
 """유저 주문 목록 카드"""
 type MyOrderSummary {
   orderId: ID!
+  """주문번호. 화면·문의에 쓰는 식별자."""
   orderNumber: String!
+  """현재 주문 상태."""
   status: OrderStatusType!
+  """주문 생성 시각."""
   createdAt: DateTime!
+  """픽업 예정 일시."""
   pickupAt: DateTime!
   """대표 상품명 (첫 OrderItem 기준)"""
   representativeProductName: String!
@@ -44,26 +53,39 @@ type MyOrderSummary {
 """주문 상세"""
 type MyOrderDetail {
   orderId: ID!
+  """주문번호."""
   orderNumber: String!
+  """현재 주문 상태."""
   status: OrderStatusType!
+  """주문 생성 시각."""
   createdAt: DateTime!
+  """픽업 예정 일시."""
   pickupAt: DateTime!
 
+  """주문자 이름."""
   buyerName: String!
+  """주문자 연락처."""
   buyerPhone: String!
 
+  """할인 전 품목 합계(원)."""
   subtotalPrice: Int!
+  """할인 금액(원). 할인이 없으면 0."""
   discountPrice: Int!
+  """최종 결제 금액(원) = subtotalPrice - discountPrice."""
   totalPrice: Int!
 
-  """상태 스테퍼용 타임스탬프"""
+  """상태 스테퍼용 타임스탬프. 아직 그 상태를 거치지 않았으면 null이다."""
   submittedAt: DateTime
+  """CONFIRMED 도달 시각. 미도달 시 null."""
   confirmedAt: DateTime
+  """MADE(제작 완료) 도달 시각. 미도달 시 null."""
   madeAt: DateTime
+  """PICKED_UP 도달 시각. 미도달 시 null."""
   pickedUpAt: DateTime
+  """CANCELED 도달 시각. 취소되지 않았으면 null."""
   canceledAt: DateTime
 
-  """상태 변경 히스토리"""
+  """상태 변경 이력. 오래된 순이다(판매자 주문 상세는 최신순 — 방향이 반대다)."""
   statusHistories: [MyOrderStatusHistory!]!
   """주문 아이템 목록"""
   items: [MyOrderItemDetail!]!
@@ -71,21 +93,36 @@ type MyOrderDetail {
   store: MyOrderStoreInfo!
 }
 
+"""주문 상태 변경 이력 1건."""
 type MyOrderStatusHistory {
+  """변경 전 상태. 최초 생성 이력이면 null."""
   fromStatus: OrderStatusType
+  """변경 후 상태."""
   toStatus: OrderStatusType!
+  """변경 시각."""
   changedAt: DateTime!
+  """변경 사유 메모. 취소 전이에는 판매자가 필수로 남긴다."""
   note: String
 }
 
+"""주문 품목 1건. 가격·옵션·커스텀은 전부 주문 당시 스냅샷이라 이후 상품이 바뀌어도 변하지 않는다."""
 type MyOrderItemDetail {
   orderItemId: ID!
   productId: ID!
+  """상품명(주문 당시)."""
   productName: String!
+  """
+  대표 상품 이미지 URL. 주문 당시 스냅샷이 아니라 현재 상품의 첫 이미지를 읽는다 —
+  판매자가 이미지를 바꾸거나 지우면 값이 달라지거나 null이 된다.
+  """
   representativeImageUrl: String
+  """주문 수량."""
   quantity: Int!
+  """정가(원, 주문 당시)."""
   regularPrice: Int!
+  """할인가(원, 주문 당시). 할인이 없었으면 null."""
   salePrice: Int
+  """이 품목의 합계 금액(원). 옵션 추가금과 수량이 반영된 값이다."""
   itemSubtotalPrice: Int!
   """선택한 옵션 목록"""
   selectedOptions: [MyOrderItemSelectedOption!]!
@@ -93,43 +130,67 @@ type MyOrderItemDetail {
   customTexts: [MyOrderItemCustomText!]!
   """자유 커스텀(스냅샷)"""
   customFreeEdits: [MyOrderItemCustomFreeEdit!]!
-  """내 리뷰 작성 여부"""
+  """이 품목에 내가 남긴 활성 리뷰가 있는지."""
   hasMyReview: Boolean!
-  """리뷰 작성 가능 여부"""
+  """리뷰 작성 가능 여부. 주문이 PICKED_UP이고 활성 리뷰가 없을 때 true."""
   canWriteReview: Boolean!
 }
 
+"""선택한 옵션(주문 당시 스냅샷)."""
 type MyOrderItemSelectedOption {
+  """옵션 그룹명."""
   groupName: String!
+  """선택한 옵션명."""
   optionTitle: String!
+  """옵션 추가금(원). 음수면 할인으로 동작했다."""
   priceDelta: Int!
 }
 
+"""입력한 커스텀 문구(주문 당시 스냅샷)."""
 type MyOrderItemCustomText {
+  """문구 슬롯 식별 키."""
   tokenKey: String!
+  """슬롯의 기본 문구."""
   defaultText: String!
+  """실제로 입력한 문구."""
   valueText: String!
+  """입력 화면 노출 순서. 오름차순."""
   sortOrder: Int!
 }
 
+"""자유 편집 요청(주문 당시 스냅샷). 이미지 위 영역을 지정해 남긴 요청이다."""
 type MyOrderItemCustomFreeEdit {
+  """지정한 편집 영역을 잘라낸 이미지 URL."""
   cropImageUrl: String!
+  """해당 영역에 대한 요청 문구."""
   descriptionText: String!
+  """요청 순서. 오름차순."""
   sortOrder: Int!
+  """참고로 첨부한 이미지 URL 목록. 첨부가 없으면 빈 배열."""
   attachmentImageUrls: [String!]!
 }
 
+"""픽업할 매장 정보. 주문은 단일 매장 전제라 1건이다."""
 type MyOrderStoreInfo {
   storeId: ID!
+  """매장명."""
   storeName: String!
+  """매장 대표 연락처."""
   storePhone: String!
+  """전체 주소 문자열."""
   addressFull: String!
+  """시·도 단위. 매핑되지 않았으면 null."""
   addressCity: String
+  """시·군·구 단위. 매핑되지 않았으면 null."""
   addressDistrict: String
+  """읍·면·동 단위. 매핑되지 않았으면 null."""
   addressNeighborhood: String
+  """위도. 좌표 미등록 시 null."""
   latitude: Float
+  """경도. 좌표 미등록 시 null."""
   longitude: Float
   """영업시간 평문"""
   businessHoursText: String
+  """매장 홈페이지·SNS URL. 미등록 시 null."""
   websiteUrl: String
 }

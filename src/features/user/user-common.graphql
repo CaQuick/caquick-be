@@ -1,20 +1,33 @@
+"""계정 종류. JWT 발급 시 결정되며 접근 가능한 API 영역을 가른다."""
 enum AccountType {
+  """구매자. 주문·찜·리뷰 등 구매자 API를 쓴다."""
   USER
+  """판매자. 매장 1곳을 보유하며 seller* API를 쓴다."""
   SELLER
+  """운영자."""
   ADMIN
 }
 
+"""알림 분류. 알림센터 목록의 그룹 기준이다."""
 enum NotificationType {
+  """주문 상태 변경 알림. ORDER_CONFIRMED·ORDER_MADE·ORDER_PICKED_UP 이벤트가 여기 속한다."""
   ORDER_STATUS
+  """내 리뷰에 좋아요가 달린 알림. REVIEW_LIKED 이벤트가 여기 속한다."""
   REVIEW_LIKE
+  """운영 공지. 현재 생성 경로가 없는 예약된 분류다."""
   SYSTEM
+  """마케팅 알림. 현재 생성 경로가 없는 예약된 분류다."""
   MARKETING
 }
 
 """알림 이벤트. 알림센터의 아이콘·라벨 매핑 기준 (figma notification-center)"""
 enum NotificationEvent {
+  """다른 사용자가 내 리뷰에 좋아요를 눌렀다. type은 REVIEW_LIKE."""
   REVIEW_LIKED
+  """판매자가 주문을 확인·수락했다. type은 ORDER_STATUS."""
   ORDER_CONFIRMED
+  """판매자가 제작을 완료했다. type은 ORDER_STATUS."""
   ORDER_MADE
+  """픽업이 완료됐다. type은 ORDER_STATUS."""
   ORDER_PICKED_UP
 }

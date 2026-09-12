@@ -1,7 +1,7 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
 const MAP_PROVIDERS = ['NAVER', 'KAKAO', 'NONE'] as const;
-type SellerStoreMapProvider = (typeof MAP_PROVIDERS)[number];
+type StoreMapProvider = (typeof MAP_PROVIDERS)[number];
 
 export class SellerUpdateStoreBasicInfoInput {
   @IsOptional()
@@ -38,7 +38,7 @@ export class SellerUpdateStoreBasicInfoInput {
 
   @IsOptional()
   @IsIn(MAP_PROVIDERS)
-  mapProvider?: SellerStoreMapProvider;
+  mapProvider?: StoreMapProvider;
 
   @IsOptional()
   @IsString()

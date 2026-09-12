@@ -3,6 +3,7 @@ extend type Query {
   searchSummary(input: SearchSummaryInput!): SearchSummary!
 }
 
+"""검색 결과 탭 카운트 조회 조건."""
 input SearchSummaryInput {
   """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
   keyword: String!
@@ -10,7 +11,10 @@ input SearchSummaryInput {
   regionIds: [ID!]
 }
 
+"""검색 결과 탭 카운트. '전체 N'은 두 값을 FE가 합산한다."""
 type SearchSummary {
+  """조건에 맞는 상품 수."""
   productCount: Int!
+  """조건에 맞는 매장 수."""
   storeCount: Int!
 }

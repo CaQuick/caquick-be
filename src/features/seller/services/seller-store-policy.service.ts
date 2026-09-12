@@ -64,18 +64,27 @@ export class SellerStorePolicyService
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listStoreDailyCapacities({
+    const filters = {
       storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
       fromDate: toDate(input?.fromDate),
       toDate: toDate(input?.toDate),
-    });
+    };
+
+    const [rows, totalCount] = await Promise.all([
+      this.repo.listStoreDailyCapacities({
+        ...filters,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.repo.countStoreDailyCapacities(filters),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toStoreDailyCapacityOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 

@@ -1,174 +1,269 @@
 extend type Query {
-  """내 매장 FAQ 목록을 조회한다."""
+  """내 매장 FAQ 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerFaqTopics: [SellerFaqTopic!]!
-  """내 매장 배너 목록을 조회한다."""
+  """내 매장 배너 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerBanners(input: SellerCursorInput): SellerBannerConnection!
-  """내 매장 감사 로그 목록을 조회한다."""
+  """내 매장 감사 로그 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerAuditLogs(input: SellerAuditLogListInput): SellerAuditLogConnection!
 }
 
 extend type Mutation {
-  """FAQ 항목을 생성한다."""
+  """FAQ 항목을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateFaqTopic(input: SellerCreateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 수정한다."""
+  """FAQ 항목을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateFaqTopic(input: SellerUpdateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 삭제한다."""
+  """FAQ 항목을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteFaqTopic(topicId: ID!): Boolean!
 
-  """배너를 생성한다."""
+  """배너를 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerCreateBanner(input: SellerCreateBannerInput!): SellerBanner!
-  """배너를 수정한다."""
+  """배너를 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerUpdateBanner(input: SellerUpdateBannerInput!): SellerBanner!
-  """배너를 삭제한다."""
+  """배너를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteBanner(bannerId: ID!): Boolean!
 }
 
+"""매장 FAQ 항목. 문의 채팅에서 자동응답 카드로 노출된다."""
 type SellerFaqTopic {
   id: ID!
   storeId: ID!
+  """FAQ 질문 제목. 채팅에서 버튼 라벨로 쓰인다."""
   title: String!
+  """FAQ 답변 본문(HTML). 서버 측 sanitize는 아직 적용돼 있지 않다."""
   answerHtml: String!
+  """노출 순서. 오름차순이고 같으면 id 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 구매자에게 보이지 않는다."""
   isActive: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerCreateFaqTopicInput 입력 타입"""
+"""FAQ 항목 생성 입력."""
 input SellerCreateFaqTopicInput {
+  """FAQ 질문 제목."""
   title: String!
+  """FAQ 답변 본문(HTML)."""
   answerHtml: String!
+  """노출 순서. 오름차순이고 같으면 id 오름차순. 미지정 시 0이라 기존이 모두 0이면 맨 뒤에 온다."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateFaqTopicInput 입력 타입"""
+"""FAQ 항목 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateFaqTopicInput {
   topicId: ID!
+  """FAQ 질문 제목."""
   title: String
+  """FAQ 답변 본문(HTML)."""
   answerHtml: String
+  """노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
-"""SellerBannerPlacement 열거형"""
+"""
+배너가 노출될 자리. 구매자 API가 실제로 읽는 값은 HOME_MAIN·CATEGORY·SEARCH 셋뿐이고,
+나머지는 아직 소비처가 없는 예약값이다.
+"""
 enum SellerBannerPlacement {
+  """홈 '상황별 인기 케이크' 배너. 카테고리 칩이 '전체'일 때 노출된다."""
   HOME_MAIN
-  HOME_SUB
+  """
+  홈 '상황별 인기 케이크' 배너 중 특정 카테고리 칩을 선택했을 때 노출되는 것.
+  해당 카테고리로 연결된 배너만 뽑히므로 linkCategoryId를 함께 지정해야 한다.
+  카테고리 진입 화면의 배너가 아니다.
+  """
   CATEGORY
-  STORE
   """검색 진입 화면 배너 슬롯"""
   SEARCH
-}
-
-"""SellerBannerLinkType 열거형"""
-enum SellerBannerLinkType {
-  NONE
-  URL
-  PRODUCT
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
+  HOME_SUB
+  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
   STORE
-  CATEGORY
 }
 
-"""SellerBanner 타입"""
+"""
+매장 배너. linkType이 어느 링크 필드를 읽어야 할지 정한다.
+
+판매자 조회는 저장된 값을 그대로 반환하므로, linkType을 바꾸기 전에 넣어 둔 값이
+다른 링크 필드에 남아 있을 수 있다. 표시·이동 판단은 linkType을 기준으로 한다
+(구매자 조회에서는 서버가 나머지를 null로 비운다).
+"""
 type SellerBanner {
   id: ID!
+  """노출 슬롯."""
   placement: SellerBannerPlacement!
+  """배너 문구. 미입력 시 null."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String!
-  linkType: SellerBannerLinkType!
+  """이동 대상 타입. 읽어야 할 링크 필드를 가리킨다(판매자 조회는 다른 필드 값도 그대로 내려준다)."""
+  linkType: BannerLinkType!
+  """이동할 URL. linkType이 URL일 때 쓰는 값."""
   linkUrl: String
+  """이동할 상품 ID. linkType이 PRODUCT일 때 쓰는 값."""
   linkProductId: ID
+  """이동할 매장 ID. linkType이 STORE일 때 쓰는 값."""
   linkStoreId: ID
+  """이동할 카테고리 ID. linkType이 CATEGORY일 때 쓰는 값."""
   linkCategoryId: ID
+  """노출 시작 일시. null이면 시작 제한 없음."""
   startsAt: DateTime
+  """노출 종료 일시. null이면 종료 제한 없음."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서. 오름차순."""
   sortOrder: Int!
+  """노출 여부. false면 기간 안이어도 나오지 않는다."""
   isActive: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
 
-"""SellerBannerConnection 타입"""
+"""배너 목록 페이지. 최신 등록이 먼저 온다."""
 type SellerBannerConnection {
+  """배너. 최신 등록이 먼저 온다."""
   items: [SellerBanner!]!
+  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
+  totalCount: Int!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerCreateBannerInput 입력 타입"""
+"""배너 생성 입력. linkType에 맞는 링크 필드를 함께 보내야 한다."""
 input SellerCreateBannerInput {
+  """노출 슬롯."""
   placement: SellerBannerPlacement!
+  """배너 문구."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String!
-  linkType: SellerBannerLinkType = NONE
+  """이동 대상 타입. 기본 NONE(이동 없음)."""
+  linkType: BannerLinkType = NONE
+  """linkType이 URL일 때 쓸 이동 URL."""
   linkUrl: String
+  """linkType이 PRODUCT일 때 쓸 상품 ID."""
   linkProductId: ID
+  """linkType이 STORE일 때 쓸 매장 ID."""
   linkStoreId: ID
+  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
   linkCategoryId: ID
+  """노출 시작 일시. 생략 시 시작 제한 없음."""
   startsAt: DateTime
+  """노출 종료 일시. 생략 시 종료 제한 없음."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서. 구매자 노출은 오름차순(같으면 id 오름차순)으로 1건만 뽑는다. 미지정 시 0."""
   sortOrder: Int
+  """노출 여부. 기본 true."""
   isActive: Boolean = true
 }
 
-"""SellerUpdateBannerInput 입력 타입"""
+"""배너 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
 input SellerUpdateBannerInput {
   bannerId: ID!
+  """노출 슬롯."""
   placement: SellerBannerPlacement
+  """배너 문구."""
   title: String
+  """배너 이미지 URL."""
   imageUrl: String
-  linkType: SellerBannerLinkType
+  """이동 대상 타입."""
+  linkType: BannerLinkType
+  """linkType이 URL일 때 쓸 이동 URL."""
   linkUrl: String
+  """linkType이 PRODUCT일 때 쓸 상품 ID."""
   linkProductId: ID
+  """linkType이 STORE일 때 쓸 매장 ID."""
   linkStoreId: ID
+  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
   linkCategoryId: ID
+  """노출 시작 일시."""
   startsAt: DateTime
+  """노출 종료 일시."""
   endsAt: DateTime
+  """같은 슬롯 안에서의 노출 순서."""
   sortOrder: Int
+  """노출 여부."""
   isActive: Boolean
 }
 
-"""SellerAuditTargetType 열거형"""
+"""감사 로그가 가리키는 대상 종류."""
 enum SellerAuditTargetType {
+  """매장 정보·영업시간·픽업 정책·FAQ·배너 등 매장 단위 설정과 콘텐츠."""
   STORE
+  """상품과 그 하위(이미지·옵션·커스텀 템플릿)."""
   PRODUCT
+  """주문. 상태 변경만 기록된다."""
   ORDER
+  """구매자 문의 대화."""
   CONVERSATION
+  """판매자 비밀번호 변경. targetId에는 비밀번호를 바꾼 판매자 본인의 계정 ID가 들어간다."""
   CHANGE_PASSWORD
 }
 
-"""SellerAuditActionType 열거형"""
+"""감사 로그에 기록된 행위 종류."""
 enum SellerAuditActionType {
+  """생성."""
   CREATE
+  """수정."""
   UPDATE
+  """삭제(soft-delete 포함)."""
   DELETE
+  """상태 전이. 주문 상태 변경과 전용 활성화 뮤테이션(sellerSetProductActive·sellerSetProductCustomTemplateActive)만 해당한다. 일반 수정 안의 isActive 변경은 UPDATE로 기록된다."""
   STATUS_CHANGE
 }
 
-"""SellerAuditLog 타입"""
+"""
+판매자 조작 감사 로그 1건. 매장 설정·상품·주문 변경 이력을 남긴다.
+로그는 누적만 되고 수정·삭제되지 않는다.
+"""
 type SellerAuditLog {
   id: ID!
+  """조작한 계정 ID."""
   actorAccountId: ID!
+  """대상 매장 ID. 판매자가 매장을 보유하면 채워지고, 보유하지 않은 상태의 조작에서만 null이다."""
   storeId: ID
+  """조작 대상 종류."""
   targetType: SellerAuditTargetType!
+  """대상 리소스 ID."""
   targetId: ID!
+  """기록된 행위 종류."""
   action: SellerAuditActionType!
+  """변경 전 값(JSON 문자열). 생성 조작이면 null."""
   beforeJson: String
+  """변경 후 값(JSON 문자열). 삭제 조작이면 null일 수 있다."""
   afterJson: String
+  """요청 IP. 수집하지 못했으면 null."""
   ipAddress: String
+  """요청 User-Agent. 수집하지 못했으면 null."""
   userAgent: String
+  """기록 시각."""
   createdAt: DateTime!
 }
 
-"""SellerAuditLogConnection 타입"""
+"""
+감사 로그 목록 페이지. 최신 기록이 먼저 온다.
+누적형 로그라 매 조회 COUNT가 부담이므로 totalCount는 내려주지 않는다.
+"""
 type SellerAuditLogConnection {
+  """감사 로그. 최신 기록이 먼저 온다."""
   items: [SellerAuditLog!]!
+  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
+  hasMore: Boolean!
+  """다음 페이지 커서. null이면 마지막 페이지다."""
   nextCursor: ID
 }
 
-"""SellerAuditLogListInput 입력 타입"""
+"""감사 로그 조회 조건."""
 input SellerAuditLogListInput {
+  """한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
+  """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
+  """대상 종류 필터. 미지정 시 전체."""
   targetType: SellerAuditTargetType
 }

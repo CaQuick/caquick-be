@@ -79,16 +79,21 @@ export class SellerBannerService
       cursor: input?.cursor ? parseId(input.cursor) : null,
     });
 
-    const rows = await this.repo.listBannersByStore({
-      storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
-    });
+    const [rows, totalCount] = await Promise.all([
+      this.repo.listBannersByStore({
+        storeId: ctx.storeId,
+        limit: normalized.limit,
+        cursor: normalized.cursor,
+      }),
+      this.repo.countBannersByStore(ctx.storeId),
+    ]);
 
     const paged = nextCursorOf(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toBannerOutput(row)),
       nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+      totalCount,
     };
   }
 

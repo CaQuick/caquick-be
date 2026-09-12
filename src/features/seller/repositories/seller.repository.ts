@@ -146,6 +146,13 @@ export class SellerRepository {
     });
   }
 
+  /** 특별휴무 전체 건수(커서 무관). */
+  async countStoreSpecialClosures(storeId: bigint): Promise<number> {
+    return this.prisma.storeSpecialClosure.count({
+      where: { store_id: storeId },
+    });
+  }
+
   async updateStoreDailyCapacity(
     capacityId: bigint,
     data: { capacityDate: Date; capacity: number },
@@ -199,6 +206,36 @@ export class SellerRepository {
     });
   }
 
+  /** 일별 생산 수량의 날짜 범위 조건. 목록과 카운트가 공유한다. */
+  private dailyCapacityScopeWhere(args: {
+    storeId: bigint;
+    fromDate?: Date;
+    toDate?: Date;
+  }): Prisma.StoreDailyCapacityWhereInput {
+    return {
+      store_id: args.storeId,
+      ...(args.fromDate || args.toDate
+        ? {
+            capacity_date: {
+              ...(args.fromDate ? { gte: args.fromDate } : {}),
+              ...(args.toDate ? { lte: args.toDate } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  /** 일별 생산 수량 전체 건수(커서 무관). */
+  async countStoreDailyCapacities(args: {
+    storeId: bigint;
+    fromDate?: Date;
+    toDate?: Date;
+  }): Promise<number> {
+    return this.prisma.storeDailyCapacity.count({
+      where: this.dailyCapacityScopeWhere(args),
+    });
+  }
+
   async listStoreDailyCapacities(args: {
     storeId: bigint;
     limit: number;
@@ -208,16 +245,8 @@ export class SellerRepository {
   }) {
     return this.prisma.storeDailyCapacity.findMany({
       where: {
-        store_id: args.storeId,
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...(args.fromDate || args.toDate
-          ? {
-              capacity_date: {
-                ...(args.fromDate ? { gte: args.fromDate } : {}),
-                ...(args.toDate ? { lte: args.toDate } : {}),
-              },
-            }
-          : {}),
+        ...this.dailyCapacityScopeWhere(args),
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
@@ -279,6 +308,13 @@ export class SellerRepository {
     });
   }
 
+  /** 목록과 카운트가 같은 조건을 보도록 where를 한 곳에서 만든다(커서는 페이지 조건이라 제외). */
+  private bannerScopeWhere(storeId: bigint): Prisma.BannerWhereInput {
+    return {
+      OR: [{ link_store_id: storeId }, { link_product: { store_id: storeId } }],
+    };
+  }
+
   async listBannersByStore(args: {
     storeId: bigint;
     limit: number;
@@ -287,20 +323,16 @@ export class SellerRepository {
     return this.prisma.banner.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        OR: [
-          {
-            link_store_id: args.storeId,
-          },
-          {
-            link_product: {
-              store_id: args.storeId,
-            },
-          },
-        ],
+        ...this.bannerScopeWhere(args.storeId),
       },
       orderBy: [{ id: 'desc' }],
       take: args.limit + 1,
     });
+  }
+
+  /** 배너 전체 건수(커서 무관). */
+  async countBannersByStore(storeId: bigint): Promise<number> {
+    return this.prisma.banner.count({ where: this.bannerScopeWhere(storeId) });
   }
 
   async findBannerByIdForStore(args: { bannerId: bigint; storeId: bigint }) {
@@ -417,23 +449,31 @@ export function normalizeCursorInput(input?: {
   };
 }
 
+/**
+ * limit+1개를 조회한 결과에서 페이지와 다음 커서를 뽑는다.
+ *
+ * hasMore는 추가 쿼리 없이 나온다 — limit보다 많이 왔으면 다음 페이지가 있다는 뜻이다.
+ */
 export function nextCursorOf<T extends { id: bigint }>(
   rows: T[],
   limit: number,
 ): {
   items: T[];
   nextCursor: string | null;
+  hasMore: boolean;
 } {
   if (rows.length <= limit) {
     return {
       items: rows,
       nextCursor: null,
+      hasMore: false,
     };
   }
 
   const sliced = rows.slice(0, limit);
   return {
     items: sliced,
+    hasMore: true,
     nextCursor: sliced[sliced.length - 1]?.id.toString() ?? null,
   };
 }

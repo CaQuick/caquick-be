@@ -4,9 +4,13 @@ extend type Subscription {
   소유자)만 구독할 수 있다. 인증은 graphql-ws connectionParams.authorization.
   """
   conversationMessageAdded(conversationId: ID!): ConversationMessage!
-  """구매자 대화 목록/배지 갱신 이벤트(새 메시지 도착 시)."""
+  """구매자 대화 목록/배지 갱신 이벤트(새 메시지 도착 시). 로그인 필수. 본인 데이터만 대상이 된다."""
   myConversationUpdated: ConversationListUpdate!
-  """판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시)."""
+  """
+판매자 대화 목록 갱신 이벤트(고객 메시지 도착 시).
+삭제되지 않은 매장을 보유한 판매자만 구독할 수 있다. 매장이 없거나 삭제됐으면 NOT_FOUND.
+비활성(is_active=false) 매장은 구독이 유지된다 — 노출만 꺼진 사이에도 고객 문의는 받아야 한다.
+"""
   sellerConversationUpdated: SellerConversationListUpdate!
 }
 
@@ -20,9 +24,11 @@ extend type Subscription {
 type ConversationListUpdate {
   conversationId: ID!
   storeId: ID!
+  """매장명."""
   storeName: String!
   """마지막 메시지 미리보기(HTML은 태그 제거)"""
   lastMessagePreview: String
+  """마지막 메시지 시각. 폐기 규칙의 1차 비교 키다."""
   lastMessageAt: DateTime!
   """이벤트 스냅샷 시점의 구매자 마지막 읽음 시각(폐기 규칙 비교용)"""
   lastReadAt: DateTime
@@ -33,8 +39,10 @@ type ConversationListUpdate {
 """판매자 대화 목록 갱신 이벤트. 도착 순서 비보장 — lastMessageAt 기준 폐기 규칙 동일."""
 type SellerConversationListUpdate {
   conversationId: ID!
+  """대화 상대인 구매자 계정 ID."""
   accountId: ID!
   """마지막 메시지 미리보기(HTML은 태그 제거)"""
   lastMessagePreview: String
+  """마지막 메시지 시각. 폐기 규칙의 비교 키다."""
   lastMessageAt: DateTime!
 }

@@ -1,0 +1,32 @@
+"""
+배너 클릭 시 이동할 대상 타입. 구매자 노출·판매자 관리 API가 공용으로 쓴다.
+
+값에 따라 읽어야 할 링크 필드가 정해진다. 구매자 조회(HomeBanner)에서는 서버가
+나머지 링크 필드를 null로 비워서 내려주지만, 판매자 조회(SellerBanner)는 저장된
+값을 그대로 반환한다 — 판매자 화면에서는 linkType과 맞지 않는 필드에 값이 남아
+있을 수 있으므로 linkType을 기준으로 판단해야 한다.
+"""
+enum BannerLinkType {
+  """이동 없음. 구매자 조회에서는 링크 필드가 전부 null로 내려온다."""
+  NONE
+  """`linkUrl`만 채워진다."""
+  URL
+  """
+  상품으로 이동. 구매자 배너(HomeBanner)는 `linkProductId`와 `linkProductStoreId`가
+  함께 채워진다(상품 상세 경로에 매장 ID가 필요). 판매자 배너는 `linkProductId`만 있고
+  `linkProductStoreId` 필드 자체가 없다.
+  """
+  PRODUCT
+  """`linkStoreId`만 채워진다."""
+  STORE
+  """`linkCategoryId`만 채워진다."""
+  CATEGORY
+}
+
+"""리뷰 목록 정렬. 상품 리뷰·매장 리뷰가 공용으로 쓴다."""
+enum ReviewSort {
+  """최신순."""
+  LATEST
+  """좋아요순(동률이면 최신순)."""
+  LIKES
+}
