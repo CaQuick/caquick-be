@@ -32,3 +32,16 @@ export const BANNER_LINK_TYPES = [
   'CATEGORY',
 ] as const;
 export type BannerLinkTypeValue = (typeof BANNER_LINK_TYPES)[number];
+
+// ── 목록 검색 ──
+
+export const MAX_KEYWORD_LENGTH = 100;
+/** SDL AccountStatus와 1:1. */
+export const ACCOUNT_STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED'] as const;
+export type AccountStatusValue = (typeof ACCOUNT_STATUSES)[number];
+
+// ── 매장 ──
+
+/** SDL StoreMapProvider와 1:1. */
+export const STORE_MAP_PROVIDERS = ['NAVER', 'KAKAO', 'NONE'] as const;
+export type StoreMapProviderValue = (typeof STORE_MAP_PROVIDERS)[number];

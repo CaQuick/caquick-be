@@ -3,6 +3,7 @@ import {
   AccountType,
   AuditActionType,
   AuditTargetType,
+  type AccountStatus,
   type Banner,
   type BannerPlacement,
   type CategoryType,
@@ -14,7 +15,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { PrismaService, visibleWhere } from '@/prisma';
+import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
@@ -31,6 +32,39 @@ export type AdminAccountRow = Prisma.AccountGetPayload<{
     };
   };
 }>;
+
+/** 판매자 계정 행 + 자격증명·프로필·매장 요약. nested는 soft-delete 자동 필터 밖이라 deleted_at을 함께 읽는다. */
+export type AdminSellerRow = Prisma.AccountGetPayload<{
+  include: typeof sellerAccountInclude;
+}>;
+
+const sellerAccountInclude = {
+  credential: {
+    select: {
+      username: true,
+      must_change_password: true,
+      last_login_at: true,
+    },
+  },
+  seller_profile: {
+    select: {
+      business_name: true,
+      business_phone: true,
+      website_url: true,
+      deleted_at: true,
+    },
+  },
+  store: {
+    select: {
+      id: true,
+      store_name: true,
+      store_phone: true,
+      address_full: true,
+      is_active: true,
+      deleted_at: true,
+    },
+  },
+} as const;
 
 const adminAccountInclude = {
   credential: {
@@ -261,5 +295,168 @@ export class AdminRepository {
       select: { category_type: true },
     });
     return row?.category_type ?? null;
+  }
+
+  // ── 판매자 계정 ──
+
+  private sellerFilterWhere(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Prisma.AccountWhereInput {
+    return {
+      account_type: AccountType.SELLER,
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.keyword
+        ? {
+            OR: [
+              { email: { contains: filter.keyword } },
+              { name: { contains: filter.keyword } },
+              { credential: { username: { contains: filter.keyword } } },
+              {
+                store: {
+                  ...activeWhere,
+                  store_name: { contains: filter.keyword },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  async listSellerAccounts(args: {
+    keyword?: string;
+    status?: AccountStatus;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminSellerRow[]> {
+    return this.prisma.account.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.sellerFilterWhere(args),
+      },
+      include: sellerAccountInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countSellerAccounts(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Promise<number> {
+    return this.prisma.account.count({ where: this.sellerFilterWhere(filter) });
+  }
+
+  async findSellerAccountById(
+    accountId: bigint,
+  ): Promise<AdminSellerRow | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId, account_type: AccountType.SELLER },
+      include: sellerAccountInclude,
+    });
+  }
+
+  /** 온보딩 시 지정 가능한 지역: 활성 2차(시군구). */
+  async isRegionSelectable(regionId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { id: regionId, level: 2, is_active: true },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  /**
+   * 계정 + 자격증명 + 사업자 프로필 + 매장 + 감사 기록을 한 트랜잭션으로 만든다.
+   * username 충돌(P2002)은 도메인 예외로 좁힌다.
+   */
+  async createSellerAccount(args: {
+    actorAccountId: bigint;
+    username: string;
+    passwordHash: string;
+    email: string | null;
+    name: string | null;
+    profile: Omit<Prisma.SellerProfileUncheckedCreateInput, 'account_id'>;
+    store: Omit<Prisma.StoreUncheckedCreateInput, 'seller_account_id'>;
+  }): Promise<AdminSellerRow> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const account = await tx.account.create({
+          data: {
+            account_type: AccountType.SELLER,
+            status: 'ACTIVE',
+            email: args.email,
+            name: args.name,
+          },
+        });
+        await tx.accountCredential.create({
+          data: {
+            account_id: account.id,
+            username: args.username,
+            password_hash: args.passwordHash,
+            must_change_password: true,
+          },
+        });
+        await tx.sellerProfile.create({
+          data: { ...args.profile, account_id: account.id },
+        });
+        const store = await tx.store.create({
+          data: { ...args.store, seller_account_id: account.id },
+        });
+        await this.auditLogs.createAuditLog(
+          {
+            actorAccountId: args.actorAccountId,
+            storeId: store.id,
+            targetType: AuditTargetType.ACCOUNT,
+            targetId: account.id,
+            action: AuditActionType.CREATE,
+            afterJson: {
+              accountType: 'SELLER',
+              username: args.username,
+              storeId: store.id.toString(),
+            },
+          },
+          tx,
+        );
+        return tx.account.findFirstOrThrow({
+          where: { id: account.id },
+          include: sellerAccountInclude,
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(USERNAME_TAKEN);
+      }
+      throw error;
+    }
+  }
+
+  /** 비밀번호 교체 + 변경 강제 + 전 세션 폐기 + 감사 기록을 한 트랜잭션으로. */
+  async resetCredentialPassword(args: {
+    accountId: bigint;
+    passwordHash: string;
+    audit: AuditEntry;
+  }): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accountCredential.update({
+        where: { account_id: args.accountId },
+        data: {
+          password_hash: args.passwordHash,
+          password_updated_at: now,
+          must_change_password: true,
+          updated_at: now,
+        },
+      });
+      await tx.authRefreshSession.updateMany({
+        where: { account_id: args.accountId, revoked_at: null },
+        data: { revoked_at: now, updated_at: now },
+      });
+      await this.auditLogs.createAuditLog(args.audit, tx);
+    });
   }
 }

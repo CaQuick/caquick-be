@@ -5,8 +5,11 @@ import { AdminAccountMutationResolver } from '@/features/admin/resolvers/admin-a
 import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-account-query.resolver';
 import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
+import { AdminSellerMutationResolver } from '@/features/admin/resolvers/admin-seller-mutation.resolver';
+import { AdminSellerQueryResolver } from '@/features/admin/resolvers/admin-seller-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
+import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
 import { AuditLogModule } from '@/features/audit-log';
 
 /**
@@ -19,10 +22,13 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminRepository,
     AdminAccountService,
     AdminBannerService,
+    AdminSellerService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
     AdminContentMutationResolver,
+    AdminSellerQueryResolver,
+    AdminSellerMutationResolver,
   ],
 })
 export class AdminModule {}
