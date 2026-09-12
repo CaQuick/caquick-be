@@ -1,7 +1,6 @@
 import type {
   Account,
   PrismaClient,
-  SellerCredential,
   SellerProfile,
   Store,
 } from '@prisma/client';
@@ -31,32 +30,6 @@ export async function createSellerProfile(
       business_name: overrides.business_name ?? `Business ${seq}`,
       business_phone:
         overrides.business_phone ?? `02-0000-${String(seq).padStart(4, '0')}`,
-    },
-  });
-}
-
-export interface SellerCredentialOverrides {
-  seller_account_id?: bigint;
-  username?: string;
-  password_hash?: string;
-}
-
-export async function createSellerCredential(
-  prisma: PrismaClient,
-  overrides: SellerCredentialOverrides = {},
-): Promise<SellerCredential> {
-  const seq = nextSeq();
-  const sellerAccountId =
-    overrides.seller_account_id ??
-    (await createAccount(prisma, { account_type: 'SELLER' })).id;
-
-  return prisma.sellerCredential.create({
-    data: {
-      seller_account_id: sellerAccountId,
-      username: overrides.username ?? `seller_${seq}`,
-      password_hash:
-        overrides.password_hash ??
-        '$argon2id$v=19$m=65536,t=3,p=4$mock_salt$mock_hash',
     },
   });
 }

@@ -312,6 +312,7 @@ export class AccountRepository implements IAccountRepository {
         id: true,
         status: true,
         account_type: true,
+        credential: { select: { must_change_password: true } },
       },
     });
   }

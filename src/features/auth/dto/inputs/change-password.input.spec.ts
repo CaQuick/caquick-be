@@ -3,13 +3,13 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerChangePasswordInput } from '@/features/auth/dto/inputs/seller-change-password.input';
+import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 
-function build(plain: object): SellerChangePasswordInput {
-  return plainToInstance(SellerChangePasswordInput, plain);
+function build(plain: object): ChangePasswordInput {
+  return plainToInstance(ChangePasswordInput, plain);
 }
 
-describe('SellerChangePasswordInput', () => {
+describe('ChangePasswordInput', () => {
   it('유효 입력 통과', async () => {
     const dto = build({
       currentPassword: 'old!Pass1',

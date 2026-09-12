@@ -9,7 +9,7 @@ const SOFT_DELETE_MODELS = new Set<Prisma.ModelName>([
   'Account',
   'UserProfile',
   'SellerProfile',
-  'SellerCredential',
+  'AccountCredential',
   'AccountIdentity',
   'AuthRefreshSession',
   'Store',

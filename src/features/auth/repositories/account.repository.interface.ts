@@ -16,7 +16,12 @@ export type AccountWithProfile = Prisma.AccountGetPayload<{
  * JWT 검증용 좁은 select.
  */
 export type AccountForJwt = Prisma.AccountGetPayload<{
-  select: { id: true; status: true; account_type: true };
+  select: {
+    id: true;
+    status: true;
+    account_type: true;
+    credential: { select: { must_change_password: true } };
+  };
 }>;
 
 /**

@@ -7,7 +7,7 @@ import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.reposit
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount } from '@/test/factories';
+import { createAccount, createAccountCredential } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('JwtBearerStrategy (real DB)', () => {
@@ -61,7 +61,29 @@ describe('JwtBearerStrategy (real DB)', () => {
 
       expect(result.accountId).toBe(account.id.toString());
       expect(result.accountType).toBe('USER');
+      // 자격증명이 없는 USER는 변경 강제 상태가 아니다
+      expect(result.mustChangePassword).toBe(false);
     });
+
+    it.each([true, false])(
+      '자격증명 계정은 must_change_password(%s)를 JwtUser에 싣는다',
+      async (mustChange) => {
+        const credential = await createAccountCredential(prisma, {
+          account_type: 'ADMIN',
+          must_change_password: mustChange,
+        });
+
+        const result = await strategy.validate({
+          sub: credential.account_id.toString(),
+          typ: 'access',
+          iat: 0,
+          exp: 0,
+        });
+
+        expect(result.accountType).toBe('ADMIN');
+        expect(result.mustChangePassword).toBe(mustChange);
+      },
+    );
 
     it('sub가 없으면 UnauthorizedException을 던진다', async () => {
       await expect(

@@ -11,6 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 
+import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
 import { seedConversations } from './seed/conversations';
@@ -78,6 +79,9 @@ async function main(): Promise<void> {
 
     log('배너 시드 중...');
     await seedBanners(prisma);
+
+    log('관리자 시드 중...');
+    await seedAdmins(prisma);
 
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {
