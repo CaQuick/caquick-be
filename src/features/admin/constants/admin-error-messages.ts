@@ -8,6 +8,13 @@ export const INVALID_CURSOR = 'Invalid cursor.';
 // ── 계정 ──
 
 export const USERNAME_TAKEN = 'Username is already taken.';
+export const SELLER_NOT_FOUND = 'Seller account not found.';
+
+// ── 매장 ──
+
+export const REGION_NOT_SELECTABLE =
+  'regionId must be an active level-2 region.';
+export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
 
 // ── 배너 ──
 
