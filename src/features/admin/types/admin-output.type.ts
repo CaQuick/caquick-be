@@ -1,4 +1,8 @@
-import type { AccountStatus } from '@prisma/client';
+import type {
+  AccountStatus,
+  BannerLinkType,
+  BannerPlacement,
+} from '@prisma/client';
 
 export interface AdminAccountOutput {
   accountId: string;
@@ -18,4 +22,22 @@ export interface AdminCursorConnection<T> {
   hasMore: boolean;
   /** 조건에 맞는 전체 건수. 누적형 로그처럼 COUNT가 부담인 목록은 내리지 않는다. */
   totalCount?: number;
+}
+
+export interface AdminBannerOutput {
+  id: string;
+  placement: BannerPlacement;
+  title: string | null;
+  imageUrl: string;
+  linkType: BannerLinkType;
+  linkUrl: string | null;
+  linkProductId: string | null;
+  linkStoreId: string | null;
+  linkCategoryId: string | null;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
