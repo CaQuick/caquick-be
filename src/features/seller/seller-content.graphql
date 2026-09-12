@@ -193,11 +193,11 @@ input SellerUpdateBannerInput {
 
 """감사 로그가 가리키는 대상 종류."""
 enum SellerAuditTargetType {
-  """매장 정보·영업시간·픽업 정책 등 매장 설정."""
+  """매장 정보·영업시간·픽업 정책·FAQ·배너 등 매장 단위 설정과 콘텐츠."""
   STORE
   """상품과 그 하위(이미지·옵션·커스텀 템플릿)."""
   PRODUCT
-  """주문. 주로 상태 변경이 기록된다."""
+  """주문. 상태 변경만 기록된다."""
   ORDER
   """구매자 문의 대화."""
   CONVERSATION
@@ -213,7 +213,7 @@ enum SellerAuditActionType {
   UPDATE
   """삭제(soft-delete 포함)."""
   DELETE
-  """상태 전이. 주문 상태 변경·노출 여부 전환이 여기 해당한다."""
+  """상태 전이. 주문 상태 변경과 전용 활성화 뮤테이션(sellerSetProductActive·sellerSetProductCustomTemplateActive)만 해당한다. 일반 수정 안의 isActive 변경은 UPDATE로 기록된다."""
   STATUS_CHANGE
 }
 
