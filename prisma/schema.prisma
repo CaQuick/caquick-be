@@ -146,7 +146,7 @@ model Account {
 
   user_profile       UserProfile?
   seller_profile     SellerProfile?
-  seller_credential  SellerCredential?
+  credential         AccountCredential?
   account_identities AccountIdentity[]
   refresh_sessions   AuthRefreshSession[]
   wishlist_items     WishlistItem[]
@@ -212,23 +212,25 @@ model SellerProfile {
   @@map("seller_profile")
 }
 
-model SellerCredential {
-  id                BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  seller_account_id BigInt @unique @db.UnsignedBigInt
+model AccountCredential {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @unique @db.UnsignedBigInt
 
   username            String    @unique @db.VarChar(80)
   password_hash       String    @db.VarChar(255)
   password_updated_at DateTime? @db.DateTime(3)
   last_login_at       DateTime? @db.DateTime(3)
+  // 관리자가 지정한 초기/초기화 비밀번호 상태. true면 본인이 바꾸기 전까지 SELLER/ADMIN API를 거부한다(RolesGuard).
+  must_change_password Boolean @default(false) @db.TinyInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  seller_account Account @relation(fields: [seller_account_id], references: [id])
+  account Account @relation(fields: [account_id], references: [id])
 
-  @@index([deleted_at], map: "idx_seller_credential_deleted_at")
-  @@map("seller_credential")
+  @@index([deleted_at], map: "idx_account_credential_deleted_at")
+  @@map("account_credential")
 }
 
 model AccountIdentity {

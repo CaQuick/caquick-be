@@ -13,7 +13,11 @@ import type { AccountRole } from '@/global/auth/types/jwt-payload.type';
 function makeGqlContext(args: {
   handler: object;
   cls: object;
-  user?: { accountId: string; accountType?: AccountRole };
+  user?: {
+    accountId: string;
+    accountType?: AccountRole;
+    mustChangePassword?: boolean;
+  };
 }): ExecutionContext {
   const gqlArgs = [undefined, {}, { req: { user: args.user } }, {}];
   return {
@@ -93,6 +97,24 @@ describe('RolesGuard', () => {
       user: { accountId: '1' },
     });
     expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+  });
+
+  it('타입이 맞아도 mustChangePassword면 FORBIDDEN', () => {
+    const ctx = makeGqlContext({
+      handler: SellerOnlyResolver.prototype.handler,
+      cls: SellerOnlyResolver,
+      user: { accountId: '1', accountType: 'SELLER', mustChangePassword: true },
+    });
+    expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+  });
+
+  it('@Roles 선언이 없으면 mustChangePassword여도 통과한다(비밀번호 변경 경로)', () => {
+    const ctx = makeGqlContext({
+      handler: NoRolesResolver.prototype.handler,
+      cls: NoRolesResolver,
+      user: { accountId: '1', accountType: 'SELLER', mustChangePassword: true },
+    });
+    expect(guard.canActivate(ctx)).toBe(true);
   });
 
   it('req.user가 없으면 UNAUTHENTICATED', () => {

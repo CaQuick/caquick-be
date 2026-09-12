@@ -2,3 +2,5 @@
 export const AUTHENTICATION_REQUIRED = 'Authentication required.';
 export const ACCOUNT_TYPE_NOT_ALLOWED =
   'Account type is not allowed for this operation.';
+export const PASSWORD_CHANGE_REQUIRED =
+  'Password change is required before using this operation.';

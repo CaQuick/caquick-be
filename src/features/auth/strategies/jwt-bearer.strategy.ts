@@ -74,6 +74,8 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       accountId: account.id.toString(),
       accountType: account.account_type,
+      // 자격증명 계정(SELLER/ADMIN)만 값이 있다. RolesGuard가 변경 전 접근을 막는다.
+      mustChangePassword: account.credential?.must_change_password ?? false,
     };
   }
 }

@@ -3,13 +3,13 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerLoginInput } from '@/features/auth/dto/inputs/seller-login.input';
+import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 
-function build(plain: object): SellerLoginInput {
-  return plainToInstance(SellerLoginInput, plain);
+function build(plain: object): CredentialLoginInput {
+  return plainToInstance(CredentialLoginInput, plain);
 }
 
-describe('SellerLoginInput', () => {
+describe('CredentialLoginInput', () => {
   it('유효 입력 통과', async () => {
     const dto = build({ username: 'seller01', password: 'Aa1!aaaa' });
     expect(await validate(dto)).toHaveLength(0);

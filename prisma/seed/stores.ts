@@ -9,9 +9,30 @@
  *   p5 비활성 상품 (찜 가시성 검증용)
  */
 import type { PrismaClient, Product, Store } from '@prisma/client';
+import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
+
+/**
+ * 시드 판매자 로그인용 자격증명. SELLER_SEED_PASSWORD가 없으면 만들지 않는다
+ * (dev 토큰 발급 경로 /auth/dev/issue-token 로도 충분하다).
+ */
+async function seedSellerCredential(
+  prisma: PrismaClient,
+  accountId: bigint,
+  username: string,
+): Promise<void> {
+  const password = process.env.SELLER_SEED_PASSWORD;
+  if (!password) return;
+  await prisma.accountCredential.create({
+    data: {
+      account_id: accountId,
+      username,
+      password_hash: await argon2.hash(password, { type: argon2.argon2id }),
+    },
+  });
+}
 
 export interface SeededStores {
   stores: Store[];
@@ -42,6 +63,7 @@ export async function seedStores(
       name: '케이크샵 A 운영자',
     },
   });
+  await seedSellerCredential(prisma, sellerA.id, 'seed-seller-a');
   const storeA = await prisma.store.create({
     data: {
       seller_account_id: sellerA.id,
@@ -98,6 +120,7 @@ export async function seedStores(
       name: '도넛샵 B 운영자',
     },
   });
+  await seedSellerCredential(prisma, sellerB.id, 'seed-seller-b');
   const storeB = await prisma.store.create({
     data: {
       seller_account_id: sellerB.id,

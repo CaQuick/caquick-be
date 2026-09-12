@@ -26,17 +26,18 @@ import {
 import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
+import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
+import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
-import { SellerChangePasswordInput } from '@/features/auth/dto/inputs/seller-change-password.input';
-import { SellerLoginInput } from '@/features/auth/dto/inputs/seller-login.input';
+import {
+  CREDENTIAL_AUTH_SERVICE,
+  type CredentialLoginResult,
+  type ICredentialAuthService,
+} from '@/features/auth/services/credential-auth.service.interface';
 import {
   OIDC_LOGIN_SERVICE,
   type IOidcLoginService,
 } from '@/features/auth/services/oidc-login.service.interface';
-import {
-  SELLER_CREDENTIAL_SERVICE,
-  type ISellerCredentialService,
-} from '@/features/auth/services/seller-credential.service.interface';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import {
   CurrentUser,
@@ -44,6 +45,45 @@ import {
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+
+/** 판매자·관리자 로그인/재발급 응답 스키마(Swagger). 두 경로가 같은 모양을 쓴다. */
+const CREDENTIAL_LOGIN_RESPONSE_PROPERTIES = {
+  accessToken: { type: 'string' },
+  tokenType: { type: 'string', example: 'Bearer' },
+  accountStatus: {
+    type: 'string',
+    enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
+  },
+  mustChangePassword: { type: 'boolean' },
+};
+const CREDENTIAL_LOGIN_RESPONSE_REQUIRED = [
+  'accessToken',
+  'tokenType',
+  'accountStatus',
+  'mustChangePassword',
+];
+
+function toCredentialLoginResponse(result: CredentialLoginResult): {
+  accessToken: string;
+  tokenType: 'Bearer';
+  accountStatus: CredentialLoginResult['accountStatus'];
+  mustChangePassword: boolean;
+} {
+  return {
+    accessToken: result.accessToken,
+    tokenType: 'Bearer',
+    accountStatus: result.accountStatus,
+    mustChangePassword: result.mustChangePassword,
+  };
+}
+
+function parseAccountIdString(raw: string): bigint {
+  try {
+    return BigInt(raw);
+  } catch {
+    throw new BadRequestException('Invalid account id.');
+  }
+}
 
 /**
  * 인증 관련 REST 컨트롤러
@@ -56,14 +96,14 @@ export class AuthController {
   /**
    * @param auth AuthService
    * @param oidcLogin OidcLoginService
-   * @param sellerAuth SellerCredentialService
+   * @param credentialAuth CredentialAuthService
    */
   constructor(
     private readonly auth: AuthService,
     @Inject(OIDC_LOGIN_SERVICE)
     private readonly oidcLogin: IOidcLoginService,
-    @Inject(SELLER_CREDENTIAL_SERVICE)
-    private readonly sellerAuth: ISellerCredentialService,
+    @Inject(CREDENTIAL_AUTH_SERVICE)
+    private readonly credentialAuth: ICredentialAuthService,
   ) {}
 
   /**
@@ -208,34 +248,24 @@ export class AuthController {
     description: '판매자 로그인 결과',
     schema: {
       type: 'object',
-      properties: {
-        accessToken: { type: 'string' },
-        tokenType: { type: 'string', example: 'Bearer' },
-        accountStatus: {
-          type: 'string',
-          enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
-        },
-      },
-      required: ['accessToken', 'tokenType', 'accountStatus'],
+      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
+      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
     },
   })
   @Post('seller/login')
   async sellerLogin(
-    @Body() body: SellerLoginInput,
+    @Body() body: CredentialLoginInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.sellerAuth.sellerLogin({
+    const result = await this.credentialAuth.login({
+      role: 'SELLER',
       username: body.username,
       password: body.password,
       req,
       res,
     });
-    res.status(200).json({
-      accessToken,
-      tokenType: 'Bearer',
-      accountStatus,
-    });
+    res.status(200).json(toCredentialLoginResponse(result));
   }
 
   /**
@@ -252,15 +282,8 @@ export class AuthController {
     description: '판매자 재발급 결과',
     schema: {
       type: 'object',
-      properties: {
-        accessToken: { type: 'string' },
-        tokenType: { type: 'string', example: 'Bearer' },
-        accountStatus: {
-          type: 'string',
-          enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
-        },
-      },
-      required: ['accessToken', 'tokenType', 'accountStatus'],
+      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
+      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
     },
   })
   @Post('seller/refresh')
@@ -268,15 +291,12 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const { accessToken, accountStatus } = await this.sellerAuth.refreshSeller(
+    const result = await this.credentialAuth.refresh({
+      role: 'SELLER',
       req,
       res,
-    );
-    res.status(200).json({
-      accessToken,
-      tokenType: 'Bearer',
-      accountStatus,
     });
+    res.status(200).json(toCredentialLoginResponse(result));
   }
 
   /**
@@ -292,7 +312,7 @@ export class AuthController {
   @ApiNoContentResponse({ description: '판매자 로그아웃 완료' })
   @Post('seller/logout')
   async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
-    await this.sellerAuth.logoutSeller(req, res);
+    await this.credentialAuth.logout({ role: 'SELLER', req, res });
     res.status(204).send();
   }
 
@@ -348,7 +368,8 @@ export class AuthController {
    */
   @ApiOperation({
     summary: '판매자 비밀번호 변경',
-    description: '현재 비밀번호를 검증하고 새 비밀번호로 변경한다.',
+    description:
+      '현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.',
   })
   @ApiBearerAuth('access-token')
   @ApiOkResponse({
@@ -363,12 +384,13 @@ export class AuthController {
   @Post('seller/change-password')
   async sellerChangePassword(
     @CurrentUser() user: JwtUser,
-    @Body() body: SellerChangePasswordInput,
+    @Body() body: ChangePasswordInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     const accountId = parseAccountId(user);
-    await this.sellerAuth.changeSellerPassword({
+    await this.credentialAuth.changePassword({
+      role: 'SELLER',
       accountId,
       currentPassword: body.currentPassword,
       newPassword: body.newPassword,
@@ -376,12 +398,121 @@ export class AuthController {
     });
     res.status(200).json({ ok: true });
   }
-}
 
-function parseAccountIdString(raw: string): bigint {
-  try {
-    return BigInt(raw);
-  } catch {
-    throw new BadRequestException('Invalid account id.');
+  /**
+   * 관리자 로그인
+   *
+   * POST /auth/admin/login
+   */
+  @ApiOperation({
+    summary: '관리자 로그인',
+    description:
+      '관리자 username/password로 로그인한다. mustChangePassword=true면 비밀번호를 바꾸기 전까지 관리자 API가 FORBIDDEN이다.',
+  })
+  @ApiOkResponse({
+    description: '관리자 로그인 결과',
+    schema: {
+      type: 'object',
+      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
+      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
+    },
+  })
+  @Post('admin/login')
+  async adminLogin(
+    @Body() body: CredentialLoginInput,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const result = await this.credentialAuth.login({
+      role: 'ADMIN',
+      username: body.username,
+      password: body.password,
+      req,
+      res,
+    });
+    res.status(200).json(toCredentialLoginResponse(result));
+  }
+
+  /**
+   * 관리자 refresh 재발급
+   *
+   * POST /auth/admin/refresh
+   */
+  @ApiOperation({
+    summary: '관리자 Access/Refresh 재발급',
+    description: '관리자 refresh 쿠키를 사용해 access token을 재발급한다.',
+  })
+  @ApiCookieAuth('refresh-cookie')
+  @ApiOkResponse({
+    description: '관리자 재발급 결과',
+    schema: {
+      type: 'object',
+      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
+      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
+    },
+  })
+  @Post('admin/refresh')
+  async adminRefresh(@Req() req: Request, @Res() res: Response): Promise<void> {
+    const result = await this.credentialAuth.refresh({
+      role: 'ADMIN',
+      req,
+      res,
+    });
+    res.status(200).json(toCredentialLoginResponse(result));
+  }
+
+  /**
+   * 관리자 로그아웃
+   *
+   * POST /auth/admin/logout
+   */
+  @ApiOperation({
+    summary: '관리자 로그아웃',
+    description: '관리자 refresh 세션을 폐기하고 쿠키를 제거한다.',
+  })
+  @ApiCookieAuth('refresh-cookie')
+  @ApiNoContentResponse({ description: '관리자 로그아웃 완료' })
+  @Post('admin/logout')
+  async adminLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.credentialAuth.logout({ role: 'ADMIN', req, res });
+    res.status(204).send();
+  }
+
+  /**
+   * 관리자 비밀번호 변경
+   *
+   * POST /auth/admin/change-password
+   */
+  @ApiOperation({
+    summary: '관리자 비밀번호 변경',
+    description:
+      '현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.',
+  })
+  @ApiBearerAuth('access-token')
+  @ApiOkResponse({
+    description: '비밀번호 변경 완료',
+    schema: {
+      type: 'object',
+      properties: { ok: { type: 'boolean' } },
+      required: ['ok'],
+    },
+  })
+  @UseGuards(JwtAuthGuard)
+  @Post('admin/change-password')
+  async adminChangePassword(
+    @CurrentUser() user: JwtUser,
+    @Body() body: ChangePasswordInput,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const accountId = parseAccountId(user);
+    await this.credentialAuth.changePassword({
+      role: 'ADMIN',
+      accountId,
+      currentPassword: body.currentPassword,
+      newPassword: body.newPassword,
+      req,
+    });
+    res.status(200).json({ ok: true });
   }
 }

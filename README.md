@@ -276,6 +276,7 @@ yarn start:dev
 | **OIDC (공통)** | `OIDC_TEMP_COOKIE_MAX_AGE_MS` |
 | **AWS S3** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS` |
 | **Docs (선택)** | `DOCS_ACCESS_TOKEN` |
+| **시드 (선택)** | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD` — 있으면 `yarn prisma:seed`가 관리자 계정 1개를 만든다. `SELLER_SEED_PASSWORD` — 시드 판매자 2곳의 로그인 비밀번호(없으면 자격증명 생략) |
 
 ### 자주 쓰는 스크립트
 
