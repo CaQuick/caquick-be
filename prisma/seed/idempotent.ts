@@ -36,6 +36,19 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
   const storeIds = seedStores.map((s) => s.id);
   const sellerAccountIds = seedStores.map((s) => s.seller_account_id);
 
+  // 0) 리뷰·댓글 신고 — 리뷰/댓글/계정 FK가 RESTRICT라 그 앞에 정리한다
+  if (userIds.length > 0 || storeIds.length > 0) {
+    await prisma.reviewReport.deleteMany({
+      where: {
+        OR: [
+          { reporter_account_id: { in: userIds } },
+          { review: { OR: [{ account_id: { in: userIds } }, { store_id: { in: storeIds } }] } },
+          { review_comment: { account_id: { in: userIds } } },
+        ],
+      },
+    });
+  }
+
   // 1) 유저 종속 (주문, 리뷰, 찜, 최근본, 알림, 드래프트, 검색기록, 카트, 인증세션)
   if (userIds.length > 0) {
     // 주문 종속들 → 주문 본체 (FK depth가 깊으므로 안에서 다시 처리)
