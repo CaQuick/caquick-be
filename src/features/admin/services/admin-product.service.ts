@@ -5,7 +5,7 @@ import {
   nextCursorOf,
   normalizeCursorInput,
 } from '@/common/utils/id-cursor-page';
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import { PRODUCT_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
@@ -49,7 +49,7 @@ export class AdminProductService extends AdminBaseService {
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
-      storeId: input?.storeId ? parseId(input.storeId) : undefined,
+      storeId: parseOptionalId(input?.storeId) ?? undefined,
       isActive: input?.isActive,
     };
 
