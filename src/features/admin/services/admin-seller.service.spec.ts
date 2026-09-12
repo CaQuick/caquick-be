@@ -164,6 +164,26 @@ describe('AdminSellerService (real DB)', () => {
       expect(page2.items.map((s) => s.accountId)).toEqual([ids[0].toString()]);
     });
 
+    it('삭제된 자격증명은 없는 것으로 보고 keyword 검색에서도 빠진다', async () => {
+      const { account, credential } = await makeSeller({
+        username: 'gone.user',
+      });
+      await prisma.accountCredential.update({
+        where: { id: credential.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const all = await service.adminSellers(await admin());
+      expect(all.items[0].accountId).toBe(account.id.toString());
+      expect(all.items[0].username).toBeNull();
+      expect(all.items[0].mustChangePassword).toBe(false);
+
+      const searched = await service.adminSellers(await admin(), {
+        keyword: 'gone.us',
+      });
+      expect(searched.totalCount).toBe(0);
+    });
+
     it('삭제된 매장·프로필은 null로 내리고, 자격증명 없는 판매자는 username null', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
       await createSellerProfile(prisma, { account_id: account.id });
@@ -362,6 +382,17 @@ describe('AdminSellerService (real DB)', () => {
       [
         '자격증명 없는 판매자',
         async () => (await setupSellerWithStore(prisma)).account.id,
+      ],
+      [
+        '자격증명이 삭제된 판매자',
+        async () => {
+          const { account, credential } = await makeSeller();
+          await prisma.accountCredential.update({
+            where: { id: credential.id },
+            data: { deleted_at: new Date() },
+          });
+          return account.id;
+        },
       ],
       [
         'USER 계정',

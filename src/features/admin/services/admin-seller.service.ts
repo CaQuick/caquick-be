@@ -189,8 +189,10 @@ export class AdminSellerService extends AdminBaseService {
     const target = await this.repo.findSellerAccountById(
       parseId(input.accountId),
     );
-    // 자격증명 없는 개발용 계정은 초기화할 로그인 수단이 없다
-    if (!target?.credential) throw new NotFoundException(SELLER_NOT_FOUND);
+    // 자격증명이 없거나 삭제된 계정은 초기화할 로그인 수단이 없다(로그인도 삭제된 자격증명을 제외한다)
+    if (!target?.credential || target.credential.deleted_at !== null) {
+      throw new NotFoundException(SELLER_NOT_FOUND);
+    }
 
     const passwordHash = await argon2.hash(input.newPassword, {
       type: argon2.argon2id,

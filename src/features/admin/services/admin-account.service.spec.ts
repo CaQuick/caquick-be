@@ -113,6 +113,22 @@ describe('AdminAccountService (real DB)', () => {
       expect(result.lastLoginAt).toBeNull();
     });
 
+    it('삭제된 자격증명은 없는 것으로 본다', async () => {
+      const credential = await createAccountCredential(prisma, {
+        account_type: 'ADMIN',
+        must_change_password: true,
+      });
+      await prisma.accountCredential.update({
+        where: { id: credential.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.adminMe(credential.account_id);
+
+      expect(result.username).toBeNull();
+      expect(result.mustChangePassword).toBe(false);
+    });
+
     it('자격증명이 없는 ADMIN(개발용)은 username null로 반환한다', async () => {
       const account = await createAccount(prisma, { account_type: 'ADMIN' });
 

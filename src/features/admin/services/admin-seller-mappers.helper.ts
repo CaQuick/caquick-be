@@ -8,14 +8,18 @@ export function toAdminSellerOutput(row: AdminSellerRow): AdminSellerOutput {
       ? row.seller_profile
       : null;
   const store = row.store && row.store.deleted_at === null ? row.store : null;
+  const credential =
+    row.credential && row.credential.deleted_at === null
+      ? row.credential
+      : null;
   return {
     accountId: row.id.toString(),
-    username: row.credential?.username ?? null,
+    username: credential?.username ?? null,
     email: row.email,
     name: row.name,
     status: row.status,
-    mustChangePassword: row.credential?.must_change_password ?? false,
-    lastLoginAt: row.credential?.last_login_at ?? null,
+    mustChangePassword: credential?.must_change_password ?? false,
+    lastLoginAt: credential?.last_login_at ?? null,
     profile: profile
       ? {
           businessName: profile.business_name,

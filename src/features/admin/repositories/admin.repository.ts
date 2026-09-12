@@ -22,15 +22,7 @@ export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 
 /** 관리자 계정 행 + 자격증명 요약. 목록·상세·생성이 같은 모양을 쓴다. */
 export type AdminAccountRow = Prisma.AccountGetPayload<{
-  include: {
-    credential: {
-      select: {
-        username: true;
-        must_change_password: true;
-        last_login_at: true;
-      };
-    };
-  };
+  include: typeof adminAccountInclude;
 }>;
 
 /** 판매자 계정 행 + 자격증명·프로필·매장 요약. nested는 soft-delete 자동 필터 밖이라 deleted_at을 함께 읽는다. */
@@ -39,11 +31,13 @@ export type AdminSellerRow = Prisma.AccountGetPayload<{
 }>;
 
 const sellerAccountInclude = {
+  // nested relation은 soft-delete 자동 필터 밖 — deleted_at을 읽어 매퍼가 삭제된 자격증명을 없는 것으로 본다
   credential: {
     select: {
       username: true,
       must_change_password: true,
       last_login_at: true,
+      deleted_at: true,
     },
   },
   seller_profile: {
@@ -67,11 +61,13 @@ const sellerAccountInclude = {
 } as const;
 
 const adminAccountInclude = {
+  // nested relation은 soft-delete 자동 필터 밖 — deleted_at을 읽어 매퍼가 삭제된 자격증명을 없는 것으로 본다
   credential: {
     select: {
       username: true,
       must_change_password: true,
       last_login_at: true,
+      deleted_at: true,
     },
   },
 } as const;
@@ -311,7 +307,12 @@ export class AdminRepository {
             OR: [
               { email: { contains: filter.keyword } },
               { name: { contains: filter.keyword } },
-              { credential: { username: { contains: filter.keyword } } },
+              {
+                credential: {
+                  ...activeWhere,
+                  username: { contains: filter.keyword },
+                },
+              },
               {
                 store: {
                   ...activeWhere,
