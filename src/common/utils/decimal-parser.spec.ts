@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { parseDecimalOrNull } from '@/common/utils/decimal-parser';
+import {
+  LATITUDE_RANGE,
+  LONGITUDE_RANGE,
+  parseDecimalOrNull,
+} from '@/common/utils/decimal-parser';
 
 describe('parseDecimalOrNull', () => {
   it.each([undefined, null, '', '   '])('값 없음(%p)은 null', (raw) => {
@@ -22,4 +26,27 @@ describe('parseDecimalOrNull', () => {
       );
     },
   );
+
+  // Prisma.Decimal은 받아들이지만 DECIMAL 컬럼은 거부하는 값 전수
+  it.each(['NaN', 'Infinity', '-Infinity'])(
+    '유한하지 않은 값(%s)은 거절한다',
+    (raw) => {
+      expect(() => parseDecimalOrNull(raw, 'bad')).toThrow(BadRequestException);
+    },
+  );
+
+  it('range를 주면 양끝 포함으로 허용하고 밖이면 거절한다', () => {
+    expect(parseDecimalOrNull('90', 'bad', LATITUDE_RANGE)?.toString()).toBe(
+      '90',
+    );
+    expect(parseDecimalOrNull('-180', 'bad', LONGITUDE_RANGE)?.toString()).toBe(
+      '-180',
+    );
+    expect(() => parseDecimalOrNull('90.0001', 'bad', LATITUDE_RANGE)).toThrow(
+      BadRequestException,
+    );
+    expect(() => parseDecimalOrNull('-181', 'bad', LONGITUDE_RANGE)).toThrow(
+      BadRequestException,
+    );
+  });
 });
