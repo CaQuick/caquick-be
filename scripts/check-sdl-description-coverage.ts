@@ -40,10 +40,10 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
 const BASELINE: Record<Category, Baseline> = {
   rootField: { documented: 130, total: 130 },
   fieldArg: { documented: 6, total: 6 },
-  inputType: { documented: 72, total: 72 },
-  inputField: { documented: 227, total: 227 },
+  inputType: { documented: 73, total: 73 },
+  inputField: { documented: 229, total: 229 },
   outputType: { documented: 134, total: 134 },
-  outputField: { documented: 603, total: 603 },
+  outputField: { documented: 618, total: 618 },
   enumType: { documented: 17, total: 17 },
   enumValue: { documented: 61, total: 61 },
 };

@@ -45,7 +45,7 @@ input SellerCreateFaqTopicInput {
   title: String!
   """FAQ 답변 본문(HTML)."""
   answerHtml: String!
-  """노출 순서. 미지정 시 서버가 정한 기본값이 들어간다."""
+  """노출 순서. 미지정 시 0이 들어간다(맨 뒤가 아니다)."""
   sortOrder: Int
   """노출 여부. 기본 true."""
   isActive: Boolean = true
@@ -156,7 +156,7 @@ input SellerCreateBannerInput {
   startsAt: DateTime
   """노출 종료 일시. 생략 시 종료 제한 없음."""
   endsAt: DateTime
-  """같은 슬롯 안에서의 노출 순서."""
+  """같은 슬롯 안에서의 노출 순서. 미지정 시 0이 들어간다(맨 뒤가 아니다)."""
   sortOrder: Int
   """노출 여부. 기본 true."""
   isActive: Boolean = true
