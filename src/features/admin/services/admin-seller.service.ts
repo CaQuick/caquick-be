@@ -16,7 +16,7 @@ import {
   nextCursorOf,
   normalizeCursorInput,
 } from '@/common/utils/id-cursor-page';
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -117,9 +117,7 @@ export class AdminSellerService extends AdminBaseService {
       throw new BadRequestException(USERNAME_TAKEN);
     }
 
-    const regionId = input.store.regionId
-      ? parseId(input.store.regionId)
-      : null;
+    const regionId = parseOptionalId(input.store.regionId);
     if (regionId !== null && !(await this.repo.isRegionSelectable(regionId))) {
       throw new BadRequestException(REGION_NOT_SELECTABLE);
     }

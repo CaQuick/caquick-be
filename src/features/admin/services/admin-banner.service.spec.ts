@@ -607,6 +607,20 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 NotFoundException', async () => {
+      const banner = await makeBanner();
+      const [a, b] = [await admin(), await admin()];
+      const results = await Promise.allSettled([
+        service.adminDeleteBanner(a, banner.id),
+        service.adminDeleteBanner(b, banner.id),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      expect(await auditCount(banner.id, 'DELETE')).toBe(1);
+    });
+
     it('soft-delete + audit(BANNER/DELETE), 재삭제는 NotFoundException', async () => {
       const banner = await makeBanner();
       const actor = await admin();

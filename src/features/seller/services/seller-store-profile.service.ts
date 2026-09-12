@@ -1,32 +1,18 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType, Prisma } from '@prisma/client';
+import { AuditActionType, AuditTargetType } from '@prisma/client';
 
-import {
-  cleanNullableText,
-  cleanRequiredText,
-} from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
-import {
-  MAX_ADDRESS_CITY_LENGTH,
-  MAX_GREETING_MESSAGE_LENGTH,
-  MAX_ADDRESS_DISTRICT_LENGTH,
-  MAX_ADDRESS_FULL_LENGTH,
-  MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
-  MAX_BUSINESS_HOURS_TEXT_LENGTH,
-  MAX_STORE_NAME_LENGTH,
-  MAX_STORE_PHONE_LENGTH,
-  MAX_URL_LENGTH,
-} from '@/features/seller/constants/seller.constants';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toStoreOutput } from '@/features/seller/services/seller-store-mappers.helper';
 import type { ISellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
+import { buildStoreBasicInfoUpdateData } from '@/features/store';
 
 @Injectable()
 export class SellerStoreProfileService
@@ -56,7 +42,8 @@ export class SellerStoreProfileService
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
     if (!current) throw new NotFoundException(STORE_NOT_FOUND);
 
-    const data = this.buildStoreBasicInfoUpdateData(input);
+    // 갱신 규칙은 store feature의 공용 헬퍼가 단일 소스(관리자 대리 수정과 공유)
+    const data = buildStoreBasicInfoUpdateData(input);
     const updated = await this.repo.updateStore({
       storeId: ctx.storeId,
       data,
@@ -79,100 +66,5 @@ export class SellerStoreProfileService
     });
 
     return toStoreOutput(updated);
-  }
-
-  private buildStoreBasicInfoUpdateData(
-    input: SellerUpdateStoreBasicInfoInput,
-  ): Prisma.StoreUpdateInput {
-    return {
-      ...(input.storeName !== undefined
-        ? {
-            store_name: cleanRequiredText(
-              input.storeName,
-              MAX_STORE_NAME_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.storePhone !== undefined
-        ? {
-            store_phone: cleanRequiredText(
-              input.storePhone,
-              MAX_STORE_PHONE_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.addressFull !== undefined
-        ? {
-            address_full: cleanRequiredText(
-              input.addressFull,
-              MAX_ADDRESS_FULL_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.addressCity !== undefined
-        ? {
-            address_city: cleanNullableText(
-              input.addressCity,
-              MAX_ADDRESS_CITY_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.addressDistrict !== undefined
-        ? {
-            address_district: cleanNullableText(
-              input.addressDistrict,
-              MAX_ADDRESS_DISTRICT_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.addressNeighborhood !== undefined
-        ? {
-            address_neighborhood: cleanNullableText(
-              input.addressNeighborhood,
-              MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
-            ),
-          }
-        : {}),
-      ...(input.latitude !== undefined
-        ? { latitude: this.toDecimal(input.latitude) }
-        : {}),
-      ...(input.longitude !== undefined
-        ? { longitude: this.toDecimal(input.longitude) }
-        : {}),
-      ...(input.mapProvider !== undefined && input.mapProvider !== null
-        ? { map_provider: input.mapProvider }
-        : {}),
-      ...(input.websiteUrl !== undefined
-        ? {
-            website_url: cleanNullableText(input.websiteUrl, MAX_URL_LENGTH),
-          }
-        : {}),
-      ...(input.businessHoursText !== undefined
-        ? {
-            business_hours_text: cleanNullableText(
-              input.businessHoursText,
-              MAX_BUSINESS_HOURS_TEXT_LENGTH,
-            ),
-          }
-        : {}),
-      // 프로필(로고) 이미지. null/빈 문자열 전달 시 제거, 미전달(undefined) 시 유지.
-      ...(input.profileImageUrl !== undefined
-        ? {
-            profile_image_url: cleanNullableText(
-              input.profileImageUrl,
-              MAX_URL_LENGTH,
-            ),
-          }
-        : {}),
-      // 빈 문자열은 null 저장 → 문의 채팅에서 서버 기본 인사말로 되돌아간다
-      ...(input.greetingMessage !== undefined
-        ? {
-            greeting_message: cleanNullableText(
-              input.greetingMessage,
-              MAX_GREETING_MESSAGE_LENGTH,
-            ),
-          }
-        : {}),
-    };
   }
 }

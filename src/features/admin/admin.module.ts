@@ -7,11 +7,14 @@ import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-c
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/admin/resolvers/admin-seller-mutation.resolver';
 import { AdminSellerQueryResolver } from '@/features/admin/resolvers/admin-seller-query.resolver';
+import { AdminStoreMutationResolver } from '@/features/admin/resolvers/admin-store-mutation.resolver';
+import { AdminStoreQueryResolver } from '@/features/admin/resolvers/admin-store-query.resolver';
 import { AdminUserMutationResolver } from '@/features/admin/resolvers/admin-user-mutation.resolver';
 import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
+import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AdminUserService } from '@/features/admin/services/admin-user.service';
 import { AuditLogModule } from '@/features/audit-log';
 
@@ -27,6 +30,7 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminBannerService,
     AdminSellerService,
     AdminUserService,
+    AdminStoreService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -35,6 +39,8 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminSellerMutationResolver,
     AdminUserQueryResolver,
     AdminUserMutationResolver,
+    AdminStoreQueryResolver,
+    AdminStoreMutationResolver,
   ],
 })
 export class AdminModule {}
