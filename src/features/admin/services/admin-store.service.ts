@@ -114,28 +114,22 @@ export class AdminStoreService extends AdminBaseService {
     input: AdminSetStoreActiveInput,
   ): Promise<AdminStoreOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const current = await this.requireStore(parseId(input.storeId));
-    // 같은 값이면 멱등 — 감사 기록도 남기지 않는다
-    if (current.is_active === input.isActive) {
-      return toAdminStoreOutput(current);
-    }
-
-    const updated = await this.repo.updateStore(
-      { storeId: current.id, data: { is_active: input.isActive } },
-      (row) => ({
+    const reason = cleanNullableText(input.reason, MAX_REASON_LENGTH);
+    // 현재 값 확인·멱등 판정은 repository가 잠금 뒤 트랜잭션 안에서 한다
+    const result = await this.repo.setStoreActive(
+      { storeId: parseId(input.storeId), isActive: input.isActive },
+      (before, after) => ({
         actorAccountId: ctx.accountId,
-        storeId: row.id,
+        storeId: after.id,
         targetType: AuditTargetType.STORE,
-        targetId: row.id,
+        targetId: after.id,
         action: AuditActionType.STATUS_CHANGE,
-        beforeJson: { isActive: current.is_active },
-        afterJson: {
-          isActive: row.is_active,
-          reason: cleanNullableText(input.reason, MAX_REASON_LENGTH),
-        },
+        beforeJson: { isActive: before.is_active },
+        afterJson: { isActive: after.is_active, reason },
       }),
     );
-    return toAdminStoreOutput(updated);
+    if (!result) throw new NotFoundException(STORE_NOT_FOUND);
+    return toAdminStoreOutput(result.row);
   }
 
   async adminUpdateStoreBasicInfo(
@@ -144,7 +138,6 @@ export class AdminStoreService extends AdminBaseService {
   ): Promise<AdminStoreOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const { storeId, regionId, ...patch } = input;
-    const current = await this.requireStore(parseId(storeId));
 
     const data: Prisma.StoreUpdateInput = buildStoreBasicInfoUpdateData(patch);
     if (regionId !== undefined) {
@@ -160,24 +153,20 @@ export class AdminStoreService extends AdminBaseService {
       k === 'region' ? 'region_id' : k,
     ) as (keyof Store)[];
 
+    // before는 repository가 잠금 뒤 트랜잭션 안에서 읽는다 — 미리 읽은 값은 낡을 수 있다
     const updated = await this.repo.updateStore(
-      { storeId: current.id, data },
-      (row) => ({
+      { storeId: parseId(storeId), data },
+      (before, after) => ({
         actorAccountId: ctx.accountId,
-        storeId: row.id,
+        storeId: after.id,
         targetType: AuditTargetType.STORE,
-        targetId: row.id,
+        targetId: after.id,
         action: AuditActionType.UPDATE,
-        beforeJson: snapshot(current, changedKeys),
-        afterJson: snapshot(row, changedKeys),
+        beforeJson: snapshot(before, changedKeys),
+        afterJson: snapshot(after, changedKeys),
       }),
     );
+    if (!updated) throw new NotFoundException(STORE_NOT_FOUND);
     return toAdminStoreOutput(updated);
-  }
-
-  private async requireStore(storeId: bigint): Promise<Store> {
-    const row = await this.repo.findStoreById(storeId);
-    if (!row) throw new NotFoundException(STORE_NOT_FOUND);
-    return row;
   }
 }

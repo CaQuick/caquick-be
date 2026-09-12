@@ -18,6 +18,9 @@ import {
 } from '@/features/audit-log';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
+/** 행 잠금 대상 테이블. 고정 문자열만 raw로 들어간다. */
+type LockableTable = 'store' | 'product' | 'banner' | 'category' | 'tag';
+
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 
@@ -231,6 +234,25 @@ export class AdminRepository {
     }
   }
 
+  /**
+   * 대상 행을 잠그고(FOR UPDATE) 미삭제인지 확인한다. 읽고-쓰는 조작(수정·토글·삭제)은 이 잠금
+   * 뒤에 트랜잭션 안에서 다시 읽어야 한다 — 서비스가 미리 읽은 값은 다른 관리자의 커밋으로
+   * 낡을 수 있어 감사 before가 틀리거나, 그 사이 삭제된 행을 되살리거나, 같은 토글이 두 번
+   * 감사된다. 잠금을 기다린 쪽은 최신 커밋을 본다.
+   * @returns 없거나 삭제됐으면 false
+   */
+  private async lockActiveRow(
+    tx: Prisma.TransactionClient,
+    table: LockableTable,
+    id: bigint,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ id: bigint }[]>`
+      SELECT id FROM ${Prisma.raw(table)}
+      WHERE id = ${id} AND deleted_at IS NULL
+      FOR UPDATE`;
+    return rows.length > 0;
+  }
+
   // ── 배너 ──
 
   private bannerFilterWhere(filter: {
@@ -284,27 +306,41 @@ export class AdminRepository {
     });
   }
 
+  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
   async updateBanner(
     args: { bannerId: bigint; data: Prisma.BannerUpdateInput },
-    audit: (row: Banner) => AuditEntry,
-  ): Promise<Banner> {
+    audit: (before: Banner, after: Banner) => AuditEntry,
+  ): Promise<Banner | null> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.banner.update({
+      if (!(await this.lockActiveRow(tx, 'banner', args.bannerId))) return null;
+      const before = await tx.banner.findFirstOrThrow({
+        where: { id: args.bannerId },
+      });
+      const after = await tx.banner.update({
         where: { id: args.bannerId },
         data: args.data,
       });
-      await this.auditLogs.createAuditLog(audit(row), tx);
-      return row;
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return after;
     });
   }
 
-  async softDeleteBanner(bannerId: bigint, audit: AuditEntry): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  /** 잠금 → soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
+  async softDeleteBanner(
+    bannerId: bigint,
+    audit: (before: Banner) => AuditEntry,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'banner', bannerId))) return false;
+      const before = await tx.banner.findFirstOrThrow({
+        where: { id: bannerId },
+      });
       await tx.banner.update({
         where: { id: bannerId },
         data: { deleted_at: new Date() },
       });
-      await this.auditLogs.createAuditLog(audit, tx);
+      await this.auditLogs.createAuditLog(audit(before), tx);
+      return true;
     });
   }
 
@@ -630,7 +666,7 @@ export class AdminRepository {
     return {
       ...(filter.keyword ? { store_name: { contains: filter.keyword } } : {}),
       ...(filter.isActive !== undefined ? { is_active: filter.isActive } : {}),
-      ...(filter.regionId ? { region_id: filter.regionId } : {}),
+      ...(filter.regionId !== undefined ? { region_id: filter.regionId } : {}),
     };
   }
 
@@ -672,18 +708,47 @@ export class AdminRepository {
     });
   }
 
-  /** 매장 갱신 + 감사 기록을 한 트랜잭션으로. */
+  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
   async updateStore(
     args: { storeId: bigint; data: Prisma.StoreUpdateInput },
-    audit: (row: Store) => AuditEntry,
-  ): Promise<Store> {
+    audit: (before: Store, after: Store) => AuditEntry,
+  ): Promise<Store | null> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.store.update({
+      if (!(await this.lockActiveRow(tx, 'store', args.storeId))) return null;
+      const before = await tx.store.findFirstOrThrow({
+        where: { id: args.storeId },
+      });
+      const after = await tx.store.update({
         where: { id: args.storeId },
         data: args.data,
       });
-      await this.auditLogs.createAuditLog(audit(row), tx);
-      return row;
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return after;
+    });
+  }
+
+  /**
+   * 노출 토글. 잠금 뒤 트랜잭션 안에서 현재 값을 보고, 이미 목표값이면 갱신·감사 없이 그대로
+   * 돌려준다(두 관리자가 동시에 같은 값으로 바꿔도 감사는 1건). 없거나 삭제됐으면 null.
+   */
+  async setStoreActive(
+    args: { storeId: bigint; isActive: boolean },
+    audit: (before: Store, after: Store) => AuditEntry,
+  ): Promise<{ row: Store; changed: boolean } | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'store', args.storeId))) return null;
+      const before = await tx.store.findFirstOrThrow({
+        where: { id: args.storeId },
+      });
+      if (before.is_active === args.isActive) {
+        return { row: before, changed: false };
+      }
+      const after = await tx.store.update({
+        where: { id: args.storeId },
+        data: { is_active: args.isActive },
+      });
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return { row: after, changed: true };
     });
   }
 }

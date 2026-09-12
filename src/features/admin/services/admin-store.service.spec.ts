@@ -78,6 +78,10 @@ describe('AdminStoreService (real DB)', () => {
       });
       expect(byRegion.totalCount).toBe(1);
       expect(byRegion.items[0].regionId).toBe(region.id.toString());
+
+      // "0"은 유효한 ID라 조건이 빠지지 않고 빈 결과여야 한다
+      const zero = await service.adminStores(await admin(), { regionId: '0' });
+      expect(zero.totalCount).toBe(0);
     });
 
     it('limit+1 조회로 hasMore·nextCursor를 판정하고 삭제 매장은 제외한다', async () => {
@@ -186,6 +190,26 @@ describe('AdminStoreService (real DB)', () => {
         }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('두 관리자가 동시에 같은 값으로 토글해도 감사는 1건(잠금 뒤 트랜잭션 안에서 판정)', async () => {
+      const store = await createStore(prisma, { is_active: true });
+      const [a, b] = [await admin(), await admin()];
+      await Promise.all([
+        service.adminSetStoreActive(a, {
+          storeId: store.id.toString(),
+          isActive: false,
+        }),
+        service.adminSetStoreActive(b, {
+          storeId: store.id.toString(),
+          isActive: false,
+        }),
+      ]);
+      expect(
+        await prisma.auditLog.count({
+          where: { target_type: 'STORE', target_id: store.id },
+        }),
+      ).toBe(1);
+    });
   });
 
   describe('adminUpdateStoreBasicInfo', () => {
@@ -290,6 +314,43 @@ describe('AdminStoreService (real DB)', () => {
           storePhone: '0'.repeat(31),
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('동시 수정의 감사 before는 트랜잭션 안에서 읽은 실제 직전 값이다', async () => {
+      const store = await createStore(prisma, { store_name: 'A' });
+      const [a, b] = [await admin(), await admin()];
+      await Promise.all([
+        service.adminUpdateStoreBasicInfo(a, {
+          storeId: store.id.toString(),
+          storeName: 'B',
+        }),
+        service.adminUpdateStoreBasicInfo(b, {
+          storeId: store.id.toString(),
+          storeName: 'C',
+        }),
+      ]);
+      const audits = await prisma.auditLog.findMany({
+        where: { target_type: 'STORE', target_id: store.id, action: 'UPDATE' },
+        orderBy: { id: 'asc' },
+      });
+      expect(audits).toHaveLength(2);
+      const [first, second] = audits.map(
+        (x) => x.before_json as { store_name: string },
+      );
+      // 두 번째 감사의 before는 첫 번째 감사의 after와 같아야 한다(A→B→C 또는 A→C→B)
+      const firstAfter = audits[0].after_json as { store_name: string };
+      expect(first.store_name).toBe('A');
+      expect(second.store_name).toBe(firstAfter.store_name);
+    });
+
+    it('삭제된 매장은 잠금 단계에서 NotFoundException(되살리지 않음)', async () => {
+      const store = await createStore(prisma, { deleted_at: new Date() });
+      await expect(
+        service.adminUpdateStoreBasicInfo(await admin(), {
+          storeId: store.id.toString(),
+          storeName: 'x',
+        }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('감사 기록이 실패하면 수정도 롤백된다(같은 트랜잭션)', async () => {

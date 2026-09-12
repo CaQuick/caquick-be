@@ -201,21 +201,23 @@ export class AdminBannerService extends AdminBaseService {
           : current.ends_at,
     });
 
+    // before는 repository가 잠금 뒤 트랜잭션 안에서 읽는다 — current는 검증용일 뿐 감사엔 안 쓴다
     const row = await this.repo.updateBanner(
       {
         bannerId: current.id,
         data: this.buildBannerUpdateData(input, resolved),
       },
-      (updated) => ({
+      (before, after) => ({
         actorAccountId: ctx.accountId,
         storeId: null,
         targetType: AuditTargetType.BANNER,
-        targetId: updated.id,
+        targetId: after.id,
         action: AuditActionType.UPDATE,
-        beforeJson: this.auditSnapshot(current),
-        afterJson: this.auditSnapshot(updated),
+        beforeJson: this.auditSnapshot(before),
+        afterJson: this.auditSnapshot(after),
       }),
     );
+    if (!row) throw new NotFoundException(BANNER_NOT_FOUND);
 
     return toAdminBannerOutput(row);
   }
@@ -225,16 +227,16 @@ export class AdminBannerService extends AdminBaseService {
     bannerId: bigint,
   ): Promise<boolean> {
     const ctx = await this.requireAdminContext(accountId);
-    const current = await this.requireBanner(bannerId);
 
-    await this.repo.softDeleteBanner(current.id, {
+    const deleted = await this.repo.softDeleteBanner(bannerId, (before) => ({
       actorAccountId: ctx.accountId,
       storeId: null,
       targetType: AuditTargetType.BANNER,
-      targetId: current.id,
+      targetId: before.id,
       action: AuditActionType.DELETE,
-      beforeJson: this.auditSnapshot(current),
-    });
+      beforeJson: this.auditSnapshot(before),
+    }));
+    if (!deleted) throw new NotFoundException(BANNER_NOT_FOUND);
 
     return true;
   }
