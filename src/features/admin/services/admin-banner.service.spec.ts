@@ -297,6 +297,22 @@ describe('AdminBannerService (real DB)', () => {
       },
     );
 
+    it('감사 기록이 실패하면 배너 생성도 롤백된다(같은 트랜잭션)', async () => {
+      const auditLogs = service['auditLogs'];
+      const spy = jest
+        .spyOn(auditLogs, 'createAuditLog')
+        .mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(
+        service.adminCreateBanner(await admin(), {
+          placement: 'HOME_MAIN',
+          imageUrl: 'https://i.example/x.png',
+        }),
+      ).rejects.toThrow('audit down');
+      expect(await prisma.banner.count()).toBe(0);
+      spy.mockRestore();
+    });
+
     it('빈 문자열 링크 필드는 값 없음으로 보고 통과시킨다', async () => {
       const result = await service.adminCreateBanner(await admin(), {
         placement: 'SEARCH',

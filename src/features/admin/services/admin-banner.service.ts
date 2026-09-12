@@ -130,26 +130,27 @@ export class AdminBannerService extends AdminBaseService {
     };
     await this.validateLinkTarget(resolved);
 
-    const row = await this.repo.createBanner({
-      placement: input.placement,
-      title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
-      image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
-      ...this.buildBannerLinkFields(resolved),
-      link_type: linkType,
-      starts_at: toDate(input.startsAt) ?? null,
-      ends_at: toDate(input.endsAt) ?? null,
-      sort_order: input.sortOrder ?? 0,
-      is_active: input.isActive ?? true,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: null,
-      targetType: AuditTargetType.BANNER,
-      targetId: row.id,
-      action: AuditActionType.CREATE,
-      afterJson: this.auditSnapshot(row),
-    });
+    const row = await this.repo.createBanner(
+      {
+        placement: input.placement,
+        title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
+        image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+        ...this.buildBannerLinkFields(resolved),
+        link_type: linkType,
+        starts_at: toDate(input.startsAt) ?? null,
+        ends_at: toDate(input.endsAt) ?? null,
+        sort_order: input.sortOrder ?? 0,
+        is_active: input.isActive ?? true,
+      },
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: null,
+        targetType: AuditTargetType.BANNER,
+        targetId: created.id,
+        action: AuditActionType.CREATE,
+        afterJson: this.auditSnapshot(created),
+      }),
+    );
 
     return toAdminBannerOutput(row);
   }
@@ -169,20 +170,21 @@ export class AdminBannerService extends AdminBaseService {
     const resolved = this.resolveNextLinkValues(input, current);
     await this.validateLinkTarget(resolved);
 
-    const row = await this.repo.updateBanner({
-      bannerId: current.id,
-      data: this.buildBannerUpdateData(input, resolved),
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: null,
-      targetType: AuditTargetType.BANNER,
-      targetId: row.id,
-      action: AuditActionType.UPDATE,
-      beforeJson: this.auditSnapshot(current),
-      afterJson: this.auditSnapshot(row),
-    });
+    const row = await this.repo.updateBanner(
+      {
+        bannerId: current.id,
+        data: this.buildBannerUpdateData(input, resolved),
+      },
+      (updated) => ({
+        actorAccountId: ctx.accountId,
+        storeId: null,
+        targetType: AuditTargetType.BANNER,
+        targetId: updated.id,
+        action: AuditActionType.UPDATE,
+        beforeJson: this.auditSnapshot(current),
+        afterJson: this.auditSnapshot(updated),
+      }),
+    );
 
     return toAdminBannerOutput(row);
   }
@@ -194,8 +196,7 @@ export class AdminBannerService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const current = await this.requireBanner(bannerId);
 
-    await this.repo.softDeleteBanner(current.id);
-    await this.auditLogs.createAuditLog({
+    await this.repo.softDeleteBanner(current.id, {
       actorAccountId: ctx.accountId,
       storeId: null,
       targetType: AuditTargetType.BANNER,
