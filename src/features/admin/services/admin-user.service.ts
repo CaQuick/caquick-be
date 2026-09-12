@@ -143,17 +143,20 @@ export class AdminUserService extends AdminBaseService {
       change.to === AccountStatus.SUSPENDED
         ? AccountStatus.ACTIVE
         : AccountStatus.SUSPENDED;
+    const invalidTransitionMessage =
+      change.to === AccountStatus.SUSPENDED
+        ? ONLY_ACTIVE_CAN_BE_SUSPENDED
+        : ONLY_SUSPENDED_CAN_BE_REINSTATED;
     if (target.status !== from) {
-      throw new BadRequestException(
-        change.to === AccountStatus.SUSPENDED
-          ? ONLY_ACTIVE_CAN_BE_SUSPENDED
-          : ONLY_SUSPENDED_CAN_BE_REINSTATED,
-      );
+      throw new BadRequestException(invalidTransitionMessage);
     }
     {
+      // 사전 검사와 갱신 사이의 경쟁은 repository의 조건부 갱신이 닫는다
       await this.repo.updateAccountStatus({
         accountId: target.id,
-        status: change.to,
+        from,
+        to: change.to,
+        invalidTransitionMessage,
         // 정지에서만 세션을 끊는다. 복구는 새 로그인부터 유효
         revokeSessions: change.to === AccountStatus.SUSPENDED,
         audit: {

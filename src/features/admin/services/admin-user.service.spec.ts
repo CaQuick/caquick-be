@@ -333,6 +333,30 @@ describe('AdminUserService (real DB)', () => {
       expect(await statusOf(pending.id)).toBe('PENDING');
     });
 
+    it('두 관리자가 동시에 정지해도 감사 기록은 1건만 남는다(조건부 갱신)', async () => {
+      const user = await makeUser();
+      const [a, b] = [await admin(), await admin()];
+
+      const results = await Promise.all([
+        service.adminSuspendAccount(a, {
+          accountId: user.id.toString(),
+          reason: 'a',
+        }),
+        service.adminSuspendAccount(b, {
+          accountId: user.id.toString(),
+          reason: 'b',
+        }),
+      ]);
+
+      expect(results.map((r) => r.status)).toEqual(['SUSPENDED', 'SUSPENDED']);
+      expect(await statusOf(user.id)).toBe('SUSPENDED');
+      expect(
+        await prisma.auditLog.count({
+          where: { target_type: 'ACCOUNT', target_id: user.id },
+        }),
+      ).toBe(1);
+    });
+
     it('감사 기록이 실패하면 상태 변경도 롤백된다(같은 트랜잭션)', async () => {
       const user = await makeUser();
       const auditLogs = service['auditLogs'];
