@@ -20,3 +20,12 @@ export function parseId(raw: string): bigint {
   }
   return id;
 }
+
+/**
+ * nullable ID 입력용. null/undefined는 "값 없음"(null)이고, 그 외(빈 문자열 포함)는 parseId를
+ * 그대로 태운다 — `"0"`·빈 문자열을 truthy 검사로 버리면 빈 ID가 "연결 해제"로 둔갑한다.
+ */
+export function parseOptionalId(raw: string | null | undefined): bigint | null {
+  if (raw === undefined || raw === null) return null;
+  return parseId(raw);
+}

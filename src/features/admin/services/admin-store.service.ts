@@ -15,7 +15,7 @@ import {
   nextCursorOf,
   normalizeCursorInput,
 } from '@/common/utils/id-cursor-page';
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   REGION_NOT_SELECTABLE,
@@ -83,7 +83,7 @@ export class AdminStoreService extends AdminBaseService {
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
       isActive: input?.isActive,
-      regionId: input?.regionId ? parseId(input.regionId) : undefined,
+      regionId: parseOptionalId(input?.regionId) ?? undefined,
     };
 
     const [rows, totalCount] = await Promise.all([
@@ -148,7 +148,8 @@ export class AdminStoreService extends AdminBaseService {
 
     const data: Prisma.StoreUpdateInput = buildStoreBasicInfoUpdateData(patch);
     if (regionId !== undefined) {
-      const parsed = regionId ? parseId(regionId) : null;
+      // 빈 문자열은 해제가 아니라 형식 오류(BAD_USER_INPUT). 해제는 명시적 null만
+      const parsed = parseOptionalId(regionId);
       if (parsed !== null && !(await this.repo.isRegionSelectable(parsed))) {
         throw new BadRequestException(REGION_NOT_SELECTABLE);
       }
