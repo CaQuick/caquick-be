@@ -18,7 +18,7 @@ type SellerConversation {
   storeId: ID!
   """마지막 메시지 시각. 메시지가 없으면 null. 목록 정렬 기준은 이 값이 아니라 updated_at이다."""
   lastMessageAt: DateTime
-  """판매자가 이 대화방을 마지막으로 읽은 시각. 읽은 적이 없으면 null."""
+  """구매자가 이 대화방을 마지막으로 읽은 시각(구매자 조회 시 전진). 판매자 읽음 마커는 없다. 읽은 적이 없으면 null."""
   lastReadAt: DateTime
   updatedAt: DateTime!
 }
