@@ -28,12 +28,15 @@ import type {
 import {
   CurrentUser,
   JwtAuthGuard,
+  Roles,
+  RolesGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
 
 @Resolver('Mutation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SELLER')
 export class SellerStoreMutationResolver {
   constructor(
     @Inject(SELLER_STORE_PROFILE_SERVICE)

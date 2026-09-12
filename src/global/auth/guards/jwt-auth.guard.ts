@@ -1,7 +1,8 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
+
+import { requestOfContext } from '@/global/auth/guards/request-of-context.helper';
 
 /**
  * REST/GraphQL 공용 JWT 인증 가드
@@ -17,10 +18,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
    * @param context ExecutionContext
    */
   override getRequest(context: ExecutionContext): Request {
-    if (context.getType<'http' | 'graphql'>() === 'graphql') {
-      const gqlCtx = GqlExecutionContext.create(context);
-      return gqlCtx.getContext<{ req: Request }>().req;
-    }
-    return context.switchToHttp().getRequest<Request>();
+    return requestOfContext(context);
   }
 }
