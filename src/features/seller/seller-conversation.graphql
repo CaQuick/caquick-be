@@ -63,7 +63,7 @@ type SellerConversationMessage {
   시스템 메시지는 물론, 인사말·FAQ 자동응답처럼 서버가 만든 STORE 메시지도 null이다.
   """
   senderAccountId: ID
-  """본문 형식. 이 값에 따라 bodyText·bodyHtml 중 하나가 채워진다."""
+  """본문 형식. 읽어야 할 본문 필드를 가리킨다(다른 쪽에도 값이 남아 있을 수 있다)."""
   bodyFormat: ConversationBodyFormat!
   """평문 본문. bodyFormat이 TEXT면 이 값을 쓴다."""
   bodyText: String
