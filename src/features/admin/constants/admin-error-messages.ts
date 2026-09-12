@@ -9,6 +9,11 @@ export const INVALID_CURSOR = 'Invalid cursor.';
 
 export const USERNAME_TAKEN = 'Username is already taken.';
 export const SELLER_NOT_FOUND = 'Seller account not found.';
+export const USER_NOT_FOUND = 'User account not found.';
+export const CANNOT_CHANGE_OWN_STATUS =
+  'Cannot change your own account status.';
+export const CANNOT_CHANGE_ADMIN_STATUS =
+  'Cannot change the status of an ADMIN account.';
 
 // ── 매장 ──
 

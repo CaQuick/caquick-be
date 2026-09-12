@@ -25,6 +25,30 @@ export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
 
+/** 구매자 계정 행 + 프로필·연동 소셜·활동 집계. */
+export type AdminUserRow = Prisma.AccountGetPayload<{
+  include: typeof userAccountInclude;
+}>;
+
+const userAccountInclude = {
+  user_profile: {
+    select: {
+      nickname: true,
+      phone_number: true,
+      onboarding_completed_at: true,
+      deleted_at: true,
+    },
+  },
+  account_identities: { select: { provider: true, deleted_at: true } },
+  // 집계는 삭제 제외(relation count filter)
+  _count: {
+    select: {
+      orders: { where: activeWhere },
+      reviews: { where: activeWhere },
+    },
+  },
+} as const;
+
 /** 판매자 계정 행 + 자격증명·프로필·매장 요약. nested는 soft-delete 자동 필터 밖이라 deleted_at을 함께 읽는다. */
 export type AdminSellerRow = Prisma.AccountGetPayload<{
   include: typeof sellerAccountInclude;
@@ -457,6 +481,100 @@ export class AdminRepository {
         where: { account_id: args.accountId, revoked_at: null },
         data: { revoked_at: now, updated_at: now },
       });
+      await this.auditLogs.createAuditLog(args.audit, tx);
+    });
+  }
+
+  // ── 구매자 계정 ──
+
+  private userFilterWhere(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Prisma.AccountWhereInput {
+    return {
+      account_type: AccountType.USER,
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.keyword
+        ? {
+            OR: [
+              { email: { contains: filter.keyword } },
+              { name: { contains: filter.keyword } },
+              {
+                user_profile: {
+                  ...activeWhere,
+                  nickname: { contains: filter.keyword },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  async listUserAccounts(args: {
+    keyword?: string;
+    status?: AccountStatus;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminUserRow[]> {
+    return this.prisma.account.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.userFilterWhere(args),
+      },
+      include: userAccountInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countUserAccounts(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Promise<number> {
+    return this.prisma.account.count({ where: this.userFilterWhere(filter) });
+  }
+
+  async findUserAccountById(accountId: bigint): Promise<AdminUserRow | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId, account_type: AccountType.USER },
+      include: userAccountInclude,
+    });
+  }
+
+  // ── 계정 상태 ──
+
+  async findAccountForStatusChange(accountId: bigint) {
+    return this.prisma.account.findFirst({
+      where: { id: accountId },
+      select: {
+        id: true,
+        account_type: true,
+        status: true,
+        store: { select: { id: true } },
+      },
+    });
+  }
+
+  /** 상태 변경 + (정지 시) 세션 폐기 + 감사 기록을 한 트랜잭션으로. */
+  async updateAccountStatus(args: {
+    accountId: bigint;
+    status: AccountStatus;
+    revokeSessions: boolean;
+    audit: AuditEntry;
+  }): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id: args.accountId },
+        data: { status: args.status, updated_at: now },
+      });
+      if (args.revokeSessions) {
+        await tx.authRefreshSession.updateMany({
+          where: { account_id: args.accountId, revoked_at: null },
+          data: { revoked_at: now, updated_at: now },
+        });
+      }
       await this.auditLogs.createAuditLog(args.audit, tx);
     });
   }

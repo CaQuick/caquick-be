@@ -45,3 +45,7 @@ export type AccountStatusValue = (typeof ACCOUNT_STATUSES)[number];
 /** SDL StoreMapProvider와 1:1. */
 export const STORE_MAP_PROVIDERS = ['NAVER', 'KAKAO', 'NONE'] as const;
 export type StoreMapProviderValue = (typeof STORE_MAP_PROVIDERS)[number];
+
+// ── 계정 상태 변경 ──
+
+export const MAX_REASON_LENGTH = 500;

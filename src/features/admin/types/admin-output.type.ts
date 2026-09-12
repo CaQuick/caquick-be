@@ -1,7 +1,9 @@
 import type {
   AccountStatus,
+  AccountType,
   BannerLinkType,
   BannerPlacement,
+  IdentityProvider,
 } from '@prisma/client';
 
 export interface AdminAccountOutput {
@@ -63,4 +65,24 @@ export interface AdminSellerOutput {
     isActive: boolean;
   } | null;
   createdAt: Date;
+}
+
+export interface AdminUserOutput {
+  accountId: string;
+  email: string | null;
+  name: string | null;
+  status: AccountStatus;
+  nickname: string | null;
+  phoneNumber: string | null;
+  onboardingCompleted: boolean;
+  identityProviders: IdentityProvider[];
+  orderCount: number;
+  reviewCount: number;
+  createdAt: Date;
+}
+
+export interface AdminAccountStatusResultOutput {
+  accountId: string;
+  accountType: AccountType;
+  status: AccountStatus;
 }
