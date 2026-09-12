@@ -13,7 +13,7 @@ extend type Query {
 input RandomCakesInput {
   """EVENT 카테고리 ID. 비우면 '전체' 칩(필터 미적용)."""
   categoryId: ID
-  """이미지 수(기본 9 — 3열 그리드 9개 단위, figma 명세 기준). 1~30만 허용하며 벗어나면 BAD_REQUEST."""
+  """이미지 수(기본 9 — 3열 그리드 9개 단위, figma 명세 기준). 1~30만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 9
 }
 
@@ -75,7 +75,7 @@ type HomeBanner {
 
 """홈 '다른 사람들은 이렇게 만들었어요' 제작 후기 카드 목록."""
 input CustomCakeShowcaseInput {
-  """가져올 후기 수. 기본 5, 1~20만 허용하며 벗어나면 BAD_REQUEST."""
+  """가져올 후기 수. 기본 5, 1~20만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 5
 }
 

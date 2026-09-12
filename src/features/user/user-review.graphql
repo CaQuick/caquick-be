@@ -11,7 +11,7 @@ extend type Query {
 input MyReviewableOrderItemsInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_REQUEST."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 
@@ -54,7 +54,7 @@ extend type Mutation {
 input MyReviewsInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_REQUEST."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 
@@ -159,7 +159,6 @@ input WriteReviewInput {
 
 """
 리뷰 첨부 미디어 입력. createReviewMediaUploadUrl로 먼저 업로드한 뒤 그 결과를 넘긴다.
-노출 순서는 배열에 담은 순서로 정해진다.
 """
 input WriteReviewMediaInput {
   """미디어 종류."""
@@ -168,9 +167,6 @@ input WriteReviewMediaInput {
   mediaUrl: String!
   """동영상 대표 프레임 URL."""
   thumbnailUrl: String
-  """
-  노출 순서. 현재 서버는 이 값을 쓰지 않고 배열에 담긴 순서를 그대로 저장한다 —
-  순서를 바꾸려면 배열 순서를 바꾼다.
-  """
+  """노출 순서. 서버는 이 값을 쓰지 않고 배열에 담긴 순서를 그대로 저장한다."""
   sortOrder: Int!
 }
