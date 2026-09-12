@@ -17,6 +17,8 @@ import { SEED_STORE_NAME_PREFIX } from './idempotent';
 /**
  * 시드 판매자 로그인용 자격증명. SELLER_SEED_PASSWORD가 없으면 만들지 않는다
  * (dev 토큰 발급 경로 /auth/dev/issue-token 로도 충분하다).
+ * 매장 생성 뒤에 호출한다 — resetSeedScope가 [SEED] 매장을 통해 판매자를 찾으므로,
+ * 매장 없이 자격증명만 남으면 고정 username이 다음 시드를 막는다.
  */
 async function seedSellerCredential(
   prisma: PrismaClient,
@@ -63,7 +65,6 @@ export async function seedStores(
       name: '케이크샵 A 운영자',
     },
   });
-  await seedSellerCredential(prisma, sellerA.id, 'seed-seller-a');
   const storeA = await prisma.store.create({
     data: {
       seller_account_id: sellerA.id,
@@ -97,6 +98,7 @@ export async function seedStores(
       },
     },
   });
+  await seedSellerCredential(prisma, sellerA.id, 'seed-seller-a');
 
   // 매장 A 구조화 영업시간: 화요일 정기 휴무(텍스트 표기와 일치), 나머지 09~18시.
   // todayPickupStores가 구조화 영업시간(StoreBusinessHour) 기준이라 시드에 필수.
@@ -120,7 +122,6 @@ export async function seedStores(
       name: '도넛샵 B 운영자',
     },
   });
-  await seedSellerCredential(prisma, sellerB.id, 'seed-seller-b');
   const storeB = await prisma.store.create({
     data: {
       seller_account_id: sellerB.id,
@@ -136,6 +137,7 @@ export async function seedStores(
       is_active: true,
     },
   });
+  await seedSellerCredential(prisma, sellerB.id, 'seed-seller-b');
   // 매장 B 구조화 영업시간: 평일 11~21시, 주말 휴무(텍스트 표기와 일치).
   // A가 화요일 휴무라, B가 화요일을 커버해 요일과 무관하게 todayPickupStores 확인 가능.
   await prisma.storeBusinessHour.createMany({

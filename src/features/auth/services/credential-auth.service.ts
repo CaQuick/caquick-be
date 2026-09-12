@@ -107,18 +107,13 @@ export class CredentialAuthService implements ICredentialAuthService {
     req: Request;
     res: Response;
   }): Promise<CredentialLoginResult> {
-    const { accessToken, accountId } = await this.tokens.rotateRefresh(
+    // 회전 전에 세션 주인의 타입을 확인한다 — 타입이 다른 쿠키(판매자 쿠키로 관리자 경로)에
+    // 새 세션을 발급하거나 기존 세션을 폐기하면 안 된다.
+    const { credential } = await this.requireSessionCredential(
+      args.role,
       args.req,
-      args.res,
     );
-    const credential =
-      await this.credentials.findCredentialByAccountId(accountId);
-    if (!credential || credential.account.account_type !== args.role) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
-      );
-    }
-
+    const { accessToken } = await this.tokens.rotateRefresh(args.req, args.res);
     return this.toResult(accessToken, credential);
   }
 
@@ -127,35 +122,11 @@ export class CredentialAuthService implements ICredentialAuthService {
     req: Request;
     res: Response;
   }): Promise<void> {
-    const refreshToken = args.req.cookies?.[AUTH_COOKIE.REFRESH] as
-      string | undefined;
-
-    if (!refreshToken) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN,
-      );
-    }
-
-    const tokenHash = this.tokens.sha256Hex(refreshToken);
-    const session =
-      await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-    if (!session) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
-      );
-    }
-
-    const credential = await this.credentials.findCredentialByAccountId(
-      session.account_id,
+    const { session } = await this.requireSessionCredential(
+      args.role,
+      args.req,
     );
-    if (!credential || credential.account.account_type !== args.role) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
-      );
-    }
-
     await this.refreshSessions.revokeRefreshSession(session.id);
-
     this.tokens.clearRefreshCookie(args.res);
   }
 
@@ -220,6 +191,42 @@ export class CredentialAuthService implements ICredentialAuthService {
       ipAddress: tryClientIp(args.req),
       userAgent: tryUserAgent(args.req),
     });
+  }
+
+  /** refresh 쿠키 → 활성 세션 → 자격증명. 세션 주인의 계정 타입이 role과 다르면 거부한다. */
+  private async requireSessionCredential(
+    role: CredentialRole,
+    req: Request,
+  ): Promise<{
+    session: { id: bigint; account_id: bigint };
+    credential: AccountCredentialWithAccount;
+  }> {
+    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
+      string | undefined;
+    if (!refreshToken) {
+      throw new UnauthorizedException(
+        AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN,
+      );
+    }
+
+    const session = await this.refreshSessions.findActiveRefreshSessionByHash(
+      this.tokens.sha256Hex(refreshToken),
+    );
+    if (!session) {
+      throw new UnauthorizedException(
+        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
+      );
+    }
+
+    const credential = await this.credentials.findCredentialByAccountId(
+      session.account_id,
+    );
+    if (!credential || credential.account.account_type !== role) {
+      throw new UnauthorizedException(
+        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
+      );
+    }
+    return { session, credential };
   }
 
   private toResult(

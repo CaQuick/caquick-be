@@ -232,23 +232,32 @@ describe('CredentialAuthService', () => {
   });
 
   describe('refresh', () => {
+    const reqWithCookie = {
+      ...mockReq,
+      cookies: { [AUTH_COOKIE.REFRESH]: 'refresh-token' },
+    } as unknown as Request;
+    const session = { id: BigInt(77), account_id: BigInt(10) } as never;
+    let rotate: jest.SpyInstance;
+
     beforeEach(() => {
-      jest
+      rotate = jest
         .spyOn(TokenService.prototype, 'rotateRefresh')
         .mockResolvedValue({ accessToken: 'rotated', accountId: BigInt(10) });
     });
 
-    it('회전된 accessToken과 자격증명 상태를 반환한다', async () => {
+    it('세션 주인의 타입이 맞으면 회전하고 자격증명 상태를 반환한다', async () => {
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
       credentials.findCredentialByAccountId.mockResolvedValue(
         makeCredential({ must_change_password: true }),
       );
 
       const result = await service.refresh({
         role: 'SELLER',
-        req: mockReq,
+        req: reqWithCookie,
         res: mockRes,
       });
 
+      expect(rotate).toHaveBeenCalledWith(reqWithCookie, mockRes);
       expect(result).toEqual({
         accessToken: 'rotated',
         accountStatus: 'ACTIVE',
@@ -256,24 +265,38 @@ describe('CredentialAuthService', () => {
       });
     });
 
-    it('자격증명이 없으면 INVALID_REFRESH_TOKEN', async () => {
-      credentials.findCredentialByAccountId.mockResolvedValue(null);
-
+    it('refresh 쿠키가 없으면 회전 없이 MISSING_REFRESH_TOKEN', async () => {
       await expect(
         service.refresh({ role: 'SELLER', req: mockReq, res: mockRes }),
       ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
+        new UnauthorizedException(AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN),
       );
+      expect(rotate).not.toHaveBeenCalled();
     });
 
-    it('계정 타입이 경로 role과 다르면 INVALID_REFRESH_TOKEN', async () => {
+    it('활성 세션이 없으면 회전 없이 INVALID_REFRESH_TOKEN', async () => {
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(null);
+
+      await expect(
+        service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
+      ).rejects.toThrow(
+        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
+      );
+      expect(rotate).not.toHaveBeenCalled();
+    });
+
+    it('세션 주인의 타입이 경로 role과 다르면 회전하지 않는다(세션 보존)', async () => {
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
       credentials.findCredentialByAccountId.mockResolvedValue(
         makeCredential({ accountType: AccountType.ADMIN }),
       );
 
       await expect(
-        service.refresh({ role: 'SELLER', req: mockReq, res: mockRes }),
-      ).rejects.toThrow(UnauthorizedException);
+        service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
+      ).rejects.toThrow(
+        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
+      );
+      expect(rotate).not.toHaveBeenCalled();
     });
   });
 
