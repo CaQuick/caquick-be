@@ -51,11 +51,10 @@ export const MAX_DAYS_AHEAD = 365;
 export const MIN_DAILY_CAPACITY = 1;
 export const MAX_DAILY_CAPACITY = 5000;
 
-// ── 콘텐츠 (FAQ / 배너) ──
+// ── 콘텐츠 (FAQ) ──
 
 export const MAX_FAQ_TITLE_LENGTH = 120;
 export const MAX_FAQ_ANSWER_HTML_LENGTH = 100000;
-export const MAX_BANNER_TITLE_LENGTH = 200;
 
 // ── 대화 ──
 

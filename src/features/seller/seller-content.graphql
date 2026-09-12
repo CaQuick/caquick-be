@@ -1,8 +1,6 @@
 extend type Query {
   """내 매장 FAQ 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerFaqTopics: [SellerFaqTopic!]!
-  """내 매장 배너 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerBanners(input: SellerCursorInput): SellerBannerConnection!
   """내 매장 감사 로그 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerAuditLogs(input: SellerAuditLogListInput): SellerAuditLogConnection!
 }
@@ -15,12 +13,6 @@ extend type Mutation {
   """FAQ 항목을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerDeleteFaqTopic(topicId: ID!): Boolean!
 
-  """배너를 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerCreateBanner(input: SellerCreateBannerInput!): SellerBanner!
-  """배너를 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerUpdateBanner(input: SellerUpdateBannerInput!): SellerBanner!
-  """배너를 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerDeleteBanner(bannerId: ID!): Boolean!
 }
 
 """매장 FAQ 항목. 문의 채팅에서 자동응답 카드로 노출된다."""
@@ -64,136 +56,9 @@ input SellerUpdateFaqTopicInput {
   isActive: Boolean
 }
 
-"""
-배너가 노출될 자리. 구매자 API가 실제로 읽는 값은 HOME_MAIN·CATEGORY·SEARCH 셋뿐이고,
-나머지는 아직 소비처가 없는 예약값이다.
-"""
-enum SellerBannerPlacement {
-  """홈 '상황별 인기 케이크' 배너. 카테고리 칩이 '전체'일 때 노출된다."""
-  HOME_MAIN
-  """
-  홈 '상황별 인기 케이크' 배너 중 특정 카테고리 칩을 선택했을 때 노출되는 것.
-  해당 카테고리로 연결된 배너만 뽑히므로 linkCategoryId를 함께 지정해야 한다.
-  카테고리 진입 화면의 배너가 아니다.
-  """
-  CATEGORY
-  """검색 진입 화면 배너 슬롯"""
-  SEARCH
-  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
-  HOME_SUB
-  """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
-  STORE
-}
-
-"""
-매장 배너. linkType이 어느 링크 필드를 읽어야 할지 정한다.
-
-판매자 조회는 저장된 값을 그대로 반환하므로, linkType을 바꾸기 전에 넣어 둔 값이
-다른 링크 필드에 남아 있을 수 있다. 표시·이동 판단은 linkType을 기준으로 한다
-(구매자 조회에서는 서버가 나머지를 null로 비운다).
-"""
-type SellerBanner {
-  id: ID!
-  """노출 슬롯."""
-  placement: SellerBannerPlacement!
-  """배너 문구. 미입력 시 null."""
-  title: String
-  """배너 이미지 URL."""
-  imageUrl: String!
-  """이동 대상 타입. 읽어야 할 링크 필드를 가리킨다(판매자 조회는 다른 필드 값도 그대로 내려준다)."""
-  linkType: BannerLinkType!
-  """이동할 URL. linkType이 URL일 때 쓰는 값."""
-  linkUrl: String
-  """이동할 상품 ID. linkType이 PRODUCT일 때 쓰는 값."""
-  linkProductId: ID
-  """이동할 매장 ID. linkType이 STORE일 때 쓰는 값."""
-  linkStoreId: ID
-  """이동할 카테고리 ID. linkType이 CATEGORY일 때 쓰는 값."""
-  linkCategoryId: ID
-  """노출 시작 일시. null이면 시작 제한 없음."""
-  startsAt: DateTime
-  """노출 종료 일시. null이면 종료 제한 없음."""
-  endsAt: DateTime
-  """같은 슬롯 안에서의 노출 순서. 오름차순."""
-  sortOrder: Int!
-  """노출 여부. false면 기간 안이어도 나오지 않는다."""
-  isActive: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""배너 목록 페이지. 최신 등록이 먼저 온다."""
-type SellerBannerConnection {
-  """배너. 최신 등록이 먼저 온다."""
-  items: [SellerBanner!]!
-  """조건에 맞는 전체 건수(현재 페이지와 무관). 커서 필터는 제외하고 센다."""
-  totalCount: Int!
-  """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
-  hasMore: Boolean!
-  """다음 페이지 커서. null이면 마지막 페이지다."""
-  nextCursor: ID
-}
-
-"""배너 생성 입력. linkType에 맞는 링크 필드를 함께 보내야 한다."""
-input SellerCreateBannerInput {
-  """노출 슬롯."""
-  placement: SellerBannerPlacement!
-  """배너 문구."""
-  title: String
-  """배너 이미지 URL."""
-  imageUrl: String!
-  """이동 대상 타입. 기본 NONE(이동 없음)."""
-  linkType: BannerLinkType = NONE
-  """linkType이 URL일 때 쓸 이동 URL."""
-  linkUrl: String
-  """linkType이 PRODUCT일 때 쓸 상품 ID."""
-  linkProductId: ID
-  """linkType이 STORE일 때 쓸 매장 ID."""
-  linkStoreId: ID
-  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
-  linkCategoryId: ID
-  """노출 시작 일시. 생략 시 시작 제한 없음."""
-  startsAt: DateTime
-  """노출 종료 일시. 생략 시 종료 제한 없음."""
-  endsAt: DateTime
-  """같은 슬롯 안에서의 노출 순서. 구매자 노출은 오름차순(같으면 id 오름차순)으로 1건만 뽑는다. 미지정 시 0."""
-  sortOrder: Int
-  """노출 여부. 기본 true."""
-  isActive: Boolean = true
-}
-
-"""배너 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
-input SellerUpdateBannerInput {
-  bannerId: ID!
-  """노출 슬롯."""
-  placement: SellerBannerPlacement
-  """배너 문구."""
-  title: String
-  """배너 이미지 URL."""
-  imageUrl: String
-  """이동 대상 타입."""
-  linkType: BannerLinkType
-  """linkType이 URL일 때 쓸 이동 URL."""
-  linkUrl: String
-  """linkType이 PRODUCT일 때 쓸 상품 ID."""
-  linkProductId: ID
-  """linkType이 STORE일 때 쓸 매장 ID."""
-  linkStoreId: ID
-  """linkType이 CATEGORY일 때 쓸 카테고리 ID."""
-  linkCategoryId: ID
-  """노출 시작 일시."""
-  startsAt: DateTime
-  """노출 종료 일시."""
-  endsAt: DateTime
-  """같은 슬롯 안에서의 노출 순서."""
-  sortOrder: Int
-  """노출 여부."""
-  isActive: Boolean
-}
-
 """감사 로그가 가리키는 대상 종류."""
 enum SellerAuditTargetType {
-  """매장 정보·영업시간·픽업 정책·FAQ·배너 등 매장 단위 설정과 콘텐츠."""
+  """매장 정보·영업시간·픽업 정책·FAQ 등 매장 단위 설정과 콘텐츠."""
   STORE
   """상품과 그 하위(이미지·옵션·커스텀 템플릿)."""
   PRODUCT

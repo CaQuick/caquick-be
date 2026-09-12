@@ -6,7 +6,6 @@ import {
 } from '@/features/seller/constants/seller.constants';
 import type {
   SellerAuditLogOutput,
-  SellerBannerOutput,
   SellerFaqTopicOutput,
 } from '@/features/seller/types/seller-output.type';
 
@@ -21,24 +20,6 @@ export interface FaqTopicRow {
   store_id: bigint;
   title: string;
   answer_html: string;
-  sort_order: number;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface BannerRow {
-  id: bigint;
-  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE' | 'SEARCH';
-  title: string | null;
-  image_url: string;
-  link_type: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
-  link_url: string | null;
-  link_product_id: bigint | null;
-  link_store_id: bigint | null;
-  link_category_id: bigint | null;
-  starts_at: Date | null;
-  ends_at: Date | null;
   sort_order: number;
   is_active: boolean;
   created_at: Date;
@@ -65,26 +46,6 @@ export function toFaqTopicOutput(row: FaqTopicRow): SellerFaqTopicOutput {
     storeId: row.store_id.toString(),
     title: row.title,
     answerHtml: row.answer_html,
-    sortOrder: row.sort_order,
-    isActive: row.is_active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export function toBannerOutput(row: BannerRow): SellerBannerOutput {
-  return {
-    id: row.id.toString(),
-    placement: row.placement,
-    title: row.title,
-    imageUrl: row.image_url,
-    linkType: row.link_type,
-    linkUrl: row.link_url,
-    linkProductId: row.link_product_id?.toString() ?? null,
-    linkStoreId: row.link_store_id?.toString() ?? null,
-    linkCategoryId: row.link_category_id?.toString() ?? null,
-    startsAt: row.starts_at,
-    endsAt: row.ends_at,
     sortOrder: row.sort_order,
     isActive: row.is_active,
     createdAt: row.created_at,

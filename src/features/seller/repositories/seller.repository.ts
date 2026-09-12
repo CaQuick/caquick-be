@@ -1,11 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  AccountType,
-  AuditTargetType,
-  BannerLinkType,
-  BannerPlacement,
-  Prisma,
-} from '@prisma/client';
+import { AccountType, AuditTargetType, Prisma } from '@prisma/client';
 
 import { SELLER_AUDIT_TARGET_TYPES } from '@/features/seller/constants/seller.constants';
 import { PrismaService } from '@/prisma';
@@ -303,102 +297,6 @@ export class SellerRepository {
   async softDeleteFaqTopic(topicId: bigint): Promise<void> {
     await this.prisma.storeFaqTopic.update({
       where: { id: topicId },
-      data: {
-        deleted_at: new Date(),
-      },
-    });
-  }
-
-  /** 목록과 카운트가 같은 조건을 보도록 where를 한 곳에서 만든다(커서는 페이지 조건이라 제외). */
-  private bannerScopeWhere(storeId: bigint): Prisma.BannerWhereInput {
-    return {
-      OR: [{ link_store_id: storeId }, { link_product: { store_id: storeId } }],
-    };
-  }
-
-  async listBannersByStore(args: {
-    storeId: bigint;
-    limit: number;
-    cursor?: bigint;
-  }) {
-    return this.prisma.banner.findMany({
-      where: {
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...this.bannerScopeWhere(args.storeId),
-      },
-      orderBy: [{ id: 'desc' }],
-      take: args.limit + 1,
-    });
-  }
-
-  /** 배너 전체 건수(커서 무관). */
-  async countBannersByStore(storeId: bigint): Promise<number> {
-    return this.prisma.banner.count({ where: this.bannerScopeWhere(storeId) });
-  }
-
-  async findBannerByIdForStore(args: { bannerId: bigint; storeId: bigint }) {
-    return this.prisma.banner.findFirst({
-      where: {
-        id: args.bannerId,
-        OR: [
-          {
-            link_store_id: args.storeId,
-          },
-          {
-            link_product: {
-              store_id: args.storeId,
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  async createBanner(args: {
-    placement: BannerPlacement;
-    title: string | null;
-    imageUrl: string;
-    linkType: BannerLinkType;
-    linkUrl: string | null;
-    linkProductId: bigint | null;
-    linkStoreId: bigint | null;
-    linkCategoryId: bigint | null;
-    startsAt: Date | null;
-    endsAt: Date | null;
-    sortOrder: number;
-    isActive: boolean;
-  }) {
-    return this.prisma.banner.create({
-      data: {
-        placement: args.placement,
-        title: args.title,
-        image_url: args.imageUrl,
-        link_type: args.linkType,
-        link_url: args.linkUrl,
-        link_product_id: args.linkProductId,
-        link_store_id: args.linkStoreId,
-        link_category_id: args.linkCategoryId,
-        starts_at: args.startsAt,
-        ends_at: args.endsAt,
-        sort_order: args.sortOrder,
-        is_active: args.isActive,
-      },
-    });
-  }
-
-  async updateBanner(args: {
-    bannerId: bigint;
-    data: Prisma.BannerUpdateInput;
-  }) {
-    return this.prisma.banner.update({
-      where: { id: args.bannerId },
-      data: args.data,
-    });
-  }
-
-  async softDeleteBanner(bannerId: bigint): Promise<void> {
-    await this.prisma.banner.update({
-      where: { id: bannerId },
       data: {
         deleted_at: new Date(),
       },
