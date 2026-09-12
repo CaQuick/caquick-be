@@ -63,3 +63,15 @@ export const MAX_CONVERSATION_BODY_TEXT_LENGTH = 2000;
 // 문의 채팅 인사말 템플릿(store.greeting_message VARCHAR(500)과 동일 상한)
 export const MAX_GREETING_MESSAGE_LENGTH = 500;
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;
+
+// ── 감사 로그 ──
+
+/** 판매자 감사 로그 화면이 보여주는 대상 종류. SDL SellerAuditTargetType과 1:1. */
+export const SELLER_AUDIT_TARGET_TYPES = [
+  'STORE',
+  'PRODUCT',
+  'ORDER',
+  'CONVERSATION',
+  'CHANGE_PASSWORD',
+] as const;
+export type SellerAuditTargetType = (typeof SELLER_AUDIT_TARGET_TYPES)[number];

@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
+import { SELLER_AUDIT_TARGET_TYPES } from '@/features/seller/constants/seller.constants';
 import { PrismaService } from '@/prisma';
 
 @Injectable()
@@ -429,7 +430,12 @@ export class SellerRepository {
           { actor_account_id: args.sellerAccountId },
           { store_id: args.storeId },
         ],
-        ...(args.targetType ? { target_type: args.targetType } : {}),
+        // 관리자 조작(REVIEW·ACCOUNT 등)이 매장 ID를 달고 기록돼도 판매자 화면 enum 밖이라 제외한다
+        target_type: {
+          in: args.targetType
+            ? [args.targetType]
+            : [...SELLER_AUDIT_TARGET_TYPES],
+        },
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
@@ -437,46 +443,11 @@ export class SellerRepository {
   }
 }
 
-export function normalizeCursorInput(input?: {
-  limit?: number | null;
-  cursor?: bigint | null;
-}): { limit: number; cursor?: bigint } {
-  const safeLimit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
-  const cursor = input?.cursor ?? undefined;
-  return {
-    limit: safeLimit,
-    ...(cursor ? { cursor } : {}),
-  };
-}
-
-/**
- * limit+1개를 조회한 결과에서 페이지와 다음 커서를 뽑는다.
- *
- * hasMore는 추가 쿼리 없이 나온다 — limit보다 많이 왔으면 다음 페이지가 있다는 뜻이다.
- */
-export function nextCursorOf<T extends { id: bigint }>(
-  rows: T[],
-  limit: number,
-): {
-  items: T[];
-  nextCursor: string | null;
-  hasMore: boolean;
-} {
-  if (rows.length <= limit) {
-    return {
-      items: rows,
-      nextCursor: null,
-      hasMore: false,
-    };
-  }
-
-  const sliced = rows.slice(0, limit);
-  return {
-    items: sliced,
-    hasMore: true,
-    nextCursor: sliced[sliced.length - 1]?.id.toString() ?? null,
-  };
-}
+// 커서 헬퍼는 관리자 목록과 공유하려고 common으로 옮겼다. 판매자 쪽 import 경로는 유지한다.
+export {
+  nextCursorOf,
+  normalizeCursorInput,
+} from '@/common/utils/id-cursor-page';
 
 export function isSellerAccount(accountType: AccountType): boolean {
   return accountType === AccountType.SELLER;

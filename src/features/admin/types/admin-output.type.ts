@@ -1,0 +1,21 @@
+import type { AccountStatus } from '@prisma/client';
+
+export interface AdminAccountOutput {
+  accountId: string;
+  username: string | null;
+  email: string | null;
+  name: string | null;
+  status: AccountStatus;
+  mustChangePassword: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+}
+
+export interface AdminCursorConnection<T> {
+  items: T[];
+  nextCursor: string | null;
+  /** 다음 페이지 존재 여부. limit+1 조회 결과로 판정하므로 추가 쿼리가 없다. */
+  hasMore: boolean;
+  /** 조건에 맞는 전체 건수. 누적형 로그처럼 COUNT가 부담인 목록은 내리지 않는다. */
+  totalCount?: number;
+}

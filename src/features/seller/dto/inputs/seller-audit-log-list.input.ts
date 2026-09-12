@@ -1,18 +1,13 @@
 import { IsIn, IsOptional } from 'class-validator';
 
+import {
+  SELLER_AUDIT_TARGET_TYPES,
+  type SellerAuditTargetType,
+} from '@/features/seller/constants/seller.constants';
 import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
-
-const AUDIT_TARGET_TYPES = [
-  'STORE',
-  'PRODUCT',
-  'ORDER',
-  'CONVERSATION',
-  'CHANGE_PASSWORD',
-] as const;
-type SellerAuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export class SellerAuditLogListInput extends SellerCursorInput {
   @IsOptional()
-  @IsIn(AUDIT_TARGET_TYPES)
+  @IsIn(SELLER_AUDIT_TARGET_TYPES)
   targetType?: SellerAuditTargetType;
 }

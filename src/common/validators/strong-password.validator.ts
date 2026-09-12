@@ -8,17 +8,18 @@ import { Validate, ValidatorConstraint } from 'class-validator';
 /**
  * 강력한 비밀번호 정책 검증.
  *
- * 왜: 판매자 비밀번호 변경 등에서 길이 8~64 + 소문자/대문자/숫자/특수문자
+ * 왜: 판매자·관리자 비밀번호 설정에서 길이 8~64 + 소문자/대문자/숫자/특수문자
  * 4종 포함을 요구한다. 기존 auth.service.assertStrongPassword 의 로직을
  * 그대로 옮겨와 DTO 레이어에서 일원화.
  *
- * 길이 판정은 trim 후 기준 (기존 동작 호환).
+ * 길이는 입력 원문(raw) 기준이다 — 저장되는 값도 원문이고 로그인 DTO(CredentialLoginInput)도
+ * 원문 길이 8~64를 보므로, trim 기준으로 통과시키면 로그인이 거절되는 비밀번호가 만들어진다.
  */
 @ValidatorConstraint({ name: 'IsStrongPassword', async: false })
 export class IsStrongPasswordConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
     if (typeof value !== 'string') return false;
-    const pw = value.trim();
+    const pw = value;
     if (pw.length < 8 || pw.length > 64) return false;
     return (
       /[a-z]/.test(pw) &&

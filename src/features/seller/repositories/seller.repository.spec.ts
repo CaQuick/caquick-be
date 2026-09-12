@@ -652,6 +652,31 @@ describe('SellerRepository (real DB)', () => {
       expect(filtered.every((r) => r.target_type === 'ORDER')).toBe(true);
     });
 
+    it('관리자 조작 대상 종류(ACCOUNT 등)는 매장 ID가 달려 있어도 제외한다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      await prisma.auditLog.create({
+        data: {
+          actor_account_id: me.account.id,
+          store_id: me.store.id,
+          target_type: 'ACCOUNT',
+          target_id: me.account.id,
+          action: 'STATUS_CHANGE',
+        },
+      });
+      const mine = await createLog({
+        actorAccountId: me.account.id,
+        storeId: me.store.id,
+      });
+
+      const rows = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 100,
+      });
+
+      expect(rows.map((r) => r.id)).toEqual([mine.id]);
+    });
+
     it('cursor / limit', async () => {
       const me = await setupSellerWithStore(prisma);
       for (let i = 0; i < 3; i++) {

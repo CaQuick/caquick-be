@@ -41,10 +41,15 @@ describe('IsStrongPassword', () => {
     expect(errors[0].property).toBe('password');
   });
 
-  it('trim 후 길이 판정: 앞뒤 공백만으로 길이 채울 수 없음', async () => {
-    const dto = build({ password: '   Aa1!aa   ' }); // 12 chars raw, 7 trimmed
-    const errors = await validate(dto);
-    expect(errors).toHaveLength(1);
+  it('길이는 원문 기준: 앞뒤 공백을 포함해 65자면 거절(로그인 DTO의 원문 길이 검사와 일치)', async () => {
+    const core = 'Aa1!' + 'b'.repeat(60); // 64
+    expect(await validate(build({ password: core }))).toHaveLength(0);
+    expect(await validate(build({ password: core + ' ' }))).toHaveLength(1);
+  });
+
+  it('원문 길이가 8 이상이면 앞뒤 공백이 있어도 허용한다(저장·로그인 모두 원문)', async () => {
+    const dto = build({ password: ' Aa1!aaa ' }); // 9 chars raw
+    expect(await validate(dto)).toHaveLength(0);
   });
 
   it('문자열이 아닌 값은 거절한다', async () => {
