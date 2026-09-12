@@ -73,6 +73,11 @@ describe('AdminProductService (real DB)', () => {
         storeId: storeB.id.toString(),
       });
       expect(byStore.totalCount).toBe(2);
+      // "0"은 유효한 ID라 조건이 빠지지 않고 빈 결과여야 한다
+      expect(
+        (await service.adminProducts(await admin(), { storeId: '0' }))
+          .totalCount,
+      ).toBe(0);
 
       const inactive = await service.adminProducts(await admin(), {
         isActive: false,
@@ -202,6 +207,44 @@ describe('AdminProductService (real DB)', () => {
           isActive: false,
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('삭제된 상품은 잠금 단계에서 NotFoundException(되살리지 않음)', async () => {
+      const product = await createProduct(prisma, { is_active: false });
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { deleted_at: new Date() },
+      });
+      await expect(
+        service.adminSetProductActive(await admin(), {
+          productId: product.id.toString(),
+          isActive: true,
+        }),
+      ).rejects.toThrow(NotFoundException);
+      const row = await prisma.product.findUniqueOrThrow({
+        where: { id: product.id },
+      });
+      expect(row.is_active).toBe(false);
+    });
+
+    it('두 관리자가 동시에 같은 값으로 토글해도 감사는 1건', async () => {
+      const product = await createProduct(prisma, { is_active: true });
+      const [a, b] = [await admin(), await admin()];
+      await Promise.all([
+        service.adminSetProductActive(a, {
+          productId: product.id.toString(),
+          isActive: false,
+        }),
+        service.adminSetProductActive(b, {
+          productId: product.id.toString(),
+          isActive: false,
+        }),
+      ]);
+      expect(
+        await prisma.auditLog.count({
+          where: { target_type: 'PRODUCT', target_id: product.id },
+        }),
+      ).toBe(1);
     });
 
     it('감사 기록이 실패하면 토글도 롤백된다(같은 트랜잭션)', async () => {

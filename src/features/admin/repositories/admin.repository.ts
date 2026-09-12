@@ -789,7 +789,7 @@ export class AdminRepository {
   }): Prisma.ProductWhereInput {
     return {
       ...(filter.keyword ? { name: { contains: filter.keyword } } : {}),
-      ...(filter.storeId ? { store_id: filter.storeId } : {}),
+      ...(filter.storeId !== undefined ? { store_id: filter.storeId } : {}),
       ...(filter.isActive !== undefined ? { is_active: filter.isActive } : {}),
     };
   }
@@ -838,19 +838,32 @@ export class AdminRepository {
     });
   }
 
-  /** 노출 토글 + 감사 기록을 한 트랜잭션으로. */
+  /**
+   * 노출 토글. 잠금 뒤 트랜잭션 안에서 현재 값을 보고, 이미 목표값이면 갱신·감사 없이 그대로
+   * 돌려준다. 없거나 그 사이 삭제됐으면 null(되살리지 않는다).
+   */
   async setProductActive(
     args: { productId: bigint; isActive: boolean },
-    audit: (row: AdminProductRow) => AuditEntry,
-  ): Promise<AdminProductRow> {
+    audit: (before: AdminProductRow, after: AdminProductRow) => AuditEntry,
+  ): Promise<{ row: AdminProductRow; changed: boolean } | null> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.product.update({
+      if (!(await this.lockActiveRow(tx, 'product', args.productId))) {
+        return null;
+      }
+      const before = await tx.product.findFirstOrThrow({
+        where: { id: args.productId },
+        include: productInclude,
+      });
+      if (before.is_active === args.isActive) {
+        return { row: before, changed: false };
+      }
+      const after = await tx.product.update({
         where: { id: args.productId },
         data: { is_active: args.isActive },
         include: productInclude,
       });
-      await this.auditLogs.createAuditLog(audit(row), tx);
-      return row;
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return { row: after, changed: true };
     });
   }
 }
