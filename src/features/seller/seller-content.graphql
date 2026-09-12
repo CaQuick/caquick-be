@@ -100,7 +100,7 @@ type SellerBanner {
   title: String
   """배너 이미지 URL."""
   imageUrl: String!
-  """이동 대상 타입. 이 값에 따라 아래 링크 필드 중 하나만 채워진다."""
+  """이동 대상 타입. 읽어야 할 링크 필드를 가리킨다(판매자 조회는 다른 필드 값도 그대로 내려준다)."""
   linkType: BannerLinkType!
   """이동할 URL. linkType이 URL일 때 쓰는 값."""
   linkUrl: String

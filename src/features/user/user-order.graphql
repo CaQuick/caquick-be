@@ -111,7 +111,10 @@ type MyOrderItemDetail {
   productId: ID!
   """상품명(주문 당시)."""
   productName: String!
-  """대표 이미지 URL(주문 당시). 이미지가 없으면 null."""
+  """
+  대표 상품 이미지 URL. 주문 당시 스냅샷이 아니라 현재 상품의 첫 이미지를 읽는다 —
+  판매자가 이미지를 바꾸거나 지우면 값이 달라지거나 null이 된다.
+  """
   representativeImageUrl: String
   """주문 수량."""
   quantity: Int!

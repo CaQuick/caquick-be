@@ -48,19 +48,26 @@ type SellerConversationConnection {
   nextCursor: String
 }
 
-"""대화 메시지 1건. bodyFormat에 따라 bodyText 또는 bodyHtml 하나만 채워진다."""
+"""
+대화 메시지 1건. bodyFormat이 읽어야 할 본문 필드를 가리킨다.
+발송 시 다른 형식의 본문을 함께 넘기면 그대로 저장되므로, 두 필드가 모두 채워져
+있을 수 있다 — 표시할 본문은 bodyFormat으로 고른다.
+"""
 type SellerConversationMessage {
   id: ID!
   conversationId: ID!
   """발신 주체. 말풍선 좌우 배치 기준이다."""
   senderType: ConversationSenderType!
-  """보낸 계정 ID. senderType이 SYSTEM이면 null이다."""
+  """
+  보낸 계정 ID. 사람이 보낸 메시지에만 채워진다.
+  시스템 메시지는 물론, 인사말·FAQ 자동응답처럼 서버가 만든 STORE 메시지도 null이다.
+  """
   senderAccountId: ID
-  """본문 형식. 이 값에 따라 bodyText·bodyHtml 중 하나가 채워진다."""
+  """본문 형식. 읽어야 할 본문 필드를 가리킨다(다른 쪽에도 값이 남아 있을 수 있다)."""
   bodyFormat: ConversationBodyFormat!
-  """평문 본문. bodyFormat이 TEXT일 때 채워진다."""
+  """평문 본문. bodyFormat이 TEXT면 이 값을 쓴다."""
   bodyText: String
-  """서식 본문. bodyFormat이 HTML일 때 채워진다."""
+  """서식 본문. bodyFormat이 HTML이면 이 값을 쓴다."""
   bodyHtml: String
   """발송 시각."""
   createdAt: DateTime!
@@ -84,7 +91,7 @@ type SellerConversationMessageConnection {
 """
 input SellerSendConversationMessageInput {
   conversationId: ID!
-  """본문 형식. 이 값에 따라 아래 둘 중 어느 필드가 필수인지 정해진다."""
+  """본문 형식. 이 값에 해당하는 본문 필드가 필수다(다른 쪽을 함께 넘기면 그대로 저장된다)."""
   bodyFormat: ConversationBodyFormat!
   """평문 본문(최대 2000자). bodyFormat이 TEXT면 필수."""
   bodyText: String
