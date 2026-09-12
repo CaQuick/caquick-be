@@ -25,6 +25,30 @@ export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
 
+/** 구매자 계정 행 + 프로필·연동 소셜·활동 집계. */
+export type AdminUserRow = Prisma.AccountGetPayload<{
+  include: typeof userAccountInclude;
+}>;
+
+const userAccountInclude = {
+  user_profile: {
+    select: {
+      nickname: true,
+      phone_number: true,
+      onboarding_completed_at: true,
+      deleted_at: true,
+    },
+  },
+  account_identities: { select: { provider: true, deleted_at: true } },
+  // 집계는 삭제 제외(relation count filter)
+  _count: {
+    select: {
+      orders: { where: activeWhere },
+      reviews: { where: activeWhere },
+    },
+  },
+} as const;
+
 /** 판매자 계정 행 + 자격증명·프로필·매장 요약. nested는 soft-delete 자동 필터 밖이라 deleted_at을 함께 읽는다. */
 export type AdminSellerRow = Prisma.AccountGetPayload<{
   include: typeof sellerAccountInclude;
@@ -458,6 +482,117 @@ export class AdminRepository {
         data: { revoked_at: now, updated_at: now },
       });
       await this.auditLogs.createAuditLog(args.audit, tx);
+    });
+  }
+
+  // ── 구매자 계정 ──
+
+  private userFilterWhere(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Prisma.AccountWhereInput {
+    return {
+      account_type: AccountType.USER,
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.keyword
+        ? {
+            OR: [
+              { email: { contains: filter.keyword } },
+              { name: { contains: filter.keyword } },
+              {
+                user_profile: {
+                  ...activeWhere,
+                  nickname: { contains: filter.keyword },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  async listUserAccounts(args: {
+    keyword?: string;
+    status?: AccountStatus;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminUserRow[]> {
+    return this.prisma.account.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.userFilterWhere(args),
+      },
+      include: userAccountInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countUserAccounts(filter: {
+    keyword?: string;
+    status?: AccountStatus;
+  }): Promise<number> {
+    return this.prisma.account.count({ where: this.userFilterWhere(filter) });
+  }
+
+  async findUserAccountById(accountId: bigint): Promise<AdminUserRow | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId, account_type: AccountType.USER },
+      include: userAccountInclude,
+    });
+  }
+
+  // ── 계정 상태 ──
+
+  async findAccountForStatusChange(accountId: bigint) {
+    return this.prisma.account.findFirst({
+      where: { id: accountId },
+      select: {
+        id: true,
+        account_type: true,
+        status: true,
+        store: { select: { id: true } },
+      },
+    });
+  }
+
+  /**
+   * 상태 변경 + (정지 시) 세션 폐기 + 감사 기록을 한 트랜잭션으로.
+   * 갱신은 기대한 출발 상태(from)일 때만 적용한다 — 두 관리자가 동시에 정지하면 서비스의 사전
+   * 검사는 둘 다 통과하므로, 여기서 조건부 갱신으로 하나만 커밋·감사되게 한다.
+   * @returns changed=false면 이미 목표 상태였다(멱등, 감사 없음)
+   */
+  async updateAccountStatus(args: {
+    accountId: bigint;
+    from: AccountStatus;
+    to: AccountStatus;
+    revokeSessions: boolean;
+    audit: AuditEntry;
+    /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 메시지 */
+    invalidTransitionMessage: string;
+  }): Promise<{ changed: boolean }> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.account.updateMany({
+        where: { id: args.accountId, status: args.from, ...activeWhere },
+        data: { status: args.to, updated_at: now },
+      });
+      if (updated.count === 0) {
+        const current = await tx.account.findFirst({
+          where: { id: args.accountId },
+          select: { status: true },
+        });
+        if (current?.status === args.to) return { changed: false };
+        throw new BadRequestException(args.invalidTransitionMessage);
+      }
+      if (args.revokeSessions) {
+        await tx.authRefreshSession.updateMany({
+          where: { account_id: args.accountId, revoked_at: null },
+          data: { revoked_at: now, updated_at: now },
+        });
+      }
+      await this.auditLogs.createAuditLog(args.audit, tx);
+      return { changed: true };
     });
   }
 }

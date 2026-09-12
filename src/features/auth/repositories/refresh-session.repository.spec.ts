@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
@@ -185,6 +186,56 @@ describe('RefreshSessionRepository (real DB)', () => {
         where: { account_id: account.id, revoked_at: null },
       });
       expect(active).toHaveLength(0);
+    });
+  });
+
+  describe('ACTIVE 계정에만 발급·회전', () => {
+    it.each(['SUSPENDED', 'PENDING'] as const)(
+      '%s 계정에는 세션을 만들지 않는다(ForbiddenException)',
+      async (status) => {
+        const account = await createAccount(prisma, { status });
+        await expect(
+          repo.createRefreshSession({
+            accountId: account.id,
+            tokenHash: 'h'.repeat(64),
+            expiresAt: new Date(Date.now() + 60_000),
+          }),
+        ).rejects.toThrow(ForbiddenException);
+        expect(
+          await prisma.authRefreshSession.count({
+            where: { account_id: account.id },
+          }),
+        ).toBe(0);
+      },
+    );
+
+    it('정지된 계정의 세션은 회전되지 않고 기존 세션도 그대로 남는다(정지 트랜잭션이 폐기할 몫)', async () => {
+      const account = await createAccount(prisma, { status: 'ACTIVE' });
+      const session = await createRefreshSession(prisma, {
+        account_id: account.id,
+      });
+      await prisma.account.update({
+        where: { id: account.id },
+        data: { status: 'SUSPENDED' },
+      });
+
+      await expect(
+        repo.rotateRefreshSession({
+          currentSessionId: session.id,
+          accountId: account.id,
+          newTokenHash: 'n'.repeat(64),
+          newExpiresAt: new Date(Date.now() + 60_000),
+        }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(
+        await prisma.authRefreshSession.count({
+          where: { account_id: account.id },
+        }),
+      ).toBe(1);
+      const same = await prisma.authRefreshSession.findUniqueOrThrow({
+        where: { id: session.id },
+      });
+      expect(same.revoked_at).toBeNull();
     });
   });
 });

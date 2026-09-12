@@ -9,6 +9,15 @@ export const INVALID_CURSOR = 'Invalid cursor.';
 
 export const USERNAME_TAKEN = 'Username is already taken.';
 export const SELLER_NOT_FOUND = 'Seller account not found.';
+export const USER_NOT_FOUND = 'User account not found.';
+export const CANNOT_CHANGE_OWN_STATUS =
+  'Cannot change your own account status.';
+export const CANNOT_CHANGE_ADMIN_STATUS =
+  'Cannot change the status of an ADMIN account.';
+export const ONLY_ACTIVE_CAN_BE_SUSPENDED =
+  'Only an ACTIVE account can be suspended.';
+export const ONLY_SUSPENDED_CAN_BE_REINSTATED =
+  'Only a SUSPENDED account can be reinstated.';
 
 // ── 매장 ──
 
