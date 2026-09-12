@@ -86,7 +86,7 @@ function main(): void {
   const files = loadSdlFiles();
   if (files.length === 0) {
     // 검사 대상이 없으면 모든 카테고리가 0/0이 되고 percentOf가 100을 돌려줘
-    // 위반 없이 "통과"가 찍힌다. 이 게이트가 막으려는 것과 같은 종류의 거짓 안전이다.
+    // 위반 없이 "통과"가 찍힌다.
     console.error(
       `[docs:check] SDL 파일을 찾지 못했습니다: ${SDL_ROOT}. ` +
         '경로가 옳은지 확인하라 — 대상이 없으면 커버리지는 의미가 없다.',
