@@ -22,8 +22,8 @@ describe('CredentialLoginInput', () => {
     expect(errors[0].property).toBe('username');
   });
 
-  it('username 길이 50 초과 거절', async () => {
-    const dto = build({ username: 'a'.repeat(51), password: 'Aa1!aaaa' });
+  it('username 길이 80 초과 거절', async () => {
+    const dto = build({ username: 'a'.repeat(81), password: 'Aa1!aaaa' });
     const errors = await validate(dto);
     expect(errors).toHaveLength(1);
     expect(errors[0].property).toBe('username');

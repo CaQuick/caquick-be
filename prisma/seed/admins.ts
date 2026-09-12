@@ -6,6 +6,7 @@
 import type { PrismaClient } from '@prisma/client';
 import argon2 from 'argon2';
 
+import { assertSeedCredential } from './credential-policy';
 import { SEED_ADMIN_EMAIL_PREFIX } from './idempotent';
 
 export async function seedAdmins(prisma: PrismaClient): Promise<void> {
@@ -17,6 +18,8 @@ export async function seedAdmins(prisma: PrismaClient): Promise<void> {
     );
     return;
   }
+
+  assertSeedCredential({ username, password });
 
   const admin = await prisma.account.create({
     data: {

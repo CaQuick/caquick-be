@@ -12,6 +12,7 @@ import type { PrismaClient, Product, Store } from '@prisma/client';
 import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';
+import { assertSeedCredential } from './credential-policy';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
 
 /**
@@ -27,6 +28,7 @@ async function seedSellerCredential(
 ): Promise<void> {
   const password = process.env.SELLER_SEED_PASSWORD;
   if (!password) return;
+  assertSeedCredential({ username, password });
   await prisma.accountCredential.create({
     data: {
       account_id: accountId,

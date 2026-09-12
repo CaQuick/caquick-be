@@ -37,6 +37,13 @@ import {
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /**
+ * 거부 경로의 더미 검증용 argon2id 해시. 실제 비밀번호와 무관하며 검증은 항상 실패한다.
+ * 존재하지 않는 username을 즉시 거부하면 응답 시간 차이로 관리자 username을 열거할 수 있다.
+ */
+const TIMING_EQUALIZER_HASH =
+  '$argon2id$v=19$m=65536,p=4,t=3$w0khoJExaZKsA5QJQiOJQA$6EQ02PMC/KY7CFsHpVDIuZFuTkq7myZhnEPkywumqSs';
+
+/**
  * username/password 자격증명 로그인/refresh/logout/changePassword 전담 서비스.
  * SELLER·ADMIN 공용 — 계정 타입은 호출부(REST 경로)가 role로 고정한다.
  */
@@ -78,15 +85,13 @@ export class CredentialAuthService implements ICredentialAuthService {
     const credential =
       await this.credentials.findCredentialByUsername(username);
     // 존재 여부·타입 불일치·비밀번호 오류를 같은 메시지로 뭉개 계정 열거를 막는다.
-    if (!credential || credential.account.account_type !== args.role) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
-    }
-
+    // 응답 시간으로도 구분되지 않게, 거부 경로에서도 argon2.verify를 한 번 태운다.
+    const roleMatches = credential?.account.account_type === args.role;
     const isPasswordValid = await argon2.verify(
-      credential.password_hash,
+      roleMatches ? credential.password_hash : TIMING_EQUALIZER_HASH,
       password,
     );
-    if (!isPasswordValid) {
+    if (!credential || !roleMatches || !isPasswordValid) {
       throw new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 

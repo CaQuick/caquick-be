@@ -190,12 +190,16 @@ describe('CredentialAuthService', () => {
       expect(credentials.findCredentialByUsername).not.toHaveBeenCalled();
     });
 
-    it('존재하지 않는 username이면 INVALID_CREDENTIALS', async () => {
+    it('존재하지 않는 username이면 더미 해시로 verify를 태운 뒤 INVALID_CREDENTIALS', async () => {
+      const verify = jest.spyOn(argon2, 'verify').mockResolvedValue(true);
       credentials.findCredentialByUsername.mockResolvedValue(null);
 
       await expect(login({ username: 'nonexistent' })).rejects.toThrow(
         new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
       );
+      // 응답 시간 평준화 — 실제 해시가 없어도 verify는 1회 실행된다
+      expect(verify).toHaveBeenCalledTimes(1);
+      expect(credentials.updateLastLogin).not.toHaveBeenCalled();
     });
 
     // 자격증명 타입 × 요청 경로 role 전수. 대각선만 통과한다.
@@ -205,17 +209,18 @@ describe('CredentialAuthService', () => {
       [AccountType.USER, 'SELLER'],
       [AccountType.USER, 'ADMIN'],
     ])(
-      '자격증명 계정 타입(%s)이 경로 role(%s)과 다르면 비밀번호 검증 없이 INVALID_CREDENTIALS',
+      '자격증명 계정 타입(%s)이 경로 role(%s)과 다르면 실제 해시를 쓰지 않고 INVALID_CREDENTIALS',
       async (accountType, role) => {
         const verify = jest.spyOn(argon2, 'verify').mockResolvedValue(true);
-        credentials.findCredentialByUsername.mockResolvedValue(
-          makeCredential({ accountType }),
-        );
+        const credential = makeCredential({ accountType });
+        credentials.findCredentialByUsername.mockResolvedValue(credential);
 
         await expect(login({ role })).rejects.toThrow(
           new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
         );
-        expect(verify).not.toHaveBeenCalled();
+        // 더미 해시로 1회 — 비밀번호가 맞아도(verify=true) 거부되고, 실제 해시는 쓰이지 않는다
+        expect(verify).toHaveBeenCalledTimes(1);
+        expect(verify.mock.calls[0][0]).not.toBe(credential.password_hash);
         expect(credentials.updateLastLogin).not.toHaveBeenCalled();
       },
     );
