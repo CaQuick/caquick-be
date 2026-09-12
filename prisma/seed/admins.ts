@@ -35,7 +35,6 @@ export async function seedAdmins(prisma: PrismaClient): Promise<void> {
       must_change_password: false,
     },
   });
-  console.log(
-    `[seed]   관리자 accountId=${admin.id.toString()} username=${username}`,
-  );
+  // username은 env에서 온 값이라 로그에 남기지 않는다(CodeQL: clear-text logging)
+  console.log(`[seed]   관리자 accountId=${admin.id.toString()}`);
 }
