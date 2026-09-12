@@ -3,14 +3,11 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { ProductRepository } from '@/features/product';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerContentMutationResolver } from '@/features/seller/resolvers/seller-content-mutation.resolver';
 import { SellerContentQueryResolver } from '@/features/seller/resolvers/seller-content-query.resolver';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
 import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
-import { SellerBannerService } from '@/features/seller/services/seller-banner.service';
-import { SELLER_BANNER_SERVICE } from '@/features/seller/services/seller-banner.service.interface';
 import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
 import { SELLER_FAQ_SERVICE } from '@/features/seller/services/seller-faq.service.interface';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -33,15 +30,10 @@ describe('Seller Content Resolvers (real DB)', () => {
           useClass: SellerFaqService,
         },
         {
-          provide: SELLER_BANNER_SERVICE,
-          useClass: SellerBannerService,
-        },
-        {
           provide: SELLER_AUDIT_SERVICE,
           useClass: SellerAuditService,
         },
         SellerRepository,
-        ProductRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
@@ -88,21 +80,5 @@ describe('Seller Content Resolvers (real DB)', () => {
         othersFaq.id.toString(),
       ),
     ).rejects.toThrow(NotFoundException);
-  });
-
-  it('Query.sellerBanners: 판매자 본인 store 배너만 반환', async () => {
-    const { account, store } = await setupSellerWithStore(prisma);
-    await prisma.banner.create({
-      data: {
-        placement: 'STORE',
-        image_url: 'https://i.example/a.png',
-        link_type: 'STORE',
-        link_store_id: store.id,
-      },
-    });
-    const result = await queryResolver.sellerBanners({
-      accountId: account.id.toString(),
-    });
-    expect(result.items).toHaveLength(1);
   });
 });
