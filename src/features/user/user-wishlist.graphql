@@ -16,7 +16,7 @@ extend type Mutation {
 input MyWishlistInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
   """특정 매장의 찜 상품만 조회(매장별 보기 → 매장 선택 화면)."""
   storeId: ID
@@ -63,7 +63,7 @@ type WishlistItemSummary {
 input MyWishlistStoreGroupsInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 

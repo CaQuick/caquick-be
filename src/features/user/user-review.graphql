@@ -11,7 +11,7 @@ extend type Query {
 input MyReviewableOrderItemsInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 
@@ -54,7 +54,7 @@ extend type Mutation {
 input MyReviewsInput {
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
-  """한 번에 가져올 개수. 기본 20."""
+  """한 번에 가져올 개수. 기본 20, 1~50만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
 }
 
@@ -144,7 +144,7 @@ type ReviewMediaUploadUrl {
 
 """
 리뷰 작성 입력. 픽업 완료(PICKED_UP)된 주문 품목에만 쓸 수 있고, 품목당 1건이다.
-미디어는 이미지 최대 10장 또는 영상 1개까지 허용된다.
+미디어는 이미지 최대 10장과 영상 1개를 각각 셈하며, 둘을 섞어 최대 11개까지 넣을 수 있다.
 """
 input WriteReviewInput {
   """리뷰 대상 주문 품목 ID. myReviewableOrderItems가 준 값을 그대로 쓴다."""
@@ -157,7 +157,9 @@ input WriteReviewInput {
   media: [WriteReviewMediaInput!]
 }
 
-"""리뷰 첨부 미디어 입력. createReviewMediaUploadUrl로 먼저 업로드한 뒤 그 결과를 넘긴다."""
+"""
+리뷰 첨부 미디어 입력. createReviewMediaUploadUrl로 먼저 업로드한 뒤 그 결과를 넘긴다.
+"""
 input WriteReviewMediaInput {
   """미디어 종류."""
   mediaType: ReviewMediaType!
@@ -165,6 +167,6 @@ input WriteReviewMediaInput {
   mediaUrl: String!
   """동영상 대표 프레임 URL."""
   thumbnailUrl: String
-  """노출 순서. 오름차순."""
+  """노출 순서. 서버는 이 값을 쓰지 않고 배열에 담긴 순서를 그대로 저장한다."""
   sortOrder: Int!
 }
