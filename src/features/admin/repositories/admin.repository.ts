@@ -29,6 +29,22 @@ export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
 
+/** 카테고리 행 + 연결 상품 수(삭제 연결 제외). */
+export type AdminCategoryRow = Prisma.CategoryGetPayload<{
+  include: typeof categoryInclude;
+}>;
+/** 태그 행 + 연결 상품 수(삭제 연결 제외). */
+export type AdminTagRow = Prisma.TagGetPayload<{
+  include: typeof tagInclude;
+}>;
+
+const categoryInclude = {
+  _count: { select: { product_categories: { where: activeWhere } } },
+} as const;
+const tagInclude = {
+  _count: { select: { product_tags: { where: activeWhere } } },
+} as const;
+
 /** 상품 행 + 소속 매장명. */
 export type AdminProductRow = Prisma.ProductGetPayload<{
   include: typeof productInclude;
@@ -864,6 +880,230 @@ export class AdminRepository {
       });
       await this.auditLogs.createAuditLog(audit(before, after), tx);
       return { row: after, changed: true };
+    });
+  }
+
+  // ── 카테고리 ──
+
+  async listCategories(args: {
+    categoryType?: CategoryType;
+    includeInactive: boolean;
+  }): Promise<AdminCategoryRow[]> {
+    return this.prisma.category.findMany({
+      where: {
+        ...(args.categoryType ? { category_type: args.categoryType } : {}),
+        ...(args.includeInactive ? {} : { is_active: true }),
+      },
+      include: categoryInclude,
+      orderBy: [{ category_type: 'asc' }, { sort_order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async findCategoryById(categoryId: bigint): Promise<AdminCategoryRow | null> {
+    return this.prisma.category.findFirst({
+      where: { id: categoryId },
+      include: categoryInclude,
+    });
+  }
+
+  /** 활성(미삭제) 행 기준 이름 충돌. 삭제 행은 createOrRestore가 복구 대상으로 본다. */
+  async existsActiveCategoryName(
+    categoryType: CategoryType,
+    name: string,
+  ): Promise<boolean> {
+    return (
+      (await this.prisma.category.findFirst({
+        where: { category_type: categoryType, name },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  /**
+   * 같은 (type, name)의 삭제 행이 있으면 복구하고(unique 인덱스가 삭제 행도 세므로 새 행을 만들 수
+   * 없다), 없으면 생성한다. 상품 연결은 복구하지 않는다. 감사 기록과 한 트랜잭션.
+   */
+  async createOrRestoreCategory(
+    data: {
+      category_type: CategoryType;
+      name: string;
+      description: string | null;
+      sort_order: number;
+      is_active: boolean;
+    },
+    audit: (row: AdminCategoryRow) => AuditEntry,
+  ): Promise<AdminCategoryRow> {
+    return this.prisma.$transaction(async (tx) => {
+      // deleted_at 조건을 명시해 soft-delete 자동 필터를 우회한다(삭제 행 탐색)
+      const deleted = await tx.category.findFirst({
+        where: {
+          category_type: data.category_type,
+          name: data.name,
+          deleted_at: { not: null },
+        },
+        select: { id: true },
+      });
+      const row = deleted
+        ? await tx.category.update({
+            where: { id: deleted.id },
+            data: { ...data, deleted_at: null },
+            include: categoryInclude,
+          })
+        : await tx.category.create({ data, include: categoryInclude });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
+    });
+  }
+
+  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
+  async updateCategory(
+    args: { categoryId: bigint; data: Prisma.CategoryUpdateInput },
+    audit: (before: AdminCategoryRow, after: AdminCategoryRow) => AuditEntry,
+  ): Promise<AdminCategoryRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'category', args.categoryId))) {
+        return null;
+      }
+      const before = await tx.category.findFirstOrThrow({
+        where: { id: args.categoryId },
+        include: categoryInclude,
+      });
+      const after = await tx.category.update({
+        where: { id: args.categoryId },
+        data: args.data,
+        include: categoryInclude,
+      });
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return after;
+    });
+  }
+
+  /** 잠금 → soft-delete + 상품 연결 soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
+  async softDeleteCategory(
+    categoryId: bigint,
+    audit: (before: AdminCategoryRow) => AuditEntry,
+  ): Promise<boolean> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'category', categoryId))) return false;
+      const before = await tx.category.findFirstOrThrow({
+        where: { id: categoryId },
+        include: categoryInclude,
+      });
+      await tx.category.update({
+        where: { id: categoryId },
+        data: { deleted_at: now },
+      });
+      await tx.productCategory.updateMany({
+        where: { category_id: categoryId, ...activeWhere },
+        data: { deleted_at: now },
+      });
+      await this.auditLogs.createAuditLog(audit(before), tx);
+      return true;
+    });
+  }
+
+  // ── 태그 ──
+
+  async listTags(args: {
+    keyword?: string;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminTagRow[]> {
+    return this.prisma.tag.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...(args.keyword ? { name: { contains: args.keyword } } : {}),
+      },
+      include: tagInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countTags(filter: { keyword?: string }): Promise<number> {
+    return this.prisma.tag.count({
+      where: filter.keyword ? { name: { contains: filter.keyword } } : {},
+    });
+  }
+
+  async findTagById(tagId: bigint): Promise<AdminTagRow | null> {
+    return this.prisma.tag.findFirst({
+      where: { id: tagId },
+      include: tagInclude,
+    });
+  }
+
+  async existsActiveTagName(name: string): Promise<boolean> {
+    return (
+      (await this.prisma.tag.findFirst({
+        where: { name },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  async createOrRestoreTag(
+    name: string,
+    audit: (row: AdminTagRow) => AuditEntry,
+  ): Promise<AdminTagRow> {
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.tag.findFirst({
+        where: { name, deleted_at: { not: null } },
+        select: { id: true },
+      });
+      const row = deleted
+        ? await tx.tag.update({
+            where: { id: deleted.id },
+            data: { deleted_at: null },
+            include: tagInclude,
+          })
+        : await tx.tag.create({ data: { name }, include: tagInclude });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
+    });
+  }
+
+  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
+  async updateTag(
+    args: { tagId: bigint; name: string },
+    audit: (before: AdminTagRow, after: AdminTagRow) => AuditEntry,
+  ): Promise<AdminTagRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'tag', args.tagId))) return null;
+      const before = await tx.tag.findFirstOrThrow({
+        where: { id: args.tagId },
+        include: tagInclude,
+      });
+      const after = await tx.tag.update({
+        where: { id: args.tagId },
+        data: { name: args.name },
+        include: tagInclude,
+      });
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return after;
+    });
+  }
+
+  /** 잠금 → soft-delete + 상품 연결 soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
+  async softDeleteTag(
+    tagId: bigint,
+    audit: (before: AdminTagRow) => AuditEntry,
+  ): Promise<boolean> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'tag', tagId))) return false;
+      const before = await tx.tag.findFirstOrThrow({
+        where: { id: tagId },
+        include: tagInclude,
+      });
+      await tx.tag.update({ where: { id: tagId }, data: { deleted_at: now } });
+      await tx.productTag.updateMany({
+        where: { tag_id: tagId, ...activeWhere },
+        data: { deleted_at: now },
+      });
+      await this.auditLogs.createAuditLog(audit(before), tx);
+      return true;
     });
   }
 }
