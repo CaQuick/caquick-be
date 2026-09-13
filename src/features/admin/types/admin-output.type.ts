@@ -304,3 +304,8 @@ export interface AdminOrderDetailOutput {
     note: string | null;
   }[];
 }
+
+export interface AdminSendNotificationResultOutput {
+  sentCount: number;
+  skippedAccountIds: string[];
+}

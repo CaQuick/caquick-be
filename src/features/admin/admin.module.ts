@@ -7,6 +7,7 @@ import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-c
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
 import { AdminModerationMutationResolver } from '@/features/admin/resolvers/admin-moderation-mutation.resolver';
 import { AdminModerationQueryResolver } from '@/features/admin/resolvers/admin-moderation-query.resolver';
+import { AdminNotificationMutationResolver } from '@/features/admin/resolvers/admin-notification-mutation.resolver';
 import { AdminOrderMutationResolver } from '@/features/admin/resolvers/admin-order-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/admin/resolvers/admin-order-query.resolver';
 import { AdminProductMutationResolver } from '@/features/admin/resolvers/admin-product-mutation.resolver';
@@ -22,6 +23,7 @@ import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-qu
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
+import { AdminNotificationService } from '@/features/admin/services/admin-notification.service';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
@@ -48,6 +50,7 @@ import { OrderModule } from '@/features/order';
     AdminTaxonomyService,
     AdminModerationService,
     AdminOrderService,
+    AdminNotificationService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -66,6 +69,7 @@ import { OrderModule } from '@/features/order';
     AdminModerationMutationResolver,
     AdminOrderQueryResolver,
     AdminOrderMutationResolver,
+    AdminNotificationMutationResolver,
   ],
 })
 export class AdminModule {}
