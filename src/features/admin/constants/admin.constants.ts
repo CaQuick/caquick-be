@@ -92,3 +92,22 @@ export const ADMIN_CANCEL_NOTE_PREFIX = '[관리자] ';
 /** 접두를 붙인 뒤에도 order_status_history.note(500)에 들어가야 한다. */
 export const MAX_ADMIN_CANCEL_NOTE_LENGTH =
   MAX_REASON_LENGTH - ADMIN_CANCEL_NOTE_PREFIX.length;
+
+// ── 알림 발송 ──
+
+/** SDL AdminNotificationType과 1:1(NotificationType의 부분집합). */
+export const ADMIN_NOTIFICATION_TYPES = ['SYSTEM', 'MARKETING'] as const;
+export type AdminNotificationTypeValue =
+  (typeof ADMIN_NOTIFICATION_TYPES)[number];
+/** SDL AdminNotificationTargetKind와 1:1. */
+export const ADMIN_NOTIFICATION_TARGET_KINDS = [
+  'ALL_USERS',
+  'ACCOUNT_IDS',
+] as const;
+export type AdminNotificationTargetKindValue =
+  (typeof ADMIN_NOTIFICATION_TARGET_KINDS)[number];
+export const MAX_NOTIFICATION_TITLE_LENGTH = 200;
+export const MAX_NOTIFICATION_BODY_LENGTH = 2000;
+export const MAX_NOTIFICATION_ACCOUNT_IDS = 500;
+/** 전체 발송 fan-out 청크. 청크 단위 createMany이고 청크 사이 트랜잭션은 없다. */
+export const NOTIFICATION_FANOUT_BATCH_SIZE = 1000;

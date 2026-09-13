@@ -7,6 +7,7 @@ import {
   type Banner,
   type BannerPlacement,
   type CategoryType,
+  type NotificationType,
   Prisma,
   type ReviewReport,
   type Store,
@@ -1590,5 +1591,56 @@ export class AdminRepository {
     return this.prisma.reviewComment.count({
       where: this.reviewCommentFilterWhere(filter),
     });
+  }
+
+  // ── 알림 발송 ──
+
+  /** 활성(ACTIVE·미탈퇴) USER의 id를 키셋(id asc)으로 한 청크 읽는다. */
+  async listActiveUserAccountIds(args: {
+    afterId?: bigint;
+    limit: number;
+  }): Promise<bigint[]> {
+    const rows = await this.prisma.account.findMany({
+      where: {
+        account_type: AccountType.USER,
+        status: 'ACTIVE',
+        ...(args.afterId !== undefined ? { id: { gt: args.afterId } } : {}),
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: args.limit,
+    });
+    return rows.map((r) => r.id);
+  }
+
+  /** 주어진 ID 중 활성 USER인 것만 돌려준다(없거나 다른 타입·정지·탈퇴는 빠진다). */
+  async filterActiveUserAccountIds(ids: bigint[]): Promise<bigint[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.account.findMany({
+      where: {
+        id: { in: ids },
+        account_type: AccountType.USER,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+
+  /** 같은 내용의 알림을 여러 계정에 저장한다(createMany). event는 없다 — 시스템 이벤트가 아니다. */
+  async createNotifications(
+    accountIds: bigint[],
+    payload: { type: NotificationType; title: string; body: string },
+  ): Promise<number> {
+    if (accountIds.length === 0) return 0;
+    const result = await this.prisma.notification.createMany({
+      data: accountIds.map((account_id) => ({
+        account_id,
+        type: payload.type,
+        title: payload.title,
+        body: payload.body,
+      })),
+    });
+    return result.count;
   }
 }
