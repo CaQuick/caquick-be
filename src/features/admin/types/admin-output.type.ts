@@ -1,6 +1,8 @@
 import type {
   AccountStatus,
   AccountType,
+  AuditActionType,
+  AuditTargetType,
   BannerLinkType,
   BannerPlacement,
   CategoryType,
@@ -324,4 +326,19 @@ export interface AdminRegionOutput {
   childCount: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AdminAuditLogOutput {
+  id: string;
+  actorAccountId: string;
+  actorAccountType: AccountType | null;
+  storeId: string | null;
+  targetType: AuditTargetType;
+  targetId: string;
+  action: AuditActionType;
+  beforeJson: string | null;
+  afterJson: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
 }

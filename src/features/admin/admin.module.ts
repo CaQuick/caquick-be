@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminAccountMutationResolver } from '@/features/admin/resolvers/admin-account-mutation.resolver';
 import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-account-query.resolver';
+import { AdminAuditQueryResolver } from '@/features/admin/resolvers/admin-audit-query.resolver';
 import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
 import { AdminModerationMutationResolver } from '@/features/admin/resolvers/admin-moderation-mutation.resolver';
@@ -23,6 +24,7 @@ import { AdminTaxonomyQueryResolver } from '@/features/admin/resolvers/admin-tax
 import { AdminUserMutationResolver } from '@/features/admin/resolvers/admin-user-mutation.resolver';
 import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
+import { AdminAuditService } from '@/features/admin/services/admin-audit.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AdminNotificationService } from '@/features/admin/services/admin-notification.service';
@@ -55,6 +57,7 @@ import { OrderModule } from '@/features/order';
     AdminOrderService,
     AdminNotificationService,
     AdminRegionService,
+    AdminAuditService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -76,6 +79,7 @@ import { OrderModule } from '@/features/order';
     AdminNotificationMutationResolver,
     AdminRegionQueryResolver,
     AdminRegionMutationResolver,
+    AdminAuditQueryResolver,
   ],
 })
 export class AdminModule {}
