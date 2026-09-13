@@ -29,7 +29,8 @@ type LockableTable =
   | 'tag'
   | 'review'
   | 'review_comment'
-  | 'review_report';
+  | 'review_report'
+  | 'region';
 
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
@@ -94,6 +95,19 @@ export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
   include: typeof adminReviewCommentInclude;
 }>;
 const adminReviewCommentInclude = { ...authorInclude } as const;
+
+/** 지역 행 + 연결 매장 수(삭제 제외)·활성 하위 지역 수. */
+export type AdminRegionRow = Prisma.RegionGetPayload<{
+  include: typeof regionInclude;
+}>;
+const regionInclude = {
+  _count: {
+    select: {
+      stores: { where: activeWhere },
+      children: { where: visibleWhere },
+    },
+  },
+} as const;
 
 /** 카테고리 행 + 연결 상품 수(삭제 연결 제외). */
 export type AdminCategoryRow = Prisma.CategoryGetPayload<{
@@ -1642,5 +1656,124 @@ export class AdminRepository {
       })),
     });
     return result.count;
+  }
+
+  // ── 지역 마스터 ──
+
+  async listRegions(args: {
+    parentId?: bigint;
+    includeInactive: boolean;
+  }): Promise<AdminRegionRow[]> {
+    return this.prisma.region.findMany({
+      where: {
+        ...(args.parentId !== undefined ? { parent_id: args.parentId } : {}),
+        ...(args.includeInactive ? {} : { is_active: true }),
+      },
+      include: regionInclude,
+      orderBy: [{ level: 'asc' }, { sort_order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async findRegionById(regionId: bigint): Promise<AdminRegionRow | null> {
+    return this.prisma.region.findFirst({
+      where: { id: regionId },
+      include: regionInclude,
+    });
+  }
+
+  /** 상위로 지정 가능한 지역: 활성 1차. */
+  async isActiveRegionGroup(regionId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { id: regionId, level: 1, is_active: true },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  async existsActiveRegionSlug(slug: string): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { slug },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  /** 삭제된 같은 slug가 있으면 복구(unique 인덱스), 없으면 생성. 감사와 한 트랜잭션. */
+  async createOrRestoreRegion(
+    data: {
+      parent_id: bigint | null;
+      level: number;
+      name: string;
+      slug: string;
+      sort_order: number;
+      is_active: boolean;
+      center_lat: Prisma.Decimal | null;
+      center_lng: Prisma.Decimal | null;
+    },
+    audit: (row: AdminRegionRow) => AuditEntry,
+  ): Promise<AdminRegionRow> {
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.region.findFirst({
+        where: { slug: data.slug, deleted_at: { not: null } },
+        select: { id: true },
+      });
+      const row = deleted
+        ? await tx.region.update({
+            where: { id: deleted.id },
+            data: { ...data, deleted_at: null },
+            include: regionInclude,
+          })
+        : await tx.region.create({ data, include: regionInclude });
+      await this.auditLogs.createAuditLog(audit(row), tx);
+      return row;
+    });
+  }
+
+  async updateRegion(
+    args: { regionId: bigint; data: Prisma.RegionUpdateInput },
+    audit: (before: AdminRegionRow, after: AdminRegionRow) => AuditEntry,
+  ): Promise<AdminRegionRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'region', args.regionId))) return null;
+      const before = await tx.region.findFirstOrThrow({
+        where: { id: args.regionId },
+        include: regionInclude,
+      });
+      const after = await tx.region.update({
+        where: { id: args.regionId },
+        data: args.data,
+        include: regionInclude,
+      });
+      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      return after;
+    });
+  }
+
+  /**
+   * 잠금 뒤 트랜잭션 안에서 연결 매장(2차)·활성 하위(1차)를 세어 있으면 거절한다 —
+   * 미리 센 값은 그 사이 새 연결로 낡을 수 있다.
+   */
+  async softDeleteRegion(
+    regionId: bigint,
+    audit: (before: AdminRegionRow) => AuditEntry,
+  ): Promise<'deleted' | 'not-found' | 'has-stores' | 'has-children'> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'region', regionId)))
+        return 'not-found';
+      const before = await tx.region.findFirstOrThrow({
+        where: { id: regionId },
+        include: regionInclude,
+      });
+      if (before._count.stores > 0) return 'has-stores';
+      if (before._count.children > 0) return 'has-children';
+      await tx.region.update({
+        where: { id: regionId },
+        data: { deleted_at: new Date() },
+      });
+      await this.auditLogs.createAuditLog(audit(before), tx);
+      return 'deleted';
+    });
   }
 }

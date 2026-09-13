@@ -111,3 +111,10 @@ export const MAX_NOTIFICATION_BODY_LENGTH = 2000;
 export const MAX_NOTIFICATION_ACCOUNT_IDS = 500;
 /** 전체 발송 fan-out 청크. 청크 단위 createMany이고 청크 사이 트랜잭션은 없다. */
 export const NOTIFICATION_FANOUT_BATCH_SIZE = 1000;
+
+// ── 지역 마스터 ──
+
+export const MAX_REGION_NAME_LENGTH = 80;
+export const MAX_REGION_SLUG_LENGTH = 120;
+/** 정책: 소문자·숫자·`-`만(기존 시드 slug 'sgg-11440' 형식과 호환). */
+export const REGION_SLUG_PATTERN = /^[a-z0-9-]+$/;
