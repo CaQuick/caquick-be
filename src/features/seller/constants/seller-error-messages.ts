@@ -40,23 +40,6 @@ export const CLOSE_BEFORE_OPEN = 'closeTime must be after openTime.';
 export const SPECIAL_CLOSURE_NOT_FOUND = 'Special closure not found.';
 export const DAILY_CAPACITY_NOT_FOUND = 'Daily capacity not found.';
 
-// ── 배너 ──
-
-export const BANNER_NOT_FOUND = 'Banner not found.';
-export const LINK_URL_REQUIRED = 'linkUrl is required when linkType is URL.';
-export const LINK_PRODUCT_REQUIRED =
-  'linkProductId is required when linkType is PRODUCT.';
-export const LINK_PRODUCT_MISMATCH = 'Cannot link product outside your store.';
-export const LINK_STORE_REQUIRED =
-  'linkStoreId is required when linkType is STORE.';
-export const LINK_STORE_MISMATCH = 'Cannot link another store.';
-export const LINK_CATEGORY_REQUIRED =
-  'linkCategoryId is required when linkType is CATEGORY.';
-export const LINK_FIELDS_MISMATCH =
-  'Link fields not relevant to the current linkType cannot be set.';
-export const INVALID_BANNER_PLACEMENT = 'Invalid banner placement.';
-export const INVALID_BANNER_LINK_TYPE = 'Invalid banner link type.';
-
 // ── 콘텐츠 ──
 
 export const FAQ_TOPIC_NOT_FOUND = 'FAQ topic not found.';

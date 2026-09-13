@@ -194,4 +194,28 @@ describe('AuditLogRepository (real DB)', () => {
       expect(logs[0].ip_address).toBe('2001:db8::1');
     });
   });
+
+  describe('createAuditLog(tx)', () => {
+    const args = {
+      actorAccountId: BigInt(1),
+      targetType: 'ACCOUNT' as const,
+      targetId: BigInt(2),
+      action: 'CREATE' as const,
+    };
+
+    it('트랜잭션 클라이언트를 넘기면 그 트랜잭션에서 기록되고, 롤백 시 함께 사라진다', async () => {
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await repo.createAuditLog(args, tx);
+          throw new Error('rollback');
+        }),
+      ).rejects.toThrow('rollback');
+      expect(await prisma.auditLog.count()).toBe(0);
+
+      await prisma.$transaction(async (tx) => {
+        await repo.createAuditLog(args, tx);
+      });
+      expect(await prisma.auditLog.count()).toBe(1);
+    });
+  });
 });

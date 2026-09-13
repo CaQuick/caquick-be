@@ -11,6 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 
+import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
 import { seedConversations } from './seed/conversations';
@@ -79,6 +80,9 @@ async function main(): Promise<void> {
     log('배너 시드 중...');
     await seedBanners(prisma);
 
+    log('관리자 시드 중...');
+    await seedAdmins(prisma);
+
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {
       const status =
@@ -97,6 +101,10 @@ function log(message: string): void {
 }
 
 main().catch((err: unknown) => {
-  console.error('[seed] 실패:', err);
+  // 오류 객체 통째로 찍지 않는다 — DB URL·자격증명 같은 env 값이 함께 남을 수 있다
+  console.error(
+    '[seed] 실패:',
+    err instanceof Error ? err.message : String(err),
+  );
   process.exit(1);
 });

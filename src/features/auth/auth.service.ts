@@ -25,7 +25,7 @@ import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
  *
  * 다른 흐름은 별도 서비스가 담당:
  * - OIDC 시작/콜백: OidcLoginService
- * - 판매자 자격증명 (login / refresh / logout / changePassword): SellerCredentialService
+ * - 판매자·관리자 자격증명 (login / refresh / logout / changePassword): CredentialAuthService
  * - GraphQL `me` 조회: UserProfileService
  */
 @Injectable()

@@ -29,14 +29,18 @@ export const MAX_TOKEN_DEFAULT_TEXT_LENGTH = 200;
 export const DEFAULT_TOKEN_MAX_LENGTH = 30;
 
 // ── 매장 ──
+// 컬럼 길이는 store feature가 단일 소스(관리자 온보딩과 공유). 판매자 쪽 import 경로는 유지한다.
 
-export const MAX_STORE_NAME_LENGTH = 200;
-export const MAX_STORE_PHONE_LENGTH = 30;
-export const MAX_ADDRESS_FULL_LENGTH = 500;
-export const MAX_ADDRESS_CITY_LENGTH = 50;
-export const MAX_ADDRESS_DISTRICT_LENGTH = 80;
-export const MAX_ADDRESS_NEIGHBORHOOD_LENGTH = 80;
-export const MAX_BUSINESS_HOURS_TEXT_LENGTH = 500;
+export {
+  MAX_ADDRESS_CITY_LENGTH,
+  MAX_ADDRESS_DISTRICT_LENGTH,
+  MAX_ADDRESS_FULL_LENGTH,
+  MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
+  MAX_BUSINESS_HOURS_TEXT_LENGTH,
+  MAX_GREETING_MESSAGE_LENGTH,
+  MAX_STORE_NAME_LENGTH,
+  MAX_STORE_PHONE_LENGTH,
+} from '@/features/store';
 export const MAX_SPECIAL_CLOSURE_REASON_LENGTH = 200;
 
 export const MIN_DAY_OF_WEEK = 0;
@@ -51,15 +55,25 @@ export const MAX_DAYS_AHEAD = 365;
 export const MIN_DAILY_CAPACITY = 1;
 export const MAX_DAILY_CAPACITY = 5000;
 
-// ── 콘텐츠 (FAQ / 배너) ──
+// ── 콘텐츠 (FAQ) ──
 
 export const MAX_FAQ_TITLE_LENGTH = 120;
 export const MAX_FAQ_ANSWER_HTML_LENGTH = 100000;
-export const MAX_BANNER_TITLE_LENGTH = 200;
 
 // ── 대화 ──
 
 export const MAX_CONVERSATION_BODY_TEXT_LENGTH = 2000;
 // 문의 채팅 인사말 템플릿(store.greeting_message VARCHAR(500)과 동일 상한)
-export const MAX_GREETING_MESSAGE_LENGTH = 500;
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;
+
+// ── 감사 로그 ──
+
+/** 판매자 감사 로그 화면이 보여주는 대상 종류. SDL SellerAuditTargetType과 1:1. */
+export const SELLER_AUDIT_TARGET_TYPES = [
+  'STORE',
+  'PRODUCT',
+  'ORDER',
+  'CONVERSATION',
+  'CHANGE_PASSWORD',
+] as const;
+export type SellerAuditTargetType = (typeof SELLER_AUDIT_TARGET_TYPES)[number];

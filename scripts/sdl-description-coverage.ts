@@ -1,13 +1,8 @@
 /**
- * SDL description 커버리지 측정 로직.
+ * SDL description 커버리지 측정 로직 (순수 함수).
  *
- * 왜: SDL에 설명 없는 필드를 추가해도 `yarn validate`가 통과한다. dto:check가
- * SDL↔DTO 동기화를 도구로 강제하듯, 문서 커버리지도 사람 주의력이 아니라
- * 게이트로 받쳐야 한다. (이슈 #250)
- *
- * 이 파일은 순수 함수만 둔다 — 파일 시스템 접근과 CLI는
- * check-sdl-description-coverage.ts가 담당한다. 그래야 spec에서 SDL 문자열만으로
- * 검증할 수 있다.
+ * 파일 시스템 접근과 CLI는 check-sdl-description-coverage.ts가 담당한다 — 그래야
+ * spec에서 SDL 문자열만으로 검증할 수 있다. 도입 배경은 그쪽 헤더에.
  */
 
 import type {
@@ -102,7 +97,7 @@ export function isExemptFieldName(name: string): boolean {
  * 타입 이름을 되풀이하기만 하는 자동생성형 설명인지.
  *
  * `"""SellerOrderSummary 타입"""`처럼 이름만 되풀이하는 설명은 파서에 "문서화됨"으로
- * 잡히지만 전달되는 정보가 없다. 미기재로 세지 않으면 기준선이 거짓 안전을 준다.
+ * 잡히지만 전달되는 정보가 없다. 미기재로 세지 않으면 기준선이 실제보다 높게 잡힌다.
  */
 export function isPlaceholderDescription(
   typeName: string,

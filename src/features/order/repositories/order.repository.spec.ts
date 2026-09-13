@@ -502,6 +502,36 @@ describe('OrderRepository (real DB)', () => {
       return order;
     }
 
+    it('잠금 시점 상태로 assertTransition이 던지면 롤백된다(이력 없음)', async () => {
+      const store = await createStore(prisma);
+      const buyer = await setupBuyer();
+      const order = await setupOrderForStore(store.id, buyer.id);
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      await expect(
+        repo.updateOrderStatusBySeller({
+          orderId: order.id,
+          storeId: store.id,
+          actorAccountId: seller.id,
+          toStatus: OrderStatus.CONFIRMED,
+          assertTransition: (from) => {
+            throw new Error(`stale:${from}`);
+          },
+          note: null,
+          now: new Date(),
+        }),
+      ).rejects.toThrow('stale:SUBMITTED');
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(row.status).toBe('SUBMITTED');
+      expect(
+        await prisma.orderStatusHistory.count({
+          where: { order_id: order.id },
+        }),
+      ).toBe(0);
+    });
+
     it('다른 store의 주문이면 null 반환 (update 미수행)', async () => {
       const storeA = await createStore(prisma);
       const storeB = await createStore(prisma);
@@ -514,6 +544,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: storeB.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now: new Date(),
       });
@@ -532,6 +563,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now,
       });
@@ -563,7 +595,7 @@ describe('OrderRepository (real DB)', () => {
       expect(auditLogs[0].action).toBe('STATUS_CHANGE');
     });
 
-    it('CANCELED 전환: canceled_at 갱신되고 notification은 생성 안됨', async () => {
+    it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();
       const order = await setupOrderForStore(store.id, buyer.id);
@@ -575,6 +607,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CANCELED,
+        assertTransition: () => undefined,
         note: '재고 부족',
         now,
       });
@@ -582,11 +615,17 @@ describe('OrderRepository (real DB)', () => {
       expect(updated?.status).toBe('CANCELED');
       expect(updated?.canceled_at?.toISOString()).toBe(now.toISOString());
 
-      // CANCELED는 notification 매핑 없음
+      // 취소도 구매자에게 알린다(판매자·운영자 취소 공통)
       const notifications = await prisma.notification.findMany({
         where: { order_id: order.id },
       });
-      expect(notifications).toHaveLength(0);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'ORDER_CANCELED',
+        store_id: store.id,
+      });
 
       const histories = await prisma.orderStatusHistory.findMany({
         where: { order_id: order.id },
@@ -609,6 +648,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now: t1,
       });
@@ -617,6 +657,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.MADE,
+        assertTransition: () => undefined,
         note: null,
         now: t2,
       });
@@ -625,6 +666,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.PICKED_UP,
+        assertTransition: () => undefined,
         note: null,
         now: t3,
       });

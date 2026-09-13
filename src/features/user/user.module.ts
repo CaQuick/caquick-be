@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
@@ -14,6 +15,7 @@ import { UserProfileMutationResolver } from '@/features/user/resolvers/user-prof
 import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/user/resolvers/user-recent-view-query.resolver';
+import { UserReportMutationResolver } from '@/features/user/resolvers/user-report-mutation.resolver';
 import { UserReviewMutationResolver } from '@/features/user/resolvers/user-review-mutation.resolver';
 import { UserReviewQueryResolver } from '@/features/user/resolvers/user-review-query.resolver';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
@@ -26,6 +28,7 @@ import { UserNotificationService } from '@/features/user/services/user-notificat
 import { UserOrderService } from '@/features/user/services/user-order.service';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
+import { UserReportService } from '@/features/user/services/user-report.service';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { UserSearchService } from '@/features/user/services/user-search.service';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
@@ -40,6 +43,8 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
     UserNotificationService,
     UserSearchService,
     UserEngagementService,
+    UserReportService,
+    ReviewReportRepository,
     UserMypageService,
     UserOrderService,
     UserRecentViewService,
@@ -61,6 +66,7 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
     UserNotificationMutationResolver,
     UserSearchMutationResolver,
     UserEngagementMutationResolver,
+    UserReportMutationResolver,
     UserWishlistQueryResolver,
     UserWishlistMutationResolver,
   ],

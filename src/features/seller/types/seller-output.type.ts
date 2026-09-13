@@ -1,3 +1,5 @@
+import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
+
 export interface SellerStoreOutput {
   id: string;
   sellerAccountId: string;
@@ -249,30 +251,11 @@ export interface SellerFaqTopicOutput {
   updatedAt: Date;
 }
 
-export interface SellerBannerOutput {
-  id: string;
-  placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE' | 'SEARCH';
-  title: string | null;
-  imageUrl: string;
-  linkType: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
-  linkUrl: string | null;
-  linkProductId: string | null;
-  linkStoreId: string | null;
-  linkCategoryId: string | null;
-  startsAt: Date | null;
-  endsAt: Date | null;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface SellerAuditLogOutput {
   id: string;
   actorAccountId: string;
   storeId: string | null;
-  targetType:
-    'STORE' | 'PRODUCT' | 'ORDER' | 'CONVERSATION' | 'CHANGE_PASSWORD';
+  targetType: SellerAuditTargetType;
   targetId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
   beforeJson: string | null;

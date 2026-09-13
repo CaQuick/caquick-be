@@ -1,12 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import {
-  AccountType,
-  AuditTargetType,
-  BannerLinkType,
-  BannerPlacement,
-  Prisma,
-} from '@prisma/client';
+import { AccountType, AuditTargetType, Prisma } from '@prisma/client';
 
+import { SELLER_AUDIT_TARGET_TYPES } from '@/features/seller/constants/seller.constants';
 import { PrismaService } from '@/prisma';
 
 @Injectable()
@@ -308,102 +303,6 @@ export class SellerRepository {
     });
   }
 
-  /** 목록과 카운트가 같은 조건을 보도록 where를 한 곳에서 만든다(커서는 페이지 조건이라 제외). */
-  private bannerScopeWhere(storeId: bigint): Prisma.BannerWhereInput {
-    return {
-      OR: [{ link_store_id: storeId }, { link_product: { store_id: storeId } }],
-    };
-  }
-
-  async listBannersByStore(args: {
-    storeId: bigint;
-    limit: number;
-    cursor?: bigint;
-  }) {
-    return this.prisma.banner.findMany({
-      where: {
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...this.bannerScopeWhere(args.storeId),
-      },
-      orderBy: [{ id: 'desc' }],
-      take: args.limit + 1,
-    });
-  }
-
-  /** 배너 전체 건수(커서 무관). */
-  async countBannersByStore(storeId: bigint): Promise<number> {
-    return this.prisma.banner.count({ where: this.bannerScopeWhere(storeId) });
-  }
-
-  async findBannerByIdForStore(args: { bannerId: bigint; storeId: bigint }) {
-    return this.prisma.banner.findFirst({
-      where: {
-        id: args.bannerId,
-        OR: [
-          {
-            link_store_id: args.storeId,
-          },
-          {
-            link_product: {
-              store_id: args.storeId,
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  async createBanner(args: {
-    placement: BannerPlacement;
-    title: string | null;
-    imageUrl: string;
-    linkType: BannerLinkType;
-    linkUrl: string | null;
-    linkProductId: bigint | null;
-    linkStoreId: bigint | null;
-    linkCategoryId: bigint | null;
-    startsAt: Date | null;
-    endsAt: Date | null;
-    sortOrder: number;
-    isActive: boolean;
-  }) {
-    return this.prisma.banner.create({
-      data: {
-        placement: args.placement,
-        title: args.title,
-        image_url: args.imageUrl,
-        link_type: args.linkType,
-        link_url: args.linkUrl,
-        link_product_id: args.linkProductId,
-        link_store_id: args.linkStoreId,
-        link_category_id: args.linkCategoryId,
-        starts_at: args.startsAt,
-        ends_at: args.endsAt,
-        sort_order: args.sortOrder,
-        is_active: args.isActive,
-      },
-    });
-  }
-
-  async updateBanner(args: {
-    bannerId: bigint;
-    data: Prisma.BannerUpdateInput;
-  }) {
-    return this.prisma.banner.update({
-      where: { id: args.bannerId },
-      data: args.data,
-    });
-  }
-
-  async softDeleteBanner(bannerId: bigint): Promise<void> {
-    await this.prisma.banner.update({
-      where: { id: bannerId },
-      data: {
-        deleted_at: new Date(),
-      },
-    });
-  }
-
   async findStoreOwnership(storeId: bigint) {
     return this.prisma.store.findFirst({
       where: {
@@ -429,7 +328,12 @@ export class SellerRepository {
           { actor_account_id: args.sellerAccountId },
           { store_id: args.storeId },
         ],
-        ...(args.targetType ? { target_type: args.targetType } : {}),
+        // 관리자 조작(REVIEW·ACCOUNT 등)이 매장 ID를 달고 기록돼도 판매자 화면 enum 밖이라 제외한다
+        target_type: {
+          in: args.targetType
+            ? [args.targetType]
+            : [...SELLER_AUDIT_TARGET_TYPES],
+        },
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
@@ -437,46 +341,11 @@ export class SellerRepository {
   }
 }
 
-export function normalizeCursorInput(input?: {
-  limit?: number | null;
-  cursor?: bigint | null;
-}): { limit: number; cursor?: bigint } {
-  const safeLimit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
-  const cursor = input?.cursor ?? undefined;
-  return {
-    limit: safeLimit,
-    ...(cursor ? { cursor } : {}),
-  };
-}
-
-/**
- * limit+1개를 조회한 결과에서 페이지와 다음 커서를 뽑는다.
- *
- * hasMore는 추가 쿼리 없이 나온다 — limit보다 많이 왔으면 다음 페이지가 있다는 뜻이다.
- */
-export function nextCursorOf<T extends { id: bigint }>(
-  rows: T[],
-  limit: number,
-): {
-  items: T[];
-  nextCursor: string | null;
-  hasMore: boolean;
-} {
-  if (rows.length <= limit) {
-    return {
-      items: rows,
-      nextCursor: null,
-      hasMore: false,
-    };
-  }
-
-  const sliced = rows.slice(0, limit);
-  return {
-    items: sliced,
-    hasMore: true,
-    nextCursor: sliced[sliced.length - 1]?.id.toString() ?? null,
-  };
-}
+// 커서 헬퍼는 관리자 목록과 공유하려고 common으로 옮겼다. 판매자 쪽 import 경로는 유지한다.
+export {
+  nextCursorOf,
+  normalizeCursorInput,
+} from '@/common/utils/id-cursor-page';
 
 export function isSellerAccount(accountType: AccountType): boolean {
   return accountType === AccountType.SELLER;

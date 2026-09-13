@@ -9,9 +9,34 @@
  *   p5 비활성 상품 (찜 가시성 검증용)
  */
 import type { PrismaClient, Product, Store } from '@prisma/client';
+import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';
+import { assertSeedCredential } from './credential-policy';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
+
+/**
+ * 시드 판매자 로그인용 자격증명. SELLER_SEED_PASSWORD가 없으면 만들지 않는다
+ * (dev 토큰 발급 경로 /auth/dev/issue-token 로도 충분하다).
+ * 매장 생성 뒤에 호출한다 — resetSeedScope가 [SEED] 매장을 통해 판매자를 찾으므로,
+ * 매장 없이 자격증명만 남으면 고정 username이 다음 시드를 막는다.
+ */
+async function seedSellerCredential(
+  prisma: PrismaClient,
+  accountId: bigint,
+  username: string,
+): Promise<void> {
+  const password = process.env.SELLER_SEED_PASSWORD;
+  if (!password) return;
+  assertSeedCredential({ username, password });
+  await prisma.accountCredential.create({
+    data: {
+      account_id: accountId,
+      username,
+      password_hash: await argon2.hash(password, { type: argon2.argon2id }),
+    },
+  });
+}
 
 export interface SeededStores {
   stores: Store[];
@@ -75,6 +100,7 @@ export async function seedStores(
       },
     },
   });
+  await seedSellerCredential(prisma, sellerA.id, 'seed-seller-a');
 
   // 매장 A 구조화 영업시간: 화요일 정기 휴무(텍스트 표기와 일치), 나머지 09~18시.
   // todayPickupStores가 구조화 영업시간(StoreBusinessHour) 기준이라 시드에 필수.
@@ -113,6 +139,7 @@ export async function seedStores(
       is_active: true,
     },
   });
+  await seedSellerCredential(prisma, sellerB.id, 'seed-seller-b');
   // 매장 B 구조화 영업시간: 평일 11~21시, 주말 휴무(텍스트 표기와 일치).
   // A가 화요일 휴무라, B가 화요일을 커버해 요일과 무관하게 todayPickupStores 확인 가능.
   await prisma.storeBusinessHour.createMany({

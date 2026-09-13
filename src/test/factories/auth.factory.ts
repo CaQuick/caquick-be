@@ -1,5 +1,7 @@
 import type {
+  AccountCredential,
   AccountIdentity,
+  AccountType,
   AuthRefreshSession,
   IdentityProvider,
   PrismaClient,
@@ -68,6 +70,40 @@ export async function createRefreshSession(
       ip_address: overrides.ip_address ?? '127.0.0.1',
       expires_at: overrides.expires_at ?? new Date(Date.now() + 7 * DAY_MS),
       revoked_at: overrides.revoked_at ?? null,
+    },
+  });
+}
+
+export interface AccountCredentialOverrides {
+  account_id?: bigint;
+  /** account_id 미지정 시 만들 계정 타입. 기본 SELLER. */
+  account_type?: AccountType;
+  username?: string;
+  password_hash?: string;
+  must_change_password?: boolean;
+}
+
+export async function createAccountCredential(
+  prisma: PrismaClient,
+  overrides: AccountCredentialOverrides = {},
+): Promise<AccountCredential> {
+  const seq = nextSeq();
+  const accountId =
+    overrides.account_id ??
+    (
+      await createAccount(prisma, {
+        account_type: overrides.account_type ?? 'SELLER',
+      })
+    ).id;
+
+  return prisma.accountCredential.create({
+    data: {
+      account_id: accountId,
+      username: overrides.username ?? `credential_${seq}`,
+      password_hash:
+        overrides.password_hash ??
+        '$argon2id$v=19$m=65536,t=3,p=4$mock_salt$mock_hash',
+      must_change_password: overrides.must_change_password ?? false,
     },
   });
 }

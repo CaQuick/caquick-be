@@ -159,6 +159,9 @@ export class SellerOrderService extends SellerBaseService {
       toStatus,
       note: cleanNullableText(input.note, 500),
       now: new Date(),
+      // 잠금 뒤 현재 상태로 같은 규칙을 다시 적용한다(위 사전 검사는 빠른 거절용)
+      assertTransition: (from) =>
+        this.orderDomainService.assertSellerTransition(from, toStatus),
     });
 
     if (!updated) throw new NotFoundException(ORDER_NOT_FOUND);

@@ -20,5 +20,10 @@ export interface AccessTokenPayload {
  */
 export interface JwtUser {
   accountId: string;
-  accountType?: 'USER' | 'SELLER' | 'ADMIN';
+  accountType?: AccountRole;
+  /** 초기/초기화 비밀번호 상태. 자격증명 계정(SELLER/ADMIN)에서만 true일 수 있다. */
+  mustChangePassword?: boolean;
 }
+
+/** 인가에 쓰는 계정 타입. Prisma AccountType과 값이 같다(global은 prisma에 의존하지 않는다). */
+export type AccountRole = 'USER' | 'SELLER' | 'ADMIN';

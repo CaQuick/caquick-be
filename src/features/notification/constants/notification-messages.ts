@@ -10,6 +10,8 @@ export const ORDER_STATUS_NOTIFICATION_TITLES: Partial<
   [OrderStatus.CONFIRMED]: '주문확정',
   [OrderStatus.MADE]: '제작완료',
   [OrderStatus.PICKED_UP]: '픽업완료',
+  // 취소는 figma 알림센터에 없던 항목 — 관리자 강제 취소 도입 시 판매자 취소와 함께 알리기로 확정
+  [OrderStatus.CANCELED]: '주문취소',
 };
 
 /**
@@ -23,6 +25,7 @@ export const ORDER_STATUS_NOTIFICATION_BODIES: Partial<
   [OrderStatus.CONFIRMED]: '주문이 확정되었어요.',
   [OrderStatus.MADE]: '주문하신 케이크 제작이 완료되었어요.',
   [OrderStatus.PICKED_UP]: '케이크 픽업이 완료되었어요.',
+  [OrderStatus.CANCELED]: '주문이 취소되었어요.',
 };
 
 // 문구는 figma notification-center 알림 목록 화면 기준.

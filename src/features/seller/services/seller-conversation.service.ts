@@ -66,10 +66,7 @@ export class SellerConversationService extends SellerBaseService {
   ) {
     super(repo, auditLogs);
   }
-  /**
-   * 대화 목록은 (updated_at, id) desc 정렬이라 커서도 두 값을 함께 담는다.
-   * id 단독 커서로는 정렬 순서와 무관한 행을 잘라내 목록에서 빠지는 대화가 생긴다.
-   */
+  /** 정렬 키 (updated_at, id)를 그대로 커서에 담는다. 근거는 repository 쪽 주석. */
   async sellerConversations(
     accountId: bigint,
     input?: SellerConversationListInput,

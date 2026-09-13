@@ -10,7 +10,6 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
-  createProduct,
   createStore,
   setupSellerWithStore,
 } from '@/test/factories';
@@ -468,110 +467,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── banner ──
-  describe('banner (list/findById/create/update/softDelete)', () => {
-    async function createBannerFor(storeId: bigint, overrides = {}) {
-      return prisma.banner.create({
-        data: {
-          placement: 'STORE',
-          image_url: 'https://i.example/a.png',
-          link_type: 'STORE',
-          link_store_id: storeId,
-          ...overrides,
-        },
-      });
-    }
-
-    it('list: link_store_id 또는 link_product.store_id 기준 본인 store 만', async () => {
-      const me = await setupSellerWithStore(prisma);
-      const other = await setupSellerWithStore(prisma);
-
-      // 본인 store_id 직접 link
-      await createBannerFor(me.store.id);
-
-      // 본인 product 를 link 한 banner
-      const myProduct = await createProduct(prisma, { store_id: me.store.id });
-      await prisma.banner.create({
-        data: {
-          placement: 'HOME_MAIN',
-          image_url: 'https://i.example/p.png',
-          link_type: 'PRODUCT',
-          link_product_id: myProduct.id,
-        },
-      });
-
-      // 다른 매장 (제외 대상)
-      await createBannerFor(other.store.id);
-
-      const rows = await repo.listBannersByStore({
-        storeId: me.store.id,
-        limit: 100,
-      });
-      expect(rows).toHaveLength(2);
-    });
-
-    it('list: cursor / limit', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      for (let i = 0; i < 3; i++) {
-        await createBannerFor(store.id);
-      }
-      const first = await repo.listBannersByStore({
-        storeId: store.id,
-        limit: 1,
-      });
-      expect(first).toHaveLength(2); // limit + 1
-
-      const paged = await repo.listBannersByStore({
-        storeId: store.id,
-        limit: 100,
-        cursor: first[0].id,
-      });
-      expect(paged.every((r) => r.id < first[0].id)).toBe(true);
-    });
-
-    it('findBannerByIdForStore: 본인 매장만', async () => {
-      const me = await setupSellerWithStore(prisma);
-      const other = await setupSellerWithStore(prisma);
-      const othersBanner = await createBannerFor(other.store.id);
-      const r = await repo.findBannerByIdForStore({
-        bannerId: othersBanner.id,
-        storeId: me.store.id,
-      });
-      expect(r).toBeNull();
-    });
-
-    it('create + update + softDelete', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      const created = await repo.createBanner({
-        placement: 'STORE',
-        title: 't',
-        imageUrl: 'https://i.example/a.png',
-        linkType: 'STORE',
-        linkUrl: null,
-        linkProductId: null,
-        linkStoreId: store.id,
-        linkCategoryId: null,
-        startsAt: null,
-        endsAt: null,
-        sortOrder: 0,
-        isActive: true,
-      });
-      expect(created.title).toBe('t');
-
-      const updated = await repo.updateBanner({
-        bannerId: created.id,
-        data: { title: 'updated' },
-      });
-      expect(updated.title).toBe('updated');
-
-      await repo.softDeleteBanner(created.id);
-      const after = await prisma.banner.findUnique({
-        where: { id: created.id },
-      });
-      expect(after?.deleted_at).not.toBeNull();
-    });
-  });
-
   // ─── audit log ──
   describe('listAuditLogsBySeller', () => {
     async function createLog(
@@ -650,6 +545,31 @@ describe('SellerRepository (real DB)', () => {
         targetType: 'ORDER',
       });
       expect(filtered.every((r) => r.target_type === 'ORDER')).toBe(true);
+    });
+
+    it('관리자 조작 대상 종류(ACCOUNT 등)는 매장 ID가 달려 있어도 제외한다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      await prisma.auditLog.create({
+        data: {
+          actor_account_id: me.account.id,
+          store_id: me.store.id,
+          target_type: 'ACCOUNT',
+          target_id: me.account.id,
+          action: 'STATUS_CHANGE',
+        },
+      });
+      const mine = await createLog({
+        actorAccountId: me.account.id,
+        storeId: me.store.id,
+      });
+
+      const rows = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 100,
+      });
+
+      expect(rows.map((r) => r.id)).toEqual([mine.id]);
     });
 
     it('cursor / limit', async () => {

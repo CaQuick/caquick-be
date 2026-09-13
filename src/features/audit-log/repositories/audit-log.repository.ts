@@ -35,19 +35,23 @@ export class AuditLogRepository implements IAuditLogRepository {
     private readonly requestContext: RequestContextService,
   ) {}
 
-  async createAuditLog(args: {
-    actorAccountId: bigint;
-    storeId?: bigint | null;
-    targetType: AuditTargetType;
-    targetId: bigint;
-    action: AuditActionType;
-    beforeJson?: Prisma.InputJsonValue | null;
-    afterJson?: Prisma.InputJsonValue | null;
-    ipAddress?: string;
-    userAgent?: string;
-  }): Promise<AuditLog> {
+  async createAuditLog(
+    args: {
+      actorAccountId: bigint;
+      storeId?: bigint | null;
+      targetType: AuditTargetType;
+      targetId: bigint;
+      action: AuditActionType;
+      beforeJson?: Prisma.InputJsonValue | null;
+      afterJson?: Prisma.InputJsonValue | null;
+      ipAddress?: string;
+      userAgent?: string;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<AuditLog> {
     const ctx = this.requestContext.get();
-    return this.prisma.auditLog.create({
+    const db = tx ?? this.prisma;
+    return db.auditLog.create({
       data: {
         actor_account_id: args.actorAccountId,
         store_id: args.storeId ?? null,

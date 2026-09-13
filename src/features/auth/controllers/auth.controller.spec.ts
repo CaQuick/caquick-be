@@ -5,13 +5,13 @@ import type { Request, Response } from 'express';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
 import {
+  CREDENTIAL_AUTH_SERVICE,
+  type ICredentialAuthService,
+} from '@/features/auth/services/credential-auth.service.interface';
+import {
   OIDC_LOGIN_SERVICE,
   type IOidcLoginService,
 } from '@/features/auth/services/oidc-login.service.interface';
-import {
-  SELLER_CREDENTIAL_SERVICE,
-  type ISellerCredentialService,
-} from '@/features/auth/services/seller-credential.service.interface';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -27,7 +27,7 @@ describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
   let oidcLogin: jest.Mocked<IOidcLoginService>;
-  let sellerAuth: jest.Mocked<ISellerCredentialService>;
+  let credentialAuth: jest.Mocked<ICredentialAuthService>;
 
   beforeEach(async () => {
     auth = {
@@ -41,11 +41,11 @@ describe('AuthController', () => {
       handleOidcCallback: jest.fn(),
     };
 
-    sellerAuth = {
-      sellerLogin: jest.fn(),
-      refreshSeller: jest.fn(),
-      logoutSeller: jest.fn(),
-      changeSellerPassword: jest.fn(),
+    credentialAuth = {
+      login: jest.fn(),
+      refresh: jest.fn(),
+      logout: jest.fn(),
+      changePassword: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -53,7 +53,7 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
-        { provide: SELLER_CREDENTIAL_SERVICE, useValue: sellerAuth },
+        { provide: CREDENTIAL_AUTH_SERVICE, useValue: credentialAuth },
       ],
     }).compile();
 
@@ -136,102 +136,128 @@ describe('AuthController', () => {
     expect(res.send).toHaveBeenCalled();
   });
 
-  it('sellerLogin은 accessToken + accountStatus를 응답한다', async () => {
-    const res = mockRes();
-    const req = {} as Request;
-    sellerAuth.sellerLogin.mockResolvedValue({
-      accessToken: 'seller-access',
-      accountStatus: 'ACTIVE',
-    });
+  describe.each([
+    {
+      role: 'SELLER' as const,
+      prefix: 'seller',
+      pick: (c: AuthController) => ({
+        login: c.sellerLogin.bind(c),
+        refresh: c.sellerRefresh.bind(c),
+        logout: c.sellerLogout.bind(c),
+        changePassword: c.sellerChangePassword.bind(c),
+      }),
+    },
+    {
+      role: 'ADMIN' as const,
+      prefix: 'admin',
+      pick: (c: AuthController) => ({
+        login: c.adminLogin.bind(c),
+        refresh: c.adminRefresh.bind(c),
+        logout: c.adminLogout.bind(c),
+        changePassword: c.adminChangePassword.bind(c),
+      }),
+    },
+  ])('$prefix 자격증명 엔드포인트', ({ role, prefix, pick }) => {
+    it(`${prefix}Login은 role=${role}로 위임하고 accessToken·accountStatus·mustChangePassword를 응답한다`, async () => {
+      const res = mockRes();
+      const req = {} as Request;
+      credentialAuth.login.mockResolvedValue({
+        accessToken: 'access',
+        accountStatus: 'ACTIVE',
+        mustChangePassword: true,
+      });
 
-    await controller.sellerLogin(
-      { username: 'seller', password: 'pw1234!A' },
-      req,
-      res,
-    );
-
-    expect(sellerAuth.sellerLogin).toHaveBeenCalledWith({
-      username: 'seller',
-      password: 'pw1234!A',
-      req,
-      res,
-    });
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      accessToken: 'seller-access',
-      tokenType: 'Bearer',
-      accountStatus: 'ACTIVE',
-    });
-  });
-
-  it('sellerRefresh는 accessToken + accountStatus를 응답한다', async () => {
-    const res = mockRes();
-    const req = {} as Request;
-    sellerAuth.refreshSeller.mockResolvedValue({
-      accessToken: 'rotated',
-      accountStatus: 'ACTIVE',
-    });
-
-    await controller.sellerRefresh(req, res);
-
-    expect(sellerAuth.refreshSeller).toHaveBeenCalledWith(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      accessToken: 'rotated',
-      tokenType: 'Bearer',
-      accountStatus: 'ACTIVE',
-    });
-  });
-
-  it('sellerLogout은 204로 응답한다', async () => {
-    const res = mockRes();
-    const req = {} as Request;
-
-    await controller.sellerLogout(req, res);
-
-    expect(sellerAuth.logoutSeller).toHaveBeenCalledWith(req, res);
-    expect(res.status).toHaveBeenCalledWith(204);
-    expect(res.send).toHaveBeenCalled();
-  });
-
-  it('sellerChangePassword는 parseAccountId 후 {ok:true}를 반환한다', async () => {
-    const res = mockRes();
-    const req = {} as Request;
-
-    const user: JwtUser = { accountId: '42', accountType: 'SELLER' };
-    await controller.sellerChangePassword(
-      user,
-      { currentPassword: 'old!Pass1', newPassword: 'New!Pass1' },
-      req,
-      res,
-    );
-
-    expect(sellerAuth.changeSellerPassword).toHaveBeenCalledWith({
-      accountId: BigInt(42),
-      currentPassword: 'old!Pass1',
-      newPassword: 'New!Pass1',
-      req,
-    });
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({ ok: true });
-  });
-
-  it('sellerChangePassword는 accountId가 BigInt로 파싱 불가하면 BadRequestException', async () => {
-    const res = mockRes();
-    const req = {} as Request;
-
-    const badUser: JwtUser = {
-      accountId: 'not-a-number',
-      accountType: 'SELLER',
-    };
-    await expect(
-      controller.sellerChangePassword(
-        badUser,
-        { currentPassword: 'old', newPassword: 'new' },
+      await pick(controller).login(
+        { username: 'who', password: 'pw1234!A' },
         req,
         res,
-      ),
-    ).rejects.toThrow(BadRequestException);
+      );
+
+      expect(credentialAuth.login).toHaveBeenCalledWith({
+        role,
+        username: 'who',
+        password: 'pw1234!A',
+        req,
+        res,
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        accessToken: 'access',
+        tokenType: 'Bearer',
+        accountStatus: 'ACTIVE',
+        mustChangePassword: true,
+      });
+    });
+
+    it(`${prefix}Refresh는 role=${role}로 위임한다`, async () => {
+      const res = mockRes();
+      const req = {} as Request;
+      credentialAuth.refresh.mockResolvedValue({
+        accessToken: 'rotated',
+        accountStatus: 'ACTIVE',
+        mustChangePassword: false,
+      });
+
+      await pick(controller).refresh(req, res);
+
+      expect(credentialAuth.refresh).toHaveBeenCalledWith({ role, req, res });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        accessToken: 'rotated',
+        tokenType: 'Bearer',
+        accountStatus: 'ACTIVE',
+        mustChangePassword: false,
+      });
+    });
+
+    it(`${prefix}Logout은 role=${role}로 위임하고 204로 응답한다`, async () => {
+      const res = mockRes();
+      const req = {} as Request;
+
+      await pick(controller).logout(req, res);
+
+      expect(credentialAuth.logout).toHaveBeenCalledWith({ role, req, res });
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it(`${prefix}ChangePassword는 parseAccountId 후 role=${role}로 위임하고 {ok:true}를 반환한다`, async () => {
+      const res = mockRes();
+      const req = {} as Request;
+
+      const user: JwtUser = { accountId: '42', accountType: role };
+      await pick(controller).changePassword(
+        user,
+        { currentPassword: 'old!Pass1', newPassword: 'New!Pass1' },
+        req,
+        res,
+      );
+
+      expect(credentialAuth.changePassword).toHaveBeenCalledWith({
+        role,
+        accountId: BigInt(42),
+        currentPassword: 'old!Pass1',
+        newPassword: 'New!Pass1',
+        req,
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ ok: true });
+    });
+
+    it(`${prefix}ChangePassword는 accountId가 BigInt로 파싱 불가하면 BadRequestException`, async () => {
+      const res = mockRes();
+      const req = {} as Request;
+
+      const badUser: JwtUser = { accountId: 'not-a-number', accountType: role };
+      await expect(
+        pick(controller).changePassword(
+          badUser,
+          { currentPassword: 'old', newPassword: 'new' },
+          req,
+          res,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('devIssueToken', () => {

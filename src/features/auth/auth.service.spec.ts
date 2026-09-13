@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -22,10 +18,6 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import {
-  SELLER_CREDENTIAL_REPOSITORY,
-  type ISellerCredentialRepository,
-} from '@/features/auth/repositories/seller-credential.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
 import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
@@ -35,7 +27,6 @@ describe('AuthService', () => {
   let mockConfig: jest.Mocked<ConfigService>;
   let mockJwt: jest.Mocked<JwtService>;
   let mockAccounts: jest.Mocked<IAccountRepository>;
-  let mockSellerCredentials: jest.Mocked<ISellerCredentialRepository>;
   let mockRefreshSessions: jest.Mocked<IRefreshSessionRepository>;
   let mockAuditLogs: jest.Mocked<IAuditLogRepository>;
 
@@ -53,13 +44,6 @@ describe('AuthService', () => {
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
       findAccountForJwt: jest.fn(),
-    };
-
-    mockSellerCredentials = {
-      findSellerCredentialByUsername: jest.fn(),
-      findSellerCredentialByAccountId: jest.fn(),
-      updateSellerLastLogin: jest.fn(),
-      updateSellerPasswordHash: jest.fn(),
     };
 
     mockRefreshSessions = {
@@ -86,10 +70,6 @@ describe('AuthService', () => {
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,
-        },
-        {
-          provide: SELLER_CREDENTIAL_REPOSITORY,
-          useValue: mockSellerCredentials,
         },
         {
           provide: REFRESH_SESSION_REPOSITORY,
@@ -265,6 +245,7 @@ describe('AuthService', () => {
         id: BigInt(1),
         status: 'ACTIVE',
         account_type: 'USER',
+        credential: null,
       });
 
       const result = await service.issueDevAccessToken(BigInt(1));
@@ -293,6 +274,7 @@ describe('AuthService', () => {
         id: BigInt(2),
         status: 'SUSPENDED',
         account_type: 'USER',
+        credential: null,
       });
 
       await expect(service.issueDevAccessToken(BigInt(2))).rejects.toThrow(

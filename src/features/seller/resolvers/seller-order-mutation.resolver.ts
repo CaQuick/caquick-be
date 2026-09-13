@@ -7,12 +7,15 @@ import type { SellerOrderSummaryOutput } from '@/features/seller/types/seller-ou
 import {
   CurrentUser,
   JwtAuthGuard,
+  Roles,
+  RolesGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
 
 @Resolver('Mutation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('SELLER')
 export class SellerOrderMutationResolver {
   constructor(private readonly orderService: SellerOrderService) {}
 

@@ -17,8 +17,6 @@ import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
 import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
-import { SellerBannerService } from '@/features/seller/services/seller-banner.service';
-import { SELLER_BANNER_SERVICE } from '@/features/seller/services/seller-banner.service.interface';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
@@ -78,10 +76,6 @@ import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-
     {
       provide: SELLER_FAQ_SERVICE,
       useClass: SellerFaqService,
-    },
-    {
-      provide: SELLER_BANNER_SERVICE,
-      useClass: SellerBannerService,
     },
     {
       provide: SELLER_AUDIT_SERVICE,

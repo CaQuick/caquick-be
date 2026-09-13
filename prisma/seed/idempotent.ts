@@ -5,6 +5,7 @@
  *   - 유저 이메일: SEED_USER_EMAIL_PREFIX (`seed-user-`)
  *   - 매장 이름:    SEED_STORE_NAME_PREFIX (`[SEED] `)
  *   - 배너 제목:    SEED_BANNER_TITLE_PREFIX (`[SEED] `)
+ *   - 관리자 이메일: SEED_ADMIN_EMAIL_PREFIX (`seed-admin-`)
  *
  * 정리 시 위 prefix에 매칭되는 row와 그 종속 데이터(주문/리뷰/찜/...)를
  * 삭제한 뒤 다시 삽입하므로, 수동으로 만든 다른 데이터는 보존된다.
@@ -14,6 +15,7 @@ import type { PrismaClient } from '@prisma/client';
 export const SEED_USER_EMAIL_PREFIX = 'seed-user-';
 export const SEED_STORE_NAME_PREFIX = '[SEED] ';
 export const SEED_BANNER_TITLE_PREFIX = '[SEED] ';
+export const SEED_ADMIN_EMAIL_PREFIX = 'seed-admin-';
 
 export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
   // 배너(링크 NONE, FK 없음)
@@ -33,6 +35,19 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
   });
   const storeIds = seedStores.map((s) => s.id);
   const sellerAccountIds = seedStores.map((s) => s.seller_account_id);
+
+  // 0) 리뷰·댓글 신고 — 리뷰/댓글/계정 FK가 RESTRICT라 그 앞에 정리한다
+  if (userIds.length > 0 || storeIds.length > 0) {
+    await prisma.reviewReport.deleteMany({
+      where: {
+        OR: [
+          { reporter_account_id: { in: userIds } },
+          { review: { OR: [{ account_id: { in: userIds } }, { store_id: { in: storeIds } }] } },
+          { review_comment: { account_id: { in: userIds } } },
+        ],
+      },
+    });
+  }
 
   // 1) 유저 종속 (주문, 리뷰, 찜, 최근본, 알림, 드래프트, 검색기록, 카트, 인증세션)
   if (userIds.length > 0) {
@@ -292,8 +307,8 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
 
   // 3) 매장의 seller account 본체
   if (sellerAccountIds.length > 0) {
-    await prisma.sellerCredential.deleteMany({
-      where: { seller_account_id: { in: sellerAccountIds } },
+    await prisma.accountCredential.deleteMany({
+      where: { account_id: { in: sellerAccountIds } },
     });
     await prisma.sellerProfile.deleteMany({
       where: { account_id: { in: sellerAccountIds } },
@@ -307,5 +322,21 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     await prisma.account.deleteMany({
       where: { id: { in: sellerAccountIds } },
     });
+  }
+
+  // 4) 관리자 (자격증명·인증세션만 종속. 감사 로그는 FK가 없어 남긴다)
+  const seedAdmins = await prisma.account.findMany({
+    where: { email: { startsWith: SEED_ADMIN_EMAIL_PREFIX } },
+    select: { id: true },
+  });
+  const adminIds = seedAdmins.map((a) => a.id);
+  if (adminIds.length > 0) {
+    await prisma.authRefreshSession.deleteMany({
+      where: { account_id: { in: adminIds } },
+    });
+    await prisma.accountCredential.deleteMany({
+      where: { account_id: { in: adminIds } },
+    });
+    await prisma.account.deleteMany({ where: { id: { in: adminIds } } });
   }
 }

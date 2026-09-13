@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 
 describe('id-parser', () => {
   it('유효한 숫자 문자열을 BigInt로 변환한다', () => {
@@ -45,5 +45,21 @@ describe('id-parser', () => {
 
   it('공백이 포함되면 BadRequestException을 던진다', () => {
     expect(() => parseId('1 2')).toThrow(BadRequestException);
+  });
+
+  describe('parseOptionalId', () => {
+    it.each([undefined, null])('%p은 null', (raw) => {
+      expect(parseOptionalId(raw)).toBeNull();
+    });
+
+    it('값이 있으면 parseId와 같다("0" 포함)', () => {
+      expect(parseOptionalId('0')).toBe(0n);
+      expect(parseOptionalId(' 42 ')).toBe(42n);
+    });
+
+    it('빈 문자열은 값 없음이 아니라 형식 오류다', () => {
+      expect(() => parseOptionalId('')).toThrow(BadRequestException);
+      expect(() => parseOptionalId('   ')).toThrow(BadRequestException);
+    });
   });
 });

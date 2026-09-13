@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import type { AuthRefreshSession } from '@prisma/client';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import type { AuthRefreshSession, Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import type { IRefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { PrismaService } from '@/prisma';
 
@@ -28,15 +29,36 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
     ipAddress?: string;
     expiresAt: Date;
   }): Promise<AuthRefreshSession> {
-    return this.prisma.authRefreshSession.create({
-      data: {
-        account_id: args.accountId,
-        token_hash: args.tokenHash,
-        user_agent: args.userAgent ?? null,
-        ip_address: args.ipAddress ?? null,
-        expires_at: args.expiresAt,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertAccountActiveForUpdate(tx, args.accountId);
+      return tx.authRefreshSession.create({
+        data: {
+          account_id: args.accountId,
+          token_hash: args.tokenHash,
+          user_agent: args.userAgent ?? null,
+          ip_address: args.ipAddress ?? null,
+          expires_at: args.expiresAt,
+        },
+      });
     });
+  }
+
+  /**
+   * 세션 발급·회전은 ACTIVE 계정에만. 계정 행을 잠그고(FOR UPDATE) 확인해, 관리자 정지
+   * 트랜잭션(status 갱신 + 전 세션 폐기)과 교차해도 정지된 계정에 새 세션이 남지 않게 한다 —
+   * 잠금을 기다린 쪽은 갱신된 status를 보고 실패한다.
+   */
+  private async assertAccountActiveForUpdate(
+    tx: Prisma.TransactionClient,
+    accountId: bigint,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<{ status: string }[]>`
+      SELECT status FROM account
+      WHERE id = ${accountId} AND deleted_at IS NULL
+      FOR UPDATE`;
+    if (rows[0]?.status !== 'ACTIVE') {
+      throw new ForbiddenException(AUTH_ERROR_MESSAGES.ACCOUNT_NOT_ACTIVE);
+    }
   }
 
   async findActiveRefreshSessionByHash(
@@ -62,6 +84,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
   }): Promise<AuthRefreshSession> {
     return this.prisma.$transaction(async (tx) => {
       const now = this.clock.now();
+      await this.assertAccountActiveForUpdate(tx, args.accountId);
 
       const newSession = await tx.authRefreshSession.create({
         data: {
