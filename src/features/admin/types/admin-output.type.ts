@@ -181,6 +181,7 @@ export interface AdminReviewReportOutput {
   reporterAccountId: string;
   reason: ReviewReportReason;
   detail: string | null;
+  contentSnapshot: string | null;
   status: ReviewReportStatus;
   resolvedByAccountId: string | null;
   resolvedAt: Date | null;

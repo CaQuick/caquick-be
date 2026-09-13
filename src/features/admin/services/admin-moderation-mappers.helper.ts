@@ -25,6 +25,7 @@ export function toAdminReviewReportOutput(row: {
   reporter_account_id: bigint;
   reason: AdminReviewReportOutput['reason'];
   detail: string | null;
+  content_snapshot: string | null;
   status: AdminReviewReportOutput['status'];
   resolved_by_account_id: bigint | null;
   resolved_at: Date | null;
@@ -40,6 +41,7 @@ export function toAdminReviewReportOutput(row: {
     reporterAccountId: row.reporter_account_id.toString(),
     reason: row.reason,
     detail: row.detail,
+    contentSnapshot: row.content_snapshot,
     status: row.status,
     resolvedByAccountId: row.resolved_by_account_id?.toString() ?? null,
     resolvedAt: row.resolved_at,

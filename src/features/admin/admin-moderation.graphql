@@ -57,6 +57,8 @@ type AdminReviewReport {
   reason: ReviewReportReason!
   """상세 설명. 없으면 null."""
   detail: String
+  """신고 시점의 대상 본문(리뷰는 2000자까지). 작성자가 삭제·재작성해도 무엇이 신고됐는지 남는다."""
+  contentSnapshot: String
   """처리 상태."""
   status: ReviewReportStatus!
   """처리한 관리자 계정 ID. 미처리면 null."""

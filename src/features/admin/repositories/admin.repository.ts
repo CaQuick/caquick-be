@@ -1233,17 +1233,20 @@ export class AdminRepository {
     actorAccountId: bigint;
   }): Promise<ReviewReport | 'not-found' | 'already-resolved'> {
     const now = new Date();
+    // 대상 id는 불변이라 트랜잭션 밖에서 읽는다 — 트랜잭션 안의 첫 일반 읽기가 REPEATABLE READ
+    // 스냅샷을 고정하므로, 잠금보다 먼저 읽으면 잠금 뒤 읽는 상태가 낡는다
+    const peek = await this.prisma.reviewReport.findFirst({
+      where: { id: args.reportId },
+      select: { review_id: true, review_comment_id: true },
+    });
+    if (!peek) return 'not-found';
+    const target = peek.review_comment_id
+      ? { kind: 'review_comment' as const, id: peek.review_comment_id }
+      : { kind: 'review' as const, id: peek.review_id! };
+
     return this.prisma.$transaction(async (tx) => {
       // 잠금 순서: 대상(리뷰/댓글) → 신고. 강제 삭제 경로도 대상을 먼저 잠그므로, 같은 대상의 다른
-      // 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다
-      const peek = await tx.reviewReport.findFirst({
-        where: { id: args.reportId },
-        select: { review_id: true, review_comment_id: true },
-      });
-      if (!peek) return 'not-found';
-      const target = peek.review_comment_id
-        ? { kind: 'review_comment' as const, id: peek.review_comment_id }
-        : { kind: 'review' as const, id: peek.review_id! };
+      // 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다.
       // 대상이 이미 삭제됐으면 잠기지 않지만 신고 처리는 계속돼야 한다
       await this.lockActiveRow(tx, target.kind, target.id);
 
