@@ -289,6 +289,39 @@ describe('AdminModerationService (real DB)', () => {
       expect(await auditCount('REVIEW', review.id)).toBe(0);
     });
 
+    it('같은 대상의 서로 다른 신고 두 건을 동시에 DELETE_TARGET 해도 교착 없이 둘 다 RESOLVED', async () => {
+      const review = await createReview(prisma);
+      const r1 = await createReviewReport(prisma, { review_id: review.id });
+      const r2 = await createReviewReport(prisma, { review_id: review.id });
+      const [a, b] = [await admin(), await admin()];
+
+      const results = await Promise.allSettled([
+        service.adminResolveReviewReport(a, {
+          reportId: r1.id.toString(),
+          action: 'DELETE_TARGET',
+        }),
+        service.adminResolveReviewReport(b, {
+          reportId: r2.id.toString(),
+          action: 'DELETE_TARGET',
+        }),
+      ]);
+
+      // 한쪽이 먼저 대상을 삭제하며 다른 신고까지 RESOLVED로 닫으므로, 다른 쪽은 already-resolved(400)
+      expect(results.map((r) => r.status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      const rejected = results.find(
+        (r) => r.status === 'rejected',
+      ) as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(BadRequestException);
+      const rows = await prisma.reviewReport.findMany({
+        where: { id: { in: [r1.id, r2.id] } },
+      });
+      expect(rows.map((r) => r.status)).toEqual(['RESOLVED', 'RESOLVED']);
+      expect(await auditCount('REVIEW', review.id, 'DELETE')).toBe(1);
+    });
+
     it('두 관리자가 동시에 처리해도 한쪽만 성공하고 감사는 1건', async () => {
       const report = await createReviewReport(prisma);
       const [a, b] = [await admin(), await admin()];

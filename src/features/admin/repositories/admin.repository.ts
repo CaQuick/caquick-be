@@ -1234,6 +1234,19 @@ export class AdminRepository {
   }): Promise<ReviewReport | 'not-found' | 'already-resolved'> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
+      // 잠금 순서: 대상(리뷰/댓글) → 신고. 강제 삭제 경로도 대상을 먼저 잠그므로, 같은 대상의 다른
+      // 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다
+      const peek = await tx.reviewReport.findFirst({
+        where: { id: args.reportId },
+        select: { review_id: true, review_comment_id: true },
+      });
+      if (!peek) return 'not-found';
+      const target = peek.review_comment_id
+        ? { kind: 'review_comment' as const, id: peek.review_comment_id }
+        : { kind: 'review' as const, id: peek.review_id! };
+      // 대상이 이미 삭제됐으면 잠기지 않지만 신고 처리는 계속돼야 한다
+      await this.lockActiveRow(tx, target.kind, target.id);
+
       if (!(await this.lockActiveRow(tx, 'review_report', args.reportId))) {
         return 'not-found';
       }
@@ -1241,10 +1254,6 @@ export class AdminRepository {
         where: { id: args.reportId },
       });
       if (report.status !== 'PENDING') return 'already-resolved';
-
-      const target = report.review_comment_id
-        ? { kind: 'review_comment' as const, id: report.review_comment_id }
-        : { kind: 'review' as const, id: report.review_id! };
 
       if (args.action === 'DELETE_TARGET') {
         await this.softDeleteTargetTx(tx, target, now, args.actorAccountId, {
