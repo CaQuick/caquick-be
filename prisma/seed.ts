@@ -101,6 +101,10 @@ function log(message: string): void {
 }
 
 main().catch((err: unknown) => {
-  console.error('[seed] 실패:', err);
+  // 오류 객체 통째로 찍지 않는다 — DB URL·자격증명 같은 env 값이 함께 남을 수 있다
+  console.error(
+    '[seed] 실패:',
+    err instanceof Error ? err.message : String(err),
+  );
   process.exit(1);
 });
