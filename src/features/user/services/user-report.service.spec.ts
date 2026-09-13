@@ -400,6 +400,36 @@ describe('UserReportService (real DB)', () => {
       expect(await prisma.reviewReport.count()).toBe(2);
     });
 
+    // 잠금 순서(리뷰 → 댓글 → 신고)가 삭제 두 경로에서 같아야 신고 행을 사이에 두고 교착하지 않는다
+    it('신고된 댓글 삭제와 부모 리뷰 삭제가 겹쳐도 둘 다 실패하지 않고 신고는 닫힌다', async () => {
+      const { review, author } = await visibleReview();
+      const commenter = await buyer();
+      const comment = await commentOn(review.id, commenter);
+      const r = await service.reportReviewComment(await buyer(), {
+        commentId: comment.id.toString(),
+        reason: 'SPAM',
+      });
+
+      const results = await Promise.all([
+        reviewRepo.softDeleteReview({
+          reviewId: review.id,
+          accountId: author,
+          now: new Date(),
+        }),
+        userRepo.softDeleteMyReviewComment({
+          accountId: commenter,
+          commentId: comment.id,
+        }),
+      ]);
+
+      expect(results[0]).toBe(true);
+      expect(['deleted', 'not-found']).toContain(results[1]);
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(r.reportId) },
+      });
+      expect(row.status).toBe('RESOLVED');
+    });
+
     // 어느 쪽이 먼저든 결과는 둘 중 하나여야 한다: NotFound 거절, 또는 접수 뒤 삭제가 닫음(RESOLVED).
     // 부모 리뷰 → 댓글 잠금 순서가 삭제와 같아야 교착 없이 이 성질이 유지된다
     it('부모 리뷰 삭제와 댓글 신고가 겹쳐도 PENDING 신고가 남지 않는다', async () => {
