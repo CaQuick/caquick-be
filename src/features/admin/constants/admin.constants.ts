@@ -118,3 +118,32 @@ export const MAX_REGION_NAME_LENGTH = 80;
 export const MAX_REGION_SLUG_LENGTH = 120;
 /** 정책: 소문자·숫자·`-`만(기존 시드 slug 'sgg-11440' 형식과 호환). */
 export const REGION_SLUG_PATTERN = /^[a-z0-9-]+$/;
+
+// ── 감사 로그 ──
+
+/** SDL AdminAuditTargetType과 1:1(Prisma AuditTargetType 전체). */
+export const AUDIT_TARGET_TYPES = [
+  'STORE',
+  'PRODUCT',
+  'ORDER',
+  'CONVERSATION',
+  'CHANGE_PASSWORD',
+  'ACCOUNT',
+  'BANNER',
+  'CATEGORY',
+  'TAG',
+  'REGION',
+  'REVIEW',
+  'REVIEW_COMMENT',
+  'REVIEW_REPORT',
+  'NOTIFICATION',
+] as const;
+export type AuditTargetTypeValue = (typeof AUDIT_TARGET_TYPES)[number];
+/** SDL AdminAuditActionType과 1:1. */
+export const AUDIT_ACTION_TYPES = [
+  'CREATE',
+  'UPDATE',
+  'DELETE',
+  'STATUS_CHANGE',
+] as const;
+export type AuditActionTypeValue = (typeof AUDIT_ACTION_TYPES)[number];

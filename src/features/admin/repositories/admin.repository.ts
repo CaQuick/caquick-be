@@ -99,6 +99,13 @@ export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
 }>;
 const adminReviewCommentInclude = { ...authorInclude } as const;
 
+/** 감사 로그 행 + 행위자 계정 종류(AuditLog에는 FK가 없어 별도 조회로 붙인다). */
+export type AdminAuditLogRow = Prisma.AuditLogGetPayload<
+  Record<string, never>
+> & {
+  actor: { account_type: AccountType } | null;
+};
+
 /** 지역 행 + 연결 매장 수(삭제 제외)·활성 하위 지역 수. */
 export type AdminRegionRow = Prisma.RegionGetPayload<{
   include: typeof regionInclude;
@@ -1875,5 +1882,59 @@ export class AdminRepository {
       await this.auditLogs.createAuditLog(audit(before), tx);
       return 'deleted';
     });
+  }
+
+  // ── 감사 로그 전역 ──
+
+  async listAuditLogs(args: {
+    actorAccountId?: bigint;
+    storeId?: bigint;
+    targetType?: AuditTargetType;
+    targetId?: bigint;
+    action?: AuditActionType;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminAuditLogRow[]> {
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...(args.actorAccountId !== undefined
+          ? { actor_account_id: args.actorAccountId }
+          : {}),
+        ...(args.storeId !== undefined ? { store_id: args.storeId } : {}),
+        ...(args.targetType ? { target_type: args.targetType } : {}),
+        ...(args.targetId !== undefined ? { target_id: args.targetId } : {}),
+        ...(args.action ? { action: args.action } : {}),
+        ...(args.fromCreatedAt || args.toCreatedAt
+          ? {
+              created_at: {
+                ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
+                ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+    // AuditLog는 계정 FK가 없다(계정이 지워져도 기록을 남기기 위해). 행위자 종류는 한 번에 붙인다
+    const actorIds = [...new Set(rows.map((r) => r.actor_account_id))];
+    const actors = actorIds.length
+      ? await this.prisma.account.findMany({
+          where: { id: { in: actorIds }, deleted_at: undefined },
+          select: { id: true, account_type: true },
+        })
+      : [];
+    const typeById = new Map(
+      actors.map((a) => [a.id.toString(), a.account_type]),
+    );
+    return rows.map((r) => ({
+      ...r,
+      actor: typeById.has(r.actor_account_id.toString())
+        ? { account_type: typeById.get(r.actor_account_id.toString())! }
+        : null,
+    }));
   }
 }
