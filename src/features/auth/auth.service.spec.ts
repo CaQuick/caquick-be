@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
