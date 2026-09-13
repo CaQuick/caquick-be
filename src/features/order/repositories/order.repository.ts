@@ -10,6 +10,51 @@ import {
 import { buildOrderStatusNotification } from '@/features/notification';
 import { activeWhere, PrismaService } from '@/prisma';
 
+/** 관리자 주문 목록 행. 매장은 첫 품목으로 정한다(단일 매장 구조). */
+export type AdminOrderRow = Prisma.OrderGetPayload<{
+  include: typeof adminOrderInclude;
+}>;
+/** 관리자 주문 상세 행: 전체 품목 + 구매자 요약 + 상태 이력. */
+export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
+  include: typeof adminOrderDetailInclude;
+}>;
+
+const adminOrderInclude = {
+  items: {
+    where: activeWhere,
+    select: { store_id: true },
+    orderBy: { id: 'asc' },
+    take: 1,
+  },
+} satisfies Prisma.OrderInclude;
+
+const adminOrderDetailInclude = {
+  account: {
+    select: {
+      id: true,
+      email: true,
+      status: true,
+      user_profile: { select: { nickname: true, deleted_at: true } },
+    },
+  },
+  status_histories: { where: activeWhere, orderBy: { changed_at: 'desc' } },
+  items: {
+    where: activeWhere,
+    orderBy: { id: 'asc' },
+    include: {
+      option_items: { where: activeWhere },
+      custom_texts: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+      free_edits: {
+        where: activeWhere,
+        orderBy: { sort_order: 'asc' },
+        include: {
+          attachments: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.OrderInclude;
+
 export interface MyOrderRow {
   id: bigint;
   order_number: string;
@@ -687,6 +732,12 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * 판매자 상태 변경. 주문 행을 잠근(FOR UPDATE) 뒤 잠금 시점 상태로 전이를 다시 판정한다 —
+   * 관리자 강제 취소(cancelOrderByAdmin)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
+   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다).
+   * assertTransition이 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
+   */
   async updateOrderStatusBySeller(args: {
     orderId: bigint;
     storeId: bigint;
@@ -694,26 +745,27 @@ export class OrderRepository {
     toStatus: OrderStatus;
     note: string | null;
     now: Date;
+    assertTransition: (fromStatus: OrderStatus) => void;
     ipAddress?: string;
     userAgent?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findFirst({
-        where: {
-          id: args.orderId,
-          items: {
-            some: {
-              store_id: args.storeId,
-            },
-          },
-        },
-      });
+      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
+        SELECT o.id, o.status FROM \`order\` o
+        WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM order_item i
+            WHERE i.order_id = o.id AND i.store_id = ${args.storeId}
+          )
+        FOR UPDATE OF o`;
+      const order = locked[0];
 
       if (!order) {
         return null;
       }
 
       const fromStatus = order.status;
+      args.assertTransition(fromStatus);
 
       const updatedOrder = await tx.order.update({
         where: {
@@ -759,7 +811,7 @@ export class OrderRepository {
         });
         await tx.notification.create({
           data: {
-            account_id: order.account_id,
+            account_id: updatedOrder.account_id,
             order_id: order.id,
             store_id: args.storeId,
             product_id: firstItem?.product_id ?? null,
@@ -788,6 +840,162 @@ export class OrderRepository {
       });
 
       return updatedOrder;
+    });
+  }
+
+  // ── 관리자 ──
+
+  /** 관리자 주문 목록 조건(매장 스코프 없음). 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다. */
+  private adminOrderScopeWhere(args: {
+    keyword?: string;
+    status?: OrderStatus;
+    storeId?: bigint;
+    accountId?: bigint;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+  }): Prisma.OrderWhereInput {
+    return {
+      ...(args.status ? { status: args.status } : {}),
+      ...(args.accountId !== undefined ? { account_id: args.accountId } : {}),
+      ...(args.storeId !== undefined
+        ? { items: { some: { store_id: args.storeId, ...activeWhere } } }
+        : {}),
+      ...(args.fromCreatedAt || args.toCreatedAt
+        ? {
+            created_at: {
+              ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
+              ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
+            },
+          }
+        : {}),
+      ...(args.keyword
+        ? {
+            OR: [
+              { order_number: { contains: args.keyword } },
+              { buyer_name: { contains: args.keyword } },
+              { buyer_phone: { contains: args.keyword } },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  async listOrdersForAdmin(args: {
+    keyword?: string;
+    status?: OrderStatus;
+    storeId?: bigint;
+    accountId?: bigint;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminOrderRow[]> {
+    return this.prisma.order.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.adminOrderScopeWhere(args),
+      },
+      include: adminOrderInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countOrdersForAdmin(args: {
+    keyword?: string;
+    status?: OrderStatus;
+    storeId?: bigint;
+    accountId?: bigint;
+    fromCreatedAt?: Date;
+    toCreatedAt?: Date;
+  }): Promise<number> {
+    return this.prisma.order.count({ where: this.adminOrderScopeWhere(args) });
+  }
+
+  async findOrderDetailForAdmin(
+    orderId: bigint,
+  ): Promise<AdminOrderDetailRow | null> {
+    return this.prisma.order.findFirst({
+      where: { id: orderId },
+      include: adminOrderDetailInclude,
+    });
+  }
+
+  /**
+   * 관리자 강제 취소. 주문 행을 잠근(FOR UPDATE) 뒤 트랜잭션 안에서 현재 상태로 취소 가능 여부를
+   * 다시 판정한다 — 판매자 상태 변경과 교차해도 둘 다 커밋되지 않게. 이력·알림(ORDER_CANCELED)·
+   * 감사(store_id는 첫 품목 매장)는 판매자 취소와 같은 규칙으로 같은 트랜잭션에 남긴다.
+   */
+  async cancelOrderByAdmin(args: {
+    orderId: bigint;
+    actorAccountId: bigint;
+    note: string;
+    now: Date;
+    canCancelFrom: (status: OrderStatus) => boolean;
+  }): Promise<AdminOrderRow | 'not-found' | 'not-cancellable'> {
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
+        SELECT id, status FROM \`order\`
+        WHERE id = ${args.orderId} AND deleted_at IS NULL
+        FOR UPDATE`;
+      const current = locked[0];
+      if (!current) return 'not-found';
+      if (!args.canCancelFrom(current.status)) return 'not-cancellable';
+
+      const updated = await tx.order.update({
+        where: { id: current.id },
+        data: { status: OrderStatus.CANCELED, canceled_at: args.now },
+        include: adminOrderInclude,
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          order_id: current.id,
+          from_status: current.status,
+          to_status: OrderStatus.CANCELED,
+          changed_at: args.now,
+          note: args.note,
+        },
+      });
+
+      const firstItem = await tx.orderItem.findFirst({
+        where: { order_id: current.id, ...activeWhere },
+        orderBy: { id: 'asc' },
+        select: { product_id: true, store_id: true },
+      });
+      // 알림 내용은 notification feature가 단일 소스 — 판매자 취소와 같은 payload
+      const notification = buildOrderStatusNotification(
+        updated.order_number,
+        OrderStatus.CANCELED,
+      );
+      if (notification) {
+        await tx.notification.create({
+          data: {
+            account_id: updated.account_id,
+            order_id: current.id,
+            store_id: firstItem?.store_id ?? null,
+            product_id: firstItem?.product_id ?? null,
+            ...notification,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actor_account_id: args.actorAccountId,
+          store_id: firstItem?.store_id ?? null,
+          target_type: AuditTargetType.ORDER,
+          target_id: current.id,
+          action: AuditActionType.STATUS_CHANGE,
+          before_json: { status: current.status },
+          after_json: {
+            status: OrderStatus.CANCELED,
+            note: args.note,
+            byAdmin: true,
+          },
+        },
+      });
+
+      return updated;
     });
   }
 }

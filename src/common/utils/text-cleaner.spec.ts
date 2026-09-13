@@ -31,6 +31,18 @@ describe('text-cleaner', () => {
       expect(() => cleanRequiredText('123456', 5)).toThrow(BadRequestException);
     });
 
+    // DTO(MaxLength)·MySQL utf8mb4와 같은 기준. UTF-16 단위로 세면 이모지 3개가 6으로 잡힌다
+    it('길이는 코드 포인트로 센다(이모지 3개는 3)', () => {
+      expect(cleanRequiredText('😀😀😀', 3)).toBe('😀😀😀');
+      expect(() => cleanRequiredText('😀😀😀😀', 3)).toThrow(
+        BadRequestException,
+      );
+      expect(cleanNullableText('😀😀😀', 3)).toBe('😀😀😀');
+      expect(() => cleanNullableText('😀😀😀😀', 3)).toThrow(
+        BadRequestException,
+      );
+    });
+
     it('앞뒤 공백을 제거한 결과를 반환해야 한다', () => {
       expect(cleanRequiredText('  hello  ', 100)).toBe('hello');
     });

@@ -5,6 +5,7 @@ import type {
   BannerPlacement,
   CategoryType,
   IdentityProvider,
+  OrderStatus,
   ReviewReportReason,
   ReviewReportStatus,
   StoreMapProvider,
@@ -225,4 +226,81 @@ export interface AdminReviewCommentOutput {
   content: string;
   deleted: boolean;
   createdAt: Date;
+}
+
+export interface AdminOrderSummaryOutput {
+  id: string;
+  orderNumber: string;
+  accountId: string;
+  storeId: string | null;
+  status: OrderStatus;
+  pickupAt: Date;
+  buyerName: string;
+  buyerPhone: string;
+  totalPrice: number;
+  createdAt: Date;
+}
+
+export interface AdminOrderItemDetailOutput {
+  id: string;
+  storeId: string;
+  productId: string;
+  productNameSnapshot: string;
+  regularPriceSnapshot: number;
+  salePriceSnapshot: number | null;
+  quantity: number;
+  itemSubtotalPrice: number;
+  optionItems: {
+    id: string;
+    groupNameSnapshot: string;
+    optionTitleSnapshot: string;
+    optionPriceDeltaSnapshot: number;
+  }[];
+  customTexts: {
+    id: string;
+    tokenKeySnapshot: string;
+    defaultTextSnapshot: string;
+    valueText: string;
+    sortOrder: number;
+  }[];
+  freeEdits: {
+    id: string;
+    cropImageUrl: string;
+    descriptionText: string;
+    sortOrder: number;
+    attachments: { id: string; imageUrl: string; sortOrder: number }[];
+  }[];
+}
+
+export interface AdminOrderDetailOutput {
+  id: string;
+  orderNumber: string;
+  buyer: {
+    accountId: string;
+    email: string | null;
+    nickname: string | null;
+    status: AccountStatus;
+  };
+  status: OrderStatus;
+  pickupAt: Date;
+  buyerName: string;
+  buyerPhone: string;
+  subtotalPrice: number;
+  discountPrice: number;
+  totalPrice: number;
+  submittedAt: Date | null;
+  confirmedAt: Date | null;
+  madeAt: Date | null;
+  pickedUpAt: Date | null;
+  canceledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  items: AdminOrderItemDetailOutput[];
+  statusHistories: {
+    id: string;
+    fromStatus: OrderStatus | null;
+    toStatus: OrderStatus;
+    changedAt: Date;
+    note: string | null;
+  }[];
 }

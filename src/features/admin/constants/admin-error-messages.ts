@@ -39,6 +39,10 @@ export const REVIEW_REPORT_ALREADY_RESOLVED =
   'Review report is already resolved.';
 export const REVIEW_NOT_FOUND = 'Review not found.';
 export const REVIEW_COMMENT_NOT_FOUND = 'Review comment not found.';
+
+// ── 주문 ──
+
+export const ORDER_NOT_FOUND = 'Order not found.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
