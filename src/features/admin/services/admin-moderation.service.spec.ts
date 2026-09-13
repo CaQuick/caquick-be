@@ -257,6 +257,43 @@ describe('AdminModerationService (real DB)', () => {
       expect(await auditCount('REVIEW', review.id)).toBe(0);
     });
 
+    // 대상 하드 삭제(ON DELETE SET NULL)로 FK가 둘 다 비면 리뷰 신고로 오해돼 review_id: null 필터가
+    // 댓글 신고 전부에 번진다 — 목록·상세·처리 모두 없는 것으로 본다
+    it('대상 FK가 비워진 신고는 목록·상세·처리에서 없는 것으로 보고 다른 신고에 번지지 않는다', async () => {
+      const actor = await admin();
+      const orphan = await createReviewReport(prisma);
+      const comment = await commentOn((await createReview(prisma)).id);
+      const other = await createReviewReport(prisma, {
+        review_id: null,
+        review_comment_id: comment.id,
+      });
+      await prisma.reviewReport.update({
+        where: { id: orphan.id },
+        data: { review_id: null },
+      });
+
+      const list = await service.adminReviewReports(actor);
+      expect(list.items.map((r) => r.id)).toEqual([other.id.toString()]);
+      expect(list.totalCount).toBe(1);
+      await expect(service.adminReviewReport(actor, orphan.id)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(
+        service.adminResolveReviewReport(actor, {
+          reportId: orphan.id.toString(),
+          action: 'DELETE_TARGET',
+          note: 'x',
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(
+        (
+          await prisma.reviewReport.findUniqueOrThrow({
+            where: { id: other.id },
+          })
+        ).status,
+      ).toBe('PENDING');
+    });
+
     it('이미 처리된 신고는 BadRequestException, 없는 신고는 NotFoundException', async () => {
       const report = await createReviewReport(prisma, { status: 'REJECTED' });
       await expect(

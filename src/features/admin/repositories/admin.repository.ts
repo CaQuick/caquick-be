@@ -1190,11 +1190,21 @@ export class AdminRepository {
 
   // ── 리뷰 모더레이션 ──
 
+  /**
+   * 대상 FK가 둘 다 비워진 신고(대상 하드 삭제 시 ON DELETE SET NULL)는 없는 것으로 본다 —
+   * 앱 경로는 soft-delete뿐이라 정상 흐름에서는 생기지 않지만, 생기면 리뷰 신고로 잘못 해석돼
+   * `review_id: null` 필터가 댓글 신고 전부에 번진다.
+   */
+  private readonly targetedReportWhere: Prisma.ReviewReportWhereInput = {
+    OR: [{ review_id: { not: null } }, { review_comment_id: { not: null } }],
+  };
+
   private reviewReportFilterWhere(filter: {
     status: 'PENDING' | 'RESOLVED' | 'REJECTED' | null;
     targetType?: 'REVIEW' | 'REVIEW_COMMENT';
   }): Prisma.ReviewReportWhereInput {
     return {
+      ...this.targetedReportWhere,
       ...(filter.status ? { status: filter.status } : {}),
       ...(filter.targetType === 'REVIEW' ? { review_id: { not: null } } : {}),
       ...(filter.targetType === 'REVIEW_COMMENT'
@@ -1232,7 +1242,7 @@ export class AdminRepository {
     reportId: bigint,
   ): Promise<AdminReviewReportDetailRow | null> {
     return this.prisma.reviewReport.findFirst({
-      where: { id: reportId },
+      where: { id: reportId, ...this.targetedReportWhere },
       include: reviewReportDetailInclude,
     });
   }
@@ -1256,9 +1266,13 @@ export class AdminRepository {
       select: { review_id: true, review_comment_id: true },
     });
     if (!peek) return 'not-found';
+    // 대상 FK가 둘 다 비워진 신고는 없는 것으로 본다(targetedReportWhere와 같은 기준)
     const target = peek.review_comment_id
       ? { kind: 'review_comment' as const, id: peek.review_comment_id }
-      : { kind: 'review' as const, id: peek.review_id! };
+      : peek.review_id
+        ? { kind: 'review' as const, id: peek.review_id }
+        : null;
+    if (!target) return 'not-found';
 
     return this.prisma.$transaction(async (tx) => {
       // 잠금 순서: (부모 리뷰 →) 대상(리뷰/댓글) → 신고. 강제 삭제 경로도 같은 순서라, 같은 대상의
