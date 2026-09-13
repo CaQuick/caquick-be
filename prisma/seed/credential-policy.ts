@@ -11,9 +11,8 @@ export function assertSeedCredential(args: {
   password: string;
 }): void {
   if (!USERNAME_PATTERN.test(args.username)) {
-    throw new Error(
-      `시드 username 정책 위반: 4~80자, 소문자·숫자·._- 만 허용 (${args.username})`,
-    );
+    // 값은 메시지에 싣지 않는다 — env에서 온 자격증명이 오류 로그로 새는 경로(CodeQL clear-text-logging)
+    throw new Error('시드 username 정책 위반: 4~80자, 소문자·숫자·._- 만 허용');
   }
   if (!new IsStrongPasswordConstraint().validate(args.password)) {
     throw new Error(
