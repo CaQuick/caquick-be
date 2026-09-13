@@ -5,6 +5,8 @@ import type {
   BannerPlacement,
   CategoryType,
   IdentityProvider,
+  ReviewReportReason,
+  ReviewReportStatus,
   StoreMapProvider,
 } from '@prisma/client';
 
@@ -170,4 +172,57 @@ export interface AdminTagOutput {
   productCount: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AdminReviewReportOutput {
+  id: string;
+  targetType: 'REVIEW' | 'REVIEW_COMMENT';
+  targetId: string;
+  reporterAccountId: string;
+  reason: ReviewReportReason;
+  detail: string | null;
+  contentSnapshot: string | null;
+  status: ReviewReportStatus;
+  resolvedByAccountId: string | null;
+  resolvedAt: Date | null;
+  resolutionNote: string | null;
+  createdAt: Date;
+}
+
+export interface AdminReviewReportDetailOutput {
+  report: AdminReviewReportOutput;
+  target: {
+    id: string;
+    reviewId: string | null;
+    authorAccountId: string;
+    authorNickname: string | null;
+    content: string | null;
+    storeId: string;
+    deleted: boolean;
+  };
+}
+
+export interface AdminReviewOutput {
+  id: string;
+  storeId: string;
+  storeName: string;
+  productId: string;
+  authorAccountId: string;
+  authorNickname: string | null;
+  rating: string;
+  content: string | null;
+  commentCount: number;
+  likeCount: number;
+  deleted: boolean;
+  createdAt: Date;
+}
+
+export interface AdminReviewCommentOutput {
+  id: string;
+  reviewId: string;
+  authorAccountId: string;
+  authorNickname: string | null;
+  content: string;
+  deleted: boolean;
+  createdAt: Date;
 }

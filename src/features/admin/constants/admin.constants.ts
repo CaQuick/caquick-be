@@ -58,3 +58,20 @@ export type CategoryTypeValue = (typeof CATEGORY_TYPES)[number];
 export const MAX_CATEGORY_NAME_LENGTH = 100;
 export const MAX_CATEGORY_DESCRIPTION_LENGTH = 255;
 export const MAX_TAG_NAME_LENGTH = 80;
+
+// ── 리뷰 모더레이션 ──
+
+/** SDL ReviewReportStatus와 1:1. */
+export const REVIEW_REPORT_STATUSES = [
+  'PENDING',
+  'RESOLVED',
+  'REJECTED',
+] as const;
+export type ReviewReportStatusValue = (typeof REVIEW_REPORT_STATUSES)[number];
+/** SDL AdminReviewReportTargetType과 1:1. */
+export const REVIEW_REPORT_TARGET_TYPES = ['REVIEW', 'REVIEW_COMMENT'] as const;
+export type ReviewReportTargetTypeValue =
+  (typeof REVIEW_REPORT_TARGET_TYPES)[number];
+/** SDL AdminReviewReportAction과 1:1. */
+export const REVIEW_REPORT_ACTIONS = ['DELETE_TARGET', 'REJECT'] as const;
+export type ReviewReportActionValue = (typeof REVIEW_REPORT_ACTIONS)[number];
