@@ -13,7 +13,10 @@ import {
   type Store,
 } from '@prisma/client';
 
-import { USERNAME_TAKEN } from '@/features/admin/constants/admin-error-messages';
+import {
+  REGION_NOT_SELECTABLE,
+  USERNAME_TAKEN,
+} from '@/features/admin/constants/admin-error-messages';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -29,7 +32,8 @@ type LockableTable =
   | 'tag'
   | 'review'
   | 'review_comment'
-  | 'review_report';
+  | 'review_report'
+  | 'region';
 
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
@@ -94,6 +98,26 @@ export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
   include: typeof adminReviewCommentInclude;
 }>;
 const adminReviewCommentInclude = { ...authorInclude } as const;
+
+/** 지역 행 + 연결 매장 수(삭제 제외)·활성 하위 지역 수. */
+export type AdminRegionRow = Prisma.RegionGetPayload<{
+  include: typeof regionInclude;
+}>;
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
+}
+
+const regionInclude = {
+  _count: {
+    select: {
+      stores: { where: activeWhere },
+      children: { where: visibleWhere },
+    },
+  },
+} as const;
 
 /** 카테고리 행 + 연결 상품 수(삭제 연결 제외). */
 export type AdminCategoryRow = Prisma.CategoryGetPayload<{
@@ -379,6 +403,24 @@ export class AdminRepository {
       FOR UPDATE OF r`;
   }
 
+  /**
+   * 지역 FK를 잇는 쓰기(매장 연결·하위 생성·2차 재활성화)는 같은 트랜잭션에서 지역 행을 FOR SHARE로
+   * 잠근다 — 지역 삭제·비활성화(FOR UPDATE)와 직렬화되어, 그쪽 커밋 뒤 FK 갱신만 통과해 삭제된
+   * 지역에 매달리는 일이 없다. 잠긴 시점에 쓸 수 있는 상태(레벨·활성·미삭제)여야 true.
+   */
+  private async lockUsableRegion(
+    tx: Prisma.TransactionClient,
+    regionId: bigint,
+    level: 1 | 2,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<{ id: bigint }[]>`
+      SELECT id FROM region
+      WHERE id = ${regionId} AND level = ${level}
+        AND is_active = 1 AND deleted_at IS NULL
+      FOR SHARE`;
+    return rows.length > 0;
+  }
+
   // ── 배너 ──
 
   private bannerFilterWhere(filter: {
@@ -612,6 +654,12 @@ export class AdminRepository {
         await tx.sellerProfile.create({
           data: { ...args.profile, account_id: account.id },
         });
+        if (
+          args.store.region_id != null &&
+          !(await this.lockUsableRegion(tx, BigInt(args.store.region_id), 2))
+        ) {
+          throw new BadRequestException(REGION_NOT_SELECTABLE);
+        }
         const store = await tx.store.create({
           data: { ...args.store, seller_account_id: account.id },
         });
@@ -834,13 +882,22 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
+  /**
+   * 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null.
+   * regionId(연결)는 같은 트랜잭션에서 지역을 잠가 확인한다 — 미리 확인한 값은 지역 삭제와 교차하면 낡는다.
+   */
   async updateStore(
-    args: { storeId: bigint; data: Prisma.StoreUpdateInput },
+    args: { storeId: bigint; data: Prisma.StoreUpdateInput; regionId?: bigint },
     audit: (before: Store, after: Store) => AuditEntry,
-  ): Promise<Store | null> {
+  ): Promise<Store | null | 'region-not-selectable'> {
     return this.prisma.$transaction(async (tx) => {
       if (!(await this.lockActiveRow(tx, 'store', args.storeId))) return null;
+      if (
+        args.regionId !== undefined &&
+        !(await this.lockUsableRegion(tx, args.regionId, 2))
+      ) {
+        return 'region-not-selectable';
+      }
       const before = await tx.store.findFirstOrThrow({
         where: { id: args.storeId },
       });
@@ -1642,5 +1699,181 @@ export class AdminRepository {
       })),
     });
     return result.count;
+  }
+
+  // ── 지역 마스터 ──
+
+  async listRegions(args: {
+    parentId?: bigint;
+    includeInactive: boolean;
+  }): Promise<AdminRegionRow[]> {
+    return this.prisma.region.findMany({
+      where: {
+        ...(args.parentId !== undefined ? { parent_id: args.parentId } : {}),
+        ...(args.includeInactive ? {} : { is_active: true }),
+      },
+      include: regionInclude,
+      orderBy: [{ level: 'asc' }, { sort_order: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async findRegionById(regionId: bigint): Promise<AdminRegionRow | null> {
+    return this.prisma.region.findFirst({
+      where: { id: regionId },
+      include: regionInclude,
+    });
+  }
+
+  /** 상위로 지정 가능한 지역: 활성 1차. */
+  async isActiveRegionGroup(regionId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { id: regionId, level: 1, is_active: true },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  async existsActiveRegionSlug(slug: string): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { slug },
+        select: { id: true },
+      })) !== null
+    );
+  }
+
+  /**
+   * 삭제된 같은 slug가 있으면 복구(unique 인덱스), 없으면 생성. 감사와 한 트랜잭션.
+   * 상위는 같은 트랜잭션에서 잠가 확인한다(상위 삭제·비활성화와 교차 방지). 활성 slug 충돌은 P2002로 잡는다.
+   */
+  async createOrRestoreRegion(
+    data: {
+      parent_id: bigint | null;
+      level: number;
+      name: string;
+      slug: string;
+      sort_order: number;
+      is_active: boolean;
+      center_lat: Prisma.Decimal | null;
+      center_lng: Prisma.Decimal | null;
+    },
+    audit: (row: AdminRegionRow) => AuditEntry,
+  ): Promise<AdminRegionRow | 'parent-not-active' | 'slug-taken'> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (
+          data.parent_id !== null &&
+          !(await this.lockUsableRegion(tx, data.parent_id, 1))
+        ) {
+          return 'parent-not-active';
+        }
+        const deleted = await tx.region.findFirst({
+          where: { slug: data.slug, deleted_at: { not: null } },
+          select: { id: true },
+        });
+        const row = deleted
+          ? await tx.region.update({
+              where: { id: deleted.id },
+              data: { ...data, deleted_at: null },
+              include: regionInclude,
+            })
+          : await tx.region.create({ data, include: regionInclude });
+        await this.auditLogs.createAuditLog(audit(row), tx);
+        return row;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) return 'slug-taken';
+      throw error;
+    }
+  }
+
+  /**
+   * 잠금 뒤 트랜잭션 안에서 계층 불변식을 지킨다 — 1차 비활성화는 활성 하위가 없을 때만,
+   * 2차 활성화는 상위가 활성일 때만(상위를 FOR SHARE로 잠가 비활성화·삭제와 직렬화).
+   * slug는 삭제된 행까지 포함해 확인한다(전역 unique 인덱스). 경쟁으로 새는 충돌은 P2002로 잡는다.
+   */
+  async updateRegion(
+    args: { regionId: bigint; data: Prisma.RegionUpdateInput },
+    audit: (before: AdminRegionRow, after: AdminRegionRow) => AuditEntry,
+  ): Promise<
+    | AdminRegionRow
+    | 'not-found'
+    | 'slug-taken'
+    | 'has-active-children'
+    | 'parent-not-active'
+  > {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (!(await this.lockActiveRow(tx, 'region', args.regionId))) {
+          return 'not-found';
+        }
+        const before = await tx.region.findFirstOrThrow({
+          where: { id: args.regionId },
+          include: regionInclude,
+        });
+        if (
+          typeof args.data.slug === 'string' &&
+          args.data.slug !== before.slug &&
+          (await tx.region.findFirst({
+            where: { slug: args.data.slug, deleted_at: undefined },
+            select: { id: true },
+          }))
+        ) {
+          return 'slug-taken';
+        }
+        if (
+          args.data.is_active === false &&
+          before.level === 1 &&
+          before._count.children > 0
+        ) {
+          return 'has-active-children';
+        }
+        if (
+          args.data.is_active === true &&
+          !before.is_active &&
+          before.parent_id !== null &&
+          !(await this.lockUsableRegion(tx, before.parent_id, 1))
+        ) {
+          return 'parent-not-active';
+        }
+        const after = await tx.region.update({
+          where: { id: args.regionId },
+          data: args.data,
+          include: regionInclude,
+        });
+        await this.auditLogs.createAuditLog(audit(before, after), tx);
+        return after;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) return 'slug-taken';
+      throw error;
+    }
+  }
+
+  /**
+   * 잠금 뒤 트랜잭션 안에서 연결 매장(2차)·활성 하위(1차)를 세어 있으면 거절한다 —
+   * 미리 센 값은 그 사이 새 연결로 낡을 수 있다.
+   */
+  async softDeleteRegion(
+    regionId: bigint,
+    audit: (before: AdminRegionRow) => AuditEntry,
+  ): Promise<'deleted' | 'not-found' | 'has-stores' | 'has-children'> {
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'region', regionId)))
+        return 'not-found';
+      const before = await tx.region.findFirstOrThrow({
+        where: { id: regionId },
+        include: regionInclude,
+      });
+      if (before._count.stores > 0) return 'has-stores';
+      if (before._count.children > 0) return 'has-children';
+      await tx.region.update({
+        where: { id: regionId },
+        data: { deleted_at: new Date() },
+      });
+      await this.auditLogs.createAuditLog(audit(before), tx);
+      return 'deleted';
+    });
   }
 }

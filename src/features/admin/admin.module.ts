@@ -12,6 +12,8 @@ import { AdminOrderMutationResolver } from '@/features/admin/resolvers/admin-ord
 import { AdminOrderQueryResolver } from '@/features/admin/resolvers/admin-order-query.resolver';
 import { AdminProductMutationResolver } from '@/features/admin/resolvers/admin-product-mutation.resolver';
 import { AdminProductQueryResolver } from '@/features/admin/resolvers/admin-product-query.resolver';
+import { AdminRegionMutationResolver } from '@/features/admin/resolvers/admin-region-mutation.resolver';
+import { AdminRegionQueryResolver } from '@/features/admin/resolvers/admin-region-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/admin/resolvers/admin-seller-mutation.resolver';
 import { AdminSellerQueryResolver } from '@/features/admin/resolvers/admin-seller-query.resolver';
 import { AdminStoreMutationResolver } from '@/features/admin/resolvers/admin-store-mutation.resolver';
@@ -26,6 +28,7 @@ import { AdminModerationService } from '@/features/admin/services/admin-moderati
 import { AdminNotificationService } from '@/features/admin/services/admin-notification.service';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
+import { AdminRegionService } from '@/features/admin/services/admin-region.service';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.service';
@@ -51,6 +54,7 @@ import { OrderModule } from '@/features/order';
     AdminModerationService,
     AdminOrderService,
     AdminNotificationService,
+    AdminRegionService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -70,6 +74,8 @@ import { OrderModule } from '@/features/order';
     AdminOrderQueryResolver,
     AdminOrderMutationResolver,
     AdminNotificationMutationResolver,
+    AdminRegionQueryResolver,
+    AdminRegionMutationResolver,
   ],
 })
 export class AdminModule {}
