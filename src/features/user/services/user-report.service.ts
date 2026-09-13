@@ -16,7 +16,7 @@ import type { ReportReviewCommentInput } from '@/features/user/dto/inputs/report
 import type { ReportReviewInput } from '@/features/user/dto/inputs/report-review.input';
 import {
   ReviewReportRepository,
-  type ReportTargetRow,
+  type ReportTarget,
 } from '@/features/user/repositories/review-report.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
@@ -24,7 +24,7 @@ import type { ReviewReportResult } from '@/features/user/types/user-review-outpu
 
 /**
  * 리뷰·댓글 신고 접수. 처리(삭제/기각)는 관리자 API가 한다.
- * 본인 작성물은 신고할 수 없고, 같은 대상의 미처리 신고는 새로 만들지 않는다(멱등).
+ * 대상 확인·본인 판정·멱등·생성은 repository가 대상·신고자를 잠근 한 트랜잭션에서 처리한다.
  */
 @Injectable()
 export class UserReportService extends UserBaseService {
@@ -40,11 +40,12 @@ export class UserReportService extends UserBaseService {
     input: ReportReviewInput,
   ): Promise<ReviewReportResult> {
     await this.requireActiveUser(accountId);
-    const reviewId = parseId(input.reviewId);
-    const target = await this.reports.findReportableReview(reviewId);
-    if (!target)
-      throw new NotFoundException(USER_REVIEW_ERRORS.REVIEW_NOT_FOUND);
-    return this.submit(accountId, target, { reviewId }, input);
+    return this.submit(
+      accountId,
+      { kind: 'review', id: parseId(input.reviewId) },
+      input,
+      USER_REVIEW_ERRORS.REVIEW_NOT_FOUND,
+    );
   }
 
   async reportReviewComment(
@@ -52,42 +53,41 @@ export class UserReportService extends UserBaseService {
     input: ReportReviewCommentInput,
   ): Promise<ReviewReportResult> {
     await this.requireActiveUser(accountId);
-    const commentId = parseId(input.commentId);
-    const target = await this.reports.findReportableComment(commentId);
-    if (!target) {
-      throw new NotFoundException(USER_REVIEW_ERRORS.COMMENT_NOT_FOUND);
-    }
     return this.submit(
       accountId,
-      target,
-      { reviewCommentId: commentId },
+      { kind: 'review_comment', id: parseId(input.commentId) },
       input,
+      USER_REVIEW_ERRORS.COMMENT_NOT_FOUND,
     );
   }
 
   private async submit(
     accountId: bigint,
-    target: ReportTargetRow,
-    key: { reviewId?: bigint; reviewCommentId?: bigint },
+    target: ReportTarget,
     input: { reason: ReviewReport['reason']; detail?: string | null },
+    notFoundMessage: string,
   ): Promise<ReviewReportResult> {
-    if (target.account_id === accountId) {
-      throw new BadRequestException(
-        USER_REVIEW_ERRORS.CANNOT_REPORT_OWN_CONTENT,
-      );
-    }
-    // 조회·생성은 repository가 신고자 행을 잠근 트랜잭션 안에서 한다(동시 요청 중복 방지)
-    const { report, created } = await this.reports.findOrCreatePendingReport({
+    const result = await this.reports.submitReport({
       reporterAccountId: accountId,
-      reviewId: key.reviewId ?? null,
-      reviewCommentId: key.reviewCommentId ?? null,
+      target,
       reason: input.reason,
       detail: cleanNullableText(input.detail, MAX_REVIEW_REPORT_DETAIL_LENGTH),
-      // 작성자가 삭제·재작성하면 같은 id가 새 내용으로 복원되므로 신고 시점 본문을 남긴다
-      contentSnapshot:
-        target.content?.slice(0, MAX_REVIEW_REPORT_SNAPSHOT_LENGTH) ?? null,
+      snapshotLength: MAX_REVIEW_REPORT_SNAPSHOT_LENGTH,
     });
-    return this.toResult(report, !created);
+    switch (result.outcome) {
+      case 'created':
+      case 'already-pending':
+        return this.toResult(
+          result.report,
+          result.outcome === 'already-pending',
+        );
+      case 'not-found':
+        throw new NotFoundException(notFoundMessage);
+      case 'own-content':
+        throw new BadRequestException(
+          USER_REVIEW_ERRORS.CANNOT_REPORT_OWN_CONTENT,
+        );
+    }
   }
 
   private toResult(
