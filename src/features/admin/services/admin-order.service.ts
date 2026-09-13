@@ -16,7 +16,7 @@ import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import { ORDER_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import {
   ADMIN_CANCEL_NOTE_PREFIX,
-  MAX_REASON_LENGTH,
+  MAX_ADMIN_CANCEL_NOTE_LENGTH,
 } from '@/features/admin/constants/admin.constants';
 import type { AdminCancelOrderInput } from '@/features/admin/dto/inputs/admin-cancel-order.input';
 import type { AdminOrderListInput } from '@/features/admin/dto/inputs/admin-order-list.input';
@@ -101,7 +101,7 @@ export class AdminOrderService extends AdminBaseService {
     input: AdminCancelOrderInput,
   ): Promise<AdminOrderSummaryOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const note = cleanRequiredText(input.note, MAX_REASON_LENGTH);
+    const note = cleanRequiredText(input.note, MAX_ADMIN_CANCEL_NOTE_LENGTH);
     // 사전 검사는 빠른 거절용 — 최종 판정은 repository가 잠금 뒤 트랜잭션 안에서 다시 한다
     const current = await this.orderRepository.findOrderDetailForAdmin(
       parseId(input.orderId),

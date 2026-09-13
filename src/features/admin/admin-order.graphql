@@ -205,6 +205,6 @@ input AdminOrderListInput {
 """주문 강제 취소 입력."""
 input AdminCancelOrderInput {
   orderId: ID!
-  """취소 사유. 필수. 최대 500자. 상태 이력과 감사 로그에 기록된다."""
+  """취소 사유. 필수. 최대 494자('[관리자] ' 접두를 붙여 500자 이내로 이력에 남는다). 감사 로그에도 기록된다."""
   note: String!
 }

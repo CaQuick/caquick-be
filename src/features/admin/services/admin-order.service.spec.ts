@@ -23,6 +23,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('AdminOrderService (real DB)', () => {
   let service: AdminOrderService;
+  let orderRepo: OrderRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -37,6 +38,7 @@ describe('AdminOrderService (real DB)', () => {
       ],
     });
     service = module.get(AdminOrderService);
+    orderRepo = module.get(OrderRepository);
     prisma = p;
   });
 
@@ -264,6 +266,65 @@ describe('AdminOrderService (real DB)', () => {
           note: 'x',
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('사유는 접두를 붙여 500자 이내여야 한다(494자 허용, 495자 거절)', async () => {
+      const { order } = await orderWithItem();
+      await expect(
+        service.adminCancelOrder(await admin(), {
+          orderId: order.id.toString(),
+          note: 'x'.repeat(495),
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await service.adminCancelOrder(await admin(), {
+        orderId: order.id.toString(),
+        note: 'x'.repeat(494),
+      });
+      const history = await prisma.orderStatusHistory.findFirstOrThrow({
+        where: { order_id: order.id },
+      });
+      expect(history.note).toHaveLength(500);
+      expect(history.note?.startsWith('[관리자] ')).toBe(true);
+    });
+
+    // 판매자 확인과 교차: 어느 쪽이 먼저든 최종은 CANCELED이고 이력은 실제 전이 순서만 남는다.
+    // 판매자 쪽이 잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다
+    it('판매자 상태 변경과 동시에 취소해도 취소가 덮어써지지 않는다', async () => {
+      const { order, storeId } = await orderWithItem();
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      const [, sellerResult] = await Promise.allSettled([
+        service.adminCancelOrder(await admin(), {
+          orderId: order.id.toString(),
+          note: 'a',
+        }),
+        orderRepo.updateOrderStatusBySeller({
+          orderId: order.id,
+          storeId,
+          actorAccountId: seller.id,
+          toStatus: 'CONFIRMED',
+          note: null,
+          now: new Date(),
+          assertTransition: (from) => {
+            if (from !== 'SUBMITTED') throw new BadRequestException('stale');
+          },
+        }),
+      ]);
+
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(row.status).toBe('CANCELED');
+      const histories = await prisma.orderStatusHistory.findMany({
+        where: { order_id: order.id },
+        orderBy: { id: 'asc' },
+      });
+      expect(histories.map((h) => `${h.from_status}>${h.to_status}`)).toEqual(
+        sellerResult.status === 'fulfilled'
+          ? ['SUBMITTED>CONFIRMED', 'CONFIRMED>CANCELED']
+          : ['SUBMITTED>CANCELED'],
+      );
     });
 
     it('두 관리자가 동시에 취소해도 이력·알림·감사는 1건씩', async () => {

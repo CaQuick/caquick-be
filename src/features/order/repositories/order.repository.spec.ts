@@ -502,6 +502,36 @@ describe('OrderRepository (real DB)', () => {
       return order;
     }
 
+    it('잠금 시점 상태로 assertTransition이 던지면 롤백된다(이력 없음)', async () => {
+      const store = await createStore(prisma);
+      const buyer = await setupBuyer();
+      const order = await setupOrderForStore(store.id, buyer.id);
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      await expect(
+        repo.updateOrderStatusBySeller({
+          orderId: order.id,
+          storeId: store.id,
+          actorAccountId: seller.id,
+          toStatus: OrderStatus.CONFIRMED,
+          assertTransition: (from) => {
+            throw new Error(`stale:${from}`);
+          },
+          note: null,
+          now: new Date(),
+        }),
+      ).rejects.toThrow('stale:SUBMITTED');
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(row.status).toBe('SUBMITTED');
+      expect(
+        await prisma.orderStatusHistory.count({
+          where: { order_id: order.id },
+        }),
+      ).toBe(0);
+    });
+
     it('다른 store의 주문이면 null 반환 (update 미수행)', async () => {
       const storeA = await createStore(prisma);
       const storeB = await createStore(prisma);
@@ -514,6 +544,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: storeB.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now: new Date(),
       });
@@ -532,6 +563,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now,
       });
@@ -575,6 +607,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CANCELED,
+        assertTransition: () => undefined,
         note: '재고 부족',
         now,
       });
@@ -615,6 +648,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.CONFIRMED,
+        assertTransition: () => undefined,
         note: null,
         now: t1,
       });
@@ -623,6 +657,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.MADE,
+        assertTransition: () => undefined,
         note: null,
         now: t2,
       });
@@ -631,6 +666,7 @@ describe('OrderRepository (real DB)', () => {
         storeId: store.id,
         actorAccountId: seller.id,
         toStatus: OrderStatus.PICKED_UP,
+        assertTransition: () => undefined,
         note: null,
         now: t3,
       });

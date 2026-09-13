@@ -732,6 +732,12 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * 판매자 상태 변경. 주문 행을 잠근(FOR UPDATE) 뒤 잠금 시점 상태로 전이를 다시 판정한다 —
+   * 관리자 강제 취소(cancelOrderByAdmin)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
+   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다).
+   * assertTransition이 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
+   */
   async updateOrderStatusBySeller(args: {
     orderId: bigint;
     storeId: bigint;
@@ -739,26 +745,27 @@ export class OrderRepository {
     toStatus: OrderStatus;
     note: string | null;
     now: Date;
+    assertTransition: (fromStatus: OrderStatus) => void;
     ipAddress?: string;
     userAgent?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findFirst({
-        where: {
-          id: args.orderId,
-          items: {
-            some: {
-              store_id: args.storeId,
-            },
-          },
-        },
-      });
+      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
+        SELECT o.id, o.status FROM \`order\` o
+        WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM order_item i
+            WHERE i.order_id = o.id AND i.store_id = ${args.storeId}
+          )
+        FOR UPDATE OF o`;
+      const order = locked[0];
 
       if (!order) {
         return null;
       }
 
       const fromStatus = order.status;
+      args.assertTransition(fromStatus);
 
       const updatedOrder = await tx.order.update({
         where: {
@@ -804,7 +811,7 @@ export class OrderRepository {
         });
         await tx.notification.create({
           data: {
-            account_id: order.account_id,
+            account_id: updatedOrder.account_id,
             order_id: order.id,
             store_id: args.storeId,
             product_id: firstItem?.product_id ?? null,

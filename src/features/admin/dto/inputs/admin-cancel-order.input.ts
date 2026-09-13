@@ -1,12 +1,12 @@
 import { IsString, MaxLength } from 'class-validator';
 
-import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
+import { MAX_ADMIN_CANCEL_NOTE_LENGTH } from '@/features/admin/constants/admin.constants';
 
 export class AdminCancelOrderInput {
   @IsString()
   orderId!: string;
 
   @IsString()
-  @MaxLength(MAX_REASON_LENGTH)
+  @MaxLength(MAX_ADMIN_CANCEL_NOTE_LENGTH)
   note!: string;
 }
