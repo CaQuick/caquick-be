@@ -75,3 +75,17 @@ export type ReviewReportTargetTypeValue =
 /** SDL AdminReviewReportAction과 1:1. */
 export const REVIEW_REPORT_ACTIONS = ['DELETE_TARGET', 'REJECT'] as const;
 export type ReviewReportActionValue = (typeof REVIEW_REPORT_ACTIONS)[number];
+
+// ── 주문 ──
+
+/** SDL OrderStatusType과 1:1. */
+export const ORDER_STATUSES = [
+  'SUBMITTED',
+  'CONFIRMED',
+  'MADE',
+  'PICKED_UP',
+  'CANCELED',
+] as const;
+export type OrderStatusValue = (typeof ORDER_STATUSES)[number];
+/** 관리자 취소 이력 메모 접두 — 판매자 취소와 구분한다. */
+export const ADMIN_CANCEL_NOTE_PREFIX = '[관리자] ';
