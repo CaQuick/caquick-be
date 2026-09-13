@@ -55,6 +55,12 @@ export const REGION_HAS_CHILDREN = 'Region still has active child regions.';
 export const REGION_HAS_ACTIVE_CHILDREN =
   'Deactivate active child regions before deactivating the group.';
 export const REGION_PARENT_INACTIVE = 'Parent region is inactive or deleted.';
+
+// ── 대시보드 ──
+
+export const INVALID_DATE_RANGE = 'from must be earlier than or equal to to.';
+export const DASHBOARD_RANGE_TOO_LONG =
+  'Date range must be 366 days or shorter.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';

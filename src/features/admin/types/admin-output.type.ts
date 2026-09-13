@@ -342,3 +342,26 @@ export interface AdminAuditLogOutput {
   userAgent: string | null;
   createdAt: Date;
 }
+
+export interface AdminDashboardSummaryOutput {
+  from: Date;
+  to: Date;
+  newUserCount: number;
+  newSellerCount: number;
+  orderCounts: {
+    submitted: number;
+    confirmed: number;
+    made: number;
+    pickedUp: number;
+    canceled: number;
+  };
+  orderAmountSum: number;
+  activeStoreCount: number;
+  activeProductCount: number;
+  pendingReportCount: number;
+}
+
+export interface AdminSearchKeywordSnapshotOutput {
+  rankedAt: Date | null;
+  items: { rank: number; keyword: string; searchCount: number }[];
+}

@@ -1937,4 +1937,80 @@ export class AdminRepository {
         : null,
     }));
   }
+
+  // ── 대시보드 집계 ──
+
+  async countAccountsCreatedBetween(
+    accountType: AccountType,
+    from: Date,
+    to: Date,
+  ): Promise<number> {
+    return this.prisma.account.count({
+      where: { account_type: accountType, created_at: { gte: from, lte: to } },
+    });
+  }
+
+  /** 기간 내 생성 주문의 상태별 건수와 취소 제외 결제 금액 합. */
+  async aggregateOrdersBetween(
+    from: Date,
+    to: Date,
+  ): Promise<{
+    counts: {
+      submitted: number;
+      confirmed: number;
+      made: number;
+      pickedUp: number;
+      canceled: number;
+    };
+    amountSum: number;
+  }> {
+    const grouped = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: { created_at: { gte: from, lte: to } },
+      _count: { _all: true },
+      _sum: { total_price: true },
+    });
+    const counts = {
+      submitted: 0,
+      confirmed: 0,
+      made: 0,
+      pickedUp: 0,
+      canceled: 0,
+    };
+    let amountSum = 0;
+    for (const g of grouped) {
+      const n = g._count._all;
+      switch (g.status) {
+        case 'SUBMITTED':
+          counts.submitted = n;
+          break;
+        case 'CONFIRMED':
+          counts.confirmed = n;
+          break;
+        case 'MADE':
+          counts.made = n;
+          break;
+        case 'PICKED_UP':
+          counts.pickedUp = n;
+          break;
+        case 'CANCELED':
+          counts.canceled = n;
+          break;
+      }
+      if (g.status !== 'CANCELED') amountSum += g._sum.total_price ?? 0;
+    }
+    return { counts, amountSum };
+  }
+
+  async countActiveStores(): Promise<number> {
+    return this.prisma.store.count({ where: { is_active: true } });
+  }
+
+  async countActiveProducts(): Promise<number> {
+    return this.prisma.product.count({ where: { is_active: true } });
+  }
+
+  async countPendingReviewReports(): Promise<number> {
+    return this.prisma.reviewReport.count({ where: { status: 'PENDING' } });
+  }
 }

@@ -12,6 +12,7 @@ export interface ProductOverrides {
   currency?: string;
   preparation_time_minutes?: number;
   is_active?: boolean;
+  deleted_at?: Date | null;
 }
 
 export async function createProduct(
@@ -32,6 +33,7 @@ export async function createProduct(
       // 스키마 기본값 180분은 당일 픽업 테스트를 방해하므로 팩토리 기본은 0
       preparation_time_minutes: overrides.preparation_time_minutes ?? 0,
       is_active: overrides.is_active ?? true,
+      ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
 }
