@@ -52,6 +52,9 @@ export const PARENT_REGION_INVALID =
 export const REGION_SLUG_TAKEN = 'Region slug is already used.';
 export const REGION_HAS_STORES = 'Region still has stores linked to it.';
 export const REGION_HAS_CHILDREN = 'Region still has active child regions.';
+export const REGION_HAS_ACTIVE_CHILDREN =
+  'Deactivate active child regions before deactivating the group.';
+export const REGION_PARENT_INACTIVE = 'Parent region is inactive or deleted.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';

@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminRegionService } from '@/features/admin/services/admin-region.service';
+import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -12,17 +13,20 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('AdminRegionService (real DB)', () => {
   let service: AdminRegionService;
+  let storeService: AdminStoreService;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         AdminRegionService,
+        AdminStoreService,
         AdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(AdminRegionService);
+    storeService = module.get(AdminStoreService);
     prisma = p;
   });
 
@@ -185,6 +189,93 @@ describe('AdminRegionService (real DB)', () => {
       expect(audit.after_json).toMatchObject({ name: '새' });
     });
 
+    it('좌표만 바꿔도 감사 before/after에 좌표가 남는다', async () => {
+      const region = await createRegion(prisma, { level: 1 });
+      await service.adminUpdateRegion(await admin(), {
+        regionId: region.id.toString(),
+        centerLat: '37.5',
+      });
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          target_type: 'REGION',
+          target_id: region.id,
+          action: 'UPDATE',
+        },
+      });
+      expect(audit.before_json).toMatchObject({
+        centerLat: null,
+        centerLng: null,
+      });
+      expect(audit.after_json).toMatchObject({
+        centerLat: '37.5',
+        centerLng: null,
+      });
+    });
+
+    // 계층 불변식: 1차 비활성 → 활성 하위 없어야, 2차 활성 → 상위가 활성이어야(고아 활성 지역 방지)
+    it('활성 하위가 있는 1차 비활성화·상위가 비활성인 2차 활성화는 BadRequestException', async () => {
+      const group = await createRegion(prisma, { level: 1 });
+      const child = await createRegion(prisma, {
+        level: 2,
+        parent_id: group.id,
+        is_active: false,
+      });
+      const active = await createRegion(prisma, {
+        level: 2,
+        parent_id: group.id,
+      });
+
+      await expect(
+        service.adminUpdateRegion(await admin(), {
+          regionId: group.id.toString(),
+          isActive: false,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await service.adminUpdateRegion(await admin(), {
+        regionId: active.id.toString(),
+        isActive: false,
+      });
+      await service.adminUpdateRegion(await admin(), {
+        regionId: group.id.toString(),
+        isActive: false,
+      });
+      await expect(
+        service.adminUpdateRegion(await admin(), {
+          regionId: child.id.toString(),
+          isActive: true,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      // 이미 활성인 2차의 다른 필드 수정은 상위와 무관
+      await service.adminUpdateRegion(await admin(), {
+        regionId: group.id.toString(),
+        isActive: true,
+      });
+      expect(
+        (
+          await service.adminUpdateRegion(await admin(), {
+            regionId: child.id.toString(),
+            isActive: true,
+          })
+        ).isActive,
+      ).toBe(true);
+    });
+
+    it('삭제된 지역의 slug로 바꾸면 BadRequestException(전역 unique 인덱스)', async () => {
+      const gone = await createRegion(prisma, { slug: 'gone' });
+      await prisma.region.update({
+        where: { id: gone.id },
+        data: { deleted_at: new Date() },
+      });
+      const mine = await createRegion(prisma, { slug: 'mine' });
+      await expect(
+        service.adminUpdateRegion(await admin(), {
+          regionId: mine.id.toString(),
+          slug: 'gone',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('slug 충돌은 BadRequestException, 없으면 NotFoundException', async () => {
       await createRegion(prisma, { slug: 'taken' });
       const mine = await createRegion(prisma, { slug: 'mine' });
@@ -203,7 +294,57 @@ describe('AdminRegionService (real DB)', () => {
     });
   });
 
+  describe('adminCreateRegion 상위 확인', () => {
+    it('비활성·삭제된 1차를 상위로 주면 BadRequestException', async () => {
+      const inactive = await createRegion(prisma, {
+        level: 1,
+        is_active: false,
+      });
+      await expect(
+        service.adminCreateRegion(await admin(), {
+          parentId: inactive.id.toString(),
+          name: '하위',
+          slug: 'child-of-inactive',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('adminDeleteRegion', () => {
+    // 지역 잠금(FOR UPDATE)과 매장 연결의 지역 잠금(FOR SHARE)이 직렬화돼야 삭제된 지역에 매장이 매달리지 않는다
+    it('지역 삭제와 매장 연결이 겹쳐도 삭제된 지역에 매장이 남지 않는다', async () => {
+      const group = await createRegion(prisma, { level: 1 });
+      const child = await createRegion(prisma, {
+        level: 2,
+        parent_id: group.id,
+      });
+      const store = await createStore(prisma);
+
+      const [deleted, linked] = await Promise.allSettled([
+        service.adminDeleteRegion(await admin(), child.id),
+        storeService.adminUpdateStoreBasicInfo(await admin(), {
+          storeId: store.id.toString(),
+          regionId: child.id.toString(),
+        }),
+      ]);
+
+      const region = await prisma.region.findFirstOrThrow({
+        where: { id: child.id, deleted_at: undefined },
+      });
+      const row = await prisma.store.findUniqueOrThrow({
+        where: { id: store.id },
+      });
+      if (deleted.status === 'fulfilled') {
+        expect(region.deleted_at).not.toBeNull();
+        expect(linked.status).toBe('rejected');
+        expect(row.region_id).toBeNull();
+      } else {
+        expect(deleted.reason).toBeInstanceOf(BadRequestException);
+        expect(region.deleted_at).toBeNull();
+        expect(row.region_id).toBe(child.id);
+      }
+    });
+
     it('연결 매장이 있는 2차·활성 하위가 있는 1차는 BadRequestException, 없으면 soft-delete + 감사', async () => {
       const group = await createRegion(prisma, { level: 1 });
       const child = await createRegion(prisma, {

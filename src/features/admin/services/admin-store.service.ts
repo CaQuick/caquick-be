@@ -140,14 +140,17 @@ export class AdminStoreService extends AdminBaseService {
     const { storeId, regionId, ...patch } = input;
 
     const data: Prisma.StoreUpdateInput = buildStoreBasicInfoUpdateData(patch);
+    let connectRegionId: bigint | undefined;
     if (regionId !== undefined) {
       // 빈 문자열은 해제가 아니라 형식 오류(BAD_USER_INPUT). 해제는 명시적 null만
       const parsed = parseOptionalId(regionId);
+      // 빠른 거절 — 최종 판정은 repository가 지역을 잠근 뒤 같은 트랜잭션에서 한다
       if (parsed !== null && !(await this.repo.isRegionSelectable(parsed))) {
         throw new BadRequestException(REGION_NOT_SELECTABLE);
       }
       // 관계 필드는 connect/disconnect로 — null은 연결 해제
       data.region = parsed ? { connect: { id: parsed } } : { disconnect: true };
+      connectRegionId = parsed ?? undefined;
     }
     const changedKeys = Object.keys(data).map((k) =>
       k === 'region' ? 'region_id' : k,
@@ -155,7 +158,7 @@ export class AdminStoreService extends AdminBaseService {
 
     // before는 repository가 잠금 뒤 트랜잭션 안에서 읽는다 — 미리 읽은 값은 낡을 수 있다
     const updated = await this.repo.updateStore(
-      { storeId: parseId(storeId), data },
+      { storeId: parseId(storeId), data, regionId: connectRegionId },
       (before, after) => ({
         actorAccountId: ctx.accountId,
         storeId: after.id,
@@ -166,6 +169,9 @@ export class AdminStoreService extends AdminBaseService {
         afterJson: snapshot(after, changedKeys),
       }),
     );
+    if (updated === 'region-not-selectable') {
+      throw new BadRequestException(REGION_NOT_SELECTABLE);
+    }
     if (!updated) throw new NotFoundException(STORE_NOT_FOUND);
     return toAdminStoreOutput(updated);
   }

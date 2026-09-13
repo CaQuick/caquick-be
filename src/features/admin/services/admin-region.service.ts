@@ -16,9 +16,11 @@ import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
   INVALID_DECIMAL_VALUE,
   PARENT_REGION_INVALID,
+  REGION_HAS_ACTIVE_CHILDREN,
   REGION_HAS_CHILDREN,
   REGION_HAS_STORES,
   REGION_NOT_FOUND,
+  REGION_PARENT_INACTIVE,
   REGION_SLUG_TAKEN,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REGION_NAME_LENGTH } from '@/features/admin/constants/admin.constants';
@@ -94,6 +96,7 @@ export class AdminRegionService extends AdminBaseService {
         LONGITUDE_RANGE,
       ),
     };
+    // 상위 활성·slug 충돌의 최종 판정은 repository가 잠금 뒤 트랜잭션 안에서 한다(위는 빠른 거절)
     const row = await this.repo.createOrRestoreRegion(data, (created) => ({
       actorAccountId: ctx.accountId,
       storeId: null,
@@ -102,6 +105,10 @@ export class AdminRegionService extends AdminBaseService {
       action: AuditActionType.CREATE,
       afterJson: this.snapshot(created),
     }));
+    if (row === 'parent-not-active') {
+      throw new BadRequestException(PARENT_REGION_INVALID);
+    }
+    if (row === 'slug-taken') throw new BadRequestException(REGION_SLUG_TAKEN);
     return toAdminRegionOutput(row);
   }
 
@@ -160,8 +167,18 @@ export class AdminRegionService extends AdminBaseService {
         afterJson: this.snapshot(after),
       }),
     );
-    if (!row) throw new NotFoundException(REGION_NOT_FOUND);
-    return toAdminRegionOutput(row);
+    switch (row) {
+      case 'not-found':
+        throw new NotFoundException(REGION_NOT_FOUND);
+      case 'slug-taken':
+        throw new BadRequestException(REGION_SLUG_TAKEN);
+      case 'has-active-children':
+        throw new BadRequestException(REGION_HAS_ACTIVE_CHILDREN);
+      case 'parent-not-active':
+        throw new BadRequestException(REGION_PARENT_INACTIVE);
+      default:
+        return toAdminRegionOutput(row);
+    }
   }
 
   async adminDeleteRegion(
@@ -194,6 +211,8 @@ export class AdminRegionService extends AdminBaseService {
       slug: row.slug,
       sortOrder: row.sort_order,
       isActive: row.is_active,
+      centerLat: row.center_lat?.toString() ?? null,
+      centerLng: row.center_lng?.toString() ?? null,
     };
   }
 }
