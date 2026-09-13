@@ -362,6 +362,22 @@ export class AdminRepository {
     return rows.length > 0;
   }
 
+  /**
+   * 댓글을 잠그기 전에 부모 리뷰부터 잠근다(리뷰 → 댓글 → 신고). 리뷰 삭제 경로(관리자·작성자)가
+   * 리뷰를 잠근 뒤 신고·댓글을 닫으므로, 댓글부터 잠그면 신고 행을 사이에 두고 교착한다.
+   * 리뷰가 이미 삭제됐어도 잠근다 — 순서만 맞으면 된다.
+   */
+  private async lockParentReviewOfComment(
+    tx: Prisma.TransactionClient,
+    commentId: bigint,
+  ): Promise<void> {
+    await tx.$queryRaw`
+      SELECT r.id FROM review r
+      JOIN review_comment c ON c.review_id = r.id
+      WHERE c.id = ${commentId}
+      FOR UPDATE OF r`;
+  }
+
   // ── 배너 ──
 
   private bannerFilterWhere(filter: {
@@ -1245,9 +1261,12 @@ export class AdminRepository {
       : { kind: 'review' as const, id: peek.review_id! };
 
     return this.prisma.$transaction(async (tx) => {
-      // 잠금 순서: 대상(리뷰/댓글) → 신고. 강제 삭제 경로도 대상을 먼저 잠그므로, 같은 대상의 다른
-      // 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다.
+      // 잠금 순서: (부모 리뷰 →) 대상(리뷰/댓글) → 신고. 강제 삭제 경로도 같은 순서라, 같은 대상의
+      // 다른 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다.
       // 대상이 이미 삭제됐으면 잠기지 않지만 신고 처리는 계속돼야 한다
+      if (target.kind === 'review_comment') {
+        await this.lockParentReviewOfComment(tx, target.id);
+      }
       await this.lockActiveRow(tx, target.kind, target.id);
 
       if (!(await this.lockActiveRow(tx, 'review_report', args.reportId))) {
@@ -1358,6 +1377,7 @@ export class AdminRepository {
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
+      await this.lockParentReviewOfComment(tx, args.commentId);
       if (!(await this.lockActiveRow(tx, 'review_comment', args.commentId))) {
         return false;
       }

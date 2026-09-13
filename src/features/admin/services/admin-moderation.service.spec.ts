@@ -429,6 +429,40 @@ describe('AdminModerationService (real DB)', () => {
       expect(await auditCount('REVIEW_COMMENT', comment.id, 'DELETE')).toBe(1);
     });
 
+    // 잠금 순서(리뷰 → 댓글 → 신고)가 두 경로에서 같아야 신고 행을 사이에 두고 교착하지 않는다
+    it('리뷰 강제 삭제와 그 댓글 강제 삭제가 겹쳐도 둘 다 실패하지 않고 댓글 신고는 닫힌다', async () => {
+      const review = await createReview(prisma);
+      const comment = await commentOn(review.id);
+      const report = await createReviewReport(prisma, {
+        review_id: null,
+        review_comment_id: comment.id,
+      });
+
+      const [reviewDeleted, commentDeleted] = await Promise.allSettled([
+        service.adminDeleteReview(await admin(), {
+          reviewId: review.id.toString(),
+          reason: '광고',
+        }),
+        service.adminDeleteReviewComment(await admin(), {
+          commentId: comment.id.toString(),
+          reason: '욕설',
+        }),
+      ]);
+
+      expect(reviewDeleted).toEqual({ status: 'fulfilled', value: true });
+      // 리뷰 삭제가 먼저면 댓글은 이미 내려가 NotFoundException
+      if (commentDeleted.status === 'rejected') {
+        expect(commentDeleted.reason).toBeInstanceOf(NotFoundException);
+      }
+      expect(
+        (
+          await prisma.reviewReport.findUniqueOrThrow({
+            where: { id: report.id },
+          })
+        ).status,
+      ).toBe('RESOLVED');
+    });
+
     it('감사 기록이 실패하면 삭제도 롤백된다(같은 트랜잭션)', async () => {
       const review = await createReview(prisma);
       const auditLogs = service['auditLogs'];
