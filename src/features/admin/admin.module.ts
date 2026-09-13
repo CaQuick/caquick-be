@@ -6,6 +6,7 @@ import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-acco
 import { AdminAuditQueryResolver } from '@/features/admin/resolvers/admin-audit-query.resolver';
 import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
+import { AdminDashboardQueryResolver } from '@/features/admin/resolvers/admin-dashboard-query.resolver';
 import { AdminModerationMutationResolver } from '@/features/admin/resolvers/admin-moderation-mutation.resolver';
 import { AdminModerationQueryResolver } from '@/features/admin/resolvers/admin-moderation-query.resolver';
 import { AdminNotificationMutationResolver } from '@/features/admin/resolvers/admin-notification-mutation.resolver';
@@ -26,6 +27,7 @@ import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-qu
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminAuditService } from '@/features/admin/services/admin-audit.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
+import { AdminDashboardService } from '@/features/admin/services/admin-dashboard.service';
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AdminNotificationService } from '@/features/admin/services/admin-notification.service';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
@@ -37,13 +39,14 @@ import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.s
 import { AdminUserService } from '@/features/admin/services/admin-user.service';
 import { AuditLogModule } from '@/features/audit-log';
 import { OrderModule } from '@/features/order';
+import { SearchModule } from '@/features/search';
 
 /**
  * 관리자(ADMIN) 도메인 모듈. seller와 대칭 구조이며 cross-feature로 쓰이지 않아 배럴이 없다.
  * DI는 구체 클래스 주입(2번째 구현 예정 없음).
  */
 @Module({
-  imports: [AuditLogModule, OrderModule],
+  imports: [AuditLogModule, OrderModule, SearchModule],
   providers: [
     AdminRepository,
     AdminAccountService,
@@ -58,6 +61,7 @@ import { OrderModule } from '@/features/order';
     AdminNotificationService,
     AdminRegionService,
     AdminAuditService,
+    AdminDashboardService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -80,6 +84,7 @@ import { OrderModule } from '@/features/order';
     AdminRegionQueryResolver,
     AdminRegionMutationResolver,
     AdminAuditQueryResolver,
+    AdminDashboardQueryResolver,
   ],
 })
 export class AdminModule {}

@@ -13,6 +13,7 @@ export interface AccountOverrides {
   email?: string | null;
   name?: string | null;
   deleted_at?: Date | null;
+  created_at?: Date;
 }
 
 export async function createAccount(
@@ -30,6 +31,7 @@ export async function createAccount(
           : overrides.email,
       name: overrides.name === undefined ? `User ${seq}` : overrides.name,
       deleted_at: overrides.deleted_at ?? null,
+      ...(overrides.created_at ? { created_at: overrides.created_at } : {}),
     },
   });
 }

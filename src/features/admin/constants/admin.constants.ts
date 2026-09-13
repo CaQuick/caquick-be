@@ -147,3 +147,7 @@ export const AUDIT_ACTION_TYPES = [
   'STATUS_CHANGE',
 ] as const;
 export type AuditActionTypeValue = (typeof AUDIT_ACTION_TYPES)[number];
+
+// ── 대시보드 ──
+
+export const MAX_DASHBOARD_RANGE_DAYS = 366;

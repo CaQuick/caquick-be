@@ -27,5 +27,6 @@ import { StoreModule } from '@/features/store';
     SearchResultService,
     SearchResultQueryResolver,
   ],
+  exports: [SearchRepository],
 })
 export class SearchModule {}
