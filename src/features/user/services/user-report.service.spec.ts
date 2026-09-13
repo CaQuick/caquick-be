@@ -6,6 +6,7 @@ import {
 import type { PrismaClient } from '@prisma/client';
 
 import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
+import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserReportService } from '@/features/user/services/user-report.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -23,13 +24,22 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('UserReportService (real DB)', () => {
   let service: UserReportService;
+  let reviewRepo: ReviewRepository;
+  let userRepo: UserRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserReportService, UserRepository, ReviewReportRepository],
+      providers: [
+        UserReportService,
+        UserRepository,
+        ReviewReportRepository,
+        ReviewRepository,
+      ],
     });
     service = module.get(UserReportService);
+    reviewRepo = module.get(ReviewRepository);
+    userRepo = module.get(UserRepository);
     prisma = p;
   });
 
@@ -158,6 +168,104 @@ describe('UserReportService (real DB)', () => {
 
       expect(again.reportId).not.toBe(first.reportId);
       expect(again.alreadyReported).toBe(false);
+    });
+
+    it('신고 시점의 본문을 스냅샷으로 남긴다', async () => {
+      const { review } = await visibleReview();
+      await prisma.review.update({
+        where: { id: review.id },
+        data: { content: '원래 내용' },
+      });
+
+      const result = await service.reportReview(await buyer(), {
+        reviewId: review.id.toString(),
+        reason: 'ABUSE',
+      });
+
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(result.reportId) },
+      });
+      expect(row.content_snapshot).toBe('원래 내용');
+    });
+
+    it('작성자가 리뷰를 삭제하면 그 리뷰·댓글의 미처리 신고가 RESOLVED(작성자 삭제)로 닫힌다', async () => {
+      const { review, author } = await visibleReview();
+      const comment = await commentOn(review.id, await buyer());
+      const r1 = await service.reportReview(await buyer(), {
+        reviewId: review.id.toString(),
+        reason: 'SPAM',
+      });
+      const r2 = await service.reportReviewComment(await buyer(), {
+        commentId: comment.id.toString(),
+        reason: 'SPAM',
+      });
+
+      expect(
+        await reviewRepo.softDeleteReview({
+          reviewId: review.id,
+          accountId: author,
+          now: new Date(),
+        }),
+      ).toBe(true);
+
+      const rows = await prisma.reviewReport.findMany({
+        where: { id: { in: [BigInt(r1.reportId), BigInt(r2.reportId)] } },
+      });
+      expect(rows.map((r) => r.status)).toEqual(['RESOLVED', 'RESOLVED']);
+      expect(rows[0].resolution_note).toBe('작성자가 대상을 삭제함');
+      expect(rows[0].resolved_by_account_id).toBeNull();
+    });
+
+    it('삭제된 리뷰를 같은 id로 재작성해도 옛 신고가 새 내용에 붙지 않는다', async () => {
+      const { review, author } = await visibleReview();
+      const r = await service.reportReview(await buyer(), {
+        reviewId: review.id.toString(),
+        reason: 'SPAM',
+      });
+      // 삭제 경로를 거치지 않은 잔여 PENDING(방어 대상)을 흉내 낸다
+      await prisma.review.update({
+        where: { id: review.id },
+        data: { deleted_at: new Date() },
+      });
+
+      await reviewRepo.createOrRestoreReviewWithMedia({
+        orderItemId: review.order_item_id,
+        accountId: author,
+        storeId: review.store_id,
+        productId: review.product_id,
+        rating: 5,
+        content: '새 내용',
+        existingDeletedReviewId: review.id,
+        media: [],
+      });
+
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(r.reportId) },
+      });
+      expect(row.status).toBe('RESOLVED');
+      expect(row.content_snapshot).not.toBe('새 내용');
+    });
+
+    it('작성자가 댓글을 삭제하면 그 댓글의 미처리 신고가 닫힌다', async () => {
+      const { review } = await visibleReview();
+      const commenter = await buyer();
+      const comment = await commentOn(review.id, commenter);
+      const r = await service.reportReviewComment(await buyer(), {
+        commentId: comment.id.toString(),
+        reason: 'SPAM',
+      });
+
+      expect(
+        await userRepo.softDeleteMyReviewComment({
+          accountId: commenter,
+          commentId: comment.id,
+        }),
+      ).toBe('deleted');
+
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(r.reportId) },
+      });
+      expect(row.status).toBe('RESOLVED');
     });
 
     it('본인 리뷰는 BadRequestException', async () => {

@@ -8,7 +8,10 @@ import type { ReviewReport } from '@prisma/client';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
-import { MAX_REVIEW_REPORT_DETAIL_LENGTH } from '@/features/user/constants/user.constants';
+import {
+  MAX_REVIEW_REPORT_DETAIL_LENGTH,
+  MAX_REVIEW_REPORT_SNAPSHOT_LENGTH,
+} from '@/features/user/constants/user.constants';
 import type { ReportReviewCommentInput } from '@/features/user/dto/inputs/report-review-comment.input';
 import type { ReportReviewInput } from '@/features/user/dto/inputs/report-review.input';
 import {
@@ -80,6 +83,9 @@ export class UserReportService extends UserBaseService {
       reviewCommentId: key.reviewCommentId ?? null,
       reason: input.reason,
       detail: cleanNullableText(input.detail, MAX_REVIEW_REPORT_DETAIL_LENGTH),
+      // 작성자가 삭제·재작성하면 같은 id가 새 내용으로 복원되므로 신고 시점 본문을 남긴다
+      contentSnapshot:
+        target.content?.slice(0, MAX_REVIEW_REPORT_SNAPSHOT_LENGTH) ?? null,
     });
     return this.toResult(report, !created);
   }

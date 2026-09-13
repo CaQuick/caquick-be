@@ -8,6 +8,7 @@ import {
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { buildReviewLikedNotification } from '@/features/notification';
+import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/user/constants/user.constants';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /**
@@ -823,10 +824,23 @@ export class UserRepository {
     if (!comment) return 'not-found';
     if (comment.account_id !== args.accountId) return 'forbidden';
 
-    await this.prisma.reviewComment.update({
-      where: { id: args.commentId },
-      data: { deleted_at: new Date() },
-    });
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.reviewComment.update({
+        where: { id: args.commentId },
+        data: { deleted_at: now },
+      }),
+      // 대상이 사라진 미처리 신고는 닫는다
+      this.prisma.reviewReport.updateMany({
+        where: { status: 'PENDING', review_comment_id: args.commentId },
+        data: {
+          status: 'RESOLVED',
+          resolved_at: now,
+          resolution_note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
+          updated_at: now,
+        },
+      }),
+    ]);
     return 'deleted';
   }
 }

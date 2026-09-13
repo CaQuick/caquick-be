@@ -6,6 +6,7 @@ CREATE TABLE `review_report` (
     `review_comment_id` BIGINT UNSIGNED NULL,
     `reason` ENUM('SPAM', 'ABUSE', 'INAPPROPRIATE', 'OTHER') NOT NULL,
     `detail` VARCHAR(500) NULL,
+    `content_snapshot` VARCHAR(2000) NULL,
     `status` ENUM('PENDING', 'RESOLVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
     `resolved_by_account_id` BIGINT UNSIGNED NULL,
     `resolved_at` DATETIME(3) NULL,

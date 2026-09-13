@@ -1504,6 +1504,9 @@ model ReviewReport {
 
   reason ReviewReportReason
   detail String? @db.VarChar(500)
+  // 신고 시점의 대상 본문. 작성자가 삭제·재작성하면 같은 리뷰 id가 새 내용으로 복원되므로
+  // 무엇이 신고됐는지는 여기 남긴다(리뷰 본문은 2000자로 잘라 저장)
+  content_snapshot String? @db.VarChar(2000)
 
   status                 ReviewReportStatus @default(PENDING)
   resolved_by_account_id BigInt?            @db.UnsignedBigInt

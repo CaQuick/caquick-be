@@ -42,3 +42,6 @@ export const REVIEW_REPORT_REASONS = [
 ] as const;
 export type ReviewReportReasonValue = (typeof REVIEW_REPORT_REASONS)[number];
 export const MAX_REVIEW_REPORT_DETAIL_LENGTH = 500;
+export const MAX_REVIEW_REPORT_SNAPSHOT_LENGTH = 2000;
+/** 작성자가 대상을 지워 신고가 무의미해졌을 때 닫으며 남기는 메모. */
+export const REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE = '작성자가 대상을 삭제함';

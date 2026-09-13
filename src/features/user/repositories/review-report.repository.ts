@@ -3,10 +3,11 @@ import type { ReviewReport, ReviewReportReason } from '@prisma/client';
 
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** 신고 대상 요약. account_id는 본인 작성물 판정용. */
+/** 신고 대상 요약. account_id는 본인 작성물 판정용, content는 스냅샷용. */
 export interface ReportTargetRow {
   id: bigint;
   account_id: bigint;
+  content: string | null;
 }
 
 /**
@@ -25,7 +26,7 @@ export class ReviewReportRepository {
         id: reviewId,
         product: { ...visibleWhere, store: visibleWhere },
       },
-      select: { id: true, account_id: true },
+      select: { id: true, account_id: true, content: true },
     });
   }
 
@@ -40,7 +41,7 @@ export class ReviewReportRepository {
           product: { ...visibleWhere, store: visibleWhere },
         },
       },
-      select: { id: true, account_id: true },
+      select: { id: true, account_id: true, content: true },
     });
   }
 
@@ -55,6 +56,7 @@ export class ReviewReportRepository {
     reviewCommentId: bigint | null;
     reason: ReviewReportReason;
     detail: string | null;
+    contentSnapshot: string | null;
   }): Promise<{ report: ReviewReport; created: boolean }> {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
@@ -79,6 +81,7 @@ export class ReviewReportRepository {
           review_comment_id: args.reviewCommentId,
           reason: args.reason,
           detail: args.detail,
+          content_snapshot: args.contentSnapshot,
         },
       });
       return { report, created: true };
