@@ -5,6 +5,8 @@ import { AdminAccountMutationResolver } from '@/features/admin/resolvers/admin-a
 import { AdminAccountQueryResolver } from '@/features/admin/resolvers/admin-account-query.resolver';
 import { AdminContentMutationResolver } from '@/features/admin/resolvers/admin-content-mutation.resolver';
 import { AdminContentQueryResolver } from '@/features/admin/resolvers/admin-content-query.resolver';
+import { AdminModerationMutationResolver } from '@/features/admin/resolvers/admin-moderation-mutation.resolver';
+import { AdminModerationQueryResolver } from '@/features/admin/resolvers/admin-moderation-query.resolver';
 import { AdminProductMutationResolver } from '@/features/admin/resolvers/admin-product-mutation.resolver';
 import { AdminProductQueryResolver } from '@/features/admin/resolvers/admin-product-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/admin/resolvers/admin-seller-mutation.resolver';
@@ -17,6 +19,7 @@ import { AdminUserMutationResolver } from '@/features/admin/resolvers/admin-user
 import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
+import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
@@ -39,6 +42,7 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminStoreService,
     AdminProductService,
     AdminTaxonomyService,
+    AdminModerationService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -53,6 +57,8 @@ import { AuditLogModule } from '@/features/audit-log';
     AdminProductMutationResolver,
     AdminTaxonomyQueryResolver,
     AdminTaxonomyMutationResolver,
+    AdminModerationQueryResolver,
+    AdminModerationMutationResolver,
   ],
 })
 export class AdminModule {}

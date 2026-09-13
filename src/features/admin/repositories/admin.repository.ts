@@ -8,6 +8,7 @@ import {
   type BannerPlacement,
   type CategoryType,
   Prisma,
+  type ReviewReport,
   type Store,
 } from '@prisma/client';
 
@@ -19,7 +20,15 @@ import {
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 행 잠금 대상 테이블. 고정 문자열만 raw로 들어간다. */
-type LockableTable = 'store' | 'product' | 'banner' | 'category' | 'tag';
+type LockableTable =
+  | 'store'
+  | 'product'
+  | 'banner'
+  | 'category'
+  | 'tag'
+  | 'review'
+  | 'review_comment'
+  | 'review_report';
 
 /** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
@@ -28,6 +37,62 @@ export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
+
+/** 작성자 닉네임(탈퇴 판정용 deleted_at 동반). */
+const authorInclude = {
+  account: {
+    select: { user_profile: { select: { nickname: true, deleted_at: true } } },
+  },
+} as const;
+
+/** 신고 상세 행 + 대상 원문(삭제 여부 포함). */
+export type AdminReviewReportDetailRow = Prisma.ReviewReportGetPayload<{
+  include: typeof reviewReportDetailInclude;
+}>;
+const reviewReportDetailInclude = {
+  review: {
+    select: {
+      id: true,
+      account_id: true,
+      store_id: true,
+      content: true,
+      deleted_at: true,
+      ...authorInclude,
+    },
+  },
+  review_comment: {
+    select: {
+      id: true,
+      review_id: true,
+      account_id: true,
+      content: true,
+      deleted_at: true,
+      review: { select: { store_id: true } },
+      ...authorInclude,
+    },
+  },
+} as const;
+
+/** 리뷰 행(관리자 시점) + 매장명·작성자·집계(삭제 제외). */
+export type AdminReviewRow = Prisma.ReviewGetPayload<{
+  include: typeof adminReviewInclude;
+}>;
+const adminReviewInclude = {
+  store: { select: { store_name: true } },
+  ...authorInclude,
+  _count: {
+    select: {
+      comments: { where: activeWhere },
+      likes: { where: activeWhere },
+    },
+  },
+} as const;
+
+/** 리뷰 댓글 행 + 작성자. */
+export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
+  include: typeof adminReviewCommentInclude;
+}>;
+const adminReviewCommentInclude = { ...authorInclude } as const;
 
 /** 카테고리 행 + 연결 상품 수(삭제 연결 제외). */
 export type AdminCategoryRow = Prisma.CategoryGetPayload<{
@@ -1104,6 +1169,369 @@ export class AdminRepository {
       });
       await this.auditLogs.createAuditLog(audit(before), tx);
       return true;
+    });
+  }
+
+  // ── 리뷰 모더레이션 ──
+
+  private reviewReportFilterWhere(filter: {
+    status: 'PENDING' | 'RESOLVED' | 'REJECTED' | null;
+    targetType?: 'REVIEW' | 'REVIEW_COMMENT';
+  }): Prisma.ReviewReportWhereInput {
+    return {
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.targetType === 'REVIEW' ? { review_id: { not: null } } : {}),
+      ...(filter.targetType === 'REVIEW_COMMENT'
+        ? { review_comment_id: { not: null } }
+        : {}),
+    };
+  }
+
+  async listReviewReports(args: {
+    status: 'PENDING' | 'RESOLVED' | 'REJECTED' | null;
+    targetType?: 'REVIEW' | 'REVIEW_COMMENT';
+    limit: number;
+    cursor?: bigint;
+  }): Promise<ReviewReport[]> {
+    return this.prisma.reviewReport.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.reviewReportFilterWhere(args),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countReviewReports(filter: {
+    status: 'PENDING' | 'RESOLVED' | 'REJECTED' | null;
+    targetType?: 'REVIEW' | 'REVIEW_COMMENT';
+  }): Promise<number> {
+    return this.prisma.reviewReport.count({
+      where: this.reviewReportFilterWhere(filter),
+    });
+  }
+
+  async findReviewReportDetailById(
+    reportId: bigint,
+  ): Promise<AdminReviewReportDetailRow | null> {
+    return this.prisma.reviewReport.findFirst({
+      where: { id: reportId },
+      include: reviewReportDetailInclude,
+    });
+  }
+
+  /**
+   * 신고 처리. 잠금 뒤 트랜잭션 안에서 상태를 보고 PENDING이 아니면 'already-resolved'.
+   * DELETE_TARGET은 대상 soft-delete(리뷰는 사진·댓글까지) + 같은 대상의 미처리 신고 전부 RESOLVED,
+   * REJECT는 이 건만 REJECTED. 감사는 신고(STATUS_CHANGE)와 대상 삭제(DELETE) 각각.
+   */
+  async resolveReviewReport(args: {
+    reportId: bigint;
+    action: 'DELETE_TARGET' | 'REJECT';
+    note: string | null;
+    actorAccountId: bigint;
+  }): Promise<ReviewReport | 'not-found' | 'already-resolved'> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'review_report', args.reportId))) {
+        return 'not-found';
+      }
+      const report = await tx.reviewReport.findFirstOrThrow({
+        where: { id: args.reportId },
+      });
+      if (report.status !== 'PENDING') return 'already-resolved';
+
+      const target = report.review_comment_id
+        ? { kind: 'review_comment' as const, id: report.review_comment_id }
+        : { kind: 'review' as const, id: report.review_id! };
+
+      if (args.action === 'DELETE_TARGET') {
+        await this.softDeleteTargetTx(tx, target, now, args.actorAccountId, {
+          reportId: report.id,
+          note: args.note,
+        });
+        // 같은 대상의 다른 미처리 신고도 함께 닫는다(이 건 포함)
+        await tx.reviewReport.updateMany({
+          where: {
+            status: 'PENDING',
+            ...(target.kind === 'review'
+              ? { review_id: target.id }
+              : { review_comment_id: target.id }),
+          },
+          data: {
+            status: 'RESOLVED',
+            resolved_by_account_id: args.actorAccountId,
+            resolved_at: now,
+            resolution_note: args.note,
+            updated_at: now,
+          },
+        });
+      } else {
+        await tx.reviewReport.update({
+          where: { id: report.id },
+          data: {
+            status: 'REJECTED',
+            resolved_by_account_id: args.actorAccountId,
+            resolved_at: now,
+            resolution_note: args.note,
+          },
+        });
+      }
+
+      await this.auditLogs.createAuditLog(
+        {
+          actorAccountId: args.actorAccountId,
+          storeId: null,
+          targetType: AuditTargetType.REVIEW_REPORT,
+          targetId: report.id,
+          action: AuditActionType.STATUS_CHANGE,
+          beforeJson: { status: 'PENDING' },
+          afterJson: {
+            status: args.action === 'DELETE_TARGET' ? 'RESOLVED' : 'REJECTED',
+            action: args.action,
+            note: args.note,
+          },
+        },
+        tx,
+      );
+      return tx.reviewReport.findFirstOrThrow({ where: { id: report.id } });
+    });
+  }
+
+  /** 리뷰 강제 삭제. 잠금 → 사진·댓글 cascade → 미처리 신고 RESOLVED → 감사. 없거나 삭제됐으면 false. */
+  async adminSoftDeleteReview(args: {
+    reviewId: bigint;
+    reason: string;
+    actorAccountId: bigint;
+  }): Promise<boolean> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'review', args.reviewId)))
+        return false;
+      await this.softDeleteTargetTx(
+        tx,
+        { kind: 'review', id: args.reviewId },
+        now,
+        args.actorAccountId,
+        { reportId: null, note: args.reason },
+      );
+      await this.resolvePendingReportsTx(
+        tx,
+        { review_id: args.reviewId },
+        now,
+        args.actorAccountId,
+        args.reason,
+      );
+      return true;
+    });
+  }
+
+  /** 댓글 강제 삭제. 잠금 → soft-delete → 미처리 신고 RESOLVED → 감사. 없거나 삭제됐으면 false. */
+  async adminSoftDeleteReviewComment(args: {
+    commentId: bigint;
+    reason: string;
+    actorAccountId: bigint;
+  }): Promise<boolean> {
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      if (!(await this.lockActiveRow(tx, 'review_comment', args.commentId))) {
+        return false;
+      }
+      await this.softDeleteTargetTx(
+        tx,
+        { kind: 'review_comment', id: args.commentId },
+        now,
+        args.actorAccountId,
+        { reportId: null, note: args.reason },
+      );
+      await this.resolvePendingReportsTx(
+        tx,
+        { review_comment_id: args.commentId },
+        now,
+        args.actorAccountId,
+        args.reason,
+      );
+      return true;
+    });
+  }
+
+  /**
+   * 대상 soft-delete + DELETE 감사. 리뷰는 작성자 본인 삭제(user feature)와 같은 범위로
+   * 사진·댓글을 함께 내린다 — 리뷰 재작성이 같은 id를 복원하므로 남겨 두면 되살아난다.
+   * 이미 삭제된 대상이면 조용히 지나간다(신고 처리는 계속돼야 한다).
+   */
+  private async softDeleteTargetTx(
+    tx: Prisma.TransactionClient,
+    target: { kind: 'review' | 'review_comment'; id: bigint },
+    now: Date,
+    actorAccountId: bigint,
+    meta: { reportId: bigint | null; note: string | null },
+  ): Promise<void> {
+    if (target.kind === 'review') {
+      const review = await tx.review.findFirst({
+        where: { id: target.id },
+        select: { store_id: true },
+      });
+      if (!review) return;
+      await tx.review.update({
+        where: { id: target.id },
+        data: { deleted_at: now },
+      });
+      await tx.reviewMedia.updateMany({
+        where: { review_id: target.id, ...activeWhere },
+        data: { deleted_at: now },
+      });
+      await tx.reviewComment.updateMany({
+        where: { review_id: target.id, ...activeWhere },
+        data: { deleted_at: now },
+      });
+      await this.auditLogs.createAuditLog(
+        {
+          actorAccountId,
+          storeId: review.store_id,
+          targetType: AuditTargetType.REVIEW,
+          targetId: target.id,
+          action: AuditActionType.DELETE,
+          afterJson: {
+            reportId: meta.reportId?.toString() ?? null,
+            reason: meta.note,
+          },
+        },
+        tx,
+      );
+      return;
+    }
+    const comment = await tx.reviewComment.findFirst({
+      where: { id: target.id },
+      select: { review: { select: { store_id: true } } },
+    });
+    if (!comment) return;
+    await tx.reviewComment.update({
+      where: { id: target.id },
+      data: { deleted_at: now },
+    });
+    await this.auditLogs.createAuditLog(
+      {
+        actorAccountId,
+        storeId: comment.review.store_id,
+        targetType: AuditTargetType.REVIEW_COMMENT,
+        targetId: target.id,
+        action: AuditActionType.DELETE,
+        afterJson: {
+          reportId: meta.reportId?.toString() ?? null,
+          reason: meta.note,
+        },
+      },
+      tx,
+    );
+  }
+
+  private async resolvePendingReportsTx(
+    tx: Prisma.TransactionClient,
+    targetWhere: { review_id: bigint } | { review_comment_id: bigint },
+    now: Date,
+    actorAccountId: bigint,
+    note: string,
+  ): Promise<void> {
+    await tx.reviewReport.updateMany({
+      where: { status: 'PENDING', ...targetWhere },
+      data: {
+        status: 'RESOLVED',
+        resolved_by_account_id: actorAccountId,
+        resolved_at: now,
+        resolution_note: note,
+        updated_at: now,
+      },
+    });
+  }
+
+  // ── 리뷰·댓글 조회(관리자) ──
+
+  private reviewFilterWhere(filter: {
+    keyword?: string;
+    storeId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+  }): Prisma.ReviewWhereInput {
+    return {
+      ...(filter.keyword ? { content: { contains: filter.keyword } } : {}),
+      ...(filter.storeId !== undefined ? { store_id: filter.storeId } : {}),
+      ...(filter.accountId !== undefined
+        ? { account_id: filter.accountId }
+        : {}),
+      // deleted_at 키를 명시하면 soft-delete 자동 필터가 빠진다(삭제 포함 조회)
+      ...(filter.includeDeleted ? { deleted_at: undefined } : {}),
+    };
+  }
+
+  async listReviews(args: {
+    keyword?: string;
+    storeId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminReviewRow[]> {
+    return this.prisma.review.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.reviewFilterWhere(args),
+      },
+      include: adminReviewInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countReviews(filter: {
+    keyword?: string;
+    storeId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+  }): Promise<number> {
+    return this.prisma.review.count({ where: this.reviewFilterWhere(filter) });
+  }
+
+  private reviewCommentFilterWhere(filter: {
+    reviewId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+  }): Prisma.ReviewCommentWhereInput {
+    return {
+      ...(filter.reviewId !== undefined ? { review_id: filter.reviewId } : {}),
+      ...(filter.accountId !== undefined
+        ? { account_id: filter.accountId }
+        : {}),
+      ...(filter.includeDeleted ? { deleted_at: undefined } : {}),
+    };
+  }
+
+  async listReviewComments(args: {
+    reviewId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+    limit: number;
+    cursor?: bigint;
+  }): Promise<AdminReviewCommentRow[]> {
+    return this.prisma.reviewComment.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.reviewCommentFilterWhere(args),
+      },
+      include: adminReviewCommentInclude,
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  async countReviewComments(filter: {
+    reviewId?: bigint;
+    accountId?: bigint;
+    includeDeleted: boolean;
+  }): Promise<number> {
+    return this.prisma.reviewComment.count({
+      where: this.reviewCommentFilterWhere(filter),
     });
   }
 }

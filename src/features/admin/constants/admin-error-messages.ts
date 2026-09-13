@@ -31,6 +31,14 @@ export const CATEGORY_NAME_TAKEN =
   'Category name is already used in this type.';
 export const TAG_NOT_FOUND = 'Tag not found.';
 export const TAG_NAME_TAKEN = 'Tag name is already used.';
+
+// ── 리뷰 모더레이션 ──
+
+export const REVIEW_REPORT_NOT_FOUND = 'Review report not found.';
+export const REVIEW_REPORT_ALREADY_RESOLVED =
+  'Review report is already resolved.';
+export const REVIEW_NOT_FOUND = 'Review not found.';
+export const REVIEW_COMMENT_NOT_FOUND = 'Review comment not found.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
 export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
