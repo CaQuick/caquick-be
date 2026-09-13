@@ -1,3 +1,4 @@
+import { InternalServerErrorException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
@@ -11,6 +12,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('AdminNotificationService (real DB)', () => {
   let service: AdminNotificationService;
+  let repo: AdminRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -22,6 +24,7 @@ describe('AdminNotificationService (real DB)', () => {
       ],
     });
     service = module.get(AdminNotificationService);
+    repo = module.get(AdminRepository);
     prisma = p;
   });
 
@@ -92,6 +95,7 @@ describe('AdminNotificationService (real DB)', () => {
         targetKind: 'ACCOUNT_IDS',
         sentCount: 1,
         skippedCount: 4,
+        interrupted: false,
       });
     });
   });
@@ -152,6 +156,43 @@ describe('AdminNotificationService (real DB)', () => {
         having: { account_id: { _count: { gt: 1 } } },
       });
       expect(dup).toHaveLength(0);
+    });
+
+    // 앞 청크는 커밋된 채 남는다 — 조용히 실패하면 재시도가 중복 발송이 되므로 건수를 감사에 남기고 알린다
+    it('청크 사이에 실패하면 저장된 건수를 감사(interrupted)에 남기고 InternalServerErrorException', async () => {
+      const actor = await admin();
+      await prisma.account.createMany({
+        data: Array.from({ length: 1_050 }, (_, i) => ({
+          account_type: 'USER' as const,
+          status: 'ACTIVE' as const,
+          email: `bulk${i}@example.com`,
+        })),
+      });
+      const original = repo.createNotifications.bind(repo);
+      const spy = jest
+        .spyOn(repo, 'createNotifications')
+        .mockImplementationOnce(original)
+        .mockRejectedValueOnce(new Error('boom'));
+
+      try {
+        await expect(
+          service.adminSendNotification(actor, {
+            ...base,
+            targetKind: 'ALL_USERS',
+          }),
+        ).rejects.toThrow(InternalServerErrorException);
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(await prisma.notification.count()).toBe(1_000);
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { target_type: 'NOTIFICATION', actor_account_id: actor },
+      });
+      expect(audit.after_json).toMatchObject({
+        sentCount: 1_000,
+        interrupted: true,
+      });
     });
   });
 });

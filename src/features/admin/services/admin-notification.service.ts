@@ -1,8 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { NOTIFICATION_FANOUT_INTERRUPTED } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_NOTIFICATION_BODY_LENGTH,
   MAX_NOTIFICATION_TITLE_LENGTH,
@@ -61,34 +66,72 @@ export class AdminNotificationService extends AdminBaseService {
       sentCount = await this.repo.createNotifications(targets, payload);
     } else {
       let afterId: bigint | undefined;
-      for (;;) {
-        const ids = await this.repo.listActiveUserAccountIds({
-          afterId,
-          limit: NOTIFICATION_FANOUT_BATCH_SIZE,
-        });
-        if (ids.length === 0) break;
-        sentCount += await this.repo.createNotifications(ids, payload);
-        afterId = ids[ids.length - 1];
-        if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) break;
+      let interrupted = false;
+      try {
+        for (;;) {
+          const ids = await this.repo.listActiveUserAccountIds({
+            afterId,
+            limit: NOTIFICATION_FANOUT_BATCH_SIZE,
+          });
+          if (ids.length === 0) break;
+          sentCount += await this.repo.createNotifications(ids, payload);
+          afterId = ids[ids.length - 1];
+          if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) break;
+        }
+      } catch {
+        // 앞 청크는 이미 커밋됐다. 조용히 실패하면 재시도가 그만큼 중복 발송이 되므로
+        // 저장된 건수를 감사에 남기고 그 사실을 오류로 알린다
+        interrupted = true;
+      }
+      if (interrupted) {
+        await this.audit(
+          ctx.accountId,
+          payload,
+          input.targetKind,
+          sentCount,
+          0,
+          true,
+        );
+        throw new InternalServerErrorException(
+          NOTIFICATION_FANOUT_INTERRUPTED(sentCount),
+        );
       }
     }
 
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
+    await this.audit(
+      ctx.accountId,
+      payload,
+      input.targetKind,
+      sentCount,
+      skippedAccountIds.length,
+      false,
+    );
+    return { sentCount, skippedAccountIds };
+  }
+
+  /** 개별 알림 ID가 아니라 발송 행위 자체를 남긴다(대상은 afterJson). */
+  private audit(
+    actorAccountId: bigint,
+    payload: { type: string; title: string },
+    targetKind: string,
+    sentCount: number,
+    skippedCount: number,
+    interrupted: boolean,
+  ): Promise<unknown> {
+    return this.auditLogs.createAuditLog({
+      actorAccountId,
       storeId: null,
       targetType: AuditTargetType.NOTIFICATION,
-      // 개별 알림 ID가 아니라 발송 행위 자체를 남긴다(대상은 afterJson)
-      targetId: ctx.accountId,
+      targetId: actorAccountId,
       action: AuditActionType.CREATE,
       afterJson: {
         type: payload.type,
         title: payload.title,
-        targetKind: input.targetKind,
+        targetKind,
         sentCount,
-        skippedCount: skippedAccountIds.length,
+        skippedCount,
+        interrupted,
       },
     });
-
-    return { sentCount, skippedAccountIds };
   }
 }
