@@ -133,6 +133,19 @@ enum AuditActionType {
   STATUS_CHANGE
 }
 
+enum ReviewReportReason {
+  SPAM
+  ABUSE
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReviewReportStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
+
 /**
  * =========================
  * 1) Accounts / Auth
@@ -175,6 +188,8 @@ model Account {
   sent_conversation_messages StoreConversationMessage[] @relation("ConversationMessageSender")
   store                      Store?                     @relation("StoreSellerAccount")
   recent_product_views       RecentProductView[]
+  review_reports             ReviewReport[]             @relation("ReviewReportReporter")
+  resolved_review_reports    ReviewReport[]             @relation("ReviewReportResolver")
 
   @@index([account_type, status], map: "idx_account_type_status")
   @@index([deleted_at], map: "idx_account_deleted_at")
@@ -1113,6 +1128,7 @@ model Review {
   likes         ReviewLike[]
   comments      ReviewComment[]
   notifications Notification[]
+  reports       ReviewReport[]
 
   @@index([store_id, created_at], map: "idx_review_store")
   @@index([product_id, created_at], map: "idx_review_product")
@@ -1154,6 +1170,7 @@ model ReviewComment {
 
   review  Review  @relation(fields: [review_id], references: [id])
   account Account @relation(fields: [account_id], references: [id])
+  reports ReviewReport[]
 
   // 커서 쿼리(review_id = ? AND id > ? ORDER BY id) 정합 인덱스
   @@index([review_id, id], map: "idx_review_comment_review")
@@ -1467,6 +1484,52 @@ model StoreDailyCapacity {
   @@unique([store_id, capacity_date], map: "uk_store_daily_capacity")
   @@index([deleted_at], map: "idx_store_daily_capacity_deleted_at")
   @@map("store_daily_capacity")
+}
+
+/**
+ * =========================
+ * 18) Review Report (리뷰·댓글 신고)
+ * - review_id / review_comment_id 둘 중 하나만 채운다(서비스가 보장)
+ * - 같은 신고자·대상의 PENDING 건은 서비스가 멱등 처리한다. unique를 두지 않는 이유:
+ *   처리(RESOLVED/REJECTED)된 뒤 같은 대상을 다시 신고할 수 있어야 한다
+ * =========================
+ */
+
+model ReviewReport {
+  id                  BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  reporter_account_id BigInt @db.UnsignedBigInt
+
+  review_id         BigInt? @db.UnsignedBigInt
+  review_comment_id BigInt? @db.UnsignedBigInt
+
+  reason ReviewReportReason
+  detail String? @db.VarChar(500)
+  // 신고 시점의 대상 본문. 작성자가 삭제·재작성하면 같은 리뷰 id가 새 내용으로 복원되므로
+  // 무엇이 신고됐는지는 여기 남긴다(리뷰 본문은 2000자로 잘라 저장)
+  content_snapshot String? @db.VarChar(2000)
+
+  status                 ReviewReportStatus @default(PENDING)
+  resolved_by_account_id BigInt?            @db.UnsignedBigInt
+  resolved_at            DateTime?          @db.DateTime(3)
+  resolution_note        String?            @db.VarChar(500)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  reporter       Account        @relation("ReviewReportReporter", fields: [reporter_account_id], references: [id])
+  review         Review?        @relation(fields: [review_id], references: [id])
+  review_comment ReviewComment? @relation(fields: [review_comment_id], references: [id])
+  resolved_by    Account?       @relation("ReviewReportResolver", fields: [resolved_by_account_id], references: [id])
+
+  @@index([status, created_at], map: "idx_review_report_status_time")
+  @@index([reporter_account_id, review_id], map: "idx_review_report_reporter_review")
+  @@index([reporter_account_id, review_comment_id], map: "idx_review_report_reporter_comment")
+  @@index([review_id], map: "idx_review_report_review")
+  @@index([review_comment_id], map: "idx_review_report_comment")
+  @@index([resolved_by_account_id], map: "idx_review_report_resolved_by")
+  @@index([deleted_at], map: "idx_review_report_deleted_at")
+  @@map("review_report")
 }
 
 model AuditLog {
