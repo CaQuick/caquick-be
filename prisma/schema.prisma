@@ -106,6 +106,7 @@ enum NotificationEvent {
   ORDER_CONFIRMED
   ORDER_MADE
   ORDER_PICKED_UP
+  ORDER_CANCELED
 }
 
 enum AuditTargetType {

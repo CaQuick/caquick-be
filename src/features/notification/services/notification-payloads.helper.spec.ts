@@ -39,10 +39,18 @@ describe('notification-payloads.helper', () => {
       });
     });
 
-    it('알림 대상이 아닌 상태(CANCELED·SUBMITTED)는 null을 반환한다', () => {
+    it('CANCELED는 취소 이벤트·문구로 매핑된다(판매자·운영자 취소 공통)', () => {
       expect(
         buildOrderStatusNotification('ORD-4', OrderStatus.CANCELED),
-      ).toBeNull();
+      ).toEqual({
+        type: NotificationType.ORDER_STATUS,
+        event: NotificationEvent.ORDER_CANCELED,
+        title: '주문취소',
+        body: 'ORD-4 주문이 취소되었어요.',
+      });
+    });
+
+    it('알림 대상이 아닌 상태(SUBMITTED)는 null을 반환한다', () => {
       expect(
         buildOrderStatusNotification('ORD-5', OrderStatus.SUBMITTED),
       ).toBeNull();

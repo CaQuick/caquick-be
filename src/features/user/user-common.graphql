@@ -40,4 +40,6 @@ enum NotificationEvent {
   ORDER_MADE
   """픽업이 완료됐다. type은 ORDER_STATUS."""
   ORDER_PICKED_UP
+  """주문이 취소됐다(판매자 또는 운영자). type은 ORDER_STATUS."""
+  ORDER_CANCELED
 }
