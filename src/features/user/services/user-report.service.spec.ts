@@ -399,5 +399,35 @@ describe('UserReportService (real DB)', () => {
       expect(c2.reportId).toBe(c1.reportId);
       expect(await prisma.reviewReport.count()).toBe(2);
     });
+
+    // 어느 쪽이 먼저든 결과는 둘 중 하나여야 한다: NotFound 거절, 또는 접수 뒤 삭제가 닫음(RESOLVED).
+    // 부모 리뷰 → 댓글 잠금 순서가 삭제와 같아야 교착 없이 이 성질이 유지된다
+    it('부모 리뷰 삭제와 댓글 신고가 겹쳐도 PENDING 신고가 남지 않는다', async () => {
+      const { review, author } = await visibleReview();
+      const comment = await commentOn(review.id, await buyer());
+      const reporter = await buyer();
+
+      const [deleted, reported] = await Promise.allSettled([
+        reviewRepo.softDeleteReview({
+          reviewId: review.id,
+          accountId: author,
+          now: new Date(),
+        }),
+        service.reportReviewComment(reporter, {
+          commentId: comment.id.toString(),
+          reason: 'SPAM',
+        }),
+      ]);
+
+      expect(deleted).toEqual({ status: 'fulfilled', value: true });
+      if (reported.status === 'rejected') {
+        expect(reported.reason).toBeInstanceOf(NotFoundException);
+      }
+      const rows = await prisma.reviewReport.findMany({
+        where: { review_comment_id: comment.id },
+      });
+      expect(rows.length).toBe(reported.status === 'fulfilled' ? 1 : 0);
+      expect(rows.every((r) => r.status === 'RESOLVED')).toBe(true);
+    });
   });
 });

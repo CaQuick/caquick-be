@@ -32,7 +32,7 @@ export class ReviewReportRepository {
   /**
    * 대상 확인 → 본인 판정 → 미처리 신고 조회 → 생성을 한 트랜잭션에서 한다.
    * - 대상 행을 FOR UPDATE로 잠가(가시성 조인 포함) 작성자 삭제와 직렬화한다 — 잠금 전에 확인만
-   *   하면 그 사이 삭제된 대상에 PENDING이 남아 복원된 새 내용에 붙는다
+   *   하면 그 사이 삭제된 대상에 PENDING이 남아 복원된 새 내용에 붙는다. 댓글은 부모 리뷰부터 잠근다
    * - 신고자 계정 행도 잠가 같은 신고자의 동시 요청이 중복 PENDING을 만들지 못하게 한다.
    *   unique 대신 잠금인 이유: 처리(RESOLVED/REJECTED) 뒤 같은 대상을 다시 신고할 수 있어야 한다
    */
@@ -100,17 +100,37 @@ export class ReviewReportRepository {
             WHERE r.id = ${target.id} AND r.deleted_at IS NULL
             FOR UPDATE OF r
           `)
-        : await tx.$queryRaw<ReportTargetRow[]>(Prisma.sql`
-            SELECT c.id, c.account_id, c.content
-            FROM review_comment c
-            JOIN review r ON r.id = c.review_id AND r.deleted_at IS NULL
-            JOIN product p
-              ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
-            JOIN store s
-              ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
-            WHERE c.id = ${target.id} AND c.deleted_at IS NULL
-            FOR UPDATE OF c
-          `);
+        : await this.lockReportableComment(tx, target.id);
     return rows[0] ?? null;
+  }
+
+  /**
+   * 댓글은 부모 리뷰 → 댓글 순으로 잠근다. 리뷰 삭제(softDeleteReview)가 리뷰를 잠근 뒤 댓글을
+   * 정리하므로 같은 순서여야 교착이 없고, 삭제가 신고 접수보다 먼저면 댓글 재확인에서 not-found,
+   * 나중이면 접수된 신고까지 삭제 쪽이 닫는다.
+   */
+  private async lockReportableComment(
+    tx: Prisma.TransactionClient,
+    commentId: bigint,
+  ): Promise<ReportTargetRow[]> {
+    const parents = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`
+      SELECT r.id
+      FROM review r
+      JOIN review_comment c ON c.review_id = r.id
+      JOIN product p
+        ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
+      JOIN store s
+        ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
+      WHERE c.id = ${commentId} AND c.deleted_at IS NULL AND r.deleted_at IS NULL
+      FOR UPDATE OF r
+    `);
+    if (parents.length === 0) return [];
+    // 리뷰 잠금을 기다리는 사이 댓글이 지워졌을 수 있어 잠근 뒤 다시 본다
+    return tx.$queryRaw<ReportTargetRow[]>(Prisma.sql`
+      SELECT c.id, c.account_id, c.content
+      FROM review_comment c
+      WHERE c.id = ${commentId} AND c.deleted_at IS NULL
+      FOR UPDATE
+    `);
   }
 }
