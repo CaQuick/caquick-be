@@ -380,6 +380,26 @@ describe('AdminModerationService (real DB)', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('리뷰 강제 삭제는 함께 내려간 댓글의 미처리 신고도 닫는다', async () => {
+      const review = await createReview(prisma);
+      const comment = await commentOn(review.id);
+      const commentReport = await createReviewReport(prisma, {
+        review_id: null,
+        review_comment_id: comment.id,
+      });
+
+      await service.adminDeleteReview(await admin(), {
+        reviewId: review.id.toString(),
+        reason: '전체 정리',
+      });
+
+      const closed = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: commentReport.id },
+      });
+      expect(closed.status).toBe('RESOLVED');
+      expect(closed.resolution_note).toBe('전체 정리');
+    });
+
     it('댓글 강제 삭제: 댓글만 삭제 + 신고 RESOLVED + 감사', async () => {
       const review = await createReview(prisma);
       const comment = await commentOn(review.id);

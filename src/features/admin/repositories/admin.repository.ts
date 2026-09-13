@@ -1263,12 +1263,17 @@ export class AdminRepository {
           reportId: report.id,
           note: args.note,
         });
-        // 같은 대상의 다른 미처리 신고도 함께 닫는다(이 건 포함)
+        // 같은 대상의 다른 미처리 신고도 함께 닫는다(이 건 포함). 리뷰면 함께 내려간 댓글 신고까지
         await tx.reviewReport.updateMany({
           where: {
             status: 'PENDING',
             ...(target.kind === 'review'
-              ? { review_id: target.id }
+              ? {
+                  OR: [
+                    { review_id: target.id },
+                    { review_comment: { review_id: target.id } },
+                  ],
+                }
               : { review_comment_id: target.id }),
           },
           data: {
@@ -1328,9 +1333,15 @@ export class AdminRepository {
         args.actorAccountId,
         { reportId: null, note: args.reason },
       );
+      // 리뷰와 함께 내려간 댓글을 겨냥한 신고도 닫는다(작성자 삭제 경로와 같은 범위)
       await this.resolvePendingReportsTx(
         tx,
-        { review_id: args.reviewId },
+        {
+          OR: [
+            { review_id: args.reviewId },
+            { review_comment: { review_id: args.reviewId } },
+          ],
+        },
         now,
         args.actorAccountId,
         args.reason,
@@ -1441,7 +1452,7 @@ export class AdminRepository {
 
   private async resolvePendingReportsTx(
     tx: Prisma.TransactionClient,
-    targetWhere: { review_id: bigint } | { review_comment_id: bigint },
+    targetWhere: Prisma.ReviewReportWhereInput,
     now: Date,
     actorAccountId: bigint,
     note: string,
