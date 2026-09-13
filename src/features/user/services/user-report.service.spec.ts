@@ -119,6 +119,26 @@ describe('UserReportService (real DB)', () => {
       expect(await prisma.reviewReport.count()).toBe(1);
     });
 
+    it('같은 신고자의 동시 요청도 PENDING 1건만 만든다(신고자 행 잠금)', async () => {
+      const { review } = await visibleReview();
+      const reporter = await buyer();
+
+      const results = await Promise.all([
+        service.reportReview(reporter, {
+          reviewId: review.id.toString(),
+          reason: 'SPAM',
+        }),
+        service.reportReview(reporter, {
+          reviewId: review.id.toString(),
+          reason: 'SPAM',
+        }),
+      ]);
+
+      expect(new Set(results.map((r) => r.reportId)).size).toBe(1);
+      expect(results.filter((r) => r.alreadyReported)).toHaveLength(1);
+      expect(await prisma.reviewReport.count()).toBe(1);
+    });
+
     it('처리된(RESOLVED/REJECTED) 신고가 있으면 다시 신고할 수 있다', async () => {
       const { review } = await visibleReview();
       const reporter = await buyer();

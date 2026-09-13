@@ -73,20 +73,15 @@ export class UserReportService extends UserBaseService {
         USER_REVIEW_ERRORS.CANNOT_REPORT_OWN_CONTENT,
       );
     }
-    const pending = await this.reports.findPendingReport({
-      reporterAccountId: accountId,
-      ...key,
-    });
-    if (pending) return this.toResult(pending, true);
-
-    const created = await this.reports.createReport({
+    // 조회·생성은 repository가 신고자 행을 잠근 트랜잭션 안에서 한다(동시 요청 중복 방지)
+    const { report, created } = await this.reports.findOrCreatePendingReport({
       reporterAccountId: accountId,
       reviewId: key.reviewId ?? null,
       reviewCommentId: key.reviewCommentId ?? null,
       reason: input.reason,
       detail: cleanNullableText(input.detail, MAX_REVIEW_REPORT_DETAIL_LENGTH),
     });
-    return this.toResult(created, false);
+    return this.toResult(report, !created);
   }
 
   private toResult(
