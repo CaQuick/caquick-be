@@ -563,7 +563,7 @@ describe('OrderRepository (real DB)', () => {
       expect(auditLogs[0].action).toBe('STATUS_CHANGE');
     });
 
-    it('CANCELED 전환: canceled_at 갱신되고 notification은 생성 안됨', async () => {
+    it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();
       const order = await setupOrderForStore(store.id, buyer.id);
@@ -582,11 +582,17 @@ describe('OrderRepository (real DB)', () => {
       expect(updated?.status).toBe('CANCELED');
       expect(updated?.canceled_at?.toISOString()).toBe(now.toISOString());
 
-      // CANCELED는 notification 매핑 없음
+      // 취소도 구매자에게 알린다(판매자·운영자 취소 공통)
       const notifications = await prisma.notification.findMany({
         where: { order_id: order.id },
       });
-      expect(notifications).toHaveLength(0);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'ORDER_CANCELED',
+        store_id: store.id,
+      });
 
       const histories = await prisma.orderStatusHistory.findMany({
         where: { order_id: order.id },

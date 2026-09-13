@@ -24,18 +24,19 @@ export interface NotificationPayload {
   body: string;
 }
 
-/** 주문 상태 → 알림 이벤트. 알림 대상이 아닌 상태(CANCELED 등)는 null. */
+/** 주문 상태 → 알림 이벤트. 알림 대상이 아닌 상태(SUBMITTED)는 null. */
 const ORDER_STATUS_NOTIFICATION_EVENTS: Partial<
   Record<OrderStatus, NotificationEvent>
 > = {
   [OrderStatus.CONFIRMED]: NotificationEvent.ORDER_CONFIRMED,
   [OrderStatus.MADE]: NotificationEvent.ORDER_MADE,
   [OrderStatus.PICKED_UP]: NotificationEvent.ORDER_PICKED_UP,
+  [OrderStatus.CANCELED]: NotificationEvent.ORDER_CANCELED,
 };
 
 /**
  * 주문 상태 변경 알림 payload. 알림 대상이 아닌 상태면 null을 반환하고,
- * 호출부는 그 경우 알림을 생성하지 않는다(CANCELED는 정책상 알림 없음).
+ * 호출부는 그 경우 알림을 생성하지 않는다(SUBMITTED는 구매자 본인의 행위라 알림 없음).
  */
 export function buildOrderStatusNotification(
   orderNumber: string,
