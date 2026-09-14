@@ -224,6 +224,19 @@ export const ERROR_CATALOG = {
     status: FORBIDDEN,
     message: '사용할 수 없는 계정 상태입니다.',
   },
+  INVALID_ACCESS_TOKEN: {
+    status: UNAUTHORIZED,
+    message: '유효하지 않은 인증 토큰입니다.',
+  },
+  // 인증 주체 조회 실패(401)와 달리, 조회 대상 계정이 없는 경우다.
+  TARGET_ACCOUNT_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '대상 계정을 찾을 수 없습니다.',
+  },
+  INVALID_ACCOUNT_ID: {
+    status: BAD_REQUEST,
+    message: '계정 id 형식이 올바르지 않습니다.',
+  },
 
   // ── 대화 (conversation) ──
   FAQ_TOPIC_NOT_FOUND: {

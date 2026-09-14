@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { messageOf } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -149,7 +150,7 @@ describe('AuthService', () => {
 
       // Act & Assert
       await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Missing refresh token.',
+        messageOf('MISSING_REFRESH_TOKEN'),
       );
     });
 
@@ -169,7 +170,7 @@ describe('AuthService', () => {
 
       // Act & Assert
       await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Invalid refresh token.',
+        messageOf('INVALID_REFRESH_TOKEN'),
       );
     });
   });
