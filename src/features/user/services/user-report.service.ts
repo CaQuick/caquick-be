@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
-import { domainError, messageOf } from '@/common/errors';
+import { domainError, type ErrorCode } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
@@ -40,7 +40,7 @@ export class UserReportService extends UserBaseService {
       accountId,
       { kind: 'review', id: parseId(input.reviewId) },
       input,
-      messageOf('REVIEW_NOT_FOUND'),
+      'REVIEW_NOT_FOUND',
     );
   }
 
@@ -53,7 +53,7 @@ export class UserReportService extends UserBaseService {
       accountId,
       { kind: 'review_comment', id: parseId(input.commentId) },
       input,
-      messageOf('REVIEW_COMMENT_NOT_FOUND'),
+      'REVIEW_COMMENT_NOT_FOUND',
     );
   }
 
@@ -61,7 +61,7 @@ export class UserReportService extends UserBaseService {
     accountId: bigint,
     target: ReportTarget,
     input: { reason: ReviewReport['reason']; detail?: string | null },
-    notFoundMessage: string,
+    notFoundCode: ErrorCode,
   ): Promise<ReviewReportResult> {
     const result = await this.reports.submitReport({
       reporterAccountId: accountId,
@@ -78,7 +78,7 @@ export class UserReportService extends UserBaseService {
           result.outcome === 'already-pending',
         );
       case 'not-found':
-        throw new NotFoundException(notFoundMessage);
+        throw domainError(notFoundCode);
       case 'own-content':
         throw domainError('CANNOT_REPORT_OWN_CONTENT');
     }

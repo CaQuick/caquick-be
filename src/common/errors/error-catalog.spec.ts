@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import {
   BadRequestException,
   ConflictException,
@@ -88,5 +91,54 @@ describe('errorCodeOf', () => {
     },
   ])('$label 이면 null', ({ value }) => {
     expect(errorCodeOf(value)).toBeNull();
+  });
+});
+
+/**
+ * 메시지가 카탈로그 밖으로 "문자열"로 새어 나가면 그 경로의 오류에는 errorCode 가 실리지
+ * 않는다. 실제로 그렇게 새던 곳이 4군데 있었다(decimal 파서, 커서 파서 2개, 신고 서비스) —
+ * 헬퍼가 메시지를 인자로 받는 형태여서 호출부가 messageOf() 를 넘기고 있었다.
+ *
+ * 프로덕션 코드에서는 messageOf 를 쓰지 않는다(코드를 넘기고 domainError 가 메시지를 만든다).
+ * 테스트 단언에서는 문구 비교가 필요하므로 spec 은 제외한다.
+ */
+describe('messageOf 사용 경계', () => {
+  const SRC_ROOT = resolve(__dirname, '..', '..');
+  const SKIP_DIRS = new Set(['generated', 'node_modules']);
+
+  function tsFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+      const full = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) out.push(...tsFiles(full));
+      else if (entry.name.endsWith('.ts')) out.push(full);
+    }
+    return out;
+  }
+
+  const productionFiles = tsFiles(SRC_ROOT).filter(
+    (f) =>
+      !f.endsWith('.spec.ts') &&
+      !f.includes('/common/errors/') &&
+      !f.includes('/test/'),
+  );
+
+  it('스캔 대상을 실제로 모았다 (0건 통과 방지)', () => {
+    expect(productionFiles.length).toBeGreaterThan(100);
+  });
+
+  it('탐지기가 심어 둔 사용처를 잡는다 (반증 케이스)', () => {
+    const planted = "const m = messageOf('STORE_NOT_FOUND');";
+    expect(planted.includes('messageOf(')).toBe(true);
+  });
+
+  it('프로덕션 코드가 messageOf 를 쓰지 않는다', () => {
+    const offenders = productionFiles.filter((f) =>
+      readFileSync(f, 'utf8').includes('messageOf('),
+    );
+
+    // 메시지가 필요해 보이면 대개 헬퍼가 ErrorCode 를 받도록 바꾸는 게 맞다.
+    expect(offenders).toEqual([]);
   });
 });
