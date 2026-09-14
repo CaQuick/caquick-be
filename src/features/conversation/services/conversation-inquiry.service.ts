@@ -1,8 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
 import { MAX_INQUIRY_BODY_TEXT_LENGTH } from '@/features/conversation/constants/conversation.constants';
 import type { SendConversationFaqMessageInput } from '@/features/conversation/dto/inputs/send-conversation-faq-message.input';
 import type { SendConversationMessageInput } from '@/features/conversation/dto/inputs/send-conversation-message.input';
@@ -113,7 +113,7 @@ export class ConversationInquiryService extends ConversationBaseService {
       faqTopicId: parseId(input.faqTopicId),
     });
     if (!topic) {
-      throw new NotFoundException(CONVERSATION_ERRORS.FAQ_TOPIC_NOT_FOUND);
+      throw domainError('FAQ_TOPIC_NOT_FOUND');
     }
 
     // 칩 탭 = 유저 질문(칩 제목) + 매장 자동응답(FAQ 답변 스냅샷) 한 쌍 저장.
@@ -255,7 +255,7 @@ export class ConversationInquiryService extends ConversationBaseService {
   private async requireInquiryStore(storeId: bigint) {
     const store = await this.repo.findInquiryStore(storeId);
     if (!store) {
-      throw new NotFoundException(CONVERSATION_ERRORS.STORE_NOT_FOUND);
+      throw domainError('STORE_NOT_FOUND');
     }
     return store;
   }

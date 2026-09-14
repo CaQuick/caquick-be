@@ -1,13 +1,9 @@
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import { domainError } from '@/common/errors';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -51,25 +47,25 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
    */
   async validate(payload: AccessTokenPayload): Promise<JwtUser> {
     if (!payload?.sub || payload.typ !== 'access') {
-      throw new UnauthorizedException('Invalid access token.');
+      throw domainError('INVALID_ACCESS_TOKEN');
     }
 
     let accountId: bigint;
     try {
       accountId = BigInt(payload.sub);
     } catch {
-      throw new UnauthorizedException('Invalid access token.');
+      throw domainError('INVALID_ACCESS_TOKEN');
     }
 
     const account = await this.accounts.findAccountForJwt(accountId);
 
     // 존재하지 않거나 deleted_at이 찍힌 경우
     if (!account) {
-      throw new UnauthorizedException('Account not found.');
+      throw domainError('ACCOUNT_NOT_FOUND');
     }
 
     if (account.status !== 'ACTIVE') {
-      throw new ForbiddenException('Account is not active.');
+      throw domainError('ACCOUNT_NOT_ACTIVE');
     }
 
     return {

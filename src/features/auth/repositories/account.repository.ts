@@ -1,8 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import { buildInitialNickname } from '@/features/auth/helpers/initial-nickname.helper';
 import type {
   AccountForJwt,
@@ -106,9 +106,7 @@ export class AccountRepository implements IAccountRepository {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException(
-          AUTH_ERROR_MESSAGES.ACCOUNT_IDENTITY_CONFLICT,
-        );
+        throw domainError('ACCOUNT_IDENTITY_CONFLICT');
       }
       throw error;
     }

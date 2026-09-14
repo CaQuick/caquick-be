@@ -1,8 +1,8 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
+import { domainError } from '@/common/errors';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
@@ -129,7 +129,7 @@ export class OidcLoginService implements IOidcLoginService {
       this.normalizeReturnTo(undefined);
 
     if (!expectedState || !expectedNonce || !codeVerifier) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.OIDC_SESSION_MISSING);
+      throw domainError('OIDC_SESSION_MISSING');
     }
 
     return { expectedState, expectedNonce, codeVerifier, returnTo };
@@ -172,7 +172,7 @@ export class OidcLoginService implements IOidcLoginService {
   } {
     const subject = typeof claims.sub === 'string' ? claims.sub : null;
     if (!subject) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.OIDC_SUBJECT_MISSING);
+      throw domainError('OIDC_SUBJECT_MISSING');
     }
 
     const email = typeof claims.email === 'string' ? claims.email : undefined;
@@ -218,9 +218,7 @@ export class OidcLoginService implements IOidcLoginService {
     });
 
     if (!account) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.ACCOUNT_UPSERT_FAILED,
-      );
+      throw domainError('ACCOUNT_UPSERT_FAILED');
     }
 
     return account;

@@ -1,20 +1,14 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
+import { domainError } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import { tryClientIp, tryUserAgent } from '@/common/utils/http-meta';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import {
   ACCOUNT_CREDENTIAL_REPOSITORY,
   type AccountCredentialWithAccount,
@@ -79,7 +73,7 @@ export class CredentialAuthService implements ICredentialAuthService {
     const password = args.password;
 
     if (!username || !password.trim()) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
+      throw domainError('INVALID_CREDENTIALS');
     }
 
     const credential =
@@ -92,7 +86,7 @@ export class CredentialAuthService implements ICredentialAuthService {
       password,
     );
     if (!credential || !roleMatches || !isPasswordValid) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
+      throw domainError('INVALID_CREDENTIALS');
     }
 
     const now = this.clock.now();
@@ -146,10 +140,10 @@ export class CredentialAuthService implements ICredentialAuthService {
       args.accountId,
     );
     if (!credential) {
-      throw new UnauthorizedException(AUTH_ERROR_MESSAGES.CREDENTIAL_NOT_FOUND);
+      throw domainError('CREDENTIAL_NOT_FOUND');
     }
     if (credential.account.account_type !== args.role) {
-      throw new ForbiddenException(AUTH_ERROR_MESSAGES.ROLE_MISMATCH);
+      throw domainError('ROLE_MISMATCH');
     }
 
     const { currentPassword, newPassword } = args;
@@ -159,9 +153,7 @@ export class CredentialAuthService implements ICredentialAuthService {
       currentPassword,
     );
     if (!isCurrentPasswordValid) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.CURRENT_PASSWORD_INVALID,
-      );
+      throw domainError('CURRENT_PASSWORD_INVALID');
     }
 
     const isSamePassword = await argon2.verify(
@@ -169,7 +161,7 @@ export class CredentialAuthService implements ICredentialAuthService {
       newPassword,
     );
     if (isSamePassword) {
-      throw new BadRequestException(AUTH_ERROR_MESSAGES.PASSWORD_UNCHANGED);
+      throw domainError('PASSWORD_UNCHANGED');
     }
 
     const now = this.clock.now();
@@ -209,27 +201,21 @@ export class CredentialAuthService implements ICredentialAuthService {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
       string | undefined;
     if (!refreshToken) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN,
-      );
+      throw domainError('MISSING_REFRESH_TOKEN');
     }
 
     const session = await this.refreshSessions.findActiveRefreshSessionByHash(
       this.tokens.sha256Hex(refreshToken),
     );
     if (!session) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
-      );
+      throw domainError('INVALID_REFRESH_TOKEN');
     }
 
     const credential = await this.credentials.findCredentialByAccountId(
       session.account_id,
     );
     if (!credential || credential.account.account_type !== role) {
-      throw new UnauthorizedException(
-        AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
-      );
+      throw domainError('INVALID_REFRESH_TOKEN');
     }
     return { session, credential };
   }

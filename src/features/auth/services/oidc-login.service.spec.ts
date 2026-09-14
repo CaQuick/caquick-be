@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { messageOf } from '@/common/errors';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -352,7 +353,7 @@ describe('OidcLoginService', () => {
       ).rejects.toThrow(UnauthorizedException);
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC session is missing.');
+      ).rejects.toThrow(messageOf('OIDC_SESSION_MISSING'));
     });
 
     it('OIDC subject가 없으면 UnauthorizedException을 던져야 한다', async () => {
@@ -376,7 +377,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC subject is missing.');
+      ).rejects.toThrow(messageOf('OIDC_SUBJECT_MISSING'));
     });
 
     it('upsertUserByOidcIdentity가 account=null을 반환하면 UnauthorizedException', async () => {
@@ -402,7 +403,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('Account upsert failed.');
+      ).rejects.toThrow(messageOf('ACCOUNT_UPSERT_FAILED'));
     });
   });
 });

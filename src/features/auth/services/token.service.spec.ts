@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { messageOf } from '@/common/errors';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -140,7 +141,7 @@ describe('TokenService', () => {
         UnauthorizedException,
       );
       await expect(service.rotateRefresh(reqNoCookie, mockRes)).rejects.toThrow(
-        'Missing refresh token.',
+        messageOf('MISSING_REFRESH_TOKEN'),
       );
     });
 
@@ -153,7 +154,7 @@ describe('TokenService', () => {
 
       await expect(
         service.rotateRefresh(reqWithCookie, mockRes),
-      ).rejects.toThrow('Invalid refresh token.');
+      ).rejects.toThrow(messageOf('INVALID_REFRESH_TOKEN'));
     });
 
     it('정상 회전 시 새 access + accountId 를 반환하고 새 refresh 쿠키를 발급한다', async () => {

@@ -23,10 +23,27 @@ export class ApiResponseTemplate<T> {
   @ApiProperty({ nullable: true })
   public readonly data: T;
 
-  private constructor(message: string, status: number, data: T) {
+  /**
+   * 도메인 에러 코드(ERROR_CATALOG). 카탈로그를 거친 예외에만 실린다.
+   *
+   * `code`는 HTTP 상태 숫자라 도메인 식별자를 담을 수 없어 필드를 따로 둔다.
+   * GraphQL 쪽 `extensions.errorCode`와 같은 이름·같은 값이다 — 클라이언트가
+   * transport에 상관없이 같은 분기를 쓴다.
+   */
+  @ApiProperty({ required: false, example: 'INVALID_CREDENTIALS' })
+  public readonly errorCode?: string;
+
+  private constructor(
+    message: string,
+    status: number,
+    data: T,
+    errorCode?: string,
+  ) {
     this.message = message;
     this.code = status;
     this.data = data;
+    // undefined면 JSON 직렬화에서 빠진다 — 성공 응답에 빈 필드를 남기지 않는다
+    if (errorCode !== undefined) this.errorCode = errorCode;
   }
 
   /**
@@ -53,8 +70,9 @@ export class ApiResponseTemplate<T> {
   static ERROR(
     message: string = 'error',
     status: HttpStatus = HttpStatus.INTERNAL_SERVER_ERROR,
+    errorCode?: string,
   ): ApiResponseTemplate<null> {
-    return new ApiResponseTemplate<null>(message, status, null);
+    return new ApiResponseTemplate<null>(message, status, null, errorCode);
   }
 
   /**
@@ -64,7 +82,8 @@ export class ApiResponseTemplate<T> {
     data: U,
     message: string = 'error',
     status: HttpStatus = HttpStatus.INTERNAL_SERVER_ERROR,
+    errorCode?: string,
   ): ApiResponseTemplate<U> {
-    return new ApiResponseTemplate<U>(message, status, data);
+    return new ApiResponseTemplate<U>(message, status, data, errorCode);
   }
 }

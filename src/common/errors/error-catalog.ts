@@ -173,6 +173,97 @@ export const ERROR_CATALOG = {
     status: BAD_REQUEST,
     message: '유효하지 않은 썸네일 URL입니다.',
   },
+
+  // ── 인증 (auth) ──
+  OIDC_SESSION_MISSING: {
+    status: UNAUTHORIZED,
+    message: '소셜 로그인 세션이 만료되었습니다. 다시 시도해 주세요.',
+  },
+  OIDC_SUBJECT_MISSING: {
+    status: UNAUTHORIZED,
+    message: '소셜 계정 정보를 확인하지 못했습니다.',
+  },
+  ACCOUNT_UPSERT_FAILED: {
+    status: UNAUTHORIZED,
+    message: '계정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  ACCOUNT_IDENTITY_CONFLICT: {
+    status: CONFLICT,
+    message: '이미 연동된 소셜 계정입니다.',
+  },
+  // 존재·타입·비밀번호 오류를 구분하지 않는다(계정 열거 방지) — 문구도 하나로 유지한다.
+  INVALID_CREDENTIALS: {
+    status: UNAUTHORIZED,
+    message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  },
+  MISSING_REFRESH_TOKEN: {
+    status: UNAUTHORIZED,
+    message: '로그인이 필요합니다.',
+  },
+  INVALID_REFRESH_TOKEN: {
+    status: UNAUTHORIZED,
+    message: '세션이 만료되었습니다. 다시 로그인해 주세요.',
+  },
+  CREDENTIAL_NOT_FOUND: {
+    status: UNAUTHORIZED,
+    message: '자격증명을 찾을 수 없습니다.',
+  },
+  ROLE_MISMATCH: {
+    status: FORBIDDEN,
+    message: '이 경로로 로그인할 수 없는 계정입니다.',
+  },
+  CURRENT_PASSWORD_INVALID: {
+    status: UNAUTHORIZED,
+    message: '현재 비밀번호가 올바르지 않습니다.',
+  },
+  PASSWORD_UNCHANGED: {
+    status: BAD_REQUEST,
+    message: '새 비밀번호는 현재 비밀번호와 달라야 합니다.',
+  },
+  ACCOUNT_NOT_ACTIVE: {
+    status: FORBIDDEN,
+    message: '사용할 수 없는 계정 상태입니다.',
+  },
+  INVALID_ACCESS_TOKEN: {
+    status: UNAUTHORIZED,
+    message: '유효하지 않은 인증 토큰입니다.',
+  },
+  // 인증 주체 조회 실패(401)와 달리, 조회 대상 계정이 없는 경우다.
+  TARGET_ACCOUNT_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '대상 계정을 찾을 수 없습니다.',
+  },
+  INVALID_ACCOUNT_ID: {
+    status: BAD_REQUEST,
+    message: '계정 id 형식이 올바르지 않습니다.',
+  },
+
+  // ── 대화 (conversation) ──
+  FAQ_TOPIC_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '문의 주제를 찾을 수 없습니다.',
+  },
+  CONVERSATION_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '대화를 찾을 수 없습니다.',
+  },
+  ACCOUNT_NOT_FOUND: {
+    status: UNAUTHORIZED,
+    message: '계정을 찾을 수 없습니다.',
+  },
+  ACCOUNT_DELETED: {
+    status: UNAUTHORIZED,
+    message: '탈퇴한 계정입니다.',
+  },
+  // 주문의 BUYER_NOT_USER 와 상황이 다르다 — 이쪽은 "이 기능은 일반 사용자 전용"이다.
+  USER_ACCOUNT_REQUIRED: {
+    status: FORBIDDEN,
+    message: '일반 사용자 계정만 이용할 수 있습니다.',
+  },
+  USER_PROFILE_NOT_FOUND: {
+    status: UNAUTHORIZED,
+    message: '사용자 프로필이 없습니다.',
+  },
 } satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

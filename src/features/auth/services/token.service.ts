@@ -1,8 +1,9 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
+import { domainError } from '@/common/errors';
 import { getEnvAsNumber } from '@/common/helpers/config.helper';
 import {
   generateRandomToken,
@@ -96,13 +97,13 @@ export class TokenService implements ITokenService {
       string | undefined;
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Missing refresh token.');
+      throw domainError('MISSING_REFRESH_TOKEN');
     }
 
     const tokenHash = this.sha256Hex(refreshToken);
     const session =
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-    if (!session) throw new UnauthorizedException('Invalid refresh token.');
+    if (!session) throw domainError('INVALID_REFRESH_TOKEN');
 
     const newRefreshToken = this.generateRefreshToken();
     const newTokenHash = this.sha256Hex(newRefreshToken);

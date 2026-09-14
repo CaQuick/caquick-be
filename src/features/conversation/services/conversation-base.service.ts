@@ -1,6 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
+import { domainError } from '@/common/errors';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { evaluateActiveUserAccount } from '@/features/user';
 
@@ -14,13 +12,13 @@ export abstract class ConversationBaseService {
     const account = await this.repo.findUserAccountForInquiry(accountId);
     switch (evaluateActiveUserAccount(account)) {
       case 'ACCOUNT_NOT_FOUND':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.ACCOUNT_NOT_FOUND);
+        throw domainError('ACCOUNT_NOT_FOUND');
       case 'ACCOUNT_DELETED':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.ACCOUNT_DELETED);
+        throw domainError('ACCOUNT_DELETED');
       case 'NOT_USER':
-        throw new ForbiddenException(CONVERSATION_ERRORS.NOT_USER);
+        throw domainError('USER_ACCOUNT_REQUIRED');
       case 'PROFILE_INACTIVE':
-        throw new UnauthorizedException(CONVERSATION_ERRORS.PROFILE_INACTIVE);
+        throw domainError('USER_PROFILE_NOT_FOUND');
       case null:
         break;
     }

@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
@@ -7,7 +8,6 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
 import {
   DEFAULT_CONVERSATION_LIST_LIMIT,
   DEFAULT_CONVERSATION_MESSAGES_LIMIT,
@@ -95,7 +95,7 @@ export class ConversationCenterService extends ConversationBaseService {
       accountId,
     });
     if (!conversation) {
-      throw new NotFoundException(CONVERSATION_ERRORS.CONVERSATION_NOT_FOUND);
+      throw domainError('CONVERSATION_NOT_FOUND');
     }
 
     const limit = input?.limit ?? DEFAULT_CONVERSATION_MESSAGES_LIMIT;

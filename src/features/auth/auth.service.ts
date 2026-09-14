@@ -1,11 +1,7 @@
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
+import { domainError } from '@/common/errors';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -72,10 +68,10 @@ export class AuthService {
   }> {
     const account = await this.accounts.findAccountForJwt(accountId);
     if (!account) {
-      throw new NotFoundException('Account not found.');
+      throw domainError('TARGET_ACCOUNT_NOT_FOUND');
     }
     if (account.status !== 'ACTIVE') {
-      throw new ForbiddenException('Account is not active.');
+      throw domainError('ACCOUNT_NOT_ACTIVE');
     }
 
     const accessToken = this.tokens.signAccessToken(accountId);

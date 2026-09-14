@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -25,6 +24,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
+import { domainError } from '@/common/errors';
 import { AuthService } from '@/features/auth/auth.service';
 import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
@@ -81,7 +81,7 @@ function parseAccountIdString(raw: string): bigint {
   try {
     return BigInt(raw);
   } catch {
-    throw new BadRequestException('Invalid account id.');
+    throw domainError('INVALID_ACCOUNT_ID');
   }
 }
 
