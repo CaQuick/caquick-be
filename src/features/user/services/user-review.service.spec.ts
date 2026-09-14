@@ -6,6 +6,7 @@ import {
 import type { PrismaClient } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order';
+import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { S3Service } from '@/global/storage/s3.service';
@@ -32,6 +33,7 @@ describe('UserReviewService (real DB)', () => {
   beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
+      isOwnedUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -54,6 +56,8 @@ describe('UserReviewService (real DB)', () => {
   beforeEach(async () => {
     await truncateAll();
     jest.clearAllMocks();
+    // 기본은 "우리가 발급한 URL". 소유권 거절 케이스만 개별 테스트에서 뒤집는다.
+    s3Service.isOwnedUploadUrl.mockReturnValue(true);
   });
 
   /** 리뷰 작성 가능한 상태(PICKED_UP 주문 + 본인 아이템)를 세팅 */
@@ -188,6 +192,113 @@ describe('UserReviewService (real DB)', () => {
           ],
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    describe('미디어 URL 소유권', () => {
+      /**
+       * 클라이언트가 외부 링크·타인 key 를 리뷰 미디어로 저장하는 것을 막는다.
+       * URL 판정 로직 자체(host·prefix·traversal)는 s3.service.spec.ts 에서 전수 검증하고,
+       * 여기서는 "어떤 purpose 로 무엇을 검사하도록 위임하는가"와 거절 여부만 고정한다.
+       */
+      it('IMAGE 는 REVIEW_IMAGE, VIDEO 는 REVIEW_VIDEO purpose 로 위임한다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 4,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'IMAGE',
+              mediaUrl: 'https://s3.example.com/i.jpg',
+              sortOrder: 0,
+            },
+            {
+              mediaType: 'VIDEO',
+              mediaUrl: 'https://s3.example.com/v.mp4',
+              thumbnailUrl: 'https://s3.example.com/v-thumb.jpg',
+              sortOrder: 1,
+            },
+          ],
+        });
+
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+          'https://s3.example.com/i.jpg',
+          'REVIEW_IMAGE',
+          ctx.accountId,
+        );
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+          'https://s3.example.com/v.mp4',
+          'REVIEW_VIDEO',
+          ctx.accountId,
+        );
+        // 썸네일은 영상이어도 이미지 prefix 로 발급된다.
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+          'https://s3.example.com/v-thumb.jpg',
+          'REVIEW_IMAGE',
+          ctx.accountId,
+        );
+      });
+
+      it.each([
+        {
+          label: 'mediaUrl 이 소유 URL 이 아니면',
+          rejectedUrl: 'https://evil.example.com/x.jpg',
+          message: USER_REVIEW_ERRORS.INVALID_MEDIA_URL,
+          media: [
+            {
+              mediaType: 'IMAGE' as const,
+              mediaUrl: 'https://evil.example.com/x.jpg',
+              sortOrder: 0,
+            },
+          ],
+        },
+        {
+          label: 'thumbnailUrl 이 소유 URL 이 아니면',
+          rejectedUrl: 'https://evil.example.com/thumb.jpg',
+          message: USER_REVIEW_ERRORS.INVALID_THUMBNAIL_URL,
+          media: [
+            {
+              mediaType: 'VIDEO' as const,
+              mediaUrl: 'https://s3.example.com/v.mp4',
+              thumbnailUrl: 'https://evil.example.com/thumb.jpg',
+              sortOrder: 0,
+            },
+          ],
+        },
+      ])(
+        '$label BadRequestException',
+        async ({ rejectedUrl, message, media }) => {
+          const ctx = await setupReviewableOrderItem();
+          s3Service.isOwnedUploadUrl.mockImplementation(
+            (url: string) => url !== rejectedUrl,
+          );
+
+          await expect(
+            service.writeReview(ctx.accountId, {
+              orderItemId: ctx.orderItemId.toString(),
+              rating: 4,
+              content: VALID_CONTENT,
+              media,
+            }),
+          ).rejects.toThrow(message);
+
+          // 거절 시 리뷰 행이 남지 않아야 한다(검증은 저장 이전 단계).
+          await expect(prisma.review.count()).resolves.toBe(0);
+        },
+      );
+
+      it('미디어가 없으면 소유권 검증을 호출하지 않는다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 4,
+          content: VALID_CONTENT,
+        });
+
+        expect(s3Service.isOwnedUploadUrl).not.toHaveBeenCalled();
+      });
     });
 
     it('사진 0 + 동영상 1개만 있어도 통과한다', async () => {
