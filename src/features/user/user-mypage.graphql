@@ -15,10 +15,6 @@ type MyPageOverview {
 
 """마이페이지 상단 카운트 카드."""
 type MyPageCounts {
-  """진행중 + 저장된 커스텀 드래프트 수"""
-  customDraftCount: Int!
-  """쿠폰함 보유 쿠폰 수 (MVP: 항상 0)"""
-  couponCount: Int!
   """상품 찜 수"""
   wishlistCount: Int!
   """내가 작성한 리뷰 수"""

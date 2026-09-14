@@ -19,7 +19,6 @@ export async function createSearchEvent(
     data: {
       account_id: overrides.account_id ?? null,
       keyword: overrides.keyword ?? `keyword_${seq}`,
-      context: 'GLOBAL',
       created_at: overrides.created_at ?? new Date(),
       deleted_at: overrides.deleted_at ?? null,
     },

@@ -66,8 +66,6 @@ describe('User Mypage Resolver (real DB)', () => {
     expect(result.ongoingOrders).toHaveLength(1);
     expect(result.ongoingOrders[0].orderId).toBe(order.id.toString());
     expect(result.counts).toMatchObject({
-      customDraftCount: 0,
-      couponCount: 0,
       wishlistCount: 0,
       myReviewCount: 0,
     });

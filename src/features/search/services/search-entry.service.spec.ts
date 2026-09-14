@@ -64,7 +64,6 @@ describe('SearchEntryService (real DB)', () => {
       expect(events).toHaveLength(1);
       expect(events[0].keyword).toBe('딸기 케이크');
       expect(events[0].account_id).toBeNull();
-      expect(events[0].context).toBe('GLOBAL');
       expect(await prisma.searchHistory.count()).toBe(0);
     });
 

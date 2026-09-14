@@ -58,8 +58,6 @@ describe('UserMypageService (real DB)', () => {
       const result = await service.getOverview(account.id);
 
       expect(result.counts).toEqual({
-        customDraftCount: 0,
-        couponCount: 0,
         wishlistCount: 0,
         myReviewCount: 0,
       });
@@ -72,30 +70,6 @@ describe('UserMypageService (real DB)', () => {
       const product = await createProduct(prisma);
       const product2 = await createProduct(prisma);
       const product3 = await createProduct(prisma);
-
-      // Custom drafts: active 2 + soft-deleted 1
-      await prisma.customDraft.create({
-        data: {
-          account_id: account.id,
-          product_id: product.id,
-          status: 'IN_PROGRESS',
-        },
-      });
-      await prisma.customDraft.create({
-        data: {
-          account_id: account.id,
-          product_id: product2.id,
-          status: 'READY_FOR_ORDER',
-        },
-      });
-      await prisma.customDraft.create({
-        data: {
-          account_id: account.id,
-          product_id: product3.id,
-          status: 'IN_PROGRESS',
-          deleted_at: new Date(),
-        },
-      });
 
       // 위시리스트: active 2 + soft-deleted 1 → soft-delete middleware가 제외해야 함
       await prisma.wishlistItem.create({
@@ -137,7 +111,6 @@ describe('UserMypageService (real DB)', () => {
       const result = await service.getOverview(account.id);
 
       // 정확히 active 레코드만 카운트
-      expect(result.counts.customDraftCount).toBe(2);
       expect(result.counts.wishlistCount).toBe(2);
       expect(result.counts.myReviewCount).toBe(0);
     });

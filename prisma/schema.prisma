@@ -43,11 +43,6 @@ enum CategoryType {
   OTHER
 }
 
-enum CustomDraftStatus {
-  IN_PROGRESS
-  READY_FOR_ORDER
-}
-
 enum OrderStatus {
   SUBMITTED
   CONFIRMED
@@ -77,12 +72,6 @@ enum ConversationBodyFormat {
 enum ReviewMediaType {
   IMAGE
   VIDEO
-}
-
-enum SearchContext {
-  GLOBAL
-  NEIGHBORHOOD
-  CATEGORY
 }
 
 enum BannerPlacement {
@@ -174,8 +163,6 @@ model Account {
   account_identities AccountIdentity[]
   refresh_sessions   AuthRefreshSession[]
   wishlist_items     WishlistItem[]
-  cart               Cart?
-  custom_drafts      CustomDraft[]
   orders             Order[]
   reviews            Review[]
   notifications      Notification[]
@@ -498,8 +485,7 @@ model Category {
   deleted_at DateTime? @db.DateTime(3)
 
   product_categories ProductCategory[]
-  search_events      SearchEvent[]
-  banners            Banner[]          @relation("BannerCategoryLink")
+  banners            Banner[] @relation("BannerCategoryLink")
 
   @@unique([category_type, name], map: "uk_category_type_name")
   @@index([category_type, sort_order], map: "idx_category_sort")
@@ -552,9 +538,7 @@ model Product {
   option_groups   ProductOptionGroup[]
   custom_template ProductCustomTemplate?
 
-  cart_items     CartItem[]
   wishlist_items WishlistItem[]
-  custom_drafts  CustomDraft[]
   order_items    OrderItem[]
   reviews        Review[]
   banners        Banner[]       @relation("BannerProductLink")
@@ -676,7 +660,6 @@ model ProductOptionItem {
 
   option_group ProductOptionGroup @relation(fields: [option_group_id], references: [id])
 
-  cart_item_option_items  CartItemOptionItem[]
   order_item_option_items OrderItemOptionItem[]
 
   @@index([option_group_id, sort_order], map: "idx_product_option_item_group")
@@ -703,8 +686,7 @@ model ProductCustomTemplate {
 
   product Product @relation(fields: [product_id], references: [id])
 
-  text_tokens   ProductCustomTextToken[]
-  custom_drafts CustomDraft[]
+  text_tokens ProductCustomTextToken[]
 
   @@index([deleted_at], map: "idx_product_custom_template_deleted_at")
   @@map("product_custom_template")
@@ -731,8 +713,6 @@ model ProductCustomTextToken {
 
   template ProductCustomTemplate @relation(fields: [template_id], references: [id])
 
-  draft_text_values CustomDraftTextValue[]
-
   @@unique([template_id, token_key], map: "uk_product_custom_text_token")
   @@index([deleted_at], map: "idx_product_custom_text_token_deleted_at")
   @@map("product_custom_text_token")
@@ -740,7 +720,7 @@ model ProductCustomTextToken {
 
 /**
  * =========================
- * 6) Wishlist / Cart
+ * 6) Wishlist
  * =========================
  */
 
@@ -761,152 +741,12 @@ model WishlistItem {
   @@map("wishlist_item")
 }
 
-model Cart {
-  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  account_id BigInt @unique @db.UnsignedBigInt
 
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
 
-  account Account @relation(fields: [account_id], references: [id])
 
-  items CartItem[]
 
-  @@index([deleted_at], map: "idx_cart_deleted_at")
-  @@map("cart")
-}
 
-model CartItem {
-  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  cart_id    BigInt @db.UnsignedBigInt
-  product_id BigInt @db.UnsignedBigInt
 
-  quantity Int @default(1) @db.UnsignedSmallInt
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  cart    Cart    @relation(fields: [cart_id], references: [id])
-  product Product @relation(fields: [product_id], references: [id])
-
-  option_items CartItemOptionItem[]
-
-  @@index([cart_id], map: "idx_cart_item_cart")
-  @@index([product_id], map: "idx_cart_item_product")
-  @@index([deleted_at], map: "idx_cart_item_deleted_at")
-  @@map("cart_item")
-}
-
-model CartItemOptionItem {
-  id             BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  cart_item_id   BigInt @db.UnsignedBigInt
-  option_item_id BigInt @db.UnsignedBigInt
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  cart_item   CartItem          @relation(fields: [cart_item_id], references: [id])
-  option_item ProductOptionItem @relation(fields: [option_item_id], references: [id])
-
-  @@unique([cart_item_id, option_item_id], map: "uk_cart_item_option_item")
-  @@index([deleted_at], map: "idx_cart_item_option_item_deleted_at")
-  @@map("cart_item_option_item")
-}
-
-/**
- * =========================
- * 7) Custom Draft (temporary)
- * =========================
- */
-
-model CustomDraft {
-  id          BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
-  account_id  BigInt  @db.UnsignedBigInt
-  product_id  BigInt  @db.UnsignedBigInt
-  template_id BigInt? @db.UnsignedBigInt
-
-  status CustomDraftStatus @default(IN_PROGRESS)
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  account  Account                @relation(fields: [account_id], references: [id])
-  product  Product                @relation(fields: [product_id], references: [id])
-  template ProductCustomTemplate? @relation(fields: [template_id], references: [id])
-
-  text_values CustomDraftTextValue[]
-  free_edits  CustomDraftFreeEdit[]
-
-  order_items OrderItem[]
-
-  @@index([account_id], map: "idx_custom_draft_account")
-  @@index([product_id], map: "idx_custom_draft_product")
-  @@index([deleted_at], map: "idx_custom_draft_deleted_at")
-  @@map("custom_draft")
-}
-
-model CustomDraftTextValue {
-  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  draft_id BigInt @db.UnsignedBigInt
-  token_id BigInt @db.UnsignedBigInt
-
-  value_text String @db.VarChar(200)
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  draft CustomDraft            @relation(fields: [draft_id], references: [id])
-  token ProductCustomTextToken @relation(fields: [token_id], references: [id])
-
-  @@unique([draft_id, token_id], map: "uk_custom_draft_text_value")
-  @@index([deleted_at], map: "idx_custom_draft_text_value_deleted_at")
-  @@map("custom_draft_text_value")
-}
-
-model CustomDraftFreeEdit {
-  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  draft_id BigInt @db.UnsignedBigInt
-
-  crop_image_url   String @db.VarChar(2048)
-  description_text String @db.VarChar(2000)
-
-  sort_order Int @default(0)
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  draft CustomDraft @relation(fields: [draft_id], references: [id])
-
-  attachments CustomDraftFreeEditAttachment[]
-
-  @@index([draft_id, sort_order], map: "idx_custom_draft_free_edit_draft")
-  @@index([deleted_at], map: "idx_custom_draft_free_edit_deleted_at")
-  @@map("custom_draft_free_edit")
-}
-
-model CustomDraftFreeEditAttachment {
-  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
-  free_edit_id BigInt @db.UnsignedBigInt
-
-  image_url  String @db.VarChar(2048)
-  sort_order Int    @default(0)
-
-  created_at DateTime  @default(now()) @db.DateTime(3)
-  updated_at DateTime  @updatedAt @db.DateTime(3)
-  deleted_at DateTime? @db.DateTime(3)
-
-  free_edit CustomDraftFreeEdit @relation(fields: [free_edit_id], references: [id])
-
-  @@index([free_edit_id, sort_order], map: "idx_custom_draft_free_edit_attachment")
-  @@index([deleted_at], map: "idx_custom_draft_free_edit_attachment_deleted_at")
-  @@map("custom_draft_free_edit_attachment")
-}
 
 /**
  * =========================
@@ -992,8 +832,6 @@ model OrderItem {
   quantity            Int @default(1) @db.UnsignedSmallInt
   item_subtotal_price Int @default(0) @db.UnsignedInt
 
-  custom_draft_id BigInt? @db.UnsignedBigInt
-
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
@@ -1001,7 +839,6 @@ model OrderItem {
   order        Order        @relation(fields: [order_id], references: [id])
   store        Store        @relation(fields: [store_id], references: [id])
   product      Product      @relation(fields: [product_id], references: [id])
-  custom_draft CustomDraft? @relation(fields: [custom_draft_id], references: [id])
 
   option_items  OrderItemOptionItem[]
   custom_texts  OrderItemCustomText[]
@@ -1258,23 +1095,12 @@ model SearchEvent {
 
   keyword String @db.VarChar(200)
 
-  context              SearchContext @default(GLOBAL)
-  address_city         String?       @db.VarChar(50)
-  address_district     String?       @db.VarChar(80)
-  address_neighborhood String?       @db.VarChar(80)
-
-  category_id BigInt? @db.UnsignedBigInt
-
   created_at DateTime  @default(now()) @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  account  Account?  @relation(fields: [account_id], references: [id])
-  category Category? @relation(fields: [category_id], references: [id])
+  account Account? @relation(fields: [account_id], references: [id])
 
   @@index([keyword, created_at], map: "idx_search_event_keyword_created")
-  @@index([context, created_at], map: "idx_search_event_context_created")
-  @@index([address_city, address_district, address_neighborhood, created_at], map: "idx_search_event_region_created")
-  @@index([category_id, created_at], map: "idx_search_event_category_created")
   @@index([deleted_at], map: "idx_search_event_deleted_at")
   @@map("search_event")
 }
