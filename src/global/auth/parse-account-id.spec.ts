@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import { parseAccountId } from '@/global/auth/parse-account-id';
 import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
@@ -22,7 +23,9 @@ describe('parseAccountId', () => {
 
   it('유효하지 않은 문자열이면 BadRequestException을 던진다', () => {
     expect(() => parseAccountId(user('abc'))).toThrow(BadRequestException);
-    expect(() => parseAccountId(user('abc'))).toThrow('Invalid account id.');
+    expect(() => parseAccountId(user('abc'))).toThrow(
+      messageOf('INVALID_ACCOUNT_ID'),
+    );
   });
 
   it('소수점이 포함되면 BadRequestException을 던진다', () => {

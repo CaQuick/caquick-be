@@ -1,5 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
-
+import { domainError } from '@/common/errors';
 import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
 export function parseAccountId(user: JwtUser): bigint {
@@ -8,16 +7,16 @@ export function parseAccountId(user: JwtUser): bigint {
       ? user.accountId.trim()
       : String(user.accountId ?? '');
   if (raw === '') {
-    throw new BadRequestException('Invalid account id.');
+    throw domainError('INVALID_ACCOUNT_ID');
   }
   let id: bigint;
   try {
     id = BigInt(raw);
   } catch {
-    throw new BadRequestException('Invalid account id.');
+    throw domainError('INVALID_ACCOUNT_ID');
   }
   if (id < 0n) {
-    throw new BadRequestException('Invalid account id.');
+    throw domainError('INVALID_ACCOUNT_ID');
   }
   return id;
 }

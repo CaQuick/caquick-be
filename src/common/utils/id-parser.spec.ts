@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 
 describe('id-parser', () => {
@@ -36,7 +37,7 @@ describe('id-parser', () => {
 
   it('유효하지 않은 문자열이면 BadRequestException을 던진다', () => {
     expect(() => parseId('abc')).toThrow(BadRequestException);
-    expect(() => parseId('abc')).toThrow('Invalid id.');
+    expect(() => parseId('abc')).toThrow(messageOf('INVALID_ID'));
   });
 
   it('소수점이 포함되면 BadRequestException을 던진다', () => {

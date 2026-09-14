@@ -1,9 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import {
   MAX_NICKNAME_LENGTH,
   MIN_NICKNAME_LENGTH,
@@ -46,11 +43,11 @@ export class UserProfileService extends UserBaseService {
     const name = this.normalizeName(input.name);
 
     if (!account.name && !name) {
-      throw new BadRequestException('Name is required.');
+      throw domainError('NAME_REQUIRED');
     }
 
     const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
-    if (isTaken) throw new ConflictException('Nickname already exists.');
+    if (isTaken) throw domainError('NICKNAME_TAKEN');
 
     await this.repo.completeOnboarding({
       accountId,
@@ -76,7 +73,7 @@ export class UserProfileService extends UserBaseService {
     const hasPhoneNumber = input.phoneNumber !== undefined;
 
     if (!hasNickname && !hasName && !hasBirthDate && !hasPhoneNumber) {
-      throw new BadRequestException('No fields to update.');
+      throw domainError('NO_FIELDS_TO_UPDATE');
     }
 
     const nickname = hasNickname
@@ -85,7 +82,7 @@ export class UserProfileService extends UserBaseService {
 
     if (nickname) {
       const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
-      if (isTaken) throw new ConflictException('Nickname already exists.');
+      if (isTaken) throw domainError('NICKNAME_TAKEN');
     }
 
     // figma 명세: 이름은 필수값. DTO 가 trim + 빈 문자열 거절을 담당하지만,
@@ -94,7 +91,7 @@ export class UserProfileService extends UserBaseService {
     if (hasName) {
       const normalized = this.normalizeName(input.name);
       if (!normalized) {
-        throw new BadRequestException('Name cannot be empty.');
+        throw domainError('NAME_CANNOT_BE_EMPTY');
       }
       name = normalized;
     }
@@ -128,15 +125,12 @@ export class UserProfileService extends UserBaseService {
 
     // 우리가 발급한 presigned URL(이 버킷·해당 계정 prefix)인지 검증 —
     // 클라이언트가 임의 URL 을 프로필 이미지로 저장하는 것을 방지한다.
-    if (
-      !this.s3Service.isOwnedUploadUrl(
-        profileImageUrl,
-        'PROFILE_IMAGE',
-        accountId,
-      )
-    ) {
-      throw new BadRequestException('Invalid profile image URL.');
-    }
+    // seller·admin 저장 경로와 같은 헬퍼를 쓴다 — 거절 문구·errorCode 가 한곳에서 나온다.
+    this.s3Service.assertOwnedUploadUrl(
+      profileImageUrl,
+      'PROFILE_IMAGE',
+      accountId,
+    );
 
     await this.repo.updateProfileImage({
       accountId,

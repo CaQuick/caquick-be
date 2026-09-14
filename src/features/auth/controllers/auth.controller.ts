@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Inject,
   Param,
@@ -351,9 +350,7 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException(
-        '/auth/dev/issue-token은 개발 환경에서만 사용 가능합니다.',
-      );
+      throw domainError('DEV_ENDPOINT_DISABLED');
     }
 
     const accountId = parseAccountIdString(body.accountId);

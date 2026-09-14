@@ -1,9 +1,6 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { utcDateOnly } from '@/common/utils/date-parser';
 import {
   DEFAULT_PAGINATION_LIMIT,
@@ -38,13 +35,13 @@ export abstract class UserBaseService {
     // 판정 분기는 공용 정책(user-account-policy.helper) 단일 소스 — 메시지 매핑만 여기서
     switch (evaluateActiveUserAccount(account)) {
       case 'ACCOUNT_NOT_FOUND':
-        throw new UnauthorizedException('Account not found.');
+        throw domainError('ACCOUNT_NOT_FOUND');
       case 'ACCOUNT_DELETED':
-        throw new UnauthorizedException('Account is deleted.');
+        throw domainError('ACCOUNT_DELETED');
       case 'NOT_USER':
-        throw new ForbiddenException('Only USER account is allowed.');
+        throw domainError('USER_ACCOUNT_REQUIRED');
       case 'PROFILE_INACTIVE':
-        throw new UnauthorizedException('User profile not found.');
+        throw domainError('USER_PROFILE_NOT_FOUND');
       case null:
         return account as ActiveUserAccount;
     }
@@ -83,7 +80,7 @@ export abstract class UserBaseService {
     }
     const nicknameRegex = /^[A-Za-z0-9가-힣_]+$/;
     if (!nicknameRegex.test(trimmed)) {
-      throw new BadRequestException('Nickname contains invalid characters.');
+      throw domainError('NICKNAME_INVALID_CHARACTERS');
     }
     return trimmed;
   }
@@ -110,19 +107,17 @@ export abstract class UserBaseService {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException('Invalid birthDate.');
+      throw domainError('INVALID_BIRTH_DATE');
     }
     // DB가 @db.Date(시간 무시) + GraphQL DateTime이 ISO string을 UTC로 해석하므로
     // timezone 독립적으로 UTC 자정 기준으로 정규화한다.
     const normalized = utcDateOnly(date);
     if (normalized < MIN_BIRTH_DATE) {
-      throw new BadRequestException(
-        'birthDate is too old (before 1900-01-01).',
-      );
+      throw domainError('BIRTH_DATE_TOO_OLD');
     }
     const todayUtc = utcDateOnly(new Date());
     if (normalized > todayUtc) {
-      throw new BadRequestException('birthDate cannot be in the future.');
+      throw domainError('BIRTH_DATE_IN_FUTURE');
     }
     return normalized;
   }
@@ -139,11 +134,11 @@ export abstract class UserBaseService {
     const unreadOnly = Boolean(input?.unreadOnly);
 
     if (offset < 0) {
-      throw new BadRequestException('Offset must be >= 0.');
+      throw domainError('OFFSET_NEGATIVE');
     }
     if (limit <= 0 || limit > MAX_PAGINATION_LIMIT) {
       throw new BadRequestException(
-        `Limit must be between 1 and ${MAX_PAGINATION_LIMIT}.`,
+        `limit은 1~${MAX_PAGINATION_LIMIT.toString()} 사이여야 합니다.`,
       );
     }
 

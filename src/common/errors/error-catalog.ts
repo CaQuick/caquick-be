@@ -518,6 +518,83 @@ export const ERROR_CATALOG = {
     status: BAD_REQUEST,
     message: '노출 시작 시각은 종료 시각보다 앞이어야 합니다.',
   },
+
+  // ── 공용 입력 파싱 ──
+  INVALID_ID: { status: BAD_REQUEST, message: 'id 형식이 올바르지 않습니다.' },
+  INVALID_DATE_VALUE: {
+    status: BAD_REQUEST,
+    message: '날짜 값이 올바르지 않습니다.',
+  },
+  REQUIRED_TEXT_EMPTY: {
+    status: BAD_REQUEST,
+    message: '필수 입력값이 비어 있습니다.',
+  },
+  OFFSET_NEGATIVE: {
+    status: BAD_REQUEST,
+    message: 'offset은 0 이상이어야 합니다.',
+  },
+
+  // ── 개발 전용 엔드포인트 ──
+  DEV_ENDPOINT_DISABLED: {
+    status: FORBIDDEN,
+    message: '개발 환경에서만 사용할 수 있는 기능입니다.',
+  },
+
+  // ── 내 프로필 ──
+  NAME_REQUIRED: { status: BAD_REQUEST, message: '이름을 입력해 주세요.' },
+  NAME_CANNOT_BE_EMPTY: {
+    status: BAD_REQUEST,
+    message: '이름은 비워 둘 수 없습니다.',
+  },
+  NO_FIELDS_TO_UPDATE: {
+    status: BAD_REQUEST,
+    message: '변경할 항목이 없습니다.',
+  },
+  NICKNAME_TAKEN: {
+    status: CONFLICT,
+    message: '이미 사용 중인 닉네임입니다.',
+  },
+  NICKNAME_INVALID_CHARACTERS: {
+    status: BAD_REQUEST,
+    message: '닉네임에 사용할 수 없는 문자가 있습니다.',
+  },
+  INVALID_BIRTH_DATE: {
+    status: BAD_REQUEST,
+    message: '생년월일 형식이 올바르지 않습니다.',
+  },
+  BIRTH_DATE_TOO_OLD: {
+    status: BAD_REQUEST,
+    message: '생년월일은 1900년 1월 1일 이후여야 합니다.',
+  },
+  BIRTH_DATE_IN_FUTURE: {
+    status: BAD_REQUEST,
+    message: '생년월일은 미래일 수 없습니다.',
+  },
+
+  // ── 내 활동 ──
+  SEARCH_HISTORY_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '최근 검색어를 찾을 수 없습니다.',
+  },
+  CANNOT_LIKE_OWN_REVIEW: {
+    status: BAD_REQUEST,
+    message: '본인 리뷰에는 좋아요를 누를 수 없습니다.',
+  },
+
+  // ── 업로드(스토리지) ──
+  NOT_OWNED_UPLOAD_URL: {
+    status: BAD_REQUEST,
+    message:
+      '업로드 URL이 올바르지 않습니다. 발급받은 URL만 사용할 수 있습니다.',
+  },
+  INVALID_CONTENT_LENGTH: {
+    status: BAD_REQUEST,
+    message: '파일 용량은 0보다 커야 합니다.',
+  },
+  S3_PRESIGN_FAILED: {
+    status: INTERNAL,
+    message: '업로드 URL 생성에 실패했습니다.',
+  },
 } satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

@@ -1,10 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
+
 export function toDate(raw?: Date | string | null): Date | undefined {
   if (raw === undefined || raw === null) return undefined;
   const date = raw instanceof Date ? raw : new Date(raw);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException('Invalid date value.');
+    throw domainError('INVALID_DATE_VALUE');
   }
   return date;
 }

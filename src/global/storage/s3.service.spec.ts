@@ -2,11 +2,9 @@ import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
+import { messageOf } from '@/common/errors';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import {
-  STORAGE_ERRORS,
-  UPLOAD_POLICIES,
-} from '@/global/storage/constants/storage.constants';
+import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 import { S3Service } from '@/global/storage/s3.service';
 import type { UploadPurpose } from '@/global/storage/types/storage.types';
 
@@ -210,13 +208,13 @@ describe('S3Service', () => {
       it('0이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: 0 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrow(messageOf('INVALID_CONTENT_LENGTH'));
       });
 
       it('음수이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: -1 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrow(messageOf('INVALID_CONTENT_LENGTH'));
       });
     });
 
@@ -250,7 +248,7 @@ describe('S3Service', () => {
         );
 
         await expect(service.createUploadUrl(baseInput)).rejects.toThrow(
-          STORAGE_ERRORS.S3_PRESIGN_FAILED,
+          messageOf('S3_PRESIGN_FAILED'),
         );
         // 실제 원인이 구조화 로그로 남아야 한다 (일반 메시지로 가려지지 않도록)
         expect(mockLogger.error).toHaveBeenCalledWith(
