@@ -10,7 +10,7 @@ import {
   parseKstYearMonth,
   toKstYmd,
 } from '@/common/utils/kst-time';
-import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/pickup';
+import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/store/constants/pickup.constants';
 import {
   StoreRepository,
   type StorePickupPolicyRow,
@@ -21,11 +21,11 @@ import {
   type PickupDayInput,
 } from '@/features/store/services/store-pickup-policy.helper';
 import type {
-  StorePickupCalendar,
-  StorePickupDay,
-  StorePickupSlot,
-  StorePickupTimeSlots,
-} from '@/features/store/types/store-pickup-schedule-output.type';
+  PickupCalendar,
+  PickupDay,
+  PickupSlot,
+  PickupTimeSlots,
+} from '@/features/store/types/pickup-output.type';
 
 // MySQL DATE/DATETIME 표현 범위(1000-01-01~9999-12-31) 안에서 KST 자정(-9h) 경계와
 // 익월/익일 상한 계산이 넘치지 않도록 연도를 제한한다.
@@ -57,7 +57,7 @@ export class StorePickupScheduleService {
   async storePickupCalendar(
     storeId: bigint,
     yearMonth: string,
-  ): Promise<StorePickupCalendar> {
+  ): Promise<PickupCalendar> {
     const ym = parseKstYearMonth(yearMonth);
     if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
       throw domainError('INVALID_YEAR_MONTH');
@@ -78,22 +78,19 @@ export class StorePickupScheduleService {
       kstMidnightUtc(ym.year, ym.month + 1, 1),
     );
 
-    const days: StorePickupDay[] = Array.from(
-      { length: dayCount },
-      (_, index) => {
-        const day = index + 1;
-        const { reason } = evaluatePickupDay(
-          this.pickupDayInput(store, ctx, now, ym.year, ym.month, day),
-        );
-        return {
-          date: new Date(Date.UTC(ym.year, ym.month - 1, day))
-            .toISOString()
-            .slice(0, 10),
-          selectable: reason === null,
-          reason,
-        };
-      },
-    );
+    const days: PickupDay[] = Array.from({ length: dayCount }, (_, index) => {
+      const day = index + 1;
+      const { reason } = evaluatePickupDay(
+        this.pickupDayInput(store, ctx, now, ym.year, ym.month, day),
+      );
+      return {
+        date: new Date(Date.UTC(ym.year, ym.month - 1, day))
+          .toISOString()
+          .slice(0, 10),
+        selectable: reason === null,
+        reason,
+      };
+    });
 
     return { yearMonth, days };
   }
@@ -105,7 +102,7 @@ export class StorePickupScheduleService {
   async storePickupTimeSlots(
     storeId: bigint,
     date: string,
-  ): Promise<StorePickupTimeSlots> {
+  ): Promise<PickupTimeSlots> {
     const parsed = parseKstDate(date);
     if (!parsed) {
       throw domainError('INVALID_DATE');
@@ -265,7 +262,7 @@ export class StorePickupScheduleService {
 }
 
 /** "HH:MM" 슬롯 시각을 자정 경과 분으로 변환(오전/오후 분리용). */
-function slotMinutes(slot: StorePickupSlot): number {
+function slotMinutes(slot: PickupSlot): number {
   const hours = Number(slot.time.slice(0, 2));
   const minutes = Number(slot.time.slice(3, 5));
   return hours * 60 + minutes;

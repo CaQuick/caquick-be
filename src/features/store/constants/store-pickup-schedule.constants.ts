@@ -1,5 +1,8 @@
-/** 매장 픽업 달력 선택 불가 사유 코드(SDL StorePickupDay.reason). */
-export const STORE_PICKUP_DAY_REASON = {
+/**
+ * 픽업 달력 선택 불가 사유 코드(SDL PickupDay.reason).
+ * 전역 달력과 매장 달력이 공유한다 — 전역은 CAPACITY_FULL을 쓰지 않는다(재고 개념 없음).
+ */
+export const PICKUP_DAY_REASON = {
   PAST: 'PAST',
   OUT_OF_RANGE: 'OUT_OF_RANGE',
   // 특별휴무·요일 휴무·영업시간 미설정·당일 잔여 가용 슬롯 없음을 묶는다.

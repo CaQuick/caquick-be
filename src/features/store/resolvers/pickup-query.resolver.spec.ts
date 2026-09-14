@@ -1,5 +1,5 @@
-import { PickupQueryResolver } from '@/features/pickup/resolvers/pickup-query.resolver';
-import { PickupSlotService } from '@/features/pickup/services/pickup-slot.service';
+import { PickupQueryResolver } from '@/features/store/resolvers/pickup-query.resolver';
+import { PickupSlotService } from '@/features/store/services/pickup-slot.service';
 
 describe('PickupQueryResolver', () => {
   const service = new PickupSlotService();

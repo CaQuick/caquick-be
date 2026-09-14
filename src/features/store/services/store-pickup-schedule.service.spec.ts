@@ -3,7 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
-import type { StorePickupCalendar } from '@/features/store/types/store-pickup-schedule-output.type';
+import type { PickupCalendar } from '@/features/store/types/pickup-output.type';
 import type {
   OrderStatus,
   PrismaClient,
@@ -103,7 +103,7 @@ describe('StorePickupScheduleService (real DB)', () => {
   }
 
   /** 달력에서 특정 날짜 row 조회. */
-  function dayOf(calendar: StorePickupCalendar, date: string) {
+  function dayOf(calendar: PickupCalendar, date: string) {
     const found = calendar.days.find((d) => d.date === date);
     if (!found) throw new Error(`달력에 ${date}가 없음`);
     return found;
