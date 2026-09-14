@@ -12,5 +12,3 @@ export const MAX_POPULAR_KEYWORDS_LIMIT = KEYWORD_RANK_SNAPSHOT_SIZE;
 
 /** 스냅샷 집계 윈도우(시간). 직전 24시간 SearchEvent를 keyword별로 센다. */
 export const KEYWORD_RANK_WINDOW_HOURS = 24;
-
-export const HOUR_MS = 60 * 60 * 1000;

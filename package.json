@@ -1,7 +1,7 @@
 {
   "name": "caquick-be",
   "version": "0.0.1",
-  "description": "\ucf00\uc774\ud035(CaQuick) \ubc31\uc5d4\ub4dc - \uc2dc\uac01 \uae30\ubc18 \uc62c\uc778\uc6d0 \ub9de\ucda4 \ucf00\uc774\ud06c \uc8fc\ubb38 \ud50c\ub7ab\ud3fc",
+  "description": "케이퀵(CaQuick) 백엔드 - 시각 기반 올인원 맞춤 케이크 주문 플랫폼",
   "author": "chanwoo7",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
@@ -92,6 +92,7 @@
     "@types/supertest": "^7.2.1",
     "@types/useragent": "^2",
     "dependency-cruiser": "^17.4.3",
+    "dotenv": "^17.2.3",
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.0.1",
     "eslint-import-resolver-typescript": "^4.4.5",

@@ -18,6 +18,8 @@
   "ignoreDependencies": [
     "@as-integrations/express5",
     "qs",
-    "express-serve-static-core"
+    "express-serve-static-core",
+    "@prisma/client",
+    "graphql-ws"
   ]
 }

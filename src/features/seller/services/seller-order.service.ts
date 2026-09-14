@@ -12,7 +12,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { OrderDomainService, OrderRepository } from '@/features/order';
+import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
@@ -72,7 +72,7 @@ export class SellerOrderService extends SellerBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
-    private readonly orderDomainService: OrderDomainService,
+    private readonly orderStatusPolicy: OrderStatusTransitionPolicy,
   ) {
     super(repo, auditLogs);
   }
@@ -90,7 +90,7 @@ export class SellerOrderService extends SellerBaseService {
     const filters = {
       storeId: ctx.storeId,
       status: input?.status
-        ? this.orderDomainService.parseStatus(input.status)
+        ? this.orderStatusPolicy.parse(input.status)
         : undefined,
       fromCreatedAt: toDate(input?.fromCreatedAt),
       toCreatedAt: toDate(input?.toCreatedAt),
@@ -136,7 +136,7 @@ export class SellerOrderService extends SellerBaseService {
   ): Promise<SellerOrderSummaryOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const orderId = parseId(input.orderId);
-    const toStatus = this.orderDomainService.parseStatus(input.toStatus);
+    const toStatus = this.orderStatusPolicy.parse(input.toStatus);
 
     const current = await this.orderRepository.findOrderDetailByStore({
       orderId,
@@ -144,9 +144,9 @@ export class SellerOrderService extends SellerBaseService {
     });
     if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
 
-    this.orderDomainService.assertSellerTransition(current.status, toStatus);
+    this.orderStatusPolicy.assertSellerTransition(current.status, toStatus);
 
-    if (this.orderDomainService.requiresCancellationNote(toStatus)) {
+    if (this.orderStatusPolicy.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
         throw new BadRequestException(CANCELLATION_NOTE_REQUIRED);
       }
@@ -161,7 +161,7 @@ export class SellerOrderService extends SellerBaseService {
       now: new Date(),
       // 잠금 뒤 현재 상태로 같은 규칙을 다시 적용한다(위 사전 검사는 빠른 거절용)
       assertTransition: (from) =>
-        this.orderDomainService.assertSellerTransition(from, toStatus),
+        this.orderStatusPolicy.assertSellerTransition(from, toStatus),
     });
 
     if (!updated) throw new NotFoundException(ORDER_NOT_FOUND);
