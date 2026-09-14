@@ -4,16 +4,14 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
 import { WriteReviewInput } from '@/features/user/dto/inputs/write-review.input';
 import { UserReviewService } from '@/features/user/services/user-review.service';
-import type {
-  MyReview,
-  ReviewMediaUploadUrl,
-} from '@/features/user/types/user-review-output.type';
+import type { MyReview } from '@/features/user/types/user-review-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
@@ -42,7 +40,7 @@ export class UserReviewMutationResolver {
   createReviewMediaUploadUrl(
     @CurrentUser() user: JwtUser,
     @Args('input') input: CreateReviewMediaUploadUrlInput,
-  ): Promise<ReviewMediaUploadUrl> {
+  ): Promise<CreateUploadUrlOutput> {
     const accountId = parseAccountId(user);
     return this.reviewService.createReviewMediaUploadUrl(accountId, input);
   }

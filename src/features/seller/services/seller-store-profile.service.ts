@@ -13,6 +13,7 @@ import { toStoreOutput } from '@/features/seller/services/seller-store-mappers.h
 import type { ISellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerStoreProfileService
@@ -23,6 +24,7 @@ export class SellerStoreProfileService
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3Service: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -41,6 +43,13 @@ export class SellerStoreProfileService
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
     if (!current) throw new NotFoundException(STORE_NOT_FOUND);
+
+    // 발급받은 매장 이미지 URL만 저장한다 — 외부 링크·타인 key 차단.
+    this.s3Service.assertOwnedUploadUrlIfPresent(
+      input.profileImageUrl,
+      'STORE_IMAGE',
+      accountId,
+    );
 
     // 갱신 규칙은 store feature의 공용 헬퍼가 단일 소스(관리자 대리 수정과 공유)
     const data = buildStoreBasicInfoUpdateData(input);

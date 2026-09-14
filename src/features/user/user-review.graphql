@@ -43,7 +43,7 @@ type MyReviewableOrderItem {
 
 extend type Mutation {
   """리뷰 미디어 업로드용 Presigned URL 발급. 로그인 필수."""
-  createReviewMediaUploadUrl(input: CreateReviewMediaUploadUrlInput!): ReviewMediaUploadUrl!
+  createReviewMediaUploadUrl(input: CreateReviewMediaUploadUrlInput!): UploadUrl!
   """리뷰 작성. 로그인 필수."""
   writeReview(input: WriteReviewInput!): MyReview!
   """내 리뷰 삭제(soft). 로그인 필수. 본인 데이터만 대상이 된다."""
@@ -130,17 +130,6 @@ input CreateReviewMediaUploadUrlInput {
   contentLength: Int!
 }
 
-"""발급된 업로드 URL. uploadUrl로 직접 PUT한 뒤 publicUrl을 writeReview에 넘긴다."""
-type ReviewMediaUploadUrl {
-  """파일을 PUT할 Presigned URL. 만료 전에 써야 한다."""
-  uploadUrl: String!
-  """업로드 완료 후 접근 가능한 URL. writeReview의 mediaUrl로 그대로 넘긴다."""
-  publicUrl: String!
-  """스토리지 객체 키."""
-  key: String!
-  """uploadUrl 만료까지 남은 시간(초)."""
-  expiresInSeconds: Int!
-}
 
 """
 리뷰 작성 입력. 픽업 완료(PICKED_UP)된 주문 품목에만 쓸 수 있고, 품목당 1건이다.

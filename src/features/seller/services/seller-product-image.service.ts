@@ -33,6 +33,7 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import type { ISellerProductImageService } from '@/features/seller/services/seller-product-image.service.interface';
 import { toProductImageOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductImageOutput } from '@/features/seller/types/seller-output.type';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerProductImageService
@@ -44,6 +45,7 @@ export class SellerProductImageService
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3Service: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -54,6 +56,13 @@ export class SellerProductImageService
   ): Promise<SellerProductImageOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const productId = parseId(input.productId);
+
+    // 발급받은 상품 이미지 URL만 저장한다 — 외부 링크·타인 key 차단.
+    this.s3Service.assertOwnedUploadUrl(
+      input.imageUrl,
+      'PRODUCT_IMAGE',
+      accountId,
+    );
 
     const product =
       await this.productRepository.findProductByIdIncludingInactive({

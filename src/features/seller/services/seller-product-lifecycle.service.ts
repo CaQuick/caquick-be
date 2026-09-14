@@ -38,6 +38,7 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import type { ISellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service.interface';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerProductLifecycleService
@@ -49,6 +50,7 @@ export class SellerProductLifecycleService
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3Service: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -60,6 +62,18 @@ export class SellerProductLifecycleService
     const ctx = await this.requireSellerContext(accountId);
 
     this.validateProductPrices(input.regularPrice, input.salePrice);
+
+    // 발급받은 상품 이미지 URL만 저장한다 — 외부 링크·타인 key 차단.
+    this.s3Service.assertOwnedUploadUrl(
+      input.initialImageUrl,
+      'PRODUCT_IMAGE',
+      accountId,
+    );
+    this.s3Service.assertOwnedUploadUrlIfPresent(
+      input.baseDesignImageUrl,
+      'PRODUCT_IMAGE',
+      accountId,
+    );
 
     const created = await this.productRepository.createProduct({
       storeId: ctx.storeId,
@@ -119,6 +133,12 @@ export class SellerProductLifecycleService
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const productId = parseId(input.productId);
+
+    this.s3Service.assertOwnedUploadUrlIfPresent(
+      input.baseDesignImageUrl,
+      'PRODUCT_IMAGE',
+      accountId,
+    );
 
     const current =
       await this.productRepository.findProductByIdIncludingInactive({

@@ -1,0 +1,16 @@
+"""
+Presigned 업로드 발급 결과. 모든 업로드 발급 뮤테이션이 이 형태를 공유한다.
+
+흐름: 발급 뮤테이션 호출 → `uploadUrl`로 파일을 PUT → 저장 뮤테이션에 `publicUrl`을 그대로 전달.
+서버는 저장 시 그 URL이 자신이 이 계정에 발급한 것인지 검증하므로, 외부 링크나 직접 만든 URL은 거절된다.
+"""
+type UploadUrl {
+  """파일을 PUT할 Presigned URL. 만료 전에 써야 한다."""
+  uploadUrl: String!
+  """업로드 완료 후 접근 가능한 URL. 저장 뮤테이션에 이 값을 그대로 넘긴다."""
+  publicUrl: String!
+  """스토리지 객체 키."""
+  key: String!
+  """uploadUrl 만료까지 남은 시간(초)."""
+  expiresInSeconds: Int!
+}

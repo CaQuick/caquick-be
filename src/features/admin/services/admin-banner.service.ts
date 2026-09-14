@@ -55,6 +55,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { S3Service } from '@/global/storage/s3.service';
 
 /** linkType이 결정된 뒤의 링크 값 묶음. 생성·수정이 같은 검증을 탄다. */
 interface BannerLinkValues {
@@ -84,6 +85,7 @@ export class AdminBannerService extends AdminBaseService {
     repo: AdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3Service: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -131,6 +133,13 @@ export class AdminBannerService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const linkType = input.linkType ?? 'NONE';
     this.assertInputLinkFieldsMatch(linkType, input);
+
+    // 발급받은 배너 이미지 URL만 저장한다 — 외부 링크·타인 key 차단.
+    this.s3Service.assertOwnedUploadUrl(
+      input.imageUrl,
+      'BANNER_IMAGE',
+      accountId,
+    );
 
     const resolved: BannerLinkValues = {
       linkType,
@@ -180,6 +189,12 @@ export class AdminBannerService extends AdminBaseService {
   ): Promise<AdminBannerOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const current = await this.requireBanner(parseId(input.bannerId));
+
+    this.s3Service.assertOwnedUploadUrlIfPresent(
+      input.imageUrl,
+      'BANNER_IMAGE',
+      accountId,
+    );
 
     const intendedLinkType = input.linkType ?? current.link_type;
     // input 기준으로만 검증한다 — resolved 기준이면 STORE→NONE 같은 정상 변경에서

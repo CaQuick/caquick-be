@@ -163,6 +163,35 @@ export class S3Service {
     );
   }
 
+  /**
+   * 소유 URL이 아니면 BadRequest로 거절한다. 저장 직전 호출한다.
+   *
+   * 판정은 isOwnedUploadUrl과 동일하며, 호출부마다 if/throw를 반복하지 않게 감싼 것이다.
+   * (미디어 URL 필드가 도메인 전반에 13개라 개별 분기로 두면 누락이 생긴다.)
+   */
+  assertOwnedUploadUrl(
+    url: string,
+    purpose: UploadPurpose,
+    accountId: bigint,
+  ): void {
+    if (!this.isOwnedUploadUrl(url, purpose, accountId)) {
+      throw new BadRequestException(STORAGE_ERRORS.NOT_OWNED_UPLOAD_URL);
+    }
+  }
+
+  /**
+   * 값이 있을 때만 소유권을 검증한다. null은 "지우기", undefined는 "변경 안 함"이라
+   * 둘 다 통과시킨다 — 선택적 이미지 필드(옵션 아이템·상품 기본 디자인 등)용.
+   */
+  assertOwnedUploadUrlIfPresent(
+    url: string | null | undefined,
+    purpose: UploadPurpose,
+    accountId: bigint,
+  ): void {
+    if (url === null || url === undefined || url.trim().length === 0) return;
+    this.assertOwnedUploadUrl(url, purpose, accountId);
+  }
+
   private validateContentType(
     contentType: string,
     allowedTypes: readonly string[],
