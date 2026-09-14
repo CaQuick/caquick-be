@@ -3,8 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import { STORAGE_ERRORS } from '@/global/storage/constants/storage.constants';
+import {
+  STORAGE_ERRORS,
+  UPLOAD_POLICIES,
+} from '@/global/storage/constants/storage.constants';
 import { S3Service } from '@/global/storage/s3.service';
+import type { UploadPurpose } from '@/global/storage/types/storage.types';
 
 // getSignedUrl을 모킹
 jest.mock('@aws-sdk/s3-request-presigner', () => ({
@@ -294,57 +298,97 @@ describe('S3Service', () => {
     });
   });
 
-  describe('isOwnedProfileImageUrl', () => {
-    it('이 버킷·해당 계정 prefix 의 URL 이면 true', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(true);
-    });
+  describe('isOwnedUploadUrl', () => {
+    const BUCKET_HOST = 'caquick-media-test.s3.ap-northeast-2.amazonaws.com';
+    const OWNER = BigInt(1);
 
-    it('다른 계정 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/2/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
+    // purpose 전수 표. UPLOAD_POLICIES에 항목이 늘면 여기에 줄을 추가한다
+    // (누락되면 바로 아래 동기화 테스트가 깨진다).
+    const PURPOSES = [
+      { purpose: 'PROFILE_IMAGE', prefix: 'profile-images' },
+      { purpose: 'REVIEW_IMAGE', prefix: 'review-media/images' },
+      { purpose: 'REVIEW_VIDEO', prefix: 'review-media/videos' },
+    ] as const satisfies readonly { purpose: UploadPurpose; prefix: string }[];
 
-    it('다른 버킷/외부 도메인 URL 이면 false', () => {
-      expect(
-        service.isOwnedProfileImageUrl(
-          'https://evil.example.com/profile-images/1/x.jpg',
-          BigInt(1),
-        ),
-      ).toBe(false);
-    });
-
-    it('review-media 등 다른 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/review-media/images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('path traversal(../)로 타 계정 key 를 가리키면 false (정규화 후 검증)', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/../2/2026-06-10/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('인코딩된 dot(%2e)이 포함되면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/%2e%2e/2/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('http(비 https)면 false', () => {
-      const url =
-        'http://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('URL 형식이 아니면 false', () => {
-      expect(service.isOwnedProfileImageUrl('not a url', BigInt(1))).toBe(
-        false,
+    it('UPLOAD_POLICIES의 모든 purpose가 표에 있다', () => {
+      expect([...PURPOSES].map((row) => row.purpose).sort()).toEqual(
+        Object.keys(UPLOAD_POLICIES).sort(),
       );
     });
+
+    it('표의 prefix가 UPLOAD_POLICIES와 일치한다', () => {
+      for (const { purpose, prefix } of PURPOSES) {
+        expect(UPLOAD_POLICIES[purpose].keyPrefix).toBe(prefix);
+      }
+    });
+
+    describe.each(PURPOSES)('$purpose', ({ purpose, prefix }) => {
+      it('이 버킷·해당 계정 prefix 의 URL 이면 true', () => {
+        const url = `https://${BUCKET_HOST}/${prefix}/1/2026-06-10/abc.jpg`;
+        expect(service.isOwnedUploadUrl(url, purpose, OWNER)).toBe(true);
+      });
+
+      // 거절 사유 전수. 새로운 우회 수법이 발견되면 이 표에 줄을 추가한다.
+      it.each([
+        {
+          label: '다른 계정 prefix',
+          url: () => `https://${BUCKET_HOST}/${prefix}/2/2026-06-10/abc.jpg`,
+        },
+        {
+          label: '계정 id가 접두사만 같은 경우(10 vs 1)',
+          url: () => `https://${BUCKET_HOST}/${prefix}/10/2026-06-10/abc.jpg`,
+        },
+        {
+          label: '외부 도메인',
+          url: () => `https://evil.example.com/${prefix}/1/x.jpg`,
+        },
+        {
+          label: '다른 버킷',
+          url: () =>
+            `https://other-bucket.s3.ap-northeast-2.amazonaws.com/${prefix}/1/x.jpg`,
+        },
+        {
+          label: '다른 리전',
+          url: () =>
+            `https://caquick-media-test.s3.us-east-1.amazonaws.com/${prefix}/1/x.jpg`,
+        },
+        {
+          label: 'path traversal(../)로 타 계정 key 지시',
+          url: () => `https://${BUCKET_HOST}/${prefix}/1/../2/x.jpg`,
+        },
+        {
+          label: '인코딩된 dot(%2e)',
+          url: () => `https://${BUCKET_HOST}/${prefix}/1/%2e%2e/2/x.jpg`,
+        },
+        {
+          label: 'http(비 https)',
+          url: () => `http://${BUCKET_HOST}/${prefix}/1/x.jpg`,
+        },
+        { label: 'URL 형식이 아님', url: () => 'not a url' },
+        { label: '빈 문자열', url: () => '' },
+      ])('$label 이면 false', ({ url }) => {
+        expect(service.isOwnedUploadUrl(url(), purpose, OWNER)).toBe(false);
+      });
+    });
+
+    // purpose를 섞으면 안 된다 — 리뷰 영상 key를 프로필 이미지로 저장하는 식의 교차 사용 차단.
+    it.each(
+      PURPOSES.flatMap((owner) =>
+        PURPOSES.filter((other) => other.purpose !== owner.purpose).map(
+          (other) => ({
+            urlPurpose: other.purpose,
+            urlPrefix: other.prefix,
+            checkedAs: owner.purpose,
+          }),
+        ),
+      ),
+    )(
+      '$urlPurpose prefix URL을 $checkedAs 로 검증하면 false',
+      ({ urlPrefix, checkedAs }) => {
+        const url = `https://${BUCKET_HOST}/${urlPrefix}/1/x.jpg`;
+        expect(service.isOwnedUploadUrl(url, checkedAs, OWNER)).toBe(false);
+      },
+    );
   });
 });
 
