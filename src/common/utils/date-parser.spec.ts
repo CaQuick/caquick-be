@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import {
   toDate,
   toDateRequired,
@@ -54,14 +55,23 @@ describe('date-parser', () => {
   });
 
   describe('toDateRequired', () => {
-    it('유효하지 않은 날짜면 BadRequestException을 던져야 한다', () => {
-      expect(() => toDateRequired('invalid', 'testField')).toThrow(
+    it('유효하지 않은 날짜면 INVALID_DATE_VALUE를 던진다', () => {
+      expect(() => toDateRequired('invalid', 'CLOSURE_DATE_REQUIRED')).toThrow(
         BadRequestException,
+      );
+      expect(() => toDateRequired('invalid', 'CLOSURE_DATE_REQUIRED')).toThrow(
+        messageOf('INVALID_DATE_VALUE'),
+      );
+    });
+
+    it('값이 없으면 호출부가 지정한 코드를 던진다', () => {
+      expect(() => toDateRequired(null, 'CAPACITY_DATE_REQUIRED')).toThrow(
+        messageOf('CAPACITY_DATE_REQUIRED'),
       );
     });
 
     it('유효한 날짜면 Date를 반환해야 한다', () => {
-      const result = toDateRequired('2024-01-01', 'testField');
+      const result = toDateRequired('2024-01-01', 'CLOSURE_DATE_REQUIRED');
       expect(result).toBeInstanceOf(Date);
     });
   });

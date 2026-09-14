@@ -1,10 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
+import type { ErrorCode } from '@/common/errors';
+import { domainError } from '@/common/errors';
 
 export function toDate(raw?: Date | string | null): Date | undefined {
   if (raw === undefined || raw === null) return undefined;
   const date = raw instanceof Date ? raw : new Date(raw);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException('Invalid date value.');
+    throw domainError('INVALID_DATE_VALUE');
   }
   return date;
 }
@@ -16,11 +17,12 @@ export function utcDateOnly(date: Date): Date {
   );
 }
 
+/** 누락 시 던질 코드를 호출부가 정한다 — 필드명을 문구로 조립하면 카탈로그 밖으로 샌다. */
 export function toDateRequired(
   raw: Date | string | null | undefined,
-  field: string,
+  missingCode: ErrorCode,
 ): Date {
   const date = toDate(raw);
-  if (!date) throw new BadRequestException(`${field} is required.`);
+  if (!date) throw domainError(missingCode);
   return date;
 }

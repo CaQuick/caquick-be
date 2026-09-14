@@ -40,13 +40,21 @@ export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
 } as const;
 
 /**
- * 스토리지 에러 메시지
+ * 동적 조립이 필요한 스토리지 에러 문구.
+ * 고정 문구는 common/errors 카탈로그로 옮겼다 — 여기 남은 둘은 허용 타입 목록·
+ * 최대 용량이 purpose마다 달라 런타임에 붙는다.
  */
-export const STORAGE_ERRORS = {
+const STORAGE_ERRORS = {
   INVALID_CONTENT_TYPE: '허용되지 않은 파일 형식입니다.',
   FILE_TOO_LARGE: '파일 용량이 허용 한도를 초과했습니다.',
-  S3_PRESIGN_FAILED: '업로드 URL 생성에 실패했습니다.',
-  INVALID_CONTENT_LENGTH: '파일 용량은 0보다 커야 합니다.',
-  NOT_OWNED_UPLOAD_URL:
-    '업로드 URL이 올바르지 않습니다. 발급받은 URL만 사용할 수 있습니다.',
 } as const;
+
+export function invalidContentTypeMessage(
+  allowedTypes: readonly string[],
+): string {
+  return `${STORAGE_ERRORS.INVALID_CONTENT_TYPE} (허용: ${allowedTypes.join(', ')})`;
+}
+
+export function fileTooLargeMessage(maxMB: number): string {
+  return `${STORAGE_ERRORS.FILE_TOO_LARGE} (최대 ${maxMB.toString()}MB)`;
+}

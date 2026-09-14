@@ -145,7 +145,10 @@ export class SellerStoreHoursService
       if (!found) throw domainError('SPECIAL_CLOSURE_NOT_FOUND');
     }
 
-    const closureDate = toDateRequired(input.closureDate, 'closureDate');
+    const closureDate = toDateRequired(
+      input.closureDate,
+      'CLOSURE_DATE_REQUIRED',
+    );
     const reason = cleanNullableText(
       input.reason,
       MAX_SPECIAL_CLOSURE_REASON_LENGTH,

@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
@@ -28,10 +24,10 @@ export class UserEngagementService extends UserBaseService {
     });
 
     if (result === 'not-found') {
-      throw new NotFoundException('Review not found.');
+      throw domainError('REVIEW_NOT_FOUND');
     }
     if (result === 'self-like') {
-      throw new BadRequestException('Cannot like your own review.');
+      throw domainError('CANNOT_LIKE_OWN_REVIEW');
     }
 
     return true;

@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -125,7 +126,7 @@ describe('UserEngagementService (real DB)', () => {
       // 제목과 일치하도록 예외 타입 + 메시지 둘 다 검증한다 (회귀 감지력 ↑).
       const promise = service.likeReview(liker.id, review.id);
       await expect(promise).rejects.toThrow(UnauthorizedException);
-      await expect(promise).rejects.toThrow(/Account is deleted/);
+      await expect(promise).rejects.toThrow(messageOf('ACCOUNT_DELETED'));
     });
   });
 

@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -26,6 +27,7 @@ describe('UserProfileService (real DB)', () => {
     s3Service = {
       createUploadUrl: jest.fn(),
       isOwnedUploadUrl: jest.fn(),
+      assertOwnedUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -416,7 +418,7 @@ describe('UserProfileService (real DB)', () => {
     it('발급된(소유) URL이면 프로필 이미지를 업데이트한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
-      s3Service.isOwnedUploadUrl.mockReturnValue(true);
+      s3Service.assertOwnedUploadUrl.mockImplementation(() => undefined);
 
       const result = await service.updateMyProfileImage(account.id, {
         profileImageUrl: 'https://s3.example.com/profile.jpg',
@@ -426,7 +428,7 @@ describe('UserProfileService (real DB)', () => {
         'https://s3.example.com/profile.jpg',
       );
       // purpose 를 섞어 넘기면 타 용도 key 가 프로필로 저장될 수 있으므로 인자까지 고정한다.
-      expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+      expect(s3Service.assertOwnedUploadUrl).toHaveBeenCalledWith(
         'https://s3.example.com/profile.jpg',
         'PROFILE_IMAGE',
         account.id,
@@ -436,7 +438,9 @@ describe('UserProfileService (real DB)', () => {
     it('발급되지 않은(소유 아님) URL이면 BadRequest 로 거절한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
-      s3Service.isOwnedUploadUrl.mockReturnValue(false);
+      s3Service.assertOwnedUploadUrl.mockImplementation(() => {
+        throw domainError('NOT_OWNED_UPLOAD_URL');
+      });
 
       await expect(
         service.updateMyProfileImage(account.id, {

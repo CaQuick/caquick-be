@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import type { MySearchHistoriesInput } from '@/features/user/dto/inputs/my-search-histories.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -44,7 +45,7 @@ export class UserSearchService extends UserBaseService {
       id,
       now: new Date(),
     });
-    if (!deleted) throw new NotFoundException('Search history not found.');
+    if (!deleted) throw domainError('SEARCH_HISTORY_NOT_FOUND');
     return true;
   }
 

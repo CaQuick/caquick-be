@@ -164,7 +164,10 @@ export class SellerStorePolicyService
       'capacity',
     );
 
-    const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
+    const capacityDate = toDateRequired(
+      input.capacityDate,
+      'CAPACITY_DATE_REQUIRED',
+    );
 
     const row = capacityId
       ? await this.repo.updateStoreDailyCapacity(capacityId, {

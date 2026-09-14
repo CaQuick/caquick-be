@@ -2,17 +2,15 @@ import { randomUUID } from 'node:crypto';
 
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { domainError } from '@/common/errors';
 import type { S3Config } from '@/config/s3.config';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import {
-  STORAGE_ERRORS,
+  fileTooLargeMessage,
+  invalidContentTypeMessage,
   UPLOAD_POLICIES,
 } from '@/global/storage/constants/storage.constants';
 import type {
@@ -121,7 +119,7 @@ export class S3Service {
             ? `${error.name}: ${error.message}`
             : String(error),
       });
-      throw new InternalServerErrorException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
+      throw domainError('S3_PRESIGN_FAILED');
     }
   }
 
@@ -175,7 +173,7 @@ export class S3Service {
     accountId: bigint,
   ): void {
     if (!this.isOwnedUploadUrl(url, purpose, accountId)) {
-      throw new BadRequestException(STORAGE_ERRORS.NOT_OWNED_UPLOAD_URL);
+      throw domainError('NOT_OWNED_UPLOAD_URL');
     }
   }
 
@@ -197,9 +195,7 @@ export class S3Service {
     allowedTypes: readonly string[],
   ): void {
     if (!allowedTypes.includes(contentType)) {
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.INVALID_CONTENT_TYPE} (허용: ${allowedTypes.join(', ')})`,
-      );
+      throw new BadRequestException(invalidContentTypeMessage(allowedTypes));
     }
   }
 
@@ -208,13 +204,11 @@ export class S3Service {
     maxSizeBytes: number,
   ): void {
     if (contentLength <= 0) {
-      throw new BadRequestException(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+      throw domainError('INVALID_CONTENT_LENGTH');
     }
     if (contentLength > maxSizeBytes) {
       const maxMB = Math.round(maxSizeBytes / (1024 * 1024));
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.FILE_TOO_LARGE} (최대 ${maxMB}MB)`,
-      );
+      throw new BadRequestException(fileTooLargeMessage(maxMB));
     }
   }
 
