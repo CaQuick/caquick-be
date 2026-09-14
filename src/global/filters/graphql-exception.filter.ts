@@ -3,6 +3,7 @@ import { GqlArgumentsHost } from '@nestjs/graphql';
 import type { Request } from 'express';
 import { GraphQLError, type GraphQLResolveInfo } from 'graphql';
 
+import { errorCodeOf } from '@/common/errors';
 import { resolveMessage, resolveStatus } from '@/common/utils/error';
 import {
   buildGraphqlRequestMeta,
@@ -36,6 +37,7 @@ export function mapStatusToCode(status: number): string {
  *
  * extensions:
  * - code        : BAD_USER_INPUT / UNAUTHENTICATED / FORBIDDEN / NOT_FOUND / INTERNAL_SERVER_ERROR
+ * - errorCode   : 도메인 코드(ERROR_CATALOG). 카탈로그를 거친 예외에만 실린다
  * - statusCode  : 400 / 401 / 403 / 404 / 500
  * - requestId   : x-request-id (트래킹용)
  * - operation   : query / mutation / subscription
@@ -56,6 +58,7 @@ export class GraphQLExceptionFilter {
     const gqlRequest = buildGraphqlRequestMeta(info, req);
 
     const status = resolveStatus(exception);
+    const errorCode = errorCodeOf(exception);
     const message = resolveMessage(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
     const duration = calculateDuration(startTime);
@@ -72,6 +75,9 @@ export class GraphQLExceptionFilter {
     return new GraphQLError(message, {
       extensions: {
         code: mapStatusToCode(status),
+        // 도메인 코드. code(Apollo 표준 분류)와 역할이 다르다 — 클라이언트가
+        // 문구가 아니라 이 값으로 분기한다. 카탈로그를 안 거친 예외는 생략된다.
+        ...(errorCode ? { errorCode } : {}),
         statusCode: status,
         requestId,
         operation: info.operation.operation,

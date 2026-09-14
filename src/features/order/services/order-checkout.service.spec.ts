@@ -6,9 +6,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
-import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
@@ -771,7 +771,7 @@ describe('OrderCheckoutService (real DB)', () => {
       // 유도)으로 보이면 클라이언트가 같은 키로 재시도해 같은 실패를 반복한다
       await expect(retry()).rejects.toThrow(BadRequestException);
       await expect(retry()).rejects.toThrow(
-        ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
+        messageOf('IDEMPOTENCY_KEY_UNAVAILABLE'),
       );
 
       // 새 키로는 정상 생성된다(키 단위 문제임을 확인)

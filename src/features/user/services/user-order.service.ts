@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { sliceOverfetched } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
 import { formatBusinessHours } from '@/features/store';
-import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
 import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import type {
   MyOrderConnection,
@@ -78,7 +78,7 @@ export class UserOrderService {
     });
 
     if (!order) {
-      throw new NotFoundException(USER_ORDER_ERRORS.ORDER_NOT_FOUND);
+      throw domainError('ORDER_NOT_FOUND');
     }
 
     const firstItem = order.items[0];

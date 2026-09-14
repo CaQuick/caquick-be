@@ -13,7 +13,6 @@ import {
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
-  INVALID_DECIMAL_VALUE,
   PARENT_REGION_INVALID,
   REGION_HAS_ACTIVE_CHILDREN,
   REGION_HAS_CHILDREN,
@@ -91,12 +90,12 @@ export class AdminRegionService extends AdminBaseService {
       is_active: input.isActive ?? true,
       center_lat: parseDecimalOrNull(
         input.centerLat,
-        INVALID_DECIMAL_VALUE,
+        'INVALID_DECIMAL_VALUE',
         LATITUDE_RANGE,
       ),
       center_lng: parseDecimalOrNull(
         input.centerLng,
-        INVALID_DECIMAL_VALUE,
+        'INVALID_DECIMAL_VALUE',
         LONGITUDE_RANGE,
       ),
     };
@@ -136,7 +135,7 @@ export class AdminRegionService extends AdminBaseService {
         ? {
             center_lat: parseDecimalOrNull(
               input.centerLat,
-              INVALID_DECIMAL_VALUE,
+              'INVALID_DECIMAL_VALUE',
               LATITUDE_RANGE,
             ),
           }
@@ -145,7 +144,7 @@ export class AdminRegionService extends AdminBaseService {
         ? {
             center_lng: parseDecimalOrNull(
               input.centerLng,
-              INVALID_DECIMAL_VALUE,
+              'INVALID_DECIMAL_VALUE',
               LONGITUDE_RANGE,
             ),
           }

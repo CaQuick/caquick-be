@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { calcDiscountRate, ProductRepository } from '@/features/product';
 import { buildRegionLabel } from '@/features/store';
-import { USER_WISHLIST_ERRORS } from '@/features/user/constants/user-wishlist-error-messages';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
 import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
@@ -34,7 +34,7 @@ export class UserWishlistService extends UserBaseService {
 
     const exists = await this.productRepository.existsActiveProduct(productId);
     if (!exists) {
-      throw new NotFoundException(USER_WISHLIST_ERRORS.PRODUCT_NOT_FOUND);
+      throw domainError('PRODUCT_NOT_FOUND');
     }
 
     await this.repo.upsertWishlistItem({

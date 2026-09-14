@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { parseSearchKeyword } from '@/common/utils/search-keyword';
-import { PRODUCT_SEARCH_ERROR_MESSAGES } from '@/features/product/constants/product-search-error-messages';
 import {
   DEFAULT_PRODUCT_SEARCH_SORT,
   DEFAULT_SEARCH_PAGE_LIMIT,
@@ -145,9 +145,7 @@ export class ProductSearchService {
       input.maxPrice !== undefined &&
       input.minPrice > input.maxPrice
     ) {
-      throw new BadRequestException(
-        PRODUCT_SEARCH_ERROR_MESSAGES.INVALID_PRICE_RANGE,
-      );
+      throw domainError('INVALID_PRICE_RANGE');
     }
     const ids = (raw?: string[]): bigint[] | undefined =>
       raw && raw.length > 0 ? raw.map((id) => parseId(id)) : undefined;

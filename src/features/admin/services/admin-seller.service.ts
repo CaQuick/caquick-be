@@ -21,7 +21,6 @@ import {
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
 import {
-  INVALID_DECIMAL_VALUE,
   REGION_NOT_SELECTABLE,
   SELLER_NOT_FOUND,
   USERNAME_TAKEN,
@@ -170,12 +169,12 @@ export class AdminSellerService extends AdminBaseService {
         region_id: regionId,
         latitude: parseDecimalOrNull(
           input.store.latitude,
-          INVALID_DECIMAL_VALUE,
+          'INVALID_DECIMAL_VALUE',
           LATITUDE_RANGE,
         ),
         longitude: parseDecimalOrNull(
           input.store.longitude,
-          INVALID_DECIMAL_VALUE,
+          'INVALID_DECIMAL_VALUE',
           LONGITUDE_RANGE,
         ),
         map_provider: input.store.mapProvider ?? 'NONE',

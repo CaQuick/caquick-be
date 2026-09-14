@@ -1,13 +1,12 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { MAX_REVIEW_COMMENT_LENGTH } from '@/features/user/constants/user.constants';
 import type { WriteReviewCommentInput } from '@/features/user/dto/inputs/write-review-comment.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -44,7 +43,7 @@ export class UserEngagementService extends UserBaseService {
 
     const result = await this.repo.unlikeReview({ accountId, reviewId });
     if (result === 'not-found') {
-      throw new NotFoundException(USER_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw domainError('REVIEW_NOT_FOUND');
     }
 
     return true;
@@ -64,7 +63,7 @@ export class UserEngagementService extends UserBaseService {
       content,
     });
     if (created === 'review-not-found') {
-      throw new NotFoundException(USER_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw domainError('REVIEW_NOT_FOUND');
     }
 
     return {
@@ -87,10 +86,10 @@ export class UserEngagementService extends UserBaseService {
       commentId,
     });
     if (result === 'not-found') {
-      throw new NotFoundException(USER_REVIEW_ERRORS.COMMENT_NOT_FOUND);
+      throw domainError('REVIEW_COMMENT_NOT_FOUND');
     }
     if (result === 'forbidden') {
-      throw new ForbiddenException(USER_REVIEW_ERRORS.NOT_COMMENT_OWNER);
+      throw domainError('NOT_COMMENT_OWNER');
     }
 
     return true;

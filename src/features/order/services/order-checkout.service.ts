@@ -1,18 +1,11 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
 import { isUniqueConstraintOn } from '@/common/utils/prisma-error';
-import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
@@ -76,12 +69,12 @@ export class OrderCheckoutService {
 
     const product = await this.productRepo.findProductDetailById(productId);
     if (!product) {
-      throw new NotFoundException(ORDER_CHECKOUT_ERRORS.PRODUCT_NOT_FOUND);
+      throw domainError('PRODUCT_NOT_FOUND');
     }
     // Order/OrderItem에 통화 스냅샷 컬럼이 없어 비 KRW 금액은 통화 정보가
     // 소실된다 — 다국통화 스냅샷 설계 전까지 KRW만 허용(명세 외 정책 결정)
     if (product.currency !== 'KRW') {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.UNSUPPORTED_CURRENCY);
+      throw domainError('UNSUPPORTED_CURRENCY');
     }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
@@ -127,9 +120,7 @@ export class OrderCheckoutService {
         amount < 0 ||
         amount > MAX_ORDER_AMOUNT
       ) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.ORDER_AMOUNT_OUT_OF_RANGE,
-        );
+        throw domainError('ORDER_AMOUNT_OUT_OF_RANGE');
       }
     }
 
@@ -192,9 +183,7 @@ export class OrderCheckoutService {
   ): ResolvedOptionSelection[] {
     const uniqueIds = new Set(optionItemIds.map((id) => id.toString()));
     if (uniqueIds.size !== optionItemIds.length) {
-      throw new BadRequestException(
-        ORDER_CHECKOUT_ERRORS.DUPLICATE_OPTION_ITEM,
-      );
+      throw domainError('DUPLICATE_OPTION_ITEM');
     }
 
     const selectionByItemId = new Map<string, ResolvedOptionSelection>();
@@ -216,9 +205,7 @@ export class OrderCheckoutService {
     const selections = optionItemIds.map((id) => {
       const selection = selectionByItemId.get(id.toString());
       if (!selection) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.INVALID_OPTION_ITEM,
-        );
+        throw domainError('INVALID_OPTION_ITEM');
       }
       const groupId = groupIdByItemId.get(id.toString());
       if (groupId !== undefined) {
@@ -235,9 +222,7 @@ export class OrderCheckoutService {
         ? withinRange
         : count === 0 || withinRange;
       if (!valid) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.OPTION_GROUP_RULE_VIOLATION,
-        );
+        throw domainError('OPTION_GROUP_RULE_VIOLATION');
       }
       // 설명/이미지 필수 옵션은 커스텀 입력 없이는 판매자 요구 정보가 빠진 채
       // 주문된다 — 커스텀 체크아웃 확장 전까지 해당 옵션 선택은 거절한다
@@ -245,9 +230,7 @@ export class OrderCheckoutService {
         count > 0 &&
         (group.option_requires_description || group.option_requires_image)
       ) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.OPTION_CUSTOMIZATION_REQUIRED,
-        );
+        throw domainError('OPTION_CUSTOMIZATION_REQUIRED');
       }
     }
     return selections;
@@ -266,12 +249,10 @@ export class OrderCheckoutService {
       await this.orderRepo.findAccountWithProfileForCheckout(accountId);
     const failure = evaluateActiveUserAccount(account);
     if (failure === 'NOT_USER') {
-      throw new ForbiddenException(ORDER_CHECKOUT_ERRORS.BUYER_NOT_USER);
+      throw domainError('BUYER_NOT_USER');
     }
     if (failure !== null || !account?.user_profile) {
-      throw new UnauthorizedException(
-        ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
-      );
+      throw domainError('BUYER_ACCOUNT_NOT_ACTIVE');
     }
     return account.user_profile;
   }
@@ -287,7 +268,7 @@ export class OrderCheckoutService {
     const name = trimmedName || profile.nickname;
     const phone = input.buyerPhone ?? profile.phone_number ?? undefined;
     if (!phone) {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_PHONE_REQUIRED);
+      throw domainError('BUYER_PHONE_REQUIRED');
     }
     return { name, phone };
   }
@@ -340,29 +321,21 @@ export class OrderCheckoutService {
             // 매핑이 없어 INTERNAL_SERVER_ERROR로 나가고, 그러면 클라이언트가
             // 일시 장애로 오인해 같은 키로 재시도한다(릴리즈 리뷰 반영).
             // BAD_USER_INPUT이 "입력을 고쳐 다시 보내라"는 이 상황과도 맞다.
-            throw new BadRequestException(
-              ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
-            );
+            throw domainError('IDEMPOTENCY_KEY_UNAVAILABLE');
           }
           // 그 외(조회 직후 하드 삭제 등 극단적 race)는 재시도가 유효할 수 있다
-          throw new InternalServerErrorException(
-            ORDER_CHECKOUT_ERRORS.IDEMPOTENT_REPLAY_FAILED,
-          );
+          throw domainError('IDEMPOTENT_REPLAY_FAILED');
         }
         if (!isUniqueViolation || attempt === ORDER_NUMBER_MAX_ATTEMPTS - 1) {
           if (isUniqueViolation) {
-            throw new InternalServerErrorException(
-              ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
-            );
+            throw domainError('ORDER_NUMBER_GENERATION_FAILED');
           }
           throw error;
         }
       }
     }
     // 루프는 반환/throw로만 종료된다 — 타입 좁히기용 방어
-    throw new InternalServerErrorException(
-      ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
-    );
+    throw domainError('ORDER_NUMBER_GENERATION_FAILED');
   }
 
   /**
@@ -378,7 +351,7 @@ export class OrderCheckoutService {
       idempotencyKey,
     );
     if (existing) return existing;
-    throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
+    throw domainError('PICKUP_NOT_AVAILABLE');
   }
 
   /**

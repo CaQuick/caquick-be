@@ -7,7 +7,7 @@ import {
 } from '@/common/utils/keyset-cursor';
 
 describe('keyset-cursor', () => {
-  const ERR = 'Invalid cursor.';
+  const ERR = 'INVALID_CURSOR';
 
   it('build → parse 왕복이 값을 보존한다', () => {
     const ts = new Date('2026-08-01T12:34:56.789Z');
