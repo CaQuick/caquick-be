@@ -7,6 +7,7 @@
 - 레포 머지 옵션 (`delete_branch_on_merge`, `allow_auto_merge` 등)
 - `main` 브랜치 Ruleset (삭제/force push 차단, PR 필수, CI 통과 필수)
 - `develop` 브랜치 Ruleset (동일 수준)
+- `develop-msa` 브랜치 Ruleset (MSA 전환 통합 브랜치, develop과 동일 수준 — 전환 완료 시 제거)
 
 > **관리 밖**: 레포 이름/가시성/이슈 탭 등 이미 설정된 값은 `lifecycle.ignore_changes`로 제외 — UI에서 편하게 바꿔도 Terraform이 되돌리지 않는다.
 
@@ -37,6 +38,7 @@ terraform import github_repository.caquick_be caquick-be
 # gh api repos/CaQuick/caquick-be/rulesets --jq '.[] | {id, name}'
 terraform import github_repository_ruleset.main_protection caquick-be:<ruleset_id>
 terraform import github_repository_ruleset.develop_protection caquick-be:<ruleset_id>
+terraform import github_repository_ruleset.develop_msa_protection caquick-be:<ruleset_id>
 
 # import 후 plan 돌려서 drift 없는지 확인
 terraform plan

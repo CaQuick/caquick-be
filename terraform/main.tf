@@ -159,3 +159,60 @@ resource "github_repository_ruleset" "develop_protection" {
     }
   }
 }
+
+############################################
+# Branch Ruleset: develop-msa (MSA 전환 통합 브랜치, develop과 동일 수준)
+############################################
+# MSA 전환 작업(Phase 0~)의 머지 대상 브랜치. develop 대신 여기로 PR을 모은다.
+# 전환이 끝나 이 브랜치를 develop으로 합치고 나면 이 리소스와 워크플로우 트리거를 함께 제거한다.
+resource "github_repository_ruleset" "develop_msa_protection" {
+  name        = "develop-msa-protection"
+  repository  = data.github_repository.this.name
+  target      = "branch"
+  enforcement = "active"
+
+  conditions {
+    ref_name {
+      include = ["refs/heads/develop-msa"]
+      exclude = []
+    }
+  }
+
+  # develop과 동일하게 Admin bypass를 둔다.
+  # 주 use case: develop에 들어온 hotfix를 develop-msa로 fast-forward/merge 동기화.
+  bypass_actors {
+    actor_id    = 5 # RepositoryRole: Admin
+    actor_type  = "RepositoryRole"
+    bypass_mode = "always"
+  }
+
+  rules {
+    deletion         = true
+    non_fast_forward = true
+
+    pull_request {
+      required_approving_review_count   = 0
+      dismiss_stale_reviews_on_push     = false
+      require_code_owner_review         = false
+      require_last_push_approval        = false
+      required_review_thread_resolution = false
+    }
+
+    required_status_checks {
+      strict_required_status_checks_policy = false
+
+      required_check {
+        context = "check"
+      }
+      required_check {
+        context = "pr-title"
+      }
+      required_check {
+        context = "coverage-report"
+      }
+      required_check {
+        context = "Analyze (javascript-typescript)"
+      }
+    }
+  }
+}
