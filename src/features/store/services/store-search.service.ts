@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { roundRatingAverage } from '@/common/utils/rating';
 import { parseSearchKeyword } from '@/common/utils/search-keyword';
 import {
   DEFAULT_SEARCH_PAGE_LIMIT,
@@ -15,8 +14,11 @@ import {
   StoreRepository,
   type StoreSearchFilter,
 } from '@/features/store/repositories/store.repository';
+import {
+  fetchStoreCardContext,
+  toStoreCardBase,
+} from '@/features/store/services/store-card.helper';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
-import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { SearchStoreConnection } from '@/features/store/types/store-search-output.type';
 
 /** 검색 요약(searchSummary)이 넘기는 공통 조건. */
@@ -57,27 +59,17 @@ export class StoreSearchService {
     const page = scored.slice(offset, offset + limit);
     const pageStoreIds = page.map((entry) => entry.candidate.id);
 
-    const [imagesByStore, wishlistedIds] = await Promise.all([
-      this.repo.findStoreCakeImages(pageStoreIds),
-      // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
-      accountId !== undefined
-        ? this.wishlistRepo.findWishlistedStoreIds({
-            accountId,
-            storeIds: pageStoreIds,
-          })
-        : Promise.resolve(new Set<string>()),
-    ]);
+    const cardContext = await fetchStoreCardContext({
+      storeRepo: this.repo,
+      wishlistRepo: this.wishlistRepo,
+      storeIds: pageStoreIds,
+      accountId,
+    });
 
     return {
       items: page.map(({ candidate, metrics }) => ({
-        id: candidate.id.toString(),
-        storeName: candidate.store_name,
+        ...toStoreCardBase(candidate, metrics, cardContext),
         profileImageUrl: candidate.profile_image_url,
-        ratingAverage: roundRatingAverage(metrics.ratingAverage),
-        reviewCount: metrics.reviewCount,
-        regionLabel: buildRegionLabel(candidate),
-        cakeImageUrls: imagesByStore.get(candidate.id) ?? [],
-        isWishlisted: wishlistedIds.has(candidate.id.toString()),
       })),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),

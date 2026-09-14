@@ -15,7 +15,10 @@ import {
   StoreRepository,
   type StoreCandidateRow,
 } from '@/features/store/repositories/store.repository';
-import { toPopularStore } from '@/features/store/services/store-mappers.helper';
+import {
+  fetchStoreCardContext,
+  toStoreCardBase,
+} from '@/features/store/services/store-card.helper';
 import {
   scoreAndSortByPopularity,
   type ScoredCandidate,
@@ -101,26 +104,17 @@ export class StoreListingService {
     const totalCount = scored.length;
     const page = scored.slice(offset, offset + limit);
     const pageStoreIds = page.map((s) => s.candidate.id);
-    const [imagesByStore, wishlistedIds] = await Promise.all([
-      this.repo.findStoreCakeImages(pageStoreIds),
-      // 0n도 유효한 계정 id — truthy 체크는 0n을 비로그인으로 떨궈 undefined로만 분기한다
-      accountId !== undefined
-        ? this.wishlistRepo.findWishlistedStoreIds({
-            accountId,
-            storeIds: pageStoreIds,
-          })
-        : Promise.resolve(new Set<string>()),
-    ]);
+    const cardContext = await fetchStoreCardContext({
+      storeRepo: this.repo,
+      wishlistRepo: this.wishlistRepo,
+      storeIds: pageStoreIds,
+      accountId,
+    });
 
-    const items = page.map((entry, idx) =>
-      toPopularStore(
-        entry.candidate,
-        entry.metrics,
-        offset + idx + 1,
-        imagesByStore.get(entry.candidate.id) ?? [],
-        wishlistedIds.has(entry.candidate.id.toString()),
-      ),
-    );
+    const items = page.map((entry, idx) => ({
+      ...toStoreCardBase(entry.candidate, entry.metrics, cardContext),
+      rank: offset + idx + 1,
+    }));
 
     return {
       items,
