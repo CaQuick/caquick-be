@@ -11,6 +11,7 @@ import { ConversationEventsService } from '@/features/conversation/services/conv
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
+import { dbNow } from '@/test/db/db-clock';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -238,14 +239,17 @@ describe('ConversationInquiryService (real DB)', () => {
       const conversation = await prisma.storeConversation.findFirstOrThrow({
         where: { account_id: buyer.id, store_id: store.id },
       });
-      // 판매자 답장(미읽음) 도착 재현
+      // 판매자 답장(미읽음) 도착 재현.
+      // 기준 시각은 DB 시계로 잡는다 — 마커 판정이 NOW(3) 기준이라 호스트 시계로
+      // 심으면 컨테이너 시계가 1초 넘게 드리프트했을 때 "미읽음"이 성립하지 않는다.
+      const dbTime = await dbNow(prisma);
       await prisma.storeConversationMessage.create({
         data: {
           conversation_id: conversation.id,
           sender_type: 'STORE',
           body_format: 'TEXT',
           body_text: '아직 안 읽은 답장',
-          created_at: new Date(Date.now() + 1000),
+          created_at: new Date(dbTime.getTime() + 1000),
         },
       });
       const markerBefore = conversation.last_read_at;
