@@ -135,7 +135,8 @@ export class AdminOrderService extends AdminBaseService {
         latest?.status ?? OrderStatus.CANCELED,
         OrderStatus.CANCELED,
       );
-      throw domainError('ORDER_NOT_FOUND');
+      // 재판정까지 통과했다면 그 사이 또 바뀐 것 — 404가 아니라 재시도 가능한 경쟁이다
+      throw domainError('ORDER_STATE_CHANGED');
     }
     return toAdminOrderSummaryOutput(updated);
   }

@@ -9,4 +9,4 @@
 
 /** 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복. */
 export const NOTIFICATION_FANOUT_INTERRUPTED = (sentCount: number): string =>
-  `Notification fan-out was interrupted after ${sentCount} deliveries; re-sending would duplicate them (see audit log).`;
+  `알림 발송이 ${sentCount}건까지 처리된 뒤 중단됐습니다. 다시 보내면 그만큼 중복 발송됩니다(감사 로그 참고).`;

@@ -322,6 +322,28 @@ describe('AdminOrderService (real DB)', () => {
       );
     });
 
+    // 잠금 판정과 재조회 사이에 상태가 또 뒤집힌 경우. 실 DB로는 재현 폭이 너무 좁아
+    // repository 반환만 경쟁 상황으로 고정한다(행은 SUBMITTED 그대로 → 재판정 통과).
+    it('취소 불가 판정 뒤 재조회가 취소 가능이면 ORDER_STATE_CHANGED', async () => {
+      const { order } = await orderWithItem();
+      const spy = jest
+        .spyOn(orderRepo, 'cancelOrderByAdmin')
+        .mockResolvedValue('not-cancellable');
+      try {
+        await expect(
+          service.adminCancelOrder(await admin(), {
+            orderId: order.id.toString(),
+            note: 'a',
+          }),
+        ).rejects.toMatchObject({
+          status: 400,
+          response: { errorCode: 'ORDER_STATE_CHANGED' },
+        });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('두 관리자가 동시에 취소해도 이력·알림·감사는 1건씩', async () => {
       const { order } = await orderWithItem();
       const [a, b] = [await admin(), await admin()];
