@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import type { CountIdCursor } from '@/common/utils/keyset-cursor';
 import { Prisma, type ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
@@ -77,7 +78,7 @@ export class StoreReviewRepository {
     storeId: bigint;
     photoOnly: boolean;
     limit: number;
-    cursor?: { likeCount: number; id: bigint };
+    cursor?: CountIdCursor;
   }): Promise<{ id: bigint; likeCount: number }[]> {
     const photoFilter = args.photoOnly
       ? Prisma.sql`AND EXISTS (
@@ -87,8 +88,8 @@ export class StoreReviewRepository {
       : Prisma.empty;
     const cursorHaving =
       args.cursor !== undefined
-        ? Prisma.sql`HAVING COUNT(l.id) < ${args.cursor.likeCount}
-          OR (COUNT(l.id) = ${args.cursor.likeCount} AND r.id < ${args.cursor.id})`
+        ? Prisma.sql`HAVING COUNT(l.id) < ${args.cursor.count}
+          OR (COUNT(l.id) = ${args.cursor.count} AND r.id < ${args.cursor.id})`
         : Prisma.empty;
 
     const rows = await this.prisma.$queryRaw<

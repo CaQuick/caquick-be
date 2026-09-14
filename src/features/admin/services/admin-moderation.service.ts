@@ -5,11 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -80,7 +80,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviewReports({ ...filter, ...normalized }),
       this.repo.countReviewReports(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewReportOutput),
       totalCount,
@@ -140,7 +140,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviews({ ...filter, ...normalized }),
       this.repo.countReviews(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewOutput),
       totalCount,
@@ -168,7 +168,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviewComments({ ...filter, ...normalized }),
       this.repo.countReviewComments(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewCommentOutput),
       totalCount,

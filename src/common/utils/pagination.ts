@@ -43,6 +43,35 @@ export function sliceCursorPage<T>(
   };
 }
 
+/**
+ * id 내림차순 키셋 페이지. `sliceCursorPage`의 가장 흔한 형태(커서 = 마지막 행 id)를
+ * 한 줄로 쓰기 위한 얇은 래퍼다. 판매자·관리자 목록 API가 공유한다.
+ */
+export function sliceIdCursorPage<T extends { id: bigint }>(
+  rows: T[],
+  limit: number,
+): CursorPage<T> {
+  return sliceCursorPage(rows, limit, (last) => last.id.toString());
+}
+
+/**
+ * 목록 입력 정규화. limit은 1~100으로 clamp(운영 보호), cursor는 있을 때만 싣는다.
+ *
+ * DTO가 이미 범위를 검증하지만 범용 유틸이라 방어를 둔다 — 상한이 빠진 경로가
+ * 생기면 조용히 전체 조회가 되기 때문이다.
+ */
+export function normalizeCursorInput(input?: {
+  limit?: number | null;
+  cursor?: bigint | null;
+}): { limit: number; cursor?: bigint } {
+  const safeLimit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
+  const cursor = input?.cursor ?? undefined;
+  return {
+    limit: safeLimit,
+    ...(cursor ? { cursor } : {}),
+  };
+}
+
 /** offset 페이지네이션의 잔여 여부. 음수 limit은 0으로 정규화한다. */
 export function hasMoreByOffset(
   offset: number,

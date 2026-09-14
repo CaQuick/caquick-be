@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 
 import { toDate } from '@/common/utils/date-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -109,7 +109,7 @@ export class AdminBannerService extends AdminBaseService {
       this.repo.countBanners(filter),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminBannerOutput),
       totalCount,

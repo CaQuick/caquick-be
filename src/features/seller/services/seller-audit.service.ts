@@ -2,16 +2,16 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
+import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { INVALID_AUDIT_TARGET_TYPE } from '@/features/seller/constants/seller-error-messages';
 import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import type { ISellerAuditService } from '@/features/seller/services/seller-audit.service.interface';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toAuditLogOutput } from '@/features/seller/services/seller-content-mappers.helper';
@@ -54,7 +54,7 @@ export class SellerAuditService
         : undefined,
     });
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toAuditLogOutput(row)),
       nextCursor: paged.nextCursor,
