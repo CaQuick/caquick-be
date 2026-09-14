@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { ProductRepository } from '@/features/product';
+import { ProductRepository, toProductCardCore } from '@/features/product';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -42,12 +42,7 @@ export class UserRecentViewService {
 
     return {
       items: items.map((view) => ({
-        productId: view.product_id.toString(),
-        productName: view.product.name,
-        representativeImageUrl: view.product.images[0]?.image_url ?? null,
-        salePrice: view.product.sale_price,
-        regularPrice: view.product.regular_price,
-        storeName: view.product.store.store_name,
+        ...toProductCardCore(view.product_id, view.product),
         viewedAt: view.viewed_at,
         isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
       })),

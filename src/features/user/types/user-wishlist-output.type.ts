@@ -1,13 +1,6 @@
-export interface WishlistItemSummary {
-  productId: string;
-  storeId: string;
-  productName: string;
-  representativeImageUrl: string | null;
-  salePrice: number | null;
-  regularPrice: number;
-  discountRate: number;
-  storeName: string;
-  regionLabel: string | null;
+import type { ProductCardCore } from '@/features/product';
+
+export interface WishlistItemSummary extends ProductCardCore {
   ratingAverage: number;
   reviewCount: number;
   addedAt: Date;

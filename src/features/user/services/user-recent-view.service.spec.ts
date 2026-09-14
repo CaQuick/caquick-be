@@ -80,13 +80,41 @@ describe('UserRecentViewService (real DB)', () => {
       expect(result.items).toHaveLength(2);
       // 최근 본 것(p2)이 먼저
       expect(result.items[0]).toMatchObject({
-        productId: p2.id.toString(),
-        productName: '케이크2',
+        id: p2.id.toString(),
+        name: '케이크2',
         storeName: '베이커리A',
         regularPrice: 20000,
       });
-      expect(result.items[1].productId).toBe(p1.id.toString());
+      expect(result.items[1].id).toBe(p1.id.toString());
       expect(result.items[1].salePrice).toBe(9000);
+    });
+
+    // storeId·discountRate·regionLabel은 카드 공용화로 새로 실린 필드다.
+    // 상세 URL이 /store/{storeId}/products/{id}라 storeId가 빠지면 이동이 막힌다.
+    it('상품 카드 공통 필드(storeId·discountRate·regionLabel)를 함께 싣는다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma, {
+        store_name: '베이커리A',
+        address_city: '서울',
+        address_neighborhood: '청담동',
+      });
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        regular_price: 20000,
+        sale_price: 15000,
+      });
+      await createRecentProductView(prisma, {
+        account_id: account.id,
+        product_id: product.id,
+      });
+
+      const result = await service.list(account.id);
+
+      expect(result.items[0]).toMatchObject({
+        storeId: store.id.toString(),
+        discountRate: 25,
+        regionLabel: '서울 청담동',
+      });
     });
 
     it('찜한 상품은 isWishlisted=true, 안 한 상품은 false로 매핑된다', async () => {
@@ -108,9 +136,7 @@ describe('UserRecentViewService (real DB)', () => {
 
       const result = await service.list(account.id);
 
-      const map = new Map(
-        result.items.map((p) => [p.productId, p.isWishlisted]),
-      );
+      const map = new Map(result.items.map((p) => [p.id, p.isWishlisted]));
       expect(map.get(wishlisted.id.toString())).toBe(true);
       expect(map.get(notWishlisted.id.toString())).toBe(false);
     });
@@ -137,9 +163,7 @@ describe('UserRecentViewService (real DB)', () => {
       const result = await service.list(account.id);
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].productId).toBe(
-        productOfInactiveStore.id.toString(),
-      );
+      expect(result.items[0].id).toBe(productOfInactiveStore.id.toString());
       expect(result.items[0].isWishlisted).toBe(false);
     });
 

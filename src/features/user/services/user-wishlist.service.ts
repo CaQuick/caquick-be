@@ -4,7 +4,11 @@ import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
-import { calcDiscountRate, ProductRepository } from '@/features/product';
+import {
+  calcDiscountRate,
+  ProductRepository,
+  toProductCardCore,
+} from '@/features/product';
 import { ReviewListingRepository } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
@@ -90,18 +94,7 @@ export class UserWishlistService extends UserBaseService {
       items: items.map((row) => {
         const stat = reviewStats.get(row.product_id);
         return {
-          productId: row.product_id.toString(),
-          storeId: row.product.store_id.toString(),
-          productName: row.product.name,
-          representativeImageUrl: row.product.images[0]?.image_url ?? null,
-          salePrice: row.product.sale_price,
-          regularPrice: row.product.regular_price,
-          discountRate: calcDiscountRate(
-            row.product.regular_price,
-            row.product.sale_price,
-          ),
-          storeName: row.product.store.store_name,
-          regionLabel: buildRegionLabel(row.product.store),
+          ...toProductCardCore(row.product_id, row.product),
           ratingAverage: roundRatingAverage(stat?.average ?? 0),
           reviewCount: stat?.count ?? 0,
           addedAt: row.created_at,

@@ -2,12 +2,11 @@ import type {
   CakeCandidateRow,
   HomeBannerRow,
 } from '@/features/product/repositories/product.repository';
-import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
+import { toProductCardCore } from '@/features/product/services/product-card.helper';
 import type {
   HomeBanner,
   PopularCake,
 } from '@/features/product/types/product-home-output.type';
-import { buildRegionLabel } from '@/features/store';
 
 /**
  * SDL 계약("linkType에 대응하는 링크 필드 하나만 채워진다")을 매퍼에서 강제한다.
@@ -45,16 +44,5 @@ export function toPopularCake(
   row: CakeCandidateRow,
   rank: number,
 ): PopularCake {
-  return {
-    id: row.id.toString(),
-    storeId: row.store_id.toString(),
-    rank,
-    name: row.name,
-    thumbnailUrl: row.images[0]?.image_url ?? null,
-    storeName: row.store.store_name,
-    regionLabel: buildRegionLabel(row.store),
-    regularPrice: row.regular_price,
-    salePrice: row.sale_price,
-    discountRate: calcDiscountRate(row.regular_price, row.sale_price),
-  };
+  return { ...toProductCardCore(row.id, row), rank };
 }

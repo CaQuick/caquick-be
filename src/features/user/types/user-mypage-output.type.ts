@@ -1,3 +1,4 @@
+import type { ProductCardCore } from '@/features/product';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyPageCounts {
@@ -16,13 +17,7 @@ export interface OngoingOrderSummary {
   totalPrice: number;
 }
 
-export interface RecentViewedProductSummary {
-  productId: string;
-  productName: string;
-  representativeImageUrl: string | null;
-  salePrice: number | null;
-  regularPrice: number;
-  storeName: string;
+export interface RecentViewedProductSummary extends ProductCardCore {
   viewedAt: Date;
   isWishlisted: boolean;
 }
