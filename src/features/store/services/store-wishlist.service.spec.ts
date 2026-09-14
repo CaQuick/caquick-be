@@ -216,8 +216,8 @@ describe('StoreWishlistService (real DB)', () => {
       const withoutImages = result.items.find(
         (i) => i.storeId === empty.id.toString(),
       );
-      expect(withImages?.imageUrls).toEqual(['u3', 'u2', 'u1']);
-      expect(withoutImages?.imageUrls).toEqual([]);
+      expect(withImages?.cakeImageUrls).toEqual(['u3', 'u2', 'u1']);
+      expect(withoutImages?.cakeImageUrls).toEqual([]);
     });
 
     it('삭제된 이미지·비활성 상품은 카드 이미지에서 제외한다', async () => {
@@ -251,7 +251,7 @@ describe('StoreWishlistService (real DB)', () => {
 
       const result = await service.myWishlistedStores(account.id);
 
-      expect(result.items[0].imageUrls).toEqual(['kept']);
+      expect(result.items[0].cakeImageUrls).toEqual(['kept']);
     });
 
     it('평점은 소수 첫째 자리 반올림, 리뷰 없으면 0.0/0건이다', async () => {

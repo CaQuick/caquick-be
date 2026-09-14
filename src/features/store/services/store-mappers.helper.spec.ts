@@ -1,8 +1,5 @@
 import type { StoreCandidateRow } from '@/features/store/repositories/store.repository';
-import {
-  buildRegionLabel,
-  toPopularStore,
-} from '@/features/store/services/store-mappers.helper';
+import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 
 function row(overrides: Partial<StoreCandidateRow>): StoreCandidateRow {
   return {
@@ -42,33 +39,6 @@ describe('store-mappers.helper', () => {
 
     it('주소도 지역도 없으면 null', () => {
       expect(buildRegionLabel(row({}))).toBeNull();
-    });
-  });
-
-  describe('toPopularStore', () => {
-    it('평점을 소수 첫째 자리로 반올림하고 rank·이미지를 매핑한다', () => {
-      const result = toPopularStore(
-        row({ id: 7n, store_name: '케이크하우스' }),
-        {
-          recentOrderCount: 3,
-          wishlistCount: 2,
-          ratingAverage: 4.666,
-          reviewCount: 9,
-        },
-        1,
-        ['a.png', 'b.png'],
-        true,
-      );
-
-      expect(result).toMatchObject({
-        id: '7',
-        rank: 1,
-        storeName: '케이크하우스',
-        ratingAverage: 4.7,
-        reviewCount: 9,
-        cakeImageUrls: ['a.png', 'b.png'],
-        isWishlisted: true,
-      });
     });
   });
 });

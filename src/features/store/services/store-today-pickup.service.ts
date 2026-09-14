@@ -4,16 +4,18 @@ import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { kstDayBoundaries } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import {
+  fetchStoreCardContext,
+  toStoreCardBase,
+} from '@/features/store/services/store-card.helper';
+import {
   StoreListingService,
   type ScoredStore,
 } from '@/features/store/services/store-listing.service';
-import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import { evaluatePickupDay } from '@/features/store/services/store-pickup-policy.helper';
 import type {
   TodayPickupSlot,
@@ -85,25 +87,15 @@ export class StoreTodayPickupService {
     const totalCount = open.length;
     const page = open.slice(offset, offset + limit);
     const pageStoreIds = page.map((p) => p.entry.candidate.id);
-    const [imagesByStore, wishlistedIds] = await Promise.all([
-      this.repo.findStoreCakeImages(pageStoreIds),
-      // 0n도 유효한 계정 id — truthy 체크는 0n을 비로그인으로 떨궈 undefined로만 분기한다
-      accountId !== undefined
-        ? this.wishlistRepo.findWishlistedStoreIds({
-            accountId,
-            storeIds: pageStoreIds,
-          })
-        : Promise.resolve(new Set<string>()),
-    ]);
+    const cardContext = await fetchStoreCardContext({
+      storeRepo: this.repo,
+      wishlistRepo: this.wishlistRepo,
+      storeIds: pageStoreIds,
+      accountId,
+    });
 
     const items = page.map(({ entry, slots }) => ({
-      id: entry.candidate.id.toString(),
-      storeName: entry.candidate.store_name,
-      ratingAverage: roundRatingAverage(entry.metrics.ratingAverage),
-      reviewCount: entry.metrics.reviewCount,
-      regionLabel: buildRegionLabel(entry.candidate),
-      cakeImageUrls: imagesByStore.get(entry.candidate.id) ?? [],
-      isWishlisted: wishlistedIds.has(entry.candidate.id.toString()),
+      ...toStoreCardBase(entry.candidate, entry.metrics, cardContext),
       slots,
     }));
 

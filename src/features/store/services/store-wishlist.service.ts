@@ -87,7 +87,7 @@ export class StoreWishlistService {
           ratingAverage: roundRatingAverage(stat?.average ?? 0),
           reviewCount: stat?.count ?? 0,
           regionLabel: buildRegionLabel(row.store),
-          imageUrls: cakeImages.get(row.store.id) ?? [],
+          cakeImageUrls: cakeImages.get(row.store.id) ?? [],
           addedAt: row.created_at,
         };
       }),

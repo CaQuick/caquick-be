@@ -10,7 +10,7 @@ export interface WishlistedStoreSummary {
   ratingAverage: number;
   reviewCount: number;
   regionLabel: string | null;
-  imageUrls: string[];
+  cakeImageUrls: string[];
   addedAt: Date;
 }
 
