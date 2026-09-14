@@ -148,25 +148,28 @@ describe('JwtBearerStrategy (real DB)', () => {
 
   describe('constructor 분기', () => {
     /**
-     * 생성자에서 JWT_ACCESS_SECRET 필수 검증을 fail-fast 한다.
-     * - 미설정/공백만 있는 경우 모두 throw 되어야 한다.
-     * - passport-jwt Strategy 생성자는 secret 없을 때 내부적으로 throw하므로,
-     *   config에 빈 문자열이면 커스텀 throw가 먼저 발생함을 확인한다.
+     * 생성자에서 시크릿 필수 검증을 fail-fast 한다.
+     * 시크릿은 raw 환경변수가 아니라 authConfig 해석값(auth.jwtSecret)에서 온다 —
+     * JWT_SECRET만 설정한 배포가 config 검증만 통과하고 여기서 죽던 회귀의 수정점.
+     * (해석 규칙은 config/auth.config.spec.ts, 소비 규칙은
+     *  global/auth/access-token-secret.spec.ts에서 전수로 고정한다.)
      */
-    it('JWT_ACCESS_SECRET 미설정이면 Error', () => {
-      const config = { get: () => undefined } as never;
+    it.each([
+      { label: '미설정', value: undefined },
+      { label: '빈 문자열', value: '' },
+      { label: '공백 문자열', value: '   ' },
+    ])('시크릿이 $label 이면 Error', ({ value }) => {
+      const config = { get: () => value } as never;
       const accounts = {} as never;
       expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
-        'Missing JWT_ACCESS_SECRET',
+        'Missing JWT access token secret',
       );
     });
 
-    it('JWT_ACCESS_SECRET이 공백 문자열이면 Error', () => {
-      const config = { get: () => '   ' } as never;
+    it('해석된 시크릿이 있으면 생성된다', () => {
+      const config = { get: () => 'resolved-secret' } as never;
       const accounts = {} as never;
-      expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
-        'Missing JWT_ACCESS_SECRET',
-      );
+      expect(() => new JwtBearerStrategy(config, accounts)).not.toThrow();
     });
   });
 });

@@ -12,7 +12,11 @@ import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
 } from '@/features/auth/repositories/account.repository.interface';
-import type { AccessTokenPayload, JwtUser } from '@/global/auth';
+import {
+  type AccessTokenPayload,
+  type JwtUser,
+  resolveAccessTokenSecret,
+} from '@/global/auth';
 
 /**
  * Bearer 기반 JWT 인증 전략
@@ -28,10 +32,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
   ) {
-    const secret = config.get<string>('JWT_ACCESS_SECRET');
-    if (!secret || secret.trim().length === 0) {
-      throw new Error('Missing JWT_ACCESS_SECRET');
-    }
+    const secret = resolveAccessTokenSecret(config);
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),

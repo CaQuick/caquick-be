@@ -37,21 +37,42 @@ function parseBoolean(
 }
 
 /**
+ * 후보 중 공백이 아닌 첫 값을 trim해 반환 (없으면 빈 문자열)
+ */
+function firstNonBlank(...values: (string | undefined)[]): string {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+}
+
+/**
  * 인증 설정
  */
 export default registerAs('auth', (): AuthConfig => {
   const isProd = process.env.NODE_ENV === 'production';
-  const jwtSecret =
-    process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? '';
 
-  if (isProd && !jwtSecret) {
+  // JWT_ACCESS_SECRET을 정본으로 두되 JWT_SECRET도 받는다. 이 해석값이 유일한
+  // 소비 경로이므로(→ resolveAccessTokenSecret) 둘 중 뭘 설정했든 동작이 같다.
+  // 빈 문자열은 미설정으로 본다 — compose/CI가 미정의 변수를 ''로 주입하는 경우가
+  // 흔해서, ??로 받으면 폴백이 건너뛰어진다.
+  const jwtSecret = firstNonBlank(
+    process.env.JWT_ACCESS_SECRET,
+    process.env.JWT_SECRET,
+  );
+
+  // 환경 불문 fail-fast. 예전엔 여기서 dev 기본값('dev_jwt_secret')을 흘려보냈지만
+  // 실제 소비처가 raw JWT_ACCESS_SECRET을 다시 요구해 어차피 부팅이 막혔다 — 죽은
+  // 폴백이었다. NODE_ENV 오설정 시 알려진 시크릿으로 조용히 뜨는 쪽이 더 위험하다.
+  if (!jwtSecret) {
     throw new Error(
-      'JWT_SECRET or JWT_ACCESS_SECRET must be set in production environment',
+      'JWT_SECRET or JWT_ACCESS_SECRET must be set (checked in every environment)',
     );
   }
 
   return {
-    jwtSecret: jwtSecret || 'dev_jwt_secret',
+    jwtSecret,
     jwtAccessExpiresSeconds: parseNumber(
       process.env.JWT_ACCESS_EXPIRES_SECONDS,
       900,

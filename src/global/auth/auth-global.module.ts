@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
+import { resolveAccessTokenSecret } from '@/global/auth/access-token-secret';
 import { JwtAuthGuard } from '@/global/auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '@/global/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '@/global/auth/guards/roles.guard';
@@ -19,13 +20,9 @@ import { RolesGuard } from '@/global/auth/guards/roles.guard';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_ACCESS_SECRET');
-        if (!secret || secret.trim().length === 0) {
-          throw new Error('Missing JWT_ACCESS_SECRET');
-        }
-        return { secret };
-      },
+      useFactory: (config: ConfigService) => ({
+        secret: resolveAccessTokenSecret(config),
+      }),
     }),
   ],
   providers: [JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard],
