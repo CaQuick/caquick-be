@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
-  buildCountIdCursor,
-  parseCountIdCursor,
-} from '@/common/utils/keyset-cursor';
-import { sliceCursorPage } from '@/common/utils/pagination';
+  fetchReviewIdPage,
+  ReviewListingRepository,
+  type ReviewIdPage,
+  type ReviewSort,
+} from '@/features/review';
 import { DEFAULT_STORE_REVIEWS_LIMIT } from '@/features/store/constants/store-review.constants';
 import type { StoreReviewsInput } from '@/features/store/dto/inputs/store-reviews.input';
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
@@ -17,7 +18,10 @@ import type {
 
 @Injectable()
 export class StoreReviewService {
-  constructor(private readonly repo: StoreReviewRepository) {}
+  constructor(
+    private readonly repo: StoreReviewRepository,
+    private readonly listing: ReviewListingRepository,
+  ) {}
 
   /**
    * 매장 공개 리뷰 목록(커서). 사진 필터·정렬(최신/좋아요) 지원.
@@ -56,55 +60,31 @@ export class StoreReviewService {
     };
   }
 
-  /**
-   * 정렬별 리뷰 id 페이지 + 다음 커서 계산.
-   *
-   * 좋아요순 커서는 "<likeCount>:<id>" 불투명 토큰 — 경계 시점의 좋아요 수를
-   * 담아, 이후 좋아요 수가 변해도 페이지가 중복/누락되지 않는다.
-   * 최신순 커서는 마지막 리뷰 id. 커서는 동일 sort 안에서만 유효하다.
-   */
-  private async fetchReviewIdPage(args: {
+  /** 정렬별 id 페이지. 커서 규약·절단은 공용 헬퍼가 단일 소스. */
+  private fetchReviewIdPage(args: {
     storeId: bigint;
     photoOnly: boolean;
-    sort: 'LATEST' | 'LIKES';
+    sort: ReviewSort;
     limit: number;
     cursorRaw?: string;
-  }): Promise<{
-    pageIds: bigint[];
-    hasMore: boolean;
-    nextCursor: string | null;
-  }> {
-    if (args.sort === 'LIKES') {
-      const rows = await this.repo.listStoreReviewIdsByLikes({
-        storeId: args.storeId,
-        photoOnly: args.photoOnly,
-        limit: args.limit,
-        cursor: args.cursorRaw
-          ? parseCountIdCursor(args.cursorRaw, 'INVALID_LIKES_CURSOR')
-          : undefined,
-      });
-      const page = sliceCursorPage(rows, args.limit, (last) =>
-        buildCountIdCursor(last.likeCount, last.id),
-      );
-      return {
-        pageIds: page.items.map((row) => row.id),
-        hasMore: page.hasMore,
-        nextCursor: page.nextCursor,
-      };
-    }
-
-    const ids = await this.repo.listStoreReviewIdsLatest({
-      storeId: args.storeId,
-      photoOnly: args.photoOnly,
+  }): Promise<ReviewIdPage> {
+    return fetchReviewIdPage({
+      sort: args.sort,
       limit: args.limit,
-      cursor: args.cursorRaw ? parseId(args.cursorRaw) : undefined,
+      cursorRaw: args.cursorRaw,
+      listByLikes: (params) =>
+        this.listing.listReviewIdsByLikes({
+          scope: { kind: 'store', storeId: args.storeId },
+          photoOnly: args.photoOnly,
+          ...params,
+        }),
+      listLatest: (params) =>
+        this.repo.listStoreReviewIdsLatest({
+          storeId: args.storeId,
+          photoOnly: args.photoOnly,
+          ...params,
+        }),
     });
-    const page = sliceCursorPage(ids, args.limit, (last) => last.toString());
-    return {
-      pageIds: page.items,
-      hasMore: page.hasMore,
-      nextCursor: page.nextCursor,
-    };
   }
 
   /** id 페이지 순서를 유지하며 본문 + 집계(좋아요/isLiked)를 채운다. */
@@ -116,9 +96,9 @@ export class StoreReviewService {
 
     const [rows, likeCounts, likedIds] = await Promise.all([
       this.repo.findStoreReviewRowsByIds(reviewIds),
-      this.repo.aggregateLikeCounts(reviewIds),
+      this.listing.aggregateLikeCounts(reviewIds),
       accountId !== undefined
-        ? this.repo.findLikedReviewIds({ reviewIds, accountId })
+        ? this.listing.findLikedReviewIds({ reviewIds, accountId })
         : Promise.resolve(new Set<string>()),
     ]);
 

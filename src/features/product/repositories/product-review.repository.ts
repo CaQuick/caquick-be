@@ -1,15 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
-import type { CountIdCursor } from '@/common/utils/keyset-cursor';
-import { Prisma, type ReviewMediaType } from '@/generated/prisma/client';
+import type { ReviewMediaRow } from '@/features/review';
+import { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
-
-export interface ProductReviewMediaRow {
-  media_type: ReviewMediaType;
-  media_url: string;
-  thumbnail_url: string | null;
-  sort_order: number;
-}
 
 /** 리뷰 작성자 프로필 row(탈퇴 여부 포함, 매퍼에서 익명화). */
 export interface ReviewAuthorRow {
@@ -27,7 +20,7 @@ export interface ProductReviewRow {
   content: string | null;
   created_at: Date;
   account: ReviewAuthorRow;
-  media: ProductReviewMediaRow[];
+  media: ReviewMediaRow[];
   order_item: {
     option_items: {
       group_name_snapshot: string;
@@ -104,98 +97,6 @@ export class ProductReviewRepository {
       take: args.limit + 1,
     });
     return rows.map((row) => row.id);
-  }
-
-  /**
-   * 상품 리뷰 id 페이지(좋아요순 desc, 동률이면 id desc).
-   *
-   * soft-delete된 좋아요를 제외한 집계 기준 정렬이 Prisma orderBy(_count)로는
-   * 불가능하므로 raw 키셋 페이지네이션으로 조회한다. 커서는 이전 페이지 경계의
-   * (likeCount, id) 값을 그대로 받아 이어간다 — 경계 리뷰의 좋아요 수가 요청
-   * 사이에 변해도 페이지가 중복/누락되지 않는다.
-   */
-  async listProductReviewIdsByLikes(args: {
-    productId: bigint;
-    photoOnly: boolean;
-    limit: number;
-    cursor?: CountIdCursor;
-  }): Promise<{ id: bigint; likeCount: number }[]> {
-    const photoFilter = args.photoOnly
-      ? Prisma.sql`AND EXISTS (
-          SELECT 1 FROM review_media m
-          WHERE m.review_id = r.id AND m.deleted_at IS NULL
-        )`
-      : Prisma.empty;
-    const cursorHaving =
-      args.cursor !== undefined
-        ? Prisma.sql`HAVING COUNT(l.id) < ${args.cursor.count}
-          OR (COUNT(l.id) = ${args.cursor.count} AND r.id < ${args.cursor.id})`
-        : Prisma.empty;
-
-    const rows = await this.prisma.$queryRaw<
-      { id: bigint; like_count: bigint }[]
-    >(Prisma.sql`
-      SELECT r.id AS id, COUNT(l.id) AS like_count
-      FROM review r
-      JOIN product p
-        ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
-      JOIN store s
-        ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
-      LEFT JOIN review_like l
-        ON l.review_id = r.id AND l.deleted_at IS NULL
-      WHERE r.product_id = ${args.productId} AND r.deleted_at IS NULL
-      ${photoFilter}
-      GROUP BY r.id
-      ${cursorHaving}
-      ORDER BY like_count DESC, r.id DESC
-      LIMIT ${args.limit + 1}
-    `);
-    return rows.map((row) => ({
-      id: row.id,
-      likeCount: Number(row.like_count),
-    }));
-  }
-
-  /**
-   * 홈 제작 후기 쇼케이스 후보 id(전체기간 좋아요순 desc, 동률이면 id desc).
-   *
-   * Before(주문 커스텀 자유편집 크롭)/After(리뷰 이미지)가 모두 있는 리뷰만
-   * 후보로 삼는다 — 대비 연출이 섹션의 본질이라 한쪽 없는 카드는 제외(정책 확정).
-   * soft-delete 좋아요 제외 집계 정렬이라 raw SQL(리뷰 목록 좋아요순과 동일 패턴).
-   */
-  async listShowcaseReviewIdsByLikes(
-    limit: number,
-  ): Promise<{ id: bigint; likeCount: number }[]> {
-    const rows = await this.prisma.$queryRaw<
-      { id: bigint; like_count: bigint }[]
-    >(Prisma.sql`
-      SELECT r.id AS id, COUNT(l.id) AS like_count
-      FROM review r
-      JOIN product p
-        ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
-      JOIN store s
-        ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
-      LEFT JOIN review_like l
-        ON l.review_id = r.id AND l.deleted_at IS NULL
-      WHERE r.deleted_at IS NULL
-        AND EXISTS (
-          SELECT 1 FROM review_media m
-          WHERE m.review_id = r.id
-            AND m.deleted_at IS NULL
-            AND m.media_type = 'IMAGE'
-        )
-        AND EXISTS (
-          SELECT 1 FROM order_item_custom_free_edit fe
-          WHERE fe.order_item_id = r.order_item_id AND fe.deleted_at IS NULL
-        )
-      GROUP BY r.id
-      ORDER BY like_count DESC, r.id DESC
-      LIMIT ${limit}
-    `);
-    return rows.map((row) => ({
-      id: row.id,
-      likeCount: Number(row.like_count),
-    }));
   }
 
   /** 쇼케이스 id 페이지의 본문 row 일괄 조회(정렬은 service에서 id 순서로 복원). */
@@ -388,33 +289,6 @@ export class ProductReviewRepository {
       select: { id: true },
     });
     return Boolean(found);
-  }
-
-  /** 리뷰별 좋아요 수. */
-  async aggregateLikeCounts(reviewIds: bigint[]): Promise<Map<bigint, number>> {
-    if (reviewIds.length === 0) return new Map();
-    const rows = await this.prisma.reviewLike.groupBy({
-      by: ['review_id'],
-      where: { review_id: { in: reviewIds } },
-      _count: { _all: true },
-    });
-    return new Map(rows.map((r) => [r.review_id, r._count._all]));
-  }
-
-  /** 로그인 사용자가 좋아요한 review_id 집합(string). */
-  async findLikedReviewIds(args: {
-    reviewIds: bigint[];
-    accountId: bigint;
-  }): Promise<Set<string>> {
-    if (args.reviewIds.length === 0) return new Set();
-    const rows = await this.prisma.reviewLike.findMany({
-      where: {
-        review_id: { in: args.reviewIds },
-        account_id: args.accountId,
-      },
-      select: { review_id: true },
-    });
-    return new Set(rows.map((r) => r.review_id.toString()));
   }
 
   /** 리뷰별 댓글 수. */

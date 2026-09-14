@@ -15,8 +15,10 @@ import { ProductHomeService } from '@/features/product/services/product-home.ser
 import { ProductReviewService } from '@/features/product/services/product-review.service';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
 import { ProductStorefrontService } from '@/features/product/services/product-storefront.service';
+import { ReviewModule } from '@/features/review';
 
 @Module({
+  imports: [ReviewModule],
   providers: [
     ProductRepository,
     ProductReviewRepository,

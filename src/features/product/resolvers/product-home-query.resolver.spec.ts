@@ -3,6 +3,7 @@ import { ProductReviewRepository } from '@/features/product/repositories/product
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { ReviewListingRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -25,6 +26,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         ProductHomeQueryResolver,
         ProductHomeService,
         ProductRepository,

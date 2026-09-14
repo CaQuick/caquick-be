@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ReviewModule } from '@/features/review';
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -22,6 +23,7 @@ import { StoreTodayPickupService } from '@/features/store/services/store-today-p
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
 
 @Module({
+  imports: [ReviewModule],
   providers: [
     StoreRepository,
     StoreReviewRepository,

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
+import { ReviewListingRepository } from '@/features/review';
 import type { PrismaClient, Product, Review } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -19,14 +20,20 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 describe('ProductReviewService (real DB)', () => {
   let service: ProductReviewService;
   let repo: ProductReviewRepository;
+  let listing: ReviewListingRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductReviewService, ProductReviewRepository],
+      providers: [
+        ProductReviewService,
+        ProductReviewRepository,
+        ReviewListingRepository,
+      ],
     });
     service = module.get(ProductReviewService);
     repo = module.get(ProductReviewRepository);
+    listing = module.get(ReviewListingRepository);
     prisma = p;
   });
 
@@ -582,12 +589,13 @@ describe('ProductReviewService (real DB)', () => {
 
   describe('repository 빈 입력 가드', () => {
     it('reviewIds가 비면 쿼리 없이 빈 컬렉션을 반환한다', async () => {
-      await expect(repo.aggregateLikeCounts([])).resolves.toEqual(new Map());
       await expect(repo.aggregateCommentCounts([])).resolves.toEqual(new Map());
-      await expect(
-        repo.findLikedReviewIds({ reviewIds: [], accountId: BigInt(1) }),
-      ).resolves.toEqual(new Set());
       await expect(repo.findProductReviewRowsByIds([])).resolves.toEqual([]);
+      // 좋아요 집계·내가 누른 id 는 공용 repository 소관(review feature)
+      await expect(listing.aggregateLikeCounts([])).resolves.toEqual(new Map());
+      await expect(
+        listing.findLikedReviewIds({ reviewIds: [], accountId: BigInt(1) }),
+      ).resolves.toEqual(new Set());
     });
   });
 });
