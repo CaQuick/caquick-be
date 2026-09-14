@@ -1,7 +1,9 @@
 import {
   RANKING_BAYESIAN_M,
+  RANKING_VALID_ORDER_STATUSES,
   RANKING_WEIGHTS,
 } from '@/features/store/constants/store-ranking.constants';
+import { activeWhere } from '@/prisma';
 
 export interface StoreMetrics {
   recentOrderCount: number;
@@ -87,4 +89,20 @@ export function scoreAndSortByPopularity<T extends { id: bigint }>(
     return b.candidate.id > a.candidate.id ? 1 : -1;
   });
   return scored;
+}
+
+/**
+ * 인기 점수용 유효 주문 필터(OrderItem.order 기준).
+ *
+ * 매장 랭킹과 상품 랭킹이 같은 조건을 각각 적어 두고 있었다. soft-delete extension은
+ * **nested relation filter에 deleted_at을 주입하지 않으므로**(root read만 보정)
+ * 삭제된 주문이 랭킹을 부풀리지 않도록 activeWhere를 명시해야 한다 — 이 주의사항이
+ * 두 곳에 흩어져 있으면 한쪽만 빠져도 조용히 틀린 순위가 나간다.
+ */
+export function rankingOrderFilter(since: Date) {
+  return {
+    status: { in: [...RANKING_VALID_ORDER_STATUSES] },
+    created_at: { gte: since },
+    ...activeWhere,
+  };
 }

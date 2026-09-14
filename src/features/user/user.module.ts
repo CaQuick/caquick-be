@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
+import { ReviewModule } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
@@ -37,7 +38,7 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
  * User 도메인 모듈
  */
 @Module({
-  imports: [OrderModule, ProductModule],
+  imports: [OrderModule, ProductModule, ReviewModule],
   providers: [
     UserProfileService,
     UserNotificationService,

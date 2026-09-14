@@ -2,6 +2,7 @@ import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductSearchQueryResolver } from '@/features/product/resolvers/product-search-query.resolver';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
+import { ReviewListingRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -20,6 +21,7 @@ describe('ProductSearchQueryResolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         ProductSearchQueryResolver,
         ProductSearchService,
         ProductRepository,

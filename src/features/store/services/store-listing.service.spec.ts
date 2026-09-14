@@ -1,3 +1,4 @@
+import { ReviewListingRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
@@ -25,6 +26,7 @@ describe('StoreListingService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         StoreListingService,
         StoreRepository,
         StoreWishlistRepository,

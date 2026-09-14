@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
+import { ReviewListingRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
@@ -29,6 +30,7 @@ export class StoreListingService {
   constructor(
     private readonly repo: StoreRepository,
     private readonly wishlistRepo: StoreWishlistRepository,
+    private readonly reviewListing: ReviewListingRepository,
   ) {}
 
   /**
@@ -63,9 +65,12 @@ export class StoreListingService {
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateWishlistCounts(storeIds),
-        this.repo.aggregateReviewStats(storeIds),
+        this.reviewListing.aggregateReviewStats({
+          by: 'store_id',
+          ids: storeIds,
+        }),
         this.repo.aggregateRecentOrderCounts(storeIds, since),
-        this.repo.globalReviewAverage(),
+        this.reviewListing.globalReviewAverage(),
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 

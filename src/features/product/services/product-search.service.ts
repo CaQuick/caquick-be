@@ -28,6 +28,7 @@ import type {
   SearchProductConnection,
   SearchProductFacets,
 } from '@/features/product/types/product-search-output.type';
+import { ReviewListingRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -45,6 +46,7 @@ export class ProductSearchService {
   constructor(
     private readonly repo: ProductRepository,
     private readonly clock: ClockService,
+    private readonly reviewListing: ReviewListingRepository,
   ) {}
 
   /**
@@ -73,7 +75,10 @@ export class ProductSearchService {
     const pageIds = page.map((row) => row.id);
 
     const [reviewStats, wishlistedIds] = await Promise.all([
-      this.repo.aggregateProductReviewStats(pageIds),
+      this.reviewListing.aggregateReviewStats({
+        by: 'product_id',
+        ids: pageIds,
+      }),
       // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
       accountId !== undefined
         ? this.repo.findWishlistedProductIds({ accountId, productIds: pageIds })
@@ -197,9 +202,12 @@ export class ProductSearchService {
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateProductWishlistCounts(ids),
-        this.repo.aggregateProductReviewStats(ids),
+        this.reviewListing.aggregateReviewStats({
+          by: 'product_id',
+          ids: ids,
+        }),
         this.repo.aggregateProductRecentOrderCounts(ids, since),
-        this.repo.globalReviewAverage(),
+        this.reviewListing.globalReviewAverage(),
       ]);
     return scoreAndSortByPopularity(
       candidates,

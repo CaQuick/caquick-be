@@ -74,9 +74,12 @@ export class ProductHomeService {
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateProductWishlistCounts(productIds),
-        this.repo.aggregateProductReviewStats(productIds),
+        this.reviewListing.aggregateReviewStats({
+          by: 'product_id',
+          ids: productIds,
+        }),
         this.repo.aggregateProductRecentOrderCounts(productIds, since),
-        this.repo.globalReviewAverage(),
+        this.reviewListing.globalReviewAverage(),
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 
