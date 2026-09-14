@@ -1,5 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
+import { Prisma } from '@/generated/prisma/client';
 import {
   applySoftDeleteArgs,
   SOFT_DELETE_MODEL_NAMES,
@@ -199,12 +201,66 @@ describe('soft delete extension', () => {
 });
 
 // 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례, 이슈 #207)을 구조로 차단한다.
-describe('SOFT_DELETE_MODELS 커버리지 (dmmf 대조)', () => {
-  const modelsWithDeletedAt = Prisma.dmmf.datamodel.models
-    .filter((model) =>
-      model.fields.some((field) => field.name === 'deleted_at'),
-    )
-    .map((model) => model.name);
+//
+// Prisma 7의 새 제너레이터(prisma-client)는 런타임 DMMF를 노출하지 않으므로
+// schema.prisma를 직접 읽어 대조한다. 스키마가 정본이라 대조 대상으로는 오히려 정확하다.
+describe('SOFT_DELETE_MODELS 커버리지 (schema.prisma 대조)', () => {
+  /** `model X { ... deleted_at ... }` 블록에서 deleted_at을 가진 모델 이름을 뽑는다 */
+  function modelsWithDeletedAtIn(schema: string): string[] {
+    const found: string[] = [];
+    let current: string | null = null;
+
+    for (const rawLine of schema.split('\n')) {
+      const line = rawLine.trim();
+
+      const start = /^model\s+([A-Za-z0-9_]+)\s*\{/.exec(line);
+      if (start) {
+        current = start[1];
+        continue;
+      }
+      if (line === '}') {
+        current = null;
+        continue;
+      }
+      if (current && /^deleted_at\s+DateTime\?/.test(line)) {
+        found.push(current);
+        current = null; // 같은 모델을 두 번 담지 않는다
+      }
+    }
+
+    return found;
+  }
+
+  const schema = readFileSync(
+    resolve(__dirname, '..', '..', 'prisma', 'schema.prisma'),
+    'utf8',
+  );
+  const modelsWithDeletedAt = modelsWithDeletedAtIn(schema);
+
+  it('스키마를 실제로 파싱했다 (0건 통과 방지)', () => {
+    expect(modelsWithDeletedAt.length).toBeGreaterThan(30);
+    expect(modelsWithDeletedAt).toContain('Account');
+  });
+
+  it('파서가 심어 둔 모델을 잡는다 (반증 케이스)', () => {
+    expect(
+      modelsWithDeletedAtIn(
+        'model Planted {\n  id BigInt @id\n  deleted_at DateTime? @db.DateTime(3)\n}',
+      ),
+    ).toEqual(['Planted']);
+
+    // deleted_at이 없으면 잡히지 않아야 한다
+    expect(
+      modelsWithDeletedAtIn('model NoSoftDelete {\n  id BigInt @id\n}'),
+    ).toEqual([]);
+
+    // 필드명이 비슷하기만 한 경우도 잡히지 않아야 한다
+    expect(
+      modelsWithDeletedAtIn(
+        'model Near {\n  id BigInt @id\n  deleted_at_by BigInt?\n}',
+      ),
+    ).toEqual([]);
+  });
 
   it('deleted_at 컬럼을 가진 모든 모델이 목록에 등록되어 있다', () => {
     const missing = modelsWithDeletedAt.filter(

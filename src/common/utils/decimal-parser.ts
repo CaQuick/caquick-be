@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+
+import { Prisma } from '@/generated/prisma/client';
 
 /** 허용 구간(양끝 포함). 좌표처럼 컬럼·도메인 범위가 정해진 값에 쓴다. */
 export interface DecimalRange {

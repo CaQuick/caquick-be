@@ -1,5 +1,4 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { AccountType, Prisma, type IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
@@ -11,6 +10,11 @@ import type {
   AccountWithProfile,
   IAccountRepository,
 } from '@/features/auth/repositories/account.repository.interface';
+import {
+  AccountType,
+  Prisma,
+  type IdentityProvider,
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
 /**

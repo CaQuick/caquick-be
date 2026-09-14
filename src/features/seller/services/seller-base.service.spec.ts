@@ -4,11 +4,11 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import type { IAuditLogRepository } from '@/features/audit-log';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';

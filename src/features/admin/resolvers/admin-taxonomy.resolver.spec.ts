@@ -1,5 +1,4 @@
 // 분기/검증 세부는 admin-taxonomy.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
-import type { PrismaClient } from '@prisma/client';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminTaxonomyMutationResolver } from '@/features/admin/resolvers/admin-taxonomy-mutation.resolver';
@@ -7,6 +6,7 @@ import { AdminTaxonomyQueryResolver } from '@/features/admin/resolvers/admin-tax
 import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';

@@ -1,11 +1,13 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+  // Prisma 7의 새 제너레이터. prisma-client-js는 deprecated(8에서 제거)이고
+  // output이 필수다. 생성물은 gitignore 대상이며 빌드 시 dist/generated로 나간다.
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 /**

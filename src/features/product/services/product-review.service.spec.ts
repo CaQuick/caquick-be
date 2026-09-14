@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient, Product, Review } from '@prisma/client';
 
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
+import type { PrismaClient, Product, Review } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -44,6 +43,7 @@ import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
 } from '@/features/seller/types/seller-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()

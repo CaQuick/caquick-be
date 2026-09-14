@@ -1,5 +1,4 @@
-import type { PrismaClient, Review } from '@prisma/client';
-
+import type { PrismaClient, Review } from '@/generated/prisma/client';
 import { createOrderItem } from '@/test/factories/order.factory';
 
 export interface ReviewOverrides {

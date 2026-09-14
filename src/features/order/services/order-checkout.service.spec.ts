@@ -5,7 +5,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { Account, PrismaClient, Product, Store } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
@@ -16,6 +15,12 @@ import { OrderCheckoutService } from '@/features/order/services/order-checkout.s
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import type {
+  Account,
+  PrismaClient,
+  Product,
+  Store,
+} from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

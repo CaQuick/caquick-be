@@ -20,7 +20,8 @@ export default defineConfig(
       'node_modules/**',
       'coverage/**',
       '.yarn/**',
-      'src/graphql/graphql.types.ts'
+      'src/graphql/graphql.types.ts',
+      'src/generated/**'
     ]
   },
 

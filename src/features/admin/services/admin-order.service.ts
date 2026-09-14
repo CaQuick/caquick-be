@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 
 import { toDate } from '@/common/utils/date-parser';
 import {
@@ -36,6 +35,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { OrderDomainService, OrderRepository } from '@/features/order';
+import { OrderStatus } from '@/generated/prisma/client';
 
 /**
  * 주문 조회와 강제 취소. 전이 규칙은 판매자와 같은 OrderDomainService가 단일 소스이고,

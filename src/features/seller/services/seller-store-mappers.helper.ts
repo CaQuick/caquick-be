@@ -1,11 +1,10 @@
-import { Prisma } from '@prisma/client';
-
 import type {
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
 } from '@/features/seller/types/seller-output.type';
+import { Prisma } from '@/generated/prisma/client';
 
 /**
  * Store 분할 서비스들이 공유하는 매핑 헬퍼.

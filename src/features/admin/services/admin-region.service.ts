@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType, type Prisma } from '@prisma/client';
 
 import {
   LATITUDE_RANGE,
@@ -38,6 +37,11 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Prisma,
+} from '@/generated/prisma/client';
 
 /**
  * 지역 마스터 관리(시드 전용이던 값). level은 parentId 유무로 정해지고 바뀌지 않는다.

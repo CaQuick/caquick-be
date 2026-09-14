@@ -1,6 +1,5 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { SearchRepository } from '@/features/search/repositories/search.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';

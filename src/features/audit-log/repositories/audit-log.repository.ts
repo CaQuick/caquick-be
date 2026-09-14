@@ -1,14 +1,14 @@
 import { isIP } from 'node:net';
 
 import { Injectable } from '@nestjs/common';
+
+import type { IAuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository.interface';
 import {
   type AuditActionType,
   type AuditLog,
   type AuditTargetType,
   Prisma,
-} from '@prisma/client';
-
-import type { IAuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository.interface';
+} from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 import { PrismaService } from '@/prisma';
 

@@ -1,9 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import type { AuthRefreshSession, Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import type { IRefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository.interface';
+import type { AuthRefreshSession, Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
 /**

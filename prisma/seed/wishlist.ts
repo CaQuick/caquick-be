@@ -7,7 +7,7 @@
  *
  * 결과: wishlistCount=2, myWishlist.totalCount=2
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';

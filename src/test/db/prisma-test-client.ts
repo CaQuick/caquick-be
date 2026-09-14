@@ -2,9 +2,10 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import mysql from 'mysql2/promise';
 
+import { PrismaClient } from '@/generated/prisma/client';
 import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
 
 const STATE_FILE = join(process.cwd(), '.tmp', 'test-db-state.json');
@@ -129,8 +130,9 @@ export async function getTestPrismaClient(): Promise<PrismaClient> {
 
   await ensureSchema(state, dbName, dbUrl);
 
+  // Prisma 7: datasources 옵션이 사라지고 접속 URL은 드라이버 어댑터로 넘긴다.
   const client = new PrismaClient({
-    datasources: { db: { url: dbUrl } },
+    adapter: new PrismaMariaDb(dbUrl),
   }).$extends(softDeleteExtension);
 
   cachedClient = client as unknown as PrismaClient;

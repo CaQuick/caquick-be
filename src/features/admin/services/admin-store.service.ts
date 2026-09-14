@@ -4,12 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActionType,
-  AuditTargetType,
-  type Prisma,
-  type Store,
-} from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -41,6 +35,12 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Prisma,
+  type Store,
+} from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 
 /** 감사 before/after에 남길 컬럼 값. bigint·Decimal·Date는 JSON에 못 실으므로 문자열로. */

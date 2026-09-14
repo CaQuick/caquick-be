@@ -90,3 +90,6 @@ src/features/example/*
 
 # 지역 시드 원본 CSV (대용량 공공데이터, 파싱 산출 regions.generated.json 만 커밋)
 prisma/seed/data/*.csv
+
+# Prisma 7 생성물 (prisma generate 산출물 — clone/브랜치 전환 직후 yarn prisma:generate)
+/src/generated

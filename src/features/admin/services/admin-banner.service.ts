@@ -4,14 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActionType,
-  AuditTargetType,
-  type Banner,
-  type BannerLinkType,
-  type BannerPlacement,
-  type Prisma,
-} from '@prisma/client';
 
 import { toDate } from '@/common/utils/date-parser';
 import {
@@ -55,6 +47,14 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Banner,
+  type BannerLinkType,
+  type BannerPlacement,
+  type Prisma,
+} from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 
 /** linkType이 결정된 뒤의 링크 값 묶음. 생성·수정이 같은 검증을 탄다. */

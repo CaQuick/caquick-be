@@ -3,12 +3,12 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserReportService } from '@/features/user/services/user-report.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

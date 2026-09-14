@@ -1,13 +1,12 @@
 import {
-  NotificationEvent,
-  NotificationType,
-  OrderStatus,
-} from '@prisma/client';
-
-import {
   buildOrderStatusNotification,
   buildReviewLikedNotification,
 } from '@/features/notification/services/notification-payloads.helper';
+import {
+  NotificationEvent,
+  NotificationType,
+  OrderStatus,
+} from '@/generated/prisma/client';
 
 describe('notification-payloads.helper', () => {
   describe('buildOrderStatusNotification', () => {

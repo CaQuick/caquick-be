@@ -1,14 +1,13 @@
 import {
-  NotificationEvent,
-  NotificationType,
-  OrderStatus,
-} from '@prisma/client';
-
-import {
   ORDER_STATUS_NOTIFICATION_BODIES,
   ORDER_STATUS_NOTIFICATION_TITLES,
   REVIEW_LIKED_NOTIFICATION,
 } from '@/features/notification/constants/notification-messages';
+import {
+  NotificationEvent,
+  NotificationType,
+  OrderStatus,
+} from '@/generated/prisma/client';
 
 /**
  * 알림 내용(type·event·문구)의 단일 소스 (이슈 #203).

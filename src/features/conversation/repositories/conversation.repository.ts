@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
+
 import {
   ConversationBodyFormat,
   ConversationSenderType,
   Prisma,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 구매자 메시지 전송 시 한 트랜잭션으로 저장할 메시지 명세. */

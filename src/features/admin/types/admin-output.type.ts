@@ -11,7 +11,7 @@ import type {
   ReviewReportReason,
   ReviewReportStatus,
   StoreMapProvider,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 export interface AdminAccountOutput {
   accountId: string;

@@ -1,4 +1,4 @@
-import type { AuthRefreshSession } from '@prisma/client';
+import type { AuthRefreshSession } from '@/generated/prisma/client';
 
 /**
  * RefreshSession Repository 토큰 (Nest DI 주입용).

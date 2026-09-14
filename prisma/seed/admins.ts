@@ -3,7 +3,7 @@
  * 비밀번호를 레포에 두지 않기 위해서다. 이메일은 SEED_ADMIN_EMAIL_PREFIX로 시작해
  * resetSeedScope가 자기 영역만 정리한다.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import argon2 from 'argon2';
 
 import { assertSeedCredential } from './credential-policy';

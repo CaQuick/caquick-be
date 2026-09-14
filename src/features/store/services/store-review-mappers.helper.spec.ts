@@ -1,7 +1,6 @@
-import { Prisma } from '@prisma/client';
-
 import type { StoreReviewRow } from '@/features/store/repositories/store-review.repository';
 import { toStoreReview } from '@/features/store/services/store-review-mappers.helper';
+import { Prisma } from '@/generated/prisma/client';
 
 function makeRow(o: Partial<StoreReviewRow> = {}): StoreReviewRow {
   return {

@@ -38,6 +38,9 @@ jobs:
           yarn -v || true
           (YARN_ENABLE_IMMUTABLE_INSTALLS=1 yarn install --immutable) || yarn install --frozen-lockfile
 
+      - name: Prisma generate
+        run: yarn prisma:generate
+
       - name: GraphQL codegen
         run: yarn graphql:codegen
 

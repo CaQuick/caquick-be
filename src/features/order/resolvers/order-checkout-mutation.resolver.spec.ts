@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -8,6 +6,7 @@ import { OrderCheckoutService } from '@/features/order/services/order-checkout.s
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

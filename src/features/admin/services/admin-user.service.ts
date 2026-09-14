@@ -5,12 +5,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AccountStatus,
-  AccountType,
-  AuditActionType,
-  AuditTargetType,
-} from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -41,6 +35,12 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import {
+  AccountStatus,
+  AccountType,
+  AuditActionType,
+  AuditTargetType,
+} from '@/generated/prisma/client';
 
 /**
  * 구매자 조회와 계정 정지/복구(USER·SELLER 공통).

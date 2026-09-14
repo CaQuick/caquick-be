@@ -4,7 +4,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import type { IAuditLogRepository } from '@/features/audit-log';
@@ -22,6 +21,7 @@ import {
   isSellerAccount,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
+import { Prisma } from '@/generated/prisma/client';
 
 export interface SellerContext {
   accountId: bigint;

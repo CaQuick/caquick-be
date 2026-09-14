@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
@@ -9,6 +7,7 @@ import { SellerOptionService } from '@/features/seller/services/seller-option.se
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import type { UploadPurpose } from '@/global/storage/types/storage.types';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';

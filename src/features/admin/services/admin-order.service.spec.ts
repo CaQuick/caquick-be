@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
@@ -10,6 +9,7 @@ import {
   OrderRepository,
   OrderStatusTransitionPolicy,
 } from '@/features/order';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

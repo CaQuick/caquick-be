@@ -1,5 +1,4 @@
 // 전체 경로(리졸버→서비스→레포→DB) 통합 검증만 담당. 분기/집계 세부 검증은 service.spec.ts에서 담당
-import type { PrismaClient } from '@prisma/client';
 import { PubSub } from 'graphql-subscriptions';
 
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
@@ -8,6 +7,7 @@ import { ConversationInquiryMutationResolver } from '@/features/conversation/res
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

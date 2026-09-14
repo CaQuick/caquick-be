@@ -6,12 +6,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
+import { isUniqueConstraintOn } from '@/common/utils/prisma-error';
 import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -19,6 +19,7 @@ import type { CreateOrderOutput } from '@/features/order/types/create-order-outp
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { evaluateActiveUserAccount } from '@/features/user';
+import { Prisma } from '@/generated/prisma/client';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -382,13 +383,13 @@ export class OrderCheckoutService {
 
   /**
    * P2002 충돌이 멱등 키 unique(uk_order_account_idempotency)에서 난 것인지 판별.
-   * MySQL은 meta.target에 제약 이름을 담는다 — 그 외(주문번호 등)는 재시도 대상.
+   * 그 외(주문번호 등)는 재시도 대상이라 구분이 필요하다.
+   * 제약 이름의 위치가 Prisma 버전·드라이버에 따라 달라서 공용 헬퍼로 뽑는다.
    */
   private isIdempotencyConflict(
     error: Prisma.PrismaClientKnownRequestError,
   ): boolean {
-    const target = error.meta?.target;
-    return typeof target === 'string' && target.includes('idempotency');
+    return isUniqueConstraintOn(error, 'idempotency');
   }
 
   /** 주문번호: ORD-YYYYMMDD-XXXXXX (KST 날짜 + 혼동 문자 제외 랜덤 6자리). */

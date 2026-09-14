@@ -3,7 +3,6 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, type PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
@@ -14,6 +13,7 @@ import {
 } from '@/features/order';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
+import { OrderStatus, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

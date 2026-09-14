@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
@@ -34,6 +33,7 @@ import { SellerProductQueryService } from '@/features/seller/services/seller-pro
 import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
 import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
