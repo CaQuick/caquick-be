@@ -3,7 +3,7 @@ import type {
   IdentityProvider,
   NotificationEvent,
   NotificationType,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 export interface UserProfileOutput {
   nickname: string;

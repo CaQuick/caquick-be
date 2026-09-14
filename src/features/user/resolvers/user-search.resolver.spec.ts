@@ -1,10 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
 import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-query.resolver';
 import { UserSearchService } from '@/features/user/services/user-search.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

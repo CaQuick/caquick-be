@@ -1,10 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { OrderRepository } from '@/features/order';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewMutationResolver } from '@/features/user/resolvers/user-review-mutation.resolver';
 import { UserReviewQueryResolver } from '@/features/user/resolvers/user-review-query.resolver';
 import { UserReviewService } from '@/features/user/services/user-review.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

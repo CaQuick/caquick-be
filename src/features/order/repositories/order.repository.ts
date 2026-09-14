@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
+
+import { buildOrderStatusNotification } from '@/features/notification';
 import {
   AuditActionType,
   AuditTargetType,
   OrderStatus,
   Prisma,
   type AccountType,
-} from '@prisma/client';
-
-import { buildOrderStatusNotification } from '@/features/notification';
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
 /** 관리자 주문 목록 행. 매장은 첫 품목으로 정한다(단일 매장 구조). */

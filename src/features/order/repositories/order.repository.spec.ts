@@ -1,7 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
-import { OrderStatus } from '@prisma/client';
-
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { OrderStatus } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

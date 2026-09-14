@@ -35,6 +35,11 @@ jobs:
           corepack enable
           yarn install --immutable
 
+      - name: Prisma generate
+        # src/generated 는 gitignore 대상이라 CI 에서 매번 생성해야 한다.
+        # prisma.config.ts 가 DATABASE_URL 부재를 허용하므로 .env 없이 동작한다.
+        run: yarn prisma:generate
+
       - name: GraphQL codegen
         run: yarn graphql:codegen
 
@@ -109,6 +114,10 @@ jobs:
         run: |
           corepack enable
           yarn install --immutable
+
+      - name: Prisma generate
+        # 이 잡도 별도 체크아웃이라 생성물이 없다. 없으면 전 spec 이 모듈 해석에 실패한다.
+        run: yarn prisma:generate
 
       - name: Coverage Report (jest-coverage-report)
         uses: ArtiomTr/jest-coverage-report-action@7f750dd50f5585533321eb7ebc482b936b49a5d4 # v2

@@ -76,7 +76,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=mysql&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=flat&logo=prisma&logoColor=white)
 
-- **MySQL 8** · **Prisma 6** (ORM + Migrations) · Custom soft-delete extension
+- **MySQL 8** · **Prisma 7** (ORM + Migrations, `mariadb` 드라이버 어댑터) · Custom soft-delete extension
 
 ### Auth & Validation
 
@@ -246,16 +246,19 @@ caquick-be/
 corepack enable
 yarn install
 
-# 2. 환경 변수 (.env 직접 생성 — 아래 "필요 환경 변수" 표 참고)
+# 2. Prisma Client 생성 (src/generated/* 는 gitignore 대상 — clone/브랜치 전환 직후 필수)
+yarn prisma:generate
+
+# 3. 환경 변수 (.env 직접 생성 — 아래 "필요 환경 변수" 표 참고)
 touch .env
 
-# 3. DB 마이그레이션
+# 4. DB 마이그레이션
 yarn prisma:migrate:dev
 
-# 4. (선택) 시드 데이터 주입
+# 5. (선택) 시드 데이터 주입
 yarn prisma:seed
 
-# 5. 개발 서버 (watch mode)
+# 6. 개발 서버 (watch mode)
 yarn start:dev
 ```
 

@@ -1,6 +1,5 @@
-import type { Banner } from '@prisma/client';
-
 import type { AdminBannerOutput } from '@/features/admin/types/admin-output.type';
+import type { Banner } from '@/generated/prisma/client';
 
 /** 순수 매퍼(DI 없음). 저장된 링크 값을 그대로 내린다 — 표시·이동 판단은 linkType 기준. */
 export function toAdminBannerOutput(row: Banner): AdminBannerOutput {

@@ -1,10 +1,10 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createAccountCredential } from '@/test/factories';

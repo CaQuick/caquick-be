@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 
-import { OrderStatus } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 import { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
+import { OrderStatus } from '@/generated/prisma/client';
 
 function build(plain: object): MyOrdersInput {
   return plainToInstance(MyOrdersInput, plain);

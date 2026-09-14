@@ -3,7 +3,6 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
@@ -21,6 +20,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /**
  * SYSTEM/MARKETING 알림 발송. 분류 값은 있었지만 만들어내는 경로가 없었다.

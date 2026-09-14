@@ -1,5 +1,4 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-import { AccountType } from '@prisma/client';
 
 import {
   ACCOUNT_NOT_ACTIVE,
@@ -8,6 +7,7 @@ import {
 } from '@/features/admin/constants/admin-error-messages';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import type { IAuditLogRepository } from '@/features/audit-log';
+import { AccountType } from '@/generated/prisma/client';
 
 export interface AdminContext {
   accountId: bigint;

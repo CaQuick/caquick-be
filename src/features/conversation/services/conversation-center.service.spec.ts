@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

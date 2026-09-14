@@ -1,10 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
-import { OrderStatus } from '@prisma/client';
-
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
+import { OrderStatus } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

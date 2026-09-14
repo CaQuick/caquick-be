@@ -1,6 +1,5 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createStore } from '@/test/factories';

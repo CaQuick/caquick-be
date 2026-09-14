@@ -1,9 +1,8 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';

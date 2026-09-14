@@ -1,7 +1,7 @@
 import type { ModuleMetadata } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
-import type { PrismaClient } from '@prisma/client';
 
+import type { PrismaClient } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 import { S3Service } from '@/global/storage/s3.service';
 import { PrismaService } from '@/prisma/prisma.service';

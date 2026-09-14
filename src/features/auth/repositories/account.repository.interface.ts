@@ -1,4 +1,4 @@
-import type { IdentityProvider, Prisma } from '@prisma/client';
+import type { IdentityProvider, Prisma } from '@/generated/prisma/client';
 
 /**
  * Account Repository 토큰 (Nest DI 주입용).

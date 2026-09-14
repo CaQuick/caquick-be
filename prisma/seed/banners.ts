@@ -3,7 +3,7 @@
  * title을 SEED_BANNER_TITLE_PREFIX로 시작시켜 resetSeedScope가 자기 영역만 정리한다.
  * 링크는 NONE — 시드 매장/상품 FK에 묶이지 않아 재시드 순서와 무관하다.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 import { SEED_BANNER_TITLE_PREFIX } from './idempotent';
 

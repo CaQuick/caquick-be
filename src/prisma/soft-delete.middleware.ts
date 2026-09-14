@@ -1,6 +1,5 @@
-import { Prisma } from '@prisma/client';
-
 import { isRecord } from '@/common/utils/type-guards';
+import { Prisma } from '@/generated/prisma/client';
 
 // deleted_at 컬럼을 가진 모든 모델이 등록되어야 한다 — 스키마와의 일치는
 // soft-delete.middleware.spec.ts의 dmmf 대조 테스트가 강제한다.

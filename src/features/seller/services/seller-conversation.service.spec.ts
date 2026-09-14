@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -8,6 +7,7 @@ import { ConversationRepository } from '@/features/conversation';
 import { ConversationEventsService } from '@/features/conversation';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

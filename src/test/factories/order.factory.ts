@@ -1,11 +1,10 @@
+import { DAY_MS } from '@/common/utils/kst-time';
 import type {
   Order,
   OrderItem,
   OrderStatus,
   PrismaClient,
-} from '@prisma/client';
-
-import { DAY_MS } from '@/common/utils/kst-time';
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';

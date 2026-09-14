@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
+import { PrismaClient } from '@/generated/prisma/client';
 import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
 
 /**
@@ -7,9 +8,19 @@ import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
  *
  * NestJS provider 의 `useFactory` 로 호출되어 단일 인스턴스를 만든다.
  * 라이프사이클(connect/disconnect) 은 PrismaModule 이 owner.
+ *
+ * Prisma 7부터 접속 URL은 schema가 아니라 드라이버 어댑터로 들어간다.
+ * 여기서 fail-fast 하지 않으면 첫 쿼리 시점까지 오류가 미뤄진다.
  */
 export function createExtendedPrismaClient() {
-  return new PrismaClient().$extends(softDeleteExtension);
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL must be set');
+  }
+
+  return new PrismaClient({ adapter: new PrismaMariaDb(url) }).$extends(
+    softDeleteExtension,
+  );
 }
 
 /**

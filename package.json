@@ -1,7 +1,7 @@
 {
   "name": "caquick-be",
   "version": "0.0.1",
-  "description": "케이퀵(CaQuick) 백엔드 - 시각 기반 올인원 맞춤 케이크 주문 플랫폼",
+  "description": "\ucf00\uc774\ud035(CaQuick) \ubc31\uc5d4\ub4dc - \uc2dc\uac01 \uae30\ubc18 \uc62c\uc778\uc6d0 \ub9de\ucda4 \ucf00\uc774\ud06c \uc8fc\ubb38 \ud50c\ub7ab\ud3fc",
   "author": "chanwoo7",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
@@ -19,7 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:dev": "prisma migrate dev && prisma generate",
     "prisma:migrate:create": "prisma migrate dev --create-only",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
@@ -53,7 +53,8 @@
     "@nestjs/schedule": "^6.1.3",
     "@nestjs/serve-static": "^5.0.5",
     "@nestjs/swagger": "^11.4.7",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/client": "7.10.0",
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -104,7 +105,7 @@
     "lint-staged": "^17.3.0",
     "mysql2": "^3.24.2",
     "prettier": "^3.9.6",
-    "prisma": "^6.19.3",
+    "prisma": "7.10.0",
     "spectaql": "^3.0.9",
     "supertest": "^7.2.2",
     "testcontainers": "^12.1.0",
@@ -145,6 +146,7 @@
       "!**/*.module.ts",
       "!**/*.d.ts",
       "!**/graphql/graphql.types.ts",
+      "!**/generated/**",
       "!**/config/**",
       "!test/**"
     ],
@@ -162,7 +164,8 @@
     "globalTeardown": "<rootDir>/test/jest.global-teardown.ts",
     "testTimeout": 60000,
     "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/$1"
+      "^@/(.*)$": "<rootDir>/$1",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   },
   "lint-staged": {

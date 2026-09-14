@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import { RegionService } from '@/features/region/services/region.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createRegion } from '@/test/factories';

@@ -1,5 +1,4 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
@@ -24,6 +23,10 @@ import type {
   ConversationMessagesPayload,
   StoreInquiryContextOutput,
 } from '@/features/conversation/types/conversation-output.type';
+import {
+  ConversationBodyFormat,
+  ConversationSenderType,
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {

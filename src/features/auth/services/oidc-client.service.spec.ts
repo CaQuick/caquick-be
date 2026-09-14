@@ -1,8 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { IdentityProvider } from '@prisma/client';
 
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { IdentityProvider } from '@/generated/prisma/client';
 
 // openid-client 모킹
 jest.mock('openid-client', () => ({

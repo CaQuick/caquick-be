@@ -1,10 +1,10 @@
 import { ConflictException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-import { IdentityProvider } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
+import { IdentityProvider } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

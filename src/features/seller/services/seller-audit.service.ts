@@ -1,5 +1,4 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -20,6 +19,7 @@ import type {
   SellerAuditLogOutput,
   SellerCursorConnection,
 } from '@/features/seller/types/seller-output.type';
+import { AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerAuditService

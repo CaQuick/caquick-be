@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
@@ -33,6 +32,7 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import type { ISellerProductImageService } from '@/features/seller/services/seller-product-image.service.interface';
 import { toProductImageOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductImageOutput } from '@/features/seller/types/seller-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()

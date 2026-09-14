@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { toDate, toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
@@ -40,6 +39,7 @@ import type {
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
 } from '@/features/seller/types/seller-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerStorePolicyService

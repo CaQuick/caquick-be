@@ -1,5 +1,7 @@
-import type { PrismaClient, StoreWishlistItem } from '@prisma/client';
-
+import type {
+  PrismaClient,
+  StoreWishlistItem,
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { createStore } from '@/test/factories/store.factory';
 
