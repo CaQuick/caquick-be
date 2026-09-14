@@ -322,6 +322,46 @@ describe('AdminOrderService (real DB)', () => {
       );
     });
 
+    // 사전 검사 통과 뒤 잠금 시점에 상태가 바뀐 경쟁. 두 갈래 전부 카탈로그 코드가
+    // 실려야 한다 — 재판정이 막으면 그 사유가, 또 뒤집혀 통과하면 재시도 신호가 나간다.
+    // 실 DB로는 잠금 직전 구간을 벌릴 수 없어 repository 반환만 고정하고,
+    // 행 상태는 실제로 바꿔 재조회가 진짜 DB를 읽게 둔다.
+    it.each([
+      ['PICKED_UP', 'ORDER_NOT_CANCELLABLE'],
+      ['CANCELED', 'ORDER_STATUS_ALREADY_SET'],
+      [null, 'ORDER_STATE_CHANGED'],
+    ] as const)(
+      '잠금 시점 상태가 %s면 %s를 던진다',
+      async (raced, errorCode) => {
+        const { order } = await orderWithItem();
+        const spy = jest
+          .spyOn(orderRepo, 'cancelOrderByAdmin')
+          .mockImplementation(async () => {
+            // null = 잠금 뒤 다시 취소 가능 상태로 되돌아간 경우(행 그대로)
+            if (raced !== null) {
+              await prisma.order.update({
+                where: { id: order.id },
+                data: { status: raced },
+              });
+            }
+            return 'not-cancellable';
+          });
+        try {
+          await expect(
+            service.adminCancelOrder(await admin(), {
+              orderId: order.id.toString(),
+              note: 'a',
+            }),
+          ).rejects.toMatchObject({
+            status: 400,
+            response: { errorCode },
+          });
+        } finally {
+          spy.mockRestore();
+        }
+      },
+    );
+
     it('두 관리자가 동시에 취소해도 이력·알림·감사는 1건씩', async () => {
       const { order } = await orderWithItem();
       const [a, b] = [await admin(), await admin()];

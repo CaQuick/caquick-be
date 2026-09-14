@@ -1,12 +1,12 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { FAQ_TOPIC_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_FAQ_ANSWER_HTML_LENGTH,
   MAX_FAQ_TITLE_LENGTH,
@@ -80,7 +80,7 @@ export class SellerFaqService
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
+    if (!current) throw domainError('FAQ_TOPIC_NOT_FOUND');
 
     const row = await this.repo.updateFaqTopic({
       topicId,
@@ -126,7 +126,7 @@ export class SellerFaqService
       topicId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException(FAQ_TOPIC_NOT_FOUND);
+    if (!current) throw domainError('FAQ_TOPIC_NOT_FOUND');
 
     await this.repo.softDeleteFaqTopic(topicId);
     await this.auditLogs.createAuditLog({

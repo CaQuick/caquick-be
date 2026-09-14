@@ -1,20 +1,13 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  invalidIdsError,
-  PRODUCT_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
+import { invalidIdsError } from '@/features/seller/constants/seller-error-messages';
 import type { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
 import type { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -50,7 +43,7 @@ export class SellerProductTaxonomyService
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const categoryIds = this.parseIdList(input.categoryIds);
     const categories =
@@ -80,7 +73,7 @@ export class SellerProductTaxonomyService
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw domainError('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }
@@ -97,7 +90,7 @@ export class SellerProductTaxonomyService
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const tagIds = this.parseIdList(input.tagIds);
     const tags = await this.productRepository.findTagIds(tagIds);
@@ -126,7 +119,7 @@ export class SellerProductTaxonomyService
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw domainError('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }

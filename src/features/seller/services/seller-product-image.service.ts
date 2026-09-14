@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
@@ -13,12 +9,8 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
-  IMAGE_LIMIT_EXCEEDED,
-  IMAGE_MIN_REQUIRED,
   idsMismatchError,
   invalidIdsError,
-  PRODUCT_IMAGE_NOT_FOUND,
-  PRODUCT_NOT_FOUND,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_PRODUCT_IMAGES,
@@ -69,11 +61,11 @@ export class SellerProductImageService
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const count = await this.productRepository.countProductImages(productId);
     if (count >= MAX_PRODUCT_IMAGES) {
-      throw new BadRequestException(IMAGE_LIMIT_EXCEEDED);
+      throw domainError('IMAGE_LIMIT_EXCEEDED');
     }
 
     const row = await this.productRepository.addProductImage({
@@ -103,14 +95,14 @@ export class SellerProductImageService
     const ctx = await this.requireSellerContext(accountId);
     const image = await this.productRepository.findProductImageById(imageId);
     if (!image || image.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(PRODUCT_IMAGE_NOT_FOUND);
+      throw domainError('PRODUCT_IMAGE_NOT_FOUND');
     }
 
     const count = await this.productRepository.countProductImages(
       image.product_id,
     );
     if (count <= MIN_PRODUCT_IMAGES) {
-      throw new BadRequestException(IMAGE_MIN_REQUIRED);
+      throw domainError('IMAGE_MIN_REQUIRED');
     }
 
     await this.productRepository.softDeleteProductImage(imageId);
@@ -141,7 +133,7 @@ export class SellerProductImageService
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const existing = await this.productRepository.listProductImages(productId);
     if (existing.length !== imageIds.length) {

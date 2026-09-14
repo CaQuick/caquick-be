@@ -1,20 +1,12 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import {
   sliceIdCursorPage,
   normalizeCursorInput,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import {
-  REGION_NOT_SELECTABLE,
-  STORE_NOT_FOUND,
-} from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSetStoreActiveInput } from '@/features/admin/dto/inputs/admin-set-store-active.input';
 import type { AdminStoreListInput } from '@/features/admin/dto/inputs/admin-store-list.input';
@@ -107,7 +99,7 @@ export class AdminStoreService extends AdminBaseService {
   ): Promise<AdminStoreDetailOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findStoreDetailById(storeId);
-    if (!row) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!row) throw domainError('STORE_NOT_FOUND');
     return toAdminStoreDetailOutput(row);
   }
 
@@ -130,7 +122,7 @@ export class AdminStoreService extends AdminBaseService {
         afterJson: { isActive: after.is_active, reason },
       }),
     );
-    if (!result) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!result) throw domainError('STORE_NOT_FOUND');
     return toAdminStoreOutput(result.row);
   }
 
@@ -155,7 +147,7 @@ export class AdminStoreService extends AdminBaseService {
       const parsed = parseOptionalId(regionId);
       // 빠른 거절 — 최종 판정은 repository가 지역을 잠근 뒤 같은 트랜잭션에서 한다
       if (parsed !== null && !(await this.repo.isRegionSelectable(parsed))) {
-        throw new BadRequestException(REGION_NOT_SELECTABLE);
+        throw domainError('REGION_NOT_SELECTABLE');
       }
       // 관계 필드는 connect/disconnect로 — null은 연결 해제
       data.region = parsed ? { connect: { id: parsed } } : { disconnect: true };
@@ -179,9 +171,9 @@ export class AdminStoreService extends AdminBaseService {
       }),
     );
     if (updated === 'region-not-selectable') {
-      throw new BadRequestException(REGION_NOT_SELECTABLE);
+      throw domainError('REGION_NOT_SELECTABLE');
     }
-    if (!updated) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!updated) throw domainError('STORE_NOT_FOUND');
     return toAdminStoreOutput(updated);
   }
 }

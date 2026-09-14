@@ -1,25 +1,12 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError, type ErrorCode } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   sliceIdCursorPage,
   normalizeCursorInput,
 } from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import {
-  ACCOUNT_NOT_FOUND,
-  CANNOT_CHANGE_ADMIN_STATUS,
-  CANNOT_CHANGE_OWN_STATUS,
-  ONLY_ACTIVE_CAN_BE_SUSPENDED,
-  ONLY_SUSPENDED_CAN_BE_REINSTATED,
-  USER_NOT_FOUND,
-} from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSuspendAccountInput } from '@/features/admin/dto/inputs/admin-suspend-account.input';
 import type { AdminUserListInput } from '@/features/admin/dto/inputs/admin-user-list.input';
@@ -89,7 +76,7 @@ export class AdminUserService extends AdminBaseService {
   ): Promise<AdminUserOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findUserAccountById(targetAccountId);
-    if (!row) throw new NotFoundException(USER_NOT_FOUND);
+    if (!row) throw domainError('USER_NOT_FOUND');
     return toAdminUserOutput(row);
   }
 
@@ -122,12 +109,12 @@ export class AdminUserService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     // 정책: 관리자 본인·다른 ADMIN 계정은 정지/복구 대상이 아니다(잠금 사고 방지)
     if (targetAccountId === ctx.accountId) {
-      throw new ForbiddenException(CANNOT_CHANGE_OWN_STATUS);
+      throw domainError('CANNOT_CHANGE_OWN_STATUS');
     }
     const target = await this.repo.findAccountForStatusChange(targetAccountId);
-    if (!target) throw new NotFoundException(ACCOUNT_NOT_FOUND);
+    if (!target) throw domainError('TARGET_ACCOUNT_NOT_FOUND');
     if (target.account_type === AccountType.ADMIN) {
-      throw new ForbiddenException(CANNOT_CHANGE_ADMIN_STATUS);
+      throw domainError('CANNOT_CHANGE_ADMIN_STATUS');
     }
 
     // 같은 상태면 멱등 — 감사 기록도 남기지 않는다
@@ -143,12 +130,12 @@ export class AdminUserService extends AdminBaseService {
       change.to === AccountStatus.SUSPENDED
         ? AccountStatus.ACTIVE
         : AccountStatus.SUSPENDED;
-    const invalidTransitionMessage =
+    const invalidTransitionCode: ErrorCode =
       change.to === AccountStatus.SUSPENDED
-        ? ONLY_ACTIVE_CAN_BE_SUSPENDED
-        : ONLY_SUSPENDED_CAN_BE_REINSTATED;
+        ? 'ONLY_ACTIVE_CAN_BE_SUSPENDED'
+        : 'ONLY_SUSPENDED_CAN_BE_REINSTATED';
     if (target.status !== from) {
-      throw new BadRequestException(invalidTransitionMessage);
+      throw domainError(invalidTransitionCode);
     }
     {
       // 사전 검사와 갱신 사이의 경쟁은 repository의 조건부 갱신이 닫는다
@@ -156,7 +143,7 @@ export class AdminUserService extends AdminBaseService {
         accountId: target.id,
         from,
         to: change.to,
-        invalidTransitionMessage,
+        invalidTransitionCode,
         // 정지에서만 세션을 끊는다. 복구는 새 로그인부터 유효
         revokeSessions: change.to === AccountStatus.SUSPENDED,
         audit: {

@@ -1,21 +1,13 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import argon2 from 'argon2';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   sliceIdCursorPage,
   normalizeCursorInput,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import {
-  ACCOUNT_NOT_FOUND,
-  USERNAME_TAKEN,
-} from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
@@ -47,7 +39,7 @@ export class AdminAccountService extends AdminBaseService {
   async adminMe(accountId: bigint): Promise<AdminAccountOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const row = await this.repo.findAdminAccountById(ctx.accountId);
-    if (!row) throw new NotFoundException(ACCOUNT_NOT_FOUND);
+    if (!row) throw domainError('TARGET_ACCOUNT_NOT_FOUND');
     return toAdminAccountOutput(row);
   }
 
@@ -83,7 +75,7 @@ export class AdminAccountService extends AdminBaseService {
     const { username } = input;
     // 사전 조회로 흔한 중복을 잡고, 경쟁·soft-delete 잔재는 repository의 P2002 매핑이 막는다
     if (await this.repo.existsCredentialUsername(username)) {
-      throw new BadRequestException(USERNAME_TAKEN);
+      throw domainError('USERNAME_TAKEN');
     }
 
     const passwordHash = await argon2.hash(input.password, {
