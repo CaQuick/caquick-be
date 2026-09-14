@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
+import { ReviewListingRepository } from '@/features/review';
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
 import { StoreReviewService } from '@/features/store/services/store-review.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -20,7 +21,11 @@ describe('StoreReviewService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreReviewService, StoreReviewRepository],
+      providers: [
+        ReviewListingRepository,
+        StoreReviewService,
+        StoreReviewRepository,
+      ],
     });
     service = module.get(StoreReviewService);
     prisma = p;

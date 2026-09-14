@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewQueryResolver } from '@/features/product/resolvers/product-review-query.resolver';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
+import { ReviewListingRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -25,6 +26,7 @@ describe('ProductReview Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         ProductReviewQueryResolver,
         ProductReviewService,
         ProductReviewRepository,

@@ -24,6 +24,7 @@ import type {
   PopularCakesResult,
   RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
+import { ReviewListingRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -35,6 +36,7 @@ export class ProductHomeService {
   constructor(
     private readonly repo: ProductRepository,
     private readonly reviewRepo: ProductReviewRepository,
+    private readonly reviewListing: ReviewListingRepository,
     private readonly random: RandomService,
   ) {}
 
@@ -101,7 +103,14 @@ export class ProductHomeService {
     input?: CustomCakeShowcaseInput,
   ): Promise<CustomCakeShowcaseItem[]> {
     const limit = input?.limit ?? DEFAULT_SHOWCASE_LIMIT;
-    const ranked = await this.reviewRepo.listShowcaseReviewIdsByLikes(limit);
+    // 공용 조회는 커서 페이지용이라 limit+1을 가져온다. 쇼케이스는 커서가 없어
+    // 상위 N만 쓰므로 여기서 잘라낸다.
+    const ranked = (
+      await this.reviewListing.listReviewIdsByLikes({
+        scope: { kind: 'showcase' },
+        limit,
+      })
+    ).slice(0, limit);
     if (ranked.length === 0) return [];
 
     const rows = await this.reviewRepo.findShowcaseReviewRowsByIds(
