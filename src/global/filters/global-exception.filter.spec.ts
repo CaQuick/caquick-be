@@ -2,6 +2,7 @@ import { BadRequestException, HttpStatus } from '@nestjs/common';
 import { BaseExceptionFilter, type AbstractHttpAdapter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
+import { domainError, messageOf } from '@/common/errors';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
@@ -193,5 +194,53 @@ describe('HttpExceptionFilter', () => {
     } finally {
       superCatch.mockRestore();
     }
+  });
+
+  /**
+   * REST 응답에도 도메인 코드를 싣는다. auth 는 REST 전용이라 여기서 빠지면
+   * 카탈로그를 도입한 목적(문구가 아니라 코드로 분기)이 그 경로에 닿지 않는다.
+   */
+  describe('errorCode 전달', () => {
+    it('카탈로그 예외는 errorCode 를 응답에 싣는다', () => {
+      const req = mockReq();
+      const res = mockRes();
+
+      filter.catch(domainError('INVALID_CREDENTIALS'), mockHost(req, res));
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorCode: 'INVALID_CREDENTIALS',
+          message: messageOf('INVALID_CREDENTIALS'),
+          code: HttpStatus.UNAUTHORIZED,
+        }),
+      );
+    });
+
+    it('카탈로그를 거치지 않은 예외는 응답에 errorCode 가 실리지 않는다', () => {
+      const req = mockReq();
+      const res = mockRes();
+
+      filter.catch(new BadRequestException('bad input'), mockHost(req, res));
+
+      // 클래스 필드 선언은 값이 undefined여도 속성 자체는 만든다(useDefineForClassFields).
+      // 클라이언트가 보는 것은 직렬화 결과이므로 그 수준에서 확인한다.
+      const payload = (res.json as jest.Mock).mock.calls[0]?.[0] as object;
+      expect(JSON.parse(JSON.stringify(payload))).not.toHaveProperty(
+        'errorCode',
+      );
+    });
+
+    it('카탈로그 예외는 직렬화 후에도 errorCode 가 남는다', () => {
+      const req = mockReq();
+      const res = mockRes();
+
+      filter.catch(domainError('MISSING_REFRESH_TOKEN'), mockHost(req, res));
+
+      const payload = (res.json as jest.Mock).mock.calls[0]?.[0] as object;
+      expect(JSON.parse(JSON.stringify(payload))).toMatchObject({
+        errorCode: 'MISSING_REFRESH_TOKEN',
+      });
+    });
   });
 });
