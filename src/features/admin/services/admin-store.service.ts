@@ -41,6 +41,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { S3Service } from '@/global/storage/s3.service';
 
 /** 감사 before/after에 남길 컬럼 값. bigint·Decimal·Date는 JSON에 못 실으므로 문자열로. */
 function snapshot(row: Store, keys: (keyof Store)[]): Prisma.InputJsonObject {
@@ -67,6 +68,7 @@ export class AdminStoreService extends AdminBaseService {
     repo: AdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3Service: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -138,6 +140,13 @@ export class AdminStoreService extends AdminBaseService {
   ): Promise<AdminStoreOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const { storeId, regionId, ...patch } = input;
+
+    // 발급받은 매장 이미지 URL만 저장한다 — 관리자 대리 수정도 같은 규칙.
+    this.s3Service.assertOwnedUploadUrlIfPresent(
+      patch.profileImageUrl,
+      'STORE_IMAGE',
+      accountId,
+    );
 
     const data: Prisma.StoreUpdateInput = buildStoreBasicInfoUpdateData(patch);
     let connectRegionId: bigint | undefined;

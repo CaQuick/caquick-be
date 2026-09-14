@@ -1,7 +1,16 @@
 /**
  * 업로드 목적 (purpose별 정책이 달라짐)
+ *
+ * key prefix가 purpose마다 다르고, 저장 시 소유권 검증(isOwnedUploadUrl)이 이 prefix로
+ * 이뤄진다. 따라서 purpose를 늘리면 UPLOAD_POLICIES에 정책을 반드시 함께 추가해야 한다.
  */
-export type UploadPurpose = 'PROFILE_IMAGE' | 'REVIEW_IMAGE' | 'REVIEW_VIDEO';
+export type UploadPurpose =
+  | 'PROFILE_IMAGE'
+  | 'REVIEW_IMAGE'
+  | 'REVIEW_VIDEO'
+  | 'PRODUCT_IMAGE'
+  | 'STORE_IMAGE'
+  | 'BANNER_IMAGE';
 
 /**
  * Presigned URL 발급 요청 입력

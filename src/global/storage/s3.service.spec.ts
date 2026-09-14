@@ -308,6 +308,9 @@ describe('S3Service', () => {
       { purpose: 'PROFILE_IMAGE', prefix: 'profile-images' },
       { purpose: 'REVIEW_IMAGE', prefix: 'review-media/images' },
       { purpose: 'REVIEW_VIDEO', prefix: 'review-media/videos' },
+      { purpose: 'PRODUCT_IMAGE', prefix: 'product-images' },
+      { purpose: 'STORE_IMAGE', prefix: 'store-images' },
+      { purpose: 'BANNER_IMAGE', prefix: 'banner-images' },
     ] as const satisfies readonly { purpose: UploadPurpose; prefix: string }[];
 
     it('UPLOAD_POLICIES의 모든 purpose가 표에 있다', () => {

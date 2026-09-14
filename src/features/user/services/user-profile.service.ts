@@ -16,9 +16,9 @@ import { UserBaseService } from '@/features/user/services/user-base.service';
 import type {
   MePayload,
   NicknameAvailability,
-  ProfileImageUploadUrl,
 } from '@/features/user/types/user-output.type';
 import { S3Service } from '@/global/storage/s3.service';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Injectable()
 export class UserProfileService extends UserBaseService {
@@ -183,7 +183,7 @@ export class UserProfileService extends UserBaseService {
   async createProfileImageUploadUrl(
     accountId: bigint,
     input: { contentType: string; contentLength: number },
-  ): Promise<ProfileImageUploadUrl> {
+  ): Promise<CreateUploadUrlOutput> {
     await this.requireActiveUser(accountId);
 
     return this.s3Service.createUploadUrl({

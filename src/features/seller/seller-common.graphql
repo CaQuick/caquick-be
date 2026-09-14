@@ -10,3 +10,36 @@ input SellerCursorInput {
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
   cursor: ID
 }
+
+extend type Mutation {
+  """
+  판매자 이미지 업로드용 Presigned URL을 발급한다. SELLER 권한 필수.
+
+  발급받은 `uploadUrl`로 파일을 PUT한 뒤, 저장 뮤테이션(상품 이미지 추가·옵션 수정·매장 프로필 등)에
+  `publicUrl`을 그대로 넘긴다. 저장 시 발급 계정과 용도가 대조되므로 외부 URL은 거절된다.
+  """
+  sellerCreateUploadUrl(input: SellerCreateUploadUrlInput!): UploadUrl!
+}
+
+"""
+판매자가 올릴 수 있는 이미지 용도.
+
+용도마다 저장 경로와 허용 크기가 다르고, 저장 시 이 용도로 발급된 URL인지 대조한다.
+따라서 상품 이미지를 매장 프로필로 재사용하는 식의 교차 사용은 거절된다.
+"""
+enum SellerUploadPurpose {
+  """상품 대표·상세 이미지, 옵션 이미지, 커스텀 템플릿 기본 이미지. 최대 10MB."""
+  PRODUCT_IMAGE
+  """매장 프로필 이미지. 최대 5MB."""
+  STORE_IMAGE
+}
+
+"""판매자 이미지 업로드 URL 발급 입력."""
+input SellerCreateUploadUrlInput {
+  """업로드 용도. 저장 경로와 크기 제한을 결정한다."""
+  purpose: SellerUploadPurpose!
+  """업로드할 파일의 MIME 타입(예: image/jpeg)."""
+  contentType: String!
+  """업로드할 파일 크기(바이트)."""
+  contentLength: Int!
+}
