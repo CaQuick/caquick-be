@@ -4,11 +4,7 @@ import { AdminRepository } from '@/features/admin/repositories/admin.repository'
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import {
-  OrderDomainService,
-  OrderRepository,
-  OrderStatusTransitionPolicy,
-} from '@/features/order';
+import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -32,7 +28,6 @@ describe('AdminOrderService (real DB)', () => {
         AdminOrderService,
         AdminRepository,
         OrderRepository,
-        OrderDomainService,
         OrderStatusTransitionPolicy,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],

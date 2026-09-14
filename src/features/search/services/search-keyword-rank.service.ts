@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
+import { HOUR_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_POPULAR_KEYWORDS_LIMIT,
-  HOUR_MS,
   KEYWORD_RANK_SNAPSHOT_SIZE,
   KEYWORD_RANK_WINDOW_HOURS,
   MAX_POPULAR_KEYWORDS_LIMIT,

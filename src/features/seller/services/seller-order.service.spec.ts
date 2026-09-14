@@ -6,11 +6,7 @@ import {
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import {
-  OrderDomainService,
-  OrderRepository,
-  OrderStatusTransitionPolicy,
-} from '@/features/order';
+import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
 import { OrderStatus, type PrismaClient } from '@/generated/prisma/client';
@@ -34,7 +30,6 @@ describe('SellerOrderService (real DB)', () => {
         SellerOrderService,
         SellerRepository,
         OrderRepository,
-        OrderDomainService,
         OrderStatusTransitionPolicy,
         {
           provide: AUDIT_LOG_REPOSITORY,

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
-import { DAY_MS } from '@/common/utils/kst-time';
+import { DAY_MS, HOUR_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_REALTIME_BEST_LIMIT,
   MAX_REALTIME_BEST_LIMIT,
@@ -16,8 +16,6 @@ import {
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
 } from '@/features/store';
-
-const HOUR_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class ProductBestSellerService {

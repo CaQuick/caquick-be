@@ -6,5 +6,4 @@ export {
   type AdminOrderDetailRow,
   type AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
-export { OrderDomainService } from '@/features/order/services/order-domain.service';
 export { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';

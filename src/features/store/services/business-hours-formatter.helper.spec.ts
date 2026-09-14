@@ -1,4 +1,4 @@
-import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
+import { formatBusinessHours } from '@/features/store/services/business-hours-formatter.helper';
 
 function makeTime(h: number, m: number): Date {
   return new Date(Date.UTC(2000, 0, 1, h, m, 0));
