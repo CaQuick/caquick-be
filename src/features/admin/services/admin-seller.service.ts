@@ -11,11 +11,11 @@ import {
   LONGITUDE_RANGE,
   parseDecimalOrNull,
 } from '@/common/utils/decimal-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -88,7 +88,7 @@ export class AdminSellerService extends AdminBaseService {
       this.repo.listSellerAccounts({ ...filter, ...normalized }),
       this.repo.countSellerAccounts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminSellerOutput),
       totalCount,

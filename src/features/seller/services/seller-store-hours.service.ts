@@ -7,6 +7,10 @@ import {
 
 import { toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -26,11 +30,7 @@ import {
 import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
 import type { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type { ISellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service.interface';
 import {
@@ -84,7 +84,7 @@ export class SellerStoreHoursService
       this.repo.countStoreSpecialClosures(ctx.storeId),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toStoreSpecialClosureOutput(row)),
       nextCursor: paged.nextCursor,

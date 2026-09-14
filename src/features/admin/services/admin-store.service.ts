@@ -5,11 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   REGION_NOT_SELECTABLE,
@@ -92,7 +92,7 @@ export class AdminStoreService extends AdminBaseService {
       this.repo.listStores({ ...filter, ...normalized }),
       this.repo.countStores(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminStoreOutput),
       totalCount,

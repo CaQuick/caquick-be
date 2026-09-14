@@ -3,6 +3,10 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { toDate, toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
 import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
+import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
@@ -23,11 +27,7 @@ import {
 import type { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
 import type { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
 import type { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import {
   toStoreDailyCapacityOutput,
@@ -79,7 +79,7 @@ export class SellerStorePolicyService
       this.repo.countStoreDailyCapacities(filters),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toStoreDailyCapacityOutput(row)),
       nextCursor: paged.nextCursor,

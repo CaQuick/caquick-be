@@ -22,33 +22,66 @@ export interface TimestampIdCursor {
   id: bigint;
 }
 
-export function parseTimestampIdCursor(
+/**
+ * "<숫자>:<id>" 공통 파싱. 아래 두 커서가 형식을 공유한다.
+ * 자릿수 폭탄(예: 309자리)은 Number 변환에서 Infinity가 되어 SQL로 흘러가므로
+ * 안전 정수 밖이면 형식 오류로 거부한다.
+ */
+function parseNumberIdCursor(
   raw: string,
   errorCode: ErrorCode,
-): TimestampIdCursor {
+): { value: number; id: bigint } {
   const match = /^(\d+):(\d+)$/.exec(raw);
   if (!match) {
     throw domainError(errorCode);
   }
-  const timestampMs = Number(match[1]);
-  if (!Number.isSafeInteger(timestampMs)) {
+
+  const value = Number(match[1]);
+  if (!Number.isSafeInteger(value)) {
     throw domainError(errorCode);
   }
-  const timestamp = new Date(timestampMs);
-  if (
-    Number.isNaN(timestamp.getTime()) ||
-    timestampMs > MAX_MYSQL_DATETIME_MS
-  ) {
-    throw domainError(errorCode);
-  }
+
   const id = BigInt(match[2]);
   if (id > MAX_UNSIGNED_BIGINT) {
     throw domainError(errorCode);
   }
-  return { timestamp, id };
+
+  return { value, id };
 }
 
-/** (시각, id) desc 페이지의 다음 커서 문자열. */
+export function parseTimestampIdCursor(
+  raw: string,
+  errorCode: ErrorCode,
+): TimestampIdCursor {
+  const { value, id } = parseNumberIdCursor(raw, errorCode);
+
+  // Date 지원 범위 밖 → Invalid Date 로 Prisma 내부 오류가 난다
+  if (Math.abs(value) > MAX_MYSQL_DATETIME_MS) {
+    throw domainError(errorCode);
+  }
+
+  return { timestamp: new Date(value), id };
+}
+
+/** "<집계값>:<id>" 커서(좋아요순 등). 정렬 기준이 시각이 아닌 목록용. */
+export interface CountIdCursor {
+  count: number;
+  id: bigint;
+}
+
+export function parseCountIdCursor(
+  raw: string,
+  errorCode: ErrorCode,
+): CountIdCursor {
+  const { value, id } = parseNumberIdCursor(raw, errorCode);
+  return { count: value, id };
+}
+
+/** parseCountIdCursor 의 역함수. 페이지 마지막 행에서 다음 커서를 만든다. */
+export function buildCountIdCursor(count: number, id: bigint): string {
+  return `${count.toString()}:${id.toString()}`;
+}
+
 export function buildTimestampIdCursor(timestamp: Date, id: bigint): string {
   return `${timestamp.getTime()}:${id.toString()}`;
 }

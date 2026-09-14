@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { toDate } from '@/common/utils/date-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseOptionalId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import type { AdminAuditLogListInput } from '@/features/admin/dto/inputs/admin-audit-log-list.input';
 import {
   AdminRepository,
@@ -51,7 +51,7 @@ export class AdminAuditService extends AdminBaseService {
       toCreatedAt: toDate(input?.toCreatedAt),
       ...normalized,
     });
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminAuditLogOutput),
       hasMore: paged.hasMore,

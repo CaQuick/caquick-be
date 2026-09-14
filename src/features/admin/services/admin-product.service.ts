@@ -1,10 +1,10 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import { PRODUCT_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
@@ -57,7 +57,7 @@ export class AdminProductService extends AdminBaseService {
       this.repo.listProducts({ ...filter, ...normalized }),
       this.repo.countProducts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminProductOutput),
       totalCount,

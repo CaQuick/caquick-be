@@ -1,7 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 
 import {
+  MAX_UNSIGNED_BIGINT,
+  buildCountIdCursor,
   buildTimestampIdCursor,
+  parseCountIdCursor,
   parseIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
@@ -72,6 +75,43 @@ describe('keyset-cursor', () => {
       for (const raw of ['abc', '-1', '', '1.5', '9'.repeat(30)]) {
         expect(() => parseIdCursor(raw, ERR)).toThrow(BadRequestException);
       }
+    });
+  });
+
+  /**
+   * 좋아요순 목록이 쓰는 "<집계값>:<id>" 커서. 예전엔 product·store 서비스가 각각
+   * 사설 파서를 갖고 있었고 둘 다 UNSIGNED BIGINT 상한 검사가 빠져 있었다.
+   * 시각 커서와 형식·방어를 공유하도록 합치면서 그 구멍도 닫힌다.
+   */
+  describe('parseCountIdCursor', () => {
+    it('build → parse 왕복이 값을 보존한다', () => {
+      const raw = buildCountIdCursor(42, 7n);
+      expect(raw).toBe('42:7');
+      expect(parseCountIdCursor(raw, ERR)).toEqual({ count: 42, id: 7n });
+    });
+
+    it('집계값 0도 유효하다', () => {
+      expect(parseCountIdCursor('0:1', ERR)).toEqual({ count: 0, id: 1n });
+    });
+
+    it.each([
+      { label: '형식 불일치', raw: 'abc' },
+      { label: '구분자 없음', raw: '42' },
+      { label: '음수', raw: '-1:2' },
+      { label: '소수', raw: '1.5:2' },
+      { label: '빈 문자열', raw: '' },
+      { label: '자릿수 폭탄(안전 정수 밖)', raw: `${'9'.repeat(309)}:1` },
+      {
+        label: 'UNSIGNED BIGINT 상한 초과 id',
+        raw: `1:${(MAX_UNSIGNED_BIGINT + 1n).toString()}`,
+      },
+    ])('$label 은 거부한다', ({ raw }) => {
+      expect(() => parseCountIdCursor(raw, ERR)).toThrow();
+    });
+
+    it('UNSIGNED BIGINT 상한 자체는 허용한다', () => {
+      const raw = buildCountIdCursor(1, MAX_UNSIGNED_BIGINT);
+      expect(parseCountIdCursor(raw, ERR).id).toBe(MAX_UNSIGNED_BIGINT);
     });
   });
 });

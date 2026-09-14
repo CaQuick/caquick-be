@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  buildCountIdCursor,
+  parseCountIdCursor,
+} from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
 import { DEFAULT_STORE_REVIEWS_LIMIT } from '@/features/store/constants/store-review.constants';
 import type { StoreReviewsInput } from '@/features/store/dto/inputs/store-reviews.input';
@@ -77,13 +80,11 @@ export class StoreReviewService {
         photoOnly: args.photoOnly,
         limit: args.limit,
         cursor: args.cursorRaw
-          ? this.parseLikesCursor(args.cursorRaw)
+          ? parseCountIdCursor(args.cursorRaw, 'INVALID_LIKES_CURSOR')
           : undefined,
       });
-      const page = sliceCursorPage(
-        rows,
-        args.limit,
-        (last) => `${last.likeCount}:${last.id.toString()}`,
+      const page = sliceCursorPage(rows, args.limit, (last) =>
+        buildCountIdCursor(last.likeCount, last.id),
       );
       return {
         pageIds: page.items.map((row) => row.id),
@@ -104,21 +105,6 @@ export class StoreReviewService {
       hasMore: page.hasMore,
       nextCursor: page.nextCursor,
     };
-  }
-
-  /** 좋아요순 커서 파싱. "<likeCount>:<id>" 형식이 아니면 BAD_USER_INPUT. */
-  private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
-    const match = /^(\d+):(\d+)$/.exec(raw);
-    if (!match) {
-      throw domainError('INVALID_LIKES_CURSOR');
-    }
-    const likeCount = Number(match[1]);
-    // 자릿수 폭탄(예: 309자리)은 Number 변환 시 Infinity가 되어 raw SQL에
-    // 비유한 값이 흘러간다. 안전 정수 범위를 벗어나면 형식 오류로 거부한다.
-    if (!Number.isSafeInteger(likeCount)) {
-      throw domainError('INVALID_LIKES_CURSOR');
-    }
-    return { likeCount, id: BigInt(match[2]) };
   }
 
   /** id 페이지 순서를 유지하며 본문 + 집계(좋아요/isLiked)를 채운다. */

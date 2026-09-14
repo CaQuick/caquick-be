@@ -6,11 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
   ACCOUNT_NOT_FOUND,
@@ -74,7 +74,7 @@ export class AdminUserService extends AdminBaseService {
       this.repo.listUserAccounts({ ...filter, ...normalized }),
       this.repo.countUserAccounts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminUserOutput),
       totalCount,

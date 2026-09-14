@@ -11,6 +11,11 @@ import {
   buildTimestampIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceCursorPage,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -35,11 +40,7 @@ import {
 import type { SellerConversationListInput } from '@/features/seller/dto/inputs/seller-conversation-list.input';
 import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerConversationMessageOutput,
@@ -87,16 +88,13 @@ export class SellerConversationService extends SellerBaseService {
       this.conversationRepository.countConversationsByStore(ctx.storeId),
     ]);
 
-    const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
+    const page = sliceCursorPage(rows, limit, (last) =>
+      buildTimestampIdCursor(last.updated_at, last.id),
+    );
     return {
-      items: items.map((row) => this.toConversationOutput(row)),
-      nextCursor:
-        hasMore && last
-          ? buildTimestampIdCursor(last.updated_at, last.id)
-          : null,
-      hasMore,
+      items: page.items.map((row) => this.toConversationOutput(row)),
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
       totalCount,
     };
   }
@@ -128,7 +126,7 @@ export class SellerConversationService extends SellerBaseService {
       this.conversationRepository.countConversationMessages(conversationId),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toConversationMessageOutput(row)),
       nextCursor: paged.nextCursor,

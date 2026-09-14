@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 import argon2 from 'argon2';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  sliceIdCursorPage,
+  normalizeCursorInput,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   ACCOUNT_NOT_FOUND,
@@ -65,7 +65,7 @@ export class AdminAccountService extends AdminBaseService {
       this.repo.listAdminAccounts(normalized),
       this.repo.countAdminAccounts(),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminAccountOutput),
       totalCount,

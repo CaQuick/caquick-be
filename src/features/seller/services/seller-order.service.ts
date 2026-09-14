@@ -7,6 +7,10 @@ import {
 
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -19,11 +23,7 @@ import {
 } from '@/features/seller/constants/seller-error-messages';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCursorConnection,
@@ -108,7 +108,7 @@ export class SellerOrderService extends SellerBaseService {
       this.orderRepository.countOrdersByStore(filters),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toOrderSummaryOutput(row)),
       nextCursor: paged.nextCursor,

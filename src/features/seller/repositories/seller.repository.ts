@@ -345,12 +345,6 @@ export class SellerRepository {
   }
 }
 
-// 커서 헬퍼는 관리자 목록과 공유하려고 common으로 옮겼다. 판매자 쪽 import 경로는 유지한다.
-export {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
-
 export function isSellerAccount(accountType: AccountType): boolean {
   return accountType === AccountType.SELLER;
 }
