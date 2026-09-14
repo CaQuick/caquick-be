@@ -11,7 +11,11 @@ extend type Query {
   ): PickupTimeSlots!
 }
 
-"""월별 픽업 달력. 요청한 연월의 모든 날짜가 담긴다."""
+"""
+월별 픽업 달력. 요청한 연월의 모든 날짜가 담긴다.
+전역(`pickupCalendar`)과 매장별(`storePickupCalendar`)이 같은 형태를 공유한다 —
+다른 것은 판정 근거이지 응답 모양이 아니다.
+"""
 type PickupCalendar {
   """요청한 연월. "YYYY-MM"."""
   yearMonth: String!
@@ -25,7 +29,11 @@ type PickupDay {
   date: String!
   """픽업 예약 가능 여부."""
   selectable: Boolean!
-  """선택 불가 사유. PAST | OUT_OF_RANGE (선택 가능 시 null)."""
+  """
+선택 불가 사유(선택 가능 시 null).
+PAST | OUT_OF_RANGE | CLOSED(휴무·영업요일 아님·당일 잔여 슬롯 없음) | CAPACITY_FULL.
+전역 달력은 매장 재고 개념이 없어 CAPACITY_FULL을 쓰지 않는다.
+"""
   reason: String
 }
 
@@ -39,7 +47,11 @@ type PickupTimeSlots {
   afternoon: [PickupSlot!]!
 }
 
-"""픽업 시간 슬롯 1칸. 영업시간 10:00~20:00을 30분 간격으로 나눈 것이라 마지막은 19:30이다."""
+"""
+픽업 시간 슬롯 1칸.
+전역 조회는 고정 정책(10:00~20:00, 30분 간격)을, 매장별 조회는 그 매장의
+pickupSlotIntervalMinutes·영업시간·리드타임·잔여 수량을 반영한다.
+"""
 type PickupSlot {
   """슬롯 시각. "HH:mm" (KST)."""
   time: String!

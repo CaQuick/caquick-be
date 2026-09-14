@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { PickupQueryResolver } from '@/features/store/resolvers/pickup-query.resolver';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
@@ -11,6 +12,7 @@ import { StoreSearchQueryResolver } from '@/features/store/resolvers/store-searc
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
+import { PickupSlotService } from '@/features/store/services/pickup-slot.service';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
@@ -37,6 +39,8 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreTodayPickupQueryResolver,
     StorePickupScheduleService,
     StorePickupScheduleQueryResolver,
+    PickupSlotService,
+    PickupQueryResolver,
     StoreSearchService,
     StoreSearchQueryResolver,
   ],

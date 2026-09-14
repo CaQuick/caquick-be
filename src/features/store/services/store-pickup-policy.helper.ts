@@ -1,5 +1,5 @@
 import { formatMinutesOfDay, kstDayDiff } from '@/common/utils/kst-time';
-import { STORE_PICKUP_DAY_REASON } from '@/features/store/constants/store-pickup-schedule.constants';
+import { PICKUP_DAY_REASON } from '@/features/store/constants/store-pickup-schedule.constants';
 import type { TodayPickupSlot } from '@/features/store/types/store-today-pickup-output.type';
 
 /**
@@ -71,7 +71,7 @@ export interface PickupBusinessHour {
 }
 
 export type StorePickupDayReason =
-  (typeof STORE_PICKUP_DAY_REASON)[keyof typeof STORE_PICKUP_DAY_REASON];
+  (typeof PICKUP_DAY_REASON)[keyof typeof PICKUP_DAY_REASON];
 
 export interface PickupDayInput {
   store: PickupPolicyStore;
@@ -119,26 +119,26 @@ export function evaluatePickupDay(input: PickupDayInput): PickupDayResult {
     : [];
 
   const diff = kstDayDiff(now, dayStartUtc);
-  if (diff < 0) return { reason: STORE_PICKUP_DAY_REASON.PAST, slots };
+  if (diff < 0) return { reason: PICKUP_DAY_REASON.PAST, slots };
   if (diff > store.max_days_ahead) {
-    return { reason: STORE_PICKUP_DAY_REASON.OUT_OF_RANGE, slots };
+    return { reason: PICKUP_DAY_REASON.OUT_OF_RANGE, slots };
   }
   if (input.isSpecialClosure) {
-    return { reason: STORE_PICKUP_DAY_REASON.CLOSED, slots };
+    return { reason: PICKUP_DAY_REASON.CLOSED, slots };
   }
   if (!activeHour) {
-    return { reason: STORE_PICKUP_DAY_REASON.CLOSED, slots };
+    return { reason: PICKUP_DAY_REASON.CLOSED, slots };
   }
 
   // capacity 레코드가 없으면 무제한으로 간주(figma 명세 외 정책 결정)
   if (input.capacity !== undefined && input.booked >= input.capacity) {
-    return { reason: STORE_PICKUP_DAY_REASON.CAPACITY_FULL, slots };
+    return { reason: PICKUP_DAY_REASON.CAPACITY_FULL, slots };
   }
 
   // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가(전역 pickupCalendar 선례 확장).
   // 리드타임이 하루를 넘으면 미래 날짜도 여기서 마감된다.
   if (!slots.some((slot) => slot.available)) {
-    return { reason: STORE_PICKUP_DAY_REASON.CLOSED, slots };
+    return { reason: PICKUP_DAY_REASON.CLOSED, slots };
   }
   return { reason: null, slots };
 }

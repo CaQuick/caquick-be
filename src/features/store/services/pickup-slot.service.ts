@@ -11,7 +11,6 @@ import {
   parseKstDate,
   parseKstYearMonth,
 } from '@/common/utils/kst-time';
-import { PICKUP_DAY_REASON } from '@/features/pickup/constants/pickup-error-messages';
 import {
   PICKUP_AFTERNOON_START_MINUTES,
   PICKUP_CLOSE_MINUTES,
@@ -19,12 +18,13 @@ import {
   PICKUP_MIN_LEAD_MINUTES,
   PICKUP_OPEN_MINUTES,
   PICKUP_SLOT_INTERVAL_MINUTES,
-} from '@/features/pickup/constants/pickup.constants';
+} from '@/features/store/constants/pickup.constants';
+import { PICKUP_DAY_REASON } from '@/features/store/constants/store-pickup-schedule.constants';
 import type {
   PickupCalendar,
   PickupSlot,
   PickupTimeSlots,
-} from '@/features/pickup/types/pickup-output.type';
+} from '@/features/store/types/pickup-output.type';
 
 @Injectable()
 export class PickupSlotService {

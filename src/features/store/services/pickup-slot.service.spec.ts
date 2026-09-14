@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { PickupSlotService } from '@/features/pickup/services/pickup-slot.service';
+import { PickupSlotService } from '@/features/store/services/pickup-slot.service';
 
 describe('PickupSlotService', () => {
   const service = new PickupSlotService();
