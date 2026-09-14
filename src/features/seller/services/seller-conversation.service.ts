@@ -27,7 +27,6 @@ import {
   BODY_TEXT_REQUIRED,
   CONVERSATION_NOT_FOUND,
   INVALID_BODY_FORMAT,
-  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
@@ -74,7 +73,7 @@ export class SellerConversationService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const limit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
     const cursor = input?.cursor
-      ? parseTimestampIdCursor(input.cursor, INVALID_CURSOR)
+      ? parseTimestampIdCursor(input.cursor, 'INVALID_CURSOR')
       : undefined;
 
     const [rows, totalCount] = await Promise.all([

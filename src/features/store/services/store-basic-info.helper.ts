@@ -7,7 +7,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import { INVALID_DECIMAL_VALUE } from '@/features/store/constants/store-basic-info-error-messages';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -98,7 +97,7 @@ export function buildStoreBasicInfoUpdateData(
       ? {
           latitude: parseDecimalOrNull(
             input.latitude,
-            INVALID_DECIMAL_VALUE,
+            'INVALID_DECIMAL_VALUE',
             LATITUDE_RANGE,
           ),
         }
@@ -107,7 +106,7 @@ export function buildStoreBasicInfoUpdateData(
       ? {
           longitude: parseDecimalOrNull(
             input.longitude,
-            INVALID_DECIMAL_VALUE,
+            'INVALID_DECIMAL_VALUE',
             LONGITUDE_RANGE,
           ),
         }

@@ -4,8 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { messageOf } from '@/common/errors';
 import { OrderRepository } from '@/features/order';
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -244,7 +244,7 @@ describe('UserReviewService (real DB)', () => {
         {
           label: 'mediaUrl 이 소유 URL 이 아니면',
           rejectedUrl: 'https://evil.example.com/x.jpg',
-          message: USER_REVIEW_ERRORS.INVALID_MEDIA_URL,
+          message: messageOf('INVALID_MEDIA_URL'),
           media: [
             {
               mediaType: 'IMAGE' as const,
@@ -256,7 +256,7 @@ describe('UserReviewService (real DB)', () => {
         {
           label: 'thumbnailUrl 이 소유 URL 이 아니면',
           rejectedUrl: 'https://evil.example.com/thumb.jpg',
-          message: USER_REVIEW_ERRORS.INVALID_THUMBNAIL_URL,
+          message: messageOf('INVALID_THUMBNAIL_URL'),
           media: [
             {
               mediaType: 'VIDEO' as const,

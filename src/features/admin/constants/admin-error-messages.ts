@@ -62,7 +62,6 @@ export const DASHBOARD_RANGE_TOO_LONG =
   'Date range must be 366 days or shorter.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
-export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
 
 // ── 배너 ──
 

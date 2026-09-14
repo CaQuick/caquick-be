@@ -1,10 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
-import {
-  DEFAULT_REGION_SEARCH_LIMIT,
-  REGION_ERRORS,
-} from '@/features/region/constants/region-error-messages';
+import { DEFAULT_REGION_SEARCH_LIMIT } from '@/features/region/constants/region-error-messages';
 import type { SearchRegionsInput } from '@/features/region/dto/inputs/search-regions.input';
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import {
@@ -33,7 +31,7 @@ export class RegionService {
     const parentId = parseId(parentIdStr);
     const exists = await this.repo.existsActiveGroup(parentId);
     if (!exists) {
-      throw new NotFoundException(REGION_ERRORS.GROUP_NOT_FOUND);
+      throw domainError('REGION_GROUP_NOT_FOUND');
     }
     const rows = await this.repo.findActiveChildren(parentId);
     return rows.map(toRegionOutput);

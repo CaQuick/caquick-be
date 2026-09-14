@@ -1,12 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import {
   DEFAULT_PRODUCT_REVIEWS_LIMIT,
   DEFAULT_REVIEW_COMMENTS_LIMIT,
@@ -74,7 +70,7 @@ export class ProductReviewService {
     const reviewId = parseId(reviewIdRaw);
     const row = await this.repo.findReviewDetailById(reviewId);
     if (!row) {
-      throw new NotFoundException(PRODUCT_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw domainError('REVIEW_NOT_FOUND');
     }
 
     const [likeCounts, likedIds, commentCounts] = await Promise.all([
@@ -103,7 +99,7 @@ export class ProductReviewService {
     const reviewId = parseId(input.reviewId);
     const exists = await this.repo.existsPublicReview(reviewId);
     if (!exists) {
-      throw new NotFoundException(PRODUCT_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw domainError('REVIEW_NOT_FOUND');
     }
 
     const limit = input.limit ?? DEFAULT_REVIEW_COMMENTS_LIMIT;
@@ -183,13 +179,13 @@ export class ProductReviewService {
   private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
     const match = /^(\d+):(\d+)$/.exec(raw);
     if (!match) {
-      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
+      throw domainError('INVALID_LIKES_CURSOR');
     }
     const likeCount = Number(match[1]);
     // 자릿수 폭탄(예: 309자리)은 Number 변환 시 Infinity가 되어 raw SQL에
     // 비유한 값이 흘러간다. 안전 정수 범위를 벗어나면 형식 오류로 거부한다.
     if (!Number.isSafeInteger(likeCount)) {
-      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
+      throw domainError('INVALID_LIKES_CURSOR');
     }
     return { likeCount, id: BigInt(match[2]) };
   }

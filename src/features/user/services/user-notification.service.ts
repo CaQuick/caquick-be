@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import {
   buildTimestampIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { USER_NOTIFICATION_ERRORS } from '@/features/user/constants/user-notification-error-messages';
 import {
   DEFAULT_PAGINATION_LIMIT,
   NOTIFICATION_VISIBLE_MONTHS,
@@ -79,9 +79,7 @@ export class UserNotificationService extends UserBaseService {
     });
 
     if (!updated) {
-      throw new NotFoundException(
-        USER_NOTIFICATION_ERRORS.NOTIFICATION_NOT_FOUND,
-      );
+      throw domainError('NOTIFICATION_NOT_FOUND');
     }
 
     return true;
@@ -114,10 +112,7 @@ export class UserNotificationService extends UserBaseService {
     createdAt: Date;
     id: bigint;
   } {
-    const cursor = parseTimestampIdCursor(
-      raw,
-      USER_NOTIFICATION_ERRORS.INVALID_CURSOR,
-    );
+    const cursor = parseTimestampIdCursor(raw, 'INVALID_CURSOR');
     return { createdAt: cursor.timestamp, id: cursor.id };
   }
 }

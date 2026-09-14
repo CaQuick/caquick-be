@@ -1,12 +1,8 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { domainError, messageOf } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import {
   MAX_REVIEW_REPORT_DETAIL_LENGTH,
   MAX_REVIEW_REPORT_SNAPSHOT_LENGTH,
@@ -44,7 +40,7 @@ export class UserReportService extends UserBaseService {
       accountId,
       { kind: 'review', id: parseId(input.reviewId) },
       input,
-      USER_REVIEW_ERRORS.REVIEW_NOT_FOUND,
+      messageOf('REVIEW_NOT_FOUND'),
     );
   }
 
@@ -57,7 +53,7 @@ export class UserReportService extends UserBaseService {
       accountId,
       { kind: 'review_comment', id: parseId(input.commentId) },
       input,
-      USER_REVIEW_ERRORS.COMMENT_NOT_FOUND,
+      messageOf('REVIEW_COMMENT_NOT_FOUND'),
     );
   }
 
@@ -84,9 +80,7 @@ export class UserReportService extends UserBaseService {
       case 'not-found':
         throw new NotFoundException(notFoundMessage);
       case 'own-content':
-        throw new BadRequestException(
-          USER_REVIEW_ERRORS.CANNOT_REPORT_OWN_CONTENT,
-        );
+        throw domainError('CANNOT_REPORT_OWN_CONTENT');
     }
   }
 

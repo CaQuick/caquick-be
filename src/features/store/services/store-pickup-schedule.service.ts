@@ -1,9 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { ClockService } from '@/common/providers/clock.service';
 import {
   daysInMonth,
@@ -14,7 +11,6 @@ import {
   toKstYmd,
 } from '@/common/utils/kst-time';
 import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/pickup';
-import { STORE_PICKUP_SCHEDULE_ERRORS } from '@/features/store/constants/store-pickup-schedule-error-messages';
 import {
   StoreRepository,
   type StorePickupPolicyRow,
@@ -64,13 +60,11 @@ export class StorePickupScheduleService {
   ): Promise<StorePickupCalendar> {
     const ym = parseKstYearMonth(yearMonth);
     if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
-      throw new BadRequestException(
-        STORE_PICKUP_SCHEDULE_ERRORS.INVALID_YEAR_MONTH,
-      );
+      throw domainError('INVALID_YEAR_MONTH');
     }
     const store = await this.repo.findStoreForPickupSchedule(storeId);
     if (!store) {
-      throw new NotFoundException(STORE_PICKUP_SCHEDULE_ERRORS.STORE_NOT_FOUND);
+      throw domainError('STORE_NOT_FOUND');
     }
 
     const now = this.clock.now();
@@ -114,15 +108,15 @@ export class StorePickupScheduleService {
   ): Promise<StorePickupTimeSlots> {
     const parsed = parseKstDate(date);
     if (!parsed) {
-      throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
+      throw domainError('INVALID_DATE');
     }
     const { year, month, day } = toKstYmd(parsed);
     if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
-      throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
+      throw domainError('INVALID_DATE');
     }
     const store = await this.repo.findStoreForPickupSchedule(storeId);
     if (!store) {
-      throw new NotFoundException(STORE_PICKUP_SCHEDULE_ERRORS.STORE_NOT_FOUND);
+      throw domainError('STORE_NOT_FOUND');
     }
 
     const now = this.clock.now();

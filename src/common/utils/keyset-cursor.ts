@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { domainError, type ErrorCode } from '@/common/errors';
 
 /**
  * "<timestampMs>:<id>" 형식 키셋 커서 파싱 공용 유틸.
@@ -24,26 +24,26 @@ export interface TimestampIdCursor {
 
 export function parseTimestampIdCursor(
   raw: string,
-  errorMessage: string,
+  errorCode: ErrorCode,
 ): TimestampIdCursor {
   const match = /^(\d+):(\d+)$/.exec(raw);
   if (!match) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   const timestampMs = Number(match[1]);
   if (!Number.isSafeInteger(timestampMs)) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   const timestamp = new Date(timestampMs);
   if (
     Number.isNaN(timestamp.getTime()) ||
     timestampMs > MAX_MYSQL_DATETIME_MS
   ) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   const id = BigInt(match[2]);
   if (id > MAX_UNSIGNED_BIGINT) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   return { timestamp, id };
 }
@@ -58,13 +58,13 @@ export function buildTimestampIdCursor(timestamp: Date, id: bigint): string {
  * 검증한다 — 상한 초과 값이 커넥터 범위 오류로 번지는 것을 형식 오류로
  * 선제 거부한다.
  */
-export function parseIdCursor(raw: string, errorMessage: string): bigint {
+export function parseIdCursor(raw: string, errorCode: ErrorCode): bigint {
   if (!/^\d+$/.test(raw)) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   const id = BigInt(raw);
   if (id > MAX_UNSIGNED_BIGINT) {
-    throw new BadRequestException(errorMessage);
+    throw domainError(errorCode);
   }
   return id;
 }

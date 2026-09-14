@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
-import { PRODUCT_DETAIL_ERRORS } from '@/features/product/constants/product-detail-error-messages';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { toProductDetail } from '@/features/product/services/product-detail-mappers.helper';
 import type { ProductDetail } from '@/features/product/types/product-detail-output.type';
@@ -21,7 +21,7 @@ export class ProductDetailService {
     const productId = parseId(productIdRaw);
     const row = await this.repo.findProductDetailById(productId);
     if (!row) {
-      throw new NotFoundException(PRODUCT_DETAIL_ERRORS.PRODUCT_NOT_FOUND);
+      throw domainError('PRODUCT_NOT_FOUND');
     }
 
     const [reviewCount, isWishlisted] = await Promise.all([
