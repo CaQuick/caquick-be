@@ -12,15 +12,18 @@ function codePointLength(text: string): number {
   return n;
 }
 
+/** 최대 길이가 호출부마다 달라 고정 문구로 못 담는다 — 조립을 이 한 곳에 모은다. */
+export function maxLengthMessage(maxLength: number): string {
+  return `입력은 ${maxLength.toString()}자를 넘을 수 없습니다.`;
+}
+
 export function cleanRequiredText(raw: string, maxLength: number): string {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
     throw domainError('REQUIRED_TEXT_EMPTY');
   }
   if (codePointLength(trimmed) > maxLength) {
-    throw new BadRequestException(
-      `입력은 ${maxLength.toString()}자를 넘을 수 없습니다.`,
-    );
+    throw new BadRequestException(maxLengthMessage(maxLength));
   }
   return trimmed;
 }
@@ -33,9 +36,7 @@ export function cleanNullableText(
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
   if (codePointLength(trimmed) > maxLength) {
-    throw new BadRequestException(
-      `입력은 ${maxLength.toString()}자를 넘을 수 없습니다.`,
-    );
+    throw new BadRequestException(maxLengthMessage(maxLength));
   }
   return trimmed;
 }

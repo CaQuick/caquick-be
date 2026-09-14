@@ -9,6 +9,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import * as ts from 'typescript';
 
 import {
   domainError,
@@ -144,24 +145,25 @@ describe('messageOf 사용 경계', () => {
 });
 
 /**
- * 예외 메시지를 코드 안에 문자열로 직접 쓰면 그 오류에는 errorCode 가 실리지 않고,
- * 문구가 여러 곳으로 흩어진다. 실제로 카탈로그 도입 뒤에도 인라인 throw 가 40곳
- * 남아 있었고, 그중에는 이관 대상 엔드포인트(POST /auth/refresh)도 있었다.
+ * 인라인 예외 메시지 금지 가드.
  *
- * 프로덕션 코드는 domainError(code) 로 던진다. 런타임 값이 들어가야 하는 문구만
- * 예외로 두고, 그 목록을 여기 고정한다 — 새로 늘면 이 테스트가 먼저 깨진다.
+ * 계약: throw 자리에서 메시지 **문자열을 직접 쓰지 않는다**. 문구는 카탈로그
+ * (`domainError(code)`)에서 오거나, 런타임 값이 섞여야 하면 이름 붙은 빌더
+ * 함수에서 온다. 빌더는 상수와 같은 모듈에 두어 따로 검토할 수 있게 한다.
+ *
+ * 그래서 탐지 기준은 "예외 생성자의 첫 인자가 문자열/템플릿 리터럴인가"다.
+ * 정규식으로는 작은따옴표만 잡혀 큰따옴표·템플릿 리터럴이 그대로 빠져나간다
+ * (실제로 그렇게 새던 자리가 있었다) — TypeScript AST로 판정한다.
  */
 describe('인라인 예외 메시지 금지', () => {
   const SRC_ROOT = resolve(__dirname, '..', '..');
   const SKIP_DIRS = new Set(['generated', 'node_modules']);
 
-  /** 런타임 값이 들어가 카탈로그의 고정 문자열로 표현할 수 없는 자리 */
-  const DYNAMIC_MESSAGE_ALLOWLIST = [
-    'common/utils/text-cleaner.ts', // 최대 길이가 호출부마다 다르다
-    'features/user/services/user-base.service.ts', // limit 상한
-    'features/seller/constants/seller-error-messages.ts', // 필드명·범위
-    'features/admin/constants/admin-error-messages.ts', // 발송 건수
-  ];
+  /**
+   * 런타임 값이 섞여 빌더로도 못 빼는 자리. 비어 있는 게 정상이고, 추가하려면
+   * "왜 이름 붙은 빌더로 못 빼는가"를 같이 남긴다.
+   */
+  const INLINE_MESSAGE_ALLOWLIST: string[] = [];
 
   function tsFiles(dir: string): string[] {
     const out: string[] = [];
@@ -174,44 +176,86 @@ describe('인라인 예외 메시지 금지', () => {
     return out;
   }
 
-  /** `new XxxException('...')` — 작은따옴표 리터럴 메시지 */
-  const INLINE_MESSAGE = /new [A-Za-z]+Exception\(\s*'/;
+  /** `new XxxException(<문자열 리터럴 형태>)` 위치를 전부 모은다. */
+  function inlineMessageSites(fileName: string, source: string): string[] {
+    const sourceFile = ts.createSourceFile(
+      fileName,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const hits: string[] = [];
+
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isNewExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text.endsWith('Exception')
+      ) {
+        const arg = node.arguments?.[0];
+        if (
+          arg &&
+          (ts.isStringLiteral(arg) ||
+            ts.isNoSubstitutionTemplateLiteral(arg) ||
+            ts.isTemplateExpression(arg))
+        ) {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(
+            arg.getStart(sourceFile),
+          );
+          hits.push(`${fileName}:${(line + 1).toString()}`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+    return hits;
+  }
 
   const files = tsFiles(SRC_ROOT).filter(
     (f) =>
       !f.endsWith('.spec.ts') &&
       !f.includes('/test/') &&
-      !DYNAMIC_MESSAGE_ALLOWLIST.some((a) => f.endsWith(a)),
+      !INLINE_MESSAGE_ALLOWLIST.some((a) => f.endsWith(a)),
   );
 
   it('스캔 대상을 실제로 모았다 (0건 통과 방지)', () => {
     expect(files.length).toBeGreaterThan(100);
   });
 
-  it('탐지기가 심어 둔 패턴을 잡는다 (반증 케이스)', () => {
-    expect(INLINE_MESSAGE.test("throw new BadRequestException('nope');")).toBe(
-      true,
+  // 막아야 할 형태를 전수로 고정한다. 정규식 버전이 놓쳤던 큰따옴표·템플릿이
+  // 여기 들어 있다 — 새 형태가 생기면 줄을 추가한다.
+  it.each([
+    ['작은따옴표', "throw new BadRequestException('nope');", true],
+    ['큰따옴표', 'throw new BadRequestException("nope");', true],
+    ['템플릿(치환 없음)', 'throw new NotFoundException(`nope`);', true],
+    ['템플릿(치환 있음)', 'throw new BadRequestException(`x ${y}`);', true],
+    ['여러 줄 인자', "throw new ForbiddenException(\n  'nope',\n);", true],
+    ['카탈로그 호출', "throw domainError('INVALID_ID');", false],
+    [
+      '빌더 호출',
+      'throw new BadRequestException(maxLengthMessage(10));',
+      false,
+    ],
+    ['상수 참조', 'throw new BadRequestException(SOME_MESSAGE);', false],
+  ])('탐지기: %s → %s', (_label, snippet, shouldDetect) => {
+    expect(inlineMessageSites('probe.ts', snippet).length > 0).toBe(
+      shouldDetect,
     );
-    // domainError 호출은 잡지 않아야 한다
-    expect(INLINE_MESSAGE.test("throw domainError('INVALID_ID');")).toBe(false);
   });
 
   it('프로덕션 코드에 인라인 예외 메시지가 없다', () => {
-    const offenders = files.filter((f) =>
-      INLINE_MESSAGE.test(readFileSync(f, 'utf8')),
+    const offenders = files.flatMap((f) =>
+      inlineMessageSites(f, readFileSync(f, 'utf8')),
     );
 
-    // 문구가 필요하면 카탈로그에 코드를 추가하고 domainError(code) 로 던진다.
+    // 고정 문구면 카탈로그에 코드를 추가해 domainError(code)로 던진다.
+    // 런타임 값이 섞이면 상수 모듈에 이름 붙은 빌더를 두고 그 호출을 넘긴다.
     expect(offenders).toEqual([]);
   });
 
-  it('허용 목록은 실제로 동적 문구를 쓰는 파일만 담는다', () => {
-    // 허용해 놓고 정작 인라인 문구가 없다면 목록에서 빼야 한다(허용 범위 최소화).
-    const stale = DYNAMIC_MESSAGE_ALLOWLIST.filter((a) => {
-      const full = `${SRC_ROOT}/${a}`;
-      return !/\$\{/.test(readFileSync(full, 'utf8'));
-    });
-
-    expect(stale).toEqual([]);
+  it('허용 목록은 비어 있다', () => {
+    // 비어 있지 않다면 각 항목에 사유 주석이 있어야 한다(위 설명 참고).
+    expect(INLINE_MESSAGE_ALLOWLIST).toEqual([]);
   });
 });

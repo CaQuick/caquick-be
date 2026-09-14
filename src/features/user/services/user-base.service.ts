@@ -3,6 +3,11 @@ import { BadRequestException } from '@nestjs/common';
 import { domainError } from '@/common/errors';
 import { utcDateOnly } from '@/common/utils/date-parser';
 import {
+  nicknameLengthMessage,
+  paginationLimitMessage,
+  phoneFormatMessage,
+} from '@/features/user/constants/user-error-messages';
+import {
   DEFAULT_PAGINATION_LIMIT,
   MAX_NICKNAME_LENGTH,
   MAX_PAGINATION_LIMIT,
@@ -74,9 +79,7 @@ export abstract class UserBaseService {
       trimmed.length < MIN_NICKNAME_LENGTH ||
       trimmed.length > MAX_NICKNAME_LENGTH
     ) {
-      throw new BadRequestException(
-        `Nickname length must be ${MIN_NICKNAME_LENGTH}~${MAX_NICKNAME_LENGTH}.`,
-      );
+      throw new BadRequestException(nicknameLengthMessage());
     }
     const nicknameRegex = /^[A-Za-z0-9가-힣_]+$/;
     if (!nicknameRegex.test(trimmed)) {
@@ -96,9 +99,7 @@ export abstract class UserBaseService {
     const trimmed = raw.trim();
     if (trimmed.length === 0) return null;
     if (!PHONE_REGEX.test(trimmed)) {
-      throw new BadRequestException(
-        `Invalid phone number format. Expected ${PHONE_FORMAT_EXAMPLE}.`,
-      );
+      throw new BadRequestException(phoneFormatMessage());
     }
     return trimmed;
   }
@@ -137,9 +138,7 @@ export abstract class UserBaseService {
       throw domainError('OFFSET_NEGATIVE');
     }
     if (limit <= 0 || limit > MAX_PAGINATION_LIMIT) {
-      throw new BadRequestException(
-        `limit은 1~${MAX_PAGINATION_LIMIT.toString()} 사이여야 합니다.`,
-      );
+      throw new BadRequestException(paginationLimitMessage());
     }
 
     return { offset, limit, unreadOnly };

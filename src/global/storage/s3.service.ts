@@ -9,7 +9,8 @@ import { domainError } from '@/common/errors';
 import type { S3Config } from '@/config/s3.config';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import {
-  STORAGE_ERRORS,
+  fileTooLargeMessage,
+  invalidContentTypeMessage,
   UPLOAD_POLICIES,
 } from '@/global/storage/constants/storage.constants';
 import type {
@@ -194,9 +195,7 @@ export class S3Service {
     allowedTypes: readonly string[],
   ): void {
     if (!allowedTypes.includes(contentType)) {
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.INVALID_CONTENT_TYPE} (허용: ${allowedTypes.join(', ')})`,
-      );
+      throw new BadRequestException(invalidContentTypeMessage(allowedTypes));
     }
   }
 
@@ -209,9 +208,7 @@ export class S3Service {
     }
     if (contentLength > maxSizeBytes) {
       const maxMB = Math.round(maxSizeBytes / (1024 * 1024));
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.FILE_TOO_LARGE} (최대 ${maxMB}MB)`,
-      );
+      throw new BadRequestException(fileTooLargeMessage(maxMB));
     }
   }
 

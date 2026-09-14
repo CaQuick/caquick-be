@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { domainError } from '@/common/errors';
 
 /**
  * 지원하는 OIDC Provider 타입
@@ -13,9 +13,10 @@ export type OidcProvider = 'google' | 'kakao';
  *
  * @param raw provider 문자열
  * @returns provider 타입
- * @throws BadRequestException 지원하지 않는 provider 인 경우
+ * @throws UNSUPPORTED_OIDC_PROVIDER 지원하지 않는 provider 인 경우
  */
 export function parseOidcProvider(raw: string): OidcProvider {
   if (raw === 'google' || raw === 'kakao') return raw;
-  throw new BadRequestException(`Unsupported OIDC provider: ${raw}`);
+  // 입력값을 문구로 되비추지 않는다 — 코드로 구분하고 원문은 로그에만 남긴다
+  throw domainError('UNSUPPORTED_OIDC_PROVIDER');
 }

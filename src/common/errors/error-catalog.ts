@@ -534,6 +534,22 @@ export const ERROR_CATALOG = {
     message: 'offset은 0 이상이어야 합니다.',
   },
 
+  // ── 판매자 매장 설정 날짜 ──
+  CLOSURE_DATE_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '휴무일 날짜를 입력해 주세요.',
+  },
+  CAPACITY_DATE_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '수량 기준 날짜를 입력해 주세요.',
+  },
+
+  // ── OIDC ──
+  UNSUPPORTED_OIDC_PROVIDER: {
+    status: BAD_REQUEST,
+    message: '지원하지 않는 로그인 제공자입니다.',
+  },
+
   // ── 개발 전용 엔드포인트 ──
   DEV_ENDPOINT_DISABLED: {
     status: FORBIDDEN,
