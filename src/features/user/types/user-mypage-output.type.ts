@@ -1,8 +1,6 @@
 import type { OrderStatus } from '@prisma/client';
 
 export interface MyPageCounts {
-  customDraftCount: number;
-  couponCount: number;
   wishlistCount: number;
   myReviewCount: number;
 }

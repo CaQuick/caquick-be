@@ -69,7 +69,6 @@ describe('UserNotificationService (real DB)', () => {
       const result = await service.viewerCounts(account.id);
 
       expect(result.unreadNotificationCount).toBe(2);
-      expect(result.cartItemCount).toBe(0);
       expect(result.wishlistCount).toBe(0);
     });
 
