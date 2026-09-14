@@ -1,4 +1,5 @@
 import { ClockService } from '@/common/providers/clock.service';
+import { ReviewListingRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
@@ -29,6 +30,7 @@ describe('StoreTodayPickupService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         StoreTodayPickupService,
         StoreListingService,
         StoreRepository,

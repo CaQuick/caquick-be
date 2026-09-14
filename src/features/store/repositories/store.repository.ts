@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-import {
-  POPULAR_STORE_CAKE_IMAGE_LIMIT,
-  RANKING_VALID_ORDER_STATUSES,
-} from '@/features/store/constants/store-ranking.constants';
+import { POPULAR_STORE_CAKE_IMAGE_LIMIT } from '@/features/store/constants/store-ranking.constants';
+import { rankingOrderFilter } from '@/features/store/services/store-ranking.helper';
 import { Prisma, type StoreMapProvider } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
@@ -359,28 +357,6 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, r._count._all]));
   }
 
-  /** 매장별 평균 평점·리뷰 수. */
-  async aggregateReviewStats(
-    storeIds: bigint[],
-  ): Promise<Map<bigint, StoreReviewStat>> {
-    if (storeIds.length === 0) return new Map();
-    const rows = await this.prisma.review.groupBy({
-      by: ['store_id'],
-      where: { store_id: { in: storeIds } },
-      _avg: { rating: true },
-      _count: { _all: true },
-    });
-    return new Map(
-      rows.map((r) => [
-        r.store_id,
-        {
-          average: r._avg.rating !== null ? Number(r._avg.rating) : 0,
-          count: r._count._all,
-        },
-      ]),
-    );
-  }
-
   /** 매장별 최근 N일 유효 주문(아이템) 수. */
   async aggregateRecentOrderCounts(
     storeIds: bigint[],
@@ -391,25 +367,11 @@ export class StoreRepository {
       by: ['store_id'],
       where: {
         store_id: { in: storeIds },
-        order: {
-          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
-          created_at: { gte: since },
-          // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
-          // 않으므로(=root read만 보정), 삭제된 주문이 랭킹을 부풀리지 않도록 명시한다.
-          ...activeWhere,
-        },
+        order: rankingOrderFilter(since),
       },
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.store_id, r._count._all]));
-  }
-
-  /** 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null. */
-  async globalReviewAverage(): Promise<number | null> {
-    const agg = await this.prisma.review.aggregate({
-      _avg: { rating: true },
-    });
-    return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
   }
 
   /** 페이지 매장들의 대표 케이크 이미지(매장당 최대 N장, 활성 상품 1장씩). */

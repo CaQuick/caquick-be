@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ReviewListingRepository } from '@/features/review';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
 import { UserWishlistQueryResolver } from '@/features/user/resolvers/user-wishlist-query.resolver';
@@ -24,6 +25,7 @@ describe('User Wishlist Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         UserWishlistMutationResolver,
         UserWishlistQueryResolver,
         UserWishlistService,

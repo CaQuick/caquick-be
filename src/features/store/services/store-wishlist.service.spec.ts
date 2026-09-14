@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { ReviewListingRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
@@ -27,6 +28,7 @@ describe('StoreWishlistService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         StoreWishlistService,
         StoreWishlistRepository,
         StoreRepository,

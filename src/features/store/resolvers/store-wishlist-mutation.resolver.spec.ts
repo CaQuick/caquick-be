@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 
+import { ReviewListingRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
@@ -21,6 +22,7 @@ describe('Store Wishlist Mutation Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         StoreWishlistMutationResolver,
         StoreWishlistService,
         StoreWishlistRepository,

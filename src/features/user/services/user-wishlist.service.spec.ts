@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ReviewListingRepository } from '@/features/review';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -22,7 +23,12 @@ describe('UserWishlistService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserWishlistService, UserRepository, ProductRepository],
+      providers: [
+        ReviewListingRepository,
+        UserWishlistService,
+        UserRepository,
+        ProductRepository,
+      ],
     });
     service = module.get(UserWishlistService);
     prisma = p;

@@ -4,6 +4,8 @@ import type { CountIdCursor } from '@/common/utils/keyset-cursor';
 import type {
   ReviewLikeRankRow,
   ReviewLikesScope,
+  ReviewStat,
+  ReviewStatKey,
 } from '@/features/review/types/review-listing.type';
 import { Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
@@ -99,6 +101,45 @@ export class ReviewListingRepository {
       select: { review_id: true },
     });
     return new Set(rows.map((r) => r.review_id.toString()));
+  }
+
+  /**
+   * 대상별 평균 평점·리뷰 수.
+   *
+   * 매장 랭킹(store_id)과 상품 랭킹(product_id)이 groupBy 키만 다른 같은 쿼리를
+   * 각각 갖고 있었다. 기준 컬럼을 값으로 받아 한 벌로 합친다.
+   */
+  async aggregateReviewStats(args: {
+    by: ReviewStatKey;
+    ids: bigint[];
+  }): Promise<Map<bigint, ReviewStat>> {
+    if (args.ids.length === 0) return new Map();
+
+    const rows = await this.prisma.review.groupBy({
+      by: [args.by],
+      where: { [args.by]: { in: args.ids } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    return new Map(
+      rows.map((row) => [
+        row[args.by],
+        {
+          average: row._avg.rating !== null ? Number(row._avg.rating) : 0,
+          count: row._count._all,
+        },
+      ]),
+    );
+  }
+
+  /**
+   * 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null.
+   * 매장·상품 랭킹이 같은 prior를 쓴다 — 전 도메인 공용 값이다.
+   */
+  async globalReviewAverage(): Promise<number | null> {
+    const agg = await this.prisma.review.aggregate({ _avg: { rating: true } });
+    return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
   }
 
   /**

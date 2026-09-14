@@ -10,4 +10,6 @@ export type {
   ReviewLikeRankRow,
   ReviewLikesScope,
   ReviewMediaRow,
+  ReviewStat,
+  ReviewStatKey,
 } from '@/features/review/types/review-listing.type';

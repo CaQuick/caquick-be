@@ -28,3 +28,12 @@ export interface ReviewLikeRankRow {
   id: bigint;
   likeCount: number;
 }
+
+/** 대상별 평균 평점·리뷰 수. 매장 랭킹과 상품 랭킹이 같은 형태를 쓴다. */
+export interface ReviewStat {
+  average: number;
+  count: number;
+}
+
+/** 리뷰 통계 집계 기준 컬럼. */
+export type ReviewStatKey = 'store_id' | 'product_id';

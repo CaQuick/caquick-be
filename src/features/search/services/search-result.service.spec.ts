@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository, ProductSearchService } from '@/features/product';
+import { ReviewListingRepository } from '@/features/review';
 import { SearchResultService } from '@/features/search/services/search-result.service';
 import { StoreSearchService } from '@/features/store';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
@@ -20,6 +21,7 @@ describe('SearchResultService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewListingRepository,
         SearchResultService,
         ProductSearchService,
         ProductRepository,
