@@ -7,6 +7,12 @@ export {
 } from '@/features/product/repositories/product.repository';
 // 할인율 산식(0~100). 상품 카드 표기 규칙 — 찜 목록(user feature)이 동일 정책을 공유한다.
 export { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
+// 상품 카드 공통 9필드 매퍼. 홈 인기·검색·찜·최근 본 상품이 같은 표기 규칙을 쓴다.
+export {
+  type ProductCardCore,
+  type ProductCardFields,
+  toProductCardCore,
+} from '@/features/product/services/product-card.helper';
 // 검색 진입 화면(search feature)이 소비하는 실시간 판매 Best·배너 매퍼·출력 타입.
 // 랭킹·카드 표기 규칙은 product feature에 유지한다(홈 인기 케이크와 단일 소스).
 export { RealtimeBestCakesInput } from '@/features/product/dto/inputs/realtime-best-cakes.input';

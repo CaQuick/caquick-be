@@ -204,8 +204,8 @@ describe('UserMypageService (real DB)', () => {
 
       expect(result.recentViewedProducts).toHaveLength(1);
       expect(result.recentViewedProducts[0]).toMatchObject({
-        productId: product.id.toString(),
-        productName: '레터링 케이크',
+        id: product.id.toString(),
+        name: '레터링 케이크',
         storeName: '케이크샵',
         regularPrice: 40000,
         salePrice: 35000,
@@ -283,7 +283,7 @@ describe('UserMypageService (real DB)', () => {
       const result = await service.getOverview(account.id);
 
       const map = new Map(
-        result.recentViewedProducts.map((p) => [p.productId, p.isWishlisted]),
+        result.recentViewedProducts.map((p) => [p.id, p.isWishlisted]),
       );
       expect(map.get(wishlisted.id.toString())).toBe(true);
       expect(map.get(notWishlisted.id.toString())).toBe(false);

@@ -74,7 +74,7 @@ describe('User Wishlist Resolver (real DB)', () => {
       accountId: account.id.toString(),
     });
     expect(list1.totalCount).toBe(1);
-    expect(list1.items[0].productId).toBe(product.id.toString());
+    expect(list1.items[0].id).toBe(product.id.toString());
 
     await mutationResolver.removeFromWishlist(
       { accountId: account.id.toString() },

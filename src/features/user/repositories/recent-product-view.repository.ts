@@ -6,11 +6,15 @@ export interface RecentViewedProductRow {
   product_id: bigint;
   viewed_at: Date;
   product: {
+    store_id: bigint;
     name: string;
     regular_price: number;
     sale_price: number | null;
     store: {
       store_name: string;
+      address_city: string | null;
+      address_neighborhood: string | null;
+      region: { name: string } | null;
     };
     images: {
       image_url: string;
@@ -41,10 +45,18 @@ export class RecentProductViewRepository {
       viewed_at: true as const,
       product: {
         select: {
+          store_id: true as const,
           name: true as const,
           regular_price: true as const,
           sale_price: true as const,
-          store: { select: { store_name: true as const } },
+          store: {
+            select: {
+              store_name: true as const,
+              address_city: true as const,
+              address_neighborhood: true as const,
+              region: { select: { name: true as const } },
+            },
+          },
           images: {
             where: activeWhere,
             orderBy: { sort_order: 'asc' as const },
@@ -168,11 +180,17 @@ export class RecentProductViewRepository {
         viewed_at: true,
         product: {
           select: {
+            store_id: true,
             name: true,
             regular_price: true,
             sale_price: true,
             store: {
-              select: { store_name: true },
+              select: {
+                store_name: true,
+                address_city: true,
+                address_neighborhood: true,
+                region: { select: { name: true } },
+              },
             },
             images: {
               where: activeWhere,

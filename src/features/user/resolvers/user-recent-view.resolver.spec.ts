@@ -72,8 +72,8 @@ describe('User Recent View Resolvers (real DB)', () => {
 
       expect(result.totalCount).toBe(1);
       expect(result.items[0]).toMatchObject({
-        productId: product.id.toString(),
-        productName: '밤 케이크',
+        id: product.id.toString(),
+        name: '밤 케이크',
         storeName: '베이커리',
       });
     });

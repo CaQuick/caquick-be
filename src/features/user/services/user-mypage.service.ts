@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { OrderRepository } from '@/features/order';
+import { toProductCardCore } from '@/features/product';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';
@@ -68,12 +69,7 @@ export class UserMypageService {
         };
       }),
       recentViewedProducts: recentViews.map((view) => ({
-        productId: view.product_id.toString(),
-        productName: view.product.name,
-        representativeImageUrl: view.product.images[0]?.image_url ?? null,
-        salePrice: view.product.sale_price,
-        regularPrice: view.product.regular_price,
-        storeName: view.product.store.store_name,
+        ...toProductCardCore(view.product_id, view.product),
         viewedAt: view.viewed_at,
         isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
       })),

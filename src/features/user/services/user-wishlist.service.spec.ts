@@ -241,8 +241,8 @@ describe('UserWishlistService (real DB)', () => {
 
       expect(result.totalCount).toBe(2);
       expect(result.items).toHaveLength(2);
-      expect(result.items[0].productId).toBe(p2.id.toString()); // 최근 추가가 먼저
-      expect(result.items[0].productName).toBe('상품2');
+      expect(result.items[0].id).toBe(p2.id.toString()); // 최근 추가가 먼저
+      expect(result.items[0].name).toBe('상품2');
       expect(result.items[0].storeName).toBe('매장A');
     });
 
@@ -292,7 +292,7 @@ describe('UserWishlistService (real DB)', () => {
       const result = await service.myWishlist(account.id);
 
       expect(result.totalCount).toBe(1);
-      expect(result.items[0].productId).toBe(activeProduct.id.toString());
+      expect(result.items[0].id).toBe(activeProduct.id.toString());
     });
 
     it('페이지네이션이 동작한다 (offset/limit/hasMore)', async () => {
@@ -336,7 +336,7 @@ describe('UserWishlistService (real DB)', () => {
 
       const result = await service.myWishlist(account.id);
 
-      expect(result.items.map((i) => i.productId)).toEqual([
+      expect(result.items.map((i) => i.id)).toEqual([
         first.id.toString(),
         second.id.toString(),
       ]);
@@ -402,7 +402,7 @@ describe('UserWishlistService (real DB)', () => {
       });
 
       expect(result.totalCount).toBe(1);
-      expect(result.items[0].productId).toBe(pA.id.toString());
+      expect(result.items[0].id).toBe(pA.id.toString());
       expect(result.items[0].storeId).toBe(storeA.id.toString());
     });
   });
