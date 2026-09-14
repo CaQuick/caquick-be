@@ -1,10 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -32,7 +32,7 @@ export class SellerStoreProfileService
   async sellerMyStore(accountId: bigint): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const store = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!store) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!store) throw domainError('STORE_NOT_FOUND');
     return toStoreOutput(store);
   }
 
@@ -42,7 +42,7 @@ export class SellerStoreProfileService
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!current) throw domainError('STORE_NOT_FOUND');
 
     // 발급받은 매장 이미지 URL만 저장한다 — 외부 링크·타인 key 차단.
     this.s3Service.assertOwnedUploadUrlIfPresent(

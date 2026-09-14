@@ -1,12 +1,12 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import {
   sliceIdCursorPage,
   normalizeCursorInput,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { PRODUCT_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminProductListInput } from '@/features/admin/dto/inputs/admin-product-list.input';
 import type { AdminSetProductActiveInput } from '@/features/admin/dto/inputs/admin-set-product-active.input';
@@ -72,7 +72,7 @@ export class AdminProductService extends AdminBaseService {
   ): Promise<AdminProductDetailOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findProductDetailById(productId);
-    if (!row) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!row) throw domainError('PRODUCT_NOT_FOUND');
     return toAdminProductDetailOutput(row);
   }
 
@@ -95,7 +95,7 @@ export class AdminProductService extends AdminBaseService {
         afterJson: { isActive: after.is_active, reason },
       }),
     );
-    if (!result) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!result) throw domainError('PRODUCT_NOT_FOUND');
     return toAdminProductOutput(result.row);
   }
 }

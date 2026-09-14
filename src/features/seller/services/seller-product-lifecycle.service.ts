@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
@@ -15,10 +11,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  PRODUCT_NOT_FOUND,
-  SALE_PRICE_EXCEEDS_REGULAR,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   DEFAULT_PREPARATION_TIME_MINUTES,
   MAX_PRODUCT_DESCRIPTION_LENGTH,
@@ -127,7 +119,7 @@ export class SellerProductLifecycleService
         productId: created.id,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw domainError('PRODUCT_NOT_FOUND');
     return toProductOutput(detail);
   }
 
@@ -149,7 +141,7 @@ export class SellerProductLifecycleService
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw domainError('PRODUCT_NOT_FOUND');
 
     const data = this.buildProductUpdateData(input);
     const nextRegularPrice = input.regularPrice ?? current.regular_price;
@@ -181,7 +173,7 @@ export class SellerProductLifecycleService
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw domainError('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }
@@ -196,7 +188,7 @@ export class SellerProductLifecycleService
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw domainError('PRODUCT_NOT_FOUND');
 
     await this.productRepository.softDeleteProduct(productId);
     await this.auditLogs.createAuditLog({
@@ -224,7 +216,7 @@ export class SellerProductLifecycleService
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw domainError('PRODUCT_NOT_FOUND');
 
     await this.productRepository.updateProduct({
       productId,
@@ -252,7 +244,7 @@ export class SellerProductLifecycleService
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw domainError('PRODUCT_NOT_FOUND');
     return toProductOutput(detail);
   }
 
@@ -277,7 +269,7 @@ export class SellerProductLifecycleService
         'salePrice',
       );
       if (regularPrice !== undefined && salePrice > regularPrice) {
-        throw new BadRequestException(SALE_PRICE_EXCEEDS_REGULAR);
+        throw domainError('SALE_PRICE_EXCEEDS_REGULAR');
       }
     }
   }

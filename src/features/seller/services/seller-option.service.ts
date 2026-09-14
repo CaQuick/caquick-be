@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
@@ -17,12 +13,7 @@ import {
 import { ProductRepository } from '@/features/product';
 import {
   idsMismatchError,
-  INVALID_SELECT_RANGE,
   invalidIdsError,
-  MAX_SELECT_BELOW_MIN,
-  OPTION_GROUP_NOT_FOUND,
-  OPTION_ITEM_NOT_FOUND,
-  PRODUCT_NOT_FOUND,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
@@ -70,12 +61,12 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const minSelect = input.minSelect ?? 1;
     const maxSelect = input.maxSelect ?? 1;
     if (minSelect < 0 || maxSelect < minSelect) {
-      throw new BadRequestException(INVALID_SELECT_RANGE);
+      throw domainError('INVALID_SELECT_RANGE');
     }
 
     const row = await this.productRepository.createOptionGroup({
@@ -120,13 +111,13 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw domainError('OPTION_GROUP_NOT_FOUND');
     }
 
     const finalMin = input.minSelect ?? current.min_select;
     const finalMax = input.maxSelect ?? current.max_select;
     if (finalMax < finalMin) {
-      throw new BadRequestException(MAX_SELECT_BELOW_MIN);
+      throw domainError('MAX_SELECT_BELOW_MIN');
     }
 
     const row = await this.productRepository.updateOptionGroup({
@@ -189,7 +180,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw domainError('OPTION_GROUP_NOT_FOUND');
     }
 
     await this.productRepository.softDeleteOptionGroup(optionGroupId);
@@ -220,7 +211,7 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw domainError('PRODUCT_NOT_FOUND');
 
     const groups =
       await this.productRepository.listOptionGroupsByProduct(productId);
@@ -272,7 +263,7 @@ export class SellerOptionService extends SellerBaseService {
       await this.productRepository.findOptionGroupById(optionGroupId);
 
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw domainError('OPTION_GROUP_NOT_FOUND');
     }
 
     const row = await this.productRepository.createOptionItem({
@@ -320,7 +311,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
+      throw domainError('OPTION_ITEM_NOT_FOUND');
     }
 
     const row = await this.productRepository.updateOptionItem({
@@ -379,7 +370,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
+      throw domainError('OPTION_ITEM_NOT_FOUND');
     }
 
     await this.productRepository.softDeleteOptionItem(optionItemId);
@@ -408,7 +399,7 @@ export class SellerOptionService extends SellerBaseService {
     const group =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw domainError('OPTION_GROUP_NOT_FOUND');
     }
 
     const items =

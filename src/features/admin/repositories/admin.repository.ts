@@ -1,9 +1,6 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
-import {
-  REGION_NOT_SELECTABLE,
-  USERNAME_TAKEN,
-} from '@/features/admin/constants/admin-error-messages';
+import { domainError, type ErrorCode } from '@/common/errors';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -369,7 +366,7 @@ export class AdminRepository {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new BadRequestException(USERNAME_TAKEN);
+        throw domainError('USERNAME_TAKEN');
       }
       throw error;
     }
@@ -665,7 +662,7 @@ export class AdminRepository {
           args.store.region_id != null &&
           !(await this.lockUsableRegion(tx, BigInt(args.store.region_id), 2))
         ) {
-          throw new BadRequestException(REGION_NOT_SELECTABLE);
+          throw domainError('REGION_NOT_SELECTABLE');
         }
         const store = await tx.store.create({
           data: { ...args.store, seller_account_id: account.id },
@@ -695,7 +692,7 @@ export class AdminRepository {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new BadRequestException(USERNAME_TAKEN);
+        throw domainError('USERNAME_TAKEN');
       }
       throw error;
     }
@@ -809,8 +806,8 @@ export class AdminRepository {
     to: AccountStatus;
     revokeSessions: boolean;
     audit: AuditEntry;
-    /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 메시지 */
-    invalidTransitionMessage: string;
+    /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 카탈로그 코드 */
+    invalidTransitionCode: ErrorCode;
   }): Promise<{ changed: boolean }> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -824,7 +821,7 @@ export class AdminRepository {
           select: { status: true },
         });
         if (current?.status === args.to) return { changed: false };
-        throw new BadRequestException(args.invalidTransitionMessage);
+        throw domainError(args.invalidTransitionCode);
       }
       if (args.revokeSessions) {
         await tx.authRefreshSession.updateMany({

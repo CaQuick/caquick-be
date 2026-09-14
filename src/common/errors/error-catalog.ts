@@ -264,6 +264,244 @@ export const ERROR_CATALOG = {
     status: UNAUTHORIZED,
     message: '사용자 프로필이 없습니다.',
   },
+  // ── 판매자 (seller) ──
+  SELLER_ONLY: {
+    status: FORBIDDEN,
+    message: '판매자 계정만 이용할 수 있습니다.',
+  },
+  DUPLICATE_IDS: { status: BAD_REQUEST, message: '중복된 id가 있습니다.' },
+  INVALID_TIME_VALUE: {
+    status: BAD_REQUEST,
+    message: '시간 형식이 올바르지 않습니다.',
+  },
+  INVALID_CURRENCY_FORMAT: {
+    status: BAD_REQUEST,
+    message: '통화 형식이 올바르지 않습니다.',
+  },
+  SALE_PRICE_EXCEEDS_REGULAR: {
+    status: BAD_REQUEST,
+    message: '할인가는 정가보다 클 수 없습니다.',
+  },
+  // 최대 장수는 seller 상수가 정본이다 — 문구와의 일치는 seller.constants.spec 이 지킨다.
+  IMAGE_LIMIT_EXCEEDED: {
+    status: BAD_REQUEST,
+    message: '상품 이미지는 최대 5장까지 등록할 수 있습니다.',
+  },
+  IMAGE_MIN_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '상품 이미지는 최소 1장이 필요합니다.',
+  },
+  PRODUCT_IMAGE_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '상품 이미지를 찾을 수 없습니다.',
+  },
+  OPTION_GROUP_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '옵션 그룹을 찾을 수 없습니다.',
+  },
+  OPTION_ITEM_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '옵션 항목을 찾을 수 없습니다.',
+  },
+  INVALID_SELECT_RANGE: {
+    status: BAD_REQUEST,
+    message: '선택 개수 범위가 올바르지 않습니다.',
+  },
+  MAX_SELECT_BELOW_MIN: {
+    status: BAD_REQUEST,
+    message: '최대 선택 개수는 최소 선택 개수보다 작을 수 없습니다.',
+  },
+  CUSTOM_TEMPLATE_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '커스텀 템플릿을 찾을 수 없습니다.',
+  },
+  CUSTOM_TEXT_TOKEN_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '커스텀 문구 슬롯을 찾을 수 없습니다.',
+  },
+  INVALID_DAY_OF_WEEK: {
+    status: BAD_REQUEST,
+    message: '요일은 0~6 사이여야 합니다.',
+  },
+  OPEN_CLOSE_TIME_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '영업 시작·종료 시각이 모두 필요합니다.',
+  },
+  CLOSE_BEFORE_OPEN: {
+    status: BAD_REQUEST,
+    message: '영업 종료 시각은 시작 시각보다 뒤여야 합니다.',
+  },
+  SPECIAL_CLOSURE_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '특별 휴무를 찾을 수 없습니다.',
+  },
+  DAILY_CAPACITY_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '일별 생산 수량 설정을 찾을 수 없습니다.',
+  },
+  INVALID_AUDIT_TARGET_TYPE: {
+    status: BAD_REQUEST,
+    message: '감사 대상 유형이 올바르지 않습니다.',
+  },
+  BODY_TEXT_REQUIRED: {
+    status: BAD_REQUEST,
+    message: 'TEXT 형식 메시지에는 본문 텍스트가 필요합니다.',
+  },
+  BODY_HTML_REQUIRED: {
+    status: BAD_REQUEST,
+    message: 'HTML 형식 메시지에는 본문 HTML이 필요합니다.',
+  },
+  INVALID_BODY_FORMAT: {
+    status: BAD_REQUEST,
+    message: '메시지 형식이 올바르지 않습니다.',
+  },
+  CANCELLATION_NOTE_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '취소 사유가 필요합니다.',
+  },
+
+  // ── 관리자 (admin) ──
+  ADMIN_ONLY: {
+    status: FORBIDDEN,
+    message: '관리자 계정만 이용할 수 있습니다.',
+  },
+  USERNAME_TAKEN: {
+    status: BAD_REQUEST,
+    message: '이미 사용 중인 아이디입니다.',
+  },
+  SELLER_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '판매자 계정을 찾을 수 없습니다.',
+  },
+  USER_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '사용자 계정을 찾을 수 없습니다.',
+  },
+  CANNOT_CHANGE_OWN_STATUS: {
+    status: FORBIDDEN,
+    message: '본인 계정의 상태는 변경할 수 없습니다.',
+  },
+  CANNOT_CHANGE_ADMIN_STATUS: {
+    status: FORBIDDEN,
+    message: '관리자 계정의 상태는 변경할 수 없습니다.',
+  },
+  ONLY_ACTIVE_CAN_BE_SUSPENDED: {
+    status: BAD_REQUEST,
+    message: '활성 계정만 정지할 수 있습니다.',
+  },
+  ONLY_SUSPENDED_CAN_BE_REINSTATED: {
+    status: BAD_REQUEST,
+    message: '정지된 계정만 복구할 수 있습니다.',
+  },
+  CATEGORY_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '카테고리를 찾을 수 없습니다.',
+  },
+  CATEGORY_NAME_TAKEN: {
+    status: BAD_REQUEST,
+    message: '같은 유형에 이미 있는 카테고리 이름입니다.',
+  },
+  TAG_NOT_FOUND: { status: NOT_FOUND, message: '태그를 찾을 수 없습니다.' },
+  TAG_NAME_TAKEN: {
+    status: BAD_REQUEST,
+    message: '이미 사용 중인 태그 이름입니다.',
+  },
+  REVIEW_REPORT_NOT_FOUND: {
+    status: NOT_FOUND,
+    message: '신고를 찾을 수 없습니다.',
+  },
+  REVIEW_REPORT_ALREADY_RESOLVED: {
+    status: BAD_REQUEST,
+    message: '이미 처리된 신고입니다.',
+  },
+  // 사전 검사와 잠금 사이에 주문 상태가 바뀐 경쟁 경로. 예전엔 ORDER_NOT_FOUND를
+  // 재사용해 "주문이 없다"로 잘못 안내했다.
+  ORDER_STATE_CHANGED: {
+    status: BAD_REQUEST,
+    message: '주문 상태가 변경되었습니다. 다시 시도해 주세요.',
+  },
+  REGION_NOT_FOUND: { status: NOT_FOUND, message: '지역을 찾을 수 없습니다.' },
+  PARENT_REGION_INVALID: {
+    status: BAD_REQUEST,
+    message: '상위 지역은 활성 1차 지역이어야 합니다.',
+  },
+  REGION_SLUG_TAKEN: {
+    status: BAD_REQUEST,
+    message: '이미 사용 중인 지역 slug입니다.',
+  },
+  REGION_HAS_STORES: {
+    status: BAD_REQUEST,
+    message: '해당 지역에 연결된 매장이 있습니다.',
+  },
+  REGION_HAS_CHILDREN: {
+    status: BAD_REQUEST,
+    message: '하위 지역이 남아 있습니다.',
+  },
+  REGION_HAS_ACTIVE_CHILDREN: {
+    status: BAD_REQUEST,
+    message: '활성 하위 지역을 먼저 비활성화해 주세요.',
+  },
+  REGION_PARENT_INACTIVE: {
+    status: BAD_REQUEST,
+    message: '상위 지역이 비활성이거나 삭제되었습니다.',
+  },
+  INVALID_DATE_RANGE: {
+    status: BAD_REQUEST,
+    message: '시작일은 종료일보다 뒤일 수 없습니다.',
+  },
+  DASHBOARD_RANGE_TOO_LONG: {
+    status: BAD_REQUEST,
+    message: '조회 기간은 366일 이내여야 합니다.',
+  },
+  REGION_NOT_SELECTABLE: {
+    status: BAD_REQUEST,
+    message: '2차 활성 지역만 선택할 수 있습니다.',
+  },
+  BANNER_NOT_FOUND: { status: NOT_FOUND, message: '배너를 찾을 수 없습니다.' },
+  LINK_URL_REQUIRED: {
+    status: BAD_REQUEST,
+    message: 'URL 링크 유형에는 링크 주소가 필요합니다.',
+  },
+  LINK_PRODUCT_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '상품 링크 유형에는 상품 id가 필요합니다.',
+  },
+  LINK_STORE_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '매장 링크 유형에는 매장 id가 필요합니다.',
+  },
+  LINK_CATEGORY_REQUIRED: {
+    status: BAD_REQUEST,
+    message: '카테고리 링크 유형에는 카테고리 id가 필요합니다.',
+  },
+  LINK_FIELDS_MISMATCH: {
+    status: BAD_REQUEST,
+    message: '링크 유형과 링크 필드가 맞지 않습니다.',
+  },
+  LINK_PRODUCT_NOT_VISIBLE: {
+    status: NOT_FOUND,
+    message: '링크 대상 상품을 찾을 수 없거나 노출 불가 상태입니다.',
+  },
+  LINK_STORE_NOT_VISIBLE: {
+    status: NOT_FOUND,
+    message: '링크 대상 매장을 찾을 수 없거나 노출 불가 상태입니다.',
+  },
+  LINK_CATEGORY_NOT_VISIBLE: {
+    status: NOT_FOUND,
+    message: '링크 대상 카테고리를 찾을 수 없거나 노출 불가 상태입니다.',
+  },
+  CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK: {
+    status: BAD_REQUEST,
+    message: 'CATEGORY 노출 위치에는 CATEGORY 링크 유형이 필요합니다.',
+  },
+  CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY: {
+    status: BAD_REQUEST,
+    message: 'CATEGORY 노출 위치에는 EVENT 카테고리 링크가 필요합니다.',
+  },
+  INVALID_EXPOSURE_WINDOW: {
+    status: BAD_REQUEST,
+    message: '노출 시작 시각은 종료 시각보다 앞이어야 합니다.',
+  },
 } satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

@@ -1,22 +1,9 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 import { domainError } from '@/common/errors';
 import { parseId } from '@/common/utils/id-parser';
 import type { IAuditLogRepository } from '@/features/audit-log';
-import {
-  ACCOUNT_NOT_FOUND,
-  DUPLICATE_IDS,
-  fieldRangeError,
-  INVALID_CURRENCY_FORMAT,
-  INVALID_TIME_VALUE,
-  SELLER_ONLY,
-  STORE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
+import { fieldRangeError } from '@/features/seller/constants/seller-error-messages';
 import {
   isSellerAccount,
   SellerRepository,
@@ -38,12 +25,12 @@ export abstract class SellerBaseService {
     accountId: bigint,
   ): Promise<SellerContext> {
     const account = await this.repo.findSellerAccountContext(accountId);
-    if (!account) throw new UnauthorizedException(ACCOUNT_NOT_FOUND);
+    if (!account) throw domainError('ACCOUNT_NOT_FOUND');
     if (!isSellerAccount(account.account_type)) {
-      throw new ForbiddenException(SELLER_ONLY);
+      throw domainError('SELLER_ONLY');
     }
     if (!account.store) {
-      throw new NotFoundException(STORE_NOT_FOUND);
+      throw domainError('STORE_NOT_FOUND');
     }
 
     return {
@@ -56,7 +43,7 @@ export abstract class SellerBaseService {
     const parsed = rawIds.map((id) => parseId(id));
     const set = new Set(parsed.map((id) => id.toString()));
     if (set.size !== parsed.length) {
-      throw new BadRequestException(DUPLICATE_IDS);
+      throw domainError('DUPLICATE_IDS');
     }
     return parsed;
   }
@@ -65,7 +52,7 @@ export abstract class SellerBaseService {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException(INVALID_TIME_VALUE);
+      throw domainError('INVALID_TIME_VALUE');
     }
     return date;
   }
@@ -84,7 +71,7 @@ export abstract class SellerBaseService {
   protected cleanCurrency(raw?: string | null): string {
     const value = (raw ?? 'KRW').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(value)) {
-      throw new BadRequestException(INVALID_CURRENCY_FORMAT);
+      throw domainError('INVALID_CURRENCY_FORMAT');
     }
     return value;
   }

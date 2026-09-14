@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -16,12 +12,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  CLOSE_BEFORE_OPEN,
-  INVALID_DAY_OF_WEEK,
-  OPEN_CLOSE_TIME_REQUIRED,
-  SPECIAL_CLOSURE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAY_OF_WEEK,
   MAX_SPECIAL_CLOSURE_REASON_LENGTH,
@@ -103,18 +93,18 @@ export class SellerStoreHoursService
       input.dayOfWeek < MIN_DAY_OF_WEEK ||
       input.dayOfWeek > MAX_DAY_OF_WEEK
     ) {
-      throw new BadRequestException(INVALID_DAY_OF_WEEK);
+      throw domainError('INVALID_DAY_OF_WEEK');
     }
 
     const openTime = input.isClosed ? null : this.toTime(input.openTime);
     const closeTime = input.isClosed ? null : this.toTime(input.closeTime);
 
     if (!input.isClosed && (!openTime || !closeTime)) {
-      throw new BadRequestException(OPEN_CLOSE_TIME_REQUIRED);
+      throw domainError('OPEN_CLOSE_TIME_REQUIRED');
     }
 
     if (openTime && closeTime && openTime >= closeTime) {
-      throw new BadRequestException(CLOSE_BEFORE_OPEN);
+      throw domainError('CLOSE_BEFORE_OPEN');
     }
 
     const row = await this.repo.upsertStoreBusinessHour({
@@ -152,7 +142,7 @@ export class SellerStoreHoursService
         closureId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
+      if (!found) throw domainError('SPECIAL_CLOSURE_NOT_FOUND');
     }
 
     const closureDate = toDateRequired(input.closureDate, 'closureDate');
@@ -196,7 +186,7 @@ export class SellerStoreHoursService
       closureId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
+    if (!found) throw domainError('SPECIAL_CLOSURE_NOT_FOUND');
 
     await this.repo.softDeleteStoreSpecialClosure(closureId);
     await this.auditLogs.createAuditLog({

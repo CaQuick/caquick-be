@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { domainError } from '@/common/errors';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -17,10 +13,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
-import {
-  CANCELLATION_NOTE_REQUIRED,
-  ORDER_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -126,7 +118,7 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!row) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!row) throw domainError('ORDER_NOT_FOUND');
     return this.toOrderDetailOutput(row);
   }
 
@@ -142,13 +134,13 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!current) throw domainError('ORDER_NOT_FOUND');
 
     this.orderStatusPolicy.assertSellerTransition(current.status, toStatus);
 
     if (this.orderStatusPolicy.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
-        throw new BadRequestException(CANCELLATION_NOTE_REQUIRED);
+        throw domainError('CANCELLATION_NOTE_REQUIRED');
       }
     }
 
@@ -164,7 +156,7 @@ export class SellerOrderService extends SellerBaseService {
         this.orderStatusPolicy.assertSellerTransition(from, toStatus),
     });
 
-    if (!updated) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!updated) throw domainError('ORDER_NOT_FOUND');
 
     return this.toOrderSummaryOutput(updated);
   }
