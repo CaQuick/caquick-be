@@ -4,7 +4,7 @@ name: Knip (dead-code report)
 # 필수 status check 아님 → 머지 차단하지 않음. 청소 후보 가시화용(수동 yarn knip이 방치되지 않도록 자동화).
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, develop-msa]
 
 permissions:
   contents: read
