@@ -420,6 +420,22 @@ export const ERROR_CATALOG = {
     status: BAD_REQUEST,
     message: '주문 상태가 변경되었습니다. 다시 시도해 주세요.',
   },
+  INVALID_ORDER_STATUS: {
+    status: BAD_REQUEST,
+    message: '올바르지 않은 주문 상태입니다.',
+  },
+  ORDER_STATUS_ALREADY_SET: {
+    status: BAD_REQUEST,
+    message: '이미 해당 상태인 주문입니다.',
+  },
+  INVALID_ORDER_STATUS_TRANSITION: {
+    status: BAD_REQUEST,
+    message: '허용되지 않은 주문 상태 변경입니다.',
+  },
+  ORDER_NOT_CANCELLABLE: {
+    status: BAD_REQUEST,
+    message: '현재 상태에서는 주문을 취소할 수 없습니다.',
+  },
   REGION_NOT_FOUND: { status: NOT_FOUND, message: '지역을 찾을 수 없습니다.' },
   PARENT_REGION_INVALID: {
     status: BAD_REQUEST,
