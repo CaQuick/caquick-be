@@ -47,6 +47,12 @@ describe('ConversationInquiryService (real DB)', () => {
     await truncateAll();
   });
 
+  /** DB 시계(NOW(3)). 테스트 컨테이너는 TZ 미설정(UTC)이라 Prisma의 UTC DATETIME 매핑과 일치한다. */
+  async function fetchDbNow(): Promise<Date> {
+    const rows = await prisma.$queryRaw<{ now: Date }[]>`SELECT NOW(3) AS now`;
+    return rows[0].now;
+  }
+
   async function setupBuyer(nickname = '김현진') {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: account.id, nickname });
@@ -238,14 +244,16 @@ describe('ConversationInquiryService (real DB)', () => {
       const conversation = await prisma.storeConversation.findFirstOrThrow({
         where: { account_id: buyer.id, store_id: store.id },
       });
-      // 판매자 답장(미읽음) 도착 재현
+      // 판매자 답장(미읽음) 도착 재현. 마커 판정은 DB NOW(3) 기준이라 호스트 시계로 심으면
+      // (DB − 호스트) ≥ 1s인 환경에서 답장이 마커보다 과거가 되어 케이스가 무너진다 → DB 시계 기준.
+      const dbNow = await fetchDbNow();
       await prisma.storeConversationMessage.create({
         data: {
           conversation_id: conversation.id,
           sender_type: 'STORE',
           body_format: 'TEXT',
           body_text: '아직 안 읽은 답장',
-          created_at: new Date(Date.now() + 1000),
+          created_at: new Date(dbNow.getTime() + 1000),
         },
       });
       const markerBefore = conversation.last_read_at;
