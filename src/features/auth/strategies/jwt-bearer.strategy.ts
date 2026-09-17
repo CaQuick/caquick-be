@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import type { AuthConfig } from '@/config/auth.config';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -28,15 +29,13 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
   ) {
-    const secret = config.get<string>('JWT_ACCESS_SECRET');
-    if (!secret || secret.trim().length === 0) {
-      throw new Error('Missing JWT_ACCESS_SECRET');
-    }
+    // 시크릿 해석(폴백·공백·prod fail-fast)은 authConfig가 단일 소스다.
+    const { jwtSecret } = config.getOrThrow<AuthConfig>('auth');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: jwtSecret,
     });
   }
 
