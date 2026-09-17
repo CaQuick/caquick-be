@@ -1,4 +1,5 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+import type { StoreCardOutput } from '@/features/store/types/store-card-output.type';
 
 /**
  * store-today-pickup resolver 반환용 도메인 출력 타입.
@@ -11,13 +12,7 @@ export interface TodayPickupSlot {
 }
 
 export interface TodayPickupStore {
-  id: string;
-  storeName: string;
-  ratingAverage: number;
-  reviewCount: number;
-  regionLabel: string | null;
-  cakeImageUrls: string[];
-  isWishlisted: boolean;
+  store: StoreCardOutput;
   slots: TodayPickupSlot[];
 }
 

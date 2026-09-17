@@ -3,8 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { roundRatingAverage } from '@/common/utils/rating';
-import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_WISHLISTED_STORES_LIMIT,
   WISHLISTED_STORE_IMAGE_LIMIT,
@@ -12,7 +10,7 @@ import {
 import type { MyWishlistedStoresInput } from '@/features/store/dto/inputs/my-wishlisted-stores.input';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
-import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import type { MyWishlistedStoresConnection } from '@/features/store/types/store-wishlist-output.type';
 
 @Injectable()
@@ -20,7 +18,7 @@ export class StoreWishlistService {
   constructor(
     private readonly wishlistRepo: StoreWishlistRepository,
     private readonly storeRepo: StoreRepository,
-    private readonly reviews: ReviewReadRepository,
+    private readonly cards: StoreCardService,
   ) {}
 
   /** 매장 찜 추가 (멱등). 존재하지 않거나 비활성 매장이면 404. */
@@ -63,31 +61,18 @@ export class StoreWishlistService {
       limit,
     });
 
-    const storeIds = items.map((row) => row.store.id);
-    // 평점·이미지는 페이지 매장들만 집계(N+1 회피).
-    // 카드 이미지는 인기 매장 카드(PopularStore)와 동일하게 상품 대표 이미지를 쓴다(#216).
-    const [reviewStats, cakeImages] = await Promise.all([
-      this.reviews.aggregateReviewStats('store_id', storeIds),
-      this.storeRepo.findStoreCakeImages(
-        storeIds,
-        WISHLISTED_STORE_IMAGE_LIMIT,
-      ),
-    ]);
+    // 카드는 공용 StoreCardService — 찜 목록은 시안 기준 이미지 3장(WISHLISTED_STORE_IMAGE_LIMIT)
+    const cards = await this.cards.buildCards(
+      items.map((row) => row.store),
+      accountId,
+      { imageLimit: WISHLISTED_STORE_IMAGE_LIMIT },
+    );
 
     return {
-      items: items.map((row) => {
-        const stat = reviewStats.get(row.store.id);
-        return {
-          storeId: row.store.id.toString(),
-          storeName: row.store.store_name,
-          profileImageUrl: row.store.profile_image_url,
-          ratingAverage: roundRatingAverage(stat?.average ?? 0),
-          reviewCount: stat?.count ?? 0,
-          regionLabel: buildRegionLabel(row.store),
-          imageUrls: cakeImages.get(row.store.id) ?? [],
-          addedAt: row.created_at,
-        };
-      }),
+      items: cards.map((store, idx) => ({
+        store,
+        addedAt: items[idx].created_at,
+      })),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),
     };

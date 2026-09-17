@@ -7,6 +7,7 @@ import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 export interface StoreCandidateRow {
   id: bigint;
   store_name: string;
+  profile_image_url: string | null;
   address_city: string | null;
   address_neighborhood: string | null;
   region: { name: string } | null;
@@ -15,10 +16,8 @@ export interface StoreCandidateRow {
   max_days_ahead: number;
 }
 
-/** 매장 검색 후보 row(랭킹 후보 + 로고). */
-export interface StoreSearchCandidateRow extends StoreCandidateRow {
-  profile_image_url: string | null;
-}
+/** 매장 검색 후보 row. 랭킹 후보와 같은 shape. */
+export type StoreSearchCandidateRow = StoreCandidateRow;
 
 /** 매장 검색 조건. */
 export interface StoreSearchFilter {
@@ -88,6 +87,7 @@ export class StoreRepository {
       select: {
         id: true,
         store_name: true,
+        profile_image_url: true,
         address_city: true,
         address_neighborhood: true,
         region: { select: { name: true } },

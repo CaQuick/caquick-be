@@ -2,6 +2,7 @@ import { ReviewReadRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -20,6 +21,7 @@ describe('Store Wishlist Mutation Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreWishlistMutationResolver,
         StoreWishlistService,

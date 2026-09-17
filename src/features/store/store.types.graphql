@@ -15,7 +15,7 @@ input PopularStoresInput {
 
 """인기 매장 목록. rank 오름차순이다."""
 type PopularStoreConnection {
-  """인기 매장 카드. rank 오름차순."""
+  """인기 매장 항목. rank 오름차순."""
   items: [PopularStore!]!
   """조건에 맞는 전체 매장 수. offset·limit과 무관하다."""
   totalCount: Int!
@@ -25,20 +25,28 @@ type PopularStoreConnection {
   rankedAt: DateTime!
 }
 
-"""인기 매장 카드"""
+"""인기 매장 항목. rank + 공용 매장 카드."""
 type PopularStore {
-  id: ID!
   """인기 순위. 1부터 시작하며 rankedAt 시점 기준이다."""
   rank: Int!
+  """매장 카드."""
+  store: StoreCard!
+}
+
+"""매장 카드. 인기 매장·오늘 픽업·검색 결과·찜 목록이 공용으로 쓴다."""
+type StoreCard {
+  id: ID!
   """매장명."""
   storeName: String!
-  """평균 평점(0.0~5.0, 소수 첫째 자리)."""
+  """매장 프로필(로고) 이미지. 미등록 시 null."""
+  profileImageUrl: String
+  """평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
   ratingAverage: Float!
   """리뷰 수."""
   reviewCount: Int!
-  """매장 위치 표기(예: 서울특별시 역삼동)."""
+  """매장 위치 표기(예: 인천 청라동)."""
   regionLabel: String
-  """대표 케이크 이미지(최대 4장)."""
+  """대표 케이크 이미지(활성 상품 대표 이미지, 최신 상품 우선). 최대 4장, 찜 목록은 3장."""
   cakeImageUrls: [String!]!
   """로그인 사용자의 찜 여부(비로그인 시 false)."""
   isWishlisted: Boolean!

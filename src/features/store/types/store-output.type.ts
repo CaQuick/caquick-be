@@ -1,4 +1,5 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+import type { StoreCardOutput } from '@/features/store/types/store-card-output.type';
 
 /**
  * store resolver 반환용 도메인 출력 타입.
@@ -6,14 +7,8 @@ import type { OffsetConnection } from '@/common/types/cursor-connection.type';
  */
 
 export interface PopularStore {
-  id: string;
   rank: number;
-  storeName: string;
-  ratingAverage: number;
-  reviewCount: number;
-  regionLabel: string | null;
-  cakeImageUrls: string[];
-  isWishlisted: boolean;
+  store: StoreCardOutput;
 }
 
 export type PopularStoreConnection = OffsetConnection<PopularStore> & {

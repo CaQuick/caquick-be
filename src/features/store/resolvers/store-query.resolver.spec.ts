@@ -3,6 +3,7 @@ import { StoreStatsRepository } from '@/features/store/repositories/store-stats.
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -21,6 +22,7 @@ describe('Store Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreQueryResolver,
@@ -48,7 +50,7 @@ describe('Store Query Resolver (real DB)', () => {
     const result = await resolver.popularStores(undefined);
 
     expect(result.totalCount).toBe(1);
-    expect(result.items[0].storeName).toBe('리졸버매장');
+    expect(result.items[0].store.storeName).toBe('리졸버매장');
     expect(result.rankedAt).toBeInstanceOf(Date);
   });
 
@@ -62,6 +64,6 @@ describe('Store Query Resolver (real DB)', () => {
     });
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].id).toBe(target.id.toString());
+    expect(result.items[0].store.id).toBe(target.id.toString());
   });
 });

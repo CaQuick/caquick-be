@@ -4,6 +4,7 @@ import { StoreStatsRepository } from '@/features/store/repositories/store-stats.
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -28,6 +29,7 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreTodayPickupQueryResolver,
@@ -71,7 +73,9 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
 
     const result = await resolver.todayPickupStores(undefined);
 
-    expect(result.items.map((i) => i.storeName)).toEqual(['오늘영업매장']);
+    expect(result.items.map((i) => i.store.storeName)).toEqual([
+      '오늘영업매장',
+    ]);
     expect(result.items[0].slots.length).toBeGreaterThan(0);
     expect(result.asOf).toEqual(NOW);
   });

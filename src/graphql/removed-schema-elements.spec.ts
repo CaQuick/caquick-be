@@ -18,6 +18,9 @@ const REMOVED_OUTPUT_FIELDS: Array<[type: string, field: string, pr: string]> =
     ['MyPageCounts', 'customDraftCount', '플랜 03'],
     ['MyPageCounts', 'couponCount', '플랜 03'],
     ['ViewerCounts', 'cartItemCount', '플랜 03'],
+    // 합성 뒤 카드 필드는 store: StoreCard 아래로만 존재한다
+    ['PopularStore', 'storeName', '플랜 11'],
+    ['TodayPickupStore', 'storeName', '플랜 11'],
   ];
 const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['SellerCursorInput', '플랜 06'],
@@ -32,6 +35,8 @@ const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['ProductReviewMedia', '플랜 09'],
   ['StoreReviewMedia', '플랜 09'],
   ['MyReviewMedia', '플랜 09'],
+  ['SearchStore', '플랜 11'],
+  ['WishlistedStoreSummary', '플랜 11'],
 ];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]
