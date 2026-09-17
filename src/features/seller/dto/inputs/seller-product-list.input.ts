@@ -1,8 +1,8 @@
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 
-export class SellerProductListInput extends SellerCursorInput {
+export class SellerProductListInput extends CursorInput {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

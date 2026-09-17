@@ -1,23 +1,25 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
-import { parseId } from '@/common/utils/id-parser';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+  toCursorConnection,
+} from '@/common/utils/pagination';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { INVALID_AUDIT_TARGET_TYPE } from '@/features/seller/constants/seller-error-messages';
-import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+  INVALID_AUDIT_TARGET_TYPE,
+  INVALID_CURSOR,
+} from '@/features/seller/constants/seller-error-messages';
+import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toAuditLogOutput } from '@/features/seller/services/seller-content-mappers.helper';
-import type {
-  SellerAuditLogOutput,
-  SellerCursorConnection,
-} from '@/features/seller/types/seller-output.type';
+import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
 import { AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
@@ -33,30 +35,32 @@ export class SellerAuditService extends SellerBaseService {
   async sellerAuditLogs(
     accountId: bigint,
     input?: SellerAuditLogListInput,
-  ): Promise<SellerCursorConnection<SellerAuditLogOutput>> {
+  ): Promise<CursorConnection<SellerAuditLogOutput>> {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
-    const rows = await this.repo.listAuditLogsBySeller({
+    const scope = {
       sellerAccountId: ctx.accountId,
       storeId: ctx.storeId,
-      limit: normalized.limit,
-      cursor: normalized.cursor,
       targetType: input?.targetType
         ? this.toAuditTargetType(input.targetType)
         : undefined,
-    });
-
-    const paged = nextCursorOf(rows, normalized.limit);
-    return {
-      items: paged.items.map((row) => toAuditLogOutput(row)),
-      nextCursor: paged.nextCursor,
-      hasMore: paged.hasMore,
-      // totalCount는 내리지 않는다 — 감사 로그는 누적형이라 매 조회 COUNT가 부담이다
     };
+    const [rows, totalCount] = await Promise.all([
+      this.repo.listAuditLogsBySeller({ ...scope, ...normalized }),
+      this.repo.countAuditLogsBySeller(scope),
+    ]);
+
+    return toCursorConnection(
+      sliceIdCursorPage(rows, normalized.limit),
+      totalCount,
+      toAuditLogOutput,
+    );
   }
 
   private toAuditTargetType(raw: string): AuditTargetType {

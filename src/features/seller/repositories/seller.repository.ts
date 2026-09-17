@@ -318,6 +318,35 @@ export class SellerRepository {
     });
   }
 
+  private sellerAuditLogWhere(args: {
+    sellerAccountId: bigint;
+    storeId: bigint;
+    targetType?: AuditTargetType;
+  }): Prisma.AuditLogWhereInput {
+    return {
+      OR: [
+        { actor_account_id: args.sellerAccountId },
+        { store_id: args.storeId },
+      ],
+      // 관리자 조작(REVIEW·ACCOUNT 등)이 매장 ID를 달고 기록돼도 판매자 화면 enum 밖이라 제외한다
+      target_type: {
+        in: args.targetType
+          ? [args.targetType]
+          : [...SELLER_AUDIT_TARGET_TYPES],
+      },
+    };
+  }
+
+  async countAuditLogsBySeller(args: {
+    sellerAccountId: bigint;
+    storeId: bigint;
+    targetType?: AuditTargetType;
+  }): Promise<number> {
+    return this.prisma.auditLog.count({
+      where: this.sellerAuditLogWhere(args),
+    });
+  }
+
   async listAuditLogsBySeller(args: {
     sellerAccountId: bigint;
     storeId: bigint;
@@ -328,28 +357,13 @@ export class SellerRepository {
     return this.prisma.auditLog.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        OR: [
-          { actor_account_id: args.sellerAccountId },
-          { store_id: args.storeId },
-        ],
-        // 관리자 조작(REVIEW·ACCOUNT 등)이 매장 ID를 달고 기록돼도 판매자 화면 enum 밖이라 제외한다
-        target_type: {
-          in: args.targetType
-            ? [args.targetType]
-            : [...SELLER_AUDIT_TARGET_TYPES],
-        },
+        ...this.sellerAuditLogWhere(args),
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,
     });
   }
 }
-
-// 커서 헬퍼는 관리자 목록과 공유하려고 common으로 옮겼다. 판매자 쪽 import 경로는 유지한다.
-export {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 
 export function isSellerAccount(accountType: AccountType): boolean {
   return accountType === AccountType.SELLER;

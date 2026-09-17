@@ -1,12 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { AdminCategoryListInput } from '@/features/admin/dto/inputs/admin-category-list.input';
 import { AdminTagListInput } from '@/features/admin/dto/inputs/admin-tag-list.input';
 import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.service';
 import type {
   AdminCategoryOutput,
-  AdminCursorConnection,
   AdminTagOutput,
 } from '@/features/admin/types/admin-output.type';
 import {
@@ -36,7 +36,7 @@ export class AdminTaxonomyQueryResolver {
   adminTags(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminTagListInput,
-  ): Promise<AdminCursorConnection<AdminTagOutput>> {
+  ): Promise<CursorConnection<AdminTagOutput>> {
     return this.taxonomyService.adminTags(parseAccountId(user), input);
   }
 }

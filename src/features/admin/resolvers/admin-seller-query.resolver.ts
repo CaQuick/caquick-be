@@ -1,13 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { AdminSellerListInput } from '@/features/admin/dto/inputs/admin-seller-list.input';
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
-import type {
-  AdminCursorConnection,
-  AdminSellerOutput,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminSellerOutput } from '@/features/admin/types/admin-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -27,7 +25,7 @@ export class AdminSellerQueryResolver {
   adminSellers(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminSellerListInput,
-  ): Promise<AdminCursorConnection<AdminSellerOutput>> {
+  ): Promise<CursorConnection<AdminSellerOutput>> {
     return this.sellerService.adminSellers(parseAccountId(user), input);
   }
 

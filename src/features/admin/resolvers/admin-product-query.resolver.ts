@@ -1,11 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { AdminProductListInput } from '@/features/admin/dto/inputs/admin-product-list.input';
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import type {
-  AdminCursorConnection,
   AdminProductDetailOutput,
   AdminProductOutput,
 } from '@/features/admin/types/admin-output.type';
@@ -28,7 +28,7 @@ export class AdminProductQueryResolver {
   adminProducts(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminProductListInput,
-  ): Promise<AdminCursorConnection<AdminProductOutput>> {
+  ): Promise<CursorConnection<AdminProductOutput>> {
     return this.productService.adminProducts(parseAccountId(user), input);
   }
 

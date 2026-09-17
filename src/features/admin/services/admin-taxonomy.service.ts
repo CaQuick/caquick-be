@@ -5,11 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -19,6 +21,7 @@ import {
   CATEGORY_NOT_FOUND,
   TAG_NAME_TAKEN,
   TAG_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_CATEGORY_DESCRIPTION_LENGTH,
@@ -39,7 +42,6 @@ import {
 } from '@/features/admin/services/admin-taxonomy-mappers.helper';
 import type {
   AdminCategoryOutput,
-  AdminCursorConnection,
   AdminTagOutput,
 } from '@/features/admin/types/admin-output.type';
 import {
@@ -187,11 +189,13 @@ export class AdminTaxonomyService extends AdminBaseService {
   async adminTags(
     accountId: bigint,
     input?: AdminTagListInput,
-  ): Promise<AdminCursorConnection<AdminTagOutput>> {
+  ): Promise<CursorConnection<AdminTagOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const keyword = input?.keyword?.trim() || undefined;
 
@@ -199,7 +203,7 @@ export class AdminTaxonomyService extends AdminBaseService {
       this.repo.listTags({ keyword, ...normalized }),
       this.repo.countTags({ keyword }),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminTagOutput),
       totalCount,

@@ -1,4 +1,8 @@
 import type {
+  CursorConnection,
+  OffsetConnection,
+} from '@/common/types/cursor-connection.type';
+import type {
   AccountType,
   IdentityProvider,
   NotificationEvent,
@@ -48,12 +52,7 @@ export interface NotificationItem {
   createdAt: Date;
 }
 
-export interface NotificationConnection {
-  items: NotificationItem[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type NotificationConnection = CursorConnection<NotificationItem>;
 
 export interface SearchHistoryItem {
   id: string;
@@ -61,11 +60,7 @@ export interface SearchHistoryItem {
   lastUsedAt: Date;
 }
 
-export interface SearchHistoryConnection {
-  items: SearchHistoryItem[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type SearchHistoryConnection = OffsetConnection<SearchHistoryItem>;
 
 export interface NicknameAvailability {
   available: boolean;

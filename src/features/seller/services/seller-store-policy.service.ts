@@ -1,7 +1,13 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate, toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -9,6 +15,7 @@ import {
 import {
   DAILY_CAPACITY_NOT_FOUND,
   STORE_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAILY_CAPACITY,
@@ -23,15 +30,10 @@ import {
 import type { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
 import type { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
 import type { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toStoreDailyCapacityOutput } from '@/features/seller/services/seller-store-mappers.helper';
 import type {
-  SellerCursorConnection,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
 } from '@/features/seller/types/seller-output.type';
@@ -51,11 +53,13 @@ export class SellerStorePolicyService extends SellerBaseService {
   async sellerStoreDailyCapacities(
     accountId: bigint,
     input?: SellerDateCursorInput,
-  ): Promise<SellerCursorConnection<SellerStoreDailyCapacityOutput>> {
+  ): Promise<CursorConnection<SellerStoreDailyCapacityOutput>> {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
     const filters = {
@@ -73,7 +77,7 @@ export class SellerStorePolicyService extends SellerBaseService {
       this.repo.countStoreDailyCapacities(filters),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toStoreDailyCapacityOutput(row)),
       nextCursor: paged.nextCursor,

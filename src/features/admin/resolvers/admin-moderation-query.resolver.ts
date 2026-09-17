@@ -1,13 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { AdminReviewCommentListInput } from '@/features/admin/dto/inputs/admin-review-comment-list.input';
 import { AdminReviewListInput } from '@/features/admin/dto/inputs/admin-review-list.input';
 import { AdminReviewReportListInput } from '@/features/admin/dto/inputs/admin-review-report-list.input';
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import type {
-  AdminCursorConnection,
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
@@ -32,7 +32,7 @@ export class AdminModerationQueryResolver {
   adminReviewReports(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminReviewReportListInput,
-  ): Promise<AdminCursorConnection<AdminReviewReportOutput>> {
+  ): Promise<CursorConnection<AdminReviewReportOutput>> {
     return this.moderationService.adminReviewReports(
       parseAccountId(user),
       input,
@@ -54,7 +54,7 @@ export class AdminModerationQueryResolver {
   adminReviews(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminReviewListInput,
-  ): Promise<AdminCursorConnection<AdminReviewOutput>> {
+  ): Promise<CursorConnection<AdminReviewOutput>> {
     return this.moderationService.adminReviews(parseAccountId(user), input);
   }
 
@@ -62,7 +62,7 @@ export class AdminModerationQueryResolver {
   adminReviewComments(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminReviewCommentListInput,
-  ): Promise<AdminCursorConnection<AdminReviewCommentOutput>> {
+  ): Promise<CursorConnection<AdminReviewCommentOutput>> {
     return this.moderationService.adminReviewComments(
       parseAccountId(user),
       input,

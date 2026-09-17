@@ -1,8 +1,7 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { ConversationMessagesInput } from '@/features/conversation/dto/inputs/conversation-messages.input';
-import { MyConversationsInput } from '@/features/conversation/dto/inputs/my-conversations.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
 import type {
   ConversationMessageConnection,
@@ -23,7 +22,7 @@ export class ConversationCenterQueryResolver {
   @Query('myConversations')
   myConversations(
     @CurrentUser() user: JwtUser,
-    @Args('input', { nullable: true }) input?: MyConversationsInput,
+    @Args('input', { nullable: true }) input?: CursorInput,
   ): Promise<MyConversationConnection> {
     const accountId = parseAccountId(user);
     return this.centerService.myConversations(accountId, input);
@@ -33,7 +32,7 @@ export class ConversationCenterQueryResolver {
   conversationMessages(
     @CurrentUser() user: JwtUser,
     @Args('conversationId') conversationId: string,
-    @Args('input', { nullable: true }) input?: ConversationMessagesInput,
+    @Args('input', { nullable: true }) input?: CursorInput,
   ): Promise<ConversationMessageConnection> {
     const accountId = parseAccountId(user);
     return this.centerService.conversationMessages(

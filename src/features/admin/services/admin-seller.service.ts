@@ -6,16 +6,18 @@ import {
 } from '@nestjs/common';
 import argon2 from 'argon2';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import {
   LATITUDE_RANGE,
   LONGITUDE_RANGE,
   parseDecimalOrNull,
 } from '@/common/utils/decimal-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -25,6 +27,7 @@ import {
   REGION_NOT_SELECTABLE,
   SELLER_NOT_FOUND,
   USERNAME_TAKEN,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
@@ -37,10 +40,7 @@ import type { AdminSellerListInput } from '@/features/admin/dto/inputs/admin-sel
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminSellerOutput } from '@/features/admin/services/admin-seller-mappers.helper';
-import type {
-  AdminCursorConnection,
-  AdminSellerOutput,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminSellerOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -74,11 +74,13 @@ export class AdminSellerService extends AdminBaseService {
   async adminSellers(
     accountId: bigint,
     input?: AdminSellerListInput,
-  ): Promise<AdminCursorConnection<AdminSellerOutput>> {
+  ): Promise<CursorConnection<AdminSellerOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -89,7 +91,7 @@ export class AdminSellerService extends AdminBaseService {
       this.repo.listSellerAccounts({ ...filter, ...normalized }),
       this.repo.countSellerAccounts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminSellerOutput),
       totalCount,

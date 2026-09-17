@@ -1,3 +1,5 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+
 export interface WishlistItemSummary {
   productId: string;
   storeId: string;
@@ -13,11 +15,7 @@ export interface WishlistItemSummary {
   addedAt: Date;
 }
 
-export interface MyWishlistConnection {
-  items: WishlistItemSummary[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type MyWishlistConnection = OffsetConnection<WishlistItemSummary>;
 
 export interface WishlistStoreGroup {
   storeId: string;
@@ -26,8 +24,5 @@ export interface WishlistStoreGroup {
   wishlistedProductCount: number;
 }
 
-export interface MyWishlistStoreGroupsConnection {
-  items: WishlistStoreGroup[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type MyWishlistStoreGroupsConnection =
+  OffsetConnection<WishlistStoreGroup>;

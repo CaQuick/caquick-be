@@ -1,12 +1,10 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { AdminAuditLogListInput } from '@/features/admin/dto/inputs/admin-audit-log-list.input';
 import { AdminAuditService } from '@/features/admin/services/admin-audit.service';
-import type {
-  AdminAuditLogOutput,
-  AdminCursorConnection,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminAuditLogOutput } from '@/features/admin/types/admin-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -26,7 +24,7 @@ export class AdminAuditQueryResolver {
   adminAuditLogs(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminAuditLogListInput,
-  ): Promise<AdminCursorConnection<AdminAuditLogOutput>> {
+  ): Promise<CursorConnection<AdminAuditLogOutput>> {
     return this.auditService.adminAuditLogs(parseAccountId(user), input);
   }
 }

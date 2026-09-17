@@ -1,11 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
 import type {
-  SellerCursorConnection,
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
 } from '@/features/seller/types/seller-output.type';
@@ -28,7 +28,7 @@ export class SellerOrderQueryResolver {
   sellerOrderList(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: SellerOrderListInput,
-  ): Promise<SellerCursorConnection<SellerOrderSummaryOutput>> {
+  ): Promise<CursorConnection<SellerOrderSummaryOutput>> {
     const accountId = parseAccountId(user);
     return this.orderService.sellerOrderList(accountId, input);
   }

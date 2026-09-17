@@ -1,3 +1,4 @@
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import type {
   ConversationBodyFormat,
   ConversationSenderType,
@@ -50,19 +51,11 @@ export interface MyConversationItemOutput {
   unreadCount: number;
 }
 
-export interface MyConversationConnection {
-  items: MyConversationItemOutput[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type MyConversationConnection =
+  CursorConnection<MyConversationItemOutput>;
 
-export interface ConversationMessageConnection {
-  items: ConversationMessageOutput[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type ConversationMessageConnection =
+  CursorConnection<ConversationMessageOutput>;
 
 /**
  * subscription 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO

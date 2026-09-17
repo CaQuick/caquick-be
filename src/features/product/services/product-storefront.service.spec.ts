@@ -71,6 +71,8 @@ describe('ProductStorefrontService (real DB)', () => {
       expect(result.items.map((p) => p.name)).toEqual(['활성']);
       expect(result.hasMore).toBe(false);
       expect(result.nextCursor).toBeNull();
+      // totalCount는 목록과 같은 범위(활성 상품·활성 매장·필터)를 센다
+      expect(result.totalCount).toBe(1);
     });
 
     it('매장이 비활성이면 빈 결과', async () => {

@@ -1,10 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
+import {
+  parseIdCursor,
+  parseNumberIdCursor,
+} from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
 import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import {
@@ -111,7 +111,9 @@ export class ProductReviewService {
       this.repo.listReviewComments({
         reviewId,
         limit,
-        cursor: input.cursor ? parseId(input.cursor) : undefined,
+        cursor: input.cursor
+          ? parseIdCursor(input.cursor, PRODUCT_REVIEW_ERRORS.INVALID_CURSOR)
+          : undefined,
       }),
       this.repo.countReviewComments(reviewId),
     ]);
@@ -179,19 +181,13 @@ export class ProductReviewService {
     };
   }
 
-  /** 좋아요순 커서 파싱. "<likeCount>:<id>" 형식이 아니면 BAD_USER_INPUT. */
+  /** 좋아요순 커서 "<likeCount>:<id>". 형식·범위 방어는 공용 파서가 담당. */
   private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
-    const match = /^(\d+):(\d+)$/.exec(raw);
-    if (!match) {
-      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
-    }
-    const likeCount = Number(match[1]);
-    // 자릿수 폭탄(예: 309자리)은 Number 변환 시 Infinity가 되어 raw SQL에
-    // 비유한 값이 흘러간다. 안전 정수 범위를 벗어나면 형식 오류로 거부한다.
-    if (!Number.isSafeInteger(likeCount)) {
-      throw new BadRequestException(PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR);
-    }
-    return { likeCount, id: BigInt(match[2]) };
+    const cursor = parseNumberIdCursor(
+      raw,
+      PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR,
+    );
+    return { likeCount: cursor.value, id: cursor.id };
   }
 
   /** id 페이지 순서를 유지하며 본문 + 집계(좋아요/댓글/isLiked)를 채운다. */

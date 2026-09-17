@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import { ORDER_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import {
@@ -26,7 +27,6 @@ import {
   toAdminOrderSummaryOutput,
 } from '@/features/admin/services/admin-order-mappers.helper';
 import type {
-  AdminCursorConnection,
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
 } from '@/features/admin/types/admin-output.type';
@@ -56,7 +56,7 @@ export class AdminOrderService extends AdminBaseService {
   async adminOrders(
     accountId: bigint,
     input?: AdminOrderListInput,
-  ): Promise<AdminCursorConnection<AdminOrderSummaryOutput>> {
+  ): Promise<CursorConnection<AdminOrderSummaryOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -75,7 +75,7 @@ export class AdminOrderService extends AdminBaseService {
       this.orderRepository.listOrdersForAdmin({ ...filter, ...normalized }),
       this.orderRepository.countOrdersForAdmin(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminOrderSummaryOutput),
       totalCount,

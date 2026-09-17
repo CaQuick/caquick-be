@@ -112,15 +112,16 @@ type SellerAuditLog {
 
 """
 감사 로그 목록 페이지. 최신 기록이 먼저 온다.
-누적형 로그라 매 조회 COUNT가 부담이므로 totalCount는 내려주지 않는다.
 """
 type SellerAuditLogConnection {
   """감사 로그. 최신 기록이 먼저 온다."""
   items: [SellerAuditLog!]!
+  """조건에 맞는 전체 건수."""
+  totalCount: Int!
   """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
   hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
-  nextCursor: ID
+  nextCursor: String
 }
 
 """감사 로그 조회 조건."""
@@ -128,7 +129,7 @@ input SellerAuditLogListInput {
   """한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
-  cursor: ID
+  cursor: String
   """대상 종류 필터. 미지정 시 전체."""
   targetType: SellerAuditTargetType
 }

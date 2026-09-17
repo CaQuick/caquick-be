@@ -1,14 +1,14 @@
 import { IsDate, IsIn, IsOptional, IsString } from 'class-validator';
 
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import {
   AUDIT_ACTION_TYPES,
   AUDIT_TARGET_TYPES,
   type AuditActionTypeValue,
   type AuditTargetTypeValue,
 } from '@/features/admin/constants/admin.constants';
-import { AdminCursorInput } from '@/features/admin/dto/inputs/admin-cursor.input';
 
-export class AdminAuditLogListInput extends AdminCursorInput {
+export class AdminAuditLogListInput extends CursorInput {
   @IsOptional()
   @IsString()
   actorAccountId?: string;

@@ -5,11 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -36,7 +37,6 @@ import {
   toAdminReviewReportOutput,
 } from '@/features/admin/services/admin-moderation-mappers.helper';
 import type {
-  AdminCursorConnection,
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
@@ -64,7 +64,7 @@ export class AdminModerationService extends AdminBaseService {
   async adminReviewReports(
     accountId: bigint,
     input?: AdminReviewReportListInput,
-  ): Promise<AdminCursorConnection<AdminReviewReportOutput>> {
+  ): Promise<CursorConnection<AdminReviewReportOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -80,7 +80,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviewReports({ ...filter, ...normalized }),
       this.repo.countReviewReports(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewReportOutput),
       totalCount,
@@ -123,7 +123,7 @@ export class AdminModerationService extends AdminBaseService {
   async adminReviews(
     accountId: bigint,
     input?: AdminReviewListInput,
-  ): Promise<AdminCursorConnection<AdminReviewOutput>> {
+  ): Promise<CursorConnection<AdminReviewOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -140,7 +140,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviews({ ...filter, ...normalized }),
       this.repo.countReviews(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewOutput),
       totalCount,
@@ -152,7 +152,7 @@ export class AdminModerationService extends AdminBaseService {
   async adminReviewComments(
     accountId: bigint,
     input?: AdminReviewCommentListInput,
-  ): Promise<AdminCursorConnection<AdminReviewCommentOutput>> {
+  ): Promise<CursorConnection<AdminReviewCommentOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -168,7 +168,7 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.listReviewComments({ ...filter, ...normalized }),
       this.repo.countReviewComments(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminReviewCommentOutput),
       totalCount,

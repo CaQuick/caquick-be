@@ -1,12 +1,17 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { PRODUCT_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
+import {
+  PRODUCT_NOT_FOUND,
+  INVALID_CURSOR,
+} from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminProductListInput } from '@/features/admin/dto/inputs/admin-product-list.input';
 import type { AdminSetProductActiveInput } from '@/features/admin/dto/inputs/admin-set-product-active.input';
@@ -17,7 +22,6 @@ import {
   toAdminProductOutput,
 } from '@/features/admin/services/admin-product-mappers.helper';
 import type {
-  AdminCursorConnection,
   AdminProductDetailOutput,
   AdminProductOutput,
 } from '@/features/admin/types/admin-output.type';
@@ -41,11 +45,13 @@ export class AdminProductService extends AdminBaseService {
   async adminProducts(
     accountId: bigint,
     input?: AdminProductListInput,
-  ): Promise<AdminCursorConnection<AdminProductOutput>> {
+  ): Promise<CursorConnection<AdminProductOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -57,7 +63,7 @@ export class AdminProductService extends AdminBaseService {
       this.repo.listProducts({ ...filter, ...normalized }),
       this.repo.countProducts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminProductOutput),
       totalCount,

@@ -1,8 +1,8 @@
 import { IsDate, IsOptional } from 'class-validator';
 
-import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 
-export class SellerDateCursorInput extends SellerCursorInput {
+export class SellerDateCursorInput extends CursorInput {
   @IsOptional()
   @IsDate()
   fromDate?: Date;

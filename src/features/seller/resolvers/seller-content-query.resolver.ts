@@ -1,12 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
 import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
 import type {
   SellerAuditLogOutput,
-  SellerCursorConnection,
   SellerFaqTopicOutput,
 } from '@/features/seller/types/seller-output.type';
 import {
@@ -39,7 +39,7 @@ export class SellerContentQueryResolver {
   sellerAuditLogs(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: SellerAuditLogListInput,
-  ): Promise<SellerCursorConnection<SellerAuditLogOutput>> {
+  ): Promise<CursorConnection<SellerAuditLogOutput>> {
     const accountId = parseAccountId(user);
     return this.auditService.sellerAuditLogs(accountId, input);
   }

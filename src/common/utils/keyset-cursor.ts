@@ -68,3 +68,37 @@ export function parseIdCursor(raw: string, errorMessage: string): bigint {
   }
   return id;
 }
+
+export interface NumberIdCursor {
+  value: number;
+  id: bigint;
+}
+
+/**
+ * "<정수>:<id>" 형식 커서 파싱(좋아요 수처럼 정수 정렬키 + id).
+ * 자릿수 폭탄은 Number 변환 시 Infinity가 되어 raw SQL로 흘러가므로 안전 정수 밖은 거부하고,
+ * id는 UNSIGNED BIGINT 상한까지 검증한다.
+ */
+export function parseNumberIdCursor(
+  raw: string,
+  errorMessage: string,
+): NumberIdCursor {
+  const match = /^(\d+):(\d+)$/.exec(raw);
+  if (!match) {
+    throw new BadRequestException(errorMessage);
+  }
+  const value = Number(match[1]);
+  if (!Number.isSafeInteger(value)) {
+    throw new BadRequestException(errorMessage);
+  }
+  const id = BigInt(match[2]);
+  if (id > MAX_UNSIGNED_BIGINT) {
+    throw new BadRequestException(errorMessage);
+  }
+  return { value, id };
+}
+
+/** (정수 정렬키, id) desc 페이지의 다음 커서 문자열. */
+export function buildNumberIdCursor(value: number, id: bigint): string {
+  return `${value}:${id.toString()}`;
+}

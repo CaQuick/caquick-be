@@ -1,8 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 
 import {
+  buildNumberIdCursor,
   buildTimestampIdCursor,
   parseIdCursor,
+  parseNumberIdCursor,
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 
@@ -72,6 +74,32 @@ describe('keyset-cursor', () => {
       for (const raw of ['abc', '-1', '', '1.5', '9'.repeat(30)]) {
         expect(() => parseIdCursor(raw, ERR)).toThrow(BadRequestException);
       }
+    });
+  });
+
+  describe('parseNumberIdCursor (좋아요순 <count>:<id>)', () => {
+    it('build → parse 왕복이 값을 보존한다', () => {
+      expect(parseNumberIdCursor(buildNumberIdCursor(12, 34n), ERR)).toEqual({
+        value: 12,
+        id: 34n,
+      });
+    });
+
+    it.each([
+      ['형식 불일치', 'abc'],
+      ['구분자 없음', '12'],
+      ['음수', '-1:2'],
+      ['자릿수 폭탄(안전 정수 밖)', `${'9'.repeat(30)}:1`],
+      ['id UNSIGNED BIGINT 초과', '1:18446744073709551616'],
+      ['빈 문자열', ''],
+    ])('%s 거부', (_label, raw) => {
+      expect(() => parseNumberIdCursor(raw, ERR)).toThrow(BadRequestException);
+    });
+
+    it('id 상한 자체는 허용한다', () => {
+      expect(parseNumberIdCursor('0:18446744073709551615', ERR).id).toBe(
+        18446744073709551615n,
+      );
     });
   });
 });

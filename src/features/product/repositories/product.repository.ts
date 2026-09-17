@@ -882,6 +882,16 @@ export class ProductRepository {
    * 구매자용 매장 상품 목록. 활성 상품(+활성 매장)만, 카테고리/검색 필터.
    * 카드용 가벼운 select(대표 이미지 1장 + 카테고리 id). 커서는 id < cursor(desc).
    */
+  async countActiveProductsByStore(args: {
+    storeId: bigint;
+    categoryId?: bigint;
+    search?: string;
+  }): Promise<number> {
+    return this.prisma.product.count({
+      where: this.activeStoreProductWhere(args),
+    });
+  }
+
   async listActiveProductsByStore(args: {
     storeId: bigint;
     limit: number;
@@ -891,41 +901,10 @@ export class ProductRepository {
   }): Promise<StoreProductRow[]> {
     return this.prisma.product.findMany({
       where: {
-        store_id: args.storeId,
-        is_active: true,
-        store: visibleWhere,
         // 0n도 유효한 인자로 다뤄야 한다(parseId("0")=0n). truthiness 체크는 0n을
         // falsy로 떨궈 잘못된 필터를 전체조회로 만들므로 undefined로만 분기한다.
         ...(args.cursor !== undefined ? { id: { lt: args.cursor } } : {}),
-        ...(args.categoryId !== undefined
-          ? {
-              product_categories: {
-                some: {
-                  category_id: args.categoryId,
-                  ...activeWhere,
-                  category: visibleWhere,
-                },
-              },
-            }
-          : {}),
-        ...(args.search
-          ? {
-              OR: [
-                { name: { contains: args.search } },
-                {
-                  product_tags: {
-                    some: {
-                      ...activeWhere,
-                      tag: {
-                        name: { contains: args.search },
-                        ...activeWhere,
-                      },
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
+        ...this.activeStoreProductWhere(args),
       },
       select: {
         id: true,
@@ -952,6 +931,48 @@ export class ProductRepository {
       orderBy: { id: 'desc' },
       take: args.limit + 1,
     });
+  }
+
+  /** 구매자 매장 상품 목록·건수가 공유하는 범위(활성 상품 + 활성 매장 + 카테고리/검색). */
+  private activeStoreProductWhere(args: {
+    storeId: bigint;
+    categoryId?: bigint;
+    search?: string;
+  }): Prisma.ProductWhereInput {
+    return {
+      store_id: args.storeId,
+      is_active: true,
+      store: visibleWhere,
+      ...(args.categoryId !== undefined
+        ? {
+            product_categories: {
+              some: {
+                category_id: args.categoryId,
+                ...activeWhere,
+                category: visibleWhere,
+              },
+            },
+          }
+        : {}),
+      ...(args.search
+        ? {
+            OR: [
+              { name: { contains: args.search } },
+              {
+                product_tags: {
+                  some: {
+                    ...activeWhere,
+                    tag: {
+                      name: { contains: args.search },
+                      ...activeWhere,
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
   }
 
   /**

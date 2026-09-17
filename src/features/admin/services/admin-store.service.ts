@@ -5,16 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   INVALID_IMAGE_URL,
   REGION_NOT_SELECTABLE,
   STORE_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSetStoreActiveInput } from '@/features/admin/dto/inputs/admin-set-store-active.input';
@@ -24,7 +27,6 @@ import { AdminRepository } from '@/features/admin/repositories/admin.repository'
 import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminStoreDetailOutput } from '@/features/admin/services/admin-store-mappers.helper';
 import type {
-  AdminCursorConnection,
   AdminStoreDetailOutput,
   AdminStoreOutput,
 } from '@/features/admin/types/admin-output.type';
@@ -75,11 +77,13 @@ export class AdminStoreService extends AdminBaseService {
   async adminStores(
     accountId: bigint,
     input?: AdminStoreListInput,
-  ): Promise<AdminCursorConnection<AdminStoreOutput>> {
+  ): Promise<CursorConnection<AdminStoreOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -91,7 +95,7 @@ export class AdminStoreService extends AdminBaseService {
       this.repo.listStores({ ...filter, ...normalized }),
       this.repo.countStores(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toStoreOutput),
       totalCount,

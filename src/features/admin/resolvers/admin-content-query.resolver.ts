@@ -1,13 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { AdminBannerListInput } from '@/features/admin/dto/inputs/admin-banner-list.input';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
-import type {
-  AdminBannerOutput,
-  AdminCursorConnection,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminBannerOutput } from '@/features/admin/types/admin-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -27,7 +25,7 @@ export class AdminContentQueryResolver {
   adminBanners(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminBannerListInput,
-  ): Promise<AdminCursorConnection<AdminBannerOutput>> {
+  ): Promise<CursorConnection<AdminBannerOutput>> {
     return this.bannerService.adminBanners(parseAccountId(user), input);
   }
 

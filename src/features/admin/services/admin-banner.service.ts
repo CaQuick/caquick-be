@@ -5,12 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -29,6 +31,7 @@ import {
   LINK_STORE_NOT_VISIBLE,
   LINK_STORE_REQUIRED,
   LINK_URL_REQUIRED,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_BANNER_TITLE_LENGTH,
@@ -40,10 +43,7 @@ import type { AdminUpdateBannerInput } from '@/features/admin/dto/inputs/admin-u
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminBannerOutput } from '@/features/admin/services/admin-content-mappers.helper';
-import type {
-  AdminBannerOutput,
-  AdminCursorConnection,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminBannerOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -95,11 +95,13 @@ export class AdminBannerService extends AdminBaseService {
   async adminBanners(
     accountId: bigint,
     input?: AdminBannerListInput,
-  ): Promise<AdminCursorConnection<AdminBannerOutput>> {
+  ): Promise<CursorConnection<AdminBannerOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const filter = {
       placement: input?.placement,
@@ -111,7 +113,7 @@ export class AdminBannerService extends AdminBaseService {
       this.repo.countBanners(filter),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminBannerOutput),
       totalCount,

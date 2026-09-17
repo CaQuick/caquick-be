@@ -5,8 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import type { CursorInput } from '@/common/dto/inputs/cursor.input';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -17,27 +24,22 @@ import {
   INVALID_DAY_OF_WEEK,
   OPEN_CLOSE_TIME_REQUIRED,
   SPECIAL_CLOSURE_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAY_OF_WEEK,
   MAX_SPECIAL_CLOSURE_REASON_LENGTH,
   MIN_DAY_OF_WEEK,
 } from '@/features/seller/constants/seller.constants';
-import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
 import type { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import {
   toStoreBusinessHourOutput,
   toStoreSpecialClosureOutput,
 } from '@/features/seller/services/seller-store-mappers.helper';
 import type {
-  SellerCursorConnection,
   SellerStoreBusinessHourOutput,
   SellerStoreSpecialClosureOutput,
 } from '@/features/seller/types/seller-output.type';
@@ -63,12 +65,14 @@ export class SellerStoreHoursService extends SellerBaseService {
 
   async sellerStoreSpecialClosures(
     accountId: bigint,
-    input?: SellerCursorInput,
-  ): Promise<SellerCursorConnection<SellerStoreSpecialClosureOutput>> {
+    input?: CursorInput,
+  ): Promise<CursorConnection<SellerStoreSpecialClosureOutput>> {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
     const [rows, totalCount] = await Promise.all([
@@ -80,7 +84,7 @@ export class SellerStoreHoursService extends SellerBaseService {
       this.repo.countStoreSpecialClosures(ctx.storeId),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => toStoreSpecialClosureOutput(row)),
       nextCursor: paged.nextCursor,

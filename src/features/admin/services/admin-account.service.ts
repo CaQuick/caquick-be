@@ -6,29 +6,28 @@ import {
 } from '@nestjs/common';
 import argon2 from 'argon2';
 
+import type { CursorInput } from '@/common/dto/inputs/cursor.input';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
 import {
-  nextCursorOf,
   normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
-import { parseId } from '@/common/utils/id-parser';
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   ACCOUNT_NOT_FOUND,
   USERNAME_TAKEN,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
 } from '@/features/admin/constants/admin.constants';
 import type { AdminCreateAdminInput } from '@/features/admin/dto/inputs/admin-create-admin.input';
-import type { AdminCursorInput } from '@/features/admin/dto/inputs/admin-cursor.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { toAdminAccountOutput } from '@/features/admin/services/admin-account-mappers.helper';
 import { AdminBaseService } from '@/features/admin/services/admin-base.service';
-import type {
-  AdminAccountOutput,
-  AdminCursorConnection,
-} from '@/features/admin/types/admin-output.type';
+import type { AdminAccountOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -53,19 +52,21 @@ export class AdminAccountService extends AdminBaseService {
 
   async adminAdmins(
     accountId: bigint,
-    input?: AdminCursorInput,
-  ): Promise<AdminCursorConnection<AdminAccountOutput>> {
+    input?: CursorInput,
+  ): Promise<CursorConnection<AdminAccountOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
     const [rows, totalCount] = await Promise.all([
       this.repo.listAdminAccounts(normalized),
       this.repo.countAdminAccounts(),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminAccountOutput),
       totalCount,

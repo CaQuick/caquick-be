@@ -1,3 +1,5 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+
 /**
  * store-search resolver 반환용 도메인 출력 타입.
  * SDL(store-search.graphql)의 타입과 필드 일치.
@@ -14,8 +16,4 @@ export interface SearchStore {
   isWishlisted: boolean;
 }
 
-export interface SearchStoreConnection {
-  items: SearchStore[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type SearchStoreConnection = OffsetConnection<SearchStore>;

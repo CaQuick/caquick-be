@@ -1,3 +1,5 @@
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+
 /**
  * product-storefront resolver 반환용 도메인 출력 타입.
  * SDL(product-storefront.graphql)의 타입과 필드 일치.
@@ -15,11 +17,7 @@ export interface StoreProduct {
   categoryIds: string[];
 }
 
-export interface StoreProductConnection {
-  items: StoreProduct[];
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type StoreProductConnection = CursorConnection<StoreProduct>;
 
 export interface StoreProductCategory {
   id: string;

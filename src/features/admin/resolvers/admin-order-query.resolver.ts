@@ -1,11 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { AdminOrderListInput } from '@/features/admin/dto/inputs/admin-order-list.input';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
 import type {
-  AdminCursorConnection,
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
 } from '@/features/admin/types/admin-output.type';
@@ -28,7 +28,7 @@ export class AdminOrderQueryResolver {
   adminOrders(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: AdminOrderListInput,
-  ): Promise<AdminCursorConnection<AdminOrderSummaryOutput>> {
+  ): Promise<CursorConnection<AdminOrderSummaryOutput>> {
     return this.orderService.adminOrders(parseAccountId(user), input);
   }
 

@@ -1,7 +1,5 @@
 import {
   isSellerAccount,
-  nextCursorOf,
-  normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { AccountType, type PrismaClient } from '@/generated/prisma/client';
@@ -598,47 +596,6 @@ describe('SellerRepository (real DB)', () => {
         cursor: first[0].id,
       });
       expect(paged.every((r) => r.id < first[0].id)).toBe(true);
-    });
-  });
-
-  // ─── standalone export functions ──
-  describe('normalizeCursorInput', () => {
-    it('미설정이면 기본 limit 20, cursor undefined', () => {
-      const r = normalizeCursorInput();
-      expect(r.limit).toBe(20);
-      expect(r.cursor).toBeUndefined();
-    });
-
-    it('limit 은 1~100 clamp', () => {
-      expect(normalizeCursorInput({ limit: 0 }).limit).toBe(1);
-      expect(normalizeCursorInput({ limit: 1000 }).limit).toBe(100);
-      expect(normalizeCursorInput({ limit: 50 }).limit).toBe(50);
-    });
-
-    it('cursor 값 그대로 전달, null 이면 미포함', () => {
-      const r = normalizeCursorInput({ cursor: 42n });
-      expect(r.cursor).toBe(42n);
-      expect(normalizeCursorInput({ cursor: null }).cursor).toBeUndefined();
-    });
-
-    it('limit null 이면 기본 20', () => {
-      expect(normalizeCursorInput({ limit: null }).limit).toBe(20);
-    });
-  });
-
-  describe('nextCursorOf', () => {
-    it('rows.length <= limit 이면 nextCursor null + items 그대로', () => {
-      const rows = [{ id: 1n }, { id: 2n }];
-      const r = nextCursorOf(rows, 5);
-      expect(r.items).toEqual(rows);
-      expect(r.nextCursor).toBeNull();
-    });
-
-    it('rows.length > limit 이면 limit 만큼 자르고 마지막 id 를 nextCursor 로', () => {
-      const rows = [{ id: 10n }, { id: 9n }, { id: 8n }];
-      const r = nextCursorOf(rows, 2);
-      expect(r.items).toEqual([{ id: 10n }, { id: 9n }]);
-      expect(r.nextCursor).toBe('9');
     });
   });
 
