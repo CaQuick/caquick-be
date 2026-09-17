@@ -1,6 +1,8 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -26,7 +28,13 @@ describe('ProductSearchService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductSearchService, ProductRepository, ClockService],
+      providers: [
+        ProductSearchService,
+        ProductRepository,
+        ReviewReadRepository,
+        StoreStatsRepository,
+        ClockService,
+      ],
     });
     service = module.get(ProductSearchService);
     prisma = p;

@@ -2,6 +2,7 @@ import { RandomService } from '@/common/providers/random.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { ReviewReadRepository } from '@/features/review';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -27,6 +28,7 @@ describe('ProductHomeService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreStatsRepository,
         ProductHomeService,
         ProductRepository,
         ReviewReadRepository,

@@ -3,12 +3,14 @@ import { Injectable } from '@nestjs/common';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
+import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
   RANKING_RECENT_ORDER_DAYS,
 } from '@/features/store/constants/store-ranking.constants';
 import type { PopularStoresInput } from '@/features/store/dto/inputs/popular-stores.input';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import {
   StoreRepository,
@@ -29,6 +31,8 @@ export class StoreListingService {
   constructor(
     private readonly repo: StoreRepository,
     private readonly wishlistRepo: StoreWishlistRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
   ) {}
 
   /**
@@ -63,9 +67,9 @@ export class StoreListingService {
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateWishlistCounts(storeIds),
-        this.repo.aggregateReviewStats(storeIds),
-        this.repo.aggregateRecentOrderCounts(storeIds, since),
-        this.repo.globalReviewAverage(),
+        this.reviews.aggregateReviewStats('store_id', storeIds),
+        this.stats.aggregateRecentOrderCounts('store_id', storeIds, since),
+        this.reviews.globalReviewAverage(),
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 

@@ -1,3 +1,5 @@
+import { ReviewReadRepository } from '@/features/review';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
@@ -19,6 +21,8 @@ describe('Store Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewReadRepository,
+        StoreStatsRepository,
         StoreQueryResolver,
         StoreListingService,
         StoreRepository,

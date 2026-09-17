@@ -12,16 +12,20 @@ import type { RealtimeBestCakesInput } from '@/features/product/dto/inputs/realt
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { toPopularCake } from '@/features/product/services/product-home-mappers.helper';
 import type { RealtimeBestCakesResult } from '@/features/product/types/product-best-seller-output.type';
+import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
 
 @Injectable()
 export class ProductBestSellerService {
   constructor(
     private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
   ) {}
 
@@ -44,7 +48,8 @@ export class ProductBestSellerService {
     if (candidates.length === 0) return { items: [], rankedAt };
 
     const productIds = candidates.map((c) => c.id);
-    const soldQuantities = await this.repo.aggregateProductSoldQuantities(
+    const soldQuantities = await this.stats.aggregateSoldQuantities(
+      'product_id',
       productIds,
       new Date(rankedAt.getTime() - REALTIME_BEST_WINDOW_HOURS * HOUR_MS),
     );
@@ -59,9 +64,9 @@ export class ProductBestSellerService {
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateProductWishlistCounts(soldIds),
-        this.repo.aggregateProductReviewStats(soldIds),
-        this.repo.aggregateProductRecentOrderCounts(soldIds, since),
-        this.repo.globalReviewAverage(),
+        this.reviews.aggregateReviewStats('product_id', soldIds),
+        this.stats.aggregateRecentOrderCounts('product_id', soldIds, since),
+        this.reviews.globalReviewAverage(),
       ]);
     const byPopularity = scoreAndSortByPopularity(
       sold,

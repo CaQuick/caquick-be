@@ -57,6 +57,15 @@ export interface ReviewListRow extends ProductReviewRow {
   order_item: ProductReviewRow['order_item'] & StoreReviewRow['order_item'];
 }
 
+/** 집계 키. 매장 카드·상세는 store_id, 상품 카드·랭킹은 product_id. */
+export type ReviewStatsKey = 'store_id' | 'product_id';
+
+/** 키별 평균 평점·리뷰 수. 리뷰가 없는 키는 Map에 없다(호출부가 0/기본값 처리). */
+export interface ReviewStat {
+  average: number;
+  count: number;
+}
+
 /** 홈 제작 후기 쇼케이스 row. */
 export interface ShowcaseReviewRow {
   id: bigint;
@@ -269,6 +278,38 @@ export class ReviewReadRepository {
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
+  }
+
+  /** 키별 평균 평점·리뷰 수(활성 리뷰). 평균은 Decimal → number. */
+  async aggregateReviewStats(
+    key: ReviewStatsKey,
+    ids: bigint[],
+  ): Promise<Map<bigint, ReviewStat>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.review.groupBy({
+      by: [key],
+      where: { [key]: { in: ids } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+    return new Map(
+      rows.map((r) => [
+        r[key],
+        {
+          average: r._avg.rating !== null ? Number(r._avg.rating) : 0,
+          count: r._count._all,
+        },
+      ]),
+    );
+  }
+
+  /**
+   * 전체 활성 리뷰 평균 평점(베이지안 prior, 전 도메인 공용). 리뷰가 없으면 null —
+   * 호출부가 DEFAULT_GLOBAL_RATING_PRIOR로 대체한다(키별 집계의 "없음 → 0"과 다른 정책).
+   */
+  async globalReviewAverage(): Promise<number | null> {
+    const agg = await this.prisma.review.aggregate({ _avg: { rating: true } });
+    return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
   }
 
   /**

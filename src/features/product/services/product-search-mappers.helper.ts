@@ -3,15 +3,13 @@ import {
   FACET_PRICE_BUCKET_MAX,
   FACET_PRICE_BUCKET_SIZE,
 } from '@/features/product/constants/product-search.constants';
-import type {
-  ProductReviewStat,
-  ProductSearchCandidateRow,
-} from '@/features/product/repositories/product.repository';
+import type { ProductSearchCandidateRow } from '@/features/product/repositories/product.repository';
 import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type {
   SearchPriceBucket,
   SearchProduct,
 } from '@/features/product/types/product-search-output.type';
+import type { ReviewStat } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 
 /** 표시가(할인가 우선). 가격 필터·가격 정렬이 공유하는 단일 규칙. */
@@ -24,7 +22,7 @@ export function displayPrice(row: {
 
 export function toSearchProduct(
   row: ProductSearchCandidateRow,
-  stat: ProductReviewStat | undefined,
+  stat: ReviewStat | undefined,
   isWishlisted: boolean,
 ): SearchProduct {
   return {
