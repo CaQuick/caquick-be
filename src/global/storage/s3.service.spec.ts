@@ -294,56 +294,57 @@ describe('S3Service', () => {
     });
   });
 
-  describe('isOwnedProfileImageUrl', () => {
-    it('이 버킷·해당 계정 prefix 의 URL 이면 true', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(true);
-    });
+  describe('isOwnedUploadUrl', () => {
+    const HOST = 'caquick-media-test.s3.ap-northeast-2.amazonaws.com';
+    // purpose별 prefix와 "다른 purpose"의 prefix — 용도 교차 반증용
+    const PURPOSES = [
+      ['PROFILE_IMAGE', 'profile-images', 'review-media/images'],
+      ['REVIEW_IMAGE', 'review-media/images', 'profile-images'],
+      ['REVIEW_VIDEO', 'review-media/videos', 'review-media/images'],
+    ] as const;
 
-    it('다른 계정 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/2/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('다른 버킷/외부 도메인 URL 이면 false', () => {
-      expect(
-        service.isOwnedProfileImageUrl(
-          'https://evil.example.com/profile-images/1/x.jpg',
-          BigInt(1),
-        ),
-      ).toBe(false);
-    });
-
-    it('review-media 등 다른 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/review-media/images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('path traversal(../)로 타 계정 key 를 가리키면 false (정규화 후 검증)', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/../2/2026-06-10/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('인코딩된 dot(%2e)이 포함되면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/%2e%2e/2/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('http(비 https)면 false', () => {
-      const url =
-        'http://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('URL 형식이 아니면 false', () => {
-      expect(service.isOwnedProfileImageUrl('not a url', BigInt(1))).toBe(
-        false,
-      );
+    describe.each(PURPOSES)('%s', (purpose, prefix, otherPrefix) => {
+      it.each([
+        [
+          '이 버킷·계정·용도 prefix',
+          `https://${HOST}/${prefix}/1/2026-06-10/a.jpg`,
+          true,
+        ],
+        [
+          '다른 계정 prefix',
+          `https://${HOST}/${prefix}/2/2026-06-10/a.jpg`,
+          false,
+        ],
+        ['다른 용도 prefix', `https://${HOST}/${otherPrefix}/1/a.jpg`, false],
+        [
+          '다른 버킷',
+          `https://other.s3.ap-northeast-2.amazonaws.com/${prefix}/1/a.jpg`,
+          false,
+        ],
+        [
+          '다른 리전',
+          `https://caquick-media-test.s3.us-east-1.amazonaws.com/${prefix}/1/a.jpg`,
+          false,
+        ],
+        ['외부 도메인', `https://evil.example.com/${prefix}/1/a.jpg`, false],
+        ['http', `http://${HOST}/${prefix}/1/a.jpg`, false],
+        [
+          'literal ../ traversal(정규화 후 타 계정)',
+          `https://${HOST}/${prefix}/1/../2/a.jpg`,
+          false,
+        ],
+        [
+          '인코딩된 dot(%2e)',
+          `https://${HOST}/${prefix}/1/%2e%2e/2/a.jpg`,
+          false,
+        ],
+        ['URL 아님', 'not a url', false],
+        ['빈 문자열', '', false],
+      ])('%s → %s', (_label, url, expected) => {
+        expect(service.isOwnedUploadUrl(url, purpose, BigInt(1))).toBe(
+          expected,
+        );
+      });
     });
   });
 });

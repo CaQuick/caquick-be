@@ -91,9 +91,9 @@ export class UserReviewService {
     accountId: bigint,
     input: WriteReviewInput,
   ): Promise<MyReview> {
-    // rating · content 길이 검증은 DTO 가 담당. 미디어 카운트(이미지 10 / 영상 1)
-    // 같은 도메인 invariant 만 service 에서 검증.
-    this.validateMedia(input.media);
+    // rating · content 길이 검증은 DTO 가 담당. 미디어 카운트(이미지 10 / 영상 1)와
+    // URL 소유권(이 계정에 발급된 publicUrl) 같은 도메인 invariant 만 service 에서 검증.
+    this.validateMedia(accountId, input.media);
 
     const orderItemId = parseId(input.orderItemId);
     const orderItem = await this.reviewRepo.findOrderItemForReview({
@@ -236,7 +236,8 @@ export class UserReviewService {
   }
 
   private validateMedia(
-    media?: { mediaType: string; mediaUrl: string }[],
+    accountId: bigint,
+    media?: { mediaType: string; mediaUrl: string; thumbnailUrl?: string }[],
   ): void {
     if (!media || media.length === 0) return;
 
@@ -252,6 +253,24 @@ export class UserReviewService {
     }
     if (videoCount > MAX_VIDEO_COUNT) {
       throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_VIDEOS);
+    }
+
+    // 미디어 URL은 저장 시 그대로 노출되므로 이 계정에 발급된 publicUrl만 받는다.
+    // 썸네일은 mediaType과 무관하게 IMAGE 용도로 발급된다.
+    for (const m of media) {
+      const purpose: UploadPurpose =
+        m.mediaType === 'VIDEO' ? 'REVIEW_VIDEO' : 'REVIEW_IMAGE';
+      const owned =
+        this.s3Service.isOwnedUploadUrl(m.mediaUrl, purpose, accountId) &&
+        (m.thumbnailUrl === undefined ||
+          this.s3Service.isOwnedUploadUrl(
+            m.thumbnailUrl,
+            'REVIEW_IMAGE',
+            accountId,
+          ));
+      if (!owned) {
+        throw new BadRequestException(USER_REVIEW_ERRORS.INVALID_MEDIA_URL);
+      }
     }
   }
 

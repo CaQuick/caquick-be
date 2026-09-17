@@ -18,6 +18,7 @@ import {
 import type {
   CreateUploadUrlInput,
   CreateUploadUrlOutput,
+  UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
 /**
@@ -125,17 +126,17 @@ export class S3Service {
   }
 
   /**
-   * 주어진 URL 이 이 버킷에 발급된 "해당 계정의 프로필 이미지" URL 인지 검증한다.
-   * 클라이언트가 임의 URL(외부 링크·타인 key)을 프로필 이미지로 저장하는 것을 막는다.
+   * 주어진 URL이 이 버킷에서 해당 계정·purpose로 발급된 publicUrl인지 검증한다.
+   * 클라이언트가 임의 URL(외부 링크·타인 key·다른 용도 key)을 저장하는 것을 막는다.
    *
    * raw `startsWith` 비교는 path traversal(`/profile-images/1/../2/...`)로 우회 가능하므로
-   * URL 을 파싱해 host·protocol 과 **정규화된 pathname** 을 검증하고, dot segment(`.`/`..`)와
-   * 인코딩된 dot(`%2e`)은 거절한다.
-   *
-   * @param url 저장하려는 URL
-   * @param accountId 소유 계정
+   * URL을 파싱해 host·protocol과 정규화된 pathname을 검증하고, 인코딩된 dot(`%2e`)은 거절한다.
    */
-  isOwnedProfileImageUrl(url: string, accountId: bigint): boolean {
+  isOwnedUploadUrl(
+    url: string,
+    purpose: UploadPurpose,
+    accountId: bigint,
+  ): boolean {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -143,12 +144,11 @@ export class S3Service {
       return false;
     }
 
-    // 인코딩된 path traversal(%2e) 차단 — URL 파서가 정규화하지 않는 케이스 방어.
-    // (literal `../`·`./` 는 new URL 이 정규화하므로, 아래 정규화된 pathname prefix 검사로 자동 차단됨)
+    // literal `../`는 new URL이 정규화하므로 prefix 검사에서 걸리지만 `%2e`는 정규화되지 않는다.
     if (/%2e/i.test(parsed.pathname)) return false;
 
     const expectedHost = `${this.bucket}.s3.${this.region}.amazonaws.com`;
-    const expectedPathPrefix = `/${UPLOAD_POLICIES.PROFILE_IMAGE.keyPrefix}/${accountId.toString()}/`;
+    const expectedPathPrefix = `/${UPLOAD_POLICIES[purpose].keyPrefix}/${accountId.toString()}/`;
 
     return (
       parsed.protocol === 'https:' &&

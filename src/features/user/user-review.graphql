@@ -163,9 +163,9 @@ input WriteReviewInput {
 input WriteReviewMediaInput {
   """미디어 종류."""
   mediaType: ReviewMediaType!
-  """업로드 완료 후의 publicUrl"""
+  """createReviewMediaUploadUrl이 이 계정·mediaType으로 발급한 publicUrl. 다른 URL은 BAD_USER_INPUT."""
   mediaUrl: String!
-  """동영상 대표 프레임 URL."""
+  """동영상 대표 프레임 URL. 제공하면 IMAGE 용도로 발급된 publicUrl이어야 한다."""
   thumbnailUrl: String
   """노출 순서. 서버는 이 값을 쓰지 않고 배열에 담긴 순서를 그대로 저장한다."""
   sortOrder: Int!

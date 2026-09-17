@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order';
@@ -29,6 +30,7 @@ describe('User Review Resolvers (real DB)', () => {
   beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
+      isOwnedUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -54,6 +56,7 @@ describe('User Review Resolvers (real DB)', () => {
   beforeEach(async () => {
     await truncateAll();
     jest.clearAllMocks();
+    s3Service.isOwnedUploadUrl.mockReturnValue(true);
   });
 
   async function setupReviewableItem() {
@@ -90,6 +93,30 @@ describe('User Review Resolvers (real DB)', () => {
       where: { id: BigInt(result.reviewId) },
     });
     expect(saved.account_id).toBe(ctx.accountId);
+  });
+
+  it('Mutation.writeReview: 발급되지 않은 미디어 URL이면 BadRequest', async () => {
+    const ctx = await setupReviewableItem();
+    s3Service.isOwnedUploadUrl.mockReturnValue(false);
+
+    await expect(
+      mutationResolver.writeReview(
+        { accountId: ctx.accountId.toString() },
+        {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'IMAGE',
+              mediaUrl: 'https://evil.example.com/x.jpg',
+              sortOrder: 0,
+            },
+          ],
+        },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(await prisma.review.count()).toBe(0);
   });
 
   // 입력 형식 검증(rating · content 길이 등)은 DTO + ValidationPipe 의 책임.
