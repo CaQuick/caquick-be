@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { ReviewModule } from '@/features/review';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
@@ -17,8 +19,10 @@ import { StoreTodayPickupService } from '@/features/store/services/store-today-p
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
 
 @Module({
+  imports: [ReviewModule],
   providers: [
     StoreRepository,
+    StoreStatsRepository,
     StoreWishlistRepository,
     StoreListingService,
     StoreWishlistService,
@@ -36,6 +40,10 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
   ],
   // StorePickupScheduleService는 주문 생성(order feature)의 픽업 일시 재검증이,
   // StoreSearchService는 검색 요약(search feature)의 매장 건수가 소비한다
-  exports: [StorePickupScheduleService, StoreSearchService],
+  exports: [
+    StorePickupScheduleService,
+    StoreSearchService,
+    StoreStatsRepository,
+  ],
 })
 export class StoreModule {}

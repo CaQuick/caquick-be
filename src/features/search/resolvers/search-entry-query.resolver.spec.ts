@@ -3,11 +3,13 @@ import {
   ProductBestSellerService,
   ProductRepository,
 } from '@/features/product';
+import { ReviewReadRepository } from '@/features/review';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
 import { SearchKeywordRankService } from '@/features/search/services/search-keyword-rank.service';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -33,6 +35,8 @@ describe('SearchEntry Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewReadRepository,
+        StoreStatsRepository,
         SearchEntryQueryResolver,
         SearchEntryMutationResolver,
         SearchEntryService,

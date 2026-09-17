@@ -1,13 +1,11 @@
 import { roundRatingAverage } from '@/common/utils/rating';
-import type {
-  StoreDetailRow,
-  StoreReviewStat,
-} from '@/features/store/repositories/store.repository';
+import type { ReviewStat } from '@/features/review';
+import type { StoreDetailRow } from '@/features/store/repositories/store.repository';
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { StoreDetail } from '@/features/store/types/store-detail-output.type';
 
 /** 소수 첫째 자리 반올림(예: 4.666 → 4.7). 리뷰 없으면 0. */
-function toRatingAverage(stat: StoreReviewStat | undefined): number {
+function toRatingAverage(stat: ReviewStat | undefined): number {
   if (!stat) return 0;
   return roundRatingAverage(stat.average);
 }
@@ -19,7 +17,7 @@ function toCoordinate(value: { toString(): string } | null): number | null {
 
 export function toStoreDetail(
   row: StoreDetailRow,
-  reviewStat: StoreReviewStat | undefined,
+  reviewStat: ReviewStat | undefined,
   isWishlisted: boolean,
 ): StoreDetail {
   return {

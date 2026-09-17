@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 
-import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
 import {
   type BannerLinkType,
   type CategoryType,
@@ -76,12 +75,6 @@ export interface HomeBannerRow {
   link_product: { store_id: bigint } | null;
   link_store_id: bigint | null;
   link_category_id: bigint | null;
-}
-
-/** 상품별 평균 평점·리뷰 수. */
-export interface ProductReviewStat {
-  average: number;
-  count: number;
 }
 
 /** 구매자 상품 상세 row. product-detail 매퍼 입력. */
@@ -1194,87 +1187,6 @@ export class ProductRepository {
       _count: { _all: true },
     });
     return new Map(rows.map((r) => [r.product_id, r._count._all]));
-  }
-
-  /** 상품별 평균 평점·리뷰 수. */
-  async aggregateProductReviewStats(
-    productIds: bigint[],
-  ): Promise<Map<bigint, ProductReviewStat>> {
-    if (productIds.length === 0) return new Map();
-    const rows = await this.prisma.review.groupBy({
-      by: ['product_id'],
-      where: { product_id: { in: productIds } },
-      _avg: { rating: true },
-      _count: { _all: true },
-    });
-    return new Map(
-      rows.map((r) => [
-        r.product_id,
-        {
-          average: r._avg.rating !== null ? Number(r._avg.rating) : 0,
-          count: r._count._all,
-        },
-      ]),
-    );
-  }
-
-  /** 상품별 최근 N일 유효 주문(아이템) 수. */
-  async aggregateProductRecentOrderCounts(
-    productIds: bigint[],
-    since: Date,
-  ): Promise<Map<bigint, number>> {
-    if (productIds.length === 0) return new Map();
-    const rows = await this.prisma.orderItem.groupBy({
-      by: ['product_id'],
-      where: {
-        product_id: { in: productIds },
-        order: {
-          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
-          created_at: { gte: since },
-          // soft-delete extension은 nested relation filter에 deleted_at을 주입하지
-          // 않으므로(=root read만 보정), 삭제된 주문이 랭킹을 부풀리지 않도록 명시한다.
-          ...activeWhere,
-        },
-      },
-      _count: { _all: true },
-    });
-    return new Map(rows.map((r) => [r.product_id, r._count._all]));
-  }
-
-  /**
-   * 상품별 최근 판매 수량 합(OrderItem.quantity). 인기 점수와 동일한 유효 주문 상태·
-   * 주문 생성 시각(created_at) 기준. 실시간 판매 Best·판매순 정렬이 공유한다.
-   */
-  async aggregateProductSoldQuantities(
-    productIds: bigint[],
-    since: Date,
-  ): Promise<Map<bigint, number>> {
-    if (productIds.length === 0) return new Map();
-    const rows = await this.prisma.orderItem.groupBy({
-      by: ['product_id'],
-      where: {
-        product_id: { in: productIds },
-        order: {
-          status: { in: [...RANKING_VALID_ORDER_STATUSES] },
-          created_at: { gte: since },
-          // nested relation filter에는 soft-delete가 주입되지 않으므로 명시
-          ...activeWhere,
-        },
-      },
-      _sum: { quantity: true },
-    });
-    return new Map(rows.map((r) => [r.product_id, r._sum.quantity ?? 0]));
-  }
-
-  /**
-   * 전체 활성 리뷰 평균 평점(베이지안 prior). 리뷰가 없으면 null.
-   * store feature의 globalReviewAverage와 동일 정의(전 도메인 공용 prior).
-   */
-  async globalReviewAverage(): Promise<number | null> {
-    const agg = await this.prisma.review.aggregate({
-      _avg: { rating: true },
-    });
-    return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
   }
 
   /**

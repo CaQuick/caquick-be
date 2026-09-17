@@ -5,6 +5,7 @@ import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { calcDiscountRate, ProductRepository } from '@/features/product';
+import { ReviewReadRepository } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
@@ -21,6 +22,7 @@ export class UserWishlistService extends UserBaseService {
   constructor(
     repo: UserRepository,
     private readonly productRepository: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
   ) {
     super(repo);
   }
@@ -79,10 +81,11 @@ export class UserWishlistService extends UserBaseService {
     });
 
     // 상품 평점은 페이지 상품들만 단일 groupBy로 집계(N+1 회피)
-    const reviewStats =
-      await this.productRepository.aggregateProductReviewStats(
-        items.map((row) => row.product_id),
-      );
+    const reviewStats = await this.reviews.aggregateReviewStats(
+      'product_id',
+
+      items.map((row) => row.product_id),
+    );
 
     return {
       items: items.map((row) => {

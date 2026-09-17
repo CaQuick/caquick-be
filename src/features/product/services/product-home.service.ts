@@ -28,6 +28,7 @@ import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
 
 @Injectable()
@@ -35,6 +36,7 @@ export class ProductHomeService {
   constructor(
     private readonly repo: ProductRepository,
     private readonly reviewRepo: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly random: RandomService,
   ) {}
 
@@ -72,9 +74,9 @@ export class ProductHomeService {
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateProductWishlistCounts(productIds),
-        this.repo.aggregateProductReviewStats(productIds),
-        this.repo.aggregateProductRecentOrderCounts(productIds, since),
-        this.repo.globalReviewAverage(),
+        this.reviewRepo.aggregateReviewStats('product_id', productIds),
+        this.stats.aggregateRecentOrderCounts('product_id', productIds, since),
+        this.reviewRepo.globalReviewAverage(),
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 

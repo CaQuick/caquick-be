@@ -1,6 +1,8 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type {
   OrderStatus,
   PrismaClient,
@@ -28,7 +30,13 @@ describe('ProductBestSellerService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductBestSellerService, ProductRepository, ClockService],
+      providers: [
+        ProductBestSellerService,
+        ProductRepository,
+        ReviewReadRepository,
+        StoreStatsRepository,
+        ClockService,
+      ],
     });
     service = module.get(ProductBestSellerService);
     clock = module.get(ClockService);

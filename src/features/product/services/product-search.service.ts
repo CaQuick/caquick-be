@@ -28,10 +28,12 @@ import type {
   SearchProductConnection,
   SearchProductFacets,
 } from '@/features/product/types/product-search-output.type';
+import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
 
 /** 검색 요약(searchSummary)이 넘기는 공통 조건 — 정렬·가격·카테고리 없이 키워드+지역만. */
@@ -44,6 +46,8 @@ export interface ProductSearchScope {
 export class ProductSearchService {
   constructor(
     private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
   ) {}
 
@@ -73,7 +77,7 @@ export class ProductSearchService {
     const pageIds = page.map((row) => row.id);
 
     const [reviewStats, wishlistedIds] = await Promise.all([
-      this.repo.aggregateProductReviewStats(pageIds),
+      this.reviews.aggregateReviewStats('product_id', pageIds),
       // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
       accountId !== undefined
         ? this.repo.findWishlistedProductIds({ accountId, productIds: pageIds })
@@ -197,9 +201,9 @@ export class ProductSearchService {
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
         this.repo.aggregateProductWishlistCounts(ids),
-        this.repo.aggregateProductReviewStats(ids),
-        this.repo.aggregateProductRecentOrderCounts(ids, since),
-        this.repo.globalReviewAverage(),
+        this.reviews.aggregateReviewStats('product_id', ids),
+        this.stats.aggregateRecentOrderCounts('product_id', ids, since),
+        this.reviews.globalReviewAverage(),
       ]);
     return scoreAndSortByPopularity(
       candidates,
@@ -215,7 +219,8 @@ export class ProductSearchService {
     const since = new Date(
       this.clock.now().getTime() - RANKING_RECENT_ORDER_DAYS * DAY_MS,
     );
-    const sold = await this.repo.aggregateProductSoldQuantities(
+    const sold = await this.stats.aggregateSoldQuantities(
+      'product_id',
       candidates.map((c) => c.id),
       since,
     );

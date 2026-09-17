@@ -4,6 +4,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
+import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_WISHLISTED_STORES_LIMIT,
   WISHLISTED_STORE_IMAGE_LIMIT,
@@ -19,6 +20,7 @@ export class StoreWishlistService {
   constructor(
     private readonly wishlistRepo: StoreWishlistRepository,
     private readonly storeRepo: StoreRepository,
+    private readonly reviews: ReviewReadRepository,
   ) {}
 
   /** 매장 찜 추가 (멱등). 존재하지 않거나 비활성 매장이면 404. */
@@ -65,7 +67,7 @@ export class StoreWishlistService {
     // 평점·이미지는 페이지 매장들만 집계(N+1 회피).
     // 카드 이미지는 인기 매장 카드(PopularStore)와 동일하게 상품 대표 이미지를 쓴다(#216).
     const [reviewStats, cakeImages] = await Promise.all([
-      this.storeRepo.aggregateReviewStats(storeIds),
+      this.reviews.aggregateReviewStats('store_id', storeIds),
       this.storeRepo.findStoreCakeImages(
         storeIds,
         WISHLISTED_STORE_IMAGE_LIMIT,

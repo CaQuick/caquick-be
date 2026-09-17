@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
+import { ReviewReadRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { toStoreDetail } from '@/features/store/services/store-detail-mappers.helper';
@@ -12,6 +13,7 @@ export class StoreDetailService {
   constructor(
     private readonly repo: StoreRepository,
     private readonly wishlistRepo: StoreWishlistRepository,
+    private readonly reviews: ReviewReadRepository,
   ) {}
 
   /**
@@ -29,7 +31,7 @@ export class StoreDetailService {
     }
 
     const [reviewStats, wishlistedIds] = await Promise.all([
-      this.repo.aggregateReviewStats([storeId]),
+      this.reviews.aggregateReviewStats('store_id', [storeId]),
       accountId !== undefined
         ? this.wishlistRepo.findWishlistedStoreIds({
             accountId,
