@@ -22,7 +22,6 @@ import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
@@ -86,9 +85,7 @@ export class SellerOrderService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const filters = {

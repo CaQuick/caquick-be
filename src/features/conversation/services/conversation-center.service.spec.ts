@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -213,7 +211,7 @@ describe('ConversationCenterService (real DB)', () => {
 
       await expect(
         service.myConversations(buyer.id, { cursor: 'abc' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const result = await service.myConversations(buyer.id);
       expect(result.totalCount).toBe(0);
@@ -316,7 +314,7 @@ describe('ConversationCenterService (real DB)', () => {
         service.conversationMessages(buyer.id, conv.id.toString(), {
           cursor: '9'.repeat(30),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('남의 대화·없는 대화는 NotFoundException', async () => {
@@ -330,10 +328,10 @@ describe('ConversationCenterService (real DB)', () => {
 
       await expect(
         service.conversationMessages(buyer.id, othersConv.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.conversationMessages(buyer.id, '999999'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

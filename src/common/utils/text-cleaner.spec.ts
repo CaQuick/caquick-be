@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import {
   cleanNullableText,
   cleanRequiredText,
@@ -7,16 +5,16 @@ import {
 
 describe('text-cleaner', () => {
   describe('cleanRequiredText', () => {
-    it('빈 문자열이면 BadRequestException을 던져야 한다', () => {
-      expect(() => cleanRequiredText('', 100)).toThrow(BadRequestException);
+    it('빈 문자열이면 400을 던져야 한다', () => {
+      expect(() => cleanRequiredText('', 100)).toThrowDomain(400);
     });
 
-    it('공백만 있으면 BadRequestException을 던져야 한다', () => {
-      expect(() => cleanRequiredText('   ', 100)).toThrow(BadRequestException);
+    it('공백만 있으면 400을 던져야 한다', () => {
+      expect(() => cleanRequiredText('   ', 100)).toThrowDomain(400);
     });
 
-    it('최대 길이를 초과하면 BadRequestException을 던져야 한다', () => {
-      expect(() => cleanRequiredText('abcdef', 5)).toThrow(BadRequestException);
+    it('최대 길이를 초과하면 400을 던져야 한다', () => {
+      expect(() => cleanRequiredText('abcdef', 5)).toThrowDomain(400);
     });
 
     it('유효한 텍스트를 트림하여 반환해야 한다', () => {
@@ -27,20 +25,16 @@ describe('text-cleaner', () => {
       expect(cleanRequiredText('12345', 5)).toBe('12345');
     });
 
-    it('maxLength를 1만큼 초과하면 BadRequestException을 던져야 한다', () => {
-      expect(() => cleanRequiredText('123456', 5)).toThrow(BadRequestException);
+    it('maxLength를 1만큼 초과하면 400을 던져야 한다', () => {
+      expect(() => cleanRequiredText('123456', 5)).toThrowDomain(400);
     });
 
     // DTO(MaxLength)·MySQL utf8mb4와 같은 기준. UTF-16 단위로 세면 이모지 3개가 6으로 잡힌다
     it('길이는 코드 포인트로 센다(이모지 3개는 3)', () => {
       expect(cleanRequiredText('😀😀😀', 3)).toBe('😀😀😀');
-      expect(() => cleanRequiredText('😀😀😀😀', 3)).toThrow(
-        BadRequestException,
-      );
+      expect(() => cleanRequiredText('😀😀😀😀', 3)).toThrowDomain(400);
       expect(cleanNullableText('😀😀😀', 3)).toBe('😀😀😀');
-      expect(() => cleanNullableText('😀😀😀😀', 3)).toThrow(
-        BadRequestException,
-      );
+      expect(() => cleanNullableText('😀😀😀😀', 3)).toThrowDomain(400);
     });
 
     it('앞뒤 공백을 제거한 결과를 반환해야 한다', () => {
@@ -65,8 +59,8 @@ describe('text-cleaner', () => {
       expect(cleanNullableText('   ', 100)).toBeNull();
     });
 
-    it('최대 길이를 초과하면 BadRequestException을 던져야 한다', () => {
-      expect(() => cleanNullableText('abcdef', 5)).toThrow(BadRequestException);
+    it('최대 길이를 초과하면 400을 던져야 한다', () => {
+      expect(() => cleanNullableText('abcdef', 5)).toThrowDomain(400);
     });
 
     it('유효한 텍스트를 트림하여 반환해야 한다', () => {

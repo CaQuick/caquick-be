@@ -1,15 +1,10 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
 import { buildRegionLabel } from '@/features/store';
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import type { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
 import type { MyReviewableOrderItemsInput } from '@/features/user/dto/inputs/my-reviewable-order-items.input';
 import type { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
@@ -104,15 +99,15 @@ export class UserReviewService {
     });
 
     if (!orderItem) {
-      throw new NotFoundException(USER_REVIEW_ERRORS.ORDER_ITEM_NOT_FOUND);
+      throw new DomainException('ORDER_ITEM_NOT_FOUND');
     }
 
     if (orderItem.order.status !== OrderStatus.PICKED_UP) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.CANNOT_WRITE_REVIEW);
+      throw new DomainException('CANNOT_WRITE_REVIEW');
     }
 
     if (orderItem.review && !orderItem.review.deleted_at) {
-      throw new ConflictException(USER_REVIEW_ERRORS.REVIEW_ALREADY_EXISTS);
+      throw new DomainException('REVIEW_ALREADY_EXISTS');
     }
 
     // soft-delete된 기존 리뷰가 있으면 복원, 없으면 신규 생성
@@ -173,7 +168,7 @@ export class UserReviewService {
     });
 
     if (!orderItem) {
-      throw new NotFoundException(USER_REVIEW_ERRORS.ORDER_ITEM_NOT_FOUND);
+      throw new DomainException('ORDER_ITEM_NOT_FOUND');
     }
 
     const isPickedUp = orderItem.order.status === OrderStatus.PICKED_UP;
@@ -216,7 +211,7 @@ export class UserReviewService {
     });
 
     if (!deleted) {
-      throw new NotFoundException(USER_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw new DomainException('REVIEW_NOT_FOUND');
     }
 
     return true;
@@ -251,10 +246,10 @@ export class UserReviewService {
     }
 
     if (imageCount > MAX_IMAGE_COUNT) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_IMAGES);
+      throw new DomainException('TOO_MANY_IMAGES');
     }
     if (videoCount > MAX_VIDEO_COUNT) {
-      throw new BadRequestException(USER_REVIEW_ERRORS.TOO_MANY_VIDEOS);
+      throw new DomainException('TOO_MANY_VIDEOS');
     }
 
     // 미디어 URL은 저장 시 그대로 노출되므로 이 계정에 발급된 publicUrl만 받는다.
@@ -271,7 +266,7 @@ export class UserReviewService {
             accountId,
           ));
       if (!owned) {
-        throw new BadRequestException(USER_REVIEW_ERRORS.INVALID_MEDIA_URL);
+        throw new DomainException('INVALID_MEDIA_URL');
       }
     }
   }

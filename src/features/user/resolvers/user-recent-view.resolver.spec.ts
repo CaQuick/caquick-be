@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -101,14 +99,14 @@ describe('User Recent View Resolvers (real DB)', () => {
       expect(row.deleted_at).toBeNull();
     });
 
-    it('상품이 없으면 NotFoundException이 전파된다', async () => {
+    it('상품이 없으면 404가 전파된다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         mutationResolver.recordProductView(
           { accountId: account.id.toString() },
           '999999',
         ),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 

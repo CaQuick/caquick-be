@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -136,7 +134,7 @@ describe('SellerStoreHoursService (real DB)', () => {
           openTime: new Date('1970-01-01T09:00:00Z'),
           closeTime: new Date('1970-01-01T18:00:00Z'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('영업일인데 시간이 없으면 BadRequestException', async () => {
@@ -148,7 +146,7 @@ describe('SellerStoreHoursService (real DB)', () => {
           openTime: null,
           closeTime: null,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('open >= close면 BadRequestException', async () => {
@@ -160,7 +158,7 @@ describe('SellerStoreHoursService (real DB)', () => {
           openTime: new Date('1970-01-01T18:00:00Z'),
           closeTime: new Date('1970-01-01T09:00:00Z'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 영업일 upsert는 row를 생성하고 다시 호출하면 같은 row를 갱신한다', async () => {
@@ -211,7 +209,7 @@ describe('SellerStoreHoursService (real DB)', () => {
           closureDate: new Date('2026-04-01'),
           reason: null,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('closureId 없으면 신규 생성', async () => {
@@ -254,7 +252,7 @@ describe('SellerStoreHoursService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteStoreSpecialClosure(account.id, BigInt(999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log 생성', async () => {

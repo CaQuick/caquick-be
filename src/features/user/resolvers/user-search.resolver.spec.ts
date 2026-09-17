@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
 import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-query.resolver';
@@ -75,7 +73,7 @@ describe('User Search Resolvers (real DB)', () => {
     expect(remaining).toBe(0);
   });
 
-  it('Mutation.deleteSearchHistory: 미존재 id는 NotFoundException 전파', async () => {
+  it('Mutation.deleteSearchHistory: 미존재 id는 404 전파', async () => {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: account.id });
 
@@ -84,6 +82,6 @@ describe('User Search Resolvers (real DB)', () => {
         { accountId: account.id.toString() },
         '999999',
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

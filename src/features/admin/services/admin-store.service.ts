@@ -14,10 +14,8 @@ import {
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
-  INVALID_IMAGE_URL,
   REGION_NOT_SELECTABLE,
   STORE_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSetStoreActiveInput } from '@/features/admin/dto/inputs/admin-set-store-active.input';
@@ -81,9 +79,7 @@ export class AdminStoreService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -151,7 +147,7 @@ export class AdminStoreService extends AdminBaseService {
         data.profile_image_url,
         'STORE_IMAGE',
         ctx.accountId,
-        INVALID_IMAGE_URL,
+        'INVALID_IMAGE_URL',
       );
     }
     let connectRegionId: bigint | undefined;

@@ -1,9 +1,6 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -71,7 +68,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
           regularPrice: 0,
           initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('salePrice > regularPrice면 BadRequestException', async () => {
@@ -83,7 +80,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
           salePrice: 20000,
           initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 생성 + 초기 이미지 + audit log', async () => {
@@ -124,7 +121,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
           productId: '999999',
           name: '수정',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('정상 수정 + audit log(before/after)', async () => {
@@ -190,7 +187,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteProduct(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log', async () => {
@@ -234,7 +231,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
           productId: '999999',
           isActive: false,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -261,7 +258,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
             regularPrice: 10000,
             initialImageUrl: url(account.id),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
         expect(await prisma.product.count()).toBe(0);
       },
     );
@@ -277,7 +274,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
             initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id),
             baseDesignImageUrl: url(account.id),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
 
@@ -291,7 +288,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
             productId: product.id.toString(),
             baseDesignImageUrl: url(account.id),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
 

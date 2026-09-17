@@ -185,7 +185,7 @@ describe('CredentialAuthService', () => {
       ['password 빈 문자열', { password: '' }],
       ['password 공백', { password: '   ' }],
     ])('%s이면 UnauthorizedException', async (_label, overrides) => {
-      await expect(login(overrides)).rejects.toThrow(UnauthorizedException);
+      await expect(login(overrides)).rejects.toThrowDomain(401);
       expect(credentials.findCredentialByUsername).not.toHaveBeenCalled();
     });
 
@@ -354,7 +354,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.logout({ role: 'ADMIN', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       expect(refreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
     });
   });

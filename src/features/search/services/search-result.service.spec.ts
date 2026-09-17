@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository, ProductSearchService } from '@/features/product';
 import { SearchResultService } from '@/features/search/services/search-result.service';
@@ -89,9 +87,9 @@ describe('SearchResultService (real DB)', () => {
     });
 
     it('빈 검색어는 400', async () => {
-      await expect(service.searchSummary({ keyword: '' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.searchSummary({ keyword: '' }),
+      ).rejects.toThrowDomain(400);
     });
   });
 });

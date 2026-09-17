@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { parseId } from '@/common/utils/id-parser';
 import { parseNumberIdCursor } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { STORE_REVIEW_ERRORS } from '@/features/store/constants/store-review-error-messages';
 import { DEFAULT_STORE_REVIEWS_LIMIT } from '@/features/store/constants/store-review.constants';
 import type { StoreReviewsInput } from '@/features/store/dto/inputs/store-reviews.input';
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
@@ -109,10 +108,7 @@ export class StoreReviewService {
 
   /** 좋아요순 커서 "<likeCount>:<id>". 형식·범위 방어는 공용 파서가 담당. */
   private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
-    const cursor = parseNumberIdCursor(
-      raw,
-      STORE_REVIEW_ERRORS.INVALID_LIKES_CURSOR,
-    );
+    const cursor = parseNumberIdCursor(raw, 'INVALID_LIKES_CURSOR');
     return { likeCount: cursor.value, id: cursor.id };
   }
 

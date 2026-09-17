@@ -1,4 +1,3 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -259,9 +258,9 @@ describe('AuthService', () => {
     it('존재하지 않는 accountId면 NotFoundException', async () => {
       mockAccounts.findAccountForJwt.mockResolvedValue(null);
 
-      await expect(service.issueDevAccessToken(BigInt(999))).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.issueDevAccessToken(BigInt(999)),
+      ).rejects.toThrowDomain(404);
       expect(mockJwt.sign).not.toHaveBeenCalled();
     });
 
@@ -273,9 +272,9 @@ describe('AuthService', () => {
         credential: null,
       });
 
-      await expect(service.issueDevAccessToken(BigInt(2))).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.issueDevAccessToken(BigInt(2)),
+      ).rejects.toThrowDomain(403);
       expect(mockJwt.sign).not.toHaveBeenCalled();
     });
   });

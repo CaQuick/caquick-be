@@ -1,13 +1,9 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { roundRatingAverage } from '@/common/utils/rating';
-import { STORE_WISHLIST_ERRORS } from '@/features/store/constants/store-wishlist-error-messages';
 import {
   DEFAULT_WISHLISTED_STORES_LIMIT,
   WISHLISTED_STORE_IMAGE_LIMIT,
@@ -33,12 +29,12 @@ export class StoreWishlistService {
     // 매장 찜은 구매자(USER)만 가능. SELLER/ADMIN 찜이 인기 랭킹을 조작하지 못하도록 차단.
     const isUser = await this.wishlistRepo.isActiveUserAccount(accountId);
     if (!isUser) {
-      throw new ForbiddenException(STORE_WISHLIST_ERRORS.USER_ONLY);
+      throw new DomainException('USER_ONLY');
     }
     const storeId = parseId(storeIdStr);
     const exists = await this.storeRepo.existsActiveStore(storeId);
     if (!exists) {
-      throw new NotFoundException(STORE_WISHLIST_ERRORS.STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
     await this.wishlistRepo.upsertStoreWishlist({
       accountId,

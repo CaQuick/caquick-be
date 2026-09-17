@@ -1,8 +1,5 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
@@ -67,15 +64,15 @@ describe('SellerStoreProfileService (real DB)', () => {
   describe('requireSellerContext (공통)', () => {
     it('판매자 계정이 아니면 ForbiddenException', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.sellerMyStore(account.id)).rejects.toThrow(
-        ForbiddenException,
+      await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
+        403,
       );
     });
 
     it('SELLER인데 store가 없으면 NotFoundException', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
-      await expect(service.sellerMyStore(account.id)).rejects.toThrow(
-        NotFoundException,
+      await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
+        404,
       );
     });
   });
@@ -95,8 +92,8 @@ describe('SellerStoreProfileService (real DB)', () => {
 
     it('store가 없으면 NotFoundException', async () => {
       const account = await setupSellerWithoutStore();
-      await expect(service.sellerMyStore(account.id)).rejects.toThrow(
-        NotFoundException,
+      await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
+        404,
       );
     });
   });
@@ -132,7 +129,7 @@ describe('SellerStoreProfileService (real DB)', () => {
         service.sellerUpdateStoreBasicInfo(account.id, {
           storeName: '이름',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('모든 선택 필드(주소/좌표/지도/웹사이트/영업시간 텍스트)를 포함한 수정', async () => {
@@ -243,7 +240,7 @@ describe('SellerStoreProfileService (real DB)', () => {
           service.sellerUpdateStoreBasicInfo(account.id, {
             profileImageUrl: url(account.id),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
   });

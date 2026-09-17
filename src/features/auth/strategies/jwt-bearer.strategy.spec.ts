@@ -1,5 +1,3 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
@@ -93,7 +91,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('typ이 access가 아니면 UnauthorizedException을 던진다', async () => {
@@ -104,7 +102,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('존재하지 않는 계정이면 UnauthorizedException을 던진다', async () => {
@@ -115,7 +113,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('ACTIVE가 아닌 계정이면 ForbiddenException을 던진다', async () => {
@@ -131,7 +129,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
 
     it('유효하지 않은 sub 형식이면 UnauthorizedException을 던진다', async () => {
@@ -142,7 +140,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
   });
 

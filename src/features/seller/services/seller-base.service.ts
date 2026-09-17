@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import type { IAuditLogRepository } from '@/features/audit-log';
 import {
@@ -12,7 +13,6 @@ import {
   DUPLICATE_IDS,
   fieldRangeError,
   INVALID_CURRENCY_FORMAT,
-  INVALID_DECIMAL_VALUE,
   INVALID_TIME_VALUE,
   SELLER_ONLY,
   STORE_NOT_FOUND,
@@ -77,7 +77,7 @@ export abstract class SellerBaseService {
     try {
       return new Prisma.Decimal(trimmed);
     } catch {
-      throw new BadRequestException(INVALID_DECIMAL_VALUE);
+      throw new DomainException('INVALID_DECIMAL_VALUE');
     }
   }
 

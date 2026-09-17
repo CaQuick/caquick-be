@@ -3,7 +3,6 @@
 export const ACCOUNT_NOT_FOUND = 'Account not found.';
 export const ADMIN_ONLY = 'Only ADMIN account is allowed.';
 export const ACCOUNT_NOT_ACTIVE = 'Account is not active.';
-export const INVALID_CURSOR = 'Invalid cursor.';
 
 // ── 계정 ──
 
@@ -63,7 +62,6 @@ export const DASHBOARD_RANGE_TOO_LONG =
   'Date range must be 366 days or shorter.';
 export const REGION_NOT_SELECTABLE =
   'regionId must be an active level-2 region.';
-export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
 
 // ── 배너 ──
 
@@ -94,6 +92,3 @@ export const INVALID_EXPOSURE_WINDOW = 'startsAt must be earlier than endsAt.';
 /** 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복. */
 export const NOTIFICATION_FANOUT_INTERRUPTED = (sentCount: number): string =>
   `Notification fan-out was interrupted after ${sentCount} deliveries; re-sending would duplicate them (see audit log).`;
-
-export const INVALID_IMAGE_URL =
-  'Image URL must be a publicUrl issued by adminCreateUploadUrl for this account.';

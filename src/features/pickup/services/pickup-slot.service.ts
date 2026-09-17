@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import {
   formatKstDate,
   daysInMonth,
@@ -11,16 +12,13 @@ import {
   parseKstYearMonth,
 } from '@/common/utils/kst-time';
 import {
-  PICKUP_DAY_REASON,
-  PICKUP_ERRORS,
-} from '@/features/pickup/constants/pickup-error-messages';
-import {
   PICKUP_AFTERNOON_START_MINUTES,
   PICKUP_CLOSE_MINUTES,
   PICKUP_MAX_DAYS_AHEAD,
   PICKUP_MIN_LEAD_MINUTES,
   PICKUP_OPEN_MINUTES,
   PICKUP_SLOT_INTERVAL_MINUTES,
+  PICKUP_DAY_REASON,
 } from '@/features/pickup/constants/pickup.constants';
 import type {
   PickupCalendar,
@@ -37,7 +35,7 @@ export class PickupSlotService {
   pickupCalendar(yearMonth: string, now: Date = new Date()): PickupCalendar {
     const ym = parseKstYearMonth(yearMonth);
     if (!ym) {
-      throw new BadRequestException(PICKUP_ERRORS.INVALID_YEAR_MONTH);
+      throw new DomainException('INVALID_YEAR_MONTH');
     }
 
     const dayCount = daysInMonth(ym.year, ym.month);
@@ -87,7 +85,7 @@ export class PickupSlotService {
   pickupTimeSlots(date: string, now: Date = new Date()): PickupTimeSlots {
     const parsed = parseKstDate(date);
     if (!parsed) {
-      throw new BadRequestException(PICKUP_ERRORS.INVALID_DATE);
+      throw new DomainException('INVALID_DATE');
     }
 
     const diff = kstDayDiff(now, parsed);

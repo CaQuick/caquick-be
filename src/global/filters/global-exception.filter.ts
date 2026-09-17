@@ -4,7 +4,11 @@ import type { GqlContextType } from '@nestjs/graphql';
 import type { Request, Response } from 'express';
 import type { GraphQLError } from 'graphql';
 
-import { resolveMessage, resolveStatus } from '@/common/utils/error';
+import {
+  resolveErrorCode,
+  resolveMessage,
+  resolveStatus,
+} from '@/common/utils/error';
 import {
   buildHttpRequestMeta,
   calculateDuration,
@@ -62,6 +66,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
 
     const status = resolveStatus(exception);
     const message = resolveMessage(exception);
+    const errorCode = resolveErrorCode(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
     const duration = calculateDuration(startTime);
 
@@ -94,15 +99,20 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
               list,
               'Validation Error',
               status,
+              errorCode,
             ),
           );
         return;
       }
 
-      res.status(status).json(ApiResponseTemplate.ERROR(message, status));
+      res
+        .status(status)
+        .json(ApiResponseTemplate.ERROR(message, status, errorCode));
       return;
     }
 
-    res.status(status).json(ApiResponseTemplate.ERROR(message, status));
+    res
+      .status(status)
+      .json(ApiResponseTemplate.ERROR(message, status, errorCode));
   }
 }

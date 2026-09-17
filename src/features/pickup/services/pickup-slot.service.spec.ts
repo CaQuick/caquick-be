@@ -1,18 +1,12 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { PickupSlotService } from '@/features/pickup/services/pickup-slot.service';
 
 describe('PickupSlotService', () => {
   const service = new PickupSlotService();
 
   describe('pickupCalendar', () => {
-    it('형식 오류면 BadRequestException', () => {
-      expect(() => service.pickupCalendar('2026/06')).toThrow(
-        BadRequestException,
-      );
-      expect(() => service.pickupCalendar('2026-13')).toThrow(
-        BadRequestException,
-      );
+    it('형식 오류면 400', () => {
+      expect(() => service.pickupCalendar('2026/06')).toThrowDomain(400);
+      expect(() => service.pickupCalendar('2026-13')).toThrowDomain(400);
     });
 
     it('월 일수만큼 days를 만들고 과거는 PAST로 막는다', () => {
@@ -55,13 +49,9 @@ describe('PickupSlotService', () => {
   });
 
   describe('pickupTimeSlots', () => {
-    it('형식 오류면 BadRequestException', () => {
-      expect(() => service.pickupTimeSlots('06-18')).toThrow(
-        BadRequestException,
-      );
-      expect(() => service.pickupTimeSlots('2026-02-30')).toThrow(
-        BadRequestException,
-      );
+    it('형식 오류면 400', () => {
+      expect(() => service.pickupTimeSlots('06-18')).toThrowDomain(400);
+      expect(() => service.pickupTimeSlots('2026-02-30')).toThrowDomain(400);
     });
 
     it('미래 날짜는 전 슬롯 available, 오전/오후를 구분한다', () => {

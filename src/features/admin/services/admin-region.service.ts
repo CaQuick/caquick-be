@@ -13,7 +13,6 @@ import {
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
-  INVALID_DECIMAL_VALUE,
   PARENT_REGION_INVALID,
   REGION_HAS_ACTIVE_CHILDREN,
   REGION_HAS_CHILDREN,
@@ -89,16 +88,8 @@ export class AdminRegionService extends AdminBaseService {
       slug,
       sort_order: input.sortOrder ?? 0,
       is_active: input.isActive ?? true,
-      center_lat: parseDecimalOrNull(
-        input.centerLat,
-        INVALID_DECIMAL_VALUE,
-        LATITUDE_RANGE,
-      ),
-      center_lng: parseDecimalOrNull(
-        input.centerLng,
-        INVALID_DECIMAL_VALUE,
-        LONGITUDE_RANGE,
-      ),
+      center_lat: parseDecimalOrNull(input.centerLat, LATITUDE_RANGE),
+      center_lng: parseDecimalOrNull(input.centerLng, LONGITUDE_RANGE),
     };
     // 상위 활성·slug 충돌의 최종 판정은 repository가 잠금 뒤 트랜잭션 안에서 한다(위는 빠른 거절)
     const row = await this.repo.createOrRestoreRegion(data, (created) => ({
@@ -134,20 +125,12 @@ export class AdminRegionService extends AdminBaseService {
       ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
       ...(input.centerLat !== undefined
         ? {
-            center_lat: parseDecimalOrNull(
-              input.centerLat,
-              INVALID_DECIMAL_VALUE,
-              LATITUDE_RANGE,
-            ),
+            center_lat: parseDecimalOrNull(input.centerLat, LATITUDE_RANGE),
           }
         : {}),
       ...(input.centerLng !== undefined
         ? {
-            center_lng: parseDecimalOrNull(
-              input.centerLng,
-              INVALID_DECIMAL_VALUE,
-              LONGITUDE_RANGE,
-            ),
+            center_lng: parseDecimalOrNull(input.centerLng, LONGITUDE_RANGE),
           }
         : {}),
     };

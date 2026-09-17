@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-
 import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -268,14 +262,14 @@ describe('UserReportService (real DB)', () => {
       expect(row.status).toBe('RESOLVED');
     });
 
-    it('본인 리뷰는 BadRequestException', async () => {
+    it('본인 리뷰는 400', async () => {
       const { review, author } = await visibleReview();
       await expect(
         service.reportReview(author, {
           reviewId: review.id.toString(),
           reason: 'SPAM',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     // 보이지 않는 대상 전수: 삭제 리뷰·비활성 상품·비활성 매장·미존재
@@ -306,10 +300,10 @@ describe('UserReportService (real DB)', () => {
           reviewId: (await makeId()).toString(),
           reason: 'SPAM',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('USER가 아니면 ForbiddenException', async () => {
+    it('USER가 아니면 403', async () => {
       const { review } = await visibleReview();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
       await expect(
@@ -317,7 +311,7 @@ describe('UserReportService (real DB)', () => {
           reviewId: review.id.toString(),
           reason: 'SPAM',
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
@@ -340,7 +334,7 @@ describe('UserReportService (real DB)', () => {
       expect(row.review_id).toBeNull();
     });
 
-    it('본인 댓글은 BadRequestException, 삭제된 댓글·삭제된 리뷰의 댓글은 NotFoundException', async () => {
+    it('본인 댓글은 400, 삭제된 댓글·삭제된 리뷰의 댓글은 404', async () => {
       const { review } = await visibleReview();
       const commenter = await buyer();
       const comment = await commentOn(review.id, commenter);
@@ -349,7 +343,7 @@ describe('UserReportService (real DB)', () => {
           commentId: comment.id.toString(),
           reason: 'ABUSE',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const deletedComment = await commentOn(review.id, commenter);
       await prisma.reviewComment.update({
@@ -361,7 +355,7 @@ describe('UserReportService (real DB)', () => {
           commentId: deletedComment.id.toString(),
           reason: 'ABUSE',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
 
       const other = await visibleReview();
       const orphan = await commentOn(other.review.id, commenter);
@@ -374,7 +368,7 @@ describe('UserReportService (real DB)', () => {
           commentId: orphan.id.toString(),
           reason: 'ABUSE',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('같은 댓글의 미처리 신고는 멱등이고, 리뷰 신고와는 별개로 센다', async () => {
@@ -451,7 +445,7 @@ describe('UserReportService (real DB)', () => {
 
       expect(deleted).toEqual({ status: 'fulfilled', value: true });
       if (reported.status === 'rejected') {
-        expect(reported.reason).toBeInstanceOf(NotFoundException);
+        expect(reported.reason).toThrowDomain(404);
       }
       const rows = await prisma.reviewReport.findMany({
         where: { review_comment_id: comment.id },

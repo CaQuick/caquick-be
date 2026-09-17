@@ -16,7 +16,6 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
-  INVALID_IMAGE_URL,
   idsMismatchError,
   INVALID_SELECT_RANGE,
   invalidIdsError,
@@ -275,7 +274,7 @@ export class SellerOptionService extends SellerBaseService {
       imageUrl,
       'PRODUCT_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
 
     const row = await this.productRepository.createOptionItem({
@@ -330,7 +329,7 @@ export class SellerOptionService extends SellerBaseService {
         imageUrl,
         'PRODUCT_IMAGE',
         ctx.accountId,
-        INVALID_IMAGE_URL,
+        'INVALID_IMAGE_URL',
       );
     }
 

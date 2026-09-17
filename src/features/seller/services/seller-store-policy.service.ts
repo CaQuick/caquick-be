@@ -15,7 +15,6 @@ import {
 import {
   DAILY_CAPACITY_NOT_FOUND,
   STORE_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAILY_CAPACITY,
@@ -57,9 +56,7 @@ export class SellerStorePolicyService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const filters = {

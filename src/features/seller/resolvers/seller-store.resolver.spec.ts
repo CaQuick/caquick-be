@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -115,6 +113,6 @@ describe('Seller Store Resolvers (real DB)', () => {
         { accountId: me.account.id.toString() },
         othersClosure.id.toString(),
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

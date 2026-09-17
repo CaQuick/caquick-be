@@ -165,7 +165,10 @@
     "testTimeout": 60000,
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "setupFilesAfterEnv": [
+      "<rootDir>/test/matchers/domain-error.matcher.ts"
+    ]
   },
   "lint-staged": {
     "*.ts": [

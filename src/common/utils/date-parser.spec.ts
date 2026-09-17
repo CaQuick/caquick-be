@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import {
   toDate,
   toDateRequired,
@@ -8,8 +6,8 @@ import {
 
 describe('date-parser', () => {
   describe('toDate', () => {
-    it('유효하지 않은 날짜면 BadRequestException을 던져야 한다', () => {
-      expect(() => toDate('invalid')).toThrow(BadRequestException);
+    it('유효하지 않은 날짜면 400을 던져야 한다', () => {
+      expect(() => toDate('invalid')).toThrowDomain(400);
     });
 
     it('null이면 undefined를 반환해야 한다', () => {
@@ -30,8 +28,8 @@ describe('date-parser', () => {
       expect(toDate(date)).toBe(date);
     });
 
-    it('빈 문자열이면 BadRequestException을 던져야 한다', () => {
-      expect(() => toDate('')).toThrow(BadRequestException);
+    it('빈 문자열이면 400을 던져야 한다', () => {
+      expect(() => toDate('')).toThrowDomain(400);
     });
 
     it('타임존이 포함된 ISO 문자열이면 Date를 반환해야 한다', () => {
@@ -54,10 +52,8 @@ describe('date-parser', () => {
   });
 
   describe('toDateRequired', () => {
-    it('유효하지 않은 날짜면 BadRequestException을 던져야 한다', () => {
-      expect(() => toDateRequired('invalid', 'testField')).toThrow(
-        BadRequestException,
-      );
+    it('유효하지 않은 날짜면 400을 던져야 한다', () => {
+      expect(() => toDateRequired('invalid', 'testField')).toThrowDomain(400);
     });
 
     it('유효한 날짜면 Date를 반환해야 한다', () => {

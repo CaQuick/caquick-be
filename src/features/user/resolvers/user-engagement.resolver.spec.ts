@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
@@ -55,7 +53,7 @@ describe('User Engagement Resolver (real DB)', () => {
     expect(count).toBe(1);
   });
 
-  it('자기 리뷰 좋아요는 BadRequestException이 전파된다', async () => {
+  it('자기 리뷰 좋아요는 400이 전파된다', async () => {
     const review = await createReview(prisma);
     await createUserProfile(prisma, { account_id: review.account_id });
 
@@ -64,7 +62,7 @@ describe('User Engagement Resolver (real DB)', () => {
         { accountId: review.account_id.toString() },
         review.id.toString(),
       ),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrowDomain(400);
   });
 
   it('unlikeReview는 좋아요를 soft-delete하고 true를 반환한다', async () => {

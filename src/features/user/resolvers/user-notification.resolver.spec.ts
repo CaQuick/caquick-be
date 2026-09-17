@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
 import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
@@ -60,7 +58,7 @@ describe('User Notification Resolvers (real DB)', () => {
     expect(result.items[0].readAt).toBeNull();
   });
 
-  it('Mutation.markNotificationRead: 성공 시 read_at 기록, 실패 시 NotFoundException 전파', async () => {
+  it('Mutation.markNotificationRead: 성공 시 read_at 기록, 실패 시 404 전파', async () => {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: account.id });
     const notif = await createNotification(prisma, { account_id: account.id });
@@ -76,6 +74,6 @@ describe('User Notification Resolvers (real DB)', () => {
         { accountId: account.id.toString() },
         '999999',
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

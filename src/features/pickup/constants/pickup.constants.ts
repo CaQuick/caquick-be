@@ -15,3 +15,10 @@ export const PICKUP_MAX_DAYS_AHEAD = 30;
 
 /** 당일 픽업 최소 리드타임(분). 현재시각 + 이 값 이전 슬롯은 마감. */
 export const PICKUP_MIN_LEAD_MINUTES = 60;
+
+/** 선택 불가 날짜 사유 코드. */
+export const PICKUP_DAY_REASON = {
+  PAST: 'PAST',
+  OUT_OF_RANGE: 'OUT_OF_RANGE',
+  CLOSED: 'CLOSED', // 당일이지만 현재시각+리드타임으로 가용 슬롯이 없음
+} as const;

@@ -17,7 +17,6 @@ import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   ACCOUNT_NOT_FOUND,
   USERNAME_TAKEN,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
@@ -57,9 +56,7 @@ export class AdminAccountService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const [rows, totalCount] = await Promise.all([

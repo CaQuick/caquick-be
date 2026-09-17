@@ -6,7 +6,6 @@ import {
   sliceIdCursorPage,
   toCursorConnection,
 } from '@/common/utils/pagination';
-import { PRODUCT_STOREFRONT_ERRORS } from '@/features/product/constants/product-storefront-error-messages';
 import { DEFAULT_STORE_PRODUCTS_LIMIT } from '@/features/product/constants/product-storefront.constants';
 import type { StoreProductsInput } from '@/features/product/dto/inputs/store-products.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -38,12 +37,7 @@ export class ProductStorefrontService {
       this.repo.listActiveProductsByStore({
         ...scope,
         limit,
-        cursor: input.cursor
-          ? parseIdCursor(
-              input.cursor,
-              PRODUCT_STOREFRONT_ERRORS.INVALID_CURSOR,
-            )
-          : undefined,
+        cursor: input.cursor ? parseIdCursor(input.cursor) : undefined,
       }),
       this.repo.countActiveProductsByStore(scope),
     ]);

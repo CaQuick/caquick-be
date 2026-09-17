@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import {
   normalizeSearchKeyword,
   parseSearchKeyword,
@@ -68,10 +66,8 @@ describe('search-keyword utils', () => {
     });
 
     it('빈 검색어·길이 초과는 400', () => {
-      expect(() => parseSearchKeyword(' ')).toThrow(BadRequestException);
-      expect(() => parseSearchKeyword('a'.repeat(201))).toThrow(
-        BadRequestException,
-      );
+      expect(() => parseSearchKeyword(' ')).toThrowDomain(400);
+      expect(() => parseSearchKeyword('a'.repeat(201))).toThrowDomain(400);
     });
   });
 });

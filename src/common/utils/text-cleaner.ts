@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { DomainException } from '@/common/errors/error-catalog';
 
 /**
  * 길이는 코드 포인트 수로 센다 — class-validator MaxLength·MySQL utf8mb4 VARCHAR(n)과 같은 기준.
@@ -13,10 +13,10 @@ function codePointLength(text: string): number {
 export function cleanRequiredText(raw: string, maxLength: number): string {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    throw new BadRequestException('Required text is empty.');
+    throw new DomainException('TEXT_REQUIRED');
   }
   if (codePointLength(trimmed) > maxLength) {
-    throw new BadRequestException(`Text exceeds ${maxLength} length.`);
+    throw new DomainException('TEXT_TOO_LONG', { maxLength });
   }
   return trimmed;
 }
@@ -29,7 +29,7 @@ export function cleanNullableText(
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
   if (codePointLength(trimmed) > maxLength) {
-    throw new BadRequestException(`Text exceeds ${maxLength} length.`);
+    throw new DomainException('TEXT_TOO_LONG', { maxLength });
   }
   return trimmed;
 }

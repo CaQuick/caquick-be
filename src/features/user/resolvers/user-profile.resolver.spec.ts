@@ -1,5 +1,3 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
 import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
@@ -77,9 +75,9 @@ describe('User Profile Resolvers (real DB)', () => {
     });
 
     it('존재하지 않는 accountId면 서비스 에러를 그대로 전파한다', async () => {
-      await expect(queryResolver.me({ accountId: '999999' })).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        queryResolver.me({ accountId: '999999' }),
+      ).rejects.toThrowDomain(401);
     });
 
     it('linkedIdentities 필드까지 resolver를 통해 그대로 노출된다', async () => {
@@ -117,7 +115,7 @@ describe('User Profile Resolvers (real DB)', () => {
       expect(saved.nickname).toBe('newNick');
     });
 
-    it('닉네임 중복은 ConflictException으로 전파된다', async () => {
+    it('닉네임 중복은 409로 전파된다', async () => {
       const other = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, {
         account_id: other.id,
@@ -132,7 +130,7 @@ describe('User Profile Resolvers (real DB)', () => {
           { accountId: me.id.toString() },
           { nickname: 'taken' },
         ),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
   });
 

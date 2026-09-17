@@ -23,11 +23,9 @@ import {
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
 import {
-  INVALID_DECIMAL_VALUE,
   REGION_NOT_SELECTABLE,
   SELLER_NOT_FOUND,
   USERNAME_TAKEN,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
@@ -78,9 +76,7 @@ export class AdminSellerService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -170,16 +166,8 @@ export class AdminSellerService extends AdminBaseService {
           MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
         ),
         region_id: regionId,
-        latitude: parseDecimalOrNull(
-          input.store.latitude,
-          INVALID_DECIMAL_VALUE,
-          LATITUDE_RANGE,
-        ),
-        longitude: parseDecimalOrNull(
-          input.store.longitude,
-          INVALID_DECIMAL_VALUE,
-          LONGITUDE_RANGE,
-        ),
+        latitude: parseDecimalOrNull(input.store.latitude, LATITUDE_RANGE),
+        longitude: parseDecimalOrNull(input.store.longitude, LONGITUDE_RANGE),
         map_provider: input.store.mapProvider ?? 'NONE',
       },
     });

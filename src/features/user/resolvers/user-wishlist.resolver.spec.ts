@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
@@ -45,7 +43,7 @@ describe('User Wishlist Resolver (real DB)', () => {
     await truncateAll();
   });
 
-  it('addToWishlist → 존재하지 않는 productId면 NotFoundException 전파', async () => {
+  it('addToWishlist → 존재하지 않는 productId면 404 전파', async () => {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: account.id });
 
@@ -54,7 +52,7 @@ describe('User Wishlist Resolver (real DB)', () => {
         { accountId: account.id.toString() },
         '999999',
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
   it('addToWishlist → removeFromWishlist → myWishlist 시나리오', async () => {

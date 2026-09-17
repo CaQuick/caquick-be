@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -116,7 +114,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           minLeadTimeMinutes: 60,
           maxDaysAhead: 7,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('minLeadTimeMinutes 범위 밖이면 BadRequestException', async () => {
@@ -127,7 +125,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           minLeadTimeMinutes: -1,
           maxDaysAhead: 7,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('maxDaysAhead 범위 밖이면 BadRequestException', async () => {
@@ -138,7 +136,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           minLeadTimeMinutes: 60,
           maxDaysAhead: 366,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 수정 시 매장 정보 갱신 + audit log(before/after)', async () => {
@@ -176,7 +174,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           minLeadTimeMinutes: 60,
           maxDaysAhead: 7,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -189,7 +187,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           capacityDate: new Date('2026-04-01'),
           capacity: 100,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('capacity 범위 밖이면 BadRequestException', async () => {
@@ -199,7 +197,7 @@ describe('SellerStorePolicyService (real DB)', () => {
           capacityDate: new Date('2026-04-01'),
           capacity: 5001,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('capacityId 없으면 신규 생성', async () => {
@@ -241,7 +239,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteStoreDailyCapacity(account.id, BigInt(999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log(beforeJson 포함)', async () => {

@@ -1,10 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -69,14 +62,14 @@ describe('UserEngagementService (real DB)', () => {
       expect(notification.title).toContain('좋아요');
     });
 
-    it('자기 리뷰에 좋아요 시 BadRequestException이 발생하고 ReviewLike/알림이 생성되지 않는다', async () => {
+    it('자기 리뷰에 좋아요 시 400이 발생하고 ReviewLike/알림이 생성되지 않는다', async () => {
       const review = await createReview(prisma);
       // 리뷰 작성자 계정에 USER 프로필을 채워 requireActiveUser 통과하도록
       await createUserProfile(prisma, { account_id: review.account_id });
 
       await expect(
         service.likeReview(review.account_id, review.id),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const likeCount = await prisma.reviewLike.count({
         where: { review_id: review.id },
@@ -89,13 +82,13 @@ describe('UserEngagementService (real DB)', () => {
       expect(notifCount).toBe(0);
     });
 
-    it('존재하지 않는 리뷰면 NotFoundException을 던진다', async () => {
+    it('존재하지 않는 리뷰면 404를 던진다', async () => {
       const liker = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: liker.id });
 
       await expect(
         service.likeReview(liker.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('이미 좋아요를 누른 리뷰에 다시 누르면 true를 반환하되 중복 레코드를 만들지 않는다', async () => {
@@ -113,7 +106,7 @@ describe('UserEngagementService (real DB)', () => {
       expect(likeCount).toBe(1);
     });
 
-    it('계정이 삭제된 사용자는 UnauthorizedException을 던진다 (requireActiveUser)', async () => {
+    it('계정이 삭제된 사용자는 401을 던진다 (requireActiveUser)', async () => {
       const review = await createReview(prisma);
       const liker = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: liker.id });
@@ -124,8 +117,8 @@ describe('UserEngagementService (real DB)', () => {
 
       // 제목과 일치하도록 예외 타입 + 메시지 둘 다 검증한다 (회귀 감지력 ↑).
       const promise = service.likeReview(liker.id, review.id);
-      await expect(promise).rejects.toThrow(UnauthorizedException);
-      await expect(promise).rejects.toThrow(/Account is deleted/);
+      await expect(promise).rejects.toThrowDomain(401);
+      await expect(promise).rejects.toThrowDomain('ACCOUNT_DELETED');
     });
   });
 
@@ -159,13 +152,13 @@ describe('UserEngagementService (real DB)', () => {
       expect(result).toBe(true);
     });
 
-    it('존재하지 않는 리뷰면 NotFoundException', async () => {
+    it('존재하지 않는 리뷰면 404', async () => {
       const user = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: user.id });
 
       await expect(
         service.unlikeReview(user.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('해제 후 다시 좋아요를 누르면 활성 레코드가 복원된다', async () => {
@@ -202,7 +195,7 @@ describe('UserEngagementService (real DB)', () => {
       expect(saved.content).toBe('너무 귀여워요');
     });
 
-    it('존재하지 않는 리뷰면 NotFoundException', async () => {
+    it('존재하지 않는 리뷰면 404', async () => {
       const commenter = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: commenter.id });
 
@@ -211,7 +204,7 @@ describe('UserEngagementService (real DB)', () => {
           reviewId: '999999',
           content: '댓글',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete된 리뷰에는 작성할 수 없다', async () => {
@@ -228,7 +221,7 @@ describe('UserEngagementService (real DB)', () => {
           reviewId: review.id.toString(),
           content: '댓글',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('비활성 상품의 리뷰에는 작성할 수 없다(공개 조회 가드와 일치)', async () => {
@@ -245,7 +238,7 @@ describe('UserEngagementService (real DB)', () => {
           reviewId: review.id.toString(),
           content: '댓글',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -276,23 +269,23 @@ describe('UserEngagementService (real DB)', () => {
       expect(row.deleted_at).not.toBeNull();
     });
 
-    it('타인 댓글이면 ForbiddenException', async () => {
+    it('타인 댓글이면 403', async () => {
       const { commentId } = await setupComment();
       const stranger = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: stranger.id });
 
       await expect(
         service.deleteMyReviewComment(stranger.id, commentId),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
 
-    it('없는(또는 이미 삭제된) 댓글이면 NotFoundException', async () => {
+    it('없는(또는 이미 삭제된) 댓글이면 404', async () => {
       const { commenter, commentId } = await setupComment();
       await service.deleteMyReviewComment(commenter.id, commentId);
 
       await expect(
         service.deleteMyReviewComment(commenter.id, commentId),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

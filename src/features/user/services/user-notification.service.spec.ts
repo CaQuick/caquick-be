@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -85,9 +79,9 @@ describe('UserNotificationService (real DB)', () => {
       expect(result.unreadNotificationCount).toBe(1);
     });
 
-    it('계정이 없으면 UnauthorizedException을 던진다', async () => {
-      await expect(service.viewerCounts(BigInt(999999))).rejects.toThrow(
-        UnauthorizedException,
+    it('계정이 없으면 401을 던진다', async () => {
+      await expect(service.viewerCounts(BigInt(999999))).rejects.toThrowDomain(
+        401,
       );
     });
   });
@@ -182,21 +176,21 @@ describe('UserNotificationService (real DB)', () => {
 
       await expect(
         service.myNotifications(account.id, { cursor: 'abc' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 자릿수 폭탄 — Number 변환 시 안전 정수 범위를 벗어나는 값
       await expect(
         service.myNotifications(account.id, { cursor: `${'9'.repeat(30)}:1` }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 안전 정수지만 Date 지원 범위(±8.64e15ms)를 넘는 timestamp
       await expect(
         service.myNotifications(account.id, { cursor: '9000000000000000:1' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // UNSIGNED BIGINT 상한을 넘는 id
       await expect(
         service.myNotifications(account.id, {
           cursor: `1700000000000:${'9'.repeat(30)}`,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('3개월 지난 알림은 목록·totalCount에서 제외한다', async () => {
@@ -329,14 +323,14 @@ describe('UserNotificationService (real DB)', () => {
       expect(saved.read_at?.getTime()).toBe(firstReadAt.getTime());
     });
 
-    it('존재하지 않는 알림이면 NotFoundException', async () => {
+    it('존재하지 않는 알림이면 404', async () => {
       const account = await setupUser();
       await expect(
         service.markNotificationRead(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('다른 계정의 알림은 접근 불가 (NotFoundException)', async () => {
+    it('다른 계정의 알림은 접근 불가 (404)', async () => {
       const me = await setupUser();
       const other = await setupUser();
       const othersNotif = await createNotification(prisma, {
@@ -345,7 +339,7 @@ describe('UserNotificationService (real DB)', () => {
 
       await expect(
         service.markNotificationRead(me.id, othersNotif.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 

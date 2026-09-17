@@ -2,6 +2,7 @@ import { BadRequestException, HttpStatus } from '@nestjs/common';
 import { BaseExceptionFilter, type AbstractHttpAdapter } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
@@ -69,7 +70,7 @@ describe('HttpExceptionFilter', () => {
     filter = new HttpExceptionFilter(adapter, logger, gqlFilter);
   });
 
-  it('BadRequestException이면 에러 응답을 반환한다', () => {
+  it('400이면 에러 응답을 반환한다', () => {
     const req = mockReq();
     const res = mockRes();
     const host = mockHost(req, res);
@@ -78,9 +79,31 @@ describe('HttpExceptionFilter', () => {
 
     expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'bad input', code: 400 }),
+      expect.objectContaining({
+        message: 'bad input',
+        code: 400,
+        errorCode: 'BAD_USER_INPUT',
+      }),
     );
     expect(logger.txError).toHaveBeenCalled();
+  });
+
+  it('DomainException이면 errorCode에 카탈로그 코드를 싣는다', () => {
+    const req = mockReq();
+    const res = mockRes();
+    const host = mockHost(req, res);
+
+    filter.catch(new DomainException('STORE_NOT_FOUND'), host);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '매장을 찾을 수 없습니다.',
+        code: 404,
+        errorCode: 'STORE_NOT_FOUND',
+        data: null,
+      }),
+    );
   });
 
   it('일반 Error이면 500 응답을 반환한다', () => {
@@ -92,11 +115,11 @@ describe('HttpExceptionFilter', () => {
 
     expect(res.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 500 }),
+      expect.objectContaining({ code: 500, errorCode: 'INTERNAL_ERROR' }),
     );
   });
 
-  it('ValidationError가 포함된 BadRequestException이면 데이터 포함 응답을 반환한다', () => {
+  it('ValidationError가 포함된 400이면 데이터 포함 응답을 반환한다', () => {
     const req = mockReq();
     const res = mockRes();
     const host = mockHost(req, res);
@@ -113,6 +136,7 @@ describe('HttpExceptionFilter', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Validation Error',
+        errorCode: 'VALIDATION_FAILED',
         data: [
           { property: 'email', constraints: { isEmail: 'must be email' } },
         ],
@@ -120,7 +144,7 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
-  it('BadRequestException의 message가 배열이지만 validation 형태가 아니면 기본 ERROR 응답', () => {
+  it('400의 message가 배열이지만 validation 형태가 아니면 기본 ERROR 응답', () => {
     const req = mockReq();
     const res = mockRes();
     const host = mockHost(req, res);
@@ -139,7 +163,7 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
-  it('BadRequestException resp가 object이지만 message 속성이 없으면 기본 ERROR', () => {
+  it('400 resp가 object이지만 message 속성이 없으면 기본 ERROR', () => {
     const req = mockReq();
     const res = mockRes();
     const host = mockHost(req, res);

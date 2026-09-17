@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -106,7 +104,7 @@ describe('SellerAuditService (real DB)', () => {
         service.sellerAuditLogs(account.id, {
           targetType: 'INVALID' as never,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('cursor 기반 페이지네이션으로 두 번째 페이지를 반환한다', async () => {

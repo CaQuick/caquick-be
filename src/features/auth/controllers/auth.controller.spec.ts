@@ -1,4 +1,3 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
@@ -250,7 +249,7 @@ describe('AuthController', () => {
           req,
           res,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -267,7 +266,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({ accountId: '1' }, res),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
       expect(auth.issueDevAccessToken).not.toHaveBeenCalled();
     });
 
@@ -277,7 +276,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({} as unknown as { accountId: string }, res),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('accountId가 BigInt로 파싱 불가하면 BadRequestException', async () => {
@@ -286,7 +285,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({ accountId: 'not-a-number' }, res),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 발급: service 위임 + 200 응답', async () => {

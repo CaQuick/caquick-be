@@ -9,5 +9,4 @@ export * from '@/global/auth/decorators/roles.decorator';
 export * from '@/global/auth/decorators/current-user.decorator';
 export * from '@/global/auth/types/jwt-payload.type';
 export * from '@/global/auth/constants/auth-cookie.constants';
-export * from '@/global/auth/constants/auth-error-messages';
 export * from '@/global/auth/parse-account-id';

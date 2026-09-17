@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductDetailQueryResolver } from '@/features/product/resolvers/product-detail-query.resolver';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
@@ -65,9 +63,9 @@ describe('ProductDetail Query Resolver (real DB)', () => {
     expect(result.isWishlisted).toBe(true);
   });
 
-  it('productDetail: 없는 상품은 NotFoundException', async () => {
+  it('productDetail: 없는 상품은 404', async () => {
     await expect(
       resolver.productDetail('999999', undefined),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

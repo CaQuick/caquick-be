@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminRegionService } from '@/features/admin/services/admin-region.service';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
@@ -133,14 +131,14 @@ describe('AdminRegionService (real DB)', () => {
           name: 'x',
           slug: 'x-region',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('slug 충돌은 BadRequestException, 삭제된 slug는 복구한다', async () => {
       const old = await createRegion(prisma, { level: 1, slug: 'busan' });
       await expect(
         service.adminCreateRegion(await admin(), { name: 'x', slug: 'busan' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       await service.adminDeleteRegion(await admin(), old.id);
       const restored = await service.adminCreateRegion(await admin(), {
@@ -158,7 +156,7 @@ describe('AdminRegionService (real DB)', () => {
           slug: 'x-1',
           centerLat: '95',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -232,7 +230,7 @@ describe('AdminRegionService (real DB)', () => {
           regionId: group.id.toString(),
           isActive: false,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       await service.adminUpdateRegion(await admin(), {
         regionId: active.id.toString(),
@@ -247,7 +245,7 @@ describe('AdminRegionService (real DB)', () => {
           regionId: child.id.toString(),
           isActive: true,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 이미 활성인 2차의 다른 필드 수정은 상위와 무관
       await service.adminUpdateRegion(await admin(), {
         regionId: group.id.toString(),
@@ -275,7 +273,7 @@ describe('AdminRegionService (real DB)', () => {
           regionId: mine.id.toString(),
           slug: 'gone',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('slug 충돌은 BadRequestException, 없으면 NotFoundException', async () => {
@@ -286,13 +284,13 @@ describe('AdminRegionService (real DB)', () => {
           regionId: mine.id.toString(),
           slug: 'taken',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateRegion(await admin(), {
           regionId: '999999',
           name: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -308,7 +306,7 @@ describe('AdminRegionService (real DB)', () => {
           name: '하위',
           slug: 'child-of-inactive',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -341,7 +339,7 @@ describe('AdminRegionService (real DB)', () => {
         expect(linked.status).toBe('rejected');
         expect(row.region_id).toBeNull();
       } else {
-        expect(deleted.reason).toBeInstanceOf(BadRequestException);
+        expect(deleted.reason).toThrowDomain(400);
         expect(region.deleted_at).toBeNull();
         expect(row.region_id).toBe(child.id);
       }
@@ -357,10 +355,10 @@ describe('AdminRegionService (real DB)', () => {
 
       await expect(
         service.adminDeleteRegion(await admin(), child.id),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminDeleteRegion(await admin(), group.id),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       await prisma.store.updateMany({
         where: { region_id: child.id },
@@ -379,7 +377,7 @@ describe('AdminRegionService (real DB)', () => {
       ).toBe(2);
       await expect(
         service.adminDeleteRegion(await admin(), group.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

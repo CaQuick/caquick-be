@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -35,31 +33,27 @@ describe('ProductDetailService (real DB)', () => {
     await truncateAll();
   });
 
-  it('존재하지 않는 상품은 NotFoundException', async () => {
-    await expect(service.productDetail('999999')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+  it('존재하지 않는 상품은 404', async () => {
+    await expect(service.productDetail('999999')).rejects.toThrowDomain(404);
   });
 
-  it('비활성 상품은 NotFoundException', async () => {
+  it('비활성 상품은 404', async () => {
     const product = await createProduct(prisma, { is_active: false });
     await expect(
       service.productDetail(product.id.toString()),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
-  it('비활성 매장의 상품은 NotFoundException', async () => {
+  it('비활성 매장의 상품은 404', async () => {
     const store = await createStore(prisma, { is_active: false });
     const product = await createProduct(prisma, { store_id: store.id });
     await expect(
       service.productDetail(product.id.toString()),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
-  it('잘못된 id 형식은 BadRequestException', async () => {
-    await expect(service.productDetail('abc')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+  it('잘못된 id 형식은 400', async () => {
+    await expect(service.productDetail('abc')).rejects.toThrowDomain(400);
   });
 
   it('상세 필드·할인율·이미지(sort_order asc)를 반환한다', async () => {

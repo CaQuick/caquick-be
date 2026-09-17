@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 
 describe('id-parser', () => {
@@ -19,32 +17,32 @@ describe('id-parser', () => {
     expect(parseId('  42  ')).toBe(42n);
   });
 
-  it('빈 문자열이면 BadRequestException을 던진다', () => {
-    expect(() => parseId('')).toThrow(BadRequestException);
-    expect(() => parseId('   ')).toThrow(BadRequestException);
+  it('빈 문자열이면 400을 던진다', () => {
+    expect(() => parseId('')).toThrowDomain(400);
+    expect(() => parseId('   ')).toThrowDomain(400);
   });
 
-  it('UNSIGNED BIGINT 상한(2^64-1)을 넘으면 BadRequestException을 던진다', () => {
+  it('UNSIGNED BIGINT 상한(2^64-1)을 넘으면 400을 던진다', () => {
     expect(parseId('18446744073709551615')).toBe(18446744073709551615n);
-    expect(() => parseId('18446744073709551616')).toThrow(BadRequestException);
-    expect(() => parseId('9'.repeat(30))).toThrow(BadRequestException);
+    expect(() => parseId('18446744073709551616')).toThrowDomain(400);
+    expect(() => parseId('9'.repeat(30))).toThrowDomain(400);
   });
 
-  it('음수이면 BadRequestException을 던진다', () => {
-    expect(() => parseId('-1')).toThrow(BadRequestException);
+  it('음수이면 400을 던진다', () => {
+    expect(() => parseId('-1')).toThrowDomain(400);
   });
 
-  it('유효하지 않은 문자열이면 BadRequestException을 던진다', () => {
-    expect(() => parseId('abc')).toThrow(BadRequestException);
-    expect(() => parseId('abc')).toThrow('Invalid id.');
+  it('유효하지 않은 문자열이면 400을 던진다', () => {
+    expect(() => parseId('abc')).toThrowDomain(400);
+    expect(() => parseId('abc')).toThrowDomain('INVALID_ID');
   });
 
-  it('소수점이 포함되면 BadRequestException을 던진다', () => {
-    expect(() => parseId('1.5')).toThrow(BadRequestException);
+  it('소수점이 포함되면 400을 던진다', () => {
+    expect(() => parseId('1.5')).toThrowDomain(400);
   });
 
-  it('공백이 포함되면 BadRequestException을 던진다', () => {
-    expect(() => parseId('1 2')).toThrow(BadRequestException);
+  it('공백이 포함되면 400을 던진다', () => {
+    expect(() => parseId('1 2')).toThrowDomain(400);
   });
 
   describe('parseOptionalId', () => {
@@ -58,8 +56,8 @@ describe('id-parser', () => {
     });
 
     it('빈 문자열은 값 없음이 아니라 형식 오류다', () => {
-      expect(() => parseOptionalId('')).toThrow(BadRequestException);
-      expect(() => parseOptionalId('   ')).toThrow(BadRequestException);
+      expect(() => parseOptionalId('')).toThrowDomain(400);
+      expect(() => parseOptionalId('   ')).toThrowDomain(400);
     });
   });
 });

@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -238,27 +236,27 @@ describe('UserRecentViewService (real DB)', () => {
       );
     });
 
-    it('상품이 존재하지 않으면 NotFoundException을 던진다', async () => {
+    it('상품이 존재하지 않으면 404를 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.record(account.id, '999999')).rejects.toThrow(
-        NotFoundException,
+      await expect(service.record(account.id, '999999')).rejects.toThrowDomain(
+        404,
       );
     });
 
-    it('is_active=false 상품이면 NotFoundException을 던진다', async () => {
+    it('is_active=false 상품이면 404를 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const inactive = await createProduct(prisma, { is_active: false });
 
       await expect(
         service.record(account.id, inactive.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('유효하지 않은 productId 문자열이면 BadRequestException을 던진다', async () => {
+    it('유효하지 않은 productId 문자열이면 400을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.record(account.id, 'not-a-number')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.record(account.id, 'not-a-number'),
+      ).rejects.toThrowDomain(400);
     });
 
     it(`계정당 ${MAX_RECENT_VIEWS}개 초과분은 오래된 순으로 soft-delete된다`, async () => {
@@ -330,10 +328,10 @@ describe('UserRecentViewService (real DB)', () => {
       expect(result).toBe(false);
     });
 
-    it('유효하지 않은 productId 문자열이면 BadRequestException을 던진다', async () => {
+    it('유효하지 않은 productId 문자열이면 400을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
-      await expect(service.deleteOne(account.id, 'abc')).rejects.toThrow(
-        BadRequestException,
+      await expect(service.deleteOne(account.id, 'abc')).rejects.toThrowDomain(
+        400,
       );
     });
   });

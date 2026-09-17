@@ -2,19 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { S3Config } from '@/config/s3.config';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import {
-  STORAGE_ERRORS,
-  UPLOAD_POLICIES,
-} from '@/global/storage/constants/storage.constants';
+import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 import type {
   CreateUploadUrlInput,
   CreateUploadUrlOutput,
@@ -121,7 +115,7 @@ export class S3Service {
             ? `${error.name}: ${error.message}`
             : String(error),
       });
-      throw new InternalServerErrorException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
+      throw new DomainException('S3_PRESIGN_FAILED');
     }
   }
 
@@ -162,9 +156,9 @@ export class S3Service {
     allowedTypes: readonly string[],
   ): void {
     if (!allowedTypes.includes(contentType)) {
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.INVALID_CONTENT_TYPE} (허용: ${allowedTypes.join(', ')})`,
-      );
+      throw new DomainException('INVALID_CONTENT_TYPE', {
+        allowed: allowedTypes.join(', '),
+      });
     }
   }
 
@@ -173,13 +167,11 @@ export class S3Service {
     maxSizeBytes: number,
   ): void {
     if (contentLength <= 0) {
-      throw new BadRequestException(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+      throw new DomainException('INVALID_CONTENT_LENGTH');
     }
     if (contentLength > maxSizeBytes) {
       const maxMB = Math.round(maxSizeBytes / (1024 * 1024));
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.FILE_TOO_LARGE} (최대 ${maxMB}MB)`,
-      );
+      throw new DomainException('FILE_TOO_LARGE', { maxMb: maxMB });
     }
   }
 

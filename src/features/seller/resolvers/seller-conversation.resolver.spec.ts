@@ -1,4 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -84,6 +83,6 @@ describe('Seller Conversation Resolvers (real DB)', () => {
           bodyText: 'x',
         } as never,
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

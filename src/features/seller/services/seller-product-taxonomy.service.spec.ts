@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
@@ -63,7 +61,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
           productId: '999999',
           categoryIds: [],
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('존재하지 않는 categoryId가 있으면 BadRequestException', async () => {
@@ -75,7 +73,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
           productId: product.id.toString(),
           categoryIds: ['999999'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('카테고리 할당 + product detail에 포함', async () => {
@@ -102,7 +100,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
           productId: '999999',
           tagIds: [],
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('존재하지 않는 tagId가 있으면 BadRequestException', async () => {
@@ -114,7 +112,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
           productId: product.id.toString(),
           tagIds: ['999999'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('태그 할당', async () => {

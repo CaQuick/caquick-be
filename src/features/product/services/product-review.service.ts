@@ -1,12 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   parseIdCursor,
   parseNumberIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { PRODUCT_REVIEW_ERRORS } from '@/features/product/constants/product-review-error-messages';
 import {
   DEFAULT_PRODUCT_REVIEWS_LIMIT,
   DEFAULT_REVIEW_COMMENTS_LIMIT,
@@ -74,7 +74,7 @@ export class ProductReviewService {
     const reviewId = parseId(reviewIdRaw);
     const row = await this.repo.findReviewDetailById(reviewId);
     if (!row) {
-      throw new NotFoundException(PRODUCT_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw new DomainException('REVIEW_NOT_FOUND');
     }
 
     const [likeCounts, likedIds, commentCounts] = await Promise.all([
@@ -103,7 +103,7 @@ export class ProductReviewService {
     const reviewId = parseId(input.reviewId);
     const exists = await this.repo.existsPublicReview(reviewId);
     if (!exists) {
-      throw new NotFoundException(PRODUCT_REVIEW_ERRORS.REVIEW_NOT_FOUND);
+      throw new DomainException('REVIEW_NOT_FOUND');
     }
 
     const limit = input.limit ?? DEFAULT_REVIEW_COMMENTS_LIMIT;
@@ -111,9 +111,7 @@ export class ProductReviewService {
       this.repo.listReviewComments({
         reviewId,
         limit,
-        cursor: input.cursor
-          ? parseIdCursor(input.cursor, PRODUCT_REVIEW_ERRORS.INVALID_CURSOR)
-          : undefined,
+        cursor: input.cursor ? parseIdCursor(input.cursor) : undefined,
       }),
       this.repo.countReviewComments(reviewId),
     ]);
@@ -183,10 +181,7 @@ export class ProductReviewService {
 
   /** 좋아요순 커서 "<likeCount>:<id>". 형식·범위 방어는 공용 파서가 담당. */
   private parseLikesCursor(raw: string): { likeCount: number; id: bigint } {
-    const cursor = parseNumberIdCursor(
-      raw,
-      PRODUCT_REVIEW_ERRORS.INVALID_LIKES_CURSOR,
-    );
+    const cursor = parseNumberIdCursor(raw, 'INVALID_LIKES_CURSOR');
     return { likeCount: cursor.value, id: cursor.id };
   }
 

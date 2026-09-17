@@ -18,7 +18,6 @@ import {
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
 import {
-  INVALID_IMAGE_URL,
   BANNER_NOT_FOUND,
   CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK,
   CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
@@ -31,7 +30,6 @@ import {
   LINK_STORE_NOT_VISIBLE,
   LINK_STORE_REQUIRED,
   LINK_URL_REQUIRED,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_BANNER_TITLE_LENGTH,
@@ -99,9 +97,7 @@ export class AdminBannerService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const filter = {
       placement: input?.placement,
@@ -160,7 +156,7 @@ export class AdminBannerService extends AdminBaseService {
       imageUrl,
       'BANNER_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
 
     const row = await this.repo.createBanner(
@@ -222,7 +218,7 @@ export class AdminBannerService extends AdminBaseService {
         data.image_url,
         'BANNER_IMAGE',
         ctx.accountId,
-        INVALID_IMAGE_URL,
+        'INVALID_IMAGE_URL',
       );
     }
 

@@ -13,7 +13,6 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
-  INVALID_IMAGE_URL,
   IMAGE_LIMIT_EXCEEDED,
   IMAGE_MIN_REQUIRED,
   idsMismatchError,
@@ -73,7 +72,7 @@ export class SellerProductImageService extends SellerBaseService {
       imageUrl,
       'PRODUCT_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
 
     const row = await this.productRepository.addProductImage({

@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { OrderRepository } from '@/features/order';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewMutationResolver } from '@/features/user/resolvers/user-review-mutation.resolver';
@@ -115,7 +113,7 @@ describe('User Review Resolvers (real DB)', () => {
           ],
         },
       ),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrowDomain(400);
     expect(await prisma.review.count()).toBe(0);
   });
 

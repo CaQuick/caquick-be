@@ -1,9 +1,6 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
@@ -72,7 +69,7 @@ describe('SellerOptionService (real DB)', () => {
           productId: '999999',
           name: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('maxSelect < minSelect면 BadRequestException', async () => {
@@ -84,7 +81,7 @@ describe('SellerOptionService (real DB)', () => {
           minSelect: 3,
           maxSelect: 1,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 생성 + audit log', async () => {
@@ -133,7 +130,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: '999999',
           name: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 소유 group이면 NotFoundException', async () => {
@@ -146,7 +143,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: othersGroup.id.toString(),
           name: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('maxSelect < minSelect(기존값+신규값 조합)면 BadRequestException', async () => {
@@ -165,7 +162,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: group.id.toString(),
           maxSelect: 1,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 수정', async () => {
@@ -202,7 +199,7 @@ describe('SellerOptionService (real DB)', () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerDeleteOptionGroup(accountId, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log', async () => {
@@ -231,7 +228,7 @@ describe('SellerOptionService (real DB)', () => {
           productId: product.id.toString(),
           optionGroupIds: ['1', '2'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 재정렬', async () => {
@@ -259,7 +256,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: '999999',
           title: 'L',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('정상 생성', async () => {
@@ -284,7 +281,7 @@ describe('SellerOptionService (real DB)', () => {
           optionItemId: '999999',
           title: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 item이면 NotFoundException', async () => {
@@ -300,7 +297,7 @@ describe('SellerOptionService (real DB)', () => {
           optionItemId: othersItem.id.toString(),
           title: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('정상 수정', async () => {
@@ -323,7 +320,7 @@ describe('SellerOptionService (real DB)', () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerDeleteOptionItem(accountId, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete', async () => {
@@ -351,7 +348,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: group.id.toString(),
           optionItemIds: ['1'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 재정렬', async () => {
@@ -445,7 +442,7 @@ describe('SellerOptionService (real DB)', () => {
           productId: '999999',
           optionGroupIds: [],
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('매장 그룹 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
@@ -464,7 +461,7 @@ describe('SellerOptionService (real DB)', () => {
           productId: product.id.toString(),
           optionGroupIds: [otherGroup.id.toString()],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -479,7 +476,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: othersGroup.id.toString(),
           title: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -494,7 +491,7 @@ describe('SellerOptionService (real DB)', () => {
 
       await expect(
         service.sellerDeleteOptionItem(me.accountId, othersItem.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -506,7 +503,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: '999999',
           optionItemIds: [],
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('매장 item 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
@@ -530,7 +527,7 @@ describe('SellerOptionService (real DB)', () => {
           optionGroupId: group.id.toString(),
           optionItemIds: [foreignItem.id.toString()],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -558,7 +555,7 @@ describe('SellerOptionService (real DB)', () => {
             title: 'L',
             imageUrl: url(accountId),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
 
@@ -575,7 +572,7 @@ describe('SellerOptionService (real DB)', () => {
             optionItemId: item.id.toString(),
             imageUrl: url(accountId),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
 

@@ -1,9 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import { STORAGE_ERRORS } from '@/global/storage/constants/storage.constants';
 import { S3Service } from '@/global/storage/s3.service';
 
 // getSignedUrl을 모킹
@@ -107,7 +105,7 @@ describe('S3Service', () => {
       it('허용되지 않은 contentType이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentType: 'image/gif' }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('5MB 초과하면 거부해야 한다', async () => {
@@ -116,7 +114,7 @@ describe('S3Service', () => {
             ...baseInput,
             contentLength: 6 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('5MB 이하이면 허용해야 한다', async () => {
@@ -149,7 +147,7 @@ describe('S3Service', () => {
             ...reviewImageInput,
             contentLength: 11 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
     });
 
@@ -189,7 +187,7 @@ describe('S3Service', () => {
             ...reviewVideoInput,
             contentLength: 51 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('이미지 contentType이면 거부해야 한다', async () => {
@@ -198,7 +196,7 @@ describe('S3Service', () => {
             ...reviewVideoInput,
             contentType: 'image/jpeg',
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
     });
 
@@ -206,13 +204,13 @@ describe('S3Service', () => {
       it('0이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: 0 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrowDomain('INVALID_CONTENT_LENGTH');
       });
 
       it('음수이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: -1 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrowDomain('INVALID_CONTENT_LENGTH');
       });
     });
 
@@ -223,7 +221,7 @@ describe('S3Service', () => {
             ...baseInput,
             contentType: 'application/pdf',
           }),
-        ).rejects.toThrow('허용되지 않은 파일 형식입니다.');
+        ).rejects.toThrowDomain('INVALID_CONTENT_TYPE');
       });
 
       it('용량 초과 에러에 최대 크기가 포함되어야 한다', async () => {
@@ -232,12 +230,12 @@ describe('S3Service', () => {
             ...baseInput,
             contentLength: 100 * 1024 * 1024,
           }),
-        ).rejects.toThrow('최대 5MB');
+        ).rejects.toThrowDomain('FILE_TOO_LARGE');
       });
     });
 
     describe('S3 presign 실패', () => {
-      it('getSignedUrl 실패 시 InternalServerErrorException을 던져야 한다', async () => {
+      it('getSignedUrl 실패 시 500을 던져야 한다', async () => {
         const { getSignedUrl: mockGetSignedUrl } = jest.requireMock<
           typeof import('@aws-sdk/s3-request-presigner')
         >('@aws-sdk/s3-request-presigner');
@@ -245,8 +243,8 @@ describe('S3Service', () => {
           new Error('Credential is missing'),
         );
 
-        await expect(service.createUploadUrl(baseInput)).rejects.toThrow(
-          STORAGE_ERRORS.S3_PRESIGN_FAILED,
+        await expect(service.createUploadUrl(baseInput)).rejects.toThrowDomain(
+          'S3_PRESIGN_FAILED',
         );
         // 실제 원인이 구조화 로그로 남아야 한다 (일반 메시지로 가려지지 않도록)
         expect(mockLogger.error).toHaveBeenCalledWith(

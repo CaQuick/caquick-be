@@ -1,4 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 import argon2 from 'argon2';
 
 import type { AdminCreateSellerInput } from '@/features/admin/dto/inputs/admin-create-seller.input';
@@ -220,7 +219,7 @@ describe('AdminSellerService (real DB)', () => {
     ])('%s이면 NotFoundException', async (_label, makeId) => {
       await expect(
         service.adminSeller(await admin(), await makeId()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -296,7 +295,7 @@ describe('AdminSellerService (real DB)', () => {
           ...validInput,
           store: { ...validInput.store, regionId: (await makeId()).toString() },
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('regionId 빈 문자열은 BadRequestException(값 없음으로 보지 않는다)', async () => {
@@ -305,7 +304,7 @@ describe('AdminSellerService (real DB)', () => {
           ...validInput,
           store: { ...validInput.store, regionId: '' },
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it.each([
@@ -320,7 +319,7 @@ describe('AdminSellerService (real DB)', () => {
           ...validInput,
           store: { ...validInput.store, ...coords },
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('이미 쓰이는 username(관리자 것 포함)이면 BadRequestException', async () => {
@@ -335,7 +334,7 @@ describe('AdminSellerService (real DB)', () => {
           ...validInput,
           username: 'taken.name',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('감사 기록이 실패하면 계정·매장도 롤백된다(같은 트랜잭션)', async () => {
@@ -422,7 +421,7 @@ describe('AdminSellerService (real DB)', () => {
           accountId: (await makeId()).toString(),
           newPassword: 'Reset!Pass9',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });
