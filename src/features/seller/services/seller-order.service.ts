@@ -14,7 +14,14 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
+import {
+  OrderRepository,
+  OrderStatusTransitionPolicy,
+  toOrderItemDetail,
+  toOrderStatusHistory,
+  type OrderItemDetailRow,
+  type OrderStatusHistoryRow,
+} from '@/features/order';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -24,39 +31,6 @@ import type {
   SellerOrderSummaryOutput,
 } from '@/features/seller/types/seller-output.type';
 import { OrderStatus } from '@/generated/prisma/client';
-
-interface OrderFreeEditRow {
-  id: bigint;
-  crop_image_url: string;
-  description_text: string;
-  sort_order: number;
-  attachments: { id: bigint; image_url: string; sort_order: number }[];
-}
-
-interface OrderItemRow {
-  id: bigint;
-  store_id: bigint;
-  product_id: bigint;
-  product_name_snapshot: string;
-  regular_price_snapshot: number;
-  sale_price_snapshot: number | null;
-  quantity: number;
-  item_subtotal_price: number;
-  option_items: {
-    id: bigint;
-    group_name_snapshot: string;
-    option_title_snapshot: string;
-    option_price_delta_snapshot: number;
-  }[];
-  custom_texts: {
-    id: bigint;
-    token_key_snapshot: string;
-    default_text_snapshot: string;
-    value_text: string;
-    sort_order: number;
-  }[];
-  free_edits: OrderFreeEditRow[];
-}
 
 @Injectable()
 export class SellerOrderService extends SellerBaseService {
@@ -200,14 +174,8 @@ export class SellerOrderService extends SellerBaseService {
     canceled_at: Date | null;
     created_at: Date;
     updated_at: Date;
-    status_histories: {
-      id: bigint;
-      from_status: OrderStatus | null;
-      to_status: OrderStatus;
-      changed_at: Date;
-      note: string | null;
-    }[];
-    items: OrderItemRow[];
+    status_histories: OrderStatusHistoryRow[];
+    items: OrderItemDetailRow[];
   }): SellerOrderDetailOutput {
     return {
       id: row.id.toString(),
@@ -227,55 +195,8 @@ export class SellerOrderService extends SellerBaseService {
       canceledAt: row.canceled_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      items: row.items.map((item) => this.toOrderItemOutput(item)),
-      statusHistories: row.status_histories.map((history) => ({
-        id: history.id.toString(),
-        fromStatus: history.from_status,
-        toStatus: history.to_status,
-        changedAt: history.changed_at,
-        note: history.note,
-      })),
-    };
-  }
-
-  private toOrderItemOutput(item: OrderItemRow) {
-    return {
-      id: item.id.toString(),
-      storeId: item.store_id.toString(),
-      productId: item.product_id.toString(),
-      productNameSnapshot: item.product_name_snapshot,
-      regularPriceSnapshot: item.regular_price_snapshot,
-      salePriceSnapshot: item.sale_price_snapshot,
-      quantity: item.quantity,
-      itemSubtotalPrice: item.item_subtotal_price,
-      optionItems: item.option_items.map((opt) => ({
-        id: opt.id.toString(),
-        groupNameSnapshot: opt.group_name_snapshot,
-        optionTitleSnapshot: opt.option_title_snapshot,
-        optionPriceDeltaSnapshot: opt.option_price_delta_snapshot,
-      })),
-      customTexts: item.custom_texts.map((text) => ({
-        id: text.id.toString(),
-        tokenKeySnapshot: text.token_key_snapshot,
-        defaultTextSnapshot: text.default_text_snapshot,
-        valueText: text.value_text,
-        sortOrder: text.sort_order,
-      })),
-      freeEdits: item.free_edits.map((edit) => this.toFreeEditOutput(edit)),
-    };
-  }
-
-  private toFreeEditOutput(edit: OrderFreeEditRow) {
-    return {
-      id: edit.id.toString(),
-      cropImageUrl: edit.crop_image_url,
-      descriptionText: edit.description_text,
-      sortOrder: edit.sort_order,
-      attachments: edit.attachments.map((a) => ({
-        id: a.id.toString(),
-        imageUrl: a.image_url,
-        sortOrder: a.sort_order,
-      })),
+      items: row.items.map(toOrderItemDetail),
+      statusHistories: row.status_histories.map(toOrderStatusHistory),
     };
   }
 }

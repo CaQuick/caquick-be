@@ -1,4 +1,8 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+import type {
+  OrderItemDetailOutput,
+  OrderStatusHistoryOutput,
+} from '@/features/order';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyOrderSummary {
@@ -17,45 +21,9 @@ export interface MyOrderSummary {
 
 export type MyOrderConnection = OffsetConnection<MyOrderSummary>;
 
-export interface MyOrderStatusHistory {
-  fromStatus: OrderStatus | null;
-  toStatus: OrderStatus;
-  changedAt: Date;
-  note: string | null;
-}
-
-export interface MyOrderItemSelectedOption {
-  groupName: string;
-  optionTitle: string;
-  priceDelta: number;
-}
-
-export interface MyOrderItemCustomText {
-  tokenKey: string;
-  defaultText: string;
-  valueText: string;
-  sortOrder: number;
-}
-
-export interface MyOrderItemCustomFreeEdit {
-  cropImageUrl: string;
-  descriptionText: string;
-  sortOrder: number;
-  attachmentImageUrls: string[];
-}
-
-export interface MyOrderItemDetail {
-  orderItemId: string;
-  productId: string;
-  productName: string;
+export interface MyOrderItem {
+  item: OrderItemDetailOutput;
   representativeImageUrl: string | null;
-  quantity: number;
-  regularPrice: number;
-  salePrice: number | null;
-  itemSubtotalPrice: number;
-  selectedOptions: MyOrderItemSelectedOption[];
-  customTexts: MyOrderItemCustomText[];
-  customFreeEdits: MyOrderItemCustomFreeEdit[];
   hasMyReview: boolean;
   canWriteReview: boolean;
 }
@@ -90,7 +58,7 @@ export interface MyOrderDetail {
   madeAt: Date | null;
   pickedUpAt: Date | null;
   canceledAt: Date | null;
-  statusHistories: MyOrderStatusHistory[];
-  items: MyOrderItemDetail[];
+  statusHistories: OrderStatusHistoryOutput[];
+  items: MyOrderItem[];
   store: MyOrderStoreInfo;
 }

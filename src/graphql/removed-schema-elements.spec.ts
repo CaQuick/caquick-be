@@ -42,6 +42,23 @@ const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['SearchProduct', '플랜 12'],
   ['WishlistItemSummary', '플랜 12'],
   ['RecentViewedProductSummary', '플랜 12'],
+  ['SellerOrderStatusHistory', '플랜 13'],
+  ['SellerOrderItemOptionSnapshot', '플랜 13'],
+  ['SellerOrderItemCustomTextSnapshot', '플랜 13'],
+  ['SellerOrderItemCustomFreeEditAttachment', '플랜 13'],
+  ['SellerOrderItemCustomFreeEditSnapshot', '플랜 13'],
+  ['SellerOrderItemDetail', '플랜 13'],
+  ['AdminOrderStatusHistory', '플랜 13'],
+  ['AdminOrderItemOptionSnapshot', '플랜 13'],
+  ['AdminOrderItemCustomTextSnapshot', '플랜 13'],
+  ['AdminOrderItemCustomFreeEditAttachment', '플랜 13'],
+  ['AdminOrderItemCustomFreeEditSnapshot', '플랜 13'],
+  ['AdminOrderItemDetail', '플랜 13'],
+  ['MyOrderStatusHistory', '플랜 13'],
+  ['MyOrderItemDetail', '플랜 13'],
+  ['MyOrderItemSelectedOption', '플랜 13'],
+  ['MyOrderItemCustomText', '플랜 13'],
+  ['MyOrderItemCustomFreeEdit', '플랜 13'],
 ];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]

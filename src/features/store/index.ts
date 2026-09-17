@@ -4,7 +4,6 @@ export { StoreModule } from '@/features/store/store.module';
 export {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
-  RANKING_VALID_ORDER_STATUSES,
 } from '@/features/store/constants/store-ranking.constants';
 export { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 // 매장 픽업 가능 판정. 주문 생성(order feature)이 픽업 일시 재검증에 사용한다 —
