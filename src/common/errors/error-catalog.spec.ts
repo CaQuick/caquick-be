@@ -34,6 +34,7 @@ const RENDER_PARAMS: Partial<
   INVALID_IDS: { field: 'imageIds' },
   PRODUCT_IMAGE_LIMIT_EXCEEDED: { max: 10 },
   NOTIFICATION_FANOUT_INTERRUPTED: { sentCount: 120 },
+  UNSUPPORTED_OIDC_PROVIDER: { provider: 'facebook' },
 };
 
 // 필터 밖 경로(Apollo가 리졸버 진입 전에 만드는 에러)는 카탈로그 코드가 아니라 Apollo 자체 code를 낸다:

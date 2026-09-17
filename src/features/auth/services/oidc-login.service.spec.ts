@@ -347,7 +347,7 @@ describe('OidcLoginService', () => {
       ).rejects.toThrowDomain(401);
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC session is missing.');
+      ).rejects.toThrowDomain('OIDC_SESSION_MISSING');
     });
 
     it('OIDC subject가 없으면 UnauthorizedException을 던져야 한다', async () => {
@@ -371,7 +371,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC subject is missing.');
+      ).rejects.toThrowDomain('OIDC_SUBJECT_MISSING');
     });
 
     it('upsertUserByOidcIdentity가 account=null을 반환하면 UnauthorizedException', async () => {
@@ -397,7 +397,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('Account upsert failed.');
+      ).rejects.toThrowDomain('ACCOUNT_UPSERT_FAILED');
     });
   });
 });

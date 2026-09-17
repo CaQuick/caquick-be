@@ -15,7 +15,8 @@ export class OptionalJwtAuthGuard extends JwtAuthGuard {
   override handleRequest<TUser = JwtUser>(
     _err: unknown,
     user: TUser | false | null,
-  ): TUser | undefined {
-    return user || undefined;
+  ): TUser {
+    // 비로그인은 req.user가 undefined — IAuthGuard 시그니처(TUser)에 맞추려는 단언
+    return (user || undefined) as TUser;
   }
 }

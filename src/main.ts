@@ -76,6 +76,8 @@ async function bootstrap(): Promise<void> {
       forbidNonWhitelisted: true,
       transform: true,
       exceptionFactory: (errors: ValidationError[]) =>
+        // 필터가 VALIDATION_FAILED로 매핑하는 유일한 Nest 예외 직접 생성
+        // eslint-disable-next-line no-restricted-syntax
         new BadRequestException({
           message: errors.map((e) => ({
             property: e.property,

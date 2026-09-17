@@ -115,25 +115,39 @@ describe('GraphQLExceptionFilter', () => {
       );
     });
 
-    // 카탈로그로 아직 이관되지 않은 Nest 예외는 분류값을 임시 코드로 쓴다(07b·07c 전까지)
+    // 카탈로그 밖 Nest 예외(앱 코드는 ESLint가 막음): 라우터 404만 ROUTE_NOT_FOUND, 나머지는 INTERNAL_ERROR
     it.each([
       [
         new BadRequestException('bad input'),
         400,
+        'INTERNAL_ERROR',
         'BAD_USER_INPUT',
         'bad input',
       ],
       [
         new UnauthorizedException('no token'),
         401,
+        'INTERNAL_ERROR',
         'UNAUTHENTICATED',
         'no token',
       ],
-      [new ForbiddenException('nope'), 403, 'FORBIDDEN', 'nope'],
-      [new NotFoundException('missing'), 404, 'NOT_FOUND', 'missing'],
+      [
+        new ForbiddenException('nope'),
+        403,
+        'INTERNAL_ERROR',
+        'FORBIDDEN',
+        'nope',
+      ],
+      [
+        new NotFoundException('Cannot GET /x'),
+        404,
+        'ROUTE_NOT_FOUND',
+        'NOT_FOUND',
+        'Cannot GET /x',
+      ],
     ])(
-      '%p → statusCode=%i, code=%s, message=%s',
-      (exception, status, code, message) => {
+      '%p → statusCode=%i, code=%s, classification=%s, message=%s',
+      (exception, status, code, classification, message) => {
         const host = mockHost();
         const result = filter.format(exception, host);
 
@@ -142,7 +156,7 @@ describe('GraphQLExceptionFilter', () => {
         expect(result.extensions).toEqual(
           expect.objectContaining({
             code,
-            classification: code,
+            classification,
             statusCode: status,
             operation: 'query',
             fieldName: 'sellerMyStore',

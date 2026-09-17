@@ -22,6 +22,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '입력값이 올바르지 않습니다.',
   },
+  ROUTE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '요청한 경로를 찾을 수 없습니다.',
+  },
   INVALID_ID: {
     status: HttpStatus.BAD_REQUEST,
     message: 'id 형식이 올바르지 않습니다.',
@@ -605,6 +609,64 @@ export const ERROR_CATALOG = {
     // 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복.
     message: ({ sentCount }) =>
       `알림 발송이 ${sentCount}건 이후 중단되었습니다. 재발송 시 중복되므로 감사 로그를 확인하세요.`,
+  },
+  // ── 인증(로그인·토큰)
+  INVALID_ACCESS_TOKEN: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: '액세스 토큰이 유효하지 않습니다.',
+  },
+  INVALID_CREDENTIALS: {
+    status: HttpStatus.UNAUTHORIZED,
+    // 존재·타입·비밀번호 오류를 구분하지 않는다(계정 열거 방지)
+    message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  },
+  MISSING_REFRESH_TOKEN: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: 'refresh 토큰이 없습니다.',
+  },
+  INVALID_REFRESH_TOKEN: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: 'refresh 토큰이 유효하지 않습니다.',
+  },
+  CREDENTIAL_NOT_FOUND: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: '자격증명을 찾을 수 없습니다.',
+  },
+  ROLE_MISMATCH: {
+    status: HttpStatus.FORBIDDEN,
+    message: '이 경로에서 사용할 수 없는 계정 유형입니다.',
+  },
+  CURRENT_PASSWORD_INVALID: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: '현재 비밀번호가 올바르지 않습니다.',
+  },
+  PASSWORD_UNCHANGED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '새 비밀번호는 현재 비밀번호와 달라야 합니다.',
+  },
+  OIDC_SESSION_MISSING: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: 'OIDC 세션이 없거나 만료되었습니다.',
+  },
+  OIDC_SUBJECT_MISSING: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: 'OIDC ID 토큰에 sub 클레임이 없습니다.',
+  },
+  ACCOUNT_UPSERT_FAILED: {
+    status: HttpStatus.UNAUTHORIZED,
+    message: '계정 생성 또는 갱신에 실패했습니다.',
+  },
+  ACCOUNT_IDENTITY_CONFLICT: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 연동된 소셜 계정입니다.',
+  },
+  UNSUPPORTED_OIDC_PROVIDER: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ provider }) => `지원하지 않는 OIDC 제공자입니다: ${provider}`,
+  },
+  DEV_ONLY_ENDPOINT: {
+    status: HttpStatus.FORBIDDEN,
+    message: '개발 환경에서만 사용할 수 있는 엔드포인트입니다.',
   },
 } as const satisfies Record<string, ErrorEntry>;
 

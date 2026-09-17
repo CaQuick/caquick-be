@@ -1,8 +1,6 @@
 import {
-  BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -24,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { AuthService } from '@/features/auth/auth.service';
 import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
@@ -76,7 +75,7 @@ function parseAccountIdString(raw: string): bigint {
   try {
     return BigInt(raw);
   } catch {
-    throw new BadRequestException('Invalid account id.');
+    throw new DomainException('INVALID_ACCOUNT_ID');
   }
 }
 
@@ -344,9 +343,7 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException(
-        '/auth/dev/issue-token은 개발 환경에서만 사용 가능합니다.',
-      );
+      throw new DomainException('DEV_ONLY_ENDPOINT');
     }
 
     const accountId = parseAccountIdString(body.accountId);

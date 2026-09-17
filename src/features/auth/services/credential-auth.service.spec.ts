@@ -1,8 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -14,7 +9,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import {
   ACCOUNT_CREDENTIAL_REPOSITORY,
   type AccountCredentialWithAccount,
@@ -193,8 +187,8 @@ describe('CredentialAuthService', () => {
       const verify = jest.spyOn(argon2, 'verify').mockResolvedValue(true);
       credentials.findCredentialByUsername.mockResolvedValue(null);
 
-      await expect(login({ username: 'nonexistent' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
+      await expect(login({ username: 'nonexistent' })).rejects.toThrowDomain(
+        'INVALID_CREDENTIALS',
       );
       // 응답 시간 평준화 — 실제 해시가 없어도 verify는 1회 실행된다
       expect(verify).toHaveBeenCalledTimes(1);
@@ -214,8 +208,8 @@ describe('CredentialAuthService', () => {
         const credential = makeCredential({ accountType });
         credentials.findCredentialByUsername.mockResolvedValue(credential);
 
-        await expect(login({ role })).rejects.toThrow(
-          new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
+        await expect(login({ role })).rejects.toThrowDomain(
+          'INVALID_CREDENTIALS',
         );
         // 더미 해시로 1회 — 비밀번호가 맞아도(verify=true) 거부되고, 실제 해시는 쓰이지 않는다
         expect(verify).toHaveBeenCalledTimes(1);
@@ -228,9 +222,9 @@ describe('CredentialAuthService', () => {
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
       credentials.findCredentialByUsername.mockResolvedValue(makeCredential());
 
-      await expect(login({ password: 'WrongPassword!123' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
-      );
+      await expect(
+        login({ password: 'WrongPassword!123' }),
+      ).rejects.toThrowDomain('INVALID_CREDENTIALS');
       expect(credentials.updateLastLogin).not.toHaveBeenCalled();
     });
   });
@@ -272,9 +266,7 @@ describe('CredentialAuthService', () => {
     it('refresh 쿠키가 없으면 회전 없이 MISSING_REFRESH_TOKEN', async () => {
       await expect(
         service.refresh({ role: 'SELLER', req: mockReq, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
 
@@ -283,9 +275,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
 
@@ -297,9 +287,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
   });
@@ -331,9 +319,7 @@ describe('CredentialAuthService', () => {
     it('refresh 쿠키가 없으면 MISSING_REFRESH_TOKEN', async () => {
       await expect(
         service.logout({ role: 'SELLER', req: mockReq, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
     });
 
     it('활성 세션이 없으면 INVALID_REFRESH_TOKEN', async () => {
@@ -341,9 +327,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.logout({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
     });
 
     it('세션 계정의 타입이 경로 role과 다르면 revoke하지 않는다', async () => {
@@ -430,8 +414,8 @@ describe('CredentialAuthService', () => {
     it('자격증명이 없으면 CREDENTIAL_NOT_FOUND', async () => {
       credentials.findCredentialByAccountId.mockResolvedValue(null);
 
-      await expect(change({ accountId: BigInt(999) })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.CREDENTIAL_NOT_FOUND),
+      await expect(change({ accountId: BigInt(999) })).rejects.toThrowDomain(
+        'CREDENTIAL_NOT_FOUND',
       );
     });
 
@@ -440,8 +424,8 @@ describe('CredentialAuthService', () => {
         makeCredential({ accountType: AccountType.ADMIN }),
       );
 
-      await expect(change({ role: 'SELLER' })).rejects.toThrow(
-        new ForbiddenException(AUTH_ERROR_MESSAGES.ROLE_MISMATCH),
+      await expect(change({ role: 'SELLER' })).rejects.toThrowDomain(
+        'ROLE_MISMATCH',
       );
     });
 
@@ -453,9 +437,9 @@ describe('CredentialAuthService', () => {
       credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
 
-      await expect(change({ currentPassword: 'Wrong!123' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.CURRENT_PASSWORD_INVALID),
-      );
+      await expect(
+        change({ currentPassword: 'Wrong!123' }),
+      ).rejects.toThrowDomain('CURRENT_PASSWORD_INVALID');
       expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
     });
 
@@ -463,9 +447,9 @@ describe('CredentialAuthService', () => {
       credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
       jest.spyOn(argon2, 'verify').mockResolvedValue(true);
 
-      await expect(change({ newPassword: 'OldPassword!123' })).rejects.toThrow(
-        new BadRequestException(AUTH_ERROR_MESSAGES.PASSWORD_UNCHANGED),
-      );
+      await expect(
+        change({ newPassword: 'OldPassword!123' }),
+      ).rejects.toThrowDomain('PASSWORD_UNCHANGED');
       expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
     });
   });
