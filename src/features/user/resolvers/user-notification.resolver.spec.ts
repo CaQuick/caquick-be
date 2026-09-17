@@ -1,10 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
 import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

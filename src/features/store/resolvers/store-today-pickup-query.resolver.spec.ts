@@ -1,11 +1,10 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';

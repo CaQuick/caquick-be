@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { ReviewReport } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
@@ -21,6 +20,7 @@ import {
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { ReviewReportResult } from '@/features/user/types/user-review-output.type';
+import type { ReviewReport } from '@/generated/prisma/client';
 
 /**
  * 리뷰·댓글 신고 접수. 처리(삭제/기각)는 관리자 API가 한다.

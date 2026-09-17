@@ -27,6 +27,37 @@ function parseBuildTsconfig(): ts.ParsedCommandLine {
   );
 }
 
+describe('Prisma 생성 클라이언트 경로 불변식', () => {
+  const schema = readFileSync(
+    path.join(REPO_ROOT, 'prisma', 'schema.prisma'),
+    'utf8',
+  );
+  const output = /generator client \{[^}]*output\s*=\s*"([^"]+)"/.exec(
+    schema,
+  )?.[1];
+
+  it('generator output은 tsconfig.build rootDir(src) 안이라 dist/generated로 함께 방출된다', () => {
+    // 왜: 런타임 import가 @/generated/prisma/client에 묶여 있다. output이 src 밖으로
+    // 나가면 tsc가 방출하지 않아 dist/main.js 부팅이 모듈 부재로 깨진다.
+    expect(output).toBeDefined();
+    const resolved = path.resolve(REPO_ROOT, 'prisma', output!);
+    expect(path.relative(path.join(REPO_ROOT, 'src'), resolved)).toBe(
+      path.join('generated', 'prisma'),
+    );
+  });
+
+  it('생성물은 커밋되지 않고 postinstall이 만든다', () => {
+    // 왜: 생성물(10만 줄)을 커밋하면 스키마와 어긋난 채 남을 수 있고, gitignore만 있고
+    // postinstall이 빠지면 clone·CI에서 tsc부터 실패한다. 둘이 짝이다.
+    const gitignore = readFileSync(path.join(REPO_ROOT, '.gitignore'), 'utf8');
+    expect(gitignore.split('\n')).toContain('src/generated/');
+    const pkg = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts.postinstall).toBe('prisma generate');
+  });
+});
+
 describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () => {
   it('deleteOutDir·incremental 동시 활성 시 tsbuildinfo는 outDir 안에 생성된다', () => {
     const nestCli = JSON.parse(readFileSync(NEST_CLI, 'utf8')) as NestCliJson;

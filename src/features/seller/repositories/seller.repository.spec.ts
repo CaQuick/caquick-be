@@ -1,11 +1,10 @@
-import { AccountType, type PrismaClient } from '@prisma/client';
-
 import {
   isSellerAccount,
   nextCursorOf,
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
+import { AccountType, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

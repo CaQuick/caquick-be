@@ -7,7 +7,7 @@
  * - 카테고리는 영구 마스터이므로 resetSeedScope 정리 대상이 아니다(region과 동일).
  *   uk(category_type, name) 기준 upsert로 항상 최신 상태로 보정한다.
  */
-import type { CategoryType, PrismaClient } from '@prisma/client';
+import type { CategoryType, PrismaClient } from '@/generated/prisma/client';
 
 const EVENT_CATEGORY_NAMES = [
   '생일',

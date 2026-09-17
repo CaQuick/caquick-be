@@ -1,5 +1,4 @@
-import type { PrismaClient, Tag } from '@prisma/client';
-
+import type { PrismaClient, Tag } from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export async function createTag(

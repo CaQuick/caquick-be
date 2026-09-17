@@ -1,10 +1,9 @@
-import { Prisma } from '@prisma/client';
-
 import type {
   StoreDetailRow,
   StoreReviewStat,
 } from '@/features/store/repositories/store.repository';
 import { toStoreDetail } from '@/features/store/services/store-detail-mappers.helper';
+import { Prisma } from '@/generated/prisma/client';
 
 function makeRow(overrides: Partial<StoreDetailRow> = {}): StoreDetailRow {
   return {

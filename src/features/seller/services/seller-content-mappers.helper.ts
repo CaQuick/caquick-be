@@ -1,5 +1,3 @@
-import { type AuditTargetType, Prisma } from '@prisma/client';
-
 import {
   SELLER_AUDIT_TARGET_TYPES,
   type SellerAuditTargetType,
@@ -8,6 +6,7 @@ import type {
   SellerAuditLogOutput,
   SellerFaqTopicOutput,
 } from '@/features/seller/types/seller-output.type';
+import { type AuditTargetType, Prisma } from '@/generated/prisma/client';
 
 /**
  * Content 분할 서비스들이 공유하는 매핑 헬퍼.

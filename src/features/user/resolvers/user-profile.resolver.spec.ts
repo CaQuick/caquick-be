@@ -1,10 +1,10 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
 import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

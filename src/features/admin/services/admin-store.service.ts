@@ -4,12 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActionType,
-  AuditTargetType,
-  type Prisma,
-  type Store,
-} from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -42,6 +36,12 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Prisma,
+  type Store,
+} from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 

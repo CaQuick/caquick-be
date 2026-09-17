@@ -1,7 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
-
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

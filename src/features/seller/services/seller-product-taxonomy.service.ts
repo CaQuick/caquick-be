@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -23,6 +22,7 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { ISellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerProductTaxonomyService

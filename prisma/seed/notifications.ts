@@ -5,7 +5,7 @@
  * - 3개월 경과 1건: myNotifications 3개월 노출 필터 검증용(목록·배지에서 제외).
  * 문구는 notification feature 상수(figma notification-center 톤)와 동일하게 유지.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededOrders } from './orders';
 import type { SeededStores } from './stores';

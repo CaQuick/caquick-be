@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+
+// 생성 클라이언트는 타입·Decimal 런타임만 쓰는 무의존 산출물이라 common에서 참조해도 레이어 규칙과 충돌하지 않는다.
+import { Prisma } from '@/generated/prisma/client';
 
 /** 허용 구간(양끝 포함). 좌표처럼 컬럼·도메인 범위가 정해진 값에 쓴다. */
 export interface DecimalRange {

@@ -1,4 +1,4 @@
-import { AccountType } from '@prisma/client';
+import { AccountType } from '@/generated/prisma/client';
 
 /**
  * 활성 USER 계정 판정 정책(단일 소스, 이슈 #226).

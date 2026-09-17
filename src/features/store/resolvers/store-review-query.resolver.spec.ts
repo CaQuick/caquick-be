@@ -1,8 +1,7 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
 import { StoreReviewQueryResolver } from '@/features/store/resolvers/store-review-query.resolver';
 import { StoreReviewService } from '@/features/store/services/store-review.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

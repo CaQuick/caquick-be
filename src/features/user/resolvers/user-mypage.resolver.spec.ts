@@ -1,10 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserMypageQueryResolver } from '@/features/user/resolvers/user-mypage-query.resolver';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

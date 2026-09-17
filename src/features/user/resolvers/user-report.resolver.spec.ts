@@ -1,10 +1,10 @@
 // 분기/검증 세부는 user-report.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
-import type { PrismaClient } from '@prisma/client';
 
 import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserReportMutationResolver } from '@/features/user/resolvers/user-report-mutation.resolver';
 import { UserReportService } from '@/features/user/services/user-report.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

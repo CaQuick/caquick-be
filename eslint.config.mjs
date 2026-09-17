@@ -20,7 +20,8 @@ export default defineConfig(
       'node_modules/**',
       'coverage/**',
       '.yarn/**',
-      'src/graphql/graphql.types.ts'
+      'src/graphql/graphql.types.ts',
+      'src/generated/**'
     ]
   },
 
@@ -181,6 +182,7 @@ export default defineConfig(
       // mode는 v7에서 deprecated — 'folder'가 기본값이라 생략한다.
       'boundaries/elements': [
         { type: 'common', pattern: 'src/common' },
+        { type: 'generated', pattern: 'src/generated' },
         { type: 'config', pattern: 'src/config' },
         { type: 'prisma', pattern: 'src/prisma' },
         { type: 'global', pattern: 'src/global' },
@@ -207,7 +209,9 @@ export default defineConfig(
               from: { element: { type: '*' } },
               allow: {
                 to: {
-                  element: { types: ['common', 'config', 'prisma', 'global'] },
+                  element: {
+                    types: ['common', 'config', 'prisma', 'global', 'generated'],
+                  },
                 },
               },
             },

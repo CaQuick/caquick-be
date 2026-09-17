@@ -1,5 +1,4 @@
 import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
@@ -7,6 +6,7 @@ import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/user/resolvers/user-recent-view-query.resolver';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

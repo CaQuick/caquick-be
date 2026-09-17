@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
+import { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 찜한 매장 목록 조회 결과 row. myWishlistedStores 매퍼 입력. */

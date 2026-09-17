@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import {
   ProductBestSellerService,
@@ -10,6 +8,7 @@ import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
 import { SearchKeywordRankService } from '@/features/search/services/search-keyword-rank.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

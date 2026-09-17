@@ -73,6 +73,7 @@ jobs:
           cp -r public bundle/public
           cp -r scripts bundle/scripts
           cp -r prisma bundle/prisma
+          cp prisma.config.ts bundle/
           cp ecosystem.config.js bundle/
           cp package.json yarn.lock bundle/
           cp appspec.yml bundle/

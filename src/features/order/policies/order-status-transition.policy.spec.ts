@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderStatus } from '@/generated/prisma/client';
 
 describe('OrderStatusTransitionPolicy', () => {
   const policy = new OrderStatusTransitionPolicy();

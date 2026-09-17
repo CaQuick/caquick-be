@@ -3,8 +3,7 @@ import type {
   AccountStatus,
   AccountType,
   PrismaClient,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface AccountOverrides {

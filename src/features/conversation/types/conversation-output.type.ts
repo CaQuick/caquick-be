@@ -1,7 +1,7 @@
 import type {
   ConversationBodyFormat,
   ConversationSenderType,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 export interface InquiryBusinessHourOutput {
   dayOfWeek: number;

@@ -2,9 +2,10 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PrismaClient } from '@prisma/client';
 import mysql from 'mysql2/promise';
 
+import { PrismaClient } from '@/generated/prisma/client';
+import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
 import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
 
 const STATE_FILE = join(process.cwd(), '.tmp', 'test-db-state.json');
@@ -129,8 +130,9 @@ export async function getTestPrismaClient(): Promise<PrismaClient> {
 
   await ensureSchema(state, dbName, dbUrl);
 
+  // 컨테이너 root는 caching_sha2_password라 콜드 연결에 RSA 키 조회 허용이 필요하다
   const client = new PrismaClient({
-    datasources: { db: { url: dbUrl } },
+    adapter: createMariaDbAdapter(dbUrl, { allowPublicKeyRetrieval: true }),
   }).$extends(softDeleteExtension);
 
   cachedClient = client as unknown as PrismaClient;

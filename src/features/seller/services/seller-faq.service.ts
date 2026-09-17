@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
@@ -19,6 +18,7 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import { toFaqTopicOutput } from '@/features/seller/services/seller-content-mappers.helper';
 import type { ISellerFaqService } from '@/features/seller/services/seller-faq.service.interface';
 import type { SellerFaqTopicOutput } from '@/features/seller/types/seller-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerFaqService

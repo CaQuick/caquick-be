@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType, type Prisma } from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -47,6 +46,11 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Prisma,
+} from '@/generated/prisma/client';
 
 /**
  * 카테고리·태그 마스터 관리. 시드에서만 만들 수 있던 값을 운영자가 관리한다.

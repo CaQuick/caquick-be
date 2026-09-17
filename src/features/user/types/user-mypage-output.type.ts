@@ -1,4 +1,4 @@
-import type { OrderStatus } from '@prisma/client';
+import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyPageCounts {
   wishlistCount: number;

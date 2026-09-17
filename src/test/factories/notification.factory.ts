@@ -3,8 +3,7 @@ import type {
   NotificationType,
   PrismaClient,
   Notification,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 

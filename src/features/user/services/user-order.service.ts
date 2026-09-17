@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
 
 import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
 import { sliceOverfetched } from '@/common/utils/pagination';
@@ -10,6 +9,7 @@ import type {
   MyOrderConnection,
   MyOrderDetail,
 } from '@/features/user/types/user-order-output.type';
+import { OrderStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class UserOrderService {

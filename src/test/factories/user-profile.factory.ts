@@ -1,5 +1,4 @@
-import type { PrismaClient, UserProfile } from '@prisma/client';
-
+import type { PrismaClient, UserProfile } from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 

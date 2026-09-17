@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type StoreMapProvider } from '@prisma/client';
 
 import {
   POPULAR_STORE_CAKE_IMAGE_LIMIT,
   RANKING_VALID_ORDER_STATUSES,
 } from '@/features/store/constants/store-ranking.constants';
+import { Prisma, type StoreMapProvider } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface StoreCandidateRow {

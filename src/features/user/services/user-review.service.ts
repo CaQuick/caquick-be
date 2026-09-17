@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, ReviewMediaType } from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
@@ -22,6 +21,7 @@ import type {
   MyReviewConnection,
   MyReviewOrNull,
 } from '@/features/user/types/user-review-output.type';
+import { OrderStatus, ReviewMediaType } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import type {
   CreateUploadUrlOutput,

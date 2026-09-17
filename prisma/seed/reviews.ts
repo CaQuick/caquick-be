@@ -2,8 +2,8 @@
  * 시드 리뷰. user1이 o4의 OrderItem에 작성한 1건.
  * IMAGE 1건 + VIDEO 1건 첨부.
  */
-import type { PrismaClient } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 
 import type { SeededOrders } from './orders';
 import type { SeededStores } from './stores';

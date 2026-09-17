@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import {
   AUDIT_LOG_REPOSITORY,
@@ -16,6 +15,7 @@ import { toStoreOutput } from '@/features/seller/services/seller-store-mappers.h
 import type { ISellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 

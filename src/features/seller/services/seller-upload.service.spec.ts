@@ -1,11 +1,11 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerUploadMutationResolver } from '@/features/seller/resolvers/seller-upload-mutation.resolver';
 import { SellerUploadService } from '@/features/seller/services/seller-upload.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';

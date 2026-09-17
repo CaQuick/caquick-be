@@ -2,7 +2,7 @@
  * 시드 최근 본 상품 (user1, 4건).
  * viewed_at에 시간 차이를 두어 정렬 검증 가능.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
