@@ -29,23 +29,17 @@ import {
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import {
-  toStoreDailyCapacityOutput,
-  toStoreOutput,
-} from '@/features/seller/services/seller-store-mappers.helper';
-import type { ISellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service.interface';
+import { toStoreDailyCapacityOutput } from '@/features/seller/services/seller-store-mappers.helper';
 import type {
   SellerCursorConnection,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
 } from '@/features/seller/types/seller-output.type';
+import { toStoreOutput } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
-export class SellerStorePolicyService
-  extends SellerBaseService
-  implements ISellerStorePolicyService
-{
+export class SellerStorePolicyService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

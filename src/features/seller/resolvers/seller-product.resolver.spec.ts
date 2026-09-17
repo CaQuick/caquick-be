@@ -26,13 +26,9 @@ import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-p
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
-import { SELLER_PRODUCT_IMAGE_SERVICE } from '@/features/seller/services/seller-product-image.service.interface';
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
-import { SELLER_PRODUCT_LIFECYCLE_SERVICE } from '@/features/seller/services/seller-product-lifecycle.service.interface';
 import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
-import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
-import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -51,22 +47,10 @@ describe('Seller Product Resolvers (real DB)', () => {
         ...s3TestProviders(),
         SellerProductQueryResolver,
         SellerProductMutationResolver,
-        {
-          provide: SELLER_PRODUCT_QUERY_SERVICE,
-          useClass: SellerProductQueryService,
-        },
-        {
-          provide: SELLER_PRODUCT_LIFECYCLE_SERVICE,
-          useClass: SellerProductLifecycleService,
-        },
-        {
-          provide: SELLER_PRODUCT_IMAGE_SERVICE,
-          useClass: SellerProductImageService,
-        },
-        {
-          provide: SELLER_PRODUCT_TAXONOMY_SERVICE,
-          useClass: SellerProductTaxonomyService,
-        },
+        SellerProductQueryService,
+        SellerProductLifecycleService,
+        SellerProductImageService,
+        SellerProductTaxonomyService,
         SellerOptionService,
         SellerCustomTemplateService,
         SellerRepository,

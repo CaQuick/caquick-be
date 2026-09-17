@@ -11,11 +11,7 @@ import {
   type IAccountRepository,
 } from '@/features/auth/repositories/account.repository.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
-import type { IOidcLoginService } from '@/features/auth/services/oidc-login.service.interface';
-import {
-  TOKEN_SERVICE,
-  type ITokenService,
-} from '@/features/auth/services/token.service.interface';
+import { TokenService } from '@/features/auth/services/token.service';
 import {
   parseOidcProvider,
   type OidcProvider,
@@ -28,7 +24,7 @@ import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
  * AuthService 의 OIDC 책임 추출 결과물. Token 발급은 TokenService 에 위임한다.
  */
 @Injectable()
-export class OidcLoginService implements IOidcLoginService {
+export class OidcLoginService {
   /**
    * @param config ConfigService
    * @param oidc OidcClientService
@@ -38,8 +34,7 @@ export class OidcLoginService implements IOidcLoginService {
   constructor(
     private readonly config: ConfigService,
     private readonly oidc: OidcClientService,
-    @Inject(TOKEN_SERVICE)
-    private readonly tokens: ITokenService,
+    private readonly tokens: TokenService,
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
   ) {}

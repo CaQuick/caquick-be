@@ -30,7 +30,6 @@ import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/se
 import type { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type { ISellerProductImageService } from '@/features/seller/services/seller-product-image.service.interface';
 import { toProductImageOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductImageOutput } from '@/features/seller/types/seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
@@ -38,10 +37,7 @@ import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
-export class SellerProductImageService
-  extends SellerBaseService
-  implements ISellerProductImageService
-{
+export class SellerProductImageService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

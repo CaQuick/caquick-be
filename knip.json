@@ -20,6 +20,7 @@
     "@as-integrations/express5",
     "qs",
     "express-serve-static-core",
-    "@prisma/client"
+    "@prisma/client",
+    "graphql-ws"
   ]
 }

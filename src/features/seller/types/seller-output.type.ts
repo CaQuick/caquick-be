@@ -1,28 +1,8 @@
 import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
+import type { StoreOutput } from '@/features/store';
 
-export interface SellerStoreOutput {
-  id: string;
-  sellerAccountId: string;
-  storeName: string;
-  storePhone: string;
-  addressFull: string;
-  addressCity: string | null;
-  addressDistrict: string | null;
-  addressNeighborhood: string | null;
-  latitude: string | null;
-  longitude: string | null;
-  mapProvider: 'NAVER' | 'KAKAO' | 'NONE';
-  websiteUrl: string | null;
-  businessHoursText: string | null;
-  profileImageUrl: string | null;
-  greetingMessage: string | null;
-  pickupSlotIntervalMinutes: number;
-  minLeadTimeMinutes: number;
-  maxDaysAhead: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+/** 판매자 SDL(SellerStore)에는 regionId가 없다 — 매핑은 store feature 1벌을 그대로 쓴다. */
+export type SellerStoreOutput = Omit<StoreOutput, 'regionId'>;
 
 export interface SellerStoreBusinessHourOutput {
   id: string;

@@ -1,20 +1,11 @@
-import { Inject, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
-import {
-  SELLER_STORE_HOURS_SERVICE,
-  type ISellerStoreHoursService,
-} from '@/features/seller/services/seller-store-hours.service.interface';
-import {
-  SELLER_STORE_POLICY_SERVICE,
-  type ISellerStorePolicyService,
-} from '@/features/seller/services/seller-store-policy.service.interface';
-import {
-  SELLER_STORE_PROFILE_SERVICE,
-  type ISellerStoreProfileService,
-} from '@/features/seller/services/seller-store-profile.service.interface';
+import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
+import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
+import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
 import type {
   SellerCursorConnection,
   SellerStoreBusinessHourOutput,
@@ -36,12 +27,9 @@ import {
 @Roles('SELLER')
 export class SellerStoreQueryResolver {
   constructor(
-    @Inject(SELLER_STORE_PROFILE_SERVICE)
-    private readonly profileService: ISellerStoreProfileService,
-    @Inject(SELLER_STORE_HOURS_SERVICE)
-    private readonly hoursService: ISellerStoreHoursService,
-    @Inject(SELLER_STORE_POLICY_SERVICE)
-    private readonly policyService: ISellerStorePolicyService,
+    private readonly profileService: SellerStoreProfileService,
+    private readonly hoursService: SellerStoreHoursService,
+    private readonly policyService: SellerStorePolicyService,
   ) {}
 
   @Query('sellerMyStore')

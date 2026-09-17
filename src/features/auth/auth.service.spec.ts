@@ -19,7 +19,6 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 describe('AuthService', () => {
@@ -63,10 +62,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,

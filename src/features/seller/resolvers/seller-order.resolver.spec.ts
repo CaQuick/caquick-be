@@ -2,11 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import {
-  OrderDomainService,
-  OrderRepository,
-  OrderStatusTransitionPolicy,
-} from '@/features/order';
+import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOrderMutationResolver } from '@/features/seller/resolvers/seller-order-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/seller/resolvers/seller-order-query.resolver';
@@ -35,7 +31,6 @@ describe('Seller Order Resolvers (real DB)', () => {
         SellerOrderService,
         SellerRepository,
         OrderRepository,
-        OrderDomainService,
         OrderStatusTransitionPolicy,
         {
           provide: AUDIT_LOG_REPOSITORY,

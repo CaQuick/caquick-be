@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { formatBusinessHours } from '@/common/utils/business-hours-formatter';
 import { sliceOverfetched } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
+import { formatBusinessHours } from '@/features/store';
 import { USER_ORDER_ERRORS } from '@/features/user/constants/user-order-error-messages';
 import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import type {

@@ -1,15 +1,9 @@
-import { Inject, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
-import {
-  SELLER_AUDIT_SERVICE,
-  type ISellerAuditService,
-} from '@/features/seller/services/seller-audit.service.interface';
-import {
-  SELLER_FAQ_SERVICE,
-  type ISellerFaqService,
-} from '@/features/seller/services/seller-faq.service.interface';
+import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
+import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
 import type {
   SellerAuditLogOutput,
   SellerCursorConnection,
@@ -29,10 +23,8 @@ import {
 @Roles('SELLER')
 export class SellerContentQueryResolver {
   constructor(
-    @Inject(SELLER_FAQ_SERVICE)
-    private readonly faqService: ISellerFaqService,
-    @Inject(SELLER_AUDIT_SERVICE)
-    private readonly auditService: ISellerAuditService,
+    private readonly faqService: SellerFaqService,
+    private readonly auditService: SellerAuditService,
   ) {}
 
   @Query('sellerFaqTopics')

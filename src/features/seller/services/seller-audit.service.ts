@@ -12,7 +12,6 @@ import {
   normalizeCursorInput,
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
-import type { ISellerAuditService } from '@/features/seller/services/seller-audit.service.interface';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toAuditLogOutput } from '@/features/seller/services/seller-content-mappers.helper';
 import type {
@@ -22,10 +21,7 @@ import type {
 import { AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
-export class SellerAuditService
-  extends SellerBaseService
-  implements ISellerAuditService
-{
+export class SellerAuditService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

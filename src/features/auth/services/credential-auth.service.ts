@@ -24,17 +24,23 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import type {
-  CredentialLoginResult,
-  CredentialRole,
-  ICredentialAuthService,
-} from '@/features/auth/services/credential-auth.service.interface';
+import { TokenService } from '@/features/auth/services/token.service';
 import {
-  TOKEN_SERVICE,
-  type ITokenService,
-} from '@/features/auth/services/token.service.interface';
-import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
+  type AccountStatus,
+  AuditActionType,
+  AuditTargetType,
+} from '@/generated/prisma/client';
+import type { AccountRole } from '@/global/auth';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+
+export type CredentialRole = Exclude<AccountRole, 'USER'>;
+
+export interface CredentialLoginResult {
+  accessToken: string;
+  accountStatus: AccountStatus;
+  /** 관리자가 지정한 초기/초기화 비밀번호 상태. true면 변경 전까지 다른 API가 거부된다. */
+  mustChangePassword: boolean;
+}
 
 /**
  * 거부 경로의 더미 검증용 argon2id 해시. 실제 비밀번호와 무관하며 검증은 항상 실패한다.
@@ -48,7 +54,7 @@ const TIMING_EQUALIZER_HASH =
  * SELLER·ADMIN 공용 — 계정 타입은 호출부(REST 경로)가 role로 고정한다.
  */
 @Injectable()
-export class CredentialAuthService implements ICredentialAuthService {
+export class CredentialAuthService {
   /**
    * @param tokens TokenService
    * @param credentials AccountCredentialRepository
@@ -57,8 +63,7 @@ export class CredentialAuthService implements ICredentialAuthService {
    * @param clock ClockService
    */
   constructor(
-    @Inject(TOKEN_SERVICE)
-    private readonly tokens: ITokenService,
+    private readonly tokens: TokenService,
     @Inject(ACCOUNT_CREDENTIAL_REPOSITORY)
     private readonly credentials: IAccountCredentialRepository,
     @Inject(REFRESH_SESSION_REPOSITORY)

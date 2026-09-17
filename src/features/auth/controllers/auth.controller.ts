@@ -4,7 +4,6 @@ import {
   Controller,
   ForbiddenException,
   Get,
-  Inject,
   Param,
   Post,
   Query,
@@ -30,14 +29,10 @@ import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
 import {
-  CREDENTIAL_AUTH_SERVICE,
+  CredentialAuthService,
   type CredentialLoginResult,
-  type ICredentialAuthService,
-} from '@/features/auth/services/credential-auth.service.interface';
-import {
-  OIDC_LOGIN_SERVICE,
-  type IOidcLoginService,
-} from '@/features/auth/services/oidc-login.service.interface';
+} from '@/features/auth/services/credential-auth.service';
+import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { parseOidcProvider } from '@/features/auth/types/oidc-provider.type';
 import {
   CurrentUser,
@@ -100,10 +95,8 @@ export class AuthController {
    */
   constructor(
     private readonly auth: AuthService,
-    @Inject(OIDC_LOGIN_SERVICE)
-    private readonly oidcLogin: IOidcLoginService,
-    @Inject(CREDENTIAL_AUTH_SERVICE)
-    private readonly credentialAuth: ICredentialAuthService,
+    private readonly oidcLogin: OidcLoginService,
+    private readonly credentialAuth: CredentialAuthService,
   ) {}
 
   /**

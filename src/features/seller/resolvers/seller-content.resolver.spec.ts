@@ -6,9 +6,7 @@ import { SellerRepository } from '@/features/seller/repositories/seller.reposito
 import { SellerContentMutationResolver } from '@/features/seller/resolvers/seller-content-mutation.resolver';
 import { SellerContentQueryResolver } from '@/features/seller/resolvers/seller-content-query.resolver';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
-import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
 import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
-import { SELLER_FAQ_SERVICE } from '@/features/seller/services/seller-faq.service.interface';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -25,14 +23,8 @@ describe('Seller Content Resolvers (real DB)', () => {
       providers: [
         SellerContentQueryResolver,
         SellerContentMutationResolver,
-        {
-          provide: SELLER_FAQ_SERVICE,
-          useClass: SellerFaqService,
-        },
-        {
-          provide: SELLER_AUDIT_SERVICE,
-          useClass: SellerAuditService,
-        },
+        SellerFaqService,
+        SellerAuditService,
         SellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

@@ -17,73 +17,37 @@ import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
 import { SellerUploadMutationResolver } from '@/features/seller/resolvers/seller-upload-mutation.resolver';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
-import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
-import { SELLER_FAQ_SERVICE } from '@/features/seller/services/seller-faq.service.interface';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { SellerOrderService } from '@/features/seller/services/seller-order.service';
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
-import { SELLER_PRODUCT_IMAGE_SERVICE } from '@/features/seller/services/seller-product-image.service.interface';
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
-import { SELLER_PRODUCT_LIFECYCLE_SERVICE } from '@/features/seller/services/seller-product-lifecycle.service.interface';
 import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
-import { SELLER_PRODUCT_QUERY_SERVICE } from '@/features/seller/services/seller-product-query.service.interface';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
-import { SELLER_PRODUCT_TAXONOMY_SERVICE } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
-import { SELLER_STORE_HOURS_SERVICE } from '@/features/seller/services/seller-store-hours.service.interface';
 import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
-import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
-import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
 import { SellerUploadService } from '@/features/seller/services/seller-upload.service';
 
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule, AuditLogModule],
   providers: [
-    {
-      provide: SELLER_STORE_PROFILE_SERVICE,
-      useClass: SellerStoreProfileService,
-    },
-    {
-      provide: SELLER_STORE_HOURS_SERVICE,
-      useClass: SellerStoreHoursService,
-    },
-    {
-      provide: SELLER_STORE_POLICY_SERVICE,
-      useClass: SellerStorePolicyService,
-    },
-    {
-      provide: SELLER_PRODUCT_QUERY_SERVICE,
-      useClass: SellerProductQueryService,
-    },
-    {
-      provide: SELLER_PRODUCT_LIFECYCLE_SERVICE,
-      useClass: SellerProductLifecycleService,
-    },
-    {
-      provide: SELLER_PRODUCT_IMAGE_SERVICE,
-      useClass: SellerProductImageService,
-    },
-    {
-      provide: SELLER_PRODUCT_TAXONOMY_SERVICE,
-      useClass: SellerProductTaxonomyService,
-    },
+    SellerStoreProfileService,
+    SellerStoreHoursService,
+    SellerStorePolicyService,
+    SellerProductQueryService,
+    SellerProductLifecycleService,
+    SellerProductImageService,
+    SellerProductTaxonomyService,
     SellerOptionService,
     SellerCustomTemplateService,
     SellerOrderService,
     SellerConversationService,
     SellerUploadService,
-    {
-      provide: SELLER_FAQ_SERVICE,
-      useClass: SellerFaqService,
-    },
-    {
-      provide: SELLER_AUDIT_SERVICE,
-      useClass: SellerAuditService,
-    },
+    SellerFaqService,
+    SellerAuditService,
     SellerRepository,
     SellerStoreQueryResolver,
     SellerProductQueryResolver,

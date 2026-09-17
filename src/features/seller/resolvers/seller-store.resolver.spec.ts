@@ -6,11 +6,8 @@ import { SellerRepository } from '@/features/seller/repositories/seller.reposito
 import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
 import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
-import { SELLER_STORE_HOURS_SERVICE } from '@/features/seller/services/seller-store-hours.service.interface';
 import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
-import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
-import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -29,18 +26,9 @@ describe('Seller Store Resolvers (real DB)', () => {
         ...s3TestProviders(),
         SellerStoreQueryResolver,
         SellerStoreMutationResolver,
-        {
-          provide: SELLER_STORE_PROFILE_SERVICE,
-          useClass: SellerStoreProfileService,
-        },
-        {
-          provide: SELLER_STORE_HOURS_SERVICE,
-          useClass: SellerStoreHoursService,
-        },
-        {
-          provide: SELLER_STORE_POLICY_SERVICE,
-          useClass: SellerStorePolicyService,
-        },
+        SellerStoreProfileService,
+        SellerStoreHoursService,
+        SellerStorePolicyService,
         SellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

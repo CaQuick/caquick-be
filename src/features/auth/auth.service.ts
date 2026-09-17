@@ -14,10 +14,7 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import {
-  TOKEN_SERVICE,
-  type ITokenService,
-} from '@/features/auth/services/token.service.interface';
+import { TokenService } from '@/features/auth/services/token.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /**
@@ -36,8 +33,7 @@ export class AuthService {
    * @param refreshSessions RefreshSessionRepository
    */
   constructor(
-    @Inject(TOKEN_SERVICE)
-    private readonly tokens: ITokenService,
+    private readonly tokens: TokenService,
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
     @Inject(REFRESH_SESSION_REPOSITORY)

@@ -4,7 +4,6 @@ import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-sta
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
-import { OrderDomainService } from '@/features/order/services/order-domain.service';
 import { ProductModule } from '@/features/product';
 import { StoreModule } from '@/features/store';
 
@@ -15,10 +14,9 @@ import { StoreModule } from '@/features/store';
   providers: [
     OrderRepository,
     OrderStatusTransitionPolicy,
-    OrderDomainService,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
   ],
-  exports: [OrderRepository, OrderStatusTransitionPolicy, OrderDomainService],
+  exports: [OrderRepository, OrderStatusTransitionPolicy],
 })
 export class OrderModule {}

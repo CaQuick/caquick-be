@@ -20,15 +20,11 @@ import type { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/sel
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
-import type { ISellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service.interface';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
-export class SellerProductTaxonomyService
-  extends SellerBaseService
-  implements ISellerProductTaxonomyService
-{
+export class SellerProductTaxonomyService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

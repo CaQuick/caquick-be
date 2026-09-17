@@ -35,7 +35,6 @@ import type { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/s
 import type { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type { ISellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service.interface';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
 import {
@@ -47,10 +46,7 @@ import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
-export class SellerProductLifecycleService
-  extends SellerBaseService
-  implements ISellerProductLifecycleService
-{
+export class SellerProductLifecycleService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

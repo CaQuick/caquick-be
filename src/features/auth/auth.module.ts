@@ -10,12 +10,9 @@ import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.reposit
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
 import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
-import { CREDENTIAL_AUTH_SERVICE } from '@/features/auth/services/credential-auth.service.interface';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
-import { OIDC_LOGIN_SERVICE } from '@/features/auth/services/oidc-login.service.interface';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 
@@ -31,18 +28,9 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
   providers: [
     AuthService,
     OidcClientService,
-    {
-      provide: OIDC_LOGIN_SERVICE,
-      useClass: OidcLoginService,
-    },
-    {
-      provide: CREDENTIAL_AUTH_SERVICE,
-      useClass: CredentialAuthService,
-    },
-    {
-      provide: TOKEN_SERVICE,
-      useClass: TokenService,
-    },
+    OidcLoginService,
+    CredentialAuthService,
+    TokenService,
     {
       provide: ACCOUNT_REPOSITORY,
       useClass: AccountRepository,

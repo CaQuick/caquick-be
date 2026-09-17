@@ -22,10 +22,7 @@ import type { AdminStoreListInput } from '@/features/admin/dto/inputs/admin-stor
 import type { AdminUpdateStoreBasicInfoInput } from '@/features/admin/dto/inputs/admin-update-store-basic-info.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminBaseService } from '@/features/admin/services/admin-base.service';
-import {
-  toAdminStoreDetailOutput,
-  toAdminStoreOutput,
-} from '@/features/admin/services/admin-store-mappers.helper';
+import { toAdminStoreDetailOutput } from '@/features/admin/services/admin-store-mappers.helper';
 import type {
   AdminCursorConnection,
   AdminStoreDetailOutput,
@@ -35,7 +32,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { buildStoreBasicInfoUpdateData, toStoreOutput } from '@/features/store';
 import {
   AuditActionType,
   AuditTargetType,
@@ -96,7 +93,7 @@ export class AdminStoreService extends AdminBaseService {
     ]);
     const paged = nextCursorOf(rows, normalized.limit);
     return {
-      items: paged.items.map(toAdminStoreOutput),
+      items: paged.items.map(toStoreOutput),
       totalCount,
       hasMore: paged.hasMore,
       nextCursor: paged.nextCursor,
@@ -133,7 +130,7 @@ export class AdminStoreService extends AdminBaseService {
       }),
     );
     if (!result) throw new NotFoundException(STORE_NOT_FOUND);
-    return toAdminStoreOutput(result.row);
+    return toStoreOutput(result.row);
   }
 
   async adminUpdateStoreBasicInfo(
@@ -186,6 +183,6 @@ export class AdminStoreService extends AdminBaseService {
       throw new BadRequestException(REGION_NOT_SELECTABLE);
     }
     if (!updated) throw new NotFoundException(STORE_NOT_FOUND);
-    return toAdminStoreOutput(updated);
+    return toStoreOutput(updated);
   }
 }

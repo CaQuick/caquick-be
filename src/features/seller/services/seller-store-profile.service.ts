@@ -11,19 +11,14 @@ import {
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import { toStoreOutput } from '@/features/seller/services/seller-store-mappers.helper';
-import type { ISellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
-import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { buildStoreBasicInfoUpdateData, toStoreOutput } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
-export class SellerStoreProfileService
-  extends SellerBaseService
-  implements ISellerStoreProfileService
-{
+export class SellerStoreProfileService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
