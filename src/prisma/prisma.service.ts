@@ -1,5 +1,8 @@
 import { PrismaClient } from '@/generated/prisma/client';
-import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
+import {
+  createMariaDbAdapter,
+  type MariaDbAdapterOptions,
+} from '@/prisma/mariadb-adapter';
 import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
 
 /**
@@ -8,7 +11,7 @@ import { softDeleteExtension } from '@/prisma/soft-delete.middleware';
  */
 export function createExtendedPrismaClient(
   databaseUrl: string,
-  options: { allowPublicKeyRetrieval?: boolean } = {},
+  options: MariaDbAdapterOptions = {},
 ) {
   return new PrismaClient({
     adapter: createMariaDbAdapter(databaseUrl, options),
