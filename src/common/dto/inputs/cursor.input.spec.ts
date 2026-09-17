@@ -25,6 +25,7 @@ describe('CursorInput', () => {
     ['limit 101', { limit: 101 }, 'limit'],
     ['limit 실수', { limit: 1.5 }, 'limit'],
     ['cursor 숫자형', { cursor: 10 }, 'cursor'],
+    ['cursor 빈 문자열', { cursor: '' }, 'cursor'],
   ])('거절: %s', async (_label, plain, property) => {
     const errors = await validate(build(plain));
     expect(errors.map((e) => e.property)).toContain(property);
