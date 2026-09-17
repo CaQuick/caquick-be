@@ -1,4 +1,5 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+import type { ProductCardOutput } from '@/features/product';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyPageCounts {
@@ -17,22 +18,16 @@ export interface OngoingOrderSummary {
   totalPrice: number;
 }
 
-export interface RecentViewedProductSummary {
-  productId: string;
-  productName: string;
-  representativeImageUrl: string | null;
-  salePrice: number | null;
-  regularPrice: number;
-  storeName: string;
+export interface RecentViewedProduct {
+  product: ProductCardOutput;
   viewedAt: Date;
-  isWishlisted: boolean;
 }
 
 export type RecentViewedProductConnection =
-  OffsetConnection<RecentViewedProductSummary>;
+  OffsetConnection<RecentViewedProduct>;
 
 export interface MyPageOverview {
   counts: MyPageCounts;
   ongoingOrders: OngoingOrderSummary[];
-  recentViewedProducts: RecentViewedProductSummary[];
+  recentViewedProducts: RecentViewedProduct[];
 }

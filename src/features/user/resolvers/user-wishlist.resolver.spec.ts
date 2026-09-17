@@ -1,4 +1,5 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
@@ -23,6 +24,7 @@ describe('User Wishlist Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         ReviewReadRepository,
         UserWishlistMutationResolver,
         UserWishlistQueryResolver,
@@ -72,7 +74,7 @@ describe('User Wishlist Resolver (real DB)', () => {
       accountId: account.id.toString(),
     });
     expect(list1.totalCount).toBe(1);
-    expect(list1.items[0].productId).toBe(product.id.toString());
+    expect(list1.items[0].product.id).toBe(product.id.toString());
 
     await mutationResolver.removeFromWishlist(
       { accountId: account.id.toString() },

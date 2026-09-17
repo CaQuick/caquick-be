@@ -44,7 +44,7 @@ input StoreProductsInput {
 
 """매장 상품 목록(커서 기반)."""
 type StoreProductConnection {
-  """상품 카드. 등록 최신순으로 온다."""
+  """매장 상품 항목. 등록 최신순으로 온다."""
   items: [StoreProduct!]!
   """조건에 맞는 활성 상품 전체 건수."""
   totalCount: Int!
@@ -54,21 +54,12 @@ type StoreProductConnection {
   nextCursor: String
 }
 
-"""매장 상품 카드."""
+"""매장 상품 항목. 공용 상품 카드 + 매장 상품 목록 전용 필드."""
 type StoreProduct {
-  id: ID!
-  """상품명."""
-  name: String!
+  """상품 카드."""
+  product: ProductCard!
   """상품 설명. 미등록 시 null."""
   description: String
-  """대표 이미지(sort_order 최소). 없으면 null."""
-  thumbnailUrl: String
-  """정가(원)."""
-  regularPrice: Int!
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
-  salePrice: Int
-  """할인율(0~100). salePrice 없으면 0."""
-  discountRate: Int!
   """통화 코드(ISO 4217). 저장된 값을 그대로 돌려주며, 현재 KRW만 주문 가능하다."""
   currency: String!
   """소속 카테고리 ID(FE 섹션 그룹핑/스크롤 스파이용)."""

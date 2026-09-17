@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { ProductRepository } from '@/features/product';
+import { ProductCardService, ProductRepository } from '@/features/product';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -18,6 +18,7 @@ export class UserRecentViewService {
     private readonly recentViewRepo: RecentProductViewRepository,
     private readonly productRepo: ProductRepository,
     private readonly userRepo: UserRepository,
+    private readonly cards: ProductCardService,
   ) {}
 
   async list(
@@ -34,22 +35,15 @@ export class UserRecentViewService {
         limit,
       });
 
-    // N+1 회피: 단일 IN 쿼리로 찜 여부 조회
-    const wishlistedProductIds = await this.userRepo.findWishlistedProductIds({
+    const cards = await this.cards.buildCards(
+      items.map((view) => view.product),
       accountId,
-      productIds: items.map((v) => v.product_id),
-    });
+    );
 
     return {
-      items: items.map((view) => ({
-        productId: view.product_id.toString(),
-        productName: view.product.name,
-        representativeImageUrl: view.product.images[0]?.image_url ?? null,
-        salePrice: view.product.sale_price,
-        regularPrice: view.product.regular_price,
-        storeName: view.product.store.store_name,
-        viewedAt: view.viewed_at,
-        isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
+      items: cards.map((product, idx) => ({
+        product,
+        viewedAt: items[idx].viewed_at,
       })),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),

@@ -1,6 +1,8 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductStorefrontService } from '@/features/product/services/product-storefront.service';
+import { ReviewReadRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -18,6 +20,8 @@ describe('ProductStorefront Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
+        ReviewReadRepository,
         ProductStorefrontQueryResolver,
         ProductStorefrontService,
         ProductRepository,
@@ -40,11 +44,12 @@ describe('ProductStorefront Query Resolver (real DB)', () => {
     const store = await createStore(prisma);
     await createProduct(prisma, { store_id: store.id, name: '케이크' });
 
-    const result = await resolver.storeProducts({
-      storeId: store.id.toString(),
-    });
+    const result = await resolver.storeProducts(
+      { storeId: store.id.toString() },
+      undefined,
+    );
 
-    expect(result.items.map((p) => p.name)).toEqual(['케이크']);
+    expect(result.items.map((p) => p.product.name)).toEqual(['케이크']);
     expect(result.hasMore).toBe(false);
   });
 

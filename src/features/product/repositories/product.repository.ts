@@ -10,6 +10,7 @@ import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 /** 구매자 매장 상품 카드 row. product-storefront 매퍼 입력. */
 export interface StoreProductRow {
   id: bigint;
+  store_id: bigint;
   name: string;
   description: string | null;
   regular_price: number;
@@ -17,6 +18,12 @@ export interface StoreProductRow {
   currency: string;
   images: { image_url: string }[];
   product_categories: { category_id: bigint }[];
+  store: {
+    store_name: string;
+    address_city: string | null;
+    address_neighborhood: string | null;
+    region: { name: string } | null;
+  };
 }
 
 /** 매장 상품 카테고리(사이드바) row. */
@@ -906,6 +913,15 @@ export class ProductRepository {
         regular_price: true,
         sale_price: true,
         currency: true,
+        store_id: true,
+        store: {
+          select: {
+            store_name: true,
+            address_city: true,
+            address_neighborhood: true,
+            region: { select: { name: true } },
+          },
+        },
         images: {
           where: activeWhere,
           orderBy: { sort_order: 'asc' },
@@ -1170,6 +1186,8 @@ export class ProductRepository {
       where: {
         account_id: args.accountId,
         product_id: { in: args.productIds },
+        // 찜 목록(myWishlist)과 같은 가시성 — 비활성/삭제 상품·매장의 찜은 카드에서도 false
+        product: { ...visibleWhere, store: visibleWhere },
       },
       select: { product_id: true },
     });

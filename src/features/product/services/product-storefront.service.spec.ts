@@ -1,5 +1,7 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductStorefrontService } from '@/features/product/services/product-storefront.service';
+import { ReviewReadRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -31,7 +33,12 @@ describe('ProductStorefrontService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductStorefrontService, ProductRepository],
+      providers: [
+        ProductStorefrontService,
+        ProductRepository,
+        ProductCardService,
+        ReviewReadRepository,
+      ],
     });
     service = module.get(ProductStorefrontService);
     prisma = p;
@@ -68,7 +75,7 @@ describe('ProductStorefrontService (real DB)', () => {
         storeId: store.id.toString(),
       });
 
-      expect(result.items.map((p) => p.name)).toEqual(['활성']);
+      expect(result.items.map((p) => p.product.name)).toEqual(['활성']);
       expect(result.hasMore).toBe(false);
       expect(result.nextCursor).toBeNull();
       // totalCount는 목록과 같은 범위(활성 상품·활성 매장·필터)를 센다
@@ -104,8 +111,8 @@ describe('ProductStorefrontService (real DB)', () => {
         storeId: store.id.toString(),
       });
 
-      expect(result.items[0].thumbnailUrl).toBe('a.png');
-      expect(result.items[0].discountRate).toBe(13);
+      expect(result.items[0].product.thumbnailUrl).toBe('a.png');
+      expect(result.items[0].product.discountRate).toBe(13);
     });
 
     it('categoryId로 필터한다', async () => {
@@ -128,7 +135,7 @@ describe('ProductStorefrontService (real DB)', () => {
         categoryId: birthdayId.toString(),
       });
 
-      expect(result.items.map((p) => p.name)).toEqual(['생일']);
+      expect(result.items.map((p) => p.product.name)).toEqual(['생일']);
     });
 
     it('search로 상품명·태그를 부분일치 검색한다', async () => {
@@ -155,7 +162,7 @@ describe('ProductStorefrontService (real DB)', () => {
         search: '강아지',
       });
 
-      expect(result.items.map((p) => p.name).sort()).toEqual([
+      expect(result.items.map((p) => p.product.name).sort()).toEqual([
         '강아지 케이크',
         '미니 케이크',
       ]);

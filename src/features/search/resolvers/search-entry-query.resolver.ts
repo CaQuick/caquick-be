@@ -1,3 +1,4 @@
+import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import {
@@ -10,6 +11,12 @@ import { PopularSearchKeywordsInput } from '@/features/search/dto/inputs/popular
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
 import { SearchKeywordRankService } from '@/features/search/services/search-keyword-rank.service';
 import type { PopularSearchKeywordsResult } from '@/features/search/types/search-entry-output.type';
+import {
+  CurrentUser,
+  OptionalJwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '@/global/auth';
 
 /**
  * 검색 진입 화면 조회 resolver. 개인화 필드가 없는 public query(인증 불필요).
@@ -30,10 +37,14 @@ export class SearchEntryQueryResolver {
   }
 
   @Query('realtimeBestCakes')
+  @UseGuards(OptionalJwtAuthGuard)
   realtimeBestCakes(
-    @Args('input', { nullable: true }) input?: RealtimeBestCakesInput,
+    @Args('input', { nullable: true })
+    input: RealtimeBestCakesInput | undefined,
+    @CurrentUser() user: JwtUser | undefined,
   ): Promise<RealtimeBestCakesResult> {
-    return this.bestSellerService.realtimeBestCakes(input);
+    const accountId = user ? parseAccountId(user) : undefined;
+    return this.bestSellerService.realtimeBestCakes(input, accountId);
   }
 
   @Query('searchBanner')

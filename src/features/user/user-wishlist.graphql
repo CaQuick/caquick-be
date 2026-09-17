@@ -24,37 +24,18 @@ input MyWishlistInput {
 
 """찜한 상품 목록. 최근 찜한 순으로 온다."""
 type MyWishlistConnection {
-  """찜한 상품 카드. 최근 찜한 순으로 온다."""
-  items: [WishlistItemSummary!]!
+  """찜한 상품 항목. 최근 찜한 순으로 온다."""
+  items: [WishlistItem!]!
   """전체 찜 상품 수(storeId 필터 적용 후). offset·limit과 무관하다."""
   totalCount: Int!
   """다음 페이지 존재 여부."""
   hasMore: Boolean!
 }
 
-"""찜한 상품 카드."""
-type WishlistItemSummary {
-  productId: ID!
-  """소속 매장 ID(상세 이동용)."""
-  storeId: ID!
-  """상품명."""
-  productName: String!
-  """대표 상품 이미지. 없으면 null."""
-  representativeImageUrl: String
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
-  salePrice: Int
-  """정가(원)."""
-  regularPrice: Int!
-  """할인율(0~100). salePrice 없으면 0."""
-  discountRate: Int!
-  """매장명."""
-  storeName: String!
-  """매장 위치 표기(예: 서울 대치동)."""
-  regionLabel: String
-  """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
-  ratingAverage: Float!
-  """리뷰 수."""
-  reviewCount: Int!
+"""찜한 상품 항목. 공용 상품 카드 + 찜 시각. isWishlisted는 항상 true다."""
+type WishlistItem {
+  """상품 카드."""
+  product: ProductCard!
   """찜한 시각. 목록 정렬 기준이다."""
   addedAt: DateTime!
 }

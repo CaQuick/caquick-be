@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { OrderRepository } from '@/features/order';
+import { ProductCardService } from '@/features/product';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';
@@ -18,6 +19,7 @@ export class UserMypageService {
     private readonly userRepository: UserRepository,
     private readonly orderRepository: OrderRepository,
     private readonly recentProductViewRepository: RecentProductViewRepository,
+    private readonly cards: ProductCardService,
   ) {}
 
   async getOverview(accountId: bigint): Promise<MyPageOverview> {
@@ -40,11 +42,10 @@ export class UserMypageService {
       ]);
 
     // N+1 회피: 최근 본 상품 productId 묶음으로 단일 IN 쿼리로 찜 여부 조회
-    const wishlistedProductIds =
-      await this.userRepository.findWishlistedProductIds({
-        accountId,
-        productIds: recentViews.map((v) => v.product_id),
-      });
+    const recentCards = await this.cards.buildCards(
+      recentViews.map((view) => view.product),
+      accountId,
+    );
 
     return {
       counts: {
@@ -67,15 +68,9 @@ export class UserMypageService {
           totalPrice: order.total_price,
         };
       }),
-      recentViewedProducts: recentViews.map((view) => ({
-        productId: view.product_id.toString(),
-        productName: view.product.name,
-        representativeImageUrl: view.product.images[0]?.image_url ?? null,
-        salePrice: view.product.sale_price,
-        regularPrice: view.product.regular_price,
-        storeName: view.product.store.store_name,
-        viewedAt: view.viewed_at,
-        isWishlisted: wishlistedProductIds.has(view.product_id.toString()),
+      recentViewedProducts: recentCards.map((product, idx) => ({
+        product,
+        viewedAt: recentViews[idx].viewed_at,
       })),
     };
   }

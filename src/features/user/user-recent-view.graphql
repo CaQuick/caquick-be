@@ -23,7 +23,7 @@ input MyRecentViewedProductsInput {
 """최근 본 상품 목록. 최근에 본 상품이 먼저 온다."""
 type RecentViewedProductConnection {
   """최근 본 상품 카드. 최근에 본 순으로 온다."""
-  items: [RecentViewedProductSummary!]!
+  items: [RecentViewedProduct!]!
   """전체 기록 수. offset·limit과 무관한 총계다."""
   totalCount: Int!
   """다음 페이지 존재 여부. offset+limit이 totalCount에 못 미치면 true."""

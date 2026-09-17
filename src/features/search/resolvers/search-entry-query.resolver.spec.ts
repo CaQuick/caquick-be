@@ -3,6 +3,7 @@ import {
   ProductBestSellerService,
   ProductRepository,
 } from '@/features/product';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
@@ -35,6 +36,7 @@ describe('SearchEntry Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         SearchEntryQueryResolver,
@@ -107,9 +109,12 @@ describe('SearchEntry Resolvers (real DB)', () => {
       quantity: 2,
     });
 
-    const result = await queryResolver.realtimeBestCakes({ limit: 5 });
+    const result = await queryResolver.realtimeBestCakes(
+      { limit: 5 },
+      undefined,
+    );
 
-    expect(result.items.map((i) => i.name)).toEqual(['베스트']);
+    expect(result.items.map((i) => i.product.name)).toEqual(['베스트']);
     expect(result.rankedAt).toBeInstanceOf(Date);
   });
 

@@ -41,39 +41,12 @@ input SearchProductsInput {
 
 """상품 검색 결과 목록."""
 type SearchProductConnection {
-  """상품 카드. 요청한 sort 순서로 온다."""
-  items: [SearchProduct!]!
+  """상품 카드. 요청한 sort 순서로 온다. 가격 뒤 '~' 표기는 FE 장식(옵션 가격 가변 안내)."""
+  items: [ProductCard!]!
   """조건에 맞는 전체 상품 수. 탭 카운트에 쓴다."""
   totalCount: Int!
   """다음 페이지 존재 여부."""
   hasMore: Boolean!
-}
-
-"""검색 결과 상품 카드. 가격 뒤 '~' 표기는 FE 장식(옵션 가격 가변 안내)."""
-type SearchProduct {
-  id: ID!
-  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
-  storeId: ID!
-  """상품명."""
-  name: String!
-  """대표 이미지(sort_order 최소). 없으면 null."""
-  thumbnailUrl: String
-  """매장명."""
-  storeName: String!
-  """매장 위치 표기(예: 인천 청라동)."""
-  regionLabel: String
-  """정가(원)."""
-  regularPrice: Int!
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
-  salePrice: Int
-  """할인율(0~100). salePrice 없으면 0."""
-  discountRate: Int!
-  """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
-  ratingAverage: Float!
-  """리뷰 수."""
-  reviewCount: Int!
-  """로그인 사용자의 찜 여부(비로그인 시 false)."""
-  isWishlisted: Boolean!
 }
 
 extend type Query {

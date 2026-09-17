@@ -1,5 +1,6 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
 import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
@@ -29,6 +30,7 @@ describe('ProductSearchService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         ProductSearchService,
         ProductRepository,
         ReviewReadRepository,

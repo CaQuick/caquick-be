@@ -14,10 +14,8 @@ import type { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/cust
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
 import type { RandomCakesInput } from '@/features/product/dto/inputs/random-cakes.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
-import {
-  toHomeBanner,
-  toPopularCake,
-} from '@/features/product/services/product-home-mappers.helper';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { toHomeBanner } from '@/features/product/services/product-home-mappers.helper';
 import type {
   CustomCakeShowcaseItem,
   PopularCakesResult,
@@ -38,6 +36,7 @@ export class ProductHomeService {
     private readonly reviewRepo: ReviewReadRepository,
     private readonly stats: StoreStatsRepository,
     private readonly random: RandomService,
+    private readonly cards: ProductCardService,
   ) {}
 
   /**
@@ -45,7 +44,10 @@ export class ProductHomeService {
    * 상품 단위로 적용해 상위 카드를 뽑고, 카테고리 대표 배너를 함께 반환한다.
    * 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리, 정책 확정 사항).
    */
-  async popularCakes(input?: PopularCakesInput): Promise<PopularCakesResult> {
+  async popularCakes(
+    input?: PopularCakesInput,
+    accountId?: bigint,
+  ): Promise<PopularCakesResult> {
     // DTO(@Max)가 1차로 막지만, 직접 호출 경로에서도 "최대 3개" 계약을 지키도록 클램프
     const limit = Math.min(
       input?.limit ?? DEFAULT_POPULAR_CAKES_LIMIT,
@@ -87,9 +89,12 @@ export class ProductHomeService {
       prior,
     );
 
-    const items = scored
-      .slice(0, limit)
-      .map((entry, idx) => toPopularCake(entry.candidate, idx + 1));
+    const cards = await this.cards.buildCards(
+      scored.slice(0, limit).map((entry) => entry.candidate),
+      accountId,
+      { stats: reviewStats },
+    );
+    const items = cards.map((product, idx) => ({ rank: idx + 1, product }));
 
     return { banner: bannerOutput, items, rankedAt };
   }

@@ -1,5 +1,6 @@
 import { RandomService } from '@/common/providers/random.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
@@ -28,6 +29,7 @@ describe('ProductHomeService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         StoreStatsRepository,
         ProductHomeService,
         ProductRepository,
@@ -93,7 +95,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual([
+      expect(result.items.map((i) => i.product.name)).toEqual([
         '1등 케이크',
         '2등 케이크',
         '3등 케이크',
@@ -110,7 +112,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items[0].name).toBe('찜 많은 케이크');
+      expect(result.items[0].product.name).toBe('찜 많은 케이크');
     });
 
     it('categoryId 지정 시 해당 카테고리 상품만 랭킹 대상이다', async () => {
@@ -127,7 +129,7 @@ describe('ProductHomeService (real DB)', () => {
         categoryId: birthday.id.toString(),
       });
 
-      expect(result.items.map((i) => i.name)).toEqual(['생일 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['생일 케이크']);
     });
 
     it('EVENT가 아닌 카테고리 id가 오면 빈 결과를 반환한다(홈 칩은 EVENT 한정)', async () => {
@@ -162,7 +164,7 @@ describe('ProductHomeService (real DB)', () => {
         regionIds: [regionA.id.toString()],
       });
 
-      expect(result.items.map((i) => i.name)).toEqual(['강남 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['강남 케이크']);
     });
 
     it('비활성 상품과 비활성 매장 상품은 제외한다', async () => {
@@ -174,7 +176,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual(['활성 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['활성 케이크']);
     });
 
     it('기본 3개, limit 지정 시 해당 수만큼 자른다', async () => {
@@ -221,14 +223,17 @@ describe('ProductHomeService (real DB)', () => {
       const [item] = (await service.popularCakes()).items;
 
       expect(item).toMatchObject({
-        name: '레터링 케이크',
-        storeId: store.id.toString(),
-        storeName: '청담 케이크샵',
-        regionLabel: '서울 청담동',
-        regularPrice: 40000,
-        salePrice: 30000,
-        discountRate: 25,
-        thumbnailUrl: 'https://img/cake.png',
+        rank: 1,
+        product: {
+          name: '레터링 케이크',
+          storeId: store.id.toString(),
+          storeName: '청담 케이크샵',
+          regionLabel: '서울 청담동',
+          regularPrice: 40000,
+          salePrice: 30000,
+          discountRate: 25,
+          thumbnailUrl: 'https://img/cake.png',
+        },
       });
     });
 
