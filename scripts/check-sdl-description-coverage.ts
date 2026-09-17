@@ -43,7 +43,7 @@ const BASELINE: Record<Category, Baseline> = {
   inputType: { documented: 108, total: 108 },
   inputField: { documented: 358, total: 358 },
   outputType: { documented: 173, total: 173 },
-  outputField: { documented: 814, total: 814 },
+  outputField: { documented: 791, total: 791 },
   enumType: { documented: 28, total: 28 },
   enumValue: { documented: 102, total: 102 },
 };

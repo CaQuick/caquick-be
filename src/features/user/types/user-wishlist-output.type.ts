@@ -1,21 +1,12 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+import type { ProductCardOutput } from '@/features/product';
 
-export interface WishlistItemSummary {
-  productId: string;
-  storeId: string;
-  productName: string;
-  representativeImageUrl: string | null;
-  salePrice: number | null;
-  regularPrice: number;
-  discountRate: number;
-  storeName: string;
-  regionLabel: string | null;
-  ratingAverage: number;
-  reviewCount: number;
+export interface WishlistItem {
+  product: ProductCardOutput;
   addedAt: Date;
 }
 
-export type MyWishlistConnection = OffsetConnection<WishlistItemSummary>;
+export type MyWishlistConnection = OffsetConnection<WishlistItem>;
 
 export interface WishlistStoreGroup {
   storeId: string;

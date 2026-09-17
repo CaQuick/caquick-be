@@ -19,10 +19,10 @@ import {
   type ProductSearchCandidateRow,
   type ProductSearchFilter,
 } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import {
   buildPriceBuckets,
   displayPrice,
-  toSearchProduct,
 } from '@/features/product/services/product-search-mappers.helper';
 import type {
   SearchProductConnection,
@@ -49,6 +49,7 @@ export class ProductSearchService {
     private readonly reviews: ReviewReadRepository,
     private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
+    private readonly cards: ProductCardService,
   ) {}
 
   /**
@@ -76,22 +77,15 @@ export class ProductSearchService {
     const page = sorted.slice(offset, offset + limit);
     const pageIds = page.map((row) => row.id);
 
-    const [reviewStats, wishlistedIds] = await Promise.all([
-      this.reviews.aggregateReviewStats('product_id', pageIds),
-      // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
-      accountId !== undefined
-        ? this.repo.findWishlistedProductIds({ accountId, productIds: pageIds })
-        : Promise.resolve(new Set<string>()),
-    ]);
+    const reviewStats = await this.reviews.aggregateReviewStats(
+      'product_id',
+      pageIds,
+    );
 
     return {
-      items: page.map((row) =>
-        toSearchProduct(
-          row,
-          reviewStats.get(row.id),
-          wishlistedIds.has(row.id.toString()),
-        ),
-      ),
+      items: await this.cards.buildCards(page, accountId, {
+        stats: reviewStats,
+      }),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),
     };

@@ -1,4 +1,6 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
@@ -22,6 +24,8 @@ describe('UserRecentViewService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
+        ReviewReadRepository,
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
@@ -78,13 +82,15 @@ describe('UserRecentViewService (real DB)', () => {
       expect(result.items).toHaveLength(2);
       // 최근 본 것(p2)이 먼저
       expect(result.items[0]).toMatchObject({
-        productId: p2.id.toString(),
-        productName: '케이크2',
-        storeName: '베이커리A',
-        regularPrice: 20000,
+        product: {
+          id: p2.id.toString(),
+          name: '케이크2',
+          storeName: '베이커리A',
+          regularPrice: 20000,
+        },
       });
-      expect(result.items[1].productId).toBe(p1.id.toString());
-      expect(result.items[1].salePrice).toBe(9000);
+      expect(result.items[1].product.id).toBe(p1.id.toString());
+      expect(result.items[1].product.salePrice).toBe(9000);
     });
 
     it('찜한 상품은 isWishlisted=true, 안 한 상품은 false로 매핑된다', async () => {
@@ -107,7 +113,7 @@ describe('UserRecentViewService (real DB)', () => {
       const result = await service.list(account.id);
 
       const map = new Map(
-        result.items.map((p) => [p.productId, p.isWishlisted]),
+        result.items.map((p) => [p.product.id, p.product.isWishlisted]),
       );
       expect(map.get(wishlisted.id.toString())).toBe(true);
       expect(map.get(notWishlisted.id.toString())).toBe(false);
@@ -135,10 +141,10 @@ describe('UserRecentViewService (real DB)', () => {
       const result = await service.list(account.id);
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].productId).toBe(
+      expect(result.items[0].product.id).toBe(
         productOfInactiveStore.id.toString(),
       );
-      expect(result.items[0].isWishlisted).toBe(false);
+      expect(result.items[0].product.isWishlisted).toBe(false);
     });
 
     it('pagination: offset + limit < totalCount면 hasMore true', async () => {

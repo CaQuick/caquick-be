@@ -9,6 +9,7 @@ import { ProductReviewQueryResolver } from '@/features/product/resolvers/product
 import { ProductSearchQueryResolver } from '@/features/product/resolvers/product-search-query.resolver';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
@@ -23,6 +24,7 @@ import { StoreModule } from '@/features/store';
   providers: [
     ProductRepository,
     ProductReviewRepository,
+    ProductCardService,
     ProductDetailService,
     ProductDetailQueryResolver,
     ProductReviewService,
@@ -38,6 +40,11 @@ import { StoreModule } from '@/features/store';
     ProductSearchQueryResolver,
   ],
   // ProductBestSellerService·ProductSearchService는 검색 화면(search feature)이 소비한다
-  exports: [ProductRepository, ProductBestSellerService, ProductSearchService],
+  exports: [
+    ProductRepository,
+    ProductBestSellerService,
+    ProductSearchService,
+    ProductCardService,
+  ],
 })
 export class ProductModule {}

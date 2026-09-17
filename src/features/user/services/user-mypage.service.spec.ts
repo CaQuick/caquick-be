@@ -1,4 +1,7 @@
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
@@ -25,6 +28,9 @@ describe('UserMypageService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
+        ReviewReadRepository,
+        ProductRepository,
         UserMypageService,
         UserRepository,
         OrderRepository,
@@ -204,12 +210,14 @@ describe('UserMypageService (real DB)', () => {
 
       expect(result.recentViewedProducts).toHaveLength(1);
       expect(result.recentViewedProducts[0]).toMatchObject({
-        productId: product.id.toString(),
-        productName: '레터링 케이크',
-        storeName: '케이크샵',
-        regularPrice: 40000,
-        salePrice: 35000,
-        isWishlisted: false,
+        product: {
+          id: product.id.toString(),
+          name: '레터링 케이크',
+          storeName: '케이크샵',
+          regularPrice: 40000,
+          salePrice: 35000,
+          isWishlisted: false,
+        },
       });
     });
 
@@ -283,7 +291,10 @@ describe('UserMypageService (real DB)', () => {
       const result = await service.getOverview(account.id);
 
       const map = new Map(
-        result.recentViewedProducts.map((p) => [p.productId, p.isWishlisted]),
+        result.recentViewedProducts.map((p) => [
+          p.product.id,
+          p.product.isWishlisted,
+        ]),
       );
       expect(map.get(wishlisted.id.toString())).toBe(true);
       expect(map.get(notWishlisted.id.toString())).toBe(false);

@@ -10,7 +10,7 @@ import {
 } from '@/features/product/constants/product-best-seller.constants';
 import type { RealtimeBestCakesInput } from '@/features/product/dto/inputs/realtime-best-cakes.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
-import { toPopularCake } from '@/features/product/services/product-home-mappers.helper';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import type { RealtimeBestCakesResult } from '@/features/product/types/product-best-seller-output.type';
 import { ReviewReadRepository } from '@/features/review';
 import {
@@ -27,6 +27,7 @@ export class ProductBestSellerService {
     private readonly reviews: ReviewReadRepository,
     private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
+    private readonly cards: ProductCardService,
   ) {}
 
   /**
@@ -37,6 +38,7 @@ export class ProductBestSellerService {
    */
   async realtimeBestCakes(
     input?: RealtimeBestCakesInput,
+    accountId?: bigint,
   ): Promise<RealtimeBestCakesResult> {
     const limit = Math.min(
       input?.limit ?? DEFAULT_REALTIME_BEST_LIMIT,
@@ -81,10 +83,13 @@ export class ProductBestSellerService {
         (soldQuantities.get(a.candidate.id) ?? 0),
     );
 
+    const cards = await this.cards.buildCards(
+      ranked.slice(0, limit).map((entry) => entry.candidate),
+      accountId,
+      { stats: reviewStats },
+    );
     return {
-      items: ranked
-        .slice(0, limit)
-        .map((entry, idx) => toPopularCake(entry.candidate, idx + 1)),
+      items: cards.map((product, idx) => ({ rank: idx + 1, product })),
       rankedAt,
     };
   }

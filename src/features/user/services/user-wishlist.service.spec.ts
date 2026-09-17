@@ -1,4 +1,5 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
@@ -22,6 +23,7 @@ describe('UserWishlistService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         UserWishlistService,
         UserRepository,
         ProductRepository,
@@ -239,9 +241,9 @@ describe('UserWishlistService (real DB)', () => {
 
       expect(result.totalCount).toBe(2);
       expect(result.items).toHaveLength(2);
-      expect(result.items[0].productId).toBe(p2.id.toString()); // 최근 추가가 먼저
-      expect(result.items[0].productName).toBe('상품2');
-      expect(result.items[0].storeName).toBe('매장A');
+      expect(result.items[0].product.id).toBe(p2.id.toString()); // 최근 추가가 먼저
+      expect(result.items[0].product.name).toBe('상품2');
+      expect(result.items[0].product.storeName).toBe('매장A');
     });
 
     it('soft-delete된 wishlist 항목은 제외된다', async () => {
@@ -290,7 +292,7 @@ describe('UserWishlistService (real DB)', () => {
       const result = await service.myWishlist(account.id);
 
       expect(result.totalCount).toBe(1);
-      expect(result.items[0].productId).toBe(activeProduct.id.toString());
+      expect(result.items[0].product.id).toBe(activeProduct.id.toString());
     });
 
     it('페이지네이션이 동작한다 (offset/limit/hasMore)', async () => {
@@ -334,7 +336,7 @@ describe('UserWishlistService (real DB)', () => {
 
       const result = await service.myWishlist(account.id);
 
-      expect(result.items.map((i) => i.productId)).toEqual([
+      expect(result.items.map((i) => i.product.id)).toEqual([
         first.id.toString(),
         second.id.toString(),
       ]);
@@ -361,13 +363,13 @@ describe('UserWishlistService (real DB)', () => {
       const result = await service.myWishlist(account.id);
 
       const item = result.items[0];
-      expect(item.storeId).toBe(store.id.toString());
-      expect(item.regionLabel).toBe('서울 대치동');
+      expect(item.product.storeId).toBe(store.id.toString());
+      expect(item.product.regionLabel).toBe('서울 대치동');
       // (40000 - 26000) / 40000 = 35%
-      expect(item.discountRate).toBe(35);
+      expect(item.product.discountRate).toBe(35);
       // (4.5 + 5.0) / 2 = 4.75 → 4.8
-      expect(item.ratingAverage).toBe(4.8);
-      expect(item.reviewCount).toBe(2);
+      expect(item.product.ratingAverage).toBe(4.8);
+      expect(item.product.reviewCount).toBe(2);
     });
 
     it('리뷰 없는 상품의 평점은 0.0/0건이다', async () => {
@@ -381,9 +383,9 @@ describe('UserWishlistService (real DB)', () => {
 
       const result = await service.myWishlist(account.id);
 
-      expect(result.items[0].ratingAverage).toBe(0);
-      expect(result.items[0].reviewCount).toBe(0);
-      expect(result.items[0].discountRate).toBe(0);
+      expect(result.items[0].product.ratingAverage).toBe(0);
+      expect(result.items[0].product.reviewCount).toBe(0);
+      expect(result.items[0].product.discountRate).toBe(0);
     });
 
     it('storeId 필터로 해당 매장 찜 상품만 반환한다', async () => {
@@ -400,8 +402,8 @@ describe('UserWishlistService (real DB)', () => {
       });
 
       expect(result.totalCount).toBe(1);
-      expect(result.items[0].productId).toBe(pA.id.toString());
-      expect(result.items[0].storeId).toBe(storeA.id.toString());
+      expect(result.items[0].product.id).toBe(pA.id.toString());
+      expect(result.items[0].product.storeId).toBe(storeA.id.toString());
     });
   });
 

@@ -1,6 +1,7 @@
 import { RandomService } from '@/common/providers/random.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
@@ -27,6 +28,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         StoreStatsRepository,
         ProductHomeQueryResolver,
         ProductHomeService,
@@ -52,9 +54,9 @@ describe('ProductHome Query Resolver (real DB)', () => {
     const store = await createStore(prisma);
     await createProduct(prisma, { store_id: store.id, name: '인기 케이크' });
 
-    const result = await resolver.popularCakes();
+    const result = await resolver.popularCakes(undefined, undefined);
 
-    expect(result.items.map((i) => i.name)).toEqual(['인기 케이크']);
+    expect(result.items.map((i) => i.product.name)).toEqual(['인기 케이크']);
     expect(result.banner).toBeNull();
   });
 

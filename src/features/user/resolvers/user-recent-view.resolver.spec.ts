@@ -1,4 +1,6 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
@@ -27,6 +29,8 @@ describe('User Recent View Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
+        ReviewReadRepository,
         UserRecentViewQueryResolver,
         UserRecentViewMutationResolver,
         UserRecentViewService,
@@ -70,9 +74,11 @@ describe('User Recent View Resolvers (real DB)', () => {
 
       expect(result.totalCount).toBe(1);
       expect(result.items[0]).toMatchObject({
-        productId: product.id.toString(),
-        productName: '밤 케이크',
-        storeName: '베이커리',
+        product: {
+          id: product.id.toString(),
+          name: '밤 케이크',
+          storeName: '베이커리',
+        },
       });
     });
   });

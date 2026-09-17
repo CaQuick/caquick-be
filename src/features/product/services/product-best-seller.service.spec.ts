@@ -1,6 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type {
@@ -31,6 +32,7 @@ describe('ProductBestSellerService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ProductCardService,
         ProductBestSellerService,
         ProductRepository,
         ReviewReadRepository,
@@ -100,7 +102,7 @@ describe('ProductBestSellerService (real DB)', () => {
 
       const result = await service.realtimeBestCakes();
 
-      expect(result.items.map((i) => [i.rank, i.name])).toEqual([
+      expect(result.items.map((i) => [i.rank, i.product.name])).toEqual([
         [1, '수량 7'],
         [2, '수량 5'],
         [3, '수량 2'],
@@ -140,7 +142,7 @@ describe('ProductBestSellerService (real DB)', () => {
 
       const result = await service.realtimeBestCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual(['유효']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['유효']);
     });
 
     it('비활성 상품·비활성 매장 상품은 후보에서 제외한다', async () => {
@@ -155,7 +157,7 @@ describe('ProductBestSellerService (real DB)', () => {
 
       const result = await service.realtimeBestCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual(['활성']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['활성']);
     });
 
     it('수량 동률은 인기 점수(찜 수)로 푼다', async () => {
@@ -171,7 +173,10 @@ describe('ProductBestSellerService (real DB)', () => {
 
       const result = await service.realtimeBestCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual(['찜 있음', '찜 없음']);
+      expect(result.items.map((i) => i.product.name)).toEqual([
+        '찜 있음',
+        '찜 없음',
+      ]);
     });
 
     it('limit만큼만 반환하며 상한 20을 넘지 않는다', async () => {
@@ -205,14 +210,17 @@ describe('ProductBestSellerService (real DB)', () => {
       const result = await service.realtimeBestCakes();
 
       expect(result.items[0]).toMatchObject({
-        id: cake.id.toString(),
-        storeId: store.id.toString(),
-        storeName: '청라 케이크',
-        regionLabel: '인천 청라동',
-        regularPrice: 40000,
-        salePrice: 30000,
-        discountRate: 25,
-        thumbnailUrl: 'https://img/1.png',
+        rank: 1,
+        product: {
+          id: cake.id.toString(),
+          storeId: store.id.toString(),
+          storeName: '청라 케이크',
+          regionLabel: '인천 청라동',
+          regularPrice: 40000,
+          salePrice: 30000,
+          discountRate: 25,
+          thumbnailUrl: 'https://img/1.png',
+        },
       });
     });
   });

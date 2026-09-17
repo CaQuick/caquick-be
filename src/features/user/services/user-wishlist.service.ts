@@ -3,10 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { roundRatingAverage } from '@/common/utils/rating';
-import { calcDiscountRate, ProductRepository } from '@/features/product';
-import { ReviewReadRepository } from '@/features/review';
-import { buildRegionLabel } from '@/features/store';
+import { ProductCardService, ProductRepository } from '@/features/product';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
 import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
@@ -22,7 +19,7 @@ export class UserWishlistService extends UserBaseService {
   constructor(
     repo: UserRepository,
     private readonly productRepository: ProductRepository,
-    private readonly reviews: ReviewReadRepository,
+    private readonly cards: ProductCardService,
   ) {
     super(repo);
   }
@@ -80,34 +77,16 @@ export class UserWishlistService extends UserBaseService {
       storeId,
     });
 
-    // 상품 평점은 페이지 상품들만 단일 groupBy로 집계(N+1 회피)
-    const reviewStats = await this.reviews.aggregateReviewStats(
-      'product_id',
-
-      items.map((row) => row.product_id),
+    const cards = await this.cards.buildCards(
+      items.map((row) => ({ ...row.product, id: row.product_id })),
+      accountId,
     );
 
     return {
-      items: items.map((row) => {
-        const stat = reviewStats.get(row.product_id);
-        return {
-          productId: row.product_id.toString(),
-          storeId: row.product.store_id.toString(),
-          productName: row.product.name,
-          representativeImageUrl: row.product.images[0]?.image_url ?? null,
-          salePrice: row.product.sale_price,
-          regularPrice: row.product.regular_price,
-          discountRate: calcDiscountRate(
-            row.product.regular_price,
-            row.product.sale_price,
-          ),
-          storeName: row.product.store.store_name,
-          regionLabel: buildRegionLabel(row.product.store),
-          ratingAverage: roundRatingAverage(stat?.average ?? 0),
-          reviewCount: stat?.count ?? 0,
-          addedAt: row.created_at,
-        };
-      }),
+      items: cards.map((product, idx) => ({
+        product,
+        addedAt: items[idx].created_at,
+      })),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),
     };

@@ -1,26 +1,8 @@
-import type {
-  StoreProductCategoryRow,
-  StoreProductRow,
-} from '@/features/product/repositories/product.repository';
+import type { StoreProductCategoryRow } from '@/features/product/repositories/product.repository';
 import {
   calcDiscountRate,
-  toStoreProduct,
   toStoreProductCategory,
 } from '@/features/product/services/product-storefront-mappers.helper';
-
-function makeProductRow(o: Partial<StoreProductRow> = {}): StoreProductRow {
-  return {
-    id: 1n,
-    name: '레터링 케이크',
-    description: '설명',
-    regular_price: 40000,
-    sale_price: 35000,
-    currency: 'KRW',
-    images: [{ image_url: 'thumb.png' }],
-    product_categories: [{ category_id: 10n }, { category_id: 20n }],
-    ...o,
-  };
-}
 
 describe('calcDiscountRate', () => {
   it('정상 할인율을 정수로 반올림한다', () => {
@@ -43,41 +25,6 @@ describe('calcDiscountRate', () => {
 
   it('salePrice가 음수 등 비정상이면 0~100으로 clamp한다', () => {
     expect(calcDiscountRate(40000, -10000)).toBe(100);
-  });
-});
-
-describe('toStoreProduct', () => {
-  it('row를 카드로 매핑한다(id 문자열·대표이미지·할인율·카테고리ids)', () => {
-    const result = toStoreProduct(makeProductRow());
-    expect(result).toEqual({
-      id: '1',
-      name: '레터링 케이크',
-      description: '설명',
-      thumbnailUrl: 'thumb.png',
-      regularPrice: 40000,
-      salePrice: 35000,
-      discountRate: 13,
-      currency: 'KRW',
-      categoryIds: ['10', '20'],
-    });
-  });
-
-  it('이미지가 없으면 thumbnailUrl은 null', () => {
-    expect(
-      toStoreProduct(makeProductRow({ images: [] })).thumbnailUrl,
-    ).toBeNull();
-  });
-
-  it('salePrice가 없으면 discountRate는 0', () => {
-    const r = toStoreProduct(makeProductRow({ sale_price: null }));
-    expect(r.salePrice).toBeNull();
-    expect(r.discountRate).toBe(0);
-  });
-
-  it('카테고리가 없으면 categoryIds는 빈 배열', () => {
-    expect(
-      toStoreProduct(makeProductRow({ product_categories: [] })).categoryIds,
-    ).toEqual([]);
   });
 });
 
