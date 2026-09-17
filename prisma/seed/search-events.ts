@@ -58,7 +58,6 @@ export async function seedSearchEvents(
       Array.from({ length: count }, (_, i) => ({
         account_id: user1.id,
         keyword,
-        context: 'GLOBAL' as const,
         created_at: new Date(rankedAt.getTime() - (i + 1) * 10 * 60 * 1000),
       })),
     ),

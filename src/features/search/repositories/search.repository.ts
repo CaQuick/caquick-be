@@ -33,7 +33,6 @@ export class SearchRepository {
       data: {
         account_id: args.accountId,
         keyword: args.keyword,
-        context: 'GLOBAL',
         created_at: args.now,
       },
     });

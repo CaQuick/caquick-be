@@ -15,7 +15,6 @@ import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
 import { seedConversations } from './seed/conversations';
-import { seedCustomDrafts } from './seed/custom-drafts';
 import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
 import { seedOrders } from './seed/orders';
@@ -67,9 +66,6 @@ async function main(): Promise<void> {
 
     log('대화 + FAQ 시드 중...');
     await seedConversations(prisma, { users, stores });
-
-    log('커스텀 드래프트 시드 중...');
-    await seedCustomDrafts(prisma, { users, stores });
 
     log('검색 히스토리 시드 중...');
     await seedSearchHistory(prisma, { users });
