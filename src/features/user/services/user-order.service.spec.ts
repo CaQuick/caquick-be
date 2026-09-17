@@ -335,10 +335,12 @@ describe('UserOrderService (real DB)', () => {
       expect(result.orderId).toBe(order.id.toString());
       expect(result.items).toHaveLength(1);
       expect(result.items[0]).toMatchObject({
-        productName: expect.any(String),
-        quantity: 2,
-        regularPrice: 30000,
-        salePrice: 25000,
+        item: {
+          productName: expect.any(String),
+          quantity: 2,
+          regularPrice: 30000,
+          salePrice: 25000,
+        },
         hasMyReview: false,
         canWriteReview: false, // 상태가 SUBMITTED이므로 불가
       });

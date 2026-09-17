@@ -1,3 +1,7 @@
+import type {
+  OrderItemDetailOutput,
+  OrderStatusHistoryOutput,
+} from '@/features/order';
 import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
 import type { StoreOutput } from '@/features/store';
 
@@ -126,58 +130,6 @@ export interface SellerOrderSummaryOutput {
   createdAt: Date;
 }
 
-export interface SellerOrderStatusHistoryOutput {
-  id: string;
-  fromStatus:
-    'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED' | null;
-  toStatus: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
-  changedAt: Date;
-  note: string | null;
-}
-
-export interface SellerOrderItemOptionSnapshotOutput {
-  id: string;
-  groupNameSnapshot: string;
-  optionTitleSnapshot: string;
-  optionPriceDeltaSnapshot: number;
-}
-
-export interface SellerOrderItemCustomTextSnapshotOutput {
-  id: string;
-  tokenKeySnapshot: string;
-  defaultTextSnapshot: string;
-  valueText: string;
-  sortOrder: number;
-}
-
-export interface SellerOrderItemCustomFreeEditAttachmentOutput {
-  id: string;
-  imageUrl: string;
-  sortOrder: number;
-}
-
-export interface SellerOrderItemCustomFreeEditSnapshotOutput {
-  id: string;
-  cropImageUrl: string;
-  descriptionText: string;
-  sortOrder: number;
-  attachments: SellerOrderItemCustomFreeEditAttachmentOutput[];
-}
-
-export interface SellerOrderItemDetailOutput {
-  id: string;
-  storeId: string;
-  productId: string;
-  productNameSnapshot: string;
-  regularPriceSnapshot: number;
-  salePriceSnapshot: number | null;
-  quantity: number;
-  itemSubtotalPrice: number;
-  optionItems: SellerOrderItemOptionSnapshotOutput[];
-  customTexts: SellerOrderItemCustomTextSnapshotOutput[];
-  freeEdits: SellerOrderItemCustomFreeEditSnapshotOutput[];
-}
-
 export interface SellerOrderDetailOutput {
   id: string;
   orderNumber: string;
@@ -196,8 +148,8 @@ export interface SellerOrderDetailOutput {
   canceledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  items: SellerOrderItemDetailOutput[];
-  statusHistories: SellerOrderStatusHistoryOutput[];
+  items: OrderItemDetailOutput[];
+  statusHistories: OrderStatusHistoryOutput[];
 }
 
 export interface SellerConversationOutput {

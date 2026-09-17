@@ -1,3 +1,7 @@
+import type {
+  OrderItemDetailOutput,
+  OrderStatusHistoryOutput,
+} from '@/features/order';
 import type { StoreOutput } from '@/features/store';
 import type {
   AccountStatus,
@@ -211,37 +215,6 @@ export interface AdminOrderSummaryOutput {
   createdAt: Date;
 }
 
-export interface AdminOrderItemDetailOutput {
-  id: string;
-  storeId: string;
-  productId: string;
-  productNameSnapshot: string;
-  regularPriceSnapshot: number;
-  salePriceSnapshot: number | null;
-  quantity: number;
-  itemSubtotalPrice: number;
-  optionItems: {
-    id: string;
-    groupNameSnapshot: string;
-    optionTitleSnapshot: string;
-    optionPriceDeltaSnapshot: number;
-  }[];
-  customTexts: {
-    id: string;
-    tokenKeySnapshot: string;
-    defaultTextSnapshot: string;
-    valueText: string;
-    sortOrder: number;
-  }[];
-  freeEdits: {
-    id: string;
-    cropImageUrl: string;
-    descriptionText: string;
-    sortOrder: number;
-    attachments: { id: string; imageUrl: string; sortOrder: number }[];
-  }[];
-}
-
 export interface AdminOrderDetailOutput {
   id: string;
   orderNumber: string;
@@ -265,14 +238,8 @@ export interface AdminOrderDetailOutput {
   canceledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  items: AdminOrderItemDetailOutput[];
-  statusHistories: {
-    id: string;
-    fromStatus: OrderStatus | null;
-    toStatus: OrderStatus;
-    changedAt: Date;
-    note: string | null;
-  }[];
+  items: OrderItemDetailOutput[];
+  statusHistories: OrderStatusHistoryOutput[];
 }
 
 export interface AdminSendNotificationResultOutput {

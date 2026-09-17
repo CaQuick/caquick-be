@@ -61,88 +61,6 @@ type AdminOrderBuyer {
   status: AccountStatus!
 }
 
-"""주문 상태 변경 이력 1건. 최신 변경이 먼저 온다."""
-type AdminOrderStatusHistory {
-  id: ID!
-  """변경 전 상태. 최초 생성 이력은 null."""
-  fromStatus: OrderStatusType
-  """변경 후 상태."""
-  toStatus: OrderStatusType!
-  """변경 시각."""
-  changedAt: DateTime!
-  """변경 사유 메모. 관리자 취소는 '[관리자]' 접두."""
-  note: String
-}
-
-"""주문 품목 옵션 스냅샷."""
-type AdminOrderItemOptionSnapshot {
-  id: ID!
-  """옵션 그룹명(주문 당시)."""
-  groupNameSnapshot: String!
-  """옵션명(주문 당시)."""
-  optionTitleSnapshot: String!
-  """옵션 추가금(원, 주문 당시)."""
-  optionPriceDeltaSnapshot: Int!
-}
-
-"""주문 품목 커스텀 문구 스냅샷."""
-type AdminOrderItemCustomTextSnapshot {
-  id: ID!
-  """문구 슬롯 키(주문 당시)."""
-  tokenKeySnapshot: String!
-  """슬롯 기본 문구(주문 당시)."""
-  defaultTextSnapshot: String!
-  """구매자가 입력한 문구."""
-  valueText: String!
-  """표시 순서."""
-  sortOrder: Int!
-}
-
-"""자유 편집 첨부."""
-type AdminOrderItemCustomFreeEditAttachment {
-  id: ID!
-  """첨부 이미지 URL."""
-  imageUrl: String!
-  """표시 순서."""
-  sortOrder: Int!
-}
-
-"""주문 품목 자유 편집 요청 스냅샷."""
-type AdminOrderItemCustomFreeEditSnapshot {
-  id: ID!
-  """편집 대상 크롭 이미지 URL."""
-  cropImageUrl: String!
-  """요청 설명."""
-  descriptionText: String!
-  """표시 순서."""
-  sortOrder: Int!
-  """첨부 이미지."""
-  attachments: [AdminOrderItemCustomFreeEditAttachment!]!
-}
-
-"""주문 품목 1건. 가격·옵션은 전부 주문 당시 스냅샷이다."""
-type AdminOrderItemDetail {
-  id: ID!
-  storeId: ID!
-  productId: ID!
-  """상품명(주문 당시)."""
-  productNameSnapshot: String!
-  """정가(원, 주문 당시)."""
-  regularPriceSnapshot: Int!
-  """할인가(원, 주문 당시). 없었으면 null."""
-  salePriceSnapshot: Int
-  """주문 수량."""
-  quantity: Int!
-  """품목 합계 금액(원)."""
-  itemSubtotalPrice: Int!
-  """선택된 옵션(주문 당시 스냅샷)."""
-  optionItems: [AdminOrderItemOptionSnapshot!]!
-  """입력된 커스텀 문구(주문 당시 스냅샷)."""
-  customTexts: [AdminOrderItemCustomTextSnapshot!]!
-  """자유 편집 요청(주문 당시 스냅샷)."""
-  freeEdits: [AdminOrderItemCustomFreeEditSnapshot!]!
-}
-
 """주문 상세(관리자 시점). 모든 품목이 담긴다."""
 type AdminOrderDetail {
   id: ID!
@@ -177,9 +95,9 @@ type AdminOrderDetail {
   createdAt: DateTime!
   updatedAt: DateTime!
   """주문 품목 전체."""
-  items: [AdminOrderItemDetail!]!
+  items: [OrderItemDetail!]!
   """상태 변경 이력. 최신순."""
-  statusHistories: [AdminOrderStatusHistory!]!
+  statusHistories: [OrderStatusHistory!]!
 }
 
 """주문 목록 조회 조건. 모든 필터는 AND로 결합된다."""

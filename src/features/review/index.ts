@@ -5,7 +5,6 @@ export {
   ReviewReadRepository,
   type ProductReviewRow,
   type ReviewStat,
-  type ReviewStatsKey,
 } from '@/features/review/repositories/review-read.repository';
 // 리뷰 카드·미디어 매핑. 리뷰 상세(product)와 내 리뷰(user)가 같은 1벌을 쓴다.
 export {

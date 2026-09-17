@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { sliceOverfetched } from '@/common/utils/pagination';
-import { OrderRepository } from '@/features/order';
+import {
+  OrderRepository,
+  toOrderItemDetail,
+  toOrderStatusHistory,
+} from '@/features/order';
 import { formatBusinessHours } from '@/features/store';
 import type { MyOrdersInput } from '@/features/user/dto/inputs/my-orders.input';
 import type {
@@ -101,38 +105,10 @@ export class UserOrderService {
       madeAt: order.made_at,
       pickedUpAt: order.picked_up_at,
       canceledAt: order.canceled_at,
-      statusHistories: order.status_histories.map((h) => ({
-        fromStatus: h.from_status,
-        toStatus: h.to_status,
-        changedAt: h.changed_at,
-        note: h.note,
-      })),
+      statusHistories: order.status_histories.map(toOrderStatusHistory),
       items: order.items.map((item) => ({
-        orderItemId: item.id.toString(),
-        productId: item.product_id.toString(),
-        productName: item.product_name_snapshot,
+        item: toOrderItemDetail(item),
         representativeImageUrl: item.product?.images?.[0]?.image_url ?? null,
-        quantity: item.quantity,
-        regularPrice: item.regular_price_snapshot,
-        salePrice: item.sale_price_snapshot,
-        itemSubtotalPrice: item.item_subtotal_price,
-        selectedOptions: item.option_items.map((oi) => ({
-          groupName: oi.group_name_snapshot,
-          optionTitle: oi.option_title_snapshot,
-          priceDelta: oi.option_price_delta_snapshot,
-        })),
-        customTexts: item.custom_texts.map((ct) => ({
-          tokenKey: ct.token_key_snapshot,
-          defaultText: ct.default_text_snapshot,
-          valueText: ct.value_text,
-          sortOrder: ct.sort_order,
-        })),
-        customFreeEdits: item.free_edits.map((fe) => ({
-          cropImageUrl: fe.crop_image_url,
-          descriptionText: fe.description_text,
-          sortOrder: fe.sort_order,
-          attachmentImageUrls: fe.attachments.map((a) => a.image_url),
-        })),
         hasMyReview: Boolean(item.review && !item.review.deleted_at),
         canWriteReview:
           isPickedUp && (!item.review || Boolean(item.review.deleted_at)),

@@ -7,3 +7,14 @@ export {
   type AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 export { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+// 주문 품목·상태 이력 출력 1벌(D31). 구매자(user)·판매자(seller)·관리자(admin) 주문 상세가 같은 매퍼를 쓴다.
+export {
+  toOrderItemDetail,
+  toOrderStatusHistory,
+  type OrderItemDetailRow,
+  type OrderStatusHistoryRow,
+} from '@/features/order/services/order-output-mappers.helper';
+export type {
+  OrderItemDetailOutput,
+  OrderStatusHistoryOutput,
+} from '@/features/order/types/order-output.type';
