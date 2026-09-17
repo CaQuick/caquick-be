@@ -3,19 +3,18 @@ import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreSearchService } from '@/features/store/services/store-search.service';
 import type { PrismaClient, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
-  createAccount,
   createOrder,
   createOrderItem,
   createProduct,
   createRegion,
   createStore,
-  createStoreWishlist,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -26,6 +25,7 @@ describe('StoreSearchService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreSearchService,
@@ -129,44 +129,6 @@ describe('StoreSearchService (real DB)', () => {
       expect(page.totalCount).toBe(3);
       expect(page.items).toHaveLength(1);
       expect(page.hasMore).toBe(false);
-    });
-
-    it('카드에 로고·지역·대표 이미지(최대 4)·찜 여부를 채운다', async () => {
-      const store = await createStore(prisma, {
-        store_name: '케이크 하우스',
-        profile_image_url: 'https://img/logo.png',
-        address_city: '서울',
-        address_neighborhood: '용산구',
-      });
-      for (let i = 0; i < 5; i += 1) {
-        const product = await createProduct(prisma, { store_id: store.id });
-        await prisma.productImage.create({
-          data: { product_id: product.id, image_url: `https://img/${i}.png` },
-        });
-      }
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: store.id,
-      });
-
-      const asUser = await service.searchStores(
-        { keyword: '케이크' },
-        account.id,
-      );
-      const asGuest = await service.searchStores({ keyword: '케이크' });
-
-      expect(asUser.items[0]).toMatchObject({
-        id: store.id.toString(),
-        storeName: '케이크 하우스',
-        profileImageUrl: 'https://img/logo.png',
-        regionLabel: '서울 용산구',
-        ratingAverage: 0,
-        reviewCount: 0,
-        isWishlisted: true,
-      });
-      expect(asUser.items[0].cakeImageUrls).toHaveLength(4);
-      expect(asGuest.items[0].isWishlisted).toBe(false);
     });
 
     it('빈 검색어는 400, 결과 없음은 빈 커넥션', async () => {

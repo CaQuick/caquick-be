@@ -3,6 +3,7 @@ import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import type { PrismaClient, Store } from '@/generated/prisma/client';
@@ -31,6 +32,7 @@ describe('StoreTodayPickupService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreTodayPickupService,
@@ -108,7 +110,7 @@ describe('StoreTodayPickupService (real DB)', () => {
       expect(result.totalCount).toBe(1);
       expect(result.asOf).toEqual(NOW);
       const [item] = result.items;
-      expect(item.storeName).toBe('헤즈케이크');
+      expect(item.store.storeName).toBe('헤즈케이크');
       expect(item.slots).toEqual([
         { time: '14:00', available: false },
         { time: '14:30', available: false },
@@ -204,7 +206,7 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual(['여유매장']);
+      expect(result.items.map((i) => i.store.storeName)).toEqual(['여유매장']);
     });
 
     it('capacity는 주문 수가 아니라 제작 수량(quantity 합) 기준으로 소진된다', async () => {
@@ -232,7 +234,9 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual(['무제한매장']);
+      expect(result.items.map((i) => i.store.storeName)).toEqual([
+        '무제한매장',
+      ]);
     });
 
     it('인기 매장 랭킹 순으로 정렬한다(찜 많은 매장 우선)', async () => {
@@ -249,7 +253,7 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual([
+      expect(result.items.map((i) => i.store.storeName)).toEqual([
         '인기매장',
         '일반매장',
       ]);
@@ -270,37 +274,14 @@ describe('StoreTodayPickupService (real DB)', () => {
       const filtered = await service.todayPickupStores({
         regionIds: [region.id.toString()],
       });
-      expect(filtered.items.map((i) => i.storeName)).toEqual(['청라매장']);
+      expect(filtered.items.map((i) => i.store.storeName)).toEqual([
+        '청라매장',
+      ]);
 
       const paged = await service.todayPickupStores({ offset: 1, limit: 1 });
       expect(paged.totalCount).toBe(2);
       expect(paged.items).toHaveLength(1);
       expect(paged.hasMore).toBe(false);
-    });
-
-    it('로그인 사용자의 찜 여부와 매장 카드 정보를 채운다', async () => {
-      const store = await createStore(prisma, {
-        store_name: '찜매장',
-        address_city: '인천',
-        address_neighborhood: '청라동',
-      });
-      await openToday(store, 10, 20);
-      const user = await createAccount(prisma, { account_type: 'USER' });
-      await prisma.storeWishlistItem.create({
-        data: { account_id: user.id, store_id: store.id },
-      });
-
-      const [asUser, asGuest] = [
-        await service.todayPickupStores(undefined, user.id),
-        await service.todayPickupStores(),
-      ];
-
-      expect(asUser.items[0]).toMatchObject({
-        storeName: '찜매장',
-        regionLabel: '인천 청라동',
-        isWishlisted: true,
-      });
-      expect(asGuest.items[0].isWishlisted).toBe(false);
     });
 
     it('매장이 없으면 빈 결과를 반환한다', async () => {

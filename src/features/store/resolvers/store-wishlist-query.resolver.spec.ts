@@ -4,6 +4,7 @@ import { ReviewReadRepository } from '@/features/review';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -22,6 +23,7 @@ describe('Store Wishlist Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreWishlistQueryResolver,
         StoreWishlistService,
@@ -58,9 +60,9 @@ describe('Store Wishlist Query Resolver (real DB)', () => {
     });
 
     expect(result.totalCount).toBe(1);
-    expect(result.items[0].storeId).toBe(store.id.toString());
-    expect(result.items[0].storeName).toBe('해즈케이크');
-    expect(result.items[0].profileImageUrl).toBe(
+    expect(result.items[0].store.id).toBe(store.id.toString());
+    expect(result.items[0].store.storeName).toBe('해즈케이크');
+    expect(result.items[0].store.profileImageUrl).toBe(
       'https://cdn.example.com/haz-logo.png',
     );
   });

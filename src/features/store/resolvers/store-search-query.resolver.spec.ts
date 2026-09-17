@@ -4,6 +4,7 @@ import { StoreStatsRepository } from '@/features/store/repositories/store-stats.
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreSearchQueryResolver } from '@/features/store/resolvers/store-search-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreSearchService } from '@/features/store/services/store-search.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -28,6 +29,7 @@ describe('StoreSearchQueryResolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreSearchQueryResolver,

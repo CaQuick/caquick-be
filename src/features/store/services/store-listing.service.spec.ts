@@ -2,15 +2,14 @@ import { ReviewReadRepository } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
-  createAccount,
   createOrder,
   createOrderItem,
-  createProduct,
   createRegion,
   createReview,
   createStore,
@@ -27,6 +26,7 @@ describe('StoreListingService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
         ReviewReadRepository,
         StoreStatsRepository,
         StoreListingService,
@@ -78,13 +78,16 @@ describe('StoreListingService (real DB)', () => {
 
       const result = await service.popularStores();
 
-      expect(result.items.map((s) => s.storeName)).toEqual(['핫', '콜드']);
+      expect(result.items.map((s) => s.store.storeName)).toEqual([
+        '핫',
+        '콜드',
+      ]);
       expect(result.items[0]).toMatchObject({
-        id: hot.id.toString(),
+        store: { id: hot.id.toString() },
         rank: 1,
       });
       expect(result.items[1].rank).toBe(2);
-      expect(cold.id.toString()).toBe(result.items[1].id);
+      expect(cold.id.toString()).toBe(result.items[1].store.id);
     });
 
     it('지역 필터(regionIds)에 해당하는 시군구 매장만 반환한다', async () => {
@@ -98,7 +101,7 @@ describe('StoreListingService (real DB)', () => {
       });
 
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe(target.id.toString());
+      expect(result.items[0].store.id).toBe(target.id.toString());
     });
 
     it('평균 평점(소수 첫째)과 리뷰 수를 집계한다', async () => {
@@ -107,10 +110,10 @@ describe('StoreListingService (real DB)', () => {
       await reviewStore(store.id, 5);
 
       const result = await service.popularStores();
-      const item = result.items.find((s) => s.id === store.id.toString());
+      const item = result.items.find((s) => s.store.id === store.id.toString());
 
-      expect(item?.ratingAverage).toBe(4.5);
-      expect(item?.reviewCount).toBe(2);
+      expect(item?.store.ratingAverage).toBe(4.5);
+      expect(item?.store.reviewCount).toBe(2);
     });
 
     it('최근 30일 유효 주문만 점수에 반영한다(오래된 주문 매장은 하위)', async () => {
@@ -142,7 +145,7 @@ describe('StoreListingService (real DB)', () => {
 
       const result = await service.popularStores();
 
-      expect(result.items[0].storeName).toBe('최근주문');
+      expect(result.items[0].store.storeName).toBe('최근주문');
     });
 
     it('soft-delete된 주문은 점수에 반영하지 않는다', async () => {
@@ -174,26 +177,7 @@ describe('StoreListingService (real DB)', () => {
 
       const result = await service.popularStores();
 
-      expect(result.items[0].storeName).toBe('유효주문');
-    });
-
-    it('대표 케이크 이미지를 매장당 최대 4장 노출한다', async () => {
-      const store = await createStore(prisma);
-      for (let i = 0; i < 5; i++) {
-        const product = await createProduct(prisma, { store_id: store.id });
-        await prisma.productImage.create({
-          data: {
-            product_id: product.id,
-            image_url: `https://img/${product.id}.png`,
-            sort_order: 0,
-          },
-        });
-      }
-
-      const result = await service.popularStores();
-      const item = result.items.find((s) => s.id === store.id.toString());
-
-      expect(item?.cakeImageUrls).toHaveLength(4);
+      expect(result.items[0].store.storeName).toBe('유효주문');
     });
 
     it('offset/limit 페이지네이션과 hasMore를 처리한다', async () => {
@@ -214,26 +198,6 @@ describe('StoreListingService (real DB)', () => {
       const result = await service.popularStores();
 
       expect(result.totalCount).toBe(0);
-    });
-
-    it('로그인 사용자의 찜 매장은 isWishlisted=true, 비로그인/미찜은 false', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      const wished = await createStore(prisma, { store_name: '찜한매장' });
-      await createStore(prisma, { store_name: '안찜매장' });
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: wished.id,
-      });
-
-      const loggedIn = await service.popularStores(undefined, account.id);
-      const byName = new Map(
-        loggedIn.items.map((s) => [s.storeName, s.isWishlisted]),
-      );
-      expect(byName.get('찜한매장')).toBe(true);
-      expect(byName.get('안찜매장')).toBe(false);
-
-      const anonymous = await service.popularStores();
-      expect(anonymous.items.every((s) => s.isWishlisted === false)).toBe(true);
     });
   });
 });

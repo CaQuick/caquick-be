@@ -11,6 +11,7 @@ import { StoreSearchQueryResolver } from '@/features/store/resolvers/store-searc
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
@@ -24,6 +25,7 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreRepository,
     StoreStatsRepository,
     StoreWishlistRepository,
+    StoreCardService,
     StoreListingService,
     StoreWishlistService,
     StoreDetailService,
