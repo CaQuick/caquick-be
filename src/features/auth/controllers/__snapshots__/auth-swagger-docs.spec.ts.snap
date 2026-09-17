@@ -1,0 +1,546 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Auth REST Swagger 문서 /auth/* operation 13개의 문서가 스냅샷과 같다 1`] = `
+{
+  "/auth/admin/change-password": {
+    "post": {
+      "description": "현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.",
+      "operationId": "AuthController_adminChangePassword",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ChangePasswordInput",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "ok": {
+                    "type": "boolean",
+                  },
+                },
+                "required": [
+                  "ok",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "비밀번호 변경 완료",
+        },
+      },
+      "security": [
+        {
+          "access-token": [],
+        },
+      ],
+      "summary": "관리자 비밀번호 변경",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/admin/login": {
+    "post": {
+      "description": "관리자 username/password로 로그인한다. mustChangePassword=true면 비밀번호를 바꾸기 전까지 관리자 API가 FORBIDDEN이다.",
+      "operationId": "AuthController_adminLogin",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CredentialLoginInput",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "accountStatus": {
+                    "enum": [
+                      "PENDING",
+                      "ACTIVE",
+                      "SUSPENDED",
+                    ],
+                    "type": "string",
+                  },
+                  "mustChangePassword": {
+                    "type": "boolean",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                  "accountStatus",
+                  "mustChangePassword",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "관리자 로그인 결과",
+        },
+      },
+      "summary": "관리자 로그인",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/admin/logout": {
+    "post": {
+      "description": "관리자 refresh 세션을 폐기하고 쿠키를 제거한다.",
+      "operationId": "AuthController_adminLogout",
+      "parameters": [],
+      "responses": {
+        "204": {
+          "description": "관리자 로그아웃 완료",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "관리자 로그아웃",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/admin/refresh": {
+    "post": {
+      "description": "관리자 refresh 쿠키를 사용해 access token을 재발급한다.",
+      "operationId": "AuthController_adminRefresh",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "accountStatus": {
+                    "enum": [
+                      "PENDING",
+                      "ACTIVE",
+                      "SUSPENDED",
+                    ],
+                    "type": "string",
+                  },
+                  "mustChangePassword": {
+                    "type": "boolean",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                  "accountStatus",
+                  "mustChangePassword",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "관리자 재발급 결과",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "관리자 Access/Refresh 재발급",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/dev/issue-token": {
+    "post": {
+      "description": "개발 환경에서 OIDC 흐름 없이 accountId로 access token을 발급한다. NODE_ENV=production 에서는 차단된다.",
+      "operationId": "AuthController_devIssueToken",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DevIssueTokenInput",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                  "expiresInSeconds",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "Dev access token",
+        },
+      },
+      "summary": "[DEV ONLY] Access token 즉시 발급",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/logout": {
+    "post": {
+      "description": "Refresh 세션을 폐기하고 쿠키를 제거한다.",
+      "operationId": "AuthController_logout",
+      "parameters": [],
+      "responses": {
+        "204": {
+          "description": "로그아웃 완료",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "로그아웃",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/oidc/{provider}/callback": {
+    "get": {
+      "description": "OIDC 인증 결과를 처리하고 세션 쿠키를 발급한 뒤 리다이렉트한다.",
+      "operationId": "AuthController_callback",
+      "parameters": [
+        {
+          "description": "OIDC provider",
+          "in": "path",
+          "name": "provider",
+          "required": true,
+          "schema": {
+            "enum": [
+              "google",
+              "kakao",
+            ],
+            "type": "string",
+          },
+        },
+      ],
+      "responses": {
+        "302": {
+          "description": "로그인 완료 후 returnTo로 리다이렉트",
+        },
+      },
+      "summary": "OIDC 콜백 처리",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/oidc/{provider}/start": {
+    "get": {
+      "description": "지정한 OIDC provider로 로그인 화면을 시작한다.",
+      "operationId": "AuthController_start",
+      "parameters": [
+        {
+          "description": "OIDC provider",
+          "in": "path",
+          "name": "provider",
+          "required": true,
+          "schema": {
+            "enum": [
+              "google",
+              "kakao",
+            ],
+            "type": "string",
+          },
+        },
+        {
+          "description": "로그인 완료 후 이동할 프론트 경로",
+          "in": "query",
+          "name": "returnTo",
+          "required": false,
+          "schema": {},
+        },
+      ],
+      "responses": {
+        "302": {
+          "description": "OIDC 인증 페이지로 리다이렉트",
+        },
+      },
+      "summary": "OIDC 로그인 시작",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/refresh": {
+    "post": {
+      "description": "Refresh 쿠키를 사용해 access token을 재발급한다.",
+      "operationId": "AuthController_refresh",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "재발급 결과",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "Access/Refresh 재발급",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/seller/change-password": {
+    "post": {
+      "description": "현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.",
+      "operationId": "AuthController_sellerChangePassword",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ChangePasswordInput",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "ok": {
+                    "type": "boolean",
+                  },
+                },
+                "required": [
+                  "ok",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "비밀번호 변경 완료",
+        },
+      },
+      "security": [
+        {
+          "access-token": [],
+        },
+      ],
+      "summary": "판매자 비밀번호 변경",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/seller/login": {
+    "post": {
+      "description": "판매자 username/password로 로그인한다.",
+      "operationId": "AuthController_sellerLogin",
+      "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CredentialLoginInput",
+            },
+          },
+        },
+        "required": true,
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "accountStatus": {
+                    "enum": [
+                      "PENDING",
+                      "ACTIVE",
+                      "SUSPENDED",
+                    ],
+                    "type": "string",
+                  },
+                  "mustChangePassword": {
+                    "type": "boolean",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                  "accountStatus",
+                  "mustChangePassword",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "판매자 로그인 결과",
+        },
+      },
+      "summary": "판매자 로그인",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/seller/logout": {
+    "post": {
+      "description": "판매자 refresh 세션을 폐기하고 쿠키를 제거한다.",
+      "operationId": "AuthController_sellerLogout",
+      "parameters": [],
+      "responses": {
+        "204": {
+          "description": "판매자 로그아웃 완료",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "판매자 로그아웃",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+  "/auth/seller/refresh": {
+    "post": {
+      "description": "판매자 refresh 쿠키를 사용해 access token을 재발급한다.",
+      "operationId": "AuthController_sellerRefresh",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "accessToken": {
+                    "type": "string",
+                  },
+                  "accountStatus": {
+                    "enum": [
+                      "PENDING",
+                      "ACTIVE",
+                      "SUSPENDED",
+                    ],
+                    "type": "string",
+                  },
+                  "mustChangePassword": {
+                    "type": "boolean",
+                  },
+                  "tokenType": {
+                    "example": "Bearer",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "accessToken",
+                  "tokenType",
+                  "accountStatus",
+                  "mustChangePassword",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "description": "판매자 재발급 결과",
+        },
+      },
+      "security": [
+        {
+          "refresh-cookie": [],
+        },
+      ],
+      "summary": "판매자 Access/Refresh 재발급",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
+}
+`;

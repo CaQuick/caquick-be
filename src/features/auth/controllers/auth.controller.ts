@@ -10,7 +10,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
   ApiCookieAuth,
   ApiFoundResponse,
   ApiNoContentResponse,
@@ -24,6 +23,12 @@ import type { Request, Response } from 'express';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { AuthService } from '@/features/auth/auth.service';
+import {
+  ApiChangePassword,
+  ApiCredentialLogin,
+  ApiCredentialLogout,
+  ApiCredentialRefresh,
+} from '@/features/auth/decorators/credential-auth-docs.decorator';
 import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
@@ -39,23 +44,6 @@ import {
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
-
-/** 판매자·관리자 로그인/재발급 응답 스키마(Swagger). 두 경로가 같은 모양을 쓴다. */
-const CREDENTIAL_LOGIN_RESPONSE_PROPERTIES = {
-  accessToken: { type: 'string' },
-  tokenType: { type: 'string', example: 'Bearer' },
-  accountStatus: {
-    type: 'string',
-    enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
-  },
-  mustChangePassword: { type: 'boolean' },
-};
-const CREDENTIAL_LOGIN_RESPONSE_REQUIRED = [
-  'accessToken',
-  'tokenType',
-  'accountStatus',
-  'mustChangePassword',
-];
 
 function toCredentialLoginResponse(result: CredentialLoginResult): {
   accessToken: string;
@@ -232,18 +220,7 @@ export class AuthController {
    *
    * POST /auth/seller/login
    */
-  @ApiOperation({
-    summary: '판매자 로그인',
-    description: '판매자 username/password로 로그인한다.',
-  })
-  @ApiOkResponse({
-    description: '판매자 로그인 결과',
-    schema: {
-      type: 'object',
-      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
-      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
-    },
-  })
+  @ApiCredentialLogin('판매자')
   @Post('seller/login')
   async sellerLogin(
     @Body() body: CredentialLoginInput,
@@ -265,19 +242,7 @@ export class AuthController {
    *
    * POST /auth/seller/refresh
    */
-  @ApiOperation({
-    summary: '판매자 Access/Refresh 재발급',
-    description: '판매자 refresh 쿠키를 사용해 access token을 재발급한다.',
-  })
-  @ApiCookieAuth('refresh-cookie')
-  @ApiOkResponse({
-    description: '판매자 재발급 결과',
-    schema: {
-      type: 'object',
-      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
-      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
-    },
-  })
+  @ApiCredentialRefresh('판매자')
   @Post('seller/refresh')
   async sellerRefresh(
     @Req() req: Request,
@@ -296,12 +261,7 @@ export class AuthController {
    *
    * POST /auth/seller/logout
    */
-  @ApiOperation({
-    summary: '판매자 로그아웃',
-    description: '판매자 refresh 세션을 폐기하고 쿠키를 제거한다.',
-  })
-  @ApiCookieAuth('refresh-cookie')
-  @ApiNoContentResponse({ description: '판매자 로그아웃 완료' })
+  @ApiCredentialLogout('판매자')
   @Post('seller/logout')
   async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.credentialAuth.logout({ role: 'SELLER', req, res });
@@ -356,20 +316,7 @@ export class AuthController {
    *
    * POST /auth/seller/change-password
    */
-  @ApiOperation({
-    summary: '판매자 비밀번호 변경',
-    description:
-      '현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.',
-  })
-  @ApiBearerAuth('access-token')
-  @ApiOkResponse({
-    description: '비밀번호 변경 완료',
-    schema: {
-      type: 'object',
-      properties: { ok: { type: 'boolean' } },
-      required: ['ok'],
-    },
-  })
+  @ApiChangePassword('판매자')
   @UseGuards(JwtAuthGuard)
   @Post('seller/change-password')
   async sellerChangePassword(
@@ -394,19 +341,7 @@ export class AuthController {
    *
    * POST /auth/admin/login
    */
-  @ApiOperation({
-    summary: '관리자 로그인',
-    description:
-      '관리자 username/password로 로그인한다. mustChangePassword=true면 비밀번호를 바꾸기 전까지 관리자 API가 FORBIDDEN이다.',
-  })
-  @ApiOkResponse({
-    description: '관리자 로그인 결과',
-    schema: {
-      type: 'object',
-      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
-      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
-    },
-  })
+  @ApiCredentialLogin('관리자')
   @Post('admin/login')
   async adminLogin(
     @Body() body: CredentialLoginInput,
@@ -428,19 +363,7 @@ export class AuthController {
    *
    * POST /auth/admin/refresh
    */
-  @ApiOperation({
-    summary: '관리자 Access/Refresh 재발급',
-    description: '관리자 refresh 쿠키를 사용해 access token을 재발급한다.',
-  })
-  @ApiCookieAuth('refresh-cookie')
-  @ApiOkResponse({
-    description: '관리자 재발급 결과',
-    schema: {
-      type: 'object',
-      properties: CREDENTIAL_LOGIN_RESPONSE_PROPERTIES,
-      required: CREDENTIAL_LOGIN_RESPONSE_REQUIRED,
-    },
-  })
+  @ApiCredentialRefresh('관리자')
   @Post('admin/refresh')
   async adminRefresh(@Req() req: Request, @Res() res: Response): Promise<void> {
     const result = await this.credentialAuth.refresh({
@@ -456,12 +379,7 @@ export class AuthController {
    *
    * POST /auth/admin/logout
    */
-  @ApiOperation({
-    summary: '관리자 로그아웃',
-    description: '관리자 refresh 세션을 폐기하고 쿠키를 제거한다.',
-  })
-  @ApiCookieAuth('refresh-cookie')
-  @ApiNoContentResponse({ description: '관리자 로그아웃 완료' })
+  @ApiCredentialLogout('관리자')
   @Post('admin/logout')
   async adminLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.credentialAuth.logout({ role: 'ADMIN', req, res });
@@ -473,20 +391,7 @@ export class AuthController {
    *
    * POST /auth/admin/change-password
    */
-  @ApiOperation({
-    summary: '관리자 비밀번호 변경',
-    description:
-      '현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.',
-  })
-  @ApiBearerAuth('access-token')
-  @ApiOkResponse({
-    description: '비밀번호 변경 완료',
-    schema: {
-      type: 'object',
-      properties: { ok: { type: 'boolean' } },
-      required: ['ok'],
-    },
-  })
+  @ApiChangePassword('관리자')
   @UseGuards(JwtAuthGuard)
   @Post('admin/change-password')
   async adminChangePassword(
