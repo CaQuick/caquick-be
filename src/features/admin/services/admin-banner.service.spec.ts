@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { INVALID_IMAGE_URL } from '@/features/admin/constants/admin-error-messages';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -14,6 +15,11 @@ import {
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('AdminBannerService (real DB)', () => {
   let service: AdminBannerService;
@@ -22,6 +28,7 @@ describe('AdminBannerService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         AdminBannerService,
         AdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -38,10 +45,14 @@ describe('AdminBannerService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    actorId = undefined;
   });
 
+  // 케이스 안에서 여러 번 불러도 같은 관리자를 돌려준다 — 발급 URL(계정 prefix)과 actor가 일치해야 한다
+  let actorId: bigint | undefined;
   async function admin(): Promise<bigint> {
-    return (await createAccount(prisma, { account_type: 'ADMIN' })).id;
+    actorId ??= (await createAccount(prisma, { account_type: 'ADMIN' })).id;
+    return actorId;
   }
 
   /** 링크 없는 배너 1건. 판매자 API로는 만들 수 없던 플랫폼 배너 형태다. */
@@ -174,7 +185,7 @@ describe('AdminBannerService (real DB)', () => {
 
       const result = await service.adminCreateBanner(actor, {
         placement: 'HOME_MAIN',
-        imageUrl: 'https://i.example/home.png',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'home.png'),
         title: '  가을 이벤트  ',
         sortOrder: 3,
       });
@@ -209,7 +220,7 @@ describe('AdminBannerService (real DB)', () => {
 
         const result = await service.adminCreateBanner(await admin(), {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
           linkType,
           [field]: targetId.toString(),
         });
@@ -229,7 +240,7 @@ describe('AdminBannerService (real DB)', () => {
         await expect(
           service.adminCreateBanner(await admin(), {
             placement: 'HOME_MAIN',
-            imageUrl: 'https://i.example/x.png',
+            imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
             linkType,
             [field]: '999999',
           }),
@@ -282,7 +293,7 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
           ...(await makeLink()),
         }),
       ).rejects.toThrow(NotFoundException);
@@ -292,7 +303,7 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'CATEGORY',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -302,7 +313,7 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'CATEGORY',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
           linkType: 'CATEGORY',
           linkCategoryId: style.id.toString(),
         }),
@@ -313,7 +324,7 @@ describe('AdminBannerService (real DB)', () => {
       const event = await createCategory(prisma, { category_type: 'EVENT' });
       const result = await service.adminCreateBanner(await admin(), {
         placement: 'CATEGORY',
-        imageUrl: 'https://i.example/x.png',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         linkType: 'CATEGORY',
         linkCategoryId: event.id.toString(),
       });
@@ -324,7 +335,7 @@ describe('AdminBannerService (real DB)', () => {
       const style = await createCategory(prisma, { category_type: 'STYLE' });
       const result = await service.adminCreateBanner(await admin(), {
         placement: 'HOME_MAIN',
-        imageUrl: 'https://i.example/x.png',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         linkType: 'CATEGORY',
         linkCategoryId: style.id.toString(),
       });
@@ -348,7 +359,7 @@ describe('AdminBannerService (real DB)', () => {
         await expect(
           service.adminCreateBanner(await admin(), {
             placement: 'HOME_MAIN',
-            imageUrl: 'https://i.example/x.png',
+            imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
             startsAt,
             endsAt,
           }),
@@ -359,7 +370,7 @@ describe('AdminBannerService (real DB)', () => {
     it('한쪽만 있는 노출 기간은 허용된다', async () => {
       const result = await service.adminCreateBanner(await admin(), {
         placement: 'HOME_MAIN',
-        imageUrl: 'https://i.example/x.png',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         endsAt: new Date('2026-12-31T00:00:00Z'),
       });
       expect(result.startsAt).toBeNull();
@@ -376,7 +387,7 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
           linkType: 'PRODUCT',
           linkProductId: product.id.toString(),
         }),
@@ -396,7 +407,7 @@ describe('AdminBannerService (real DB)', () => {
         await expect(
           service.adminCreateBanner(await admin(), {
             placement: 'HOME_MAIN',
-            imageUrl: 'https://i.example/x.png',
+            imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
             linkType,
             ...extra,
           }),
@@ -418,7 +429,7 @@ describe('AdminBannerService (real DB)', () => {
         await expect(
           service.adminCreateBanner(await admin(), {
             placement: 'HOME_MAIN',
-            imageUrl: 'https://i.example/x.png',
+            imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
             linkType,
             ...extra,
           }),
@@ -435,7 +446,7 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'HOME_MAIN',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         }),
       ).rejects.toThrow('audit down');
       expect(await prisma.banner.count()).toBe(0);
@@ -445,7 +456,7 @@ describe('AdminBannerService (real DB)', () => {
     it('빈 문자열 링크 필드는 값 없음으로 보고 통과시킨다', async () => {
       const result = await service.adminCreateBanner(await admin(), {
         placement: 'SEARCH',
-        imageUrl: 'https://i.example/x.png',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         linkType: 'NONE',
         linkUrl: '',
         linkProductId: '',
@@ -634,5 +645,47 @@ describe('AdminBannerService (real DB)', () => {
         NotFoundException,
       );
     });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('BANNER_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(STORE_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'adminCreateBanner.imageUrl이 %s면 BadRequest·배너 미생성',
+      async (_label, url) => {
+        const actor = await admin();
+        await expect(
+          service.adminCreateBanner(actor, {
+            placement: 'HOME_MAIN',
+            imageUrl: url(actor),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+        expect(await prisma.banner.count()).toBe(0);
+      },
+    );
+
+    it.each(rejected)(
+      'adminUpdateBanner.imageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const actor = await admin();
+        const banner = await makeBanner();
+        await expect(
+          service.adminUpdateBanner(actor, {
+            bannerId: banner.id.toString(),
+            imageUrl: url(actor),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
   });
 });

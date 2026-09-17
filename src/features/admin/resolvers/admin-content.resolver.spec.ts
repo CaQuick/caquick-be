@@ -11,6 +11,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { ownedUploadUrl, s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('Admin Content Resolvers (real DB)', () => {
   let queryResolver: AdminContentQueryResolver;
@@ -20,6 +21,7 @@ describe('Admin Content Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         AdminContentQueryResolver,
         AdminContentMutationResolver,
         AdminBannerService,
@@ -50,7 +52,7 @@ describe('Admin Content Resolvers (real DB)', () => {
 
     const created = await mutationResolver.adminCreateBanner(user, {
       placement: 'SEARCH',
-      imageUrl: 'https://i.example/search.png',
+      imageUrl: ownedUploadUrl('BANNER_IMAGE', account.id, 'search.png'),
     });
     const fetched = await queryResolver.adminBanner(user, created.id);
     expect(fetched.placement).toBe('SEARCH');

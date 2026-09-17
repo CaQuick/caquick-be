@@ -1,7 +1,13 @@
 /**
  * 업로드 목적 (purpose별 정책이 달라짐)
  */
-export type UploadPurpose = 'PROFILE_IMAGE' | 'REVIEW_IMAGE' | 'REVIEW_VIDEO';
+export type UploadPurpose =
+  | 'PROFILE_IMAGE'
+  | 'REVIEW_IMAGE'
+  | 'REVIEW_VIDEO'
+  | 'PRODUCT_IMAGE'
+  | 'STORE_IMAGE'
+  | 'BANNER_IMAGE';
 
 /**
  * Presigned URL 발급 요청 입력

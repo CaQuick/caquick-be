@@ -18,6 +18,7 @@ import {
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
+  INVALID_IMAGE_URL,
   REGION_NOT_SELECTABLE,
   STORE_NOT_FOUND,
 } from '@/features/admin/constants/admin-error-messages';
@@ -41,6 +42,8 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 /** 감사 before/after에 남길 컬럼 값. bigint·Decimal·Date는 JSON에 못 실으므로 문자열로. */
 function snapshot(row: Store, keys: (keyof Store)[]): Prisma.InputJsonObject {
@@ -67,6 +70,7 @@ export class AdminStoreService extends AdminBaseService {
     repo: AdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -140,6 +144,15 @@ export class AdminStoreService extends AdminBaseService {
     const { storeId, regionId, ...patch } = input;
 
     const data: Prisma.StoreUpdateInput = buildStoreBasicInfoUpdateData(patch);
+    if (typeof data.profile_image_url === 'string') {
+      assertOwnedUploadUrl(
+        this.s3,
+        data.profile_image_url,
+        'STORE_IMAGE',
+        ctx.accountId,
+        INVALID_IMAGE_URL,
+      );
+    }
     let connectRegionId: bigint | undefined;
     if (regionId !== undefined) {
       // 빈 문자열은 해제가 아니라 형식 오류(BAD_USER_INPUT). 해제는 명시적 null만

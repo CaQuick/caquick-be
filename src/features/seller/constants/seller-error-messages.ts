@@ -74,3 +74,6 @@ export function idsMismatchError(field: string): string {
 export function invalidIdsError(field: string): string {
   return `Invalid ${field}.`;
 }
+
+export const INVALID_IMAGE_URL =
+  'Image URL must be a publicUrl issued by sellerCreateUploadUrl for this account.';

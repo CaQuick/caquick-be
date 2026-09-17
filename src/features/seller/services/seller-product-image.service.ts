@@ -14,6 +14,7 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
+  INVALID_IMAGE_URL,
   IMAGE_LIMIT_EXCEEDED,
   IMAGE_MIN_REQUIRED,
   idsMismatchError,
@@ -33,6 +34,8 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import type { ISellerProductImageService } from '@/features/seller/services/seller-product-image.service.interface';
 import { toProductImageOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductImageOutput } from '@/features/seller/types/seller-output.type';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerProductImageService
@@ -44,6 +47,7 @@ export class SellerProductImageService
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -67,9 +71,18 @@ export class SellerProductImageService
       throw new BadRequestException(IMAGE_LIMIT_EXCEEDED);
     }
 
+    const imageUrl = cleanRequiredText(input.imageUrl, MAX_URL_LENGTH);
+    assertOwnedUploadUrl(
+      this.s3,
+      imageUrl,
+      'PRODUCT_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
+
     const row = await this.productRepository.addProductImage({
       productId,
-      imageUrl: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+      imageUrl,
       sortOrder: input.sortOrder ?? count,
     });
 

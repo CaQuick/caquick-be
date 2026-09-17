@@ -17,6 +17,7 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
+  INVALID_IMAGE_URL,
   idsMismatchError,
   INVALID_SELECT_RANGE,
   invalidIdsError,
@@ -44,6 +45,8 @@ import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
 } from '@/features/seller/types/seller-output.type';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerOptionService extends SellerBaseService {
@@ -52,6 +55,7 @@ export class SellerOptionService extends SellerBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -265,6 +269,15 @@ export class SellerOptionService extends SellerBaseService {
       throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
     }
 
+    const imageUrl = cleanNullableText(input.imageUrl, MAX_URL_LENGTH);
+    assertOwnedUploadUrl(
+      this.s3,
+      imageUrl,
+      'PRODUCT_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
+
     const row = await this.productRepository.createOptionItem({
       optionGroupId,
       data: {
@@ -273,7 +286,7 @@ export class SellerOptionService extends SellerBaseService {
           input.description,
           MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
         ),
-        image_url: cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
+        image_url: imageUrl,
         price_delta: input.priceDelta ?? 0,
         sort_order: input.sortOrder ?? 0,
         is_active: input.isActive ?? true,
@@ -307,6 +320,20 @@ export class SellerOptionService extends SellerBaseService {
       throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
     }
 
+    const imageUrl =
+      input.imageUrl !== undefined
+        ? cleanNullableText(input.imageUrl, MAX_URL_LENGTH)
+        : undefined;
+    if (imageUrl !== undefined) {
+      assertOwnedUploadUrl(
+        this.s3,
+        imageUrl,
+        'PRODUCT_IMAGE',
+        ctx.accountId,
+        INVALID_IMAGE_URL,
+      );
+    }
+
     const row = await this.productRepository.updateOptionItem({
       optionItemId,
       data: {
@@ -326,11 +353,7 @@ export class SellerOptionService extends SellerBaseService {
               ),
             }
           : {}),
-        ...(input.imageUrl !== undefined
-          ? {
-              image_url: cleanNullableText(input.imageUrl, MAX_URL_LENGTH),
-            }
-          : {}),
+        ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
         ...(input.priceDelta !== undefined
           ? { price_delta: input.priceDelta }
           : {}),

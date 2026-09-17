@@ -1,0 +1,22 @@
+extend type Mutation {
+  """이미지 업로드용 Presigned URL을 발급한다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN. 배너·매장 로고의 URL 필드는 여기서 발급된 publicUrl만 받는다."""
+  adminCreateUploadUrl(input: AdminCreateUploadUrlInput!): UploadUrl!
+}
+
+"""관리자 업로드 용도. 용도마다 저장 경로가 다르고, 저장 입력은 같은 용도로 발급된 URL만 받는다."""
+enum AdminUploadPurpose {
+  """배너 이미지."""
+  BANNER_IMAGE
+  """매장 프로필(로고) 이미지."""
+  STORE_IMAGE
+}
+
+"""관리자 업로드 URL 발급 입력."""
+input AdminCreateUploadUrlInput {
+  """업로드 용도."""
+  purpose: AdminUploadPurpose!
+  """파일 MIME 타입. image/jpeg·image/png·image/webp만 허용, 아니면 BAD_USER_INPUT."""
+  contentType: String!
+  """파일 크기(바이트). 1 이상 5MB 이하, 아니면 BAD_USER_INPUT."""
+  contentLength: Int!
+}

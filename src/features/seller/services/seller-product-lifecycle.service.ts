@@ -17,6 +17,7 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
+  INVALID_IMAGE_URL,
   PRODUCT_NOT_FOUND,
   SALE_PRICE_EXCEEDS_REGULAR,
 } from '@/features/seller/constants/seller-error-messages';
@@ -38,6 +39,8 @@ import { SellerBaseService } from '@/features/seller/services/seller-base.servic
 import type { ISellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service.interface';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerProductLifecycleService
@@ -49,6 +52,7 @@ export class SellerProductLifecycleService
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -60,6 +64,29 @@ export class SellerProductLifecycleService
     const ctx = await this.requireSellerContext(accountId);
 
     this.validateProductPrices(input.regularPrice, input.salePrice);
+
+    const baseDesignImageUrl = cleanNullableText(
+      input.baseDesignImageUrl,
+      MAX_URL_LENGTH,
+    );
+    const initialImageUrl = cleanRequiredText(
+      input.initialImageUrl,
+      MAX_URL_LENGTH,
+    );
+    assertOwnedUploadUrl(
+      this.s3,
+      baseDesignImageUrl,
+      'PRODUCT_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
+    assertOwnedUploadUrl(
+      this.s3,
+      initialImageUrl,
+      'PRODUCT_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
 
     const created = await this.productRepository.createProduct({
       storeId: ctx.storeId,
@@ -76,10 +103,7 @@ export class SellerProductLifecycleService
         regular_price: input.regularPrice,
         sale_price: input.salePrice ?? null,
         currency: this.cleanCurrency(input.currency),
-        base_design_image_url: cleanNullableText(
-          input.baseDesignImageUrl,
-          MAX_URL_LENGTH,
-        ),
+        base_design_image_url: baseDesignImageUrl,
         preparation_time_minutes:
           input.preparationTimeMinutes ?? DEFAULT_PREPARATION_TIME_MINUTES,
         is_active: input.isActive ?? true,
@@ -88,7 +112,7 @@ export class SellerProductLifecycleService
 
     await this.productRepository.addProductImage({
       productId: created.id,
-      imageUrl: cleanRequiredText(input.initialImageUrl, MAX_URL_LENGTH),
+      imageUrl: initialImageUrl,
       sortOrder: 0,
     });
 
@@ -128,6 +152,15 @@ export class SellerProductLifecycleService
     if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
     const data = this.buildProductUpdateData(input);
+    if (typeof data.base_design_image_url === 'string') {
+      assertOwnedUploadUrl(
+        this.s3,
+        data.base_design_image_url,
+        'PRODUCT_IMAGE',
+        ctx.accountId,
+        INVALID_IMAGE_URL,
+      );
+    }
     const nextRegularPrice = input.regularPrice ?? current.regular_price;
     const nextSalePrice =
       input.salePrice !== undefined ? input.salePrice : current.sale_price;

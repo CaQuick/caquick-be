@@ -153,7 +153,7 @@ input AdminUpdateStoreBasicInfoInput {
   websiteUrl: String
   """영업시간 안내 문구. null이면 제거."""
   businessHoursText: String
-  """매장 프로필(로고) 이미지 URL. null이면 제거."""
+  """매장 프로필(로고) 이미지 URL. null이면 제거. adminCreateUploadUrl(STORE_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   profileImageUrl: String
   """문의 채팅 인사말 템플릿. null이면 기본 문구로 되돌린다."""
   greetingMessage: String

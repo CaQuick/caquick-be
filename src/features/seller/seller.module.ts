@@ -15,6 +15,7 @@ import { SellerProductMutationResolver } from '@/features/seller/resolvers/selle
 import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-product-query.resolver';
 import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
+import { SellerUploadMutationResolver } from '@/features/seller/resolvers/seller-upload-mutation.resolver';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
 import { SELLER_AUDIT_SERVICE } from '@/features/seller/services/seller-audit.service.interface';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
@@ -37,6 +38,7 @@ import { SellerStorePolicyService } from '@/features/seller/services/seller-stor
 import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
 import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
+import { SellerUploadService } from '@/features/seller/services/seller-upload.service';
 
 @Module({
   imports: [OrderModule, ProductModule, ConversationModule, AuditLogModule],
@@ -73,6 +75,7 @@ import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-
     SellerCustomTemplateService,
     SellerOrderService,
     SellerConversationService,
+    SellerUploadService,
     {
       provide: SELLER_FAQ_SERVICE,
       useClass: SellerFaqService,
@@ -92,6 +95,7 @@ import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-
     SellerOrderMutationResolver,
     SellerConversationMutationResolver,
     SellerContentMutationResolver,
+    SellerUploadMutationResolver,
   ],
 })
 export class SellerModule {}

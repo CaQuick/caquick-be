@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
@@ -10,6 +11,11 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerStoreProfileService (real DB)', () => {
   let service: SellerStoreProfileService;
@@ -18,6 +24,7 @@ describe('SellerStoreProfileService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerStoreProfileService,
         SellerRepository,
         {
@@ -157,15 +164,17 @@ describe('SellerStoreProfileService (real DB)', () => {
       const { account, store } = await setupSellerWithStore(prisma);
 
       const result = await service.sellerUpdateStoreBasicInfo(account.id, {
-        profileImageUrl: 'https://cdn.example.com/logo.png',
+        profileImageUrl: ownedUploadUrl('STORE_IMAGE', account.id, 'logo.png'),
       });
 
-      expect(result.profileImageUrl).toBe('https://cdn.example.com/logo.png');
+      expect(result.profileImageUrl).toBe(
+        ownedUploadUrl('STORE_IMAGE', account.id, 'logo.png'),
+      );
       const dbStore = await prisma.store.findUniqueOrThrow({
         where: { id: store.id },
       });
       expect(dbStore.profile_image_url).toBe(
-        'https://cdn.example.com/logo.png',
+        ownedUploadUrl('STORE_IMAGE', account.id, 'logo.png'),
       );
     });
 
@@ -211,5 +220,31 @@ describe('SellerStoreProfileService (real DB)', () => {
       });
       expect(cleared.greetingMessage).toBeNull();
     });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(PRODUCT_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('PRODUCT_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'sellerUpdateStoreBasicInfo.profileImageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { account } = await setupSellerWithStore(prisma);
+        await expect(
+          service.sellerUpdateStoreBasicInfo(account.id, {
+            profileImageUrl: url(account.id),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
   });
 });

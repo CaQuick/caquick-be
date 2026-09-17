@@ -4,12 +4,18 @@ import type { PrismaClient } from '@prisma/client';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
+import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerProductLifecycleService (real DB)', () => {
   let service: SellerProductLifecycleService;
@@ -18,6 +24,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerProductLifecycleService,
         SellerRepository,
         ProductRepository,
@@ -62,7 +69,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
         service.sellerCreateProduct(account.id, {
           name: 'X',
           regularPrice: 0,
-          initialImageUrl: 'https://i.example/a.png',
+          initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -74,7 +81,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
           name: 'X',
           regularPrice: 10000,
           salePrice: 20000,
-          initialImageUrl: 'https://i.example/a.png',
+          initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -86,7 +93,11 @@ describe('SellerProductLifecycleService (real DB)', () => {
         name: '신상 케이크',
         regularPrice: 30000,
         salePrice: 25000,
-        initialImageUrl: 'https://i.example/init.png',
+        initialImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          account.id,
+          'init.png',
+        ),
       });
 
       expect(result.name).toBe('신상 케이크');
@@ -141,7 +152,11 @@ describe('SellerProductLifecycleService (real DB)', () => {
         description: '설명',
         purchaseNotice: '주의사항',
         currency: 'KRW',
-        baseDesignImageUrl: 'https://i.example/base.png',
+        baseDesignImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          account.id,
+          'base.png',
+        ),
         preparationTimeMinutes: 60,
         regularPrice: 12000,
         salePrice: 9000,
@@ -150,7 +165,9 @@ describe('SellerProductLifecycleService (real DB)', () => {
       expect(result.description).toBe('설명');
       expect(result.purchaseNotice).toBe('주의사항');
       expect(result.currency).toBe('KRW');
-      expect(result.baseDesignImageUrl).toBe('https://i.example/base.png');
+      expect(result.baseDesignImageUrl).toBe(
+        ownedUploadUrl('PRODUCT_IMAGE', account.id, 'base.png'),
+      );
       expect(result.preparationTimeMinutes).toBe(60);
       expect(result.regularPrice).toBe(12000);
       expect(result.salePrice).toBe(9000);
@@ -218,6 +235,76 @@ describe('SellerProductLifecycleService (real DB)', () => {
           isActive: false,
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('PRODUCT_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(STORE_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'sellerCreateProduct.initialImageUrl이 %s면 BadRequest·상품 미생성',
+      async (_label, url) => {
+        const { account } = await setupSellerWithStore(prisma);
+        await expect(
+          service.sellerCreateProduct(account.id, {
+            name: 'X',
+            regularPrice: 10000,
+            initialImageUrl: url(account.id),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+        expect(await prisma.product.count()).toBe(0);
+      },
+    );
+
+    it.each(rejected)(
+      'sellerCreateProduct.baseDesignImageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { account } = await setupSellerWithStore(prisma);
+        await expect(
+          service.sellerCreateProduct(account.id, {
+            name: 'X',
+            regularPrice: 10000,
+            initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id),
+            baseDesignImageUrl: url(account.id),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
+
+    it.each(rejected)(
+      'sellerUpdateProduct.baseDesignImageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const product = await createSellerProduct(store.id);
+        await expect(
+          service.sellerUpdateProduct(account.id, {
+            productId: product.id.toString(),
+            baseDesignImageUrl: url(account.id),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
+
+    it('sellerUpdateProduct.baseDesignImageUrl 빈 문자열은 제거 의미라 검증 없이 통과한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id, {
+        base_design_image_url: 'https://legacy.example/base.png',
+      });
+      const result = await service.sellerUpdateProduct(account.id, {
+        productId: product.id.toString(),
+        baseDesignImageUrl: '',
+      });
+      expect(result.baseDesignImageUrl).toBeNull();
     });
   });
 });
