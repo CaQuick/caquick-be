@@ -24,7 +24,6 @@ import s3Config from '@/config/s3.config';
 import { AdminModule } from '@/features/admin/admin.module';
 import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
-import { PickupModule } from '@/features/pickup';
 import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
 import { SellerModule } from '@/features/seller/seller.module';
@@ -101,7 +100,6 @@ import { PrismaModule } from '@/prisma';
     SystemModule,
     AuthModule,
     ConversationModule,
-    PickupModule,
     RegionModule,
     SearchModule,
     StoreModule,

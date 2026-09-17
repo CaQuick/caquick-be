@@ -62,11 +62,11 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
     }
   }
 
-  it('storePickupCalendar: ID 문자열을 파싱해 월 달력을 반환한다', async () => {
+  it('pickupCalendar: ID 문자열을 파싱해 월 달력을 반환한다', async () => {
     const store = await createStore(prisma);
     await openAllWeek(store.id);
 
-    const result = await resolver.storePickupCalendar(
+    const result = await resolver.pickupCalendar(
       store.id.toString(),
       '2026-09',
     );
@@ -80,11 +80,11 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
     });
   });
 
-  it('storePickupTimeSlots: 선택 날짜의 오전/오후 슬롯을 반환한다', async () => {
+  it('pickupTimeSlots: 선택 날짜의 오전/오후 슬롯을 반환한다', async () => {
     const store = await createStore(prisma);
     await openAllWeek(store.id);
 
-    const result = await resolver.storePickupTimeSlots(
+    const result = await resolver.pickupTimeSlots(
       store.id.toString(),
       '2026-09-18',
     );

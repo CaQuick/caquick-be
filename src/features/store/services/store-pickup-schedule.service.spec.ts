@@ -1,7 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
-import type { StorePickupCalendar } from '@/features/store/types/store-pickup-schedule-output.type';
+import type { PickupCalendar } from '@/features/store/types/pickup-schedule-output.type';
 import type {
   OrderStatus,
   PrismaClient,
@@ -101,18 +101,18 @@ describe('StorePickupScheduleService (real DB)', () => {
   }
 
   /** 달력에서 특정 날짜 row 조회. */
-  function dayOf(calendar: StorePickupCalendar, date: string) {
+  function dayOf(calendar: PickupCalendar, date: string) {
     const found = calendar.days.find((d) => d.date === date);
     if (!found) throw new Error(`달력에 ${date}가 없음`);
     return found;
   }
 
-  describe('storePickupCalendar', () => {
+  describe('pickupCalendar', () => {
     it('과거는 PAST, max_days_ahead 초과는 OUT_OF_RANGE, 그 사이 영업일은 선택 가능하다', async () => {
       const store = await createStore(prisma, { max_days_ahead: 7 });
       await openAllWeek(store);
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(calendar.yearMonth).toBe('2026-09');
       expect(calendar.days).toHaveLength(30);
@@ -152,7 +152,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         },
       });
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(dayOf(calendar, '2026-09-18')).toMatchObject({
         selectable: false,
@@ -166,7 +166,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       await setBusinessHour(store, 4, 10, 20); // 목요일만 영업
       await setBusinessHour(store, 5, 0, 0, true); // 금요일 휴무 지정
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(dayOf(calendar, '2026-09-17')).toMatchObject({
         selectable: true,
@@ -192,7 +192,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       // 9/18은 capacity 레코드 없음 → 예약이 많아도 무제한
       await book(store, new Date('2026-09-18T05:00:00.000Z'), 5);
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(dayOf(calendar, '2026-09-17')).toMatchObject({
         selectable: false,
@@ -215,7 +215,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(dayOf(calendar, '2026-09-17')).toMatchObject({
         selectable: true,
@@ -234,14 +234,11 @@ describe('StorePickupScheduleService (real DB)', () => {
       });
       await openAllWeek(openToday, 10, 20);
 
-      const closedCal = await service.storePickupCalendar(
+      const closedCal = await service.pickupCalendar(
         soldOutToday.id,
         '2026-09',
       );
-      const openCal = await service.storePickupCalendar(
-        openToday.id,
-        '2026-09',
-      );
+      const openCal = await service.pickupCalendar(openToday.id, '2026-09');
 
       expect(dayOf(closedCal, '2026-09-16')).toMatchObject({
         selectable: false,
@@ -259,7 +256,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       // UTC 9/20 15:30 = KST 9/21 00:30 → 9/21 점유
       await book(store, new Date('2026-09-20T15:30:00.000Z'));
 
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
 
       expect(dayOf(calendar, '2026-09-21')).toMatchObject({
         selectable: false,
@@ -272,10 +269,10 @@ describe('StorePickupScheduleService (real DB)', () => {
       const store = await createStore(prisma);
 
       await expect(
-        service.storePickupCalendar(store.id, '2026-13'),
+        service.pickupCalendar(store.id, '2026-13'),
       ).rejects.toThrowDomain(400);
       await expect(
-        service.storePickupCalendar(store.id, '202609'),
+        service.pickupCalendar(store.id, '202609'),
       ).rejects.toThrowDomain(400);
     });
 
@@ -284,19 +281,19 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       // 0~99년은 Date.UTC가 1900년대로 매핑해 엉뚱한 세기를 반환하므로 차단
       await expect(
-        service.storePickupCalendar(store.id, '0000-01'),
+        service.pickupCalendar(store.id, '0000-01'),
       ).rejects.toThrowDomain(400);
       // MySQL DATE 하한(1000-01-01) 미만
       await expect(
-        service.storePickupCalendar(store.id, '0999-01'),
+        service.pickupCalendar(store.id, '0999-01'),
       ).rejects.toThrowDomain(400);
       // 1000-01은 KST 월 시작 경계(-9h)가 0999-12-31T15:00Z로 DATETIME 하한을 밑돈다
       await expect(
-        service.storePickupCalendar(store.id, '1000-01'),
+        service.pickupCalendar(store.id, '1000-01'),
       ).rejects.toThrowDomain(400);
       // 9999-12는 익월 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
-        service.storePickupCalendar(store.id, '9999-12'),
+        service.pickupCalendar(store.id, '9999-12'),
       ).rejects.toThrowDomain(400);
     });
 
@@ -304,15 +301,15 @@ describe('StorePickupScheduleService (real DB)', () => {
       const inactive = await createStore(prisma, { is_active: false });
 
       await expect(
-        service.storePickupCalendar(999999n, '2026-09'),
+        service.pickupCalendar(999999n, '2026-09'),
       ).rejects.toThrowDomain(404);
       await expect(
-        service.storePickupCalendar(inactive.id, '2026-09'),
+        service.pickupCalendar(inactive.id, '2026-09'),
       ).rejects.toThrowDomain(404);
     });
   });
 
-  describe('storePickupTimeSlots', () => {
+  describe('pickupTimeSlots', () => {
     it('매장 간격·영업시간으로 슬롯을 만들고 당일 리드타임 이전 슬롯은 마감한다', async () => {
       const store = await createStore(prisma, {
         pickup_slot_interval_minutes: 60,
@@ -320,7 +317,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       });
       await openAllWeek(store, 10, 18);
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-16');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-16');
 
       // 현재 16:00 + 리드 60분 → 17:00부터 가용
       expect(result.date).toBe('2026-09-16');
@@ -342,7 +339,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       const store = await createStore(prisma);
       await openAllWeek(store, 11, 13);
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-18');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-18');
 
       expect(result.morning).toEqual([
         { time: '11:00', available: true },
@@ -358,7 +355,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       const store = await createStore(prisma);
       await setBusinessHour(store, 4, 10, 20); // 목요일만 영업
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-19');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-19');
 
       expect(result).toEqual({
         date: '2026-09-19',
@@ -377,7 +374,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         },
       });
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-18');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-18');
 
       expect(result).toEqual({
         date: '2026-09-18',
@@ -392,7 +389,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       await setCapacity(store, new Date(Date.UTC(2026, 8, 18)), 1);
       await book(store, new Date('2026-09-18T02:00:00.000Z'));
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-18');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-18');
 
       expect(result.morning).toEqual([
         { time: '10:00', available: false },
@@ -407,7 +404,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       const store = await createStore(prisma);
       await openAllWeek(store, 10, 11);
 
-      const result = await service.storePickupTimeSlots(store.id, '2026-09-15');
+      const result = await service.pickupTimeSlots(store.id, '2026-09-15');
 
       expect(result.morning).toEqual([
         { time: '10:00', available: false },
@@ -419,10 +416,10 @@ describe('StorePickupScheduleService (real DB)', () => {
       const store = await createStore(prisma);
 
       await expect(
-        service.storePickupTimeSlots(store.id, '2026-09-32'),
+        service.pickupTimeSlots(store.id, '2026-09-32'),
       ).rejects.toThrowDomain(400);
       await expect(
-        service.storePickupTimeSlots(store.id, '20260918'),
+        service.pickupTimeSlots(store.id, '20260918'),
       ).rejects.toThrowDomain(400);
     });
 
@@ -431,11 +428,11 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       // 9999-12-31은 익일 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
-        service.storePickupTimeSlots(store.id, '9999-12-31'),
+        service.pickupTimeSlots(store.id, '9999-12-31'),
       ).rejects.toThrowDomain(400);
       // 1000-01-01은 KST 자정 경계(-9h)가 DATETIME 하한을 밑돈다
       await expect(
-        service.storePickupTimeSlots(store.id, '1000-01-01'),
+        service.pickupTimeSlots(store.id, '1000-01-01'),
       ).rejects.toThrowDomain(400);
     });
 
@@ -443,10 +440,10 @@ describe('StorePickupScheduleService (real DB)', () => {
       const inactive = await createStore(prisma, { is_active: false });
 
       await expect(
-        service.storePickupTimeSlots(999999n, '2026-09-18'),
+        service.pickupTimeSlots(999999n, '2026-09-18'),
       ).rejects.toThrowDomain(404);
       await expect(
-        service.storePickupTimeSlots(inactive.id, '2026-09-18'),
+        service.pickupTimeSlots(inactive.id, '2026-09-18'),
       ).rejects.toThrowDomain(404);
     });
   });
@@ -554,7 +551,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).resolves.toBe(true);
 
       // 달력도 동일: 리드타임에 완전히 덮인 날은 CLOSED, 부분 가용 날은 선택 가능
-      const calendar = await service.storePickupCalendar(store.id, '2026-09');
+      const calendar = await service.pickupCalendar(store.id, '2026-09');
       expect(dayOf(calendar, '2026-09-18')).toMatchObject({
         selectable: false,
         reason: 'CLOSED',
@@ -562,7 +559,7 @@ describe('StorePickupScheduleService (real DB)', () => {
       expect(dayOf(calendar, '2026-09-19').selectable).toBe(true);
 
       // 슬롯 조회도 9/19 16:00 이전은 마감 표기
-      const slots = await service.storePickupTimeSlots(store.id, '2026-09-19');
+      const slots = await service.pickupTimeSlots(store.id, '2026-09-19');
       expect(
         slots.afternoon.find((slot) => slot.time === '15:30')?.available,
       ).toBe(false);

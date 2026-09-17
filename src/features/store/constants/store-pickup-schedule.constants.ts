@@ -1,4 +1,4 @@
-/** 매장 픽업 달력 선택 불가 사유 코드(SDL StorePickupDay.reason). */
+/** 매장 픽업 달력 선택 불가 사유 코드(SDL PickupDay.reason). */
 export const STORE_PICKUP_DAY_REASON = {
   PAST: 'PAST',
   OUT_OF_RANGE: 'OUT_OF_RANGE',
@@ -7,3 +7,6 @@ export const STORE_PICKUP_DAY_REASON = {
   CLOSED: 'CLOSED',
   CAPACITY_FULL: 'CAPACITY_FULL',
 } as const;
+
+/** 오전/오후 경계(자정 경과 분). 12:00은 afternoon에 들어간다. */
+export const PICKUP_AFTERNOON_START_MINUTES = 12 * 60;
