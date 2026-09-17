@@ -221,6 +221,28 @@ describe('UserReviewService (real DB)', () => {
           ctx.accountId,
         );
       });
+
+      it('thumbnailUrl이 명시적 null이면 검증하지 않고 null로 저장한다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        const result = await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'VIDEO',
+              mediaUrl: OWNED,
+              // GraphQL nullable 필드라 런타임에 null이 들어온다(DTO 타입은 string | undefined)
+              thumbnailUrl: null as unknown as undefined,
+              sortOrder: 0,
+            },
+          ],
+        });
+
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledTimes(1);
+        expect(result.media[0].thumbnailUrl).toBeNull();
+      });
     });
 
     // rating(범위/0.5 단위) · content 길이 검증은 DTO (WriteReviewInput +

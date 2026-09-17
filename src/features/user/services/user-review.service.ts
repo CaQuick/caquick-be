@@ -256,13 +256,13 @@ export class UserReviewService {
     }
 
     // 미디어 URL은 저장 시 그대로 노출되므로 이 계정에 발급된 publicUrl만 받는다.
-    // 썸네일은 mediaType과 무관하게 IMAGE 용도로 발급된다.
+    // 썸네일은 mediaType과 무관하게 IMAGE 용도로 발급된다. null은 미제공(undefined)과 같다.
     for (const m of media) {
       const purpose: UploadPurpose =
         m.mediaType === 'VIDEO' ? 'REVIEW_VIDEO' : 'REVIEW_IMAGE';
       const owned =
         this.s3Service.isOwnedUploadUrl(m.mediaUrl, purpose, accountId) &&
-        (m.thumbnailUrl === undefined ||
+        (m.thumbnailUrl == null ||
           this.s3Service.isOwnedUploadUrl(
             m.thumbnailUrl,
             'REVIEW_IMAGE',
