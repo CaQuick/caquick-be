@@ -6,6 +6,7 @@ import {
 import type { PrismaClient } from '@prisma/client';
 
 import { OrderRepository } from '@/features/order';
+import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import { S3Service } from '@/global/storage/s3.service';
@@ -32,6 +33,7 @@ describe('UserReviewService (real DB)', () => {
   beforeAll(async () => {
     s3Service = {
       createUploadUrl: jest.fn(),
+      isOwnedUploadUrl: jest.fn(),
     } as unknown as jest.Mocked<S3Service>;
 
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -54,6 +56,8 @@ describe('UserReviewService (real DB)', () => {
   beforeEach(async () => {
     await truncateAll();
     jest.clearAllMocks();
+    // 기존 케이스의 fixture URL은 소유 검증 대상이 아니므로 기본 통과
+    s3Service.isOwnedUploadUrl.mockReturnValue(true);
   });
 
   /** 리뷰 작성 가능한 상태(PICKED_UP 주문 + 본인 아이템)를 세팅 */
@@ -123,6 +127,122 @@ describe('UserReviewService (real DB)', () => {
       });
       expect(saved.media).toHaveLength(2);
       expect(saved.media.some((m) => m.media_type === 'VIDEO')).toBe(true);
+    });
+
+    describe('미디어 URL 소유권', () => {
+      const OWNED = 'https://bucket.s3.ap-northeast-2.amazonaws.com/owned.jpg';
+      const FOREIGN = 'https://evil.example.com/x.jpg';
+
+      it.each([
+        [
+          'IMAGE mediaUrl은 REVIEW_IMAGE 용도',
+          { mediaType: 'IMAGE' as const, mediaUrl: FOREIGN },
+          'REVIEW_IMAGE',
+        ],
+        [
+          'VIDEO mediaUrl은 REVIEW_VIDEO 용도',
+          { mediaType: 'VIDEO' as const, mediaUrl: FOREIGN },
+          'REVIEW_VIDEO',
+        ],
+        [
+          'thumbnailUrl은 항상 REVIEW_IMAGE 용도',
+          {
+            mediaType: 'VIDEO' as const,
+            mediaUrl: OWNED,
+            thumbnailUrl: FOREIGN,
+          },
+          'REVIEW_IMAGE',
+        ],
+      ])(
+        '%s로 검증하고, 발급되지 않은 URL이면 BadRequest·리뷰 미저장',
+        async (_label, media, purpose) => {
+          const ctx = await setupReviewableOrderItem();
+          s3Service.isOwnedUploadUrl.mockImplementation(
+            (url) => url !== FOREIGN,
+          );
+
+          await expect(
+            service.writeReview(ctx.accountId, {
+              orderItemId: ctx.orderItemId.toString(),
+              rating: 5,
+              content: VALID_CONTENT,
+              media: [{ ...media, sortOrder: 0 }],
+            }),
+          ).rejects.toThrow(
+            new BadRequestException(USER_REVIEW_ERRORS.INVALID_MEDIA_URL),
+          );
+          expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+            FOREIGN,
+            purpose,
+            ctx.accountId,
+          );
+          expect(await prisma.review.count()).toBe(0);
+        },
+      );
+
+      it('thumbnailUrl이 없으면 mediaUrl만 검증한다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [{ mediaType: 'IMAGE', mediaUrl: OWNED, sortOrder: 0 }],
+        });
+
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledTimes(1);
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+          OWNED,
+          'REVIEW_IMAGE',
+          ctx.accountId,
+        );
+      });
+
+      it('빈 문자열 thumbnailUrl도 건너뛰지 않고 검증한다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'VIDEO',
+              mediaUrl: OWNED,
+              thumbnailUrl: '',
+              sortOrder: 0,
+            },
+          ],
+        });
+
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
+          '',
+          'REVIEW_IMAGE',
+          ctx.accountId,
+        );
+      });
+
+      it('thumbnailUrl이 명시적 null이면 검증하지 않고 null로 저장한다', async () => {
+        const ctx = await setupReviewableOrderItem();
+
+        const result = await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'VIDEO',
+              mediaUrl: OWNED,
+              // GraphQL nullable 필드라 런타임에 null이 들어온다(DTO 타입은 string | undefined)
+              thumbnailUrl: null as unknown as undefined,
+              sortOrder: 0,
+            },
+          ],
+        });
+
+        expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledTimes(1);
+        expect(result.media[0].thumbnailUrl).toBeNull();
+      });
     });
 
     // rating(범위/0.5 단위) · content 길이 검증은 DTO (WriteReviewInput +
