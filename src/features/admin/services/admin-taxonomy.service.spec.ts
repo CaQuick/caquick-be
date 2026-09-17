@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -116,7 +114,7 @@ describe('AdminTaxonomyService (real DB)', () => {
           categoryType: 'EVENT',
           name: '생일',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       const other = await service.adminCreateCategory(await admin(), {
         categoryType: 'STYLE',
         name: '생일',
@@ -187,13 +185,13 @@ describe('AdminTaxonomyService (real DB)', () => {
           categoryId: mine.id.toString(),
           name: '점유',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateCategory(await admin(), {
           categoryId: '999999',
           name: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -235,7 +233,7 @@ describe('AdminTaxonomyService (real DB)', () => {
       ).toBe(1);
       await expect(
         service.adminDeleteCategory(await admin(), category.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -320,19 +318,19 @@ describe('AdminTaxonomyService (real DB)', () => {
       const mine = await createTag(prisma, { name: 'mine' });
       await expect(
         service.adminCreateTag(await admin(), { name: 'taken' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateTag(await admin(), {
           tagId: mine.id.toString(),
           name: 'taken',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateTag(await admin(), { tagId: '999999', name: 'x' }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.adminDeleteTag(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('감사 기록이 실패하면 생성도 롤백된다(같은 트랜잭션)', async () => {

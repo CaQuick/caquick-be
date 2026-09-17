@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -159,10 +157,10 @@ describe('AdminProductService (real DB)', () => {
       });
       await expect(
         service.adminProduct(await admin(), deleted.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.adminProduct(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -206,7 +204,7 @@ describe('AdminProductService (real DB)', () => {
           productId: '999999',
           isActive: false,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('삭제된 상품은 잠금 단계에서 NotFoundException(되살리지 않음)', async () => {
@@ -220,7 +218,7 @@ describe('AdminProductService (real DB)', () => {
           productId: product.id.toString(),
           isActive: true,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       const row = await prisma.product.findUniqueOrThrow({
         where: { id: product.id },
       });

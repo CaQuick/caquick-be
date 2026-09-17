@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
 import type { PrismaClient, Product, Review } from '@/generated/prisma/client';
@@ -85,10 +83,10 @@ describe('ProductReviewService (real DB)', () => {
   }
 
   describe('productReviews', () => {
-    it('잘못된 id 형식은 BadRequestException', async () => {
+    it('잘못된 id 형식은 400', async () => {
       await expect(
         service.productReviews({ productId: 'abc' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('최신순(id desc) 목록과 totalCount/photoTotalCount를 반환한다', async () => {
@@ -281,7 +279,7 @@ describe('ProductReviewService (real DB)', () => {
       expect(page2.items.map((r) => r.id)).toEqual([reviewC.id.toString()]);
     });
 
-    it('좋아요순 커서 형식이 잘못되면 BadRequestException', async () => {
+    it('좋아요순 커서 형식이 잘못되면 400', async () => {
       const product = await createProduct(prisma);
 
       await expect(
@@ -290,10 +288,10 @@ describe('ProductReviewService (real DB)', () => {
           sort: 'LIKES',
           cursor: '123',
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
-    it('좋아요순 커서 like count가 안전 정수 범위를 넘으면 BadRequestException', async () => {
+    it('좋아요순 커서 like count가 안전 정수 범위를 넘으면 400', async () => {
       const product = await createProduct(prisma);
 
       // 309자리 숫자는 정규식은 통과하지만 Number 변환 시 Infinity가 된다
@@ -303,7 +301,7 @@ describe('ProductReviewService (real DB)', () => {
           sort: 'LIKES',
           cursor: `${'9'.repeat(309)}:1`,
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('soft-delete 리뷰·비활성 상품 리뷰는 노출하지 않는다', async () => {
@@ -419,13 +417,11 @@ describe('ProductReviewService (real DB)', () => {
   });
 
   describe('reviewDetail', () => {
-    it('없는 리뷰는 NotFoundException', async () => {
-      await expect(service.reviewDetail('999999')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+    it('없는 리뷰는 404', async () => {
+      await expect(service.reviewDetail('999999')).rejects.toThrowDomain(404);
     });
 
-    it('soft-delete 리뷰는 NotFoundException', async () => {
+    it('soft-delete 리뷰는 404', async () => {
       const product = await createProduct(prisma);
       const review = await createProductReview(product);
       await prisma.review.update({
@@ -435,7 +431,7 @@ describe('ProductReviewService (real DB)', () => {
 
       await expect(
         service.reviewDetail(review.id.toString()),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('리뷰 본문과 판매 케이크 정보(현재 상품 가격 기준)를 반환한다', async () => {
@@ -501,10 +497,10 @@ describe('ProductReviewService (real DB)', () => {
   });
 
   describe('reviewComments', () => {
-    it('없는 리뷰는 NotFoundException', async () => {
+    it('없는 리뷰는 404', async () => {
       await expect(
         service.reviewComments({ reviewId: '999999' }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('등록순(id asc) + 커서 + soft-delete 제외, isMine을 채운다', async () => {

@@ -1,5 +1,3 @@
-import { InternalServerErrorException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminNotificationService } from '@/features/admin/services/admin-notification.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -180,7 +178,7 @@ describe('AdminNotificationService (real DB)', () => {
             ...base,
             targetKind: 'ALL_USERS',
           }),
-        ).rejects.toThrow(InternalServerErrorException);
+        ).rejects.toThrowDomain(500);
       } finally {
         spy.mockRestore();
       }

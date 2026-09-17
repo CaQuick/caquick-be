@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
-import { STORE_DETAIL_ERRORS } from '@/features/store/constants/store-detail-error-messages';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { toStoreDetail } from '@/features/store/services/store-detail-mappers.helper';
@@ -25,7 +25,7 @@ export class StoreDetailService {
     const storeId = parseId(storeIdRaw);
     const row = await this.repo.findStoreDetailById(storeId);
     if (!row) {
-      throw new NotFoundException(STORE_DETAIL_ERRORS.STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
 
     const [reviewStats, wishlistedIds] = await Promise.all([

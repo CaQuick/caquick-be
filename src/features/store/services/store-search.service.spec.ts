@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -168,9 +166,9 @@ describe('StoreSearchService (real DB)', () => {
     });
 
     it('빈 검색어는 400, 결과 없음은 빈 커넥션', async () => {
-      await expect(service.searchStores({ keyword: ' ' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.searchStores({ keyword: ' ' }),
+      ).rejects.toThrowDomain(400);
       expect(await service.searchStores({ keyword: '없음' })).toEqual({
         items: [],
         totalCount: 0,

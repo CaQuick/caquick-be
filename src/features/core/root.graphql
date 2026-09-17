@@ -3,6 +3,11 @@ ISO 8601 DateTime 스칼라
 """
 scalar DateTime
 
+"""
+에러 응답 규약: `errors[].extensions.code`는 에러 카탈로그 코드(예: STORE_NOT_FOUND),
+`extensions.classification`은 HTTP 상태 분류(BAD_USER_INPUT / UNAUTHENTICATED / FORBIDDEN / NOT_FOUND / CONFLICT / INTERNAL_SERVER_ERROR).
+각 필드 설명의 FORBIDDEN·NOT_FOUND·BAD_USER_INPUT 언급은 `classification` 값이다.
+"""
 type Query {
   """스키마 루트 유지를 위한 no-op 필드"""
   _queryNoop: Boolean

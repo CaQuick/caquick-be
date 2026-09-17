@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminOrderService } from '@/features/admin/services/admin-order.service';
@@ -181,10 +181,10 @@ describe('AdminOrderService (real DB)', () => {
       const deleted = await createOrder(prisma, { deleted_at: new Date() });
       await expect(
         service.adminOrder(await admin(), deleted.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.adminOrder(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -238,7 +238,7 @@ describe('AdminOrderService (real DB)', () => {
             orderId: order.id.toString(),
             note: 'x',
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
         expect(
           await prisma.orderStatusHistory.count({
             where: { order_id: order.id },
@@ -254,13 +254,13 @@ describe('AdminOrderService (real DB)', () => {
           orderId: order.id.toString(),
           note: '   ',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminCancelOrder(await admin(), {
           orderId: '999999',
           note: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('사유는 접두를 붙여 500자 이내여야 한다(494자 허용, 495자 거절)', async () => {
@@ -270,7 +270,7 @@ describe('AdminOrderService (real DB)', () => {
           orderId: order.id.toString(),
           note: 'x'.repeat(495),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       await service.adminCancelOrder(await admin(), {
         orderId: order.id.toString(),

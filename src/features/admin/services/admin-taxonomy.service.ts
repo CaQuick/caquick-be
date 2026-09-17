@@ -21,7 +21,6 @@ import {
   CATEGORY_NOT_FOUND,
   TAG_NAME_TAKEN,
   TAG_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_CATEGORY_DESCRIPTION_LENGTH,
@@ -193,9 +192,7 @@ export class AdminTaxonomyService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const keyword = input?.keyword?.trim() || undefined;
 

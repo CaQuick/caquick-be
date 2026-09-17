@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchService } from '@/features/user/services/user-search.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -119,7 +117,7 @@ describe('UserSearchService (real DB)', () => {
       expect(saved.deleted_at).not.toBeNull();
     });
 
-    it('이미 삭제된 기록이면 NotFoundException', async () => {
+    it('이미 삭제된 기록이면 404', async () => {
       const account = await setupUser();
       const history = await createSearchHistory(prisma, {
         account_id: account.id,
@@ -128,17 +126,17 @@ describe('UserSearchService (real DB)', () => {
 
       await expect(
         service.deleteSearchHistory(account.id, history.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('존재하지 않는 id면 NotFoundException', async () => {
+    it('존재하지 않는 id면 404', async () => {
       const account = await setupUser();
       await expect(
         service.deleteSearchHistory(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('다른 계정의 기록은 접근 불가 (NotFoundException)', async () => {
+    it('다른 계정의 기록은 접근 불가 (404)', async () => {
       const me = await setupUser();
       const other = await setupUser();
       const othersHistory = await createSearchHistory(prisma, {
@@ -147,7 +145,7 @@ describe('UserSearchService (real DB)', () => {
 
       await expect(
         service.deleteSearchHistory(me.id, othersHistory.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 

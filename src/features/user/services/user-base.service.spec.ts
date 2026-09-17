@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -84,13 +78,13 @@ describe('UserBaseService (real DB)', () => {
       expect(result.user_profile).not.toBeNull();
     });
 
-    it('계정이 존재하지 않으면 UnauthorizedException을 던진다', async () => {
+    it('계정이 존재하지 않으면 401을 던진다', async () => {
       await expect(
         service.testRequireActiveUser(BigInt(999999)),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
-    it('soft delete 된 계정이면 UnauthorizedException을 던진다', async () => {
+    it('soft delete 된 계정이면 401을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
       await prisma.account.update({
@@ -98,28 +92,28 @@ describe('UserBaseService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      await expect(service.testRequireActiveUser(account.id)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.testRequireActiveUser(account.id),
+      ).rejects.toThrowDomain(401);
     });
 
-    it('USER 이외 타입(SELLER)이면 ForbiddenException을 던진다', async () => {
+    it('USER 이외 타입(SELLER)이면 403을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
 
-      await expect(service.testRequireActiveUser(account.id)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.testRequireActiveUser(account.id),
+      ).rejects.toThrowDomain(403);
     });
 
-    it('프로필이 없는 USER 계정이면 UnauthorizedException을 던진다', async () => {
+    it('프로필이 없는 USER 계정이면 401을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
 
-      await expect(service.testRequireActiveUser(account.id)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.testRequireActiveUser(account.id),
+      ).rejects.toThrowDomain(401);
     });
 
-    it('프로필이 soft delete 된 경우 UnauthorizedException을 던진다', async () => {
+    it('프로필이 soft delete 된 경우 401을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const profile = await createUserProfile(prisma, {
         account_id: account.id,
@@ -129,9 +123,9 @@ describe('UserBaseService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      await expect(service.testRequireActiveUser(account.id)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.testRequireActiveUser(account.id),
+      ).rejects.toThrowDomain(401);
     });
   });
 
@@ -139,21 +133,19 @@ describe('UserBaseService (real DB)', () => {
   // 순수 함수 — DB 의존 없음
   // ─────────────────────────────────────────────
   describe('normalizeNickname', () => {
-    it('길이가 하한 미만이면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizeNickname('a')).toThrow(
-        BadRequestException,
+    it('길이가 하한 미만이면 400을 던진다', () => {
+      expect(() => service.testNormalizeNickname('a')).toThrowDomain(400);
+    });
+
+    it('길이가 상한 초과이면 400을 던진다', () => {
+      expect(() => service.testNormalizeNickname('a'.repeat(21))).toThrowDomain(
+        400,
       );
     });
 
-    it('길이가 상한 초과이면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizeNickname('a'.repeat(21))).toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('허용되지 않는 특수문자가 포함되면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizeNickname('nick name!')).toThrow(
-        BadRequestException,
+    it('허용되지 않는 특수문자가 포함되면 400을 던진다', () => {
+      expect(() => service.testNormalizeNickname('nick name!')).toThrowDomain(
+        400,
       );
     });
 
@@ -208,9 +200,7 @@ describe('UserBaseService (real DB)', () => {
       ['010--1234-5678'], // 하이픈 위치 잘못
       ['12345'], // 짧은 임의 문자열
     ])('비정상 형식 %s 은 BadRequestException을 던진다', (raw) => {
-      expect(() => service.testNormalizePhoneNumber(raw)).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testNormalizePhoneNumber(raw)).toThrowDomain(400);
     });
   });
 
@@ -220,26 +210,24 @@ describe('UserBaseService (real DB)', () => {
       expect(service.testNormalizeBirthDate(undefined)).toBeNull();
     });
 
-    it('유효하지 않은 날짜 문자열이면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizeBirthDate('not-a-date')).toThrow(
-        BadRequestException,
+    it('유효하지 않은 날짜 문자열이면 400을 던진다', () => {
+      expect(() => service.testNormalizeBirthDate('not-a-date')).toThrowDomain(
+        400,
       );
     });
 
-    it('미래 날짜면 BadRequestException을 던진다', () => {
+    it('미래 날짜면 400을 던진다', () => {
       const future = new Date();
       future.setFullYear(future.getFullYear() + 1);
-      expect(() => service.testNormalizeBirthDate(future)).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testNormalizeBirthDate(future)).toThrowDomain(400);
     });
 
-    it('1899-12-31 등 1900-01-01 이전이면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizeBirthDate('1899-12-31')).toThrow(
-        BadRequestException,
+    it('1899-12-31 등 1900-01-01 이전이면 400을 던진다', () => {
+      expect(() => service.testNormalizeBirthDate('1899-12-31')).toThrowDomain(
+        400,
       );
-      expect(() => service.testNormalizeBirthDate('1850-01-01')).toThrow(
-        BadRequestException,
+      expect(() => service.testNormalizeBirthDate('1850-01-01')).toThrowDomain(
+        400,
       );
     });
 
@@ -273,22 +261,22 @@ describe('UserBaseService (real DB)', () => {
   });
 
   describe('normalizePaginationInput', () => {
-    it('offset 음수면 BadRequestException을 던진다', () => {
+    it('offset 음수면 400을 던진다', () => {
       expect(() =>
         service.testNormalizePaginationInput({ offset: -1 }),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
-    it('limit이 0 이하면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizePaginationInput({ limit: 0 })).toThrow(
-        BadRequestException,
-      );
+    it('limit이 0 이하면 400을 던진다', () => {
+      expect(() =>
+        service.testNormalizePaginationInput({ limit: 0 }),
+      ).toThrowDomain(400);
     });
 
-    it('limit이 상한(50) 초과면 BadRequestException을 던진다', () => {
-      expect(() => service.testNormalizePaginationInput({ limit: 51 })).toThrow(
-        BadRequestException,
-      );
+    it('limit이 상한(50) 초과면 400을 던진다', () => {
+      expect(() =>
+        service.testNormalizePaginationInput({ limit: 51 }),
+      ).toThrowDomain(400);
     });
 
     it('입력이 없으면 기본값을 반환한다', () => {

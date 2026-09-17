@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderStatus } from '@/generated/prisma/client';
 
@@ -17,19 +15,19 @@ describe('OrderStatusTransitionPolicy', () => {
       expect(policy.parse(raw)).toBe(expected);
     });
 
-    it('알 수 없는 문자열이면 BadRequestException', () => {
-      expect(() => policy.parse('INVALID')).toThrow(BadRequestException);
+    it('알 수 없는 문자열이면 400', () => {
+      expect(() => policy.parse('INVALID')).toThrowDomain(400);
     });
   });
 
   describe('assertSellerTransition', () => {
-    it('from === to면 BadRequestException', () => {
+    it('from === to면 400', () => {
       expect(() =>
         policy.assertSellerTransition(
           OrderStatus.SUBMITTED,
           OrderStatus.SUBMITTED,
         ),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
     it('CONFIRMED는 SUBMITTED에서만 가능', () => {
@@ -41,7 +39,7 @@ describe('OrderStatusTransitionPolicy', () => {
       ).not.toThrow();
       expect(() =>
         policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.CONFIRMED),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
     it('MADE는 CONFIRMED에서만 가능', () => {
@@ -50,7 +48,7 @@ describe('OrderStatusTransitionPolicy', () => {
       ).not.toThrow();
       expect(() =>
         policy.assertSellerTransition(OrderStatus.SUBMITTED, OrderStatus.MADE),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
     it('PICKED_UP은 MADE에서만 가능', () => {
@@ -62,7 +60,7 @@ describe('OrderStatusTransitionPolicy', () => {
           OrderStatus.CONFIRMED,
           OrderStatus.PICKED_UP,
         ),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
     it('CANCELED는 SUBMITTED/CONFIRMED/MADE에서 가능, PICKED_UP에서는 불가', () => {
@@ -86,7 +84,7 @@ describe('OrderStatusTransitionPolicy', () => {
           OrderStatus.PICKED_UP,
           OrderStatus.CANCELED,
         ),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
 
     /**
@@ -102,7 +100,7 @@ describe('OrderStatusTransitionPolicy', () => {
     ])('SUBMITTED로 되돌리는 역전이는 거부 (from=%s)', (from) => {
       expect(() =>
         policy.assertSellerTransition(from, OrderStatus.SUBMITTED),
-      ).toThrow(BadRequestException);
+      ).toThrowDomain(400);
     });
   });
 

@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
 import argon2 from 'argon2';
 
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
@@ -58,9 +52,7 @@ describe('AdminAccountService (real DB)', () => {
 
   describe('requireAdminContext (공통)', () => {
     it('존재하지 않는 계정이면 UnauthorizedException', async () => {
-      await expect(service.adminMe(BigInt(999_999))).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.adminMe(BigInt(999_999))).rejects.toThrowDomain(401);
     });
 
     it.each(['USER', 'SELLER'] as const)(
@@ -69,9 +61,7 @@ describe('AdminAccountService (real DB)', () => {
         const account = await createAccount(prisma, {
           account_type: accountType,
         });
-        await expect(service.adminMe(account.id)).rejects.toThrow(
-          ForbiddenException,
-        );
+        await expect(service.adminMe(account.id)).rejects.toThrowDomain(403);
       },
     );
 
@@ -80,9 +70,7 @@ describe('AdminAccountService (real DB)', () => {
         account_type: 'ADMIN',
         status: 'SUSPENDED',
       });
-      await expect(service.adminMe(account.id)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(service.adminMe(account.id)).rejects.toThrowDomain(403);
     });
 
     it('탈퇴(soft-delete)한 ADMIN 계정이면 UnauthorizedException', async () => {
@@ -90,9 +78,7 @@ describe('AdminAccountService (real DB)', () => {
         account_type: 'ADMIN',
         deleted_at: new Date(),
       });
-      await expect(service.adminMe(account.id)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.adminMe(account.id)).rejects.toThrowDomain(401);
     });
   });
 
@@ -144,9 +130,7 @@ describe('AdminAccountService (real DB)', () => {
       const spy = jest
         .spyOn(repo, 'findAdminAccountById')
         .mockResolvedValueOnce(null);
-      await expect(service.adminMe(account.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.adminMe(account.id)).rejects.toThrowDomain(404);
       spy.mockRestore();
     });
   });
@@ -273,7 +257,7 @@ describe('AdminAccountService (real DB)', () => {
           ...validInput,
           username: 'taken.name',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('판매자가 쓰는 username도 충돌한다(자격증명 테이블 공용)', async () => {
@@ -288,7 +272,7 @@ describe('AdminAccountService (real DB)', () => {
           ...validInput,
           username: 'seller.name',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('사전 조회를 지나친 unique 충돌(P2002)도 BadRequestException으로 좁힌다', async () => {
@@ -307,7 +291,7 @@ describe('AdminAccountService (real DB)', () => {
           ...validInput,
           username: 'race.name',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 트랜잭션이 롤백돼 계정이 추가로 남지 않는다
       expect(
         await prisma.account.count({ where: { account_type: 'ADMIN' } }),

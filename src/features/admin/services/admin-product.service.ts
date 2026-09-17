@@ -8,10 +8,7 @@ import {
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import {
-  PRODUCT_NOT_FOUND,
-  INVALID_CURSOR,
-} from '@/features/admin/constants/admin-error-messages';
+import { PRODUCT_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminProductListInput } from '@/features/admin/dto/inputs/admin-product-list.input';
 import type { AdminSetProductActiveInput } from '@/features/admin/dto/inputs/admin-set-product-active.input';
@@ -49,9 +46,7 @@ export class AdminProductService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,

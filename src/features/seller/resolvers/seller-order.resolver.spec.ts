@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
@@ -88,6 +86,6 @@ describe('Seller Order Resolvers (real DB)', () => {
           note: null,
         } as never,
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

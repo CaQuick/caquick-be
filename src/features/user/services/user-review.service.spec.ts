@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
-
 import { OrderRepository } from '@/features/order';
-import { USER_REVIEW_ERRORS } from '@/features/user/constants/user-review-error-messages';
 import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -168,9 +161,7 @@ describe('UserReviewService (real DB)', () => {
               content: VALID_CONTENT,
               media: [{ ...media, sortOrder: 0 }],
             }),
-          ).rejects.toThrow(
-            new BadRequestException(USER_REVIEW_ERRORS.INVALID_MEDIA_URL),
-          );
+          ).rejects.toThrowDomain('INVALID_MEDIA_URL');
           expect(s3Service.isOwnedUploadUrl).toHaveBeenCalledWith(
             FOREIGN,
             purpose,
@@ -271,7 +262,7 @@ describe('UserReviewService (real DB)', () => {
       ).resolves.toBeDefined();
     });
 
-    it('사진 11장이면 BadRequestException (TOO_MANY_IMAGES)', async () => {
+    it('사진 11장이면 400 (TOO_MANY_IMAGES)', async () => {
       const ctx = await setupReviewableOrderItem();
       await expect(
         service.writeReview(ctx.accountId, {
@@ -284,10 +275,10 @@ describe('UserReviewService (real DB)', () => {
             sortOrder: i,
           })),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
-    it('동영상 2개면 BadRequestException (TOO_MANY_VIDEOS)', async () => {
+    it('동영상 2개면 400 (TOO_MANY_VIDEOS)', async () => {
       const ctx = await setupReviewableOrderItem();
       await expect(
         service.writeReview(ctx.accountId, {
@@ -307,7 +298,7 @@ describe('UserReviewService (real DB)', () => {
             },
           ],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('사진 0 + 동영상 1개만 있어도 통과한다', async () => {
@@ -328,7 +319,7 @@ describe('UserReviewService (real DB)', () => {
       ).resolves.toBeDefined();
     });
 
-    it('orderItem이 본인 소유가 아니면 NotFoundException', async () => {
+    it('orderItem이 본인 소유가 아니면 404', async () => {
       const me = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: me.id });
       const other = await setupReviewableOrderItem();
@@ -339,10 +330,10 @@ describe('UserReviewService (real DB)', () => {
           rating: 5,
           content: VALID_CONTENT,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('주문이 PICKED_UP 이전 상태면 BadRequestException', async () => {
+    it('주문이 PICKED_UP 이전 상태면 400', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
       const product = await createProduct(prisma);
@@ -361,10 +352,10 @@ describe('UserReviewService (real DB)', () => {
           rating: 5,
           content: VALID_CONTENT,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
-    it('활성 리뷰가 이미 있으면 ConflictException', async () => {
+    it('활성 리뷰가 이미 있으면 409', async () => {
       const ctx = await setupReviewableOrderItem();
       await service.writeReview(ctx.accountId, {
         orderItemId: ctx.orderItemId.toString(),
@@ -378,7 +369,7 @@ describe('UserReviewService (real DB)', () => {
           rating: 5,
           content: VALID_CONTENT,
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
 
     it('soft-delete된 리뷰가 있으면 복원하여 새 rating/content/media를 반영한다', async () => {
@@ -542,14 +533,14 @@ describe('UserReviewService (real DB)', () => {
       expect(result.review?.productName).toBe('상품R 스냅샷');
     });
 
-    it('orderItem이 본인 소유가 아니면 NotFoundException', async () => {
+    it('orderItem이 본인 소유가 아니면 404', async () => {
       const me = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: me.id });
       const other = await setupReviewableOrderItem();
 
       await expect(
         service.myReviewForOrderItem(me.id, other.orderItemId.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -575,13 +566,13 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.deleted_at).not.toBeNull();
     });
 
-    it('존재하지 않거나 타인 리뷰면 NotFoundException', async () => {
+    it('존재하지 않거나 타인 리뷰면 404', async () => {
       const me = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: me.id });
 
-      await expect(service.deleteMyReview(me.id, '999999')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.deleteMyReview(me.id, '999999'),
+      ).rejects.toThrowDomain(404);
     });
 
     it('리뷰 삭제 시 댓글도 soft-delete되어 재작성(복원) 리뷰에 되살아나지 않는다', async () => {

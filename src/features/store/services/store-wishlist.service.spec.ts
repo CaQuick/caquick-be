@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
@@ -111,26 +105,26 @@ describe('StoreWishlistService (real DB)', () => {
       expect(await activeWishlistCount(account.id, store.id)).toBe(1);
     });
 
-    it('존재하지 않는 매장이면 NotFoundException', async () => {
+    it('존재하지 않는 매장이면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.addStoreToWishlist(account.id, '999999'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('비활성 매장이면 NotFoundException', async () => {
+    it('비활성 매장이면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const inactive = await createStore(prisma, { is_active: false });
       await expect(
         service.addStoreToWishlist(account.id, inactive.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('유효하지 않은 storeId면 BadRequestException', async () => {
+    it('유효하지 않은 storeId면 400', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.addStoreToWishlist(account.id, 'not-a-number'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('USER가 아닌 계정(SELLER)은 찜할 수 없다(Forbidden)', async () => {
@@ -138,7 +132,7 @@ describe('StoreWishlistService (real DB)', () => {
       const store = await createStore(prisma);
       await expect(
         service.addStoreToWishlist(seller.id, store.id.toString()),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 

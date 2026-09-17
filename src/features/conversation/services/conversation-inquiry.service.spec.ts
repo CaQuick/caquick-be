@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
@@ -161,10 +155,10 @@ describe('ConversationInquiryService (real DB)', () => {
 
       await expect(
         service.storeInquiryContext(buyer.id, inactive.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.storeInquiryContext(buyer.id, deleted.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('없는 계정은 Unauthorized, SELLER 계정은 Forbidden', async () => {
@@ -173,10 +167,10 @@ describe('ConversationInquiryService (real DB)', () => {
 
       await expect(
         service.storeInquiryContext(BigInt(999999), store.id.toString()),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       await expect(
         service.storeInquiryContext(seller.id, store.id.toString()),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
@@ -310,13 +304,13 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           bodyText: '   ',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.sendConversationMessage(buyer.id, {
           storeId: store.id.toString(),
           bodyText: 'a'.repeat(2001),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('비활성 매장에는 전송할 수 없다', async () => {
@@ -328,7 +322,7 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           bodyText: '안녕하세요',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -395,13 +389,13 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           faqTopicId: inactiveFaq.id.toString(),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.sendConversationFaqMessage(buyer.id, {
           storeId: store.id.toString(),
           faqTopicId: othersFaq.id.toString(),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

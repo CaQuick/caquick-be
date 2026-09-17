@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminDashboardService } from '@/features/admin/services/admin-dashboard.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -153,7 +151,7 @@ describe('AdminDashboardService (real DB)', () => {
       const actor = await admin();
       await expect(
         service.adminDashboardSummary(actor, { from: to, to: from }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('366일 초과 거절, 정확히 366일은 허용', async () => {
@@ -170,7 +168,7 @@ describe('AdminDashboardService (real DB)', () => {
           from: start,
           to: new Date(okEnd.getTime() + 1),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 

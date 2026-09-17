@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ProductRepository } from '@/features/product';
@@ -10,10 +11,6 @@ import type { RecentViewedProductConnection } from '@/features/user/types/user-m
 
 /** 계정당 최대 보관 개수 */
 const MAX_RECENT_VIEWS = 50;
-
-const RECENT_VIEW_ERRORS = {
-  PRODUCT_NOT_FOUND: '상품을 찾을 수 없습니다.',
-} as const;
 
 @Injectable()
 export class UserRecentViewService {
@@ -66,7 +63,7 @@ export class UserRecentViewService {
     // 상품 존재 확인 (active + 삭제되지 않은 것)
     const product = await this.productRepo.findActiveProduct(productId);
     if (!product) {
-      throw new NotFoundException(RECENT_VIEW_ERRORS.PRODUCT_NOT_FOUND);
+      throw new DomainException('PRODUCT_NOT_FOUND');
     }
 
     await this.recentViewRepo.upsertView({ accountId, productId, now });

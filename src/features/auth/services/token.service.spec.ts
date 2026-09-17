@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -136,9 +135,9 @@ describe('TokenService', () => {
     it('refresh 쿠키가 없으면 UnauthorizedException(Missing)', async () => {
       const reqNoCookie = { cookies: {} } as unknown as Request;
 
-      await expect(service.rotateRefresh(reqNoCookie, mockRes)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.rotateRefresh(reqNoCookie, mockRes),
+      ).rejects.toThrowDomain(401);
       await expect(service.rotateRefresh(reqNoCookie, mockRes)).rejects.toThrow(
         'Missing refresh token.',
       );

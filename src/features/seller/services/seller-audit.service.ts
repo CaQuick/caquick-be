@@ -11,10 +11,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  INVALID_AUDIT_TARGET_TYPE,
-  INVALID_CURSOR,
-} from '@/features/seller/constants/seller-error-messages';
+import { INVALID_AUDIT_TARGET_TYPE } from '@/features/seller/constants/seller-error-messages';
 import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -39,9 +36,7 @@ export class SellerAuditService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const scope = {

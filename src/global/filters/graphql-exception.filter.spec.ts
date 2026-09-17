@@ -8,10 +8,9 @@ import {
 import type { ArgumentsHost } from '@nestjs/common';
 import { GraphQLError } from 'graphql';
 
-import {
-  GraphQLExceptionFilter,
-  mapStatusToCode,
-} from '@/global/filters/graphql-exception.filter';
+import { DomainException } from '@/common/errors/error-catalog';
+import { classifyStatus } from '@/common/utils/error';
+import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 jest.mock('@/global/logger/logger', () => ({
@@ -62,20 +61,61 @@ describe('GraphQLExceptionFilter', () => {
     filter = new GraphQLExceptionFilter(logger);
   });
 
-  describe('mapStatusToCode', () => {
+  describe('classifyStatus', () => {
     it.each([
       [HttpStatus.BAD_REQUEST, 'BAD_USER_INPUT'],
       [HttpStatus.UNAUTHORIZED, 'UNAUTHENTICATED'],
       [HttpStatus.FORBIDDEN, 'FORBIDDEN'],
       [HttpStatus.NOT_FOUND, 'NOT_FOUND'],
+      [HttpStatus.CONFLICT, 'CONFLICT'],
       [HttpStatus.INTERNAL_SERVER_ERROR, 'INTERNAL_SERVER_ERROR'],
       [418, 'INTERNAL_SERVER_ERROR'],
     ])('%i → %s', (status, expected) => {
-      expect(mapStatusToCode(status)).toBe(expected);
+      expect(classifyStatus(status)).toBe(expected);
     });
   });
 
   describe('format', () => {
+    it.each([
+      ['STORE_NOT_FOUND', 404, 'NOT_FOUND'],
+      ['INVALID_CURSOR', 400, 'BAD_USER_INPUT'],
+      ['AUTHENTICATION_REQUIRED', 401, 'UNAUTHENTICATED'],
+      ['USER_ONLY', 403, 'FORBIDDEN'],
+      ['NICKNAME_TAKEN', 409, 'CONFLICT'],
+      ['S3_PRESIGN_FAILED', 500, 'INTERNAL_SERVER_ERROR'],
+    ] as const)(
+      'DomainException(%s) → code는 카탈로그 코드, classification=%s',
+      (code, status, classification) => {
+        const exception = new DomainException(code);
+        const result = filter.format(exception, mockHost());
+
+        expect(result.message).toBe(exception.message);
+        expect(result.extensions).toEqual(
+          expect.objectContaining({
+            code,
+            classification,
+            statusCode: status,
+          }),
+        );
+      },
+    );
+
+    it('ValidationPipe 예외는 VALIDATION_FAILED', () => {
+      const exception = new BadRequestException({
+        message: [{ property: 'email', constraints: { isEmail: 'bad' } }],
+      });
+      const result = filter.format(exception, mockHost());
+
+      expect(result.extensions).toEqual(
+        expect.objectContaining({
+          code: 'VALIDATION_FAILED',
+          classification: 'BAD_USER_INPUT',
+          statusCode: 400,
+        }),
+      );
+    });
+
+    // 카탈로그로 아직 이관되지 않은 Nest 예외는 분류값을 임시 코드로 쓴다(07b·07c 전까지)
     it.each([
       [
         new BadRequestException('bad input'),
@@ -102,6 +142,7 @@ describe('GraphQLExceptionFilter', () => {
         expect(result.extensions).toEqual(
           expect.objectContaining({
             code,
+            classification: code,
             statusCode: status,
             operation: 'query',
             fieldName: 'sellerMyStore',
@@ -110,26 +151,28 @@ describe('GraphQLExceptionFilter', () => {
       },
     );
 
-    it('일반 Error 는 INTERNAL_SERVER_ERROR (500) 으로 매핑된다', () => {
+    it('일반 Error 는 INTERNAL_ERROR (500) 으로 매핑된다', () => {
       const host = mockHost();
       const result = filter.format(new Error('boom'), host);
 
       expect(result.extensions).toEqual(
         expect.objectContaining({
-          code: 'INTERNAL_SERVER_ERROR',
+          code: 'INTERNAL_ERROR',
+          classification: 'INTERNAL_SERVER_ERROR',
           statusCode: 500,
         }),
       );
     });
 
-    it('Error 가 아닌 throw (예: string) 도 INTERNAL_SERVER_ERROR 로 안전하게 매핑된다', () => {
+    it('Error 가 아닌 throw (예: string) 도 INTERNAL_ERROR 로 안전하게 매핑된다', () => {
       // stack 추출 분기에서 exception !instanceof Error 경로 커버
       const host = mockHost();
       const result = filter.format('plain string thrown', host);
 
       expect(result.extensions).toEqual(
         expect.objectContaining({
-          code: 'INTERNAL_SERVER_ERROR',
+          code: 'INTERNAL_ERROR',
+          classification: 'INTERNAL_SERVER_ERROR',
           statusCode: 500,
         }),
       );

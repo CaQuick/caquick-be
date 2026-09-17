@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
+import { DomainException } from '@/common/errors/error-catalog';
 import { utcDateOnly } from '@/common/utils/date-parser';
 import {
   DEFAULT_PAGINATION_LIMIT,
@@ -18,7 +13,6 @@ import type { UserAccountWithProfile } from '@/features/user/repositories/user.r
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { evaluateActiveUserAccount } from '@/features/user/services/user-account-policy.helper';
 import type { MePayload } from '@/features/user/types/user-output.type';
-
 export type ActiveUserAccount = UserAccountWithProfile & {
   deleted_at: null;
   user_profile: NonNullable<UserAccountWithProfile['user_profile']> & {
@@ -38,13 +32,13 @@ export abstract class UserBaseService {
     // 판정 분기는 공용 정책(user-account-policy.helper) 단일 소스 — 메시지 매핑만 여기서
     switch (evaluateActiveUserAccount(account)) {
       case 'ACCOUNT_NOT_FOUND':
-        throw new UnauthorizedException('Account not found.');
+        throw new DomainException('SESSION_ACCOUNT_MISSING');
       case 'ACCOUNT_DELETED':
-        throw new UnauthorizedException('Account is deleted.');
+        throw new DomainException('ACCOUNT_DELETED');
       case 'NOT_USER':
-        throw new ForbiddenException('Only USER account is allowed.');
+        throw new DomainException('USER_ONLY');
       case 'PROFILE_INACTIVE':
-        throw new UnauthorizedException('User profile not found.');
+        throw new DomainException('PROFILE_NOT_FOUND');
       case null:
         return account as ActiveUserAccount;
     }
@@ -77,13 +71,14 @@ export abstract class UserBaseService {
       trimmed.length < MIN_NICKNAME_LENGTH ||
       trimmed.length > MAX_NICKNAME_LENGTH
     ) {
-      throw new BadRequestException(
-        `Nickname length must be ${MIN_NICKNAME_LENGTH}~${MAX_NICKNAME_LENGTH}.`,
-      );
+      throw new DomainException('NICKNAME_LENGTH_INVALID', {
+        min: MIN_NICKNAME_LENGTH,
+        max: MAX_NICKNAME_LENGTH,
+      });
     }
     const nicknameRegex = /^[A-Za-z0-9가-힣_]+$/;
     if (!nicknameRegex.test(trimmed)) {
-      throw new BadRequestException('Nickname contains invalid characters.');
+      throw new DomainException('NICKNAME_INVALID_CHARACTERS');
     }
     return trimmed;
   }
@@ -99,9 +94,9 @@ export abstract class UserBaseService {
     const trimmed = raw.trim();
     if (trimmed.length === 0) return null;
     if (!PHONE_REGEX.test(trimmed)) {
-      throw new BadRequestException(
-        `Invalid phone number format. Expected ${PHONE_FORMAT_EXAMPLE}.`,
-      );
+      throw new DomainException('INVALID_PHONE_FORMAT', {
+        example: PHONE_FORMAT_EXAMPLE,
+      });
     }
     return trimmed;
   }
@@ -110,19 +105,17 @@ export abstract class UserBaseService {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException('Invalid birthDate.');
+      throw new DomainException('INVALID_BIRTH_DATE');
     }
     // DB가 @db.Date(시간 무시) + GraphQL DateTime이 ISO string을 UTC로 해석하므로
     // timezone 독립적으로 UTC 자정 기준으로 정규화한다.
     const normalized = utcDateOnly(date);
     if (normalized < MIN_BIRTH_DATE) {
-      throw new BadRequestException(
-        'birthDate is too old (before 1900-01-01).',
-      );
+      throw new DomainException('BIRTH_DATE_TOO_OLD');
     }
     const todayUtc = utcDateOnly(new Date());
     if (normalized > todayUtc) {
-      throw new BadRequestException('birthDate cannot be in the future.');
+      throw new DomainException('BIRTH_DATE_IN_FUTURE');
     }
     return normalized;
   }
@@ -139,12 +132,10 @@ export abstract class UserBaseService {
     const unreadOnly = Boolean(input?.unreadOnly);
 
     if (offset < 0) {
-      throw new BadRequestException('Offset must be >= 0.');
+      throw new DomainException('INVALID_OFFSET');
     }
     if (limit <= 0 || limit > MAX_PAGINATION_LIMIT) {
-      throw new BadRequestException(
-        `Limit must be between 1 and ${MAX_PAGINATION_LIMIT}.`,
-      );
+      throw new DomainException('INVALID_LIMIT', { max: MAX_PAGINATION_LIMIT });
     }
 
     return { offset, limit, unreadOnly };

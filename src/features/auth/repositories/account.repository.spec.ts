@@ -1,5 +1,3 @@
-import { ConflictException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
@@ -294,7 +292,7 @@ describe('AccountRepository (real DB)', () => {
           providerEmail: 'orphan@example.com',
           emailVerified: true,
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
 
     it('기존 Identity + account email이 null + user_profile 없는 경우: profile 신규 생성 + email 주입', async () => {

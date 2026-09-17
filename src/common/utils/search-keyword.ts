@@ -1,3 +1,5 @@
+import { DomainException } from '@/common/errors/error-catalog';
+
 /**
  * 검색어 정규화·단어 분리(DI-free 순수 함수).
  *
@@ -6,14 +8,6 @@
  * trim → 연속 공백 1개로 축약. 최소 길이 제한 없음(1글자 허용), 최대 200자
  * (SearchHistory/SearchEvent.keyword 컬럼 길이). 대소문자는 MySQL collation(ci)에 맡긴다.
  */
-
-import { BadRequestException } from '@nestjs/common';
-
-/** 검색어 검증 실패 메시지. 검색 기록·상품/매장 검색이 공유한다. */
-export const SEARCH_KEYWORD_ERROR_MESSAGES = {
-  KEYWORD_EMPTY: '검색어를 입력해 주세요.',
-  KEYWORD_TOO_LONG: '검색어는 200자 이하여야 합니다.',
-} as const;
 
 /** 정규화된 검색어 최대 길이(keyword 컬럼 VarChar(200)). */
 export const SEARCH_KEYWORD_MAX_LENGTH = 200;
@@ -57,10 +51,8 @@ export interface ParsedSearchKeyword {
 export function parseSearchKeyword(raw: string): ParsedSearchKeyword {
   const result = normalizeSearchKeyword(raw);
   if (!result.ok) {
-    throw new BadRequestException(
-      result.reason === 'EMPTY'
-        ? SEARCH_KEYWORD_ERROR_MESSAGES.KEYWORD_EMPTY
-        : SEARCH_KEYWORD_ERROR_MESSAGES.KEYWORD_TOO_LONG,
+    throw new DomainException(
+      result.reason === 'EMPTY' ? 'KEYWORD_EMPTY' : 'KEYWORD_TOO_LONG',
     );
   }
   return { keyword: result.keyword, words: splitSearchWords(result.keyword) };

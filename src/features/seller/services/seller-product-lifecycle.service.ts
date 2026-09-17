@@ -16,7 +16,6 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
-  INVALID_IMAGE_URL,
   PRODUCT_NOT_FOUND,
   SALE_PRICE_EXCEEDS_REGULAR,
 } from '@/features/seller/constants/seller-error-messages';
@@ -78,14 +77,14 @@ export class SellerProductLifecycleService extends SellerBaseService {
       baseDesignImageUrl,
       'PRODUCT_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
     assertOwnedUploadUrl(
       this.s3,
       initialImageUrl,
       'PRODUCT_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
 
     const created = await this.productRepository.createProduct({
@@ -158,7 +157,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         data.base_design_image_url,
         'PRODUCT_IMAGE',
         ctx.accountId,
-        INVALID_IMAGE_URL,
+        'INVALID_IMAGE_URL',
       );
     }
     const nextRegularPrice = input.regularPrice ?? current.regular_price;

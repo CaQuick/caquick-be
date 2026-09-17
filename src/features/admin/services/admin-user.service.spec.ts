@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminUserService } from '@/features/admin/services/admin-user.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -214,7 +208,7 @@ describe('AdminUserService (real DB)', () => {
     ])('%s이면 NotFoundException', async (_label, makeId) => {
       await expect(
         service.adminUser(await admin(), await makeId()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -289,7 +283,7 @@ describe('AdminUserService (real DB)', () => {
           accountId: actor.toString(),
           reason: 'x',
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
       expect(await statusOf(actor)).toBe('ACTIVE');
     });
 
@@ -300,7 +294,7 @@ describe('AdminUserService (real DB)', () => {
           accountId: other.toString(),
           reason: 'x',
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
 
     it.each([
@@ -316,7 +310,7 @@ describe('AdminUserService (real DB)', () => {
           accountId: (await makeId()).toString(),
           reason: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('PENDING 계정은 정지할 수 없다(BadRequestException) — 복구 시 승인 없이 ACTIVE가 되는 경로 차단', async () => {
@@ -329,7 +323,7 @@ describe('AdminUserService (real DB)', () => {
           accountId: pending.id.toString(),
           reason: 'x',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       expect(await statusOf(pending.id)).toBe('PENDING');
     });
 
@@ -412,7 +406,7 @@ describe('AdminUserService (real DB)', () => {
       });
       await expect(
         service.adminReinstateAccount(await admin(), pending.id),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       expect(await statusOf(pending.id)).toBe('PENDING');
     });
 
@@ -423,7 +417,7 @@ describe('AdminUserService (real DB)', () => {
       });
       await expect(
         service.adminReinstateAccount(await admin(), other.id),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 });

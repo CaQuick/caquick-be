@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -114,7 +112,7 @@ describe('SellerFaqService (real DB)', () => {
           topicId: '999999',
           title: '수정',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 소유 FAQ는 NotFoundException으로 차단', async () => {
@@ -133,7 +131,7 @@ describe('SellerFaqService (real DB)', () => {
           topicId: otherFaq.id.toString(),
           title: '수정',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('FAQ 수정 + audit log', async () => {
@@ -181,7 +179,7 @@ describe('SellerFaqService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteFaqTopic(account.id, BigInt(999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log', async () => {

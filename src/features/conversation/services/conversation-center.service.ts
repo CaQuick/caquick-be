@@ -35,7 +35,7 @@ export class ConversationCenterService extends ConversationBaseService {
 
     const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
     const cursor = input?.cursor
-      ? parseTimestampIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
+      ? parseTimestampIdCursor(input.cursor)
       : undefined;
 
     // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로
@@ -99,9 +99,7 @@ export class ConversationCenterService extends ConversationBaseService {
     const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
     // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로
     // 번진다 — 상한까지 검증하는 커서 전용 파서를 쓴다(리뷰 반영)
-    const cursor = input?.cursor
-      ? parseIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
-      : undefined;
+    const cursor = input?.cursor ? parseIdCursor(input.cursor) : undefined;
 
     // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 조회
     // 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과, 사용자 확정

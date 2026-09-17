@@ -12,10 +12,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  PRODUCT_NOT_FOUND,
-  INVALID_CURSOR,
-} from '@/features/seller/constants/seller-error-messages';
+import { PRODUCT_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import type { SellerProductListInput } from '@/features/seller/dto/inputs/seller-product-list.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -41,9 +38,7 @@ export class SellerProductQueryService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const filters = {

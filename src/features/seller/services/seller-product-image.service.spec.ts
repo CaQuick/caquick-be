@@ -1,9 +1,6 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -81,7 +78,7 @@ describe('SellerProductImageService (real DB)', () => {
           productId: product.id.toString(),
           imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, '6.png'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 추가', async () => {
@@ -109,7 +106,7 @@ describe('SellerProductImageService (real DB)', () => {
           productId: '999999',
           imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'x.png'),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -123,14 +120,14 @@ describe('SellerProductImageService (real DB)', () => {
 
       await expect(
         service.sellerDeleteProductImage(account.id, image.id),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('존재하지 않는 imageId면 NotFoundException', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteProductImage(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장의 이미지면 NotFoundException', async () => {
@@ -147,7 +144,7 @@ describe('SellerProductImageService (real DB)', () => {
 
       await expect(
         service.sellerDeleteProductImage(me.account.id, othersImage.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('정상 삭제 (이미지 2개 이상)', async () => {
@@ -176,7 +173,7 @@ describe('SellerProductImageService (real DB)', () => {
           productId: product.id.toString(),
           imageIds: ['1', '2', '3'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 재정렬', async () => {
@@ -209,7 +206,7 @@ describe('SellerProductImageService (real DB)', () => {
           productId: '999999',
           imageIds: ['1'],
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('매장 imageId 집합과 입력 배열이 안 맞으면 BadRequestException(invalidIds)', async () => {
@@ -225,7 +222,7 @@ describe('SellerProductImageService (real DB)', () => {
           productId: product.id.toString(),
           imageIds: [otherImage.id.toString()],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -252,7 +249,7 @@ describe('SellerProductImageService (real DB)', () => {
             productId: product.id.toString(),
             imageUrl: url(account.id),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
         expect(
           await prisma.productImage.count({
             where: { product_id: product.id },

@@ -1,10 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import type { IAuditLogRepository } from '@/features/audit-log';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -78,21 +71,21 @@ describe('SellerBaseService (real DB)', () => {
     it('계정이 존재하지 않으면 UnauthorizedException', async () => {
       await expect(
         service.testRequireSellerContext(BigInt(99999)),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('SELLER가 아닌 계정이면 ForbiddenException', async () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.testRequireSellerContext(userAccount.id),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
 
     it('SELLER인데 store가 없으면 NotFoundException', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
       await expect(
         service.testRequireSellerContext(account.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('SELLER + store 조합이면 SellerContext를 반환한다', async () => {
@@ -105,9 +98,7 @@ describe('SellerBaseService (real DB)', () => {
 
   describe('parseIdList', () => {
     it('중복된 ID면 BadRequestException', () => {
-      expect(() => service.testParseIdList(['1', '2', '1'])).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testParseIdList(['1', '2', '1'])).toThrowDomain(400);
     });
 
     it('유효한 ID 목록을 BigInt 배열로 파싱한다', () => {
@@ -126,9 +117,7 @@ describe('SellerBaseService (real DB)', () => {
     });
 
     it('잘못된 문자열이면 BadRequestException', () => {
-      expect(() => service.testToTime('not-a-date')).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testToTime('not-a-date')).toThrowDomain(400);
     });
 
     it('Date 객체면 그대로 통과한다', () => {
@@ -139,9 +128,7 @@ describe('SellerBaseService (real DB)', () => {
 
   describe('toDecimal', () => {
     it('잘못된 형식이면 BadRequestException', () => {
-      expect(() => service.testToDecimal('not-a-number')).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testToDecimal('not-a-number')).toThrowDomain(400);
     });
 
     it('null/undefined/공백 문자열은 null', () => {
@@ -159,9 +146,7 @@ describe('SellerBaseService (real DB)', () => {
 
   describe('cleanCurrency', () => {
     it('잘못된 통화 형식이면 BadRequestException', () => {
-      expect(() => service.testCleanCurrency('ABCD')).toThrow(
-        BadRequestException,
-      );
+      expect(() => service.testCleanCurrency('ABCD')).toThrowDomain(400);
     });
 
     it('null이면 KRW 기본값', () => {
@@ -175,21 +160,21 @@ describe('SellerBaseService (real DB)', () => {
 
   describe('assertPositiveRange', () => {
     it('범위 미만이면 BadRequestException', () => {
-      expect(() => service.testAssertPositiveRange(0, 1, 100, 'x')).toThrow(
-        BadRequestException,
-      );
+      expect(() =>
+        service.testAssertPositiveRange(0, 1, 100, 'x'),
+      ).toThrowDomain(400);
     });
 
     it('범위 초과면 BadRequestException', () => {
-      expect(() => service.testAssertPositiveRange(101, 1, 100, 'x')).toThrow(
-        BadRequestException,
-      );
+      expect(() =>
+        service.testAssertPositiveRange(101, 1, 100, 'x'),
+      ).toThrowDomain(400);
     });
 
     it('정수가 아니면 BadRequestException', () => {
-      expect(() => service.testAssertPositiveRange(1.5, 1, 100, 'x')).toThrow(
-        BadRequestException,
-      );
+      expect(() =>
+        service.testAssertPositiveRange(1.5, 1, 100, 'x'),
+      ).toThrowDomain(400);
     });
 
     it('범위 내 정수면 통과', () => {

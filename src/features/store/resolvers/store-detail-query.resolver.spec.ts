@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
@@ -69,9 +67,9 @@ describe('Store Detail Query Resolver (real DB)', () => {
     expect(result.isWishlisted).toBe(true);
   });
 
-  it('storeDetail: 없는 매장은 NotFoundException', async () => {
+  it('storeDetail: 없는 매장은 404', async () => {
     await expect(
       resolver.storeDetail('999999', undefined),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

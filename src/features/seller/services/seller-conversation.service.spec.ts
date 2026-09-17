@@ -1,4 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -84,7 +83,7 @@ describe('SellerConversationService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerConversationMessages(account.id, BigInt(999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 conversation이면 NotFoundException', async () => {
@@ -94,7 +93,7 @@ describe('SellerConversationService (real DB)', () => {
 
       await expect(
         service.sellerConversationMessages(me.account.id, conv.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('자기 conversation의 메시지 목록 반환', async () => {
@@ -128,7 +127,7 @@ describe('SellerConversationService (real DB)', () => {
           bodyFormat: 'TEXT',
           bodyText: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('잘못된 bodyFormat이면 BadRequestException', async () => {
@@ -140,7 +139,7 @@ describe('SellerConversationService (real DB)', () => {
           bodyFormat: 'INVALID' as never,
           bodyText: 'x',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('TEXT 포맷인데 bodyText 없음 → BadRequestException', async () => {
@@ -151,7 +150,7 @@ describe('SellerConversationService (real DB)', () => {
           conversationId: conv.id.toString(),
           bodyFormat: 'TEXT',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('HTML 포맷인데 bodyHtml 없음 → BadRequestException', async () => {
@@ -162,7 +161,7 @@ describe('SellerConversationService (real DB)', () => {
           conversationId: conv.id.toString(),
           bodyFormat: 'HTML',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 TEXT 메시지 전송 + conversation.last_message_at 갱신 + audit log', async () => {

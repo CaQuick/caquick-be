@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { UserOrderQueryResolver } from '@/features/user/resolvers/user-order-query.resolver';
 import { UserOrderService } from '@/features/user/services/user-order.service';
@@ -60,7 +58,7 @@ describe('User Order Resolver (real DB)', () => {
     expect(result.items[0].orderId).toBe(order.id.toString());
   });
 
-  it('Query.myOrder: 타 계정 주문 접근은 NotFoundException이 전파된다', async () => {
+  it('Query.myOrder: 타 계정 주문 접근은 404가 전파된다', async () => {
     const me = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: me.id });
     const other = await createAccount(prisma, { account_type: 'USER' });
@@ -75,6 +73,6 @@ describe('User Order Resolver (real DB)', () => {
         { accountId: me.id.toString() },
         othersOrder.id.toString(),
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

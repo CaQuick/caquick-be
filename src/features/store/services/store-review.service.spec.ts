@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { StoreReviewRepository } from '@/features/store/repositories/store-review.repository';
 import { StoreReviewService } from '@/features/store/services/store-review.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -335,7 +333,7 @@ describe('StoreReviewService (real DB)', () => {
         sort: 'LIKES',
         cursor: 'abc',
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrowDomain(400);
 
     // 자릿수 폭탄: 안전 정수 범위를 벗어난 likeCount는 형식 오류로 거부
     await expect(
@@ -344,7 +342,7 @@ describe('StoreReviewService (real DB)', () => {
         sort: 'LIKES',
         cursor: `${'1'.repeat(400)}:1`,
       }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrowDomain(400);
   });
 
   it('비활성/삭제 매장의 리뷰는 목록·카운트에서 제외한다', async () => {

@@ -1,6 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
-import { INVALID_IMAGE_URL } from '@/features/admin/constants/admin-error-messages';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -146,10 +143,10 @@ describe('AdminStoreService (real DB)', () => {
       const deleted = await createStore(prisma, { deleted_at: new Date() });
       await expect(
         service.adminStore(await admin(), deleted.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.adminStore(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -195,7 +192,7 @@ describe('AdminStoreService (real DB)', () => {
           storeId: '999999',
           isActive: false,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('두 관리자가 동시에 같은 값으로 토글해도 감사는 1건(잠금 뒤 트랜잭션 안에서 판정)', async () => {
@@ -275,7 +272,7 @@ describe('AdminStoreService (real DB)', () => {
           storeId: store.id.toString(),
           regionId: '',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       const row = await prisma.store.findUniqueOrThrow({
         where: { id: store.id },
       });
@@ -297,7 +294,7 @@ describe('AdminStoreService (real DB)', () => {
           storeId: store.id.toString(),
           regionId: (await makeId()).toString(),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('판매자와 같은 규칙: 필수 공백·좌표 형식·길이 초과는 BadRequestException', async () => {
@@ -308,19 +305,19 @@ describe('AdminStoreService (real DB)', () => {
           ...base,
           storeName: '   ',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateStoreBasicInfo(await admin(), {
           ...base,
           longitude: 'east',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminUpdateStoreBasicInfo(await admin(), {
           ...base,
           storePhone: '0'.repeat(31),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('동시 수정의 감사 before는 트랜잭션 안에서 읽은 실제 직전 값이다', async () => {
@@ -357,7 +354,7 @@ describe('AdminStoreService (real DB)', () => {
           storeId: store.id.toString(),
           storeName: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('감사 기록이 실패하면 수정도 롤백된다(같은 트랜잭션)', async () => {
@@ -404,7 +401,7 @@ describe('AdminStoreService (real DB)', () => {
             storeId: store.id.toString(),
             profileImageUrl: url(actor),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
 

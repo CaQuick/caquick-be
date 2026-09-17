@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
@@ -118,15 +116,13 @@ describe('SearchEntryService (real DB)', () => {
     });
 
     it('공백만 있는 검색어는 400', async () => {
-      await expect(service.recordSearch('   ')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.recordSearch('   ')).rejects.toThrowDomain(400);
       expect(await searchEvents()).toHaveLength(0);
     });
 
     it('200자를 넘는 검색어는 400', async () => {
-      await expect(service.recordSearch('a'.repeat(201))).rejects.toThrow(
-        BadRequestException,
+      await expect(service.recordSearch('a'.repeat(201))).rejects.toThrowDomain(
+        400,
       );
     });
   });

@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -74,10 +68,8 @@ describe('UserProfileService (real DB)', () => {
       });
     });
 
-    it('계정이 없으면 UnauthorizedException을 던진다', async () => {
-      await expect(service.me(BigInt(999999))).rejects.toThrow(
-        UnauthorizedException,
-      );
+    it('계정이 없으면 401을 던진다', async () => {
+      await expect(service.me(BigInt(999999))).rejects.toThrowDomain(401);
     });
 
     it('연동된 identity가 없으면 linkedIdentities는 빈 배열이다', async () => {
@@ -215,7 +207,7 @@ describe('UserProfileService (real DB)', () => {
       expect(result.name).toBe('기존이름');
     });
 
-    it('Account.name과 입력 name이 모두 없으면 BadRequestException을 던진다', async () => {
+    it('Account.name과 입력 name이 모두 없으면 400을 던진다', async () => {
       const account = await createAccount(prisma, {
         account_type: 'USER',
         name: null,
@@ -227,10 +219,10 @@ describe('UserProfileService (real DB)', () => {
           nickname: 'newNick',
           name: null,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
-    it('닉네임이 이미 다른 계정에서 사용 중이면 ConflictException을 던진다', async () => {
+    it('닉네임이 이미 다른 계정에서 사용 중이면 409를 던진다', async () => {
       const other = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, {
         account_id: other.id,
@@ -245,19 +237,19 @@ describe('UserProfileService (real DB)', () => {
 
       await expect(
         service.completeOnboarding(me.id, { nickname: 'takenNick' }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
   });
 
   // ─── updateMyProfile ───
   describe('updateMyProfile', () => {
-    it('변경할 필드가 하나도 없으면 BadRequestException을 던진다', async () => {
+    it('변경할 필드가 하나도 없으면 400을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
 
-      await expect(service.updateMyProfile(account.id, {})).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.updateMyProfile(account.id, {}),
+      ).rejects.toThrowDomain(400);
     });
 
     it('birthDate만 단독 업데이트한다', async () => {
@@ -303,7 +295,7 @@ describe('UserProfileService (real DB)', () => {
       expect(result.profile.nickname).toBe('newNick');
     });
 
-    it('닉네임이 다른 계정에서 이미 쓰이면 ConflictException을 던진다', async () => {
+    it('닉네임이 다른 계정에서 이미 쓰이면 409를 던진다', async () => {
       const other = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, {
         account_id: other.id,
@@ -315,7 +307,7 @@ describe('UserProfileService (real DB)', () => {
 
       await expect(
         service.updateMyProfile(me.id, { nickname: 'taken' }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
 
     it('name만 단독 업데이트하면 Account.name이 갱신된다', async () => {
@@ -350,7 +342,7 @@ describe('UserProfileService (real DB)', () => {
       expect(result.name).toBe('홍길동');
     });
 
-    it('name이 빈 문자열이면 BadRequestException', async () => {
+    it('name이 빈 문자열이면 400', async () => {
       const account = await createAccount(prisma, {
         account_type: 'USER',
         name: '구이름',
@@ -359,10 +351,10 @@ describe('UserProfileService (real DB)', () => {
 
       await expect(
         service.updateMyProfile(account.id, { name: '' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
-    it('name이 공백-only이면 BadRequestException', async () => {
+    it('name이 공백-only이면 400', async () => {
       const account = await createAccount(prisma, {
         account_type: 'USER',
         name: '구이름',
@@ -371,7 +363,7 @@ describe('UserProfileService (real DB)', () => {
 
       await expect(
         service.updateMyProfile(account.id, { name: '   ' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('name + nickname 동시 업데이트 시 둘 다 반영된다', async () => {
@@ -436,7 +428,7 @@ describe('UserProfileService (real DB)', () => {
         service.updateMyProfileImage(account.id, {
           profileImageUrl: 'https://evil.example.com/someone-else.jpg',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     // profileImageUrl 형식·길이 검증은 DTO (UpdateMyProfileImageInput) 로 이전됨.
@@ -572,15 +564,13 @@ describe('UserProfileService (real DB)', () => {
       expect(deletedProfile.nickname).toBe(`deleted_${account.id.toString()}`);
     });
 
-    it('삭제된 계정은 이후 me() 호출 시 UnauthorizedException', async () => {
+    it('삭제된 계정은 이후 me() 호출 시 401', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: account.id });
 
       await service.deleteMyAccount(account.id);
 
-      await expect(service.me(account.id)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.me(account.id)).rejects.toThrowDomain(401);
     });
   });
 });

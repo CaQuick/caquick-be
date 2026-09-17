@@ -1,9 +1,6 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
@@ -75,7 +72,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           productId: '999999',
           baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'x.png'),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('처음 호출 시 template 생성, 두 번째 호출 시 같은 product_id의 template 갱신 (upsert)', async () => {
@@ -114,7 +111,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           templateId: '999999',
           isActive: false,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 template이면 NotFoundException', async () => {
@@ -127,7 +124,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           templateId: othersTemplate.id.toString(),
           isActive: false,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('is_active 토글 + audit log STATUS_CHANGE', async () => {
@@ -160,7 +157,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           tokenKey: 'NAME',
           defaultText: 'X',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('tokenId를 줬는데 다른 template 소속이면 NotFoundException', async () => {
@@ -183,7 +180,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           tokenKey: 'Y',
           defaultText: 'y',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('tokenId 없이 호출 → 신규 생성', async () => {
@@ -232,7 +229,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
         service.sellerDeleteProductCustomTextToken(accountId, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('soft-delete + audit log', async () => {
@@ -265,7 +262,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
           templateId: tpl.id.toString(),
           tokenIds: ['1', '2'],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 재정렬', async () => {
@@ -311,7 +308,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
             productId: product.id.toString(),
             baseImageUrl: url(accountId),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
   });

@@ -3,12 +3,10 @@ import { MAX_PRODUCT_IMAGES } from '@/features/seller/constants/seller.constants
 // ── 공통 ──
 
 export const ACCOUNT_NOT_FOUND = 'Account not found.';
-export const INVALID_CURSOR = 'Invalid cursor.';
 export const SELLER_ONLY = 'Only SELLER account is allowed.';
 export const STORE_NOT_FOUND = 'Store not found.';
 export const DUPLICATE_IDS = 'Duplicate ids are not allowed.';
 export const INVALID_TIME_VALUE = 'Invalid time value.';
-export const INVALID_DECIMAL_VALUE = 'Invalid decimal value.';
 export const INVALID_CURRENCY_FORMAT = 'Invalid currency format.';
 
 // ── 상품 ──
@@ -74,6 +72,3 @@ export function idsMismatchError(field: string): string {
 export function invalidIdsError(field: string): string {
   return `Invalid ${field}.`;
 }
-
-export const INVALID_IMAGE_URL =
-  'Image URL must be a publicUrl issued by sellerCreateUploadUrl for this account.';

@@ -21,7 +21,6 @@ import {
   ONLY_ACTIVE_CAN_BE_SUSPENDED,
   ONLY_SUSPENDED_CAN_BE_REINSTATED,
   USER_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSuspendAccountInput } from '@/features/admin/dto/inputs/admin-suspend-account.input';
@@ -65,9 +64,7 @@ export class AdminUserService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,

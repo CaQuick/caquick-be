@@ -13,7 +13,6 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
-  INVALID_IMAGE_URL,
   CUSTOM_TEMPLATE_NOT_FOUND,
   CUSTOM_TEXT_TOKEN_NOT_FOUND,
   idsMismatchError,
@@ -72,7 +71,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       baseImageUrl,
       'PRODUCT_IMAGE',
       ctx.accountId,
-      INVALID_IMAGE_URL,
+      'INVALID_IMAGE_URL',
     );
 
     const row = await this.productRepository.upsertProductCustomTemplate({

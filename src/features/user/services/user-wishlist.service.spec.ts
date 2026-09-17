@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
@@ -127,14 +125,14 @@ describe('UserWishlistService (real DB)', () => {
       expect(row?.deleted_at).toBeNull();
     });
 
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const account = await setupUser();
-      await expect(service.addToWishlist(account.id, '999999')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.addToWishlist(account.id, '999999'),
+      ).rejects.toThrowDomain(404);
     });
 
-    it('비활성 product면 NotFoundException', async () => {
+    it('비활성 product면 404', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, {
@@ -144,10 +142,10 @@ describe('UserWishlistService (real DB)', () => {
 
       await expect(
         service.addToWishlist(account.id, product.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('soft-delete된 product면 NotFoundException', async () => {
+    it('soft-delete된 product면 404', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -158,17 +156,17 @@ describe('UserWishlistService (real DB)', () => {
 
       await expect(
         service.addToWishlist(account.id, product.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('비활성 store에 속한 product면 NotFoundException', async () => {
+    it('비활성 store에 속한 product면 404', async () => {
       const account = await setupUser();
       const store = await createStore(prisma, { is_active: false });
       const product = await createProduct(prisma, { store_id: store.id });
 
       await expect(
         service.addToWishlist(account.id, product.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 

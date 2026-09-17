@@ -1,6 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
-import { INVALID_IMAGE_URL } from '@/features/admin/constants/admin-error-messages';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminBannerService } from '@/features/admin/services/admin-banner.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -175,7 +172,7 @@ describe('AdminBannerService (real DB)', () => {
     it('없거나 삭제된 배너면 NotFoundException', async () => {
       await expect(
         service.adminBanner(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -244,7 +241,7 @@ describe('AdminBannerService (real DB)', () => {
             linkType,
             [field]: '999999',
           }),
-        ).rejects.toThrow(NotFoundException);
+        ).rejects.toThrowDomain(404);
       },
     );
 
@@ -296,7 +293,7 @@ describe('AdminBannerService (real DB)', () => {
           imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
           ...(await makeLink()),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('CATEGORY 지면은 linkType CATEGORY가 아니면 BadRequestException', async () => {
@@ -305,7 +302,7 @@ describe('AdminBannerService (real DB)', () => {
           placement: 'CATEGORY',
           imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('CATEGORY 지면에 EVENT가 아닌 카테고리를 연결하면 BadRequestException', async () => {
@@ -317,7 +314,7 @@ describe('AdminBannerService (real DB)', () => {
           linkType: 'CATEGORY',
           linkCategoryId: style.id.toString(),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('CATEGORY 지면 + EVENT 카테고리 링크는 허용된다', async () => {
@@ -363,7 +360,7 @@ describe('AdminBannerService (real DB)', () => {
             startsAt,
             endsAt,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       },
     );
 
@@ -391,7 +388,7 @@ describe('AdminBannerService (real DB)', () => {
           linkType: 'PRODUCT',
           linkProductId: product.id.toString(),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     // linkType별 필수 값 누락 전수
@@ -411,7 +408,7 @@ describe('AdminBannerService (real DB)', () => {
             linkType,
             ...extra,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       },
     );
 
@@ -433,7 +430,7 @@ describe('AdminBannerService (real DB)', () => {
             linkType,
             ...extra,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       },
     );
 
@@ -472,7 +469,7 @@ describe('AdminBannerService (real DB)', () => {
           bannerId: '999999',
           title: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('전달한 필드만 바꾸고 audit(before/after)을 남긴다', async () => {
@@ -533,7 +530,7 @@ describe('AdminBannerService (real DB)', () => {
           linkType: 'STORE',
           linkStoreId: '999999',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('병합 결과로 검증한다: 기존 startsAt보다 앞선 endsAt만 보내면 BadRequestException', async () => {
@@ -550,7 +547,7 @@ describe('AdminBannerService (real DB)', () => {
           bannerId: banner.id.toString(),
           endsAt: new Date('2026-10-01T00:00:00Z'),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('병합 결과로 검증한다: 링크 NONE인 배너를 CATEGORY 지면으로만 바꾸면 BadRequestException', async () => {
@@ -561,7 +558,7 @@ describe('AdminBannerService (real DB)', () => {
           bannerId: banner.id.toString(),
           placement: 'CATEGORY',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('linkType 미변경 + 같은 타입의 링크 필드 부분 수정은 허용된다', async () => {
@@ -592,7 +589,7 @@ describe('AdminBannerService (real DB)', () => {
           bannerId: banner.id.toString(),
           linkProductId: '1',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('linkType 미변경 + 필수 링크 값을 null로 지우면 BadRequestException', async () => {
@@ -607,7 +604,7 @@ describe('AdminBannerService (real DB)', () => {
           bannerId: banner.id.toString(),
           linkStoreId: null,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -615,7 +612,7 @@ describe('AdminBannerService (real DB)', () => {
     it('존재하지 않으면 NotFoundException', async () => {
       await expect(
         service.adminDeleteBanner(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 NotFoundException', async () => {
@@ -641,9 +638,9 @@ describe('AdminBannerService (real DB)', () => {
       const row = await prisma.banner.findUnique({ where: { id: banner.id } });
       expect(row!.deleted_at).not.toBeNull();
       expect(await auditCount(banner.id, 'DELETE')).toBe(1);
-      await expect(service.adminDeleteBanner(actor, banner.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.adminDeleteBanner(actor, banner.id),
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -669,7 +666,7 @@ describe('AdminBannerService (real DB)', () => {
             placement: 'HOME_MAIN',
             imageUrl: url(actor),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
         expect(await prisma.banner.count()).toBe(0);
       },
     );
@@ -684,7 +681,7 @@ describe('AdminBannerService (real DB)', () => {
             bannerId: banner.id.toString(),
             imageUrl: url(actor),
           }),
-        ).rejects.toThrow(INVALID_IMAGE_URL);
+        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
       },
     );
   });

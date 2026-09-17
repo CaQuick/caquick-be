@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import { RegionService } from '@/features/region/services/region.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -145,13 +143,11 @@ describe('RegionService (real DB)', () => {
       });
     });
 
-    it('존재하지 않는 1차면 NotFoundException', async () => {
-      await expect(service.regions('999999')).rejects.toThrow(
-        NotFoundException,
-      );
+    it('존재하지 않는 1차면 404', async () => {
+      await expect(service.regions('999999')).rejects.toThrowDomain(404);
     });
 
-    it('2차 id를 parentId로 주면 NotFoundException (level 1만 허용)', async () => {
+    it('2차 id를 parentId로 주면 404 (level 1만 허용)', async () => {
       const parent = await createRegion(prisma, { level: 1, slug: 'pp' });
       const child = await createRegion(prisma, {
         level: 2,
@@ -159,15 +155,13 @@ describe('RegionService (real DB)', () => {
         parent_id: parent.id,
       });
 
-      await expect(service.regions(child.id.toString())).rejects.toThrow(
-        NotFoundException,
+      await expect(service.regions(child.id.toString())).rejects.toThrowDomain(
+        404,
       );
     });
 
-    it('유효하지 않은 parentId 문자열이면 BadRequestException', async () => {
-      await expect(service.regions('not-a-number')).rejects.toThrow(
-        BadRequestException,
-      );
+    it('유효하지 않은 parentId 문자열이면 400', async () => {
+      await expect(service.regions('not-a-number')).rejects.toThrowDomain(400);
     });
   });
 

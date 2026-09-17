@@ -7,7 +7,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import { INVALID_DECIMAL_VALUE } from '@/features/store/constants/store-basic-info-error-messages';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -43,7 +42,7 @@ export interface StoreBasicInfoPatch {
 
 /**
  * 전달된 필드만 Prisma update 데이터로 만든다(DI-free 순수 함수).
- * 길이 초과·필수 공백·좌표 형식 오류는 BadRequestException.
+ * 길이 초과·필수 공백·좌표 형식 오류는 400(DomainException).
  */
 export function buildStoreBasicInfoUpdateData(
   input: StoreBasicInfoPatch,
@@ -96,20 +95,12 @@ export function buildStoreBasicInfoUpdateData(
       : {}),
     ...(input.latitude !== undefined
       ? {
-          latitude: parseDecimalOrNull(
-            input.latitude,
-            INVALID_DECIMAL_VALUE,
-            LATITUDE_RANGE,
-          ),
+          latitude: parseDecimalOrNull(input.latitude, LATITUDE_RANGE),
         }
       : {}),
     ...(input.longitude !== undefined
       ? {
-          longitude: parseDecimalOrNull(
-            input.longitude,
-            INVALID_DECIMAL_VALUE,
-            LONGITUDE_RANGE,
-          ),
+          longitude: parseDecimalOrNull(input.longitude, LONGITUDE_RANGE),
         }
       : {}),
     ...(input.mapProvider !== undefined && input.mapProvider !== null

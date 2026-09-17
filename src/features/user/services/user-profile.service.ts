@@ -1,9 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import {
   MAX_NICKNAME_LENGTH,
   MIN_NICKNAME_LENGTH,
@@ -46,11 +43,11 @@ export class UserProfileService extends UserBaseService {
     const name = this.normalizeName(input.name);
 
     if (!account.name && !name) {
-      throw new BadRequestException('Name is required.');
+      throw new DomainException('NAME_REQUIRED');
     }
 
     const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
-    if (isTaken) throw new ConflictException('Nickname already exists.');
+    if (isTaken) throw new DomainException('NICKNAME_TAKEN');
 
     await this.repo.completeOnboarding({
       accountId,
@@ -76,7 +73,7 @@ export class UserProfileService extends UserBaseService {
     const hasPhoneNumber = input.phoneNumber !== undefined;
 
     if (!hasNickname && !hasName && !hasBirthDate && !hasPhoneNumber) {
-      throw new BadRequestException('No fields to update.');
+      throw new DomainException('NO_FIELDS_TO_UPDATE');
     }
 
     const nickname = hasNickname
@@ -85,7 +82,7 @@ export class UserProfileService extends UserBaseService {
 
     if (nickname) {
       const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
-      if (isTaken) throw new ConflictException('Nickname already exists.');
+      if (isTaken) throw new DomainException('NICKNAME_TAKEN');
     }
 
     // figma 명세: 이름은 필수값. DTO 가 trim + 빈 문자열 거절을 담당하지만,
@@ -94,7 +91,7 @@ export class UserProfileService extends UserBaseService {
     if (hasName) {
       const normalized = this.normalizeName(input.name);
       if (!normalized) {
-        throw new BadRequestException('Name cannot be empty.');
+        throw new DomainException('NAME_EMPTY');
       }
       name = normalized;
     }
@@ -135,7 +132,7 @@ export class UserProfileService extends UserBaseService {
         accountId,
       )
     ) {
-      throw new BadRequestException('Invalid profile image URL.');
+      throw new DomainException('INVALID_PROFILE_IMAGE_URL');
     }
 
     await this.repo.updateProfileImage({

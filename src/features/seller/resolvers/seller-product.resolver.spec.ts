@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
@@ -107,7 +105,7 @@ describe('Seller Product Resolvers (real DB)', () => {
         { accountId: me.account.id.toString() },
         othersProduct.id.toString(),
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
   it('Mutation.sellerCreateOptionGroup: option 서비스 예외(BadRequest) 전파', async () => {
@@ -125,7 +123,7 @@ describe('Seller Product Resolvers (real DB)', () => {
         { accountId: account.id.toString() },
         badInput,
       ),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrowDomain(400);
   });
 
   /**

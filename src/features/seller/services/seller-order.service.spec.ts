@@ -1,9 +1,3 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
@@ -71,7 +65,7 @@ describe('SellerOrderService (real DB)', () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.sellerOrder(userAccount.id, BigInt(10)),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
@@ -143,7 +137,7 @@ describe('SellerOrderService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerOrderList(account.id, { status: 'INVALID' as never }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('limit 초과 시 nextCursor 반환', async () => {
@@ -161,7 +155,7 @@ describe('SellerOrderService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerOrder(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 주문은 NotFoundException', async () => {
@@ -171,7 +165,7 @@ describe('SellerOrderService (real DB)', () => {
 
       await expect(
         service.sellerOrder(me.account.id, othersOrder.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('본인 매장 주문의 상세를 items/status_histories 포함하여 반환', async () => {
@@ -226,9 +220,9 @@ describe('SellerOrderService (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      await expect(service.sellerOrder(account.id, order.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.sellerOrder(account.id, order.id),
+      ).rejects.toThrowDomain(404);
       const list = await service.sellerOrderList(account.id);
       expect(list.items).toHaveLength(0);
     });
@@ -243,7 +237,7 @@ describe('SellerOrderService (real DB)', () => {
           toStatus: 'CONFIRMED',
           note: null,
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('상태 전이가 잘못되면 BadRequestException (SUBMITTED → MADE 차단)', async () => {
@@ -255,7 +249,7 @@ describe('SellerOrderService (real DB)', () => {
           toStatus: 'MADE',
           note: null,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('CANCELED 전환 시 note 누락되면 BadRequestException', async () => {
@@ -267,7 +261,7 @@ describe('SellerOrderService (real DB)', () => {
           toStatus: 'CANCELED',
           note: null,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 상태 전이: SUBMITTED → CONFIRMED, status_history row 생성 확인', async () => {

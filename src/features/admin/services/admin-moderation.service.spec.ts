@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -149,7 +147,7 @@ describe('AdminModerationService (real DB)', () => {
     it('없는 신고면 NotFoundException', async () => {
       await expect(
         service.adminReviewReport(await admin(), BigInt(999_999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -275,16 +273,16 @@ describe('AdminModerationService (real DB)', () => {
       const list = await service.adminReviewReports(actor);
       expect(list.items.map((r) => r.id)).toEqual([other.id.toString()]);
       expect(list.totalCount).toBe(1);
-      await expect(service.adminReviewReport(actor, orphan.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.adminReviewReport(actor, orphan.id),
+      ).rejects.toThrowDomain(404);
       await expect(
         service.adminResolveReviewReport(actor, {
           reportId: orphan.id.toString(),
           action: 'DELETE_TARGET',
           note: 'x',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       expect(
         (
           await prisma.reviewReport.findUniqueOrThrow({
@@ -301,13 +299,13 @@ describe('AdminModerationService (real DB)', () => {
           reportId: report.id.toString(),
           action: 'REJECT',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.adminResolveReviewReport(await admin(), {
           reportId: '999999',
           action: 'REJECT',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('이미 삭제된 대상의 신고도 처리된다(대상 삭제 감사는 없음)', async () => {
@@ -351,7 +349,7 @@ describe('AdminModerationService (real DB)', () => {
       const rejected = results.find(
         (r) => r.status === 'rejected',
       ) as PromiseRejectedResult;
-      expect(rejected.reason).toBeInstanceOf(BadRequestException);
+      expect(rejected.reason).toThrowDomain(400);
       const rows = await prisma.reviewReport.findMany({
         where: { id: { in: [r1.id, r2.id] } },
       });
@@ -414,7 +412,7 @@ describe('AdminModerationService (real DB)', () => {
           reviewId: review.id.toString(),
           reason: '광고',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('리뷰 강제 삭제는 함께 내려간 댓글의 미처리 신고도 닫는다', async () => {
@@ -489,7 +487,7 @@ describe('AdminModerationService (real DB)', () => {
       expect(reviewDeleted).toEqual({ status: 'fulfilled', value: true });
       // 리뷰 삭제가 먼저면 댓글은 이미 내려가 NotFoundException
       if (commentDeleted.status === 'rejected') {
-        expect(commentDeleted.reason).toBeInstanceOf(NotFoundException);
+        expect(commentDeleted.reason).toThrowDomain(404);
       }
       expect(
         (

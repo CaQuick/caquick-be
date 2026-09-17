@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewQueryResolver } from '@/features/product/resolvers/product-review-query.resolver';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
@@ -124,9 +122,9 @@ describe('ProductReview Query Resolver (real DB)', () => {
     expect(result.items[0].isMine).toBe(true);
   });
 
-  it('reviewComments: 없는 리뷰는 NotFoundException', async () => {
+  it('reviewComments: 없는 리뷰는 404', async () => {
     await expect(
       resolver.reviewComments({ reviewId: '999999' }, undefined),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

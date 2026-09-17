@@ -24,7 +24,6 @@ import {
   INVALID_DAY_OF_WEEK,
   OPEN_CLOSE_TIME_REQUIRED,
   SPECIAL_CLOSURE_NOT_FOUND,
-  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAY_OF_WEEK,
@@ -70,9 +69,7 @@ export class SellerStoreHoursService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor
-        ? parseIdCursor(input.cursor, INVALID_CURSOR)
-        : null,
+      cursor: input?.cursor ? parseIdCursor(input.cursor) : null,
     });
 
     const [rows, totalCount] = await Promise.all([

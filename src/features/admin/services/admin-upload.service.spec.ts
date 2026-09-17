@@ -1,5 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
-
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminUploadMutationResolver } from '@/features/admin/resolvers/admin-upload-mutation.resolver';
 import { AdminUploadService } from '@/features/admin/services/admin-upload.service';
@@ -83,7 +81,7 @@ describe('AdminUploadService (real DB)', () => {
         contentType: 'image/png',
         contentLength: 1,
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrowDomain(403);
   });
 
   it('Mutation.adminCreateUploadUrl 배선', async () => {

@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { parseAccountId } from '@/global/auth/parse-account-id';
 import type { JwtUser } from '@/global/auth/types/jwt-payload.type';
 
@@ -20,29 +18,31 @@ describe('parseAccountId', () => {
     expect(parseAccountId(user('0'))).toBe(0n);
   });
 
-  it('유효하지 않은 문자열이면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user('abc'))).toThrow(BadRequestException);
-    expect(() => parseAccountId(user('abc'))).toThrow('Invalid account id.');
+  it('유효하지 않은 문자열이면 400을 던진다', () => {
+    expect(() => parseAccountId(user('abc'))).toThrowDomain(400);
+    expect(() => parseAccountId(user('abc'))).toThrowDomain(
+      'INVALID_ACCOUNT_ID',
+    );
   });
 
-  it('소수점이 포함되면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user('1.5'))).toThrow(BadRequestException);
+  it('소수점이 포함되면 400을 던진다', () => {
+    expect(() => parseAccountId(user('1.5'))).toThrowDomain(400);
   });
 
-  it('빈 문자열이면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user(''))).toThrow(BadRequestException);
-    expect(() => parseAccountId(user('   '))).toThrow(BadRequestException);
+  it('빈 문자열이면 400을 던진다', () => {
+    expect(() => parseAccountId(user(''))).toThrowDomain(400);
+    expect(() => parseAccountId(user('   '))).toThrowDomain(400);
   });
 
-  it('음수이면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user('-1'))).toThrow(BadRequestException);
+  it('음수이면 400을 던진다', () => {
+    expect(() => parseAccountId(user('-1'))).toThrowDomain(400);
   });
 
-  it('undefined이면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user(undefined))).toThrow(BadRequestException);
+  it('undefined이면 400을 던진다', () => {
+    expect(() => parseAccountId(user(undefined))).toThrowDomain(400);
   });
 
-  it('null이면 BadRequestException을 던진다', () => {
-    expect(() => parseAccountId(user(null))).toThrow(BadRequestException);
+  it('null이면 400을 던진다', () => {
+    expect(() => parseAccountId(user(null))).toThrowDomain(400);
   });
 });

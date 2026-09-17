@@ -1,9 +1,3 @@
-import {
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
@@ -67,14 +61,14 @@ describe('SellerProductQueryService (real DB)', () => {
     it('계정이 없으면 UnauthorizedException', async () => {
       await expect(
         service.sellerProduct(BigInt(99999), BigInt(1)),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('판매자 계정이 아니면 ForbiddenException', async () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.sellerProduct(userAccount.id, BigInt(1)),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
@@ -156,7 +150,7 @@ describe('SellerProductQueryService (real DB)', () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerProduct(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('다른 매장 상품이면 NotFoundException', async () => {
@@ -166,7 +160,7 @@ describe('SellerProductQueryService (real DB)', () => {
 
       await expect(
         service.sellerProduct(me.account.id, othersProduct.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('본인 상품 상세를 반환한다', async () => {

@@ -1,8 +1,3 @@
-import {
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
@@ -77,10 +72,10 @@ describe('ConversationSubscriptionService (real DB)', () => {
       ).resolves.toBeDefined();
       await expect(
         service.subscribeConversationMessages(stranger.id, id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.subscribeConversationMessages(buyer.id, '999999'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('구독 중이면 구매자 전송 이벤트를 실제로 수신한다(발행 경로 통합)', async () => {
@@ -121,10 +116,10 @@ describe('ConversationSubscriptionService (real DB)', () => {
 
       await expect(
         service.subscribeMyConversationUpdates(BigInt(999999)),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       await expect(
         service.subscribeMyConversationUpdates(seller.id),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
 
       const iterator = await service.subscribeMyConversationUpdates(buyer.id);
       const pending = iterator.next();
@@ -157,7 +152,7 @@ describe('ConversationSubscriptionService (real DB)', () => {
       // 매장 없는 계정은 구독 불가
       await expect(
         service.subscribeSellerConversationUpdates(buyer.id),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
 
       const iterator = await service.subscribeSellerConversationUpdates(
         seller.id,

@@ -1,5 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
@@ -143,12 +141,12 @@ describe('ProductSearchService (real DB)', () => {
     });
 
     it('빈 검색어·길이 초과는 400', async () => {
-      await expect(service.searchProducts({ keyword: '  ' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.searchProducts({ keyword: '  ' }),
+      ).rejects.toThrowDomain(400);
       await expect(
         service.searchProducts({ keyword: 'a'.repeat(201) }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('결과가 없으면 빈 커넥션', async () => {
@@ -245,7 +243,7 @@ describe('ProductSearchService (real DB)', () => {
           minPrice: 50000,
           maxPrice: 10000,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('regionIds 지정 시 해당 지역 매장 상품만', async () => {

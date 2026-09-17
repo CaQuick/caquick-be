@@ -1,5 +1,3 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -105,7 +103,7 @@ describe('SellerUploadService (real DB)', () => {
         contentType: 'image/png',
         contentLength: 1,
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrowDomain(403);
   });
 
   it('매장이 없는 판매자면 NotFoundException', async () => {
@@ -116,7 +114,7 @@ describe('SellerUploadService (real DB)', () => {
         contentType: 'image/png',
         contentLength: 1,
       }),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
   it('Mutation.sellerCreateUploadUrl 배선', async () => {

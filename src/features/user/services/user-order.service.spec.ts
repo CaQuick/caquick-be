@@ -1,5 +1,3 @@
-import { NotFoundException } from '@nestjs/common';
-
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { UserOrderService } from '@/features/user/services/user-order.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -350,14 +348,14 @@ describe('UserOrderService (real DB)', () => {
       });
     });
 
-    it('존재하지 않는 orderId면 NotFoundException', async () => {
+    it('존재하지 않는 orderId면 404', async () => {
       const account = await setupUser();
       await expect(
         service.getMyOrder(account.id, BigInt(999999)),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('다른 계정의 orderId는 NotFoundException으로 접근 차단', async () => {
+    it('다른 계정의 orderId는 404로 접근 차단', async () => {
       const me = await setupUser();
       const other = await setupUser();
       const othersOrder = await createOrder(prisma, {
@@ -365,9 +363,9 @@ describe('UserOrderService (real DB)', () => {
         status: 'SUBMITTED',
       });
 
-      await expect(service.getMyOrder(me.id, othersOrder.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.getMyOrder(me.id, othersOrder.id),
+      ).rejects.toThrowDomain(404);
     });
 
     it('PICKED_UP 상태면서 리뷰 미작성 아이템은 canWriteReview=true', async () => {

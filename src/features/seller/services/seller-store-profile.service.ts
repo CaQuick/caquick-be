@@ -4,10 +4,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  INVALID_IMAGE_URL,
-  STORE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
+import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -51,7 +48,7 @@ export class SellerStoreProfileService extends SellerBaseService {
         data.profile_image_url,
         'STORE_IMAGE',
         ctx.accountId,
-        INVALID_IMAGE_URL,
+        'INVALID_IMAGE_URL',
       );
     }
     const updated = await this.repo.updateStore({

@@ -1,5 +1,3 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
@@ -275,10 +273,10 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       await expect(
         service.storePickupCalendar(store.id, '2026-13'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.storePickupCalendar(store.id, '202609'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('DB date 표현 범위 밖 연도는 거절한다', async () => {
@@ -287,19 +285,19 @@ describe('StorePickupScheduleService (real DB)', () => {
       // 0~99년은 Date.UTC가 1900년대로 매핑해 엉뚱한 세기를 반환하므로 차단
       await expect(
         service.storePickupCalendar(store.id, '0000-01'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // MySQL DATE 하한(1000-01-01) 미만
       await expect(
         service.storePickupCalendar(store.id, '0999-01'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 1000-01은 KST 월 시작 경계(-9h)가 0999-12-31T15:00Z로 DATETIME 하한을 밑돈다
       await expect(
         service.storePickupCalendar(store.id, '1000-01'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 9999-12는 익월 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
         service.storePickupCalendar(store.id, '9999-12'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('없거나 비활성 매장은 NOT_FOUND다', async () => {
@@ -307,10 +305,10 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       await expect(
         service.storePickupCalendar(999999n, '2026-09'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.storePickupCalendar(inactive.id, '2026-09'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
@@ -422,10 +420,10 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       await expect(
         service.storePickupTimeSlots(store.id, '2026-09-32'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.storePickupTimeSlots(store.id, '20260918'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('DB date 표현 범위 밖 연도는 거절한다', async () => {
@@ -434,11 +432,11 @@ describe('StorePickupScheduleService (real DB)', () => {
       // 9999-12-31은 익일 상한 계산이 DATE 상한(9999-12-31)을 넘는다
       await expect(
         service.storePickupTimeSlots(store.id, '9999-12-31'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 1000-01-01은 KST 자정 경계(-9h)가 DATETIME 하한을 밑돈다
       await expect(
         service.storePickupTimeSlots(store.id, '1000-01-01'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('없거나 비활성 매장은 NOT_FOUND다', async () => {
@@ -446,10 +444,10 @@ describe('StorePickupScheduleService (real DB)', () => {
 
       await expect(
         service.storePickupTimeSlots(999999n, '2026-09-18'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.storePickupTimeSlots(inactive.id, '2026-09-18'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 

@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -345,7 +344,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
       ).rejects.toThrow('OIDC session is missing.');
