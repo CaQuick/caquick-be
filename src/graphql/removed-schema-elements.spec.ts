@@ -14,7 +14,13 @@ const REMOVED_OUTPUT_FIELDS: Array<[type: string, field: string, pr: string]> =
     ['MyPageCounts', 'couponCount', '플랜 03'],
     ['ViewerCounts', 'cartItemCount', '플랜 03'],
   ];
-const REMOVED_TYPES: Array<[type: string, pr: string]> = [];
+const REMOVED_TYPES: Array<[type: string, pr: string]> = [
+  ['SellerCursorInput', '플랜 06'],
+  ['AdminCursorInput', '플랜 06'],
+  ['SellerConversationListInput', '플랜 06'],
+  ['MyConversationsInput', '플랜 06'],
+  ['ConversationMessagesInput', '플랜 06'],
+];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]
 > = [];

@@ -1,8 +1,8 @@
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-import { AdminCursorInput } from '@/features/admin/dto/inputs/admin-cursor.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 
-export class AdminReviewCommentListInput extends AdminCursorInput {
+export class AdminReviewCommentListInput extends CursorInput {
   @IsOptional()
   @IsString()
   reviewId?: string;

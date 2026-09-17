@@ -5,8 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -16,17 +22,13 @@ import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import {
   CANCELLATION_NOTE_REQUIRED,
   ORDER_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/seller/constants/seller-error-messages';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
-  SellerCursorConnection,
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
 } from '@/features/seller/types/seller-output.type';
@@ -79,12 +81,14 @@ export class SellerOrderService extends SellerBaseService {
   async sellerOrderList(
     accountId: bigint,
     input?: SellerOrderListInput,
-  ): Promise<SellerCursorConnection<SellerOrderSummaryOutput>> {
+  ): Promise<CursorConnection<SellerOrderSummaryOutput>> {
     const ctx = await this.requireSellerContext(accountId);
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
     const filters = {
@@ -106,7 +110,7 @@ export class SellerOrderService extends SellerBaseService {
       this.orderRepository.countOrdersByStore(filters),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toOrderSummaryOutput(row)),
       nextCursor: paged.nextCursor,

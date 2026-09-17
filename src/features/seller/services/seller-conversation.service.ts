@@ -6,11 +6,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import type { CursorInput } from '@/common/dto/inputs/cursor.input';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
   parseTimestampIdCursor,
+  parseIdCursor,
 } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+  sliceCursorPage,
+  toCursorConnection,
+} from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -33,19 +42,12 @@ import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
 } from '@/features/seller/constants/seller.constants';
-import type { SellerConversationListInput } from '@/features/seller/dto/inputs/seller-conversation-list.input';
-import type { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
-  SellerCursorConnection,
 } from '@/features/seller/types/seller-output.type';
 import {
   AuditActionType,
@@ -69,8 +71,8 @@ export class SellerConversationService extends SellerBaseService {
   /** 정렬 키 (updated_at, id)를 그대로 커서에 담는다. 근거는 repository 쪽 주석. */
   async sellerConversations(
     accountId: bigint,
-    input?: SellerConversationListInput,
-  ): Promise<SellerCursorConnection<SellerConversationOutput>> {
+    input?: CursorInput,
+  ): Promise<CursorConnection<SellerConversationOutput>> {
     const ctx = await this.requireSellerContext(accountId);
     const limit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
     const cursor = input?.cursor
@@ -88,25 +90,19 @@ export class SellerConversationService extends SellerBaseService {
       this.conversationRepository.countConversationsByStore(ctx.storeId),
     ]);
 
-    const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items[items.length - 1];
-    return {
-      items: items.map((row) => this.toConversationOutput(row)),
-      nextCursor:
-        hasMore && last
-          ? buildTimestampIdCursor(last.updated_at, last.id)
-          : null,
-      hasMore,
-      totalCount,
-    };
+    const page = sliceCursorPage(rows, limit, (last) =>
+      buildTimestampIdCursor(last.updated_at, last.id),
+    );
+    return toCursorConnection(page, totalCount, (row) =>
+      this.toConversationOutput(row),
+    );
   }
 
   async sellerConversationMessages(
     accountId: bigint,
     conversationId: bigint,
-    input?: SellerCursorInput,
-  ): Promise<SellerCursorConnection<SellerConversationMessageOutput>> {
+    input?: CursorInput,
+  ): Promise<CursorConnection<SellerConversationMessageOutput>> {
     const ctx = await this.requireSellerContext(accountId);
     const conversation =
       await this.conversationRepository.findConversationByIdAndStore({
@@ -117,7 +113,9 @@ export class SellerConversationService extends SellerBaseService {
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
 
     const [rows, totalCount] = await Promise.all([
@@ -129,7 +127,7 @@ export class SellerConversationService extends SellerBaseService {
       this.conversationRepository.countConversationMessages(conversationId),
     ]);
 
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map((row) => this.toConversationMessageOutput(row)),
       nextCursor: paged.nextCursor,

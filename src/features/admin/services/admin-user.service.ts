@@ -6,11 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  nextCursorOf,
-  normalizeCursorInput,
-} from '@/common/utils/id-cursor-page';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+} from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
   ACCOUNT_NOT_FOUND,
@@ -19,6 +21,7 @@ import {
   ONLY_ACTIVE_CAN_BE_SUSPENDED,
   ONLY_SUSPENDED_CAN_BE_REINSTATED,
   USER_NOT_FOUND,
+  INVALID_CURSOR,
 } from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSuspendAccountInput } from '@/features/admin/dto/inputs/admin-suspend-account.input';
@@ -28,7 +31,6 @@ import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminUserOutput } from '@/features/admin/services/admin-user-mappers.helper';
 import type {
   AdminAccountStatusResultOutput,
-  AdminCursorConnection,
   AdminUserOutput,
 } from '@/features/admin/types/admin-output.type';
 import {
@@ -59,11 +61,13 @@ export class AdminUserService extends AdminBaseService {
   async adminUsers(
     accountId: bigint,
     input?: AdminUserListInput,
-  ): Promise<AdminCursorConnection<AdminUserOutput>> {
+  ): Promise<CursorConnection<AdminUserOutput>> {
     await this.requireAdminContext(accountId);
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
-      cursor: input?.cursor ? parseId(input.cursor) : null,
+      cursor: input?.cursor
+        ? parseIdCursor(input.cursor, INVALID_CURSOR)
+        : null,
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
@@ -74,7 +78,7 @@ export class AdminUserService extends AdminBaseService {
       this.repo.listUserAccounts({ ...filter, ...normalized }),
       this.repo.countUserAccounts(filter),
     ]);
-    const paged = nextCursorOf(rows, normalized.limit);
+    const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
       items: paged.items.map(toAdminUserOutput),
       totalCount,

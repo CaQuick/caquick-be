@@ -100,6 +100,16 @@ export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
 const adminReviewCommentInclude = { ...authorInclude } as const;
 
 /** 감사 로그 행 + 행위자 계정 종류(AuditLog에는 FK가 없어 별도 조회로 붙인다). */
+export interface AdminAuditLogFilter {
+  actorAccountId?: bigint;
+  storeId?: bigint;
+  targetType?: AuditTargetType;
+  targetId?: bigint;
+  action?: AuditActionType;
+  fromCreatedAt?: Date;
+  toCreatedAt?: Date;
+}
+
 export type AdminAuditLogRow = Prisma.AuditLogGetPayload<
   Record<string, never>
 > & {
@@ -1886,35 +1896,37 @@ export class AdminRepository {
 
   // ── 감사 로그 전역 ──
 
-  async listAuditLogs(args: {
-    actorAccountId?: bigint;
-    storeId?: bigint;
-    targetType?: AuditTargetType;
-    targetId?: bigint;
-    action?: AuditActionType;
-    fromCreatedAt?: Date;
-    toCreatedAt?: Date;
-    limit: number;
-    cursor?: bigint;
-  }): Promise<AdminAuditLogRow[]> {
+  private auditLogWhere(args: AdminAuditLogFilter): Prisma.AuditLogWhereInput {
+    return {
+      ...(args.actorAccountId !== undefined
+        ? { actor_account_id: args.actorAccountId }
+        : {}),
+      ...(args.storeId !== undefined ? { store_id: args.storeId } : {}),
+      ...(args.targetType ? { target_type: args.targetType } : {}),
+      ...(args.targetId !== undefined ? { target_id: args.targetId } : {}),
+      ...(args.action ? { action: args.action } : {}),
+      ...(args.fromCreatedAt || args.toCreatedAt
+        ? {
+            created_at: {
+              ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
+              ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  async countAuditLogs(args: AdminAuditLogFilter): Promise<number> {
+    return this.prisma.auditLog.count({ where: this.auditLogWhere(args) });
+  }
+
+  async listAuditLogs(
+    args: AdminAuditLogFilter & { limit: number; cursor?: bigint },
+  ): Promise<AdminAuditLogRow[]> {
     const rows = await this.prisma.auditLog.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
-        ...(args.actorAccountId !== undefined
-          ? { actor_account_id: args.actorAccountId }
-          : {}),
-        ...(args.storeId !== undefined ? { store_id: args.storeId } : {}),
-        ...(args.targetType ? { target_type: args.targetType } : {}),
-        ...(args.targetId !== undefined ? { target_id: args.targetId } : {}),
-        ...(args.action ? { action: args.action } : {}),
-        ...(args.fromCreatedAt || args.toCreatedAt
-          ? {
-              created_at: {
-                ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
-                ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
-              },
-            }
-          : {}),
+        ...this.auditLogWhere(args),
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,

@@ -1,13 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
-import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
-  SellerCursorConnection,
 } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
@@ -29,8 +29,8 @@ export class SellerConversationQueryResolver {
   @Query('sellerConversations')
   sellerConversations(
     @CurrentUser() user: JwtUser,
-    @Args('input', { nullable: true }) input?: SellerCursorInput,
-  ): Promise<SellerCursorConnection<SellerConversationOutput>> {
+    @Args('input', { nullable: true }) input?: CursorInput,
+  ): Promise<CursorConnection<SellerConversationOutput>> {
     const accountId = parseAccountId(user);
     return this.conversationService.sellerConversations(accountId, input);
   }
@@ -39,8 +39,8 @@ export class SellerConversationQueryResolver {
   sellerConversationMessages(
     @CurrentUser() user: JwtUser,
     @Args('conversationId') conversationId: string,
-    @Args('input', { nullable: true }) input?: SellerCursorInput,
-  ): Promise<SellerCursorConnection<SellerConversationMessageOutput>> {
+    @Args('input', { nullable: true }) input?: CursorInput,
+  ): Promise<CursorConnection<SellerConversationMessageOutput>> {
     const accountId = parseAccountId(user);
     return this.conversationService.sellerConversationMessages(
       accountId,

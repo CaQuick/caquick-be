@@ -1,9 +1,9 @@
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import { MAX_KEYWORD_LENGTH } from '@/features/admin/constants/admin.constants';
-import { AdminCursorInput } from '@/features/admin/dto/inputs/admin-cursor.input';
 
-export class AdminReviewListInput extends AdminCursorInput {
+export class AdminReviewListInput extends CursorInput {
   @IsOptional()
   @IsString()
   @MaxLength(MAX_KEYWORD_LENGTH)

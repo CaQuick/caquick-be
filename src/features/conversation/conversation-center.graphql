@@ -1,22 +1,15 @@
 extend type Query {
   """알림센터 대화 탭 목록(구매자). 마지막 메시지 최신순. 로그인 필수. 본인 데이터만 대상이 된다."""
-  myConversations(input: MyConversationsInput): MyConversationConnection!
+  myConversations(input: CursorInput): MyConversationConnection!
   """
   채팅 상세 메시지 목록(최신순 키셋 커서). 구매자 본인 대화만 조회 가능하며,
   조회 시 last_read_at을 이번에 반환한 최신 메시지의 작성 시각까지 끌어올린다
   (안읽음 배지 해소 부수효과). 반환할 메시지가 없으면 갱신하지 않는다.
   로그인 필수.
   """
-  conversationMessages(conversationId: ID!, input: ConversationMessagesInput): ConversationMessageConnection!
+  conversationMessages(conversationId: ID!, input: CursorInput): ConversationMessageConnection!
 }
 
-"""대화 목록 조회 입력"""
-input MyConversationsInput {
-  """이전 응답의 nextCursor(불투명 토큰). 미지정 시 첫 페이지"""
-  cursor: String
-  """조회 개수(최대 50)"""
-  limit: Int = 20
-}
 
 """대화 목록 응답"""
 type MyConversationConnection {
@@ -47,13 +40,6 @@ type MyConversationItem {
   unreadCount: Int!
 }
 
-"""채팅 상세 메시지 조회 입력"""
-input ConversationMessagesInput {
-  """이전 응답의 nextCursor(마지막 메시지 ID). 미지정 시 최신 페이지"""
-  cursor: String
-  """조회 개수(최대 50)"""
-  limit: Int = 30
-}
 
 """채팅 상세 메시지 응답(최신순)"""
 type ConversationMessageConnection {

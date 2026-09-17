@@ -29,7 +29,7 @@ describe('SellerDateCursorInput', () => {
     expect(errors[0].property).toBe('fromDate');
   });
 
-  it('SellerCursorInput 의 limit 검증 상속', async () => {
+  it('CursorInput 의 limit 검증 상속', async () => {
     const dto = build({ limit: 101 });
     const errors = await validate(dto);
     expect(errors[0].property).toBe('limit');

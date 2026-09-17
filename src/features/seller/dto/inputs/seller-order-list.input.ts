@@ -1,6 +1,6 @@
 import { IsDate, IsIn, IsOptional, IsString } from 'class-validator';
 
-import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 
 const ORDER_STATUSES = [
   'SUBMITTED',
@@ -11,7 +11,7 @@ const ORDER_STATUSES = [
 ] as const;
 type SellerOrderStatusInput = (typeof ORDER_STATUSES)[number];
 
-export class SellerOrderListInput extends SellerCursorInput {
+export class SellerOrderListInput extends CursorInput {
   @IsOptional()
   @IsIn(ORDER_STATUSES)
   status?: SellerOrderStatusInput;

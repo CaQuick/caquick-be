@@ -1,3 +1,5 @@
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+
 /**
  * product-reviews resolver 반환용 도메인 출력 타입.
  * SDL(product-reviews.graphql)의 타입과 필드 일치.
@@ -29,13 +31,9 @@ export interface ProductReview {
   createdAt: Date;
 }
 
-export interface ProductReviewConnection {
-  items: ProductReview[];
-  totalCount: number;
+export type ProductReviewConnection = CursorConnection<ProductReview> & {
   photoTotalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+};
 
 export interface ReviewDetailProduct {
   productId: string;
@@ -62,9 +60,4 @@ export interface ReviewCommentItem {
   createdAt: Date;
 }
 
-export interface ReviewCommentConnection {
-  items: ReviewCommentItem[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type ReviewCommentConnection = CursorConnection<ReviewCommentItem>;

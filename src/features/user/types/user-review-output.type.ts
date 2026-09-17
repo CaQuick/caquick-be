@@ -1,3 +1,5 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+
 export interface MyReviewMedia {
   mediaType: 'IMAGE' | 'VIDEO';
   mediaUrl: string;
@@ -18,11 +20,7 @@ export interface MyReview {
   createdAt: Date;
 }
 
-export interface MyReviewConnection {
-  items: MyReview[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type MyReviewConnection = OffsetConnection<MyReview>;
 
 export interface MyReviewableOrderItem {
   orderItemId: string;
@@ -34,11 +32,8 @@ export interface MyReviewableOrderItem {
   pickedUpAt: Date | null;
 }
 
-export interface MyReviewableOrderItemConnection {
-  items: MyReviewableOrderItem[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type MyReviewableOrderItemConnection =
+  OffsetConnection<MyReviewableOrderItem>;
 
 export interface MyReviewOrNull {
   review: MyReview | null;

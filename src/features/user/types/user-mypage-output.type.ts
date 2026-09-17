@@ -1,3 +1,4 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyPageCounts {
@@ -27,11 +28,8 @@ export interface RecentViewedProductSummary {
   isWishlisted: boolean;
 }
 
-export interface RecentViewedProductConnection {
-  items: RecentViewedProductSummary[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type RecentViewedProductConnection =
+  OffsetConnection<RecentViewedProductSummary>;
 
 export interface MyPageOverview {
   counts: MyPageCounts;

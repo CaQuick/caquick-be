@@ -58,7 +58,7 @@ describe('AdminAuditService (real DB)', () => {
     });
   }
 
-  it('전역 최신순, 행위자 종류 동반, before/after는 JSON 문자열, totalCount 없음', async () => {
+  it('전역 최신순, 행위자 종류 동반, before/after는 JSON 문자열, totalCount 동반', async () => {
     const seller = await createAccount(prisma, { account_type: 'SELLER' });
     const actor = await admin();
     const l1 = await log({ actor: seller.id });
@@ -74,7 +74,7 @@ describe('AdminAuditService (real DB)', () => {
     expect(result.items[1].actorAccountType).toBe('SELLER');
     expect(result.items[1].beforeJson).toBe('{"a":1}');
     expect(result.items[0].afterJson).toBeNull();
-    expect(result.totalCount).toBeUndefined();
+    expect(result.totalCount).toBe(2);
   });
 
   // 필터 축 전수

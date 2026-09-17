@@ -1,13 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { SellerCursorInput } from '@/features/seller/dto/inputs/seller-cursor.input';
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
 import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
 import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
 import type {
-  SellerCursorConnection,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
@@ -49,8 +49,8 @@ export class SellerStoreQueryResolver {
   @Query('sellerStoreSpecialClosures')
   sellerStoreSpecialClosures(
     @CurrentUser() user: JwtUser,
-    @Args('input', { nullable: true }) input?: SellerCursorInput,
-  ): Promise<SellerCursorConnection<SellerStoreSpecialClosureOutput>> {
+    @Args('input', { nullable: true }) input?: CursorInput,
+  ): Promise<CursorConnection<SellerStoreSpecialClosureOutput>> {
     const accountId = parseAccountId(user);
     return this.hoursService.sellerStoreSpecialClosures(accountId, input);
   }
@@ -59,7 +59,7 @@ export class SellerStoreQueryResolver {
   sellerStoreDailyCapacities(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: SellerDateCursorInput,
-  ): Promise<SellerCursorConnection<SellerStoreDailyCapacityOutput>> {
+  ): Promise<CursorConnection<SellerStoreDailyCapacityOutput>> {
     const accountId = parseAccountId(user);
     return this.policyService.sellerStoreDailyCapacities(accountId, input);
   }

@@ -1,3 +1,5 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
+
 /**
  * product-search resolver 반환용 도메인 출력 타입.
  * SDL(product-search.graphql)의 타입과 필드 일치.
@@ -18,11 +20,7 @@ export interface SearchProduct {
   isWishlisted: boolean;
 }
 
-export interface SearchProductConnection {
-  items: SearchProduct[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type SearchProductConnection = OffsetConnection<SearchProduct>;
 
 export interface SearchPriceBucket {
   minPrice: number;

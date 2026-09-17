@@ -2,7 +2,7 @@ extend type Query {
   """내 관리자 계정을 조회한다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN."""
   adminMe: AdminAccount!
   """관리자 계정 목록을 최신 생성순으로 조회한다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN."""
-  adminAdmins(input: AdminCursorInput): AdminAccountConnection!
+  adminAdmins(input: CursorInput): AdminAccountConnection!
 }
 
 extend type Mutation {
@@ -41,7 +41,7 @@ type AdminAccountConnection {
   """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
   hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
-  nextCursor: ID
+  nextCursor: String
 }
 
 """관리자 계정 생성 입력."""

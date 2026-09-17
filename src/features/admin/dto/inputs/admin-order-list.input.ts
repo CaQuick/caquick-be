@@ -1,13 +1,13 @@
 import { IsDate, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
+import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import {
   MAX_KEYWORD_LENGTH,
   ORDER_STATUSES,
   type OrderStatusValue,
 } from '@/features/admin/constants/admin.constants';
-import { AdminCursorInput } from '@/features/admin/dto/inputs/admin-cursor.input';
 
-export class AdminOrderListInput extends AdminCursorInput {
+export class AdminOrderListInput extends CursorInput {
   @IsOptional()
   @IsString()
   @MaxLength(MAX_KEYWORD_LENGTH)

@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import {
+  CURSOR_PAGE_DEFAULT_LIMIT,
+  type CursorInput,
+} from '@/common/dto/inputs/cursor.input';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
@@ -8,12 +12,6 @@ import {
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
 import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
-import {
-  DEFAULT_CONVERSATION_LIST_LIMIT,
-  DEFAULT_CONVERSATION_MESSAGES_LIMIT,
-} from '@/features/conversation/constants/conversation.constants';
-import type { ConversationMessagesInput } from '@/features/conversation/dto/inputs/conversation-messages.input';
-import type { MyConversationsInput } from '@/features/conversation/dto/inputs/my-conversations.input';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
@@ -31,11 +29,11 @@ export class ConversationCenterService extends ConversationBaseService {
 
   async myConversations(
     accountId: bigint,
-    input?: MyConversationsInput,
+    input?: CursorInput,
   ): Promise<MyConversationConnection> {
     await this.requireActiveUser(accountId);
 
-    const limit = input?.limit ?? DEFAULT_CONVERSATION_LIST_LIMIT;
+    const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
     const cursor = input?.cursor
       ? parseTimestampIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
       : undefined;
@@ -85,7 +83,7 @@ export class ConversationCenterService extends ConversationBaseService {
   async conversationMessages(
     accountId: bigint,
     conversationIdRaw: string,
-    input?: ConversationMessagesInput,
+    input?: CursorInput,
   ): Promise<ConversationMessageConnection> {
     await this.requireActiveUser(accountId);
     const conversationId = parseId(conversationIdRaw);
@@ -98,7 +96,7 @@ export class ConversationCenterService extends ConversationBaseService {
       throw new NotFoundException(CONVERSATION_ERRORS.CONVERSATION_NOT_FOUND);
     }
 
-    const limit = input?.limit ?? DEFAULT_CONVERSATION_MESSAGES_LIMIT;
+    const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
     // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로
     // 번진다 — 상한까지 검증하는 커서 전용 파서를 쓴다(리뷰 반영)
     const cursor = input?.cursor

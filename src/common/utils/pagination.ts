@@ -1,3 +1,5 @@
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+
 /**
  * 페이지네이션 조립 공용 유틸(이슈 #226).
  * - 커서형: `take: limit + 1` 초과 조회 → 페이지 절단 → 다음 커서 계산
@@ -50,4 +52,39 @@ export function hasMoreByOffset(
   totalCount: number,
 ): boolean {
   return offset + Math.max(0, limit) < totalCount;
+}
+
+/** id 단독 커서 목록의 입력 정규화. limit은 1~100으로 clamp(운영 보호), cursor는 있을 때만 싣는다. */
+export function normalizeCursorInput(input?: {
+  limit?: number | null;
+  cursor?: bigint | null;
+}): { limit: number; cursor?: bigint } {
+  const safeLimit = Math.min(Math.max(input?.limit ?? 20, 1), 100);
+  const cursor = input?.cursor ?? undefined;
+  return {
+    limit: safeLimit,
+    ...(cursor !== undefined ? { cursor } : {}),
+  };
+}
+
+/** id desc 키셋 목록의 초과 조회 결과 → 커서 페이지. 커서는 마지막 행의 id. */
+export function sliceIdCursorPage<T extends { id: bigint }>(
+  rows: T[],
+  limit: number,
+): CursorPage<T> {
+  return sliceCursorPage(rows, limit, (last) => last.id.toString());
+}
+
+/** 커서 페이지 + 전체 건수 → 응답 Connection. 항목 매핑을 여기서 한 번만 한다. */
+export function toCursorConnection<T, U>(
+  page: CursorPage<T>,
+  totalCount: number,
+  map: (item: T) => U,
+): CursorConnection<U> {
+  return {
+    items: page.items.map(map),
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
+    totalCount,
+  };
 }

@@ -1,3 +1,4 @@
+import type { OffsetConnection } from '@/common/types/cursor-connection.type';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyOrderSummary {
@@ -14,11 +15,7 @@ export interface MyOrderSummary {
   hasReviewableItem: boolean;
 }
 
-export interface MyOrderConnection {
-  items: MyOrderSummary[];
-  totalCount: number;
-  hasMore: boolean;
-}
+export type MyOrderConnection = OffsetConnection<MyOrderSummary>;
 
 export interface MyOrderStatusHistory {
   fromStatus: OrderStatus | null;

@@ -1,13 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { SellerProductListInput } from '@/features/seller/dto/inputs/seller-product-list.input';
 import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
-import type {
-  SellerCursorConnection,
-  SellerProductOutput,
-} from '@/features/seller/types/seller-output.type';
+import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -27,7 +25,7 @@ export class SellerProductQueryResolver {
   sellerProducts(
     @CurrentUser() user: JwtUser,
     @Args('input', { nullable: true }) input?: SellerProductListInput,
-  ): Promise<SellerCursorConnection<SellerProductOutput>> {
+  ): Promise<CursorConnection<SellerProductOutput>> {
     const accountId = parseAccountId(user);
     return this.productQuery.sellerProducts(accountId, input);
   }

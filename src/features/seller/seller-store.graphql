@@ -4,7 +4,7 @@ extend type Query {
   """내 매장 요일별 영업시간 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreBusinessHours: [SellerStoreBusinessHour!]!
   """내 매장 특별휴무 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerStoreSpecialClosures(input: SellerCursorInput): SellerStoreSpecialClosureConnection!
+  sellerStoreSpecialClosures(input: CursorInput): SellerStoreSpecialClosureConnection!
   """내 매장 일별 생산 가능 수량 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerStoreDailyCapacities(input: SellerDateCursorInput): SellerStoreDailyCapacityConnection!
 }
@@ -31,7 +31,7 @@ input SellerDateCursorInput {
   """한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT."""
   limit: Int = 20
   """이전 응답의 nextCursor. 첫 페이지는 생략한다."""
-  cursor: ID
+  cursor: String
   """조회 시작 날짜(이상). 미지정 시 하한 없음."""
   fromDate: DateTime
   """조회 종료 날짜(이하). 미지정 시 상한 없음."""
@@ -116,7 +116,7 @@ type SellerStoreSpecialClosureConnection {
   """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
   hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
-  nextCursor: ID
+  nextCursor: String
 }
 
 """특정 날짜의 생산 가능 수량. 미설정 날짜는 수량 제한이 없다."""
@@ -139,7 +139,7 @@ type SellerStoreDailyCapacityConnection {
   """다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다."""
   hasMore: Boolean!
   """다음 페이지 커서. null이면 마지막 페이지다."""
-  nextCursor: ID
+  nextCursor: String
 }
 
 """
