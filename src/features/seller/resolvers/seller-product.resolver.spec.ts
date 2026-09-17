@@ -126,18 +126,8 @@ describe('Seller Product Resolvers (real DB)', () => {
     ).rejects.toThrowDomain(400);
   });
 
-  /**
-   * 모든 seller-product-mutation resolver 메서드를 도메인 단위로 묶어 배선만 검증하는 통합 테스트.
-   * 상세 분기/예외는 service.spec에서 담당하며, 여기는 resolver → service → repository 어댑터
-   * 계층이 정상 배선되었는지만 확인한다.
-   *
-   * truncateAll이 beforeEach에서 동작하므로, 각 it은 자체 setup(seller + product)으로 시작한다.
-   */
+  /** 상세 분기/예외는 service.spec에서 담당 — resolver → service → repository 배선만 확인한다. truncateAll이 beforeEach라 각 it은 자체 setup으로 시작한다. */
   describe('전체 Mutation 메서드 배선 커버리지', () => {
-    /**
-     * 본 describe의 공통 setup. account/store + 1개 product를 만들고 auth/productId/auth+resolver 호출에
-     * 필요한 최소 입력을 반환한다.
-     */
     async function setupProductForMutationWiring() {
       const { account, store } = await setupSellerWithStore(prisma);
       const auth = { accountId: account.id.toString() };

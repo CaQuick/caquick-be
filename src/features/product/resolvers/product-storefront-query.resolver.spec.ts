@@ -9,10 +9,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/필터 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/필터 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductStorefront Query Resolver (real DB)', () => {
   let resolver: ProductStorefrontQueryResolver;
   let prisma: PrismaClient;

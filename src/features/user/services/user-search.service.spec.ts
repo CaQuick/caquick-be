@@ -37,7 +37,6 @@ describe('UserSearchService (real DB)', () => {
     return account;
   }
 
-  // ─── mySearchHistories ───
   describe('mySearchHistories', () => {
     it('last_used_at desc 정렬로 페이지네이션된 결과를 반환한다', async () => {
       const account = await setupUser();
@@ -100,7 +99,6 @@ describe('UserSearchService (real DB)', () => {
     });
   });
 
-  // ─── deleteSearchHistory ───
   describe('deleteSearchHistory', () => {
     it('본인 기록이면 soft-delete하고 true 반환', async () => {
       const account = await setupUser();
@@ -149,7 +147,6 @@ describe('UserSearchService (real DB)', () => {
     });
   });
 
-  // ─── clearSearchHistories ───
   describe('clearSearchHistories', () => {
     it('해당 계정의 모든 active 기록을 soft-delete한다', async () => {
       const account = await setupUser();

@@ -19,18 +19,8 @@ import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { LogContext } from '@/global/types/log.type';
 
 /**
- * GraphQL 컨텍스트 전용 예외 포맷터.
- *
- * NestJS 글로벌 필터는 host type 별로 1 회만 매칭되므로 별도 글로벌 등록 대신
- * `HttpExceptionFilter` 가 graphql context 일 때 본 클래스에 위임한다.
- *
- * extensions:
- * - code           : 카탈로그 에러 코드(정본). 필터 밖 예외는 VALIDATION_FAILED / INTERNAL_ERROR
- * - classification : Apollo 관례 분류(BAD_USER_INPUT / UNAUTHENTICATED / FORBIDDEN / NOT_FOUND / CONFLICT / INTERNAL_SERVER_ERROR)
- * - statusCode     : 400 / 401 / 403 / 404 / 409 / 500
- * - requestId   : x-request-id (트래킹용)
- * - operation   : query / mutation / subscription
- * - fieldName   : 루트 필드명
+ * NestJS 글로벌 필터는 host type별로 1회만 매칭되므로 별도 글로벌 등록 대신 HttpExceptionFilter가 graphql context일 때 위임한다.
+ * extensions.code는 카탈로그 코드(정본), classification은 Apollo 관례 분류, 나머지(statusCode·requestId·operation·fieldName)는 트래킹용.
  */
 @Injectable()
 export class GraphQLExceptionFilter {

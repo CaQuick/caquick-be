@@ -63,7 +63,6 @@ describe('SellerCustomTemplateService (real DB)', () => {
     });
   }
 
-  // ─── Template upsert ──
   describe('sellerUpsertProductCustomTemplate', () => {
     it('없는 productId면 404', async () => {
       const { accountId } = await setupSellerWithProduct();

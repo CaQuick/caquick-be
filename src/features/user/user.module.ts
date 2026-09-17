@@ -34,9 +34,6 @@ import { UserReviewService } from '@/features/user/services/user-review.service'
 import { UserSearchService } from '@/features/user/services/user-search.service';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 
-/**
- * User 도메인 모듈
- */
 @Module({
   imports: [OrderModule, ProductModule, ReviewModule],
   providers: [

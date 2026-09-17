@@ -9,9 +9,7 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/**
- * 검색 실행 기록 resolver. 비로그인도 호출 가능(집계 이벤트만), 로그인 시 최근 검색어까지 갱신.
- */
+/** 비로그인도 호출 가능(집계 이벤트만), 로그인 시 최근 검색어까지 갱신. */
 @Resolver('Mutation')
 export class SearchEntryMutationResolver {
   constructor(private readonly service: SearchEntryService) {}

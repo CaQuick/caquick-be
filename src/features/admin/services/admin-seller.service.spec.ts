@@ -48,7 +48,6 @@ describe('AdminSellerService (real DB)', () => {
     return (await createAccount(prisma, { account_type: 'ADMIN' })).id;
   }
 
-  /** 자격증명·프로필·매장을 갖춘 판매자 한 세트. */
   async function makeSeller(
     overrides: {
       username?: string;

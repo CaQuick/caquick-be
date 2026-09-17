@@ -16,17 +16,13 @@ export interface StoreCandidateRow {
   max_days_ahead: number;
 }
 
-/** 매장 검색 후보 row. 랭킹 후보와 같은 shape. */
 export type StoreSearchCandidateRow = StoreCandidateRow;
 
-/** 매장 검색 조건. */
 export interface StoreSearchFilter {
-  /** 매장명에 모두 포함돼야 하는 단어(AND). */
   words: string[];
   regionIds?: bigint[];
 }
 
-/** 특정 요일의 매장 영업시간 row(오늘 픽업 슬롯 산출용). */
 export interface StoreTodayBusinessHourRow {
   store_id: bigint;
   is_closed: boolean;
@@ -34,7 +30,6 @@ export interface StoreTodayBusinessHourRow {
   close_time: Date | null;
 }
 
-/** 매장 픽업 정책 row(달력·시간 슬롯 산출용). */
 export interface StorePickupPolicyRow {
   id: bigint;
   pickup_slot_interval_minutes: number;
@@ -42,7 +37,6 @@ export interface StorePickupPolicyRow {
   max_days_ahead: number;
 }
 
-/** 요일별 영업시간 row(매장 픽업 달력용). */
 export interface StoreWeekdayBusinessHourRow {
   day_of_week: number;
   is_closed: boolean;
@@ -50,7 +44,6 @@ export interface StoreWeekdayBusinessHourRow {
   close_time: Date | null;
 }
 
-/** 매장 상세 조회 결과 row. storeDetail 매퍼 입력. */
 export interface StoreDetailRow {
   id: bigint;
   store_name: string;
@@ -73,7 +66,6 @@ export interface StoreDetailRow {
 export class StoreRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 인기 매장 랭킹 후보. 활성 매장만, 지역 필터(2차 시군구 다중) 적용. */
   async findActiveStoresForRanking(
     regionIds?: bigint[],
   ): Promise<StoreCandidateRow[]> {
@@ -98,10 +90,7 @@ export class StoreRepository {
     });
   }
 
-  /**
-   * 매장 검색 후보 전량(활성 매장). 인기순 점수화가 메모리라 후보를 모두 로드한다
-   * (findActiveStoresForRanking과 동일 트레이드오프).
-   */
+  /** 인기순 점수화가 메모리라 후보를 모두 로드한다(findActiveStoresForRanking과 동일 트레이드오프). */
   async findStoreSearchCandidates(
     filter: StoreSearchFilter,
   ): Promise<StoreSearchCandidateRow[]> {
@@ -122,12 +111,11 @@ export class StoreRepository {
     });
   }
 
-  /** 매장 검색 결과 수(검색 요약 탭 카운트). 후보 조건과 단일 소스. */
+  /** 후보 조건과 단일 소스. */
   async countStoreSearch(filter: StoreSearchFilter): Promise<number> {
     return this.prisma.store.count({ where: buildStoreSearchWhere(filter) });
   }
 
-  /** 특정 요일(0=일~6=토)의 매장별 영업시간. */
   async findBusinessHoursByWeekday(
     storeIds: bigint[],
     dayOfWeek: number,
@@ -147,7 +135,6 @@ export class StoreRepository {
     });
   }
 
-  /** 특정 날짜(@db.Date, UTC 자정 표현)에 특별휴무인 매장 id 집합. */
   async findSpecialClosureStoreIds(
     storeIds: bigint[],
     date: Date,
@@ -163,7 +150,7 @@ export class StoreRepository {
     return new Set(rows.map((r) => r.store_id.toString()));
   }
 
-  /** 특정 날짜의 매장별 일일 capacity(레코드 없으면 무제한 취급은 호출부 책임). */
+  /** 레코드 없으면 무제한 취급은 호출부 책임. */
   async findDailyCapacities(
     storeIds: bigint[],
     date: Date,
@@ -179,10 +166,7 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, r.capacity]));
   }
 
-  /**
-   * 픽업 시각이 [rangeStart, rangeEnd)인 매장별 예약 제작 수량(아이템 quantity 합).
-   * capacity(일별 생산 가능 '수량') 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
-   */
+  /** capacity(일별 생산 가능 '수량') 소진 판정용 — CANCELED·soft-delete 주문은 제외한다. */
   async sumPickupQuantitiesInRange(
     storeIds: bigint[],
     rangeStart: Date,
@@ -208,7 +192,6 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, Number(r.booked_quantity)]));
   }
 
-  /** 픽업 달력·슬롯 산출용 매장 정책. 활성·미삭제 매장만. */
   async findStoreForPickupSchedule(
     storeId: bigint,
   ): Promise<StorePickupPolicyRow | null> {
@@ -223,7 +206,6 @@ export class StoreRepository {
     });
   }
 
-  /** 매장의 요일별 영업시간 전체(요일당 최대 1행). */
   async findBusinessHoursForStore(
     storeId: bigint,
   ): Promise<StoreWeekdayBusinessHourRow[]> {
@@ -238,7 +220,6 @@ export class StoreRepository {
     });
   }
 
-  /** [from, to) 범위(@db.Date, UTC 자정 표현)의 특별휴무 날짜 집합("YYYY-MM-DD"). */
   async findSpecialClosureDatesInRange(
     storeId: bigint,
     from: Date,
@@ -254,7 +235,7 @@ export class StoreRepository {
     return new Set(rows.map((r) => r.closure_date.toISOString().slice(0, 10)));
   }
 
-  /** [from, to) 범위의 일일 capacity 맵("YYYY-MM-DD" → capacity). 레코드 없으면 무제한 취급은 호출부 책임. */
+  /** 레코드 없으면 무제한 취급은 호출부 책임. */
   async findDailyCapacitiesInRange(
     storeId: bigint,
     from: Date,
@@ -272,11 +253,7 @@ export class StoreRepository {
     );
   }
 
-  /**
-   * 픽업 시각이 [rangeStart, rangeEnd)인 KST 날짜별 예약 제작 수량(아이템 quantity 합).
-   * capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다.
-   * KST는 DST 없는 고정 +9h라 INTERVAL 9 HOUR 변환으로 달력일을 묶는다.
-   */
+  /** capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다. KST는 DST 없는 고정 +9h라 INTERVAL 9 HOUR 변환으로 달력일을 묶는다. */
   async sumPickupQuantitiesByKstDate(
     storeId: bigint,
     rangeStart: Date,
@@ -301,7 +278,6 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.pickup_date, Number(r.booked_quantity)]));
   }
 
-  /** 활성 매장 존재 검증(찜 등). */
   async existsActiveStore(storeId: bigint): Promise<boolean> {
     const found = await this.prisma.store.findFirst({
       where: { id: storeId, is_active: true },
@@ -310,7 +286,6 @@ export class StoreRepository {
     return Boolean(found);
   }
 
-  /** 매장 상세 헤더 조회. 활성·미삭제 매장만. 대표 이미지는 sort_order asc. */
   async findStoreDetailById(storeId: bigint): Promise<StoreDetailRow | null> {
     return this.prisma.store.findFirst({
       where: { id: storeId, is_active: true },
@@ -338,7 +313,6 @@ export class StoreRepository {
     });
   }
 
-  /** 매장별 활성 찜 수. */
   async aggregateWishlistCounts(
     storeIds: bigint[],
   ): Promise<Map<bigint, number>> {
@@ -351,7 +325,6 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, r._count._all]));
   }
 
-  /** 페이지 매장들의 대표 케이크 이미지(매장당 최대 N장, 활성 상품 1장씩). */
   async findStoreCakeImages(
     storeIds: bigint[],
     limit: number = POPULAR_STORE_CAKE_IMAGE_LIMIT,
@@ -391,7 +364,7 @@ export class StoreRepository {
   }
 }
 
-/** 매장 검색 where. 단어별 매장명 contains AND + 활성 + 지역(정책 확정). */
+/** 단어별 매장명 contains AND + 활성 + 지역. */
 export function buildStoreSearchWhere(
   filter: StoreSearchFilter,
 ): Prisma.StoreWhereInput {

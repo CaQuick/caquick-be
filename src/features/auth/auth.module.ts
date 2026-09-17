@@ -16,12 +16,6 @@ import { TokenService } from '@/features/auth/services/token.service';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 
-/**
- * Auth 도메인 모듈
- *
- * - OIDC 인증, 토큰 발급/갱신, 로그아웃 비즈니스 로직
- * - JWT 가드/모듈은 global/auth/auth-global.module.ts에서 제공
- */
 @Module({
   imports: [AuthGlobalModule, AuditLogModule],
   controllers: [AuthController],

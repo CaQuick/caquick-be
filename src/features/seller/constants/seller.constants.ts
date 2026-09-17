@@ -1,6 +1,5 @@
 // ── 텍스트 필드 최대 길이 ──
 
-/** URL 필드 공통 최대 길이 */
 export const MAX_URL_LENGTH = 2048;
 
 // ── 상품 ──
@@ -51,12 +50,11 @@ export const MAX_FAQ_ANSWER_HTML_LENGTH = 100000;
 // ── 대화 ──
 
 export const MAX_CONVERSATION_BODY_TEXT_LENGTH = 2000;
-// 문의 채팅 인사말 템플릿(store.greeting_message VARCHAR(500)과 동일 상한)
+// store.greeting_message VARCHAR(500)과 동일 상한
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;
 
 // ── 감사 로그 ──
 
-/** 판매자 감사 로그 화면이 보여주는 대상 종류. SDL SellerAuditTargetType과 1:1. */
 export const SELLER_AUDIT_TARGET_TYPES = [
   'STORE',
   'PRODUCT',

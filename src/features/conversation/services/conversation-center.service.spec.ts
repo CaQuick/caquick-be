@@ -80,7 +80,6 @@ describe('ConversationCenterService (real DB)', () => {
     });
   }
 
-  // ─── myConversations ───
   describe('myConversations', () => {
     it('마지막 메시지 최신순으로 매장 정보·미리보기·안읽음 수를 반환한다', async () => {
       const buyer = await setupBuyer();
@@ -219,7 +218,6 @@ describe('ConversationCenterService (real DB)', () => {
     });
   });
 
-  // ─── conversationMessages ───
   describe('conversationMessages', () => {
     it('메시지를 최신순 키셋 커서로 반환하고, 조회 시 last_read_at을 갱신한다', async () => {
       const buyer = await setupBuyer();

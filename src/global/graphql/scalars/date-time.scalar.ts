@@ -3,14 +3,8 @@ import type { CustomScalar } from '@nestjs/graphql';
 import { Kind } from 'graphql';
 import type { ValueNode } from 'graphql';
 
-/**
- * ISO DateTime 스칼라
- */
 @Scalar('DateTime', () => Date)
 export class DateTimeScalar implements CustomScalar<string, Date> {
-  /**
-   * 클라이언트 입력 값을 Date로 변환한다.
-   */
   parseValue(value: unknown): Date {
     if (typeof value !== 'string') {
       throw new TypeError('Invalid DateTime value.');
@@ -22,9 +16,6 @@ export class DateTimeScalar implements CustomScalar<string, Date> {
     return date;
   }
 
-  /**
-   * 내부 값을 ISO 문자열로 직렬화한다.
-   */
   serialize(value: unknown): string {
     if (value instanceof Date) {
       return value.toISOString();
@@ -39,9 +30,6 @@ export class DateTimeScalar implements CustomScalar<string, Date> {
     throw new TypeError('Invalid DateTime value.');
   }
 
-  /**
-   * GraphQL AST 리터럴 파싱
-   */
   parseLiteral(ast: ValueNode): Date {
     if (ast.kind !== Kind.STRING) {
       throw new TypeError('Invalid DateTime literal.');

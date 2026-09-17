@@ -16,17 +16,9 @@ import {
 const TMP_DIR = join(process.cwd(), '.tmp');
 const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
 
-/**
- * Jest globalSetup.
- *
- * 1) MySQL 8 Testcontainer를 1회 기동
- * 2) DB 접속 정보를 state 파일과 env 변수에 기록
- * 3) worker들이 state 파일로부터 접속 정보를 읽어 worker별 DB를 구성
- */
 export default async function globalSetup(): Promise<void> {
-  // 이전 실행이 Ctrl+C 등으로 중단되어 globalTeardown이 실행되지 않았다면
-  // .tmp/schema-applied-*.marker가 stale 상태로 남는다. 새 MySQL 컨테이너를
-  // 기동하는 시점이므로 무조건 정리한다 (Codex 리뷰 반영).
+  // 이전 실행이 Ctrl+C 등으로 중단되어 globalTeardown이 실행되지 않았다면 .tmp/schema-applied-*.marker가
+  // stale 상태로 남는다. 새 MySQL 컨테이너를 기동하는 시점이므로 무조건 정리한다.
   if (existsSync(TMP_DIR)) {
     for (const name of readdirSync(TMP_DIR)) {
       if (name.startsWith('schema-applied-') && name.endsWith('.marker')) {

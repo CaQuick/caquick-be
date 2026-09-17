@@ -63,9 +63,6 @@ describe('UserBaseService (real DB)', () => {
     await truncateAll();
   });
 
-  // ─────────────────────────────────────────────
-  // requireActiveUser — DB 상태 의존
-  // ─────────────────────────────────────────────
   describe('requireActiveUser', () => {
     it('활성 USER 계정이면 계정 + 프로필 정보를 반환한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -129,9 +126,6 @@ describe('UserBaseService (real DB)', () => {
     });
   });
 
-  // ─────────────────────────────────────────────
-  // 순수 함수 — DB 의존 없음
-  // ─────────────────────────────────────────────
   describe('normalizeNickname', () => {
     it('길이가 하한 미만이면 400을 던진다', () => {
       expect(() => service.testNormalizeNickname('a')).toThrowDomain(400);

@@ -91,11 +91,7 @@ export class UserNotificationService extends UserBaseService {
     return true;
   }
 
-  /**
-   * "최근 3개월" 노출 하한. setMonth는 대상 월에 없는 날짜를 다음 달로
-   * 롤오버시키므로(예: 5/31 → 3/3) 하한이 며칠 늦어져 알림이 일찍 숨는다 —
-   * 롤오버가 감지되면 대상 월의 말일로 클램프한다(릴리즈 리뷰 반영).
-   */
+  /** setMonth는 대상 월에 없는 날짜를 다음 달로 롤오버시키므로(예: 5/31 → 3/3) 하한이 며칠 늦어져 알림이 일찍 숨는다 — 롤오버가 감지되면 대상 월의 말일로 클램프한다. */
   private notificationVisibleSince(): Date {
     const since = new Date();
     const dayOfMonth = since.getDate();
@@ -107,7 +103,6 @@ export class UserNotificationService extends UserBaseService {
     return since;
   }
 
-  /** 커서 파싱: "<createdAtMs>:<id>". 형식·범위 방어는 공용 유틸이 담당. */
   private parseNotificationCursor(raw: string): {
     createdAt: Date;
     id: bigint;

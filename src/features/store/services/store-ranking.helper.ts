@@ -10,10 +10,7 @@ export interface StoreMetrics {
   reviewCount: number;
 }
 
-/**
- * 베이지안 평점: 리뷰 수가 적을수록 전체 평균(globalAvg)으로 수축시켜
- * 신규/소량 리뷰 매장이 과대평가되는 것을 막는다.
- */
+/** 리뷰 수가 적을수록 전체 평균(globalAvg)으로 수축시켜 신규/소량 리뷰 매장이 과대평가되는 것을 막는다. */
 export function bayesianRating(
   average: number,
   count: number,
@@ -24,9 +21,7 @@ export function bayesianRating(
   return (count / (count + m)) * average + (m / (count + m)) * globalAverage;
 }
 
-/**
- * 인기 점수. 주문/찜은 ln 으로 롱테일을 완화하고, 평점은 베이지안 보정 후 가중 합산.
- */
+/** 주문/찜은 ln으로 롱테일을 완화하고, 평점은 베이지안 보정 후 가중 합산. */
 export function popularityScore(
   metrics: StoreMetrics,
   globalAverage: number,
@@ -43,7 +38,6 @@ export function popularityScore(
   );
 }
 
-/** 후보별 집계값 묶음(후보 id 키 Map). */
 export interface PopularityAggregates {
   wishlistCounts: Map<bigint, number>;
   reviewStats: Map<bigint, { average: number; count: number }>;
@@ -56,10 +50,7 @@ export interface ScoredCandidate<T> {
   score: number;
 }
 
-/**
- * 후보 목록을 인기 점수화하고 점수 desc → 리뷰수 desc → id desc로 정렬한다
- * (안정적 동점 처리). 인기 매장·인기 케이크가 동일 정책을 공유한다(이슈 #226).
- */
+/** 점수 desc → 리뷰수 desc → id desc(안정적 동점 처리). 인기 매장·인기 케이크가 동일 정책을 공유한다. */
 export function scoreAndSortByPopularity<T extends { id: bigint }>(
   candidates: T[],
   aggregates: PopularityAggregates,

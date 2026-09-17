@@ -25,7 +25,7 @@ const CREDENTIAL_LOGIN_RESPONSE_SCHEMA = {
 export type CredentialRoleLabel = '판매자' | '관리자';
 
 /**
- * 자격증명(username/password) REST 문서 데코레이터 4묶음(D36).
+ * 자격증명(username/password) REST 문서 데코레이터 4묶음.
  * 판매자·관리자 핸들러 8개가 같은 문서 모양을 쓰며, 라우트·가드·본문은 각 핸들러에 남는다.
  */
 export function ApiCredentialLogin(role: CredentialRoleLabel): MethodDecorator {

@@ -50,7 +50,6 @@ describe('ProductHomeService (real DB)', () => {
     await truncateAll();
   });
 
-  /** 확정(CONFIRMED) 주문 n건을 만들어 상품의 최근 주문수를 채운다. */
   async function confirmOrders(product: Product, count: number): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       const order = await createOrder(prisma, { status: 'CONFIRMED' });
@@ -61,7 +60,6 @@ describe('ProductHomeService (real DB)', () => {
     }
   }
 
-  /** 활성 찜 n건 생성. */
   async function wishProduct(product: Product, count: number): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -420,10 +418,7 @@ describe('ProductHomeService (real DB)', () => {
   });
 
   describe('customCakeShowcase', () => {
-    /**
-     * Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰 생성.
-     * storeId를 주면 해당 매장 소속으로 만든다.
-     */
+    /** Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰. */
     async function makeShowcaseReview(args?: {
       storeId?: bigint;
       nickname?: string;
@@ -466,7 +461,6 @@ describe('ProductHomeService (real DB)', () => {
       return review.id;
     }
 
-    /** 유효 좋아요 n건 생성. */
     async function likeReview(reviewId: bigint, count: number): Promise<void> {
       for (let i = 0; i < count; i += 1) {
         const account = await createAccount(prisma, { account_type: 'USER' });
@@ -616,7 +610,6 @@ describe('ProductHomeService (real DB)', () => {
       jest.restoreAllMocks();
     });
 
-    /** 대표 이미지가 있는 활성 케이크 n개 생성. */
     async function makeCakesWithImage(
       store: Store,
       count: number,

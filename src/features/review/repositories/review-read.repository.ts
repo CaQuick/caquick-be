@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** 목록 범위. 상품 리뷰는 상품·매장 가시성, 매장 리뷰는 매장 가시성만 가드한다(D34: 현행 유지). */
+/** 상품 리뷰는 상품·매장 가시성, 매장 리뷰는 매장 가시성만 가드한다(D34: 현행 유지). */
 export type ReviewScope =
   { kind: 'product'; productId: bigint } | { kind: 'store'; storeId: bigint };
 
@@ -14,7 +14,6 @@ export interface ReviewMediaRow {
   sort_order: number;
 }
 
-/** 리뷰 작성자 프로필 row(탈퇴 여부 포함, 매퍼에서 익명화). */
 export interface ReviewAuthorRow {
   user_profile: {
     nickname: string;
@@ -23,7 +22,6 @@ export interface ReviewAuthorRow {
   } | null;
 }
 
-/** 상품 리뷰 카드 매퍼 입력(리뷰 상세도 같은 shape). */
 export interface ProductReviewRow {
   id: bigint;
   rating: Prisma.Decimal;
@@ -39,7 +37,6 @@ export interface ProductReviewRow {
   };
 }
 
-/** 매장 리뷰 카드 매퍼 입력. */
 export interface StoreReviewRow {
   id: bigint;
   rating: Prisma.Decimal;
@@ -52,21 +49,18 @@ export interface StoreReviewRow {
   order_item: { product_name_snapshot: string };
 }
 
-/** 목록 hydrate row — 두 카드가 필요한 컬럼의 합집합 1벌. */
 export interface ReviewListRow extends ProductReviewRow {
   order_item: ProductReviewRow['order_item'] & StoreReviewRow['order_item'];
 }
 
-/** 집계 키. 매장 카드·상세는 store_id, 상품 카드·랭킹은 product_id. */
 export type ReviewStatsKey = 'store_id' | 'product_id';
 
-/** 키별 평균 평점·리뷰 수. 리뷰가 없는 키는 Map에 없다(호출부가 0/기본값 처리). */
+/** 리뷰가 없는 키는 Map에 없다(호출부가 0/기본값 처리). */
 export interface ReviewStat {
   average: number;
   count: number;
 }
 
-/** 홈 제작 후기 쇼케이스 row. */
 export interface ShowcaseReviewRow {
   id: bigint;
   store_id: bigint;
@@ -78,10 +72,7 @@ export interface ShowcaseReviewRow {
   order_item: { free_edits: { crop_image_url: string }[] };
 }
 
-/**
- * 공개 리뷰 읽기 전용 repository. 상품·매장 리뷰 목록과 홈 쇼케이스가 공유한다.
- * 쓰기(작성·수정·삭제)는 user feature의 ReviewRepository 소관.
- */
+/** 쓰기(작성·수정·삭제)는 user feature의 ReviewRepository 소관. */
 @Injectable()
 export class ReviewReadRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -100,7 +91,6 @@ export class ReviewReadRepository {
     };
   }
 
-  /** 리뷰 id 페이지(최신순, 커서 id desc). */
   async listReviewIdsLatest(args: {
     scope: ReviewScope;
     photoOnly: boolean;
@@ -122,12 +112,9 @@ export class ReviewReadRepository {
   }
 
   /**
-   * 리뷰 id 페이지(좋아요순 desc, 동률이면 id desc).
-   *
-   * soft-delete된 좋아요를 제외한 집계 기준 정렬이 Prisma orderBy(_count)로는
-   * 불가능하므로 raw 키셋 페이지네이션으로 조회한다. 커서는 이전 페이지 경계의
-   * (likeCount, id) 값을 그대로 받아 이어간다 — 경계 리뷰의 좋아요 수가 요청
-   * 사이에 변해도 페이지가 중복/누락되지 않는다.
+   * soft-delete된 좋아요를 제외한 집계 기준 정렬이 Prisma orderBy(_count)로는 불가능하므로 raw 키셋으로 조회한다.
+   * 커서는 이전 페이지 경계의 (likeCount, id) 값을 그대로 받아 이어간다 — 경계 리뷰의 좋아요 수가 요청 사이에
+   * 변해도 페이지가 중복/누락되지 않는다.
    */
   async listReviewIdsByLikes(args: {
     scope: ReviewScope;
@@ -180,7 +167,6 @@ export class ReviewReadRepository {
     }));
   }
 
-  /** 범위 내 활성 리뷰 수(photoOnly=true면 사진 리뷰 수). 비가시 매장/상품은 0. */
   async countReviews(args: {
     scope: ReviewScope;
     photoOnly: boolean;
@@ -190,7 +176,6 @@ export class ReviewReadRepository {
     });
   }
 
-  /** id 페이지의 리뷰 본문 row 일괄 조회(정렬은 service에서 id 순서로 복원). */
   async findReviewRowsByIds(reviewIds: bigint[]): Promise<ReviewListRow[]> {
     if (reviewIds.length === 0) return [];
     return this.prisma.review.findMany({
@@ -240,7 +225,6 @@ export class ReviewReadRepository {
     });
   }
 
-  /** 리뷰별 좋아요 수. */
   async aggregateLikeCounts(reviewIds: bigint[]): Promise<Map<bigint, number>> {
     if (reviewIds.length === 0) return new Map();
     const rows = await this.prisma.reviewLike.groupBy({
@@ -251,7 +235,6 @@ export class ReviewReadRepository {
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
   }
 
-  /** 로그인 사용자가 좋아요한 review_id 집합(string). */
   async findLikedReviewIds(args: {
     reviewIds: bigint[];
     accountId: bigint;
@@ -267,7 +250,6 @@ export class ReviewReadRepository {
     return new Set(rows.map((r) => r.review_id.toString()));
   }
 
-  /** 리뷰별 댓글 수. */
   async aggregateCommentCounts(
     reviewIds: bigint[],
   ): Promise<Map<bigint, number>> {
@@ -280,7 +262,6 @@ export class ReviewReadRepository {
     return new Map(rows.map((r) => [r.review_id, r._count._all]));
   }
 
-  /** 키별 평균 평점·리뷰 수(활성 리뷰). 평균은 Decimal → number. */
   async aggregateReviewStats(
     key: ReviewStatsKey,
     ids: bigint[],
@@ -303,21 +284,15 @@ export class ReviewReadRepository {
     );
   }
 
-  /**
-   * 전체 활성 리뷰 평균 평점(베이지안 prior, 전 도메인 공용). 리뷰가 없으면 null —
-   * 호출부가 DEFAULT_GLOBAL_RATING_PRIOR로 대체한다(키별 집계의 "없음 → 0"과 다른 정책).
-   */
+  /** 리뷰가 없으면 null — 호출부가 DEFAULT_GLOBAL_RATING_PRIOR로 대체한다(키별 집계의 "없음 → 0"과 다른 정책). */
   async globalReviewAverage(): Promise<number | null> {
     const agg = await this.prisma.review.aggregate({ _avg: { rating: true } });
     return agg._avg.rating !== null ? Number(agg._avg.rating) : null;
   }
 
   /**
-   * 홈 제작 후기 쇼케이스 후보 id(전체기간 좋아요순 desc, 동률이면 id desc).
-   *
-   * Before(주문 커스텀 자유편집 크롭)/After(리뷰 이미지)가 모두 있는 리뷰만
-   * 후보로 삼는다 — 대비 연출이 섹션의 본질이라 한쪽 없는 카드는 제외.
-   * 목록 좋아요순과 형태가 달라(범위 필터·커서 없음, EXISTS 2) SQL을 따로 둔다.
+   * Before(주문 커스텀 자유편집 크롭)/After(리뷰 이미지)가 모두 있는 리뷰만 후보 — 대비 연출이 섹션의 본질이라
+   * 한쪽 없는 카드는 제외. 목록 좋아요순과 형태가 달라(범위 필터·커서 없음, EXISTS 2) SQL을 따로 둔다.
    */
   async listShowcaseReviewIdsByLikes(
     limit: number,
@@ -354,7 +329,6 @@ export class ReviewReadRepository {
     }));
   }
 
-  /** 쇼케이스 id 페이지의 본문 row 일괄 조회(정렬은 service에서 id 순서로 복원). */
   async findShowcaseReviewRowsByIds(
     reviewIds: bigint[],
   ): Promise<ShowcaseReviewRow[]> {

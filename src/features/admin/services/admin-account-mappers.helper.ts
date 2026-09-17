@@ -2,7 +2,6 @@ import type { AdminAccountRow } from '@/features/admin/repositories/admin.reposi
 import { activeOrNull } from '@/features/admin/services/admin-mappers.helper';
 import type { AdminAccountOutput } from '@/features/admin/types/admin-output.type';
 
-/** 순수 매퍼(DI 없음). */
 export function toAdminAccountOutput(row: AdminAccountRow): AdminAccountOutput {
   const credential = activeOrNull(row.credential);
   return {

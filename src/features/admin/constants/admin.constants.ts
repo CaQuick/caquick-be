@@ -14,7 +14,6 @@ export const MAX_ACCOUNT_NAME_LENGTH = 100;
 
 export const MAX_URL_LENGTH = 2048;
 export const MAX_BANNER_TITLE_LENGTH = 200;
-/** SDL BannerPlacement와 1:1. DTO @IsIn 검증용. */
 export const BANNER_PLACEMENTS = [
   'HOME_MAIN',
   'HOME_SUB',
@@ -23,7 +22,6 @@ export const BANNER_PLACEMENTS = [
   'SEARCH',
 ] as const;
 export type BannerPlacementValue = (typeof BANNER_PLACEMENTS)[number];
-/** SDL BannerLinkType와 1:1. */
 export const BANNER_LINK_TYPES = [
   'NONE',
   'URL',
@@ -36,13 +34,11 @@ export type BannerLinkTypeValue = (typeof BANNER_LINK_TYPES)[number];
 // ── 목록 검색 ──
 
 export const MAX_KEYWORD_LENGTH = 100;
-/** SDL AccountStatus와 1:1. */
 export const ACCOUNT_STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED'] as const;
 export type AccountStatusValue = (typeof ACCOUNT_STATUSES)[number];
 
 // ── 매장 ──
 
-/** SDL StoreMapProvider와 1:1. */
 export const STORE_MAP_PROVIDERS = ['NAVER', 'KAKAO', 'NONE'] as const;
 export type StoreMapProviderValue = (typeof STORE_MAP_PROVIDERS)[number];
 
@@ -52,7 +48,6 @@ export const MAX_REASON_LENGTH = 500;
 
 // ── 카테고리·태그 마스터 ──
 
-/** SDL CategoryType과 1:1. */
 export const CATEGORY_TYPES = ['EVENT', 'STYLE', 'OTHER'] as const;
 export type CategoryTypeValue = (typeof CATEGORY_TYPES)[number];
 export const MAX_CATEGORY_NAME_LENGTH = 100;
@@ -61,24 +56,20 @@ export const MAX_TAG_NAME_LENGTH = 80;
 
 // ── 리뷰 모더레이션 ──
 
-/** SDL ReviewReportStatus와 1:1. */
 export const REVIEW_REPORT_STATUSES = [
   'PENDING',
   'RESOLVED',
   'REJECTED',
 ] as const;
 export type ReviewReportStatusValue = (typeof REVIEW_REPORT_STATUSES)[number];
-/** SDL AdminReviewReportTargetType과 1:1. */
 export const REVIEW_REPORT_TARGET_TYPES = ['REVIEW', 'REVIEW_COMMENT'] as const;
 export type ReviewReportTargetTypeValue =
   (typeof REVIEW_REPORT_TARGET_TYPES)[number];
-/** SDL AdminReviewReportAction과 1:1. */
 export const REVIEW_REPORT_ACTIONS = ['DELETE_TARGET', 'REJECT'] as const;
 export type ReviewReportActionValue = (typeof REVIEW_REPORT_ACTIONS)[number];
 
 // ── 주문 ──
 
-/** SDL OrderStatusType과 1:1. */
 export const ORDER_STATUSES = [
   'SUBMITTED',
   'CONFIRMED',
@@ -95,11 +86,9 @@ export const MAX_ADMIN_CANCEL_NOTE_LENGTH =
 
 // ── 알림 발송 ──
 
-/** SDL AdminNotificationType과 1:1(NotificationType의 부분집합). */
 export const ADMIN_NOTIFICATION_TYPES = ['SYSTEM', 'MARKETING'] as const;
 export type AdminNotificationTypeValue =
   (typeof ADMIN_NOTIFICATION_TYPES)[number];
-/** SDL AdminNotificationTargetKind와 1:1. */
 export const ADMIN_NOTIFICATION_TARGET_KINDS = [
   'ALL_USERS',
   'ACCOUNT_IDS',
@@ -121,7 +110,6 @@ export const REGION_SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 // ── 감사 로그 ──
 
-/** SDL AdminAuditTargetType과 1:1(Prisma AuditTargetType 전체). */
 export const AUDIT_TARGET_TYPES = [
   'STORE',
   'PRODUCT',
@@ -139,7 +127,6 @@ export const AUDIT_TARGET_TYPES = [
   'NOTIFICATION',
 ] as const;
 export type AuditTargetTypeValue = (typeof AUDIT_TARGET_TYPES)[number];
-/** SDL AdminAuditActionType과 1:1. */
 export const AUDIT_ACTION_TYPES = [
   'CREATE',
   'UPDATE',

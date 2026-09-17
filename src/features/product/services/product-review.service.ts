@@ -17,7 +17,6 @@ import type {
 } from '@/features/product/types/product-review-output.type';
 import { ReviewReadRepository, toProductReview } from '@/features/review';
 
-/** 리뷰 상세·댓글. 목록(productReviews)은 review feature의 ReviewListingService가 담당한다. */
 @Injectable()
 export class ProductReviewService {
   constructor(
@@ -25,7 +24,6 @@ export class ProductReviewService {
     private readonly reviews: ReviewReadRepository,
   ) {}
 
-  /** 리뷰 상세(본문 + 현재 상품 기준 판매 케이크 정보). 없으면 NOT_FOUND. */
   async reviewDetail(
     reviewIdRaw: string,
     accountId?: bigint,
@@ -54,7 +52,6 @@ export class ProductReviewService {
     };
   }
 
-  /** 리뷰 댓글 목록(등록순, 커서). 리뷰가 없으면 NOT_FOUND. */
   async reviewComments(
     input: ReviewCommentsInput,
     accountId?: bigint,

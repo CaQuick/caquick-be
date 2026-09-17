@@ -4,7 +4,6 @@ import type { ProductReviewRow } from '@/features/review';
 import type { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** 리뷰 작성자 프로필 row(탈퇴 여부 포함, 매퍼에서 익명화). */
 export interface ReviewAuthorRow {
   user_profile: {
     nickname: string;
@@ -13,7 +12,6 @@ export interface ReviewAuthorRow {
   } | null;
 }
 
-/** 리뷰 상세 상단 판매 케이크 정보 row. */
 export interface ReviewDetailProductRow {
   id: bigint;
   name: string;
@@ -32,7 +30,6 @@ export interface ReviewDetailRow extends ProductReviewRow {
   product: ReviewDetailProductRow;
 }
 
-/** 리뷰 댓글 row. */
 export interface ReviewCommentRow {
   id: bigint;
   content: string;
@@ -41,22 +38,17 @@ export interface ReviewCommentRow {
   account: ReviewAuthorRow;
 }
 
-/**
- * 리뷰 상세·댓글 조회 전용 repository(상품 상세 후기 탭의 후기 상세/댓글).
- * 목록·집계·쇼케이스는 review feature의 ReviewReadRepository가 담당한다.
- */
+/** 목록·집계·쇼케이스는 review feature의 ReviewReadRepository가 담당한다. */
 @Injectable()
 export class ProductReviewRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 공개 리뷰 공통 가드: 리뷰·상품·매장 모두 활성. */
   private readonly publicReviewWhere: Prisma.ReviewWhereInput = {
     ...activeWhere,
     product: visibleWhere,
     store: visibleWhere,
   };
 
-  /** 리뷰 상세(본문 + 판매 케이크 정보). 리뷰·상품·매장 활성 가드. */
   async findReviewDetailById(
     reviewId: bigint,
   ): Promise<ReviewDetailRow | null> {
@@ -128,7 +120,6 @@ export class ProductReviewRepository {
     });
   }
 
-  /** 공개 리뷰 존재 여부(댓글 목록 진입 가드). */
   async existsPublicReview(reviewId: bigint): Promise<boolean> {
     const found = await this.prisma.review.findFirst({
       where: { id: reviewId, ...this.publicReviewWhere },
@@ -137,7 +128,6 @@ export class ProductReviewRepository {
     return Boolean(found);
   }
 
-  /** 리뷰 댓글 목록(등록순, 커서 id asc). soft-delete 제외. */
   async listReviewComments(args: {
     reviewId: bigint;
     limit: number;
@@ -170,7 +160,6 @@ export class ProductReviewRepository {
     });
   }
 
-  /** 리뷰 활성 댓글 수. */
   async countReviewComments(reviewId: bigint): Promise<number> {
     return this.prisma.reviewComment.count({
       where: { review_id: reviewId },

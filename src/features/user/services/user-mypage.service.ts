@@ -6,11 +6,8 @@ import { RecentProductViewRepository } from '@/features/user/repositories/recent
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';
 
-/** 진행중 주문 조회 기준: 최근 90일 */
 const ONGOING_ORDER_DAYS = 90;
-/** 진행중 주문 최대 건수 */
 const ONGOING_ORDER_LIMIT = 5;
-/** 최근 본 상품 최대 건수 */
 const RECENT_VIEW_LIMIT = 20;
 
 @Injectable()
@@ -41,7 +38,6 @@ export class UserMypageService {
         ),
       ]);
 
-    // N+1 회피: 최근 본 상품 productId 묶음으로 단일 IN 쿼리로 찜 여부 조회
     const recentCards = await this.cards.buildCards(
       recentViews.map((view) => view.product),
       accountId,

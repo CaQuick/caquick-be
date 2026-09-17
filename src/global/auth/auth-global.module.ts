@@ -8,12 +8,6 @@ import { JwtAuthGuard } from '@/global/auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '@/global/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '@/global/auth/guards/roles.guard';
 
-/**
- * 전역 인증 인프라 모듈
- *
- * - JWT 가드, 데코레이터, 모듈 설정 제공
- * - 모든 도메인에서 인증 기능 사용 가능
- */
 @Global()
 @Module({
   imports: [

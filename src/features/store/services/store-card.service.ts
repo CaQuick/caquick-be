@@ -8,7 +8,6 @@ import { StoreRepository } from '@/features/store/repositories/store.repository'
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { StoreCardOutput } from '@/features/store/types/store-card-output.type';
 
-/** 카드에 필요한 매장 row 부분집합. 랭킹 후보·검색 후보·찜 목록 row가 모두 만족한다. */
 export interface StoreCardSource {
   id: bigint;
   store_name: string;
@@ -18,16 +17,13 @@ export interface StoreCardSource {
   region: { name: string } | null;
 }
 
-/** 이미 집계된 평점(랭킹 metrics). 없으면 카드 서비스가 직접 집계한다. */
+/** 없으면 카드 서비스가 직접 집계한다. */
 export interface StoreCardStats {
   ratingAverage: number;
   reviewCount: number;
 }
 
-/**
- * 매장 카드 1벌(D28). 인기 매장·오늘 픽업·검색·찜 목록이 같은 카드를 쓴다 —
- * 케이크 이미지·찜 여부·평점 반올림·지역 라벨 규칙을 한 곳에 둔다.
- */
+/** 케이크 이미지·찜 여부·평점 반올림·지역 라벨 규칙을 한 곳에 둔다. */
 @Injectable()
 export class StoreCardService {
   constructor(
@@ -36,7 +32,6 @@ export class StoreCardService {
     private readonly reviews: ReviewReadRepository,
   ) {}
 
-  /** rows 순서를 유지한 카드 배열. viewerId가 없으면(비로그인) isWishlisted는 전부 false. */
   async buildCards(
     rows: StoreCardSource[],
     viewerId: bigint | undefined,

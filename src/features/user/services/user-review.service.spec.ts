@@ -84,7 +84,6 @@ describe('UserReviewService (real DB)', () => {
     };
   }
 
-  // ─── writeReview ───
   describe('writeReview', () => {
     it('PICKED_UP 주문 아이템에 리뷰와 미디어를 생성한다', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -235,9 +234,6 @@ describe('UserReviewService (real DB)', () => {
         expect(result.media[0].thumbnailUrl).toBeNull();
       });
     });
-
-    // rating(범위/0.5 단위) · content 길이 검증은 DTO (WriteReviewInput +
-    // IsRatingValid) 로 이전됨. service 테스트는 미디어 카운트·도메인 분기에 집중.
 
     it('사진 10장 + 동영상 1개(총 11개)는 통과한다', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -430,7 +426,6 @@ describe('UserReviewService (real DB)', () => {
     });
   });
 
-  // ─── myReviews ───
   describe('myReviews', () => {
     it('본인 리뷰 목록을 최신순으로 반환 + hasMore 계산', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -470,11 +465,8 @@ describe('UserReviewService (real DB)', () => {
       const result = await service.myReviews(me.accountId);
       expect(result.totalCount).toBe(1);
     });
-
-    // offset/limit 범위 검증은 DTO (MyReviewsInput → UserPaginationInput) 로 이전됨.
   });
 
-  // ─── myReviewForOrderItem ───
   describe('myReviewForOrderItem', () => {
     it('작성 전 + PICKED_UP이면 canWrite=true, review=null', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -544,7 +536,6 @@ describe('UserReviewService (real DB)', () => {
     });
   });
 
-  // ─── deleteMyReview ───
   describe('deleteMyReview', () => {
     it('본인 리뷰를 soft-delete하고 true 반환', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -608,7 +599,6 @@ describe('UserReviewService (real DB)', () => {
     });
   });
 
-  // ─── createReviewMediaUploadUrl ───
   describe('createReviewMediaUploadUrl', () => {
     it('IMAGE 타입이면 REVIEW_IMAGE purpose로 S3Service 위임', async () => {
       const expected = {
@@ -652,7 +642,6 @@ describe('UserReviewService (real DB)', () => {
   });
 
   describe('myReviewableOrderItems', () => {
-    /** 특정 계정의 픽업 완료 주문 아이템 생성. */
     async function pickUpItem(
       accountId: bigint,
       args?: {

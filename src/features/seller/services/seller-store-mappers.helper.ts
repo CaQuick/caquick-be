@@ -4,12 +4,6 @@ import type {
   SellerStoreSpecialClosureOutput,
 } from '@/features/seller/types/seller-output.type';
 
-/**
- * Store 분할 서비스들이 공유하는 매핑 헬퍼.
- *
- * 순수 함수 (this 의존 없음). DI 가 필요 없으므로 static export 만으로 충분.
- */
-
 export interface StoreBusinessHourRow {
   id: bigint;
   day_of_week: number;

@@ -33,7 +33,6 @@ describe('SellerRepository (real DB)', () => {
     await truncateAll();
   });
 
-  // ─── account / store context ──
   describe('findSellerAccountContext', () => {
     it('계정 + store id 를 함께 반환한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
@@ -92,7 +91,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── business hours ──
   describe('listStoreBusinessHours / upsertStoreBusinessHour', () => {
     it('day_of_week 오름차순 정렬', async () => {
       const { store } = await setupSellerWithStore(prisma);
@@ -134,7 +132,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── special closure ──
   describe('storeSpecialClosure (create/update/findById/softDelete/list)', () => {
     it('create: 새 row 생성', async () => {
       const { store } = await setupSellerWithStore(prisma);
@@ -241,7 +238,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── daily capacity ──
   describe('storeDailyCapacity (create/update/findById/softDelete/list)', () => {
     it('create: 새 row 생성', async () => {
       const { store } = await setupSellerWithStore(prisma);
@@ -373,7 +369,6 @@ describe('SellerRepository (real DB)', () => {
       });
       expect(noFilter).toHaveLength(3);
 
-      // cursor
       const first = await repo.listStoreDailyCapacities({
         storeId: store.id,
         limit: 1,
@@ -388,7 +383,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── faq topic ──
   describe('faqTopic (list/create/findById/update/softDelete)', () => {
     it('list: sort_order, id 오름차순', async () => {
       const { store } = await setupSellerWithStore(prisma);
@@ -464,7 +458,6 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // ─── audit log ──
   describe('listAuditLogsBySeller', () => {
     async function createLog(
       args: Partial<{
@@ -607,8 +600,7 @@ describe('SellerRepository (real DB)', () => {
     });
   });
 
-  // createStore factory 미사용 import 워닝 방지용 — 이미 위에서 setupSellerWithStore 가 store 를 만들지만,
-  // createStore 단독 사용 경로도 한 번 커버해두면 다른 spec 의존성 변화에도 안정적임.
+  // createStore 팩토리 단독 사용 경로도 한 번 커버해 둔다(미사용 import 방지).
   it('createStore factory 단독 호출도 정상 동작 (factory smoke)', async () => {
     const store = await createStore(prisma);
     expect(store.id).toBeDefined();

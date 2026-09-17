@@ -3,12 +3,7 @@ import { IsIn, IsOptional, IsString } from 'class-validator';
 const BODY_FORMATS = ['TEXT', 'HTML'] as const;
 type ConversationBodyFormat = (typeof BODY_FORMATS)[number];
 
-/**
- * 판매자 채팅 메시지 전송 입력.
- *
- * bodyFormat 에 따라 bodyText / bodyHtml 둘 중 하나는 필수라는 invariant 는
- * service 에서 검증 (class-validator 만으로 깔끔하게 표현 어려움).
- */
+/** bodyFormat에 따라 bodyText/bodyHtml 중 하나가 필수라는 invariant는 service에서 검증한다(class-validator로 표현하기 어렵다). */
 export class SellerSendConversationMessageInput {
   @IsString()
   conversationId!: string;

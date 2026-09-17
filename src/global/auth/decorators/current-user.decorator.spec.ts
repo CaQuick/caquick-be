@@ -2,12 +2,7 @@ import type { ExecutionContext } from '@nestjs/common';
 
 import { currentUserFactory } from '@/global/auth/decorators/current-user.decorator';
 
-/**
- * 실제 ExecutionContextHost 동작에 충실한 mock을 만든다.
- * 핵심: switchToHttp().getRequest()는 컨텍스트 타입과 무관하게 args[0]을 반환한다.
- * (GraphQL 컨텍스트에서 args[0]은 resolver root — 루트 Query면 undefined)
- * 과거 mock이 getRequest()를 항상 객체로 반환해 비로그인 GraphQL 500 버그를 놓쳤다.
- */
+/** switchToHttp().getRequest()는 컨텍스트 타입과 무관하게 args[0]을 반환한다(GraphQL 루트 Query면 undefined) — 과거 mock이 항상 객체를 반환해 비로그인 GraphQL 500 버그를 놓쳤다. */
 function makeExecutionContext(args: {
   type: 'graphql' | 'http';
   args: unknown[];

@@ -7,10 +7,7 @@ import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 
-/**
- * REST 문서(Swagger) 계약 고정. 데코레이터를 묶음으로 추출해도(플랜 14) 13개 operation의
- * summary·description·security·response 스키마가 바뀌지 않아야 한다 — 스냅샷은 추출 전 코드로 생성했다.
- */
+/** 데코레이터를 묶음으로 추출해도 13개 operation의 summary·description·security·response 스키마가 바뀌지 않아야 한다 — 스냅샷은 추출 전 코드로 생성했다. */
 describe('Auth REST Swagger 문서', () => {
   let app: INestApplication;
 

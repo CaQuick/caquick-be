@@ -20,7 +20,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 
-/** 감사 로그 전역 조회. 판매자 화면은 자기 매장·5종만 보지만 관리자는 전부 본다. */
 @Injectable()
 export class AdminAuditService extends AdminBaseService {
   constructor(

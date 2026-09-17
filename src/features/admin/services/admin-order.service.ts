@@ -32,10 +32,7 @@ import {
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import { OrderStatus } from '@/generated/prisma/client';
 
-/**
- * 주문 조회와 강제 취소. 전이 규칙은 판매자와 같은 OrderStatusTransitionPolicy가 단일 소스이고,
- * 저장·이력·알림·감사는 order feature의 repository가 한 트랜잭션에서 처리한다.
- */
+/** 전이 규칙은 판매자와 같은 OrderStatusTransitionPolicy가 단일 소스이고, 저장·이력·알림·감사는 order feature의 repository가 한 트랜잭션에서 처리한다. */
 @Injectable()
 export class AdminOrderService extends AdminBaseService {
   constructor(

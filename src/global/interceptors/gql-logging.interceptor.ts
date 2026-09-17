@@ -21,20 +21,12 @@ import {
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { LogContext } from '@/global/types/log.type';
 
-/**
- * GraphQL 요청/응답을 로깅하는 인터셉터.
- * - 루트(Query/Mutation) 레벨만 로깅한다.
- */
+/** 루트(Query/Mutation) 레벨만 로깅한다. */
 @Injectable()
 export class GqlLoggingInterceptor implements NestInterceptor {
   constructor(private readonly logger: CustomLoggerService) {}
 
-  /**
-   * GraphQL 실행 컨텍스트에서 메타데이터를 수집하고,
-   * 성공 시 트랜잭션 로그(tx) 를 남긴다.
-   * 에러 로깅은 GraphQLExceptionFilter 가 담당 (HTTP path 의 HttpExceptionFilter 와 동일 패턴).
-   * 단, 에러 응답에도 response time header 가 누락되지 않도록 setResponseTimeHeader 는 본 인터셉터에서 유지.
-   */
+  /** 에러 로깅은 GraphQLExceptionFilter가 담당하지만, 에러 응답에도 response time header가 누락되지 않도록 setResponseTimeHeader는 여기서 유지한다. */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const type = context.getType<GqlContextType>();
 
@@ -75,8 +67,6 @@ export class GqlLoggingInterceptor implements NestInterceptor {
           setResponseTimeHeader(res, duration);
         },
         error: () => {
-          // 에러 로깅은 GraphQLExceptionFilter 가 담당 (중복 방지).
-          // 본 인터셉터에서는 응답 시간 헤더만 누락 없이 기록한다.
           const duration = calculateDuration(startTime);
           setResponseTimeHeader(res, duration);
         },

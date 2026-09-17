@@ -1,10 +1,5 @@
 import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
 
-/**
- * product-home resolver 반환용 도메인 출력 타입.
- * SDL(product-home.graphql)의 타입과 필드 일치.
- */
-
 export interface HomeBanner {
   id: string;
   imageUrl: string;

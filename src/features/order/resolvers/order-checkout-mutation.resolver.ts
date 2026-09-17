@@ -11,7 +11,6 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/** 주문 생성 resolver. 검증·가격 계산은 OrderCheckoutService 담당. */
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
 export class OrderCheckoutMutationResolver {

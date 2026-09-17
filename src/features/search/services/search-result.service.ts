@@ -14,7 +14,7 @@ export class SearchResultService {
     private readonly storeSearch: StoreSearchService,
   ) {}
 
-  /** '전체' 탭 카운트. 각 도메인의 검색 조건(where 빌더)을 그대로 세어 목록과 어긋나지 않게 한다. */
+  /** 각 도메인의 검색 조건(where 빌더)을 그대로 세어 목록과 어긋나지 않게 한다. */
   async searchSummary(input: SearchSummaryInput): Promise<SearchSummary> {
     const { words } = parseSearchKeyword(input.keyword);
     const regionIds =

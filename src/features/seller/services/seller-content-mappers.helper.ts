@@ -8,12 +8,6 @@ import type {
 } from '@/features/seller/types/seller-output.type';
 import { type AuditTargetType, Prisma } from '@/generated/prisma/client';
 
-/**
- * Content 분할 서비스들이 공유하는 매핑 헬퍼.
- *
- * 순수 함수 (this 의존 없음). DI 가 필요 없으므로 static export 만으로 충분.
- */
-
 export interface FaqTopicRow {
   id: bigint;
   store_id: bigint;
@@ -68,10 +62,7 @@ export function toAuditLogOutput(row: AuditLogRow): SellerAuditLogOutput {
   };
 }
 
-/**
- * 저장된 대상 종류를 판매자 화면 enum으로 좁힌다. 조회 쿼리가 이미 걸러 주므로
- * 여기 걸리면 repository 필터가 풀린 것이다 — 조용히 넘기지 않고 실패시킨다.
- */
+/** 조회 쿼리가 이미 걸러 주므로 여기 걸리면 repository 필터가 풀린 것이다 — 조용히 넘기지 않고 실패시킨다. */
 function toSellerAuditTargetType(raw: AuditTargetType): SellerAuditTargetType {
   if ((SELLER_AUDIT_TARGET_TYPES as readonly string[]).includes(raw)) {
     return raw as SellerAuditTargetType;

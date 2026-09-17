@@ -46,10 +46,7 @@ import {
 } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
-/**
- * 판매자 온보딩·조회·비밀번호 초기화. 판매자 계정은 시드 외 생성 경로가 없었다.
- * 매장은 기본 정보만 만들고 영업시간·픽업 정책은 판매자가 seller* API로 직접 설정한다.
- */
+/** 매장은 기본 정보만 만들고 영업시간·픽업 정책은 판매자가 seller* API로 직접 설정한다. */
 @Injectable()
 export class AdminSellerService extends AdminBaseService {
   constructor(

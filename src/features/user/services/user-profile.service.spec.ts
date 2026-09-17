@@ -44,7 +44,6 @@ describe('UserProfileService (real DB)', () => {
     jest.clearAllMocks();
   });
 
-  // ─── me ───
   describe('me', () => {
     it('활성 USER의 프로필 정보를 MePayload로 반환한다', async () => {
       const account = await createAccount(prisma, {
@@ -163,7 +162,6 @@ describe('UserProfileService (real DB)', () => {
     });
   });
 
-  // ─── completeOnboarding ───
   describe('completeOnboarding', () => {
     it('이름 미존재 + 입력 이름이 있으면 Account.name과 프로필을 갱신한다', async () => {
       const account = await createAccount(prisma, {
@@ -241,7 +239,6 @@ describe('UserProfileService (real DB)', () => {
     });
   });
 
-  // ─── updateMyProfile ───
   describe('updateMyProfile', () => {
     it('변경할 필드가 하나도 없으면 400을 던진다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -403,7 +400,6 @@ describe('UserProfileService (real DB)', () => {
     });
   });
 
-  // ─── updateMyProfileImage ───
   describe('updateMyProfileImage', () => {
     it('발급된(소유) URL이면 프로필 이미지를 업데이트한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -430,11 +426,8 @@ describe('UserProfileService (real DB)', () => {
         }),
       ).rejects.toThrowDomain(400);
     });
-
-    // profileImageUrl 형식·길이 검증은 DTO (UpdateMyProfileImageInput) 로 이전됨.
   });
 
-  // ─── checkNicknameAvailability ───
   describe('checkNicknameAvailability', () => {
     it('사용 가능한 닉네임이면 available: true', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -506,7 +499,6 @@ describe('UserProfileService (real DB)', () => {
     });
   });
 
-  // ─── createProfileImageUploadUrl (S3 mock 유지) ───
   describe('createProfileImageUploadUrl', () => {
     it('S3Service.createUploadUrl에 PROFILE_IMAGE purpose로 위임한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -535,7 +527,6 @@ describe('UserProfileService (real DB)', () => {
     });
   });
 
-  // ─── deleteMyAccount ───
   describe('deleteMyAccount', () => {
     it('계정/프로필을 soft delete하고 닉네임은 deleted_{id}로 치환한다', async () => {
       const account = await createAccount(prisma, {

@@ -7,26 +7,14 @@ interface BusinessHourRow {
   close_time: Date | null;
 }
 
-/**
- * Date 객체에서 HH:mm 문자열을 추출한다.
- * Prisma의 Time 타입은 Date 객체로 반환되며 시/분만 의미가 있다.
- */
+/** Prisma의 Time 타입은 Date 객체로 반환되며 시/분만 의미가 있다. */
 function formatTime(date: Date): string {
   const h = date.getUTCHours().toString().padStart(2, '0');
   const m = date.getUTCMinutes().toString().padStart(2, '0');
   return `${h}:${m}`;
 }
 
-/**
- * 구조화된 StoreBusinessHour 데이터에서 사람이 읽을 수 있는
- * 영업시간 텍스트를 생성한다.
- *
- * 예: "매일 09:00 ~ 18:00 / 화요일 정기 휴무"
- * 예: "월~금 09:00 ~ 18:00, 토 10:00 ~ 17:00 / 일요일 정기 휴무"
- *
- * @param hours 요일별 영업시간 (0~6)
- * @param fallback 구조화 데이터가 없을 때 반환할 문자열
- */
+/** 예: "매일 09:00 ~ 18:00 / 화요일 정기 휴무", "월~금 09:00 ~ 18:00, 토 10:00 ~ 17:00 / 일요일 정기 휴무". */
 export function formatBusinessHours(
   hours: BusinessHourRow[],
   fallback?: string | null,
@@ -35,7 +23,6 @@ export function formatBusinessHours(
     return fallback ?? null;
   }
 
-  // 요일 순서로 정렬 (0=일 ~ 6=토)
   const sorted = [...hours].sort((a, b) => a.day_of_week - b.day_of_week);
 
   const closedDays: string[] = [];
@@ -52,7 +39,6 @@ export function formatBusinessHours(
     }
   }
 
-  // 영업 시간대별로 그룹핑
   const groups = groupByTimeRange(openSlots);
   const parts: string[] = [];
 
@@ -89,7 +75,6 @@ function formatDayRange(days: number[]): string {
   if (days.length === 7) return '매일';
   if (days.length === 0) return '';
 
-  // 연속 범위 감지
   const sorted = [...days].sort((a, b) => a - b);
   if (isConsecutive(sorted) && sorted.length > 2) {
     return `${DAY_LABELS[sorted[0]]}~${DAY_LABELS[sorted[sorted.length - 1]]}`;

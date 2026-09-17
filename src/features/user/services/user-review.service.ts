@@ -46,7 +46,7 @@ interface ReviewRow {
   }[];
 }
 
-// figma 명세: 사진 최대 10장 / 동영상 1개. 합쳐서 최대 11개까지 허용.
+// 사진 최대 10장 / 동영상 1개 — 합쳐서 최대 11개.
 const MAX_IMAGE_COUNT = 10;
 const MAX_VIDEO_COUNT = 1;
 
@@ -58,7 +58,6 @@ export class UserReviewService {
     private readonly s3Service: S3Service,
   ) {}
 
-  /** 리뷰 작성 가능한 주문 아이템 목록(마이페이지 '리뷰 남기기' 탭). 픽업 최신순. */
   async myReviewableOrderItems(
     accountId: bigint,
     input?: MyReviewableOrderItemsInput,
@@ -89,8 +88,7 @@ export class UserReviewService {
     accountId: bigint,
     input: WriteReviewInput,
   ): Promise<MyReview> {
-    // rating · content 길이 검증은 DTO 가 담당. 미디어 카운트(이미지 10 / 영상 1)와
-    // URL 소유권(이 계정에 발급된 publicUrl) 같은 도메인 invariant 만 service 에서 검증.
+    // rating·content 길이는 DTO가 담당. 미디어 카운트와 URL 소유권(이 계정에 발급된 publicUrl) 같은 도메인 invariant만 여기서.
     this.validateMedia(accountId, input.media);
 
     const orderItemId = parseId(input.orderItemId);
@@ -111,7 +109,6 @@ export class UserReviewService {
       throw new DomainException('REVIEW_ALREADY_EXISTS');
     }
 
-    // soft-delete된 기존 리뷰가 있으면 복원, 없으면 신규 생성
     const existingDeletedReviewId = orderItem.review?.deleted_at
       ? orderItem.review.id
       : undefined;

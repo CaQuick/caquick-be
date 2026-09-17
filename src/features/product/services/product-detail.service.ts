@@ -10,10 +10,6 @@ import type { ProductDetail } from '@/features/product/types/product-detail-outp
 export class ProductDetailService {
   constructor(private readonly repo: ProductRepository) {}
 
-  /**
-   * 상품 상세. 비활성/삭제 상품(또는 매장)은 NOT_FOUND.
-   * 리뷰 수는 실시간 집계, isWishlisted는 로그인 사용자에 한해 채운다(비로그인 false).
-   */
   async productDetail(
     productIdRaw: string,
     accountId?: bigint,

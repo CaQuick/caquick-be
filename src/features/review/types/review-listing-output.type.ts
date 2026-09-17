@@ -1,10 +1,5 @@
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 
-/**
- * review-listing resolver 반환용 도메인 출력 타입.
- * SDL(review.types.graphql·review-listing.graphql)의 타입과 필드 일치.
- */
-
 export interface ReviewMedia {
   mediaType: 'IMAGE' | 'VIDEO';
   mediaUrl: string;

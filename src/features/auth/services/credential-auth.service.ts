@@ -43,19 +43,9 @@ export interface CredentialLoginResult {
 const TIMING_EQUALIZER_HASH =
   '$argon2id$v=19$m=65536,p=4,t=3$w0khoJExaZKsA5QJQiOJQA$6EQ02PMC/KY7CFsHpVDIuZFuTkq7myZhnEPkywumqSs';
 
-/**
- * username/password 자격증명 로그인/refresh/logout/changePassword 전담 서비스.
- * SELLER·ADMIN 공용 — 계정 타입은 호출부(REST 경로)가 role로 고정한다.
- */
+/** SELLER·ADMIN 공용 — 계정 타입은 호출부(REST 경로)가 role로 고정한다. */
 @Injectable()
 export class CredentialAuthService {
-  /**
-   * @param tokens TokenService
-   * @param credentials AccountCredentialRepository
-   * @param refreshSessions RefreshSessionRepository
-   * @param auditLogs AuditLogRepository
-   * @param clock ClockService
-   */
   constructor(
     private readonly tokens: TokenService,
     @Inject(ACCOUNT_CREDENTIAL_REPOSITORY)
@@ -195,7 +185,6 @@ export class CredentialAuthService {
     });
   }
 
-  /** refresh 쿠키 → 활성 세션 → 자격증명. 세션 주인의 계정 타입이 role과 다르면 거부한다. */
   private async requireSessionCredential(
     role: CredentialRole,
     req: Request,

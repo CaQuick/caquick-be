@@ -5,7 +5,7 @@ import type {
 } from '@/features/order/types/order-output.type';
 import type { OrderStatus } from '@/generated/prisma/client';
 
-/** 매퍼 입력 row(주문 시점 스냅샷). 판매자·관리자·구매자 조회 row가 모두 만족하는 부분집합. */
+/** 판매자·관리자·구매자 조회 row가 모두 만족하는 구조적 부분집합. */
 export interface OrderItemFreeEditRow {
   id: bigint;
   crop_image_url: string;
@@ -47,7 +47,6 @@ export interface OrderStatusHistoryRow {
   note: string | null;
 }
 
-/** 주문 품목 1벌(D31). 판매자·관리자·구매자 주문 상세가 같은 매퍼를 쓴다. */
 export function toOrderItemDetail(
   item: OrderItemDetailRow,
 ): OrderItemDetailOutput {

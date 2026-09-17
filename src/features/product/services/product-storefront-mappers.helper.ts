@@ -1,7 +1,6 @@
 import type { StoreProductCategoryRow } from '@/features/product/repositories/product.repository';
 import type { StoreProductCategory } from '@/features/product/types/product-storefront-output.type';
 
-/** 할인율(0~100, 정수). salePrice가 없거나 비정상(정가 이상)이면 0. */
 export function calcDiscountRate(
   regularPrice: number,
   salePrice: number | null,

@@ -17,10 +17,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 const NOW = new Date('2026-08-19T07:00:00.000Z');
 const TODAY_WEEKDAY = new Date(Date.UTC(2026, 7, 19)).getUTCDay();
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 슬롯/휴무/capacity 분기 세부 검증은 service.spec.ts에서 담당.
- */
+// 슬롯/휴무/capacity 분기 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('StoreTodayPickup Query Resolver (real DB)', () => {
   let resolver: StoreTodayPickupQueryResolver;
   let clock: ClockService;

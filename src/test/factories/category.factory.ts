@@ -30,7 +30,6 @@ export async function createCategory(
   });
 }
 
-/** 상품 ↔ 카테고리 연결. */
 export async function linkProductCategory(
   prisma: PrismaClient,
   args: { productId: bigint; categoryId: bigint },

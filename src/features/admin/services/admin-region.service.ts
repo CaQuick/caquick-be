@@ -29,10 +29,7 @@ import {
   type Prisma,
 } from '@/generated/prisma/client';
 
-/**
- * 지역 마스터 관리(시드 전용이던 값). level은 parentId 유무로 정해지고 바뀌지 않는다.
- * 삭제는 연결된 매장·활성 하위 지역이 없을 때만(soft-delete). 삭제된 slug는 복구한다(unique 인덱스).
- */
+/** level은 parentId 유무로 정해지고 바뀌지 않는다. 삭제된 slug는 복구한다(unique 인덱스가 삭제 행도 세므로). */
 @Injectable()
 export class AdminRegionService extends AdminBaseService {
   constructor(

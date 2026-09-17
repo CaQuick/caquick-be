@@ -15,10 +15,7 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/**
- * 공개 리뷰 목록 resolver(상품·매장). 비로그인도 접근 가능한 public query.
- * 옵셔널 인증으로 로그인 시에만 isLiked를 채운다.
- */
+/** 옵셔널 인증으로 로그인 시에만 isLiked를 채운다. */
 @Resolver('Query')
 export class ReviewListingQueryResolver {
   constructor(private readonly service: ReviewListingService) {}

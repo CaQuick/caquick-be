@@ -43,7 +43,6 @@ describe('StorePickupScheduleService (real DB)', () => {
     jest.restoreAllMocks();
   });
 
-  /** 특정 요일(0=일~6=토) 영업시간 설정. */
   async function setBusinessHour(
     store: Store,
     dayOfWeek: number,
@@ -62,7 +61,6 @@ describe('StorePickupScheduleService (real DB)', () => {
     });
   }
 
-  /** 전 요일 동일 영업시간 설정. */
   async function openAllWeek(
     store: Store,
     openHour = 10,
@@ -84,7 +82,6 @@ describe('StorePickupScheduleService (real DB)', () => {
     });
   }
 
-  /** 픽업 주문 1건 생성(케이크 quantity개). */
   async function book(
     store: Store,
     pickupAt: Date,
@@ -100,7 +97,6 @@ describe('StorePickupScheduleService (real DB)', () => {
     return order.id;
   }
 
-  /** 달력에서 특정 날짜 row 조회. */
   function dayOf(calendar: PickupCalendar, date: string) {
     const found = calendar.days.find((d) => d.date === date);
     if (!found) throw new Error(`달력에 ${date}가 없음`);

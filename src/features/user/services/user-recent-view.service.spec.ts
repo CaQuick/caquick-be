@@ -46,7 +46,6 @@ describe('UserRecentViewService (real DB)', () => {
     await truncateAll();
   });
 
-  // ─── list ───
   describe('list', () => {
     it('최근 본 순서로 정렬된 상품 커넥션을 반환한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -191,12 +190,8 @@ describe('UserRecentViewService (real DB)', () => {
 
       expect(result.totalCount).toBe(0);
     });
-
-    // offset/limit 범위 검증은 DTO (MyRecentViewedProductsInput → UserPaginationInput)
-    // 로 이전됨. service 테스트는 도메인 로직에 집중.
   });
 
-  // ─── record ───
   describe('record', () => {
     it('활성 상품이면 view를 새로 기록한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -304,7 +299,6 @@ describe('UserRecentViewService (real DB)', () => {
     });
   });
 
-  // ─── deleteOne ───
   describe('deleteOne', () => {
     it('기록이 있으면 soft-delete하고 true를 반환한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -342,7 +336,6 @@ describe('UserRecentViewService (real DB)', () => {
     });
   });
 
-  // ─── clearAll ───
   describe('clearAll', () => {
     it('해당 계정의 모든 active view를 soft-delete한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });

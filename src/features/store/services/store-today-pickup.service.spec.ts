@@ -61,7 +61,6 @@ describe('StoreTodayPickupService (real DB)', () => {
     jest.restoreAllMocks();
   });
 
-  /** 오늘 요일 영업시간(HH 기준) 설정. */
   async function openToday(
     store: Store,
     openHour: number,
@@ -78,7 +77,6 @@ describe('StoreTodayPickupService (real DB)', () => {
     });
   }
 
-  /** 오늘 픽업 유효 주문 n건 생성(주문당 케이크 quantity개). */
   async function bookToday(
     store: Store,
     count: number,

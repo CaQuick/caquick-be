@@ -1,29 +1,19 @@
-/**
- * Access Token(JWT) Payload 타입
- */
 export interface AccessTokenPayload {
-  /** 계정 ID */
   sub: string;
 
-  /** 토큰 타입 */
   typ: 'access';
 
-  /** 발급 시각 */
   iat: number;
 
-  /** 만료 시각 */
   exp: number;
 }
 
-/**
- * JWT Strategy가 validate 이후 req.user에 심을 유저 타입
- */
 export interface JwtUser {
   accountId: string;
   accountType?: AccountRole;
-  /** 초기/초기화 비밀번호 상태. 자격증명 계정(SELLER/ADMIN)에서만 true일 수 있다. */
+  /** 자격증명 계정(SELLER/ADMIN)에서만 true일 수 있다. */
   mustChangePassword?: boolean;
 }
 
-/** 인가에 쓰는 계정 타입. Prisma AccountType과 값이 같다(global은 prisma에 의존하지 않는다). */
+/** Prisma AccountType과 값이 같다 — global은 prisma에 의존하지 않는다. */
 export type AccountRole = 'USER' | 'SELLER' | 'ADMIN';

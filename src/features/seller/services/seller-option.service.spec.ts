@@ -60,7 +60,6 @@ describe('SellerOptionService (real DB)', () => {
     });
   }
 
-  // ─── OptionGroup ──
   describe('sellerCreateOptionGroup', () => {
     it('존재하지 않는 productId면 404', async () => {
       const { accountId } = await setupProductForSeller();
@@ -247,7 +246,6 @@ describe('SellerOptionService (real DB)', () => {
     });
   });
 
-  // ─── OptionItem ──
   describe('sellerCreateOptionItem', () => {
     it('없는 optionGroupId면 404', async () => {
       const { accountId } = await setupProductForSeller();

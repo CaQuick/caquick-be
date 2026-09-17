@@ -1,12 +1,6 @@
 import { IsString, Length } from 'class-validator';
 
-/**
- * POST /auth/seller/login · /auth/admin/login Body.
- *
- * username 길이 4~80(컬럼·계정 생성 정책과 동일), password 길이 8~64 까지 기본 형식만 검증한다.
- * 실제 인증은 argon2.verify 가 담당. 로그인 시점에는 강 정책(복잡도)을
- * 적용하지 않는다 (사용자 등록 시점의 정책만 신뢰).
- */
+/** 실제 인증은 argon2.verify가 담당하므로 형식만 검증한다 — 로그인 시점에는 복잡도 정책을 적용하지 않는다(등록 시점 정책만 신뢰). */
 export class CredentialLoginInput {
   @IsString()
   @Length(4, 80)

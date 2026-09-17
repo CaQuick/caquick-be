@@ -11,15 +11,8 @@ import {
 } from '@/features/auth/repositories/account.repository.interface';
 import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 
-/**
- * Bearer 기반 JWT 인증 전략
- */
 @Injectable()
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
-  /**
-   * @param config ConfigService
-   * @param accounts AccountRepository
-   */
   constructor(
     config: ConfigService,
     @Inject(ACCOUNT_REPOSITORY)
@@ -35,14 +28,6 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  /**
-   * payload 검증 후 req.user로 주입할 값을 반환한다.
-   *
-   * - 토큰 형식 검증
-   * - DB에서 계정 존재/상태/탈퇴(deleted_at) 여부 검증
-   *
-   * @param payload AccessTokenPayload
-   */
   async validate(payload: AccessTokenPayload): Promise<JwtUser> {
     if (!payload?.sub || payload.typ !== 'access') {
       throw new DomainException('INVALID_ACCESS_TOKEN');
@@ -57,7 +42,6 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     const account = await this.accounts.findAccountForJwt(accountId);
 
-    // 존재하지 않거나 deleted_at이 찍힌 경우
     if (!account) {
       throw new DomainException('SESSION_ACCOUNT_MISSING');
     }

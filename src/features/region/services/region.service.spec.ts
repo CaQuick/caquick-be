@@ -6,10 +6,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createRegion } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Service ↔ Repository ↔ DB 통합 검증. region feature는 인증이 없는 public 조회라
- * 분기/매핑 검증을 service spec에 집중한다.
- */
+// region은 인증 없는 public 조회라 분기/매핑 검증을 service spec에 집중한다.
 describe('RegionService (real DB)', () => {
   let service: RegionService;
   let prisma: PrismaClient;

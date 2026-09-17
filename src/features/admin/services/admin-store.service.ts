@@ -49,10 +49,7 @@ function snapshot(row: Store, keys: (keyof Store)[]): Prisma.InputJsonObject {
   return out;
 }
 
-/**
- * 매장 관리 — 노출 토글과 기본 정보 대리 수정. 매장 내용(상품·옵션)은 판매자 몫이다.
- * 기본 정보 갱신 규칙은 판매자 API와 같은 헬퍼(store feature)를 쓴다.
- */
+/** 매장 내용(상품·옵션)은 판매자 몫이다. 기본 정보 갱신 규칙은 판매자 API와 같은 헬퍼(store feature)를 쓴다. */
 @Injectable()
 export class AdminStoreService extends AdminBaseService {
   constructor(

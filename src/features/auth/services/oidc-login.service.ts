@@ -18,19 +18,8 @@ import {
 } from '@/features/auth/types/oidc-provider.type';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
-/**
- * OIDC 로그인 흐름 (start / callback) 전담 서비스.
- *
- * AuthService 의 OIDC 책임 추출 결과물. Token 발급은 TokenService 에 위임한다.
- */
 @Injectable()
 export class OidcLoginService {
-  /**
-   * @param config ConfigService
-   * @param oidc OidcClientService
-   * @param tokens TokenService
-   * @param accounts AccountRepository
-   */
   constructor(
     private readonly config: ConfigService,
     private readonly oidc: OidcClientService,
@@ -104,9 +93,6 @@ export class OidcLoginService {
     return { returnTo, accessToken };
   }
 
-  /**
-   * OIDC 임시 쿠키를 추출하고 검증한다.
-   */
   private extractOidcTempCookies(req: Request): {
     expectedState: string;
     expectedNonce: string;
@@ -130,9 +116,6 @@ export class OidcLoginService {
     return { expectedState, expectedNonce, codeVerifier, returnTo };
   }
 
-  /**
-   * OIDC code 를 token 으로 교환한다.
-   */
   private async exchangeOidcCode(
     provider: OidcProvider,
     req: Request,
@@ -152,9 +135,6 @@ export class OidcLoginService {
     });
   }
 
-  /**
-   * OIDC claims 에서 사용자 정보를 추출한다.
-   */
   private extractUserInfoFromClaims(
     provider: OidcProvider,
     claims: Record<string, unknown>,
@@ -188,9 +168,6 @@ export class OidcLoginService {
     return { subject, email, emailVerified, displayName, picture };
   }
 
-  /**
-   * OIDC 사용자 정보로 계정을 생성/업데이트한다.
-   */
   private async upsertAccountFromOidc(
     provider: OidcProvider,
     userInfo: {
@@ -219,9 +196,7 @@ export class OidcLoginService {
     return account;
   }
 
-  /**
-   * returnTo 값을 안전하게 정규화한다 (오픈 리다이렉트 방지).
-   */
+  /** 오픈 리다이렉트 방지. */
   private normalizeReturnTo(raw: string | undefined): string {
     const frontend =
       this.config.get<string>('FRONTEND_BASE_URL')?.trim() ??
@@ -234,9 +209,6 @@ export class OidcLoginService {
     return ok ? raw : frontend;
   }
 
-  /**
-   * callback params (code / state 등) 를 안전하게 추출한다.
-   */
   private pickCallbackParams(req: Request): Record<string, string | string[]> {
     const q = req.query as Record<string, unknown>;
     const result: Record<string, string | string[]> = {};
@@ -266,9 +238,6 @@ export class OidcLoginService {
     return result;
   }
 
-  /**
-   * provider 별 callback redirect uri 를 반환한다.
-   */
   private getCallbackRedirectUri(provider: OidcProvider): string {
     const backendBase =
       this.config.get<string>('BACKEND_BASE_URL')?.trim() ??

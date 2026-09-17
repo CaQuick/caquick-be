@@ -38,9 +38,8 @@ export class ConversationCenterService extends ConversationBaseService {
       ? parseTimestampIdCursor(input.cursor)
       : undefined;
 
-    // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로
-    // 읽는다 — 조회 사이에 커밋된 메시지로 미리보기와 정렬 기준·커서가
-    // 어긋나는 혼합 상태 방지(릴리즈 리뷰 반영).
+    // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로 읽는다 — 조회 사이에 커밋된
+    // 메시지로 미리보기와 정렬 기준·커서가 어긋나는 혼합 상태 방지.
     const { rows, totalCount, extras } =
       await this.repo.getConversationPageWithExtras({
         accountId,
@@ -97,13 +96,11 @@ export class ConversationCenterService extends ConversationBaseService {
     }
 
     const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
-    // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로
-    // 번진다 — 상한까지 검증하는 커서 전용 파서를 쓴다(리뷰 반영)
+    // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로 번진다 — 상한까지 검증하는 커서 전용 파서
     const cursor = input?.cursor ? parseIdCursor(input.cursor) : undefined;
 
-    // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 조회
-    // 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과, 사용자 확정
-    // 정책). 전송 경로와 같은 잠금·마커 정합은 repository가 담당한다.
+    // 채팅 상세 조회 = 읽음으로 간주 — 별도 mutation 없이 조회 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과).
+    // 전송 경로와 같은 잠금·마커 정합은 repository가 담당한다.
     const { rows, totalCount } = await this.repo.listBuyerMessagesAndMarkRead({
       conversationId,
       limit,

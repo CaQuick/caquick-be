@@ -33,7 +33,6 @@ interface ListingArgs {
   limit?: number;
 }
 
-/** id 페이지 → hydrate 결과(id 순서 유지). */
 interface ListingPage {
   rows: ReviewListRow[];
   likeCounts: Map<bigint, number>;
@@ -45,15 +44,11 @@ interface ListingPage {
   nextCursor: string | null;
 }
 
-/**
- * 공개 리뷰 목록(상품·매장 공용). id 페이지 → hydrate → 좋아요 집계 → 내가 누른 id 순서로
- * 한 파이프라인을 타고, 범위(product/store)와 카드 매퍼만 다르다.
- */
+/** id 페이지 → hydrate → 좋아요 집계 → 내가 누른 id 순서로 한 파이프라인을 타고, 범위(product/store)와 카드 매퍼만 다르다. */
 @Injectable()
 export class ReviewListingService {
   constructor(private readonly repo: ReviewReadRepository) {}
 
-  /** 상품 공개 리뷰 목록(커서). 사진 필터·정렬(최신/좋아요) 지원. 댓글 수 포함. */
   async productReviews(
     input: ProductReviewsInput,
     accountId?: bigint,
@@ -79,7 +74,6 @@ export class ReviewListingService {
     };
   }
 
-  /** 매장 공개 리뷰 목록(커서). 사진 필터·정렬(최신/좋아요) 지원. */
   async storeReviews(
     input: StoreReviewsInput,
     accountId?: bigint,
@@ -158,13 +152,7 @@ export class ReviewListingService {
     };
   }
 
-  /**
-   * 정렬별 리뷰 id 페이지 + 다음 커서 계산.
-   *
-   * 좋아요순 커서는 "<likeCount>:<id>" 불투명 토큰 — 경계 시점의 좋아요 수를
-   * 담아, 이후 좋아요 수가 변해도 페이지가 중복/누락되지 않는다.
-   * 최신순 커서는 마지막 리뷰 id. 커서는 동일 sort 안에서만 유효하다.
-   */
+  /** 좋아요순 커서는 경계 시점의 좋아요 수를 담아, 이후 좋아요 수가 변해도 페이지가 중복/누락되지 않는다. 커서는 동일 sort 안에서만 유효하다. */
   private async fetchReviewIdPage(args: {
     scope: ReviewScope;
     photoOnly: boolean;

@@ -6,10 +6,7 @@ export interface AdminContext {
   accountId: bigint;
 }
 
-/**
- * 관리자 서비스 공통 베이스. RolesGuard가 1차로 막고, 여기서 DB 기준으로 한 번 더 확인한다
- * (판매자의 requireSellerContext와 대칭 — 토큰 발급 후 타입·상태가 바뀐 계정을 걸러 낸다).
- */
+/** RolesGuard가 1차로 막고, 여기서 DB 기준으로 한 번 더 확인한다 — 토큰 발급 후 타입·상태가 바뀐 계정을 걸러 낸다. */
 export abstract class AdminBaseService {
   protected constructor(
     protected readonly repo: AdminRepository,

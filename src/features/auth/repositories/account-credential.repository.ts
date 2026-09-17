@@ -6,14 +6,8 @@ import type {
 } from '@/features/auth/repositories/account-credential.repository.interface';
 import { PrismaService } from '@/prisma';
 
-/**
- * AccountCredential Repository 구체 구현.
- */
 @Injectable()
 export class AccountCredentialRepository implements IAccountCredentialRepository {
-  /**
-   * @param prisma PrismaService
-   */
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly accountInclude = {

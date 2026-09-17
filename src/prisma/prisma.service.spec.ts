@@ -14,13 +14,7 @@ import {
 } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 
-/**
- * Prisma 모듈/서비스 — useFactory + class+interface declaration merging 패턴 검증.
- *
- * - createExtendedPrismaClient: 확장(soft-delete) 적용된 PrismaClient 인스턴스 생성
- * - PrismaModule: 인스턴스 라이프사이클 (connect/disconnect) 소유
- * - DI 토큰으로 사용된 PrismaService 클래스 → 실제 주입되는 인스턴스는 factory 반환값
- */
+// useFactory + abstract class 토큰 패턴 검증 — 주입되는 인스턴스는 factory 반환값이다.
 describe('Prisma (real DB)', () => {
   beforeAll(async () => {
     await getTestPrismaClient();
@@ -116,7 +110,6 @@ describe('Prisma (real DB)', () => {
       const connectSpy = jest.spyOn(prisma, '$connect');
       const disconnectSpy = jest.spyOn(prisma, '$disconnect');
 
-      // init/close 를 호출하면 모듈 라이프사이클 훅이 동작한다.
       await moduleRef.init();
       expect(connectSpy).toHaveBeenCalledTimes(1);
 

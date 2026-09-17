@@ -3,9 +3,6 @@ import type {
   UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
-/**
- * 업로드 목적별 정책
- */
 export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
   PROFILE_IMAGE: {
     keyPrefix: 'profile-images',
@@ -22,7 +19,7 @@ export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
     maxSizeBytes: 50 * 1024 * 1024, // 50MB
     allowedContentTypes: ['video/mp4', 'video/quicktime'],
   },
-  // 판매자·관리자 이미지는 프로필 이미지와 같은 정책(5MB, jpeg/png/webp)
+  // 판매자·관리자 이미지는 프로필 이미지와 같은 정책
   PRODUCT_IMAGE: {
     keyPrefix: 'product-images',
     maxSizeBytes: 5 * 1024 * 1024,

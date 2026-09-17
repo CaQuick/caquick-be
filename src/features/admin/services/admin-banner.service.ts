@@ -39,7 +39,6 @@ import {
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 
-/** linkType이 결정된 뒤의 링크 값 묶음. 생성·수정이 같은 검증을 탄다. */
 interface BannerLinkValues {
   linkType: BannerLinkType;
   linkProductId: bigint | null;
@@ -48,7 +47,6 @@ interface BannerLinkValues {
   linkUrl: string | null;
 }
 
-/** 저장 직전의 최종 노출 조건. 생성은 입력 그대로, 수정은 현재 값과 병합한 결과다. */
 interface BannerExposure extends BannerLinkValues {
   placement: BannerPlacement;
   startsAt: Date | null;
@@ -56,10 +54,8 @@ interface BannerExposure extends BannerLinkValues {
 }
 
 /**
- * 플랫폼 배너 관리. 판매자 배너 API에서 이관 — 매장 소속 제한이 없다.
- * 저장 시점에 "구매자 조회(findFirstBanner)가 뽑을 수 있는 상태"인지 확인한다 —
- * 링크 대상 노출 가능(visibleWhere), CATEGORY 지면은 EVENT 카테고리 링크, 노출 기간 순서.
- * 저장 후 대상이 내려가는 건 노출 시점에 구매자 쿼리가 거른다.
+ * 저장 시점에 "구매자 조회(findFirstBanner)가 뽑을 수 있는 상태"인지 확인한다 — 링크 대상 노출 가능(visibleWhere),
+ * CATEGORY 지면은 EVENT 카테고리 링크, 노출 기간 순서. 저장 후 대상이 내려가는 건 노출 시점에 구매자 쿼리가 거른다.
  */
 @Injectable()
 export class AdminBannerService extends AdminBaseService {
@@ -330,7 +326,6 @@ export class AdminBannerService extends AdminBaseService {
     };
   }
 
-  /** linkType에 따라 활성 링크 필드만 유지하고 나머지는 null로 정리한다. */
   private buildBannerLinkFields(resolved: BannerLinkValues): {
     link_url: string | null;
     link_product_id: bigint | null;
@@ -360,12 +355,7 @@ export class AdminBannerService extends AdminBaseService {
     }
   }
 
-  /**
-   * 저장하려는 최종 상태가 구매자 조회에서 뽑힐 수 있는지 확인한다.
-   * - 노출 기간: startsAt < endsAt (둘 다 있을 때)
-   * - 링크 대상: findFirstBanner와 같은 visibleWhere 기준(활성·미삭제, 상품은 매장까지)
-   * - CATEGORY 지면: 홈 칩 배너는 EVENT 카테고리 링크로만 뽑히므로 linkType CATEGORY + EVENT 필수
-   */
+  /** findFirstBanner와 같은 기준 — 홈 칩 배너는 EVENT 카테고리 링크로만 뽑히므로 CATEGORY 지면은 linkType CATEGORY + EVENT 필수. */
   private async validateExposure(final: BannerExposure): Promise<void> {
     if (final.startsAt && final.endsAt && final.startsAt >= final.endsAt) {
       throw new DomainException('INVALID_EXPOSURE_WINDOW');
@@ -418,11 +408,7 @@ export class AdminBannerService extends AdminBaseService {
     }
   }
 
-  /**
-   * intendedLinkType과 무관한 링크 필드가 입력에 섞였는지 검증한다.
-   * 깨진 row(linkType=STORE인데 link_product_id가 set)를 fail-fast로 거부한다.
-   * null/undefined는 "set 의도 없음", 빈 문자열은 falsy로 통과.
-   */
+  /** 깨진 row(linkType=STORE인데 link_product_id가 set)를 fail-fast로 거부한다. null/undefined는 "set 의도 없음", 빈 문자열은 falsy로 통과. */
   private assertInputLinkFieldsMatch(
     intendedLinkType: BannerLinkType,
     input: {

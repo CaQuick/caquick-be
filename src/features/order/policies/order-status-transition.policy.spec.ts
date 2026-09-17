@@ -87,11 +87,7 @@ describe('OrderStatusTransitionPolicy', () => {
       ).toThrowDomain(400);
     });
 
-    /**
-     * SUBMITTED는 주문 생성 시점의 초기 상태로, 도메인 정의상 어떤 상태에서도 되돌아갈 수 없다.
-     * 가드가 빠지면 PICKED_UP/CONFIRMED → SUBMITTED 같은 비정상 역전이가 silent하게 통과될 수 있어,
-     * 모든 from 케이스에 대해 reject되는지 명시적으로 회귀 검증한다.
-     */
+    // SUBMITTED는 주문 생성 시점의 초기 상태라 어떤 상태에서도 되돌아갈 수 없다 — 가드가 빠지면 역전이가 조용히 통과되므로 모든 from을 전수 검증한다.
     it.each([
       OrderStatus.CONFIRMED,
       OrderStatus.MADE,

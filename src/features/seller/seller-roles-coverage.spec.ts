@@ -1,6 +1,3 @@
-/**
- * 판매자 루트 필드 전수 × 인가 선언 대조. 입력 공간은 SDL에서 읽는다(헬퍼 참고).
- */
 import { Query } from '@nestjs/graphql';
 
 import { ConversationSubscriptionResolver } from '@/features/conversation/resolvers/conversation-subscription.resolver';

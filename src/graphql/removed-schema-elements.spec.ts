@@ -8,11 +8,7 @@ import {
   isObjectType,
 } from 'graphql';
 
-/**
- * Phase 0에서 의도적으로 삭제한 SDL 요소가 되살아나지 않게 고정한다.
- * 앱과 같은 범위(src/features/**\/*.graphql)를 통째로 빌드하므로 파일 단위 파싱이 놓치는
- * 타입 소실·중복 정의도 여기서 걸린다. 삭제 PR마다 표에 줄을 추가한다.
- */
+/** 의도적으로 삭제한 SDL 요소가 되살아나지 않게 고정한다. 앱과 같은 범위를 통째로 빌드하므로 파일 단위 파싱이 놓치는 타입 소실·중복 정의도 여기서 걸린다. 삭제 PR마다 표에 줄을 추가한다. */
 const REMOVED_OUTPUT_FIELDS: Array<[type: string, field: string, pr: string]> =
   [
     ['MyPageCounts', 'customDraftCount', '플랜 03'],

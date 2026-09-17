@@ -4,13 +4,11 @@ import type { StoreDetailRow } from '@/features/store/repositories/store.reposit
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { StoreDetail } from '@/features/store/types/store-detail-output.type';
 
-/** 소수 첫째 자리 반올림(예: 4.666 → 4.7). 리뷰 없으면 0. */
 function toRatingAverage(stat: ReviewStat | undefined): number {
   if (!stat) return 0;
   return roundRatingAverage(stat.average);
 }
 
-/** Decimal(위/경도)을 number로. null은 유지. */
 function toCoordinate(value: { toString(): string } | null): number | null {
   return value !== null ? Number(value) : null;
 }

@@ -6,10 +6,7 @@ import { ConversationRepository } from '@/features/conversation/repositories/con
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 
-/**
- * subscription 구독 진입점 — 구독 권한 검증 후 토픽 iterator를 돌려준다.
- * 이벤트 발행은 각 전송 서비스(구매자 전송·판매자 답장)가 담당한다.
- */
+/** 이벤트 발행은 각 전송 서비스(구매자 전송·판매자 답장)가 담당한다. */
 @Injectable()
 export class ConversationSubscriptionService extends ConversationBaseService {
   constructor(
@@ -19,7 +16,6 @@ export class ConversationSubscriptionService extends ConversationBaseService {
     super(repo);
   }
 
-  /** 대화방 메시지 구독 — 대화 소유 구매자 또는 해당 매장 판매자만. */
   async subscribeConversationMessages(
     accountId: bigint,
     conversationIdRaw: string,
@@ -39,7 +35,6 @@ export class ConversationSubscriptionService extends ConversationBaseService {
     return this.events.messageAddedIterator(conversationId.toString());
   }
 
-  /** 구매자 대화 목록/배지 갱신 구독. */
   async subscribeMyConversationUpdates(
     accountId: bigint,
   ): Promise<AsyncIterator<unknown>> {
@@ -47,7 +42,6 @@ export class ConversationSubscriptionService extends ConversationBaseService {
     return this.events.buyerListIterator(accountId.toString());
   }
 
-  /** 판매자 대화 목록 갱신 구독. */
   async subscribeSellerConversationUpdates(
     accountId: bigint,
   ): Promise<AsyncIterator<unknown>> {

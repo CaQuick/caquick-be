@@ -202,7 +202,7 @@ describe('soft delete extension', () => {
   });
 });
 
-// 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례, 이슈 #207)을 구조로 차단한다.
+// 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례)을 구조로 차단한다.
 describe('SOFT_DELETE_MODELS 커버리지 (dmmf 대조)', () => {
   // Prisma 7의 prisma-client 생성물은 런타임 DMMF를 노출하지 않아 스키마 파일을 직접 파싱한다.
   let modelsWithDeletedAt: string[];

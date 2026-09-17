@@ -15,9 +15,6 @@ import type {
   UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
-/**
- * Content-Type에서 확장자를 추출하는 맵
- */
 const CONTENT_TYPE_TO_EXT: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -32,8 +29,7 @@ export class S3Service {
   private readonly bucket: string;
   private readonly region: string;
   private readonly presignExpiresSeconds: number;
-  // presign 실패 진단용: 정적 자격증명(Access Key) 주입 여부.
-  // 로컬에서 키 누락이면 getSignedUrl이 "Credential is missing"으로 throw된다.
+  // presign 실패 진단용 — 로컬에서 키 누락이면 getSignedUrl이 "Credential is missing"으로 throw된다.
   private readonly hasStaticCredentials: boolean;
 
   constructor(
@@ -62,13 +58,6 @@ export class S3Service {
     });
   }
 
-  /**
-   * Presigned PUT URL을 발급한다.
-   *
-   * 1. purpose별 정책(크기/타입) 검증
-   * 2. S3 key 생성
-   * 3. Presigned URL 발급
-   */
   async createUploadUrl(
     input: CreateUploadUrlInput,
   ): Promise<CreateUploadUrlOutput> {
@@ -120,11 +109,9 @@ export class S3Service {
   }
 
   /**
-   * 주어진 URL이 이 버킷에서 해당 계정·purpose로 발급된 publicUrl인지 검증한다.
-   * 클라이언트가 임의 URL(외부 링크·타인 key·다른 용도 key)을 저장하는 것을 막는다.
-   *
-   * raw `startsWith` 비교는 path traversal(`/profile-images/1/../2/...`)로 우회 가능하므로
-   * URL을 파싱해 host·protocol과 정규화된 pathname을 검증하고, 인코딩된 dot(`%2e`)은 거절한다.
+   * 클라이언트가 임의 URL(외부 링크·타인 key·다른 용도 key)을 저장하는 것을 막는다. raw startsWith 비교는
+   * path traversal(`/profile-images/1/../2/...`)로 우회 가능하므로 URL을 파싱해 host·protocol과 정규화된
+   * pathname을 검증하고, 인코딩된 dot(`%2e`)은 거절한다.
    */
   isOwnedUploadUrl(
     url: string,
@@ -175,9 +162,6 @@ export class S3Service {
     }
   }
 
-  /**
-   * S3 key 생성 규칙: {prefix}/{accountId}/{yyyy-mm-dd}/{uuid}.{ext}
-   */
   private buildKey(
     prefix: string,
     accountId: bigint,

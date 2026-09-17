@@ -4,12 +4,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { S3Service } from '@/global/storage/s3.service';
 
-// getSignedUrl을 모킹
 jest.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
 }));
 
-// S3Client를 모킹
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({})),
   PutObjectCommand: jest.fn().mockImplementation((input) => input),
@@ -347,7 +345,6 @@ describe('S3Service', () => {
   });
 });
 
-// Jest 커스텀 매처
 expect.extend({
   toEndWith(received: string, suffix: string) {
     const pass = received.endsWith(suffix);

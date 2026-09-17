@@ -52,11 +52,7 @@ export class ProductSearchService {
     private readonly cards: ProductCardService,
   ) {}
 
-  /**
-   * 키워드 상품 검색. 후보 전량을 로드해 정렬 후 offset 페이지를 자르고, 페이지 상품만
-   * 평점·찜 여부를 채운다. 인기/판매순은 메모리 점수화라 DB 페이지네이션이 불가해
-   * 정렬 5종을 같은 파이프라인으로 통일했다(자체 판단 — 인기 매장과 동일 트레이드오프).
-   */
+  /** 인기/판매순은 메모리 점수화라 DB 페이지네이션이 불가해 정렬 5종을 같은 파이프라인(후보 전량 로드 → 정렬 → offset)으로 통일했다. */
   async searchProducts(
     input: SearchProductsInput,
     accountId?: bigint,
@@ -91,11 +87,7 @@ export class ProductSearchService {
     };
   }
 
-  /**
-   * 가격대 시트 히스토그램. 가격 조건을 뺀 나머지 조건(키워드·카테고리·지역)으로 표시가를
-   * 모아 5,000원 버킷으로 센다. 상품 수 소규모 전제의 메모리 집계(자체 판단 — 규모가 커지면
-   * SQL FLOOR 그룹핑으로 전환). 'N개 상품보기' 카운트는 searchProducts.totalCount를 쓴다.
-   */
+  /** 상품 수 소규모 전제의 메모리 집계 — 규모가 커지면 SQL FLOOR 그룹핑으로 전환. 'N개 상품보기' 카운트는 searchProducts.totalCount를 쓴다. */
   async searchProductFacets(
     input: SearchProductFacetsInput,
   ): Promise<SearchProductFacets> {
@@ -121,7 +113,6 @@ export class ProductSearchService {
     };
   }
 
-  /** 검색 요약 탭의 상품 건수(필터·정렬 없이 키워드+지역). */
   countProducts(scope: ProductSearchScope): Promise<number> {
     return this.repo.countProductSearch(scope);
   }
@@ -184,7 +175,6 @@ export class ProductSearchService {
     }
   }
 
-  /** 인기 케이크·인기 매장과 동일 산식(최근 주문·찜·베이지안 평점). */
   private async sortByPopularity(
     candidates: ProductSearchCandidateRow[],
   ): Promise<ProductSearchCandidateRow[]> {
@@ -206,7 +196,7 @@ export class ProductSearchService {
     ).map((entry) => entry.candidate);
   }
 
-  /** 판매순: 최근 30일 유효 주문 수량 합 desc → id desc. 판매 0건도 뒤에 남긴다(검색 결과 누락 방지). */
+  /** 판매 0건도 뒤에 남긴다(검색 결과 누락 방지). */
   private async sortByRecentSales(
     candidates: ProductSearchCandidateRow[],
   ): Promise<ProductSearchCandidateRow[]> {
