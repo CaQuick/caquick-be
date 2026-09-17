@@ -4,6 +4,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
+import { toReviewMedia } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 import type { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
 import type { MyReviewableOrderItemsInput } from '@/features/user/dto/inputs/my-reviewable-order-items.input';
@@ -38,7 +39,7 @@ interface ReviewRow {
     };
   } | null;
   media?: {
-    media_type: string;
+    media_type: ReviewMediaType;
     media_url: string;
     thumbnail_url: string | null;
     sort_order: number;
@@ -288,12 +289,7 @@ export class UserReviewService {
       storeName: r.order_item?.store?.store_name ?? '',
       rating,
       content: r.content,
-      media: (r.media ?? []).map((m) => ({
-        mediaType: m.media_type as 'IMAGE' | 'VIDEO',
-        mediaUrl: m.media_url,
-        thumbnailUrl: m.thumbnail_url,
-        sortOrder: m.sort_order,
-      })),
+      media: (r.media ?? []).map(toReviewMedia),
       createdAt: r.created_at,
     };
   }

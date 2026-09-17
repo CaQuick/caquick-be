@@ -96,7 +96,7 @@ export function toAdminReviewOutput(row: AdminReviewRow): AdminReviewOutput {
     productId: row.product_id.toString(),
     authorAccountId: row.account_id.toString(),
     authorNickname: nicknameOf(row.account),
-    rating: row.rating.toString(),
+    rating: Number(row.rating),
     content: row.content,
     commentCount: row._count.comments,
     likeCount: row._count.likes,

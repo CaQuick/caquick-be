@@ -85,7 +85,7 @@ type MyReview {
   """리뷰 본문. 삭제된 리뷰 등으로 본문이 없으면 null."""
   content: String
   """첨부 미디어. 없으면 빈 배열."""
-  media: [MyReviewMedia!]!
+  media: [ReviewMedia!]!
   """작성 시각."""
   createdAt: DateTime!
 }
@@ -98,26 +98,6 @@ type MyReviewOrNull {
   canWrite: Boolean!
   """쓸 수 없는 사유 문구. canWrite가 true면 null이다(예: 이미 작성함, 픽업 미완료)."""
   reasonIfCannotWrite: String
-}
-
-"""리뷰에 첨부된 미디어 1건."""
-type MyReviewMedia {
-  """미디어 종류."""
-  mediaType: ReviewMediaType!
-  """미디어 원본 URL."""
-  mediaUrl: String!
-  """동영상 대표 프레임 URL. 이미지면 null일 수 있다."""
-  thumbnailUrl: String
-  """노출 순서. 오름차순."""
-  sortOrder: Int!
-}
-
-"""리뷰 첨부 미디어 종류."""
-enum ReviewMediaType {
-  """이미지."""
-  IMAGE
-  """동영상. thumbnailUrl이 있으면 대표 프레임으로 쓰지만 필수가 아니라 없을 수 있다."""
-  VIDEO
 }
 
 """리뷰 미디어 업로드용 Presigned URL 발급 입력."""

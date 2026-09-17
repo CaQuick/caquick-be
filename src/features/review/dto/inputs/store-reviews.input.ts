@@ -9,20 +9,22 @@ import {
   Min,
 } from 'class-validator';
 
-export const PRODUCT_REVIEW_SORTS = ['LATEST', 'LIKES'] as const;
-export type ReviewSort = (typeof PRODUCT_REVIEW_SORTS)[number];
+import {
+  REVIEW_SORTS,
+  type ReviewSort,
+} from '@/features/review/constants/review.constants';
 
-export class ProductReviewsInput {
+export class StoreReviewsInput {
   @IsString()
   @IsNotEmpty()
-  productId!: string;
+  storeId!: string;
 
   @IsOptional()
   @IsBoolean()
   photoOnly?: boolean;
 
   @IsOptional()
-  @IsIn(PRODUCT_REVIEW_SORTS)
+  @IsIn(REVIEW_SORTS)
   sort?: ReviewSort;
 
   @IsOptional()

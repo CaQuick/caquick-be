@@ -13,7 +13,6 @@ import {
 import type { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
 import type { RandomCakesInput } from '@/features/product/dto/inputs/random-cakes.input';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import {
   toHomeBanner,
@@ -24,6 +23,7 @@ import type {
   PopularCakesResult,
   RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
+import { ReviewReadRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -34,7 +34,7 @@ import {
 export class ProductHomeService {
   constructor(
     private readonly repo: ProductRepository,
-    private readonly reviewRepo: ProductReviewRepository,
+    private readonly reviewRepo: ReviewReadRepository,
     private readonly random: RandomService,
   ) {}
 

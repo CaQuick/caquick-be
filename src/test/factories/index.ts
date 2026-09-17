@@ -6,6 +6,8 @@ export * from './order.factory';
 export * from './product.factory';
 export * from './recent-product-view.factory';
 export * from './region.factory';
+export * from './review-like.factory';
+export * from './review-media.factory';
 export * from './review-report.factory';
 export * from './review.factory';
 export * from './search-event.factory';

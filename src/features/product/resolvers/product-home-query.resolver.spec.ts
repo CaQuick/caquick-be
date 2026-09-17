@@ -1,8 +1,8 @@
 import { RandomService } from '@/common/providers/random.service';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { ReviewReadRepository } from '@/features/review';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -10,6 +10,7 @@ import {
   createOrderItem,
   createProduct,
   createReview,
+  createReviewMedia,
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -28,7 +29,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
         ProductHomeQueryResolver,
         ProductHomeService,
         ProductRepository,
-        ProductReviewRepository,
+        ReviewReadRepository,
         RandomService,
       ],
     });
@@ -68,12 +69,10 @@ describe('ProductHome Query Resolver (real DB)', () => {
       order_item_id: orderItem.id,
       content: '제작 후기',
     });
-    await prisma.reviewMedia.create({
-      data: {
-        review_id: review.id,
-        media_type: 'IMAGE',
-        media_url: 'https://img/after.png',
-      },
+    await createReviewMedia(prisma, {
+      review_id: review.id,
+      media_type: 'IMAGE',
+      media_url: 'https://img/after.png',
     });
 
     const result = await resolver.customCakeShowcase();

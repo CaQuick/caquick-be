@@ -1,0 +1,27 @@
+"""리뷰 첨부 미디어 1건. 상품 리뷰·매장 리뷰·내 리뷰가 공용으로 쓴다."""
+type ReviewMedia {
+  """미디어 종류."""
+  mediaType: ReviewMediaType!
+  """미디어 원본 URL."""
+  mediaUrl: String!
+  """동영상 대표 프레임 URL. 이미지면 null일 수 있다."""
+  thumbnailUrl: String
+  """노출 순서. 오름차순."""
+  sortOrder: Int!
+}
+
+"""리뷰 첨부 미디어 종류."""
+enum ReviewMediaType {
+  """이미지."""
+  IMAGE
+  """동영상. thumbnailUrl이 있으면 대표 프레임으로 쓰지만 필수가 아니라 없을 수 있다."""
+  VIDEO
+}
+
+"""리뷰 목록 정렬. 상품 리뷰·매장 리뷰가 공용으로 쓴다."""
+enum ReviewSort {
+  """최신순."""
+  LATEST
+  """좋아요순(동률이면 최신순)."""
+  LIKES
+}

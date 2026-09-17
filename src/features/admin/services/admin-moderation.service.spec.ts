@@ -8,6 +8,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createReview,
+  createReviewMedia,
   createReviewReport,
   createUserProfile,
 } from '@/test/factories';
@@ -155,13 +156,11 @@ describe('AdminModerationService (real DB)', () => {
     it('DELETE_TARGET: 리뷰(사진·댓글 포함)를 삭제하고 같은 대상의 미처리 신고를 전부 RESOLVED로, 감사 2건', async () => {
       const actor = await admin();
       const review = await createReview(prisma);
-      await prisma.reviewMedia.create({
-        data: {
-          review_id: review.id,
-          media_type: 'IMAGE',
-          media_url: 'https://m/1.png',
-          sort_order: 0,
-        },
+      await createReviewMedia(prisma, {
+        review_id: review.id,
+        media_type: 'IMAGE',
+        media_url: 'https://m/1.png',
+        sort_order: 0,
       });
       const comment = await commentOn(review.id);
       const mine = await createReviewReport(prisma, { review_id: review.id });
@@ -537,6 +536,7 @@ describe('AdminModerationService (real DB)', () => {
       expect(active.items[0]).toMatchObject({
         id: review.id.toString(),
         authorNickname: 'author1',
+        rating: 5,
         commentCount: 1,
         likeCount: 0,
         deleted: false,

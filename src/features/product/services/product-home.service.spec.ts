@@ -1,7 +1,7 @@
 import { RandomService } from '@/common/providers/random.service';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { ReviewReadRepository } from '@/features/review';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -12,6 +12,8 @@ import {
   createOrderItem,
   createProduct,
   createReview,
+  createReviewLike,
+  createReviewMedia,
   createStore,
   createUserProfile,
   linkProductCategory,
@@ -27,7 +29,7 @@ describe('ProductHomeService (real DB)', () => {
       providers: [
         ProductHomeService,
         ProductRepository,
-        ProductReviewRepository,
+        ReviewReadRepository,
         RandomService,
       ],
     });
@@ -440,12 +442,9 @@ describe('ProductHomeService (real DB)', () => {
         content: args?.content ?? '후기 본문',
       });
       if (args?.after !== false) {
-        await prisma.reviewMedia.create({
-          data: {
-            review_id: review.id,
-            media_type: 'IMAGE',
-            media_url: `https://img/after-${review.id}.png`,
-          },
+        await createReviewMedia(prisma, {
+          review_id: review.id,
+          media_url: `https://img/after-${review.id}.png`,
         });
       }
       if (args?.nickname) {
@@ -464,8 +463,9 @@ describe('ProductHomeService (real DB)', () => {
     async function likeReview(reviewId: bigint, count: number): Promise<void> {
       for (let i = 0; i < count; i += 1) {
         const account = await createAccount(prisma, { account_type: 'USER' });
-        await prisma.reviewLike.create({
-          data: { review_id: reviewId, account_id: account.id },
+        await createReviewLike(prisma, {
+          review_id: reviewId,
+          account_id: account.id,
         });
       }
     }
@@ -477,12 +477,10 @@ describe('ProductHomeService (real DB)', () => {
       await likeReview(second, 1);
       // soft-delete된 좋아요는 집계에서 제외되어야 한다
       const ghost = await createAccount(prisma, { account_type: 'USER' });
-      await prisma.reviewLike.create({
-        data: {
-          review_id: second,
-          account_id: ghost.id,
-          deleted_at: new Date(),
-        },
+      await createReviewLike(prisma, {
+        review_id: second,
+        account_id: ghost.id,
+        deleted_at: new Date(),
       });
 
       const result = await service.customCakeShowcase();
@@ -507,30 +505,24 @@ describe('ProductHomeService (real DB)', () => {
         content: '비디오+이미지',
         after: false,
       });
-      await prisma.reviewMedia.create({
-        data: {
-          review_id: review,
-          media_type: 'VIDEO',
-          media_url: 'https://img/video.mp4',
-          sort_order: 0,
-        },
+      await createReviewMedia(prisma, {
+        review_id: review,
+        media_type: 'VIDEO',
+        media_url: 'https://img/video.mp4',
+        sort_order: 0,
       });
-      await prisma.reviewMedia.create({
-        data: {
-          review_id: review,
-          media_type: 'IMAGE',
-          media_url: 'https://img/real-after.png',
-          sort_order: 1,
-        },
+      await createReviewMedia(prisma, {
+        review_id: review,
+        media_type: 'IMAGE',
+        media_url: 'https://img/real-after.png',
+        sort_order: 1,
       });
       await makeShowcaseReview({ content: '비디오만', after: false }).then(
         (id) =>
-          prisma.reviewMedia.create({
-            data: {
-              review_id: id,
-              media_type: 'VIDEO',
-              media_url: 'https://img/only-video.mp4',
-            },
+          createReviewMedia(prisma, {
+            review_id: id,
+            media_type: 'VIDEO',
+            media_url: 'https://img/only-video.mp4',
           }),
       );
 

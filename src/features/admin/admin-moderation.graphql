@@ -122,8 +122,8 @@ type AdminReview {
   authorAccountId: ID!
   """작성자 닉네임. 탈퇴(프로필 삭제)면 null."""
   authorNickname: String
-  """평점. 정밀도 보존을 위해 문자열."""
-  rating: String!
+  """평점(0.0~5.0)."""
+  rating: Float!
   """본문. 없으면 null."""
   content: String
   """댓글 수(삭제 제외)."""
