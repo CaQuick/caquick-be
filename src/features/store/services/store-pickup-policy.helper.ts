@@ -14,8 +14,7 @@ export interface TodaySlotPolicy {
   openMinutes: number;
   /**
    * 영업 종료(자정 경과 분, 미포함).
-   * 슬롯은 픽업 '시각' 포인트라 시작 시각이 close 이전이면 유효하다
-   * (전역 정책 pickup.constants의 close 미포함 규칙과 동일 해석).
+   * 슬롯은 픽업 '시각' 포인트라 시작 시각이 close 이전이면 유효하다(close 미포함).
    */
   closeMinutes: number;
   /** 슬롯 간격(분). */
@@ -135,7 +134,7 @@ export function evaluatePickupDay(input: PickupDayInput): PickupDayResult {
     return { reason: STORE_PICKUP_DAY_REASON.CAPACITY_FULL, slots };
   }
 
-  // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가(전역 pickupCalendar 선례 확장).
+  // 리드타임 반영 잔여 슬롯이 없는 날은 선택 불가.
   // 리드타임이 하루를 넘으면 미래 날짜도 여기서 마감된다.
   if (!slots.some((slot) => slot.available)) {
     return { reason: STORE_PICKUP_DAY_REASON.CLOSED, slots };

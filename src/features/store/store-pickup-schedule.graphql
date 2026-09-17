@@ -1,28 +1,28 @@
 extend type Query {
   """매장별 월 픽업 가능 날짜. 없거나 비활성/삭제 매장이면 NOT_FOUND. 비로그인 접근 가능. yearMonth: "YYYY-MM" """
-  storePickupCalendar(
+  pickupCalendar(
     storeId: ID!
     """대상 연월. "YYYY-MM" 형식(KST 기준). 예: "2026-09". 형식이 어긋나면 BAD_USER_INPUT."""
     yearMonth: String!
-  ): StorePickupCalendar!
+  ): PickupCalendar!
   """매장별 선택 날짜의 픽업 시간 슬롯. date: "YYYY-MM-DD" """
-  storePickupTimeSlots(
+  pickupTimeSlots(
     storeId: ID!
     """대상 날짜. "YYYY-MM-DD" 형식(KST 기준). 예: "2026-09-10". 형식이 어긋나면 BAD_USER_INPUT."""
     date: String!
-  ): StorePickupTimeSlots!
+  ): PickupTimeSlots!
 }
 
 """매장별 월 픽업 달력(상품 상세 픽업 일정 선택용)."""
-type StorePickupCalendar {
+type PickupCalendar {
   """요청한 연월. "YYYY-MM"."""
   yearMonth: String!
   """해당 월의 전 날짜. 선택 불가한 날도 사유와 함께 포함된다."""
-  days: [StorePickupDay!]!
+  days: [PickupDay!]!
 }
 
 """매장 달력의 하루. 매장 영업요일·특별휴무·일별 생산 수량이 모두 반영된 결과다."""
-type StorePickupDay {
+type PickupDay {
   """날짜. "YYYY-MM-DD" (KST)."""
   date: String!
   """픽업 예약 가능 여부."""
@@ -32,17 +32,17 @@ type StorePickupDay {
 }
 
 """매장별 특정 날짜의 픽업 시간 슬롯. 영업하지 않는 날은 빈 배열."""
-type StorePickupTimeSlots {
+type PickupTimeSlots {
   """요청한 날짜. "YYYY-MM-DD" (KST)."""
   date: String!
   """오전 슬롯. 12:00 이전(12:00은 afternoon에 들어간다)."""
-  morning: [StorePickupSlot!]!
+  morning: [PickupSlot!]!
   """오후 슬롯. 12:00 포함, 이후."""
-  afternoon: [StorePickupSlot!]!
+  afternoon: [PickupSlot!]!
 }
 
 """매장 픽업 시간 슬롯 1칸. 간격은 매장의 pickupSlotIntervalMinutes 정책을 따른다."""
-type StorePickupSlot {
+type PickupSlot {
   """슬롯 시각. "HH:mm" (KST)."""
   time: String!
   """예약 가능 여부. 매장 리드타임·영업시간·잔여 수량을 반영한 값이다."""

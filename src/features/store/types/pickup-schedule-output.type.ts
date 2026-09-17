@@ -3,24 +3,24 @@
  * SDL(store-pickup-schedule.graphql)의 타입과 필드 일치.
  */
 
-export interface StorePickupDay {
+export interface PickupDay {
   date: string;
   selectable: boolean;
   reason: string | null;
 }
 
-export interface StorePickupCalendar {
+export interface PickupCalendar {
   yearMonth: string;
-  days: StorePickupDay[];
+  days: PickupDay[];
 }
 
-export interface StorePickupSlot {
+export interface PickupSlot {
   time: string;
   available: boolean;
 }
 
-export interface StorePickupTimeSlots {
+export interface PickupTimeSlots {
   date: string;
-  morning: StorePickupSlot[];
-  afternoon: StorePickupSlot[];
+  morning: PickupSlot[];
+  afternoon: PickupSlot[];
 }

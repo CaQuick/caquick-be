@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { buildSchema, type GraphQLSchema, isObjectType } from 'graphql';
+import {
+  buildSchema,
+  type GraphQLSchema,
+  isNonNullType,
+  isObjectType,
+} from 'graphql';
 
 /**
  * Phase 0에서 의도적으로 삭제한 SDL 요소가 되살아나지 않게 고정한다.
@@ -20,10 +25,24 @@ const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['SellerConversationListInput', '플랜 06'],
   ['MyConversationsInput', '플랜 06'],
   ['ConversationMessagesInput', '플랜 06'],
+  ['StorePickupCalendar', '플랜 08'],
+  ['StorePickupDay', '플랜 08'],
+  ['StorePickupTimeSlots', '플랜 08'],
+  ['StorePickupSlot', '플랜 08'],
 ];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]
-> = [];
+> = [
+  ['Query', 'storePickupCalendar', '플랜 08'],
+  ['Query', 'storePickupTimeSlots', '플랜 08'],
+];
+// 개명된 매장판 루트 필드는 storeId를 필수로 받는다 — 전역판(인자 없음)이 같은 이름으로 되살아나지 않게.
+const REQUIRED_ROOT_ARGS: Array<
+  [root: 'Query' | 'Mutation', field: string, arg: string, pr: string]
+> = [
+  ['Query', 'pickupCalendar', 'storeId', '플랜 08'],
+  ['Query', 'pickupTimeSlots', 'storeId', '플랜 08'],
+];
 
 // 검사기 반증용 — 실제로 존재하는 요소. 검사가 "없음"만 통과시키는 게 아니라 "있음"을 구분하는지 본다.
 const PRESENT_OUTPUT_FIELD: [string, string] = [
@@ -79,6 +98,15 @@ describe('삭제된 스키마 요소 부재 (전체 SDL 빌드)', () => {
   for (const [root, field, pr] of REMOVED_ROOT_FIELDS) {
     it(`${root}.${field} 루트 필드는 없다 (${pr})`, () => {
       expect(hasOutputField(schema, root, field)).toBe(false);
+    });
+  }
+
+  for (const [root, field, arg, pr] of REQUIRED_ROOT_ARGS) {
+    it(`${root}.${field}의 ${arg} 인자는 필수다 (${pr})`, () => {
+      const t = schema.getType(root);
+      const f = isObjectType(t) ? t.getFields()[field] : undefined;
+      const a = f?.args.find((x) => x.name === arg);
+      expect(a !== undefined && isNonNullType(a.type)).toBe(true);
     });
   }
 });
