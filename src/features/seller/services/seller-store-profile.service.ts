@@ -5,7 +5,10 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
+import {
+  INVALID_IMAGE_URL,
+  STORE_NOT_FOUND,
+} from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -13,6 +16,8 @@ import { toStoreOutput } from '@/features/seller/services/seller-store-mappers.h
 import type { ISellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service.interface';
 import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
 import { buildStoreBasicInfoUpdateData } from '@/features/store';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerStoreProfileService
@@ -23,6 +28,7 @@ export class SellerStoreProfileService
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -44,6 +50,15 @@ export class SellerStoreProfileService
 
     // 갱신 규칙은 store feature의 공용 헬퍼가 단일 소스(관리자 대리 수정과 공유)
     const data = buildStoreBasicInfoUpdateData(input);
+    if (typeof data.profile_image_url === 'string') {
+      assertOwnedUploadUrl(
+        this.s3,
+        data.profile_image_url,
+        'STORE_IMAGE',
+        ctx.accountId,
+        INVALID_IMAGE_URL,
+      );
+    }
     const updated = await this.repo.updateStore({
       storeId: ctx.storeId,
       data,

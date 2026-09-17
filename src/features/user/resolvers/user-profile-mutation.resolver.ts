@@ -6,16 +6,14 @@ import { CreateProfileImageUploadUrlInput } from '@/features/user/dto/inputs/cre
 import { UpdateMyProfileImageInput } from '@/features/user/dto/inputs/update-my-profile-image.input';
 import { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
 import { UserProfileService } from '@/features/user/services/user-profile.service';
-import type {
-  MePayload,
-  ProfileImageUploadUrl,
-} from '@/features/user/types/user-output.type';
+import type { MePayload } from '@/features/user/types/user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
@@ -53,7 +51,7 @@ export class UserProfileMutationResolver {
   createProfileImageUploadUrl(
     @CurrentUser() user: JwtUser,
     @Args('input') input: CreateProfileImageUploadUrlInput,
-  ): Promise<ProfileImageUploadUrl> {
+  ): Promise<CreateUploadUrlOutput> {
     const accountId = parseAccountId(user);
     return this.profileService.createProfileImageUploadUrl(accountId, input);
   }

@@ -21,10 +21,12 @@ import type {
   MyReviewableOrderItemConnection,
   MyReviewConnection,
   MyReviewOrNull,
-  ReviewMediaUploadUrl,
 } from '@/features/user/types/user-review-output.type';
 import { S3Service } from '@/global/storage/s3.service';
-import type { UploadPurpose } from '@/global/storage/types/storage.types';
+import type {
+  CreateUploadUrlOutput,
+  UploadPurpose,
+} from '@/global/storage/types/storage.types';
 
 interface ReviewRow {
   id: bigint;
@@ -223,7 +225,7 @@ export class UserReviewService {
   async createReviewMediaUploadUrl(
     accountId: bigint,
     input: CreateReviewMediaUploadUrlInput,
-  ): Promise<ReviewMediaUploadUrl> {
+  ): Promise<CreateUploadUrlOutput> {
     const purpose: UploadPurpose =
       input.mediaType === 'VIDEO' ? 'REVIEW_VIDEO' : 'REVIEW_IMAGE';
 

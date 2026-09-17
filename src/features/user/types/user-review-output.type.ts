@@ -46,13 +46,6 @@ export interface MyReviewOrNull {
   reasonIfCannotWrite: string | null;
 }
 
-export interface ReviewMediaUploadUrl {
-  uploadUrl: string;
-  publicUrl: string;
-  key: string;
-  expiresInSeconds: number;
-}
-
 export interface MyReviewComment {
   id: string;
   reviewId: string;

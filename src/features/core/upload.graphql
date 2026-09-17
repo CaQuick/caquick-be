@@ -1,0 +1,11 @@
+"""발급된 업로드 URL. uploadUrl로 직접 PUT한 뒤 publicUrl을 저장 입력의 URL 필드에 그대로 넘긴다."""
+type UploadUrl {
+  """파일을 PUT할 Presigned URL. 만료 전에 써야 한다."""
+  uploadUrl: String!
+  """업로드 완료 후 접근 가능한 URL. 발급한 계정·용도로만 저장이 허용된다."""
+  publicUrl: String!
+  """스토리지 객체 키."""
+  key: String!
+  """uploadUrl 만료까지 남은 시간(초)."""
+  expiresInSeconds: Int!
+}

@@ -94,3 +94,6 @@ export const INVALID_EXPOSURE_WINDOW = 'startsAt must be earlier than endsAt.';
 /** 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복. */
 export const NOTIFICATION_FANOUT_INTERRUPTED = (sentCount: number): string =>
   `Notification fan-out was interrupted after ${sentCount} deliveries; re-sending would duplicate them (see audit log).`;
+
+export const INVALID_IMAGE_URL =
+  'Image URL must be a publicUrl issued by adminCreateUploadUrl for this account.';

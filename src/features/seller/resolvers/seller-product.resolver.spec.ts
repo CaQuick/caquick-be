@@ -38,6 +38,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { ownedUploadUrl, s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('Seller Product Resolvers (real DB)', () => {
   let queryResolver: SellerProductQueryResolver;
@@ -47,6 +48,7 @@ describe('Seller Product Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerProductQueryResolver,
         SellerProductMutationResolver,
         {
@@ -95,7 +97,7 @@ describe('Seller Product Resolvers (real DB)', () => {
     const createInput: SellerCreateProductInput = {
       name: '신상',
       regularPrice: 10000,
-      initialImageUrl: 'https://i.example/a.png',
+      initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
     };
     const created = await mutationResolver.sellerCreateProduct(
       { accountId: account.id.toString() },
@@ -160,7 +162,11 @@ describe('Seller Product Resolvers (real DB)', () => {
       const createInput: SellerCreateProductInput = {
         name: '원본',
         regularPrice: 10000,
-        initialImageUrl: 'https://i.example/init.png',
+        initialImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          account.id,
+          'init.png',
+        ),
       };
       const created = await mutationResolver.sellerCreateProduct(
         auth,
@@ -196,7 +202,11 @@ describe('Seller Product Resolvers (real DB)', () => {
       // image add / reorder / delete
       const addImageInput: SellerAddProductImageInput = {
         productId,
-        imageUrl: 'https://i.example/b.png',
+        imageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          BigInt(auth.accountId),
+          'b.png',
+        ),
       };
       const addedImage = await mutationResolver.sellerAddProductImage(
         auth,
@@ -366,7 +376,11 @@ describe('Seller Product Resolvers (real DB)', () => {
 
       const upsertTemplateInput: SellerUpsertProductCustomTemplateInput = {
         productId,
-        baseImageUrl: 'https://i.example/tpl.png',
+        baseImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          BigInt(auth.accountId),
+          'tpl.png',
+        ),
         isActive: true,
       };
       const template = await mutationResolver.sellerUpsertProductCustomTemplate(

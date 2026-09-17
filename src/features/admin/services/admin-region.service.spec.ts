@@ -10,6 +10,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createRegion, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('AdminRegionService (real DB)', () => {
   let service: AdminRegionService;
@@ -19,6 +20,7 @@ describe('AdminRegionService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         AdminRegionService,
         AdminStoreService,
         AdminRepository,

@@ -14,6 +14,7 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import {
+  INVALID_IMAGE_URL,
   CUSTOM_TEMPLATE_NOT_FOUND,
   CUSTOM_TEXT_TOKEN_NOT_FOUND,
   idsMismatchError,
@@ -36,6 +37,8 @@ import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
 } from '@/features/seller/types/seller-output.type';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerCustomTemplateService extends SellerBaseService {
@@ -44,6 +47,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -62,9 +66,18 @@ export class SellerCustomTemplateService extends SellerBaseService {
       });
     if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
 
+    const baseImageUrl = cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH);
+    assertOwnedUploadUrl(
+      this.s3,
+      baseImageUrl,
+      'PRODUCT_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
+
     const row = await this.productRepository.upsertProductCustomTemplate({
       productId,
-      baseImageUrl: cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH),
+      baseImageUrl,
       isActive: input.isActive ?? true,
     });
 

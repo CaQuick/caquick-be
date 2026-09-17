@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 
+import { INVALID_IMAGE_URL } from '@/features/admin/constants/admin-error-messages';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -16,6 +17,11 @@ import {
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('AdminStoreService (real DB)', () => {
   let service: AdminStoreService;
@@ -24,6 +30,7 @@ describe('AdminStoreService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         AdminStoreService,
         AdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -371,6 +378,52 @@ describe('AdminStoreService (real DB)', () => {
       });
       expect(row.store_name).toBe('원본');
       spy.mockRestore();
+    });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(BANNER_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('BANNER_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'adminUpdateStoreBasicInfo.profileImageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const actor = await admin();
+        const store = await createStore(prisma);
+        await expect(
+          service.adminUpdateStoreBasicInfo(actor, {
+            storeId: store.id.toString(),
+            profileImageUrl: url(actor),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
+
+    it('발급된 URL이면 저장하고 null이면 제거한다', async () => {
+      const actor = await admin();
+      const store = await createStore(prisma);
+      const url = ownedUploadUrl('STORE_IMAGE', actor, 'logo.png');
+
+      const saved = await service.adminUpdateStoreBasicInfo(actor, {
+        storeId: store.id.toString(),
+        profileImageUrl: url,
+      });
+      expect(saved.profileImageUrl).toBe(url);
+
+      const removed = await service.adminUpdateStoreBasicInfo(actor, {
+        storeId: store.id.toString(),
+        profileImageUrl: null,
+      });
+      expect(removed.profileImageUrl).toBeNull();
     });
   });
 });

@@ -16,6 +16,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('Seller Store Resolvers (real DB)', () => {
   let queryResolver: SellerStoreQueryResolver;
@@ -25,6 +26,7 @@ describe('Seller Store Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerStoreQueryResolver,
         SellerStoreMutationResolver,
         {

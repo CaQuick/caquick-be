@@ -88,7 +88,7 @@ input AdminCreateBannerInput {
   placement: BannerPlacement!
   """배너 문구."""
   title: String
-  """배너 이미지 URL."""
+  """배너 이미지 URL. adminCreateUploadUrl(BANNER_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   imageUrl: String!
   """이동 대상 타입. 기본 NONE(이동 없음)."""
   linkType: BannerLinkType = NONE
@@ -117,7 +117,7 @@ input AdminUpdateBannerInput {
   placement: BannerPlacement
   """배너 문구."""
   title: String
-  """배너 이미지 URL."""
+  """배너 이미지 URL. adminCreateUploadUrl(BANNER_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   imageUrl: String
   """이동 대상 타입."""
   linkType: BannerLinkType

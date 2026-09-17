@@ -22,6 +22,7 @@ import { AdminStoreMutationResolver } from '@/features/admin/resolvers/admin-sto
 import { AdminStoreQueryResolver } from '@/features/admin/resolvers/admin-store-query.resolver';
 import { AdminTaxonomyMutationResolver } from '@/features/admin/resolvers/admin-taxonomy-mutation.resolver';
 import { AdminTaxonomyQueryResolver } from '@/features/admin/resolvers/admin-taxonomy-query.resolver';
+import { AdminUploadMutationResolver } from '@/features/admin/resolvers/admin-upload-mutation.resolver';
 import { AdminUserMutationResolver } from '@/features/admin/resolvers/admin-user-mutation.resolver';
 import { AdminUserQueryResolver } from '@/features/admin/resolvers/admin-user-query.resolver';
 import { AdminAccountService } from '@/features/admin/services/admin-account.service';
@@ -36,6 +37,7 @@ import { AdminRegionService } from '@/features/admin/services/admin-region.servi
 import { AdminSellerService } from '@/features/admin/services/admin-seller.service';
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AdminTaxonomyService } from '@/features/admin/services/admin-taxonomy.service';
+import { AdminUploadService } from '@/features/admin/services/admin-upload.service';
 import { AdminUserService } from '@/features/admin/services/admin-user.service';
 import { AuditLogModule } from '@/features/audit-log';
 import { OrderModule } from '@/features/order';
@@ -62,6 +64,7 @@ import { SearchModule } from '@/features/search';
     AdminRegionService,
     AdminAuditService,
     AdminDashboardService,
+    AdminUploadService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
     AdminContentQueryResolver,
@@ -85,6 +88,7 @@ import { SearchModule } from '@/features/search';
     AdminRegionMutationResolver,
     AdminAuditQueryResolver,
     AdminDashboardQueryResolver,
+    AdminUploadMutationResolver,
   ],
 })
 export class AdminModule {}

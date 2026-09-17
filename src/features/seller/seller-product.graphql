@@ -244,7 +244,7 @@ input SellerProductListInput {
 input SellerCreateProductInput {
   """상품명."""
   name: String!
-  """대표 이미지 URL. 상품 생성과 함께 첫 이미지로 등록된다."""
+  """대표 이미지 URL. 상품 생성과 함께 첫 이미지로 등록된다. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   initialImageUrl: String!
   """상품 설명."""
   description: String
@@ -256,7 +256,7 @@ input SellerCreateProductInput {
   salePrice: Int
   """통화 코드(ISO 4217, 대문자 3자). 기본 KRW. 다른 코드도 저장은 되지만 구매자 주문이 거절된다."""
   currency: String = "KRW"
-  """커스텀 도안의 바탕 이미지 URL."""
+  """커스텀 도안의 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   baseDesignImageUrl: String
   """제작 소요 시간(분). 기본 180."""
   preparationTimeMinutes: Int = 180
@@ -279,7 +279,7 @@ input SellerUpdateProductInput {
   salePrice: Int
   """통화 코드(ISO 4217, 대문자 3자). KRW 외에는 구매자 주문이 거절된다."""
   currency: String
-  """커스텀 도안의 바탕 이미지 URL."""
+  """커스텀 도안의 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   baseDesignImageUrl: String
   """제작 소요 시간(분)."""
   preparationTimeMinutes: Int
@@ -295,7 +295,7 @@ input SellerSetProductActiveInput {
 """상품 이미지 추가 입력."""
 input SellerAddProductImageInput {
   productId: ID!
-  """추가할 이미지 URL."""
+  """추가할 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   imageUrl: String!
   """노출 순서. 미지정 시 맨 뒤에 붙는다."""
   sortOrder: Int
@@ -391,7 +391,7 @@ input SellerCreateOptionItemInput {
   title: String!
   """선택지 설명."""
   description: String
-  """선택지 이미지 URL."""
+  """선택지 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   imageUrl: String
   """추가 금액(원). 기본 0. 음수면 할인으로 동작하되 품목 금액이 0원 미만이 되면 거절된다."""
   priceDelta: Int = 0
@@ -408,7 +408,7 @@ input SellerUpdateOptionItemInput {
   title: String
   """선택지 설명."""
   description: String
-  """선택지 이미지 URL."""
+  """선택지 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   imageUrl: String
   """추가 금액(원)."""
   priceDelta: Int
@@ -431,7 +431,7 @@ input SellerReorderOptionItemsInput {
 """커스텀 템플릿 등록·수정 입력. 상품당 1개라 같은 상품에 다시 보내면 덮어쓴다."""
 input SellerUpsertProductCustomTemplateInput {
   productId: ID!
-  """문구를 올릴 바탕 이미지 URL."""
+  """문구를 올릴 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT."""
   baseImageUrl: String!
   """활성 여부. 기본 true."""
   isActive: Boolean = true

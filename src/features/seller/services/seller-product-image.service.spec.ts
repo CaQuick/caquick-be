@@ -4,12 +4,18 @@ import type { PrismaClient } from '@prisma/client';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
+import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerProductImageService (real DB)', () => {
   let service: SellerProductImageService;
@@ -18,6 +24,7 @@ describe('SellerProductImageService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerProductImageService,
         SellerRepository,
         ProductRepository,
@@ -72,7 +79,7 @@ describe('SellerProductImageService (real DB)', () => {
       await expect(
         service.sellerAddProductImage(account.id, {
           productId: product.id.toString(),
-          imageUrl: 'https://i.example/6.png',
+          imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, '6.png'),
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -83,9 +90,11 @@ describe('SellerProductImageService (real DB)', () => {
 
       const result = await service.sellerAddProductImage(account.id, {
         productId: product.id.toString(),
-        imageUrl: 'https://i.example/new.png',
+        imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'new.png'),
       });
-      expect(result.imageUrl).toBe('https://i.example/new.png');
+      expect(result.imageUrl).toBe(
+        ownedUploadUrl('PRODUCT_IMAGE', account.id, 'new.png'),
+      );
 
       const images = await prisma.productImage.findMany({
         where: { product_id: product.id },
@@ -98,7 +107,7 @@ describe('SellerProductImageService (real DB)', () => {
       await expect(
         service.sellerAddProductImage(account.id, {
           productId: '999999',
-          imageUrl: 'https://i.example/x.png',
+          imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'x.png'),
         }),
       ).rejects.toThrow(NotFoundException);
     });
@@ -218,5 +227,38 @@ describe('SellerProductImageService (real DB)', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('PRODUCT_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(STORE_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'sellerAddProductImage.imageUrl이 %s면 BadRequest·이미지 미추가',
+      async (_label, url) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const product = await createSellerProduct(store.id);
+        await expect(
+          service.sellerAddProductImage(account.id, {
+            productId: product.id.toString(),
+            imageUrl: url(account.id),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+        expect(
+          await prisma.productImage.count({
+            where: { product_id: product.id },
+          }),
+        ).toBe(1);
+      },
+    );
   });
 });

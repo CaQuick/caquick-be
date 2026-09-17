@@ -4,12 +4,18 @@ import type { PrismaClient, Product } from '@prisma/client';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
+import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerCustomTemplateService (real DB)', () => {
   let service: SellerCustomTemplateService;
@@ -18,6 +24,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerCustomTemplateService,
         SellerRepository,
         ProductRepository,
@@ -66,7 +73,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
       await expect(
         service.sellerUpsertProductCustomTemplate(accountId, {
           productId: '999999',
-          baseImageUrl: 'https://i.example/x.png',
+          baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'x.png'),
         }),
       ).rejects.toThrow(NotFoundException);
     });
@@ -76,19 +83,21 @@ describe('SellerCustomTemplateService (real DB)', () => {
 
       const first = await service.sellerUpsertProductCustomTemplate(accountId, {
         productId: product.id.toString(),
-        baseImageUrl: 'https://i.example/a.png',
+        baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'a.png'),
       });
 
       const second = await service.sellerUpsertProductCustomTemplate(
         accountId,
         {
           productId: product.id.toString(),
-          baseImageUrl: 'https://i.example/b.png',
+          baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
         },
       );
 
       expect(second.id).toBe(first.id);
-      expect(second.baseImageUrl).toBe('https://i.example/b.png');
+      expect(second.baseImageUrl).toBe(
+        ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+      );
 
       const templates = await prisma.productCustomTemplate.findMany({
         where: { product_id: product.id },
@@ -278,5 +287,32 @@ describe('SellerCustomTemplateService (real DB)', () => {
       );
       expect(result[0].id).toBe(t2.id.toString());
     });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('PRODUCT_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(STORE_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'sellerUpsertProductCustomTemplate.baseImageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: url(accountId),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
   });
 });

@@ -24,6 +24,7 @@ import {
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
 import {
+  INVALID_IMAGE_URL,
   BANNER_NOT_FOUND,
   CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK,
   CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
@@ -55,6 +56,8 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
+import { S3Service } from '@/global/storage/s3.service';
 
 /** linkType이 결정된 뒤의 링크 값 묶음. 생성·수정이 같은 검증을 탄다. */
 interface BannerLinkValues {
@@ -84,6 +87,7 @@ export class AdminBannerService extends AdminBaseService {
     repo: AdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -148,12 +152,20 @@ export class AdminBannerService extends AdminBaseService {
       endsAt: toDate(input.endsAt) ?? null,
     };
     await this.validateExposure(exposure);
+    const imageUrl = cleanRequiredText(input.imageUrl, MAX_URL_LENGTH);
+    assertOwnedUploadUrl(
+      this.s3,
+      imageUrl,
+      'BANNER_IMAGE',
+      ctx.accountId,
+      INVALID_IMAGE_URL,
+    );
 
     const row = await this.repo.createBanner(
       {
         placement: exposure.placement,
         title: cleanNullableText(input.title, MAX_BANNER_TITLE_LENGTH),
-        image_url: cleanRequiredText(input.imageUrl, MAX_URL_LENGTH),
+        image_url: imageUrl,
         ...this.buildBannerLinkFields(resolved),
         link_type: linkType,
         starts_at: exposure.startsAt,
@@ -201,11 +213,22 @@ export class AdminBannerService extends AdminBaseService {
           : current.ends_at,
     });
 
+    const data = this.buildBannerUpdateData(input, resolved);
+    if (typeof data.image_url === 'string') {
+      assertOwnedUploadUrl(
+        this.s3,
+        data.image_url,
+        'BANNER_IMAGE',
+        ctx.accountId,
+        INVALID_IMAGE_URL,
+      );
+    }
+
     // before는 repository가 잠금 뒤 트랜잭션 안에서 읽는다 — current는 검증용일 뿐 감사엔 안 쓴다
     const row = await this.repo.updateBanner(
       {
         bannerId: current.id,
-        data: this.buildBannerUpdateData(input, resolved),
+        data,
       },
       (before, after) => ({
         actorAccountId: ctx.accountId,

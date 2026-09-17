@@ -4,12 +4,18 @@ import type { PrismaClient, Product } from '@prisma/client';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
+import { INVALID_IMAGE_URL } from '@/features/seller/constants/seller-error-messages';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerOptionService (real DB)', () => {
   let service: SellerOptionService;
@@ -18,6 +24,7 @@ describe('SellerOptionService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ...s3TestProviders(),
         SellerOptionService,
         SellerRepository,
         ProductRepository,
@@ -413,7 +420,7 @@ describe('SellerOptionService (real DB)', () => {
         optionItemId: item.id.toString(),
         title: 'L',
         description: '대사이즈',
-        imageUrl: 'https://i.example/l.png',
+        imageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'l.png'),
         priceDelta: 2000,
         sortOrder: 3,
         isActive: false,
@@ -421,7 +428,9 @@ describe('SellerOptionService (real DB)', () => {
 
       expect(result.title).toBe('L');
       expect(result.description).toBe('대사이즈');
-      expect(result.imageUrl).toBe('https://i.example/l.png');
+      expect(result.imageUrl).toBe(
+        ownedUploadUrl('PRODUCT_IMAGE', accountId, 'l.png'),
+      );
       expect(result.priceDelta).toBe(2000);
       expect(result.sortOrder).toBe(3);
       expect(result.isActive).toBe(false);
@@ -522,6 +531,69 @@ describe('SellerOptionService (real DB)', () => {
           optionItemIds: [foreignItem.id.toString()],
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('이미지 URL 소유권', () => {
+    const rejected = [
+      [
+        '타 계정 prefix',
+        (id: bigint) => ownedUploadUrl('PRODUCT_IMAGE', id + BigInt(1)),
+      ],
+      [
+        '타 용도(STORE_IMAGE) prefix',
+        (id: bigint) => ownedUploadUrl('STORE_IMAGE', id),
+      ],
+      ['외부 호스트', () => FOREIGN_UPLOAD_URL],
+    ] as const;
+
+    it.each(rejected)(
+      'sellerCreateOptionItem.imageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { accountId, product } = await setupProductForSeller();
+        const group = await createOptionGroup(product.id);
+        await expect(
+          service.sellerCreateOptionItem(accountId, {
+            optionGroupId: group.id.toString(),
+            title: 'L',
+            imageUrl: url(accountId),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
+
+    it.each(rejected)(
+      'sellerUpdateOptionItem.imageUrl이 %s면 BadRequest',
+      async (_label, url) => {
+        const { accountId, product } = await setupProductForSeller();
+        const group = await createOptionGroup(product.id);
+        const item = await prisma.productOptionItem.create({
+          data: { option_group_id: group.id, title: 'S' },
+        });
+        await expect(
+          service.sellerUpdateOptionItem(accountId, {
+            optionItemId: item.id.toString(),
+            imageUrl: url(accountId),
+          }),
+        ).rejects.toThrow(INVALID_IMAGE_URL);
+      },
+    );
+
+    it('sellerUpdateOptionItem.imageUrl 빈 문자열은 제거 의미라 검증 없이 통과한다', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const item = await prisma.productOptionItem.create({
+        data: {
+          option_group_id: group.id,
+          title: 'S',
+          image_url: 'https://legacy.example/s.png',
+        },
+      });
+      const result = await service.sellerUpdateOptionItem(accountId, {
+        optionItemId: item.id.toString(),
+        imageUrl: '',
+      });
+      expect(result.imageUrl).toBeNull();
     });
   });
 });
