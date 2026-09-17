@@ -146,27 +146,15 @@ describe('JwtBearerStrategy (real DB)', () => {
     });
   });
 
-  describe('constructor 분기', () => {
-    /**
-     * 생성자에서 JWT_ACCESS_SECRET 필수 검증을 fail-fast 한다.
-     * - 미설정/공백만 있는 경우 모두 throw 되어야 한다.
-     * - passport-jwt Strategy 생성자는 secret 없을 때 내부적으로 throw하므로,
-     *   config에 빈 문자열이면 커스텀 throw가 먼저 발생함을 확인한다.
-     */
-    it('JWT_ACCESS_SECRET 미설정이면 Error', () => {
-      const config = { get: () => undefined } as never;
+  describe('constructor', () => {
+    // 시크릿 검증(폴백·공백·prod)은 auth.config.spec이 담당한다. 여기서는 해석값을 그대로 쓰는지만 본다.
+    it('authConfig.jwtSecret으로 생성된다', () => {
+      const getOrThrow = jest.fn().mockReturnValue({ jwtSecret: 'resolved' });
+      const config = { getOrThrow } as never;
       const accounts = {} as never;
-      expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
-        'Missing JWT_ACCESS_SECRET',
-      );
-    });
 
-    it('JWT_ACCESS_SECRET이 공백 문자열이면 Error', () => {
-      const config = { get: () => '   ' } as never;
-      const accounts = {} as never;
-      expect(() => new JwtBearerStrategy(config, accounts)).toThrow(
-        'Missing JWT_ACCESS_SECRET',
-      );
+      expect(() => new JwtBearerStrategy(config, accounts)).not.toThrow();
+      expect(getOrThrow).toHaveBeenCalledWith('auth');
     });
   });
 });

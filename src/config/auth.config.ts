@@ -37,12 +37,23 @@ function parseBoolean(
 }
 
 /**
+ * JWT 시크릿 — JWT_ACCESS_SECRET 우선, 없으면 JWT_SECRET.
+ * 공백만 있는 값은 미설정으로 본다(strategy·module이 이 값을 그대로 서명키로 쓴다).
+ */
+function readJwtSecret(): string | undefined {
+  for (const key of ['JWT_ACCESS_SECRET', 'JWT_SECRET'] as const) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
  * 인증 설정
  */
 export default registerAs('auth', (): AuthConfig => {
   const isProd = process.env.NODE_ENV === 'production';
-  const jwtSecret =
-    process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? '';
+  const jwtSecret = readJwtSecret();
 
   if (isProd && !jwtSecret) {
     throw new Error(
@@ -51,7 +62,7 @@ export default registerAs('auth', (): AuthConfig => {
   }
 
   return {
-    jwtSecret: jwtSecret || 'dev_jwt_secret',
+    jwtSecret: jwtSecret ?? 'dev_jwt_secret',
     jwtAccessExpiresSeconds: parseNumber(
       process.env.JWT_ACCESS_EXPIRES_SECONDS,
       900,
