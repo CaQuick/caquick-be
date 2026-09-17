@@ -16,8 +16,6 @@ extend type Mutation {
 type ViewerCounts {
   """읽지 않은 알림 수"""
   unreadNotificationCount: Int!
-  """장바구니 아이템 수"""
-  cartItemCount: Int!
   """위시리스트 아이템 수"""
   wishlistCount: Int!
 }

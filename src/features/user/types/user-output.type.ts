@@ -29,7 +29,6 @@ export interface MePayload {
 
 export interface ViewerCounts {
   unreadNotificationCount: number;
-  cartItemCount: number;
   wishlistCount: number;
 }
 

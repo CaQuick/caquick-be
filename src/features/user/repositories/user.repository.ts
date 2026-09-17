@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  AccountType,
-  CustomDraftStatus,
-  IdentityProvider,
-  Prisma,
-} from '@prisma/client';
+import { AccountType, IdentityProvider, Prisma } from '@prisma/client';
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { buildReviewLikedNotification } from '@/features/notification';
@@ -291,11 +286,10 @@ export class UserRepository {
     notificationSince: Date;
   }): Promise<{
     unreadNotificationCount: number;
-    cartItemCount: number;
     wishlistCount: number;
   }> {
     const { accountId, notificationSince } = args;
-    const [unreadNotificationCount, cartItemCount, wishlistCount] =
+    const [unreadNotificationCount, wishlistCount] =
       await this.prisma.$transaction([
         // 3개월 밖 미읽 알림까지 세면 목록(myNotifications)과 배지 수가 어긋난다
         this.prisma.notification.count({
@@ -305,17 +299,12 @@ export class UserRepository {
             created_at: { gte: notificationSince },
           },
         }),
-        this.prisma.cartItem.count({
-          where: {
-            cart: { account_id: accountId, ...activeWhere },
-          },
-        }),
         this.prisma.wishlistItem.count({
           where: this.visibleWishlistWhere(accountId),
         }),
       ]);
 
-    return { unreadNotificationCount, cartItemCount, wishlistCount };
+    return { unreadNotificationCount, wishlistCount };
   }
 
   async listNotifications(args: {
@@ -468,20 +457,6 @@ export class UserRepository {
       data: { deleted_at: args.now },
     });
     return result.count;
-  }
-
-  async countCustomDrafts(accountId: bigint): Promise<number> {
-    return this.prisma.customDraft.count({
-      where: {
-        account_id: accountId,
-        status: {
-          in: [
-            CustomDraftStatus.IN_PROGRESS,
-            CustomDraftStatus.READY_FOR_ORDER,
-          ],
-        },
-      },
-    });
   }
 
   async countWishlistItems(accountId: bigint): Promise<number> {

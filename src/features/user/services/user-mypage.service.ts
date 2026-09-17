@@ -24,26 +24,20 @@ export class UserMypageService {
     const since = new Date();
     since.setDate(since.getDate() - ONGOING_ORDER_DAYS);
 
-    const [
-      customDraftCount,
-      wishlistCount,
-      myReviewCount,
-      ongoingOrders,
-      recentViews,
-    ] = await Promise.all([
-      this.userRepository.countCustomDrafts(accountId),
-      this.userRepository.countWishlistItems(accountId),
-      this.userRepository.countMyReviews(accountId),
-      this.orderRepository.findOngoingOrdersByAccount({
-        accountId,
-        since,
-        limit: ONGOING_ORDER_LIMIT,
-      }),
-      this.recentProductViewRepository.findRecentByAccount(
-        accountId,
-        RECENT_VIEW_LIMIT,
-      ),
-    ]);
+    const [wishlistCount, myReviewCount, ongoingOrders, recentViews] =
+      await Promise.all([
+        this.userRepository.countWishlistItems(accountId),
+        this.userRepository.countMyReviews(accountId),
+        this.orderRepository.findOngoingOrdersByAccount({
+          accountId,
+          since,
+          limit: ONGOING_ORDER_LIMIT,
+        }),
+        this.recentProductViewRepository.findRecentByAccount(
+          accountId,
+          RECENT_VIEW_LIMIT,
+        ),
+      ]);
 
     // N+1 회피: 최근 본 상품 productId 묶음으로 단일 IN 쿼리로 찜 여부 조회
     const wishlistedProductIds =
@@ -54,8 +48,6 @@ export class UserMypageService {
 
     return {
       counts: {
-        customDraftCount,
-        couponCount: 0, // TODO: 쿠폰 도메인 도입 시 실 구현
         wishlistCount,
         myReviewCount,
       },

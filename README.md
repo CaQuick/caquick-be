@@ -164,7 +164,7 @@ flowchart LR
 flowchart TB
     subgraph features["src/features"]
         Auth[🔐 auth<br/>OIDC + JWT]
-        User[👤 user<br/>마이페이지 · 프로필 · 알림 · 찜 · 리뷰 · 장바구니]
+        User[👤 user<br/>마이페이지 · 프로필 · 알림 · 찜 · 리뷰]
         Product[🎂 product<br/>케이크 상품 · 카테고리]
         Order[📦 order<br/>주문 · 결제 · 픽업]
         Seller[🏪 seller<br/>판매자 가게]

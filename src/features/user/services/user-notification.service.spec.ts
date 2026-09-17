@@ -55,7 +55,7 @@ describe('UserNotificationService (real DB)', () => {
 
   // ─── viewerCounts ───
   describe('viewerCounts', () => {
-    it('미읽 알림 수 / 장바구니 / 위시리스트 수를 반환한다', async () => {
+    it('미읽 알림 수 / 위시리스트 수를 반환한다', async () => {
       const account = await setupUser();
 
       // 미읽 알림 2개 + 읽음 알림 1개
@@ -69,7 +69,6 @@ describe('UserNotificationService (real DB)', () => {
       const result = await service.viewerCounts(account.id);
 
       expect(result.unreadNotificationCount).toBe(2);
-      expect(result.cartItemCount).toBe(0);
       expect(result.wishlistCount).toBe(0);
     });
 
