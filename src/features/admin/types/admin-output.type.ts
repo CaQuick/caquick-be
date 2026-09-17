@@ -180,7 +180,7 @@ export interface AdminReviewOutput {
   productId: string;
   authorAccountId: string;
   authorNickname: string | null;
-  rating: string;
+  rating: number;
   content: string | null;
   commentCount: number;
   likeCount: number;

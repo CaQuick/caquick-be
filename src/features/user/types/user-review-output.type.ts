@@ -1,11 +1,5 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
-
-export interface MyReviewMedia {
-  mediaType: 'IMAGE' | 'VIDEO';
-  mediaUrl: string;
-  thumbnailUrl: string | null;
-  sortOrder: number;
-}
+import type { ReviewMedia } from '@/features/review';
 
 export interface MyReview {
   reviewId: string;
@@ -16,7 +10,7 @@ export interface MyReview {
   storeName: string;
   rating: number;
   content: string | null;
-  media: MyReviewMedia[];
+  media: ReviewMedia[];
   createdAt: Date;
 }
 

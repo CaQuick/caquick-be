@@ -29,6 +29,9 @@ const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['StorePickupDay', '플랜 08'],
   ['StorePickupTimeSlots', '플랜 08'],
   ['StorePickupSlot', '플랜 08'],
+  ['ProductReviewMedia', '플랜 09'],
+  ['StoreReviewMedia', '플랜 09'],
+  ['MyReviewMedia', '플랜 09'],
 ];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]
