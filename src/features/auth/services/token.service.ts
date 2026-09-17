@@ -15,7 +15,6 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import type { ITokenService } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
 
@@ -25,7 +24,7 @@ import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
  * AuthService 의 토큰 관련 책임을 분리한 결과물.
  */
 @Injectable()
-export class TokenService implements ITokenService {
+export class TokenService {
   /**
    * @param config ConfigService
    * @param jwt JwtService

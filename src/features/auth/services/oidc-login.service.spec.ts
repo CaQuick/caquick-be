@@ -15,7 +15,6 @@ import {
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 describe('OidcLoginService', () => {
@@ -62,10 +61,7 @@ describe('OidcLoginService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,

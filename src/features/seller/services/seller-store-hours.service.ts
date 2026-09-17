@@ -32,7 +32,6 @@ import {
   SellerRepository,
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type { ISellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service.interface';
 import {
   toStoreBusinessHourOutput,
   toStoreSpecialClosureOutput,
@@ -45,10 +44,7 @@ import type {
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
-export class SellerStoreHoursService
-  extends SellerBaseService
-  implements ISellerStoreHoursService
-{
+export class SellerStoreHoursService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

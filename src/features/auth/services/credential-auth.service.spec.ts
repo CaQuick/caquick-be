@@ -24,10 +24,11 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
-import type { CredentialRole } from '@/features/auth/services/credential-auth.service.interface';
+import {
+  CredentialAuthService,
+  type CredentialRole,
+} from '@/features/auth/services/credential-auth.service';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AccountType } from '@/generated/prisma/client';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
@@ -108,10 +109,7 @@ describe('CredentialAuthService', () => {
           provide: JwtService,
           useValue: { sign: jest.fn(() => 'mock-access-token') },
         },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_CREDENTIAL_REPOSITORY,
           useValue: credentials,

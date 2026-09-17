@@ -15,17 +15,13 @@ import {
 } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
-import type { ISellerProductQueryService } from '@/features/seller/services/seller-product-query.service.interface';
 import type {
   SellerCursorConnection,
   SellerProductOutput,
 } from '@/features/seller/types/seller-output.type';
 
 @Injectable()
-export class SellerProductQueryService
-  extends SellerBaseService
-  implements ISellerProductQueryService
-{
+export class SellerProductQueryService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

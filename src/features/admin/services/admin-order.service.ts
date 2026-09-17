@@ -34,11 +34,11 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { OrderDomainService, OrderRepository } from '@/features/order';
+import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import { OrderStatus } from '@/generated/prisma/client';
 
 /**
- * 주문 조회와 강제 취소. 전이 규칙은 판매자와 같은 OrderDomainService가 단일 소스이고,
+ * 주문 조회와 강제 취소. 전이 규칙은 판매자와 같은 OrderStatusTransitionPolicy가 단일 소스이고,
  * 저장·이력·알림·감사는 order feature의 repository가 한 트랜잭션에서 처리한다.
  */
 @Injectable()
@@ -48,7 +48,7 @@ export class AdminOrderService extends AdminBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
-    private readonly orderDomainService: OrderDomainService,
+    private readonly statusPolicy: OrderStatusTransitionPolicy,
   ) {
     super(repo, auditLogs);
   }
@@ -64,9 +64,7 @@ export class AdminOrderService extends AdminBaseService {
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
-      status: input?.status
-        ? this.orderDomainService.parseStatus(input.status)
-        : undefined,
+      status: input?.status ? this.statusPolicy.parse(input.status) : undefined,
       storeId: parseOptionalId(input?.storeId) ?? undefined,
       accountId: parseOptionalId(input?.accountId) ?? undefined,
       fromCreatedAt: toDate(input?.fromCreatedAt),
@@ -107,7 +105,7 @@ export class AdminOrderService extends AdminBaseService {
       parseId(input.orderId),
     );
     if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
-    this.orderDomainService.assertSellerTransition(
+    this.statusPolicy.assertSellerTransition(
       current.status,
       OrderStatus.CANCELED,
     );
@@ -120,7 +118,7 @@ export class AdminOrderService extends AdminBaseService {
       // 잠금 뒤 현재 상태가 취소 가능한지 repository가 이 함수로 다시 판정한다
       canCancelFrom: (status) => {
         try {
-          this.orderDomainService.assertSellerTransition(
+          this.statusPolicy.assertSellerTransition(
             status,
             OrderStatus.CANCELED,
           );
@@ -136,7 +134,7 @@ export class AdminOrderService extends AdminBaseService {
       const latest = await this.orderRepository.findOrderDetailForAdmin(
         current.id,
       );
-      this.orderDomainService.assertSellerTransition(
+      this.statusPolicy.assertSellerTransition(
         latest?.status ?? OrderStatus.CANCELED,
         OrderStatus.CANCELED,
       );

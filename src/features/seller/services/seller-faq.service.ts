@@ -16,15 +16,11 @@ import type { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/sel
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toFaqTopicOutput } from '@/features/seller/services/seller-content-mappers.helper';
-import type { ISellerFaqService } from '@/features/seller/services/seller-faq.service.interface';
 import type { SellerFaqTopicOutput } from '@/features/seller/types/seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
-export class SellerFaqService
-  extends SellerBaseService
-  implements ISellerFaqService
-{
+export class SellerFaqService extends SellerBaseService {
   constructor(
     repo: SellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)

@@ -1,3 +1,4 @@
+import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import type {
   AdminOrderDetailOutput,
   AdminOrderItemDetailOutput,
@@ -34,9 +35,8 @@ export function toAdminOrderDetailOutput(
     buyer: {
       accountId: row.account.id.toString(),
       email: row.account.email,
-      // 탈퇴(프로필 삭제) 구매자는 닉네임을 노출하지 않는다
-      nickname:
-        profile && profile.deleted_at === null ? profile.nickname : null,
+      // 구매자도 리뷰 작성자와 같은 탈퇴 노출 정책을 따른다
+      nickname: anonymizeReviewAuthor(profile).nickname,
       status: row.account.status,
     },
     status: row.status,

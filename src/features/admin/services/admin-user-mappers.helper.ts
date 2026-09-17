@@ -1,12 +1,10 @@
 import type { AdminUserRow } from '@/features/admin/repositories/admin.repository';
+import { activeOrNull } from '@/features/admin/services/admin-mappers.helper';
 import type { AdminUserOutput } from '@/features/admin/types/admin-output.type';
 
 /** 순수 매퍼(DI 없음). nested relation은 soft-delete 자동 필터 밖이라 deleted_at을 직접 본다. */
 export function toAdminUserOutput(row: AdminUserRow): AdminUserOutput {
-  const profile =
-    row.user_profile && row.user_profile.deleted_at === null
-      ? row.user_profile
-      : null;
+  const profile = activeOrNull(row.user_profile);
   return {
     accountId: row.id.toString(),
     email: row.email,

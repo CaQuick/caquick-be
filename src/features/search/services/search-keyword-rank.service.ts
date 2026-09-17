@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
+import { HOUR_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_POPULAR_KEYWORDS_LIMIT,
-  HOUR_MS,
   KEYWORD_RANK_SNAPSHOT_SIZE,
   KEYWORD_RANK_WINDOW_HOURS,
-  MAX_POPULAR_KEYWORDS_LIMIT,
 } from '@/features/search/constants/search.constants';
 import type { PopularSearchKeywordsInput } from '@/features/search/dto/inputs/popular-search-keywords.input';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
@@ -51,7 +50,7 @@ export class SearchKeywordRankService {
   ): Promise<PopularSearchKeywordsResult> {
     const limit = Math.min(
       input?.limit ?? DEFAULT_POPULAR_KEYWORDS_LIMIT,
-      MAX_POPULAR_KEYWORDS_LIMIT,
+      KEYWORD_RANK_SNAPSHOT_SIZE,
     );
 
     const rankedAt = await this.repo.findLatestSnapshotAt();

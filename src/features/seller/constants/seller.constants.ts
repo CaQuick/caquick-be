@@ -29,18 +29,6 @@ export const MAX_TOKEN_DEFAULT_TEXT_LENGTH = 200;
 export const DEFAULT_TOKEN_MAX_LENGTH = 30;
 
 // ── 매장 ──
-// 컬럼 길이는 store feature가 단일 소스(관리자 온보딩과 공유). 판매자 쪽 import 경로는 유지한다.
-
-export {
-  MAX_ADDRESS_CITY_LENGTH,
-  MAX_ADDRESS_DISTRICT_LENGTH,
-  MAX_ADDRESS_FULL_LENGTH,
-  MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
-  MAX_BUSINESS_HOURS_TEXT_LENGTH,
-  MAX_GREETING_MESSAGE_LENGTH,
-  MAX_STORE_NAME_LENGTH,
-  MAX_STORE_PHONE_LENGTH,
-} from '@/features/store';
 export const MAX_SPECIAL_CLOSURE_REASON_LENGTH = 200;
 
 export const MIN_DAY_OF_WEEK = 0;

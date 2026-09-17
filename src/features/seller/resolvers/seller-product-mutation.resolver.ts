@@ -1,4 +1,4 @@
-import { Inject, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
@@ -21,18 +21,9 @@ import { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/in
 import { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
-import {
-  SELLER_PRODUCT_IMAGE_SERVICE,
-  type ISellerProductImageService,
-} from '@/features/seller/services/seller-product-image.service.interface';
-import {
-  SELLER_PRODUCT_LIFECYCLE_SERVICE,
-  type ISellerProductLifecycleService,
-} from '@/features/seller/services/seller-product-lifecycle.service.interface';
-import {
-  SELLER_PRODUCT_TAXONOMY_SERVICE,
-  type ISellerProductTaxonomyService,
-} from '@/features/seller/services/seller-product-taxonomy.service.interface';
+import { SellerProductImageService } from '@/features/seller/services/seller-product-image.service';
+import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
+import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
@@ -55,12 +46,9 @@ import {
 @Roles('SELLER')
 export class SellerProductMutationResolver {
   constructor(
-    @Inject(SELLER_PRODUCT_LIFECYCLE_SERVICE)
-    private readonly productLifecycle: ISellerProductLifecycleService,
-    @Inject(SELLER_PRODUCT_IMAGE_SERVICE)
-    private readonly productImage: ISellerProductImageService,
-    @Inject(SELLER_PRODUCT_TAXONOMY_SERVICE)
-    private readonly productTaxonomy: ISellerProductTaxonomyService,
+    private readonly productLifecycle: SellerProductLifecycleService,
+    private readonly productImage: SellerProductImageService,
+    private readonly productTaxonomy: SellerProductTaxonomyService,
     private readonly optionService: SellerOptionService,
     private readonly templateService: SellerCustomTemplateService,
   ) {}

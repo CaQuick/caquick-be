@@ -1,3 +1,4 @@
+import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import type {
   AdminReviewCommentRow,
   AdminReviewReportDetailRow,
@@ -10,12 +11,11 @@ import type {
   AdminReviewReportOutput,
 } from '@/features/admin/types/admin-output.type';
 
-/** 탈퇴(프로필 삭제) 작성자는 닉네임을 노출하지 않는다. nested는 soft-delete 자동 필터 밖. */
+/** 작성자 노출 정책은 common 헬퍼가 단일 소스(리뷰 화면과 동일). */
 function nicknameOf(account: {
   user_profile: { nickname: string; deleted_at: Date | null } | null;
 }): string | null {
-  const profile = account.user_profile;
-  return profile && profile.deleted_at === null ? profile.nickname : null;
+  return anonymizeReviewAuthor(account.user_profile).nickname;
 }
 
 export function toAdminReviewReportOutput(row: {

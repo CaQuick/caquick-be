@@ -4,14 +4,8 @@ import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
-import {
-  CREDENTIAL_AUTH_SERVICE,
-  type ICredentialAuthService,
-} from '@/features/auth/services/credential-auth.service.interface';
-import {
-  OIDC_LOGIN_SERVICE,
-  type IOidcLoginService,
-} from '@/features/auth/services/oidc-login.service.interface';
+import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
+import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -26,8 +20,8 @@ function mockRes(): Response {
 describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
-  let oidcLogin: jest.Mocked<IOidcLoginService>;
-  let credentialAuth: jest.Mocked<ICredentialAuthService>;
+  let oidcLogin: jest.Mocked<OidcLoginService>;
+  let credentialAuth: jest.Mocked<CredentialAuthService>;
 
   beforeEach(async () => {
     auth = {
@@ -39,21 +33,21 @@ describe('AuthController', () => {
     oidcLogin = {
       startOidcLogin: jest.fn(),
       handleOidcCallback: jest.fn(),
-    };
+    } as unknown as jest.Mocked<OidcLoginService>;
 
     credentialAuth = {
       login: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
       changePassword: jest.fn(),
-    };
+    } as unknown as jest.Mocked<CredentialAuthService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         { provide: AuthService, useValue: auth },
-        { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
-        { provide: CREDENTIAL_AUTH_SERVICE, useValue: credentialAuth },
+        { provide: OidcLoginService, useValue: oidcLogin },
+        { provide: CredentialAuthService, useValue: credentialAuth },
       ],
     }).compile();
 

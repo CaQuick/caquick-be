@@ -1,13 +1,10 @@
-import { Inject, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
 import { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
 import { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
-import {
-  SELLER_FAQ_SERVICE,
-  type ISellerFaqService,
-} from '@/features/seller/services/seller-faq.service.interface';
+import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
 import type { SellerFaqTopicOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
@@ -22,10 +19,7 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('SELLER')
 export class SellerContentMutationResolver {
-  constructor(
-    @Inject(SELLER_FAQ_SERVICE)
-    private readonly faqService: ISellerFaqService,
-  ) {}
+  constructor(private readonly faqService: SellerFaqService) {}
 
   @Mutation('sellerCreateFaqTopic')
   sellerCreateFaqTopic(

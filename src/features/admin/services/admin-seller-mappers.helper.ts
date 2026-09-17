@@ -1,17 +1,12 @@
 import type { AdminSellerRow } from '@/features/admin/repositories/admin.repository';
+import { activeOrNull } from '@/features/admin/services/admin-mappers.helper';
 import type { AdminSellerOutput } from '@/features/admin/types/admin-output.type';
 
 /** 순수 매퍼(DI 없음). nested relation은 soft-delete 자동 필터 밖이라 deleted_at을 직접 본다. */
 export function toAdminSellerOutput(row: AdminSellerRow): AdminSellerOutput {
-  const profile =
-    row.seller_profile && row.seller_profile.deleted_at === null
-      ? row.seller_profile
-      : null;
-  const store = row.store && row.store.deleted_at === null ? row.store : null;
-  const credential =
-    row.credential && row.credential.deleted_at === null
-      ? row.credential
-      : null;
+  const profile = activeOrNull(row.seller_profile);
+  const store = activeOrNull(row.store);
+  const credential = activeOrNull(row.credential);
   return {
     accountId: row.id.toString(),
     username: credential?.username ?? null,
