@@ -144,7 +144,7 @@ describe('AdminModerationService (real DB)', () => {
       expect(detail.target.authorNickname).toBe(`c_${comment.account_id}`);
     });
 
-    it('없는 신고면 NotFoundException', async () => {
+    it('없는 신고면 404', async () => {
       await expect(
         service.adminReviewReport(await admin(), BigInt(999_999)),
       ).rejects.toThrowDomain(404);
@@ -292,7 +292,7 @@ describe('AdminModerationService (real DB)', () => {
       ).toBe('PENDING');
     });
 
-    it('이미 처리된 신고는 BadRequestException, 없는 신고는 NotFoundException', async () => {
+    it('이미 처리된 신고는 400, 없는 신고는 404', async () => {
       const report = await createReviewReport(prisma, { status: 'REJECTED' });
       await expect(
         service.adminResolveReviewReport(await admin(), {
@@ -379,7 +379,7 @@ describe('AdminModerationService (real DB)', () => {
   });
 
   describe('adminDeleteReview / adminDeleteReviewComment', () => {
-    it('리뷰 강제 삭제: cascade + 미처리 신고 RESOLVED(사유 메모) + 감사, 재삭제는 NotFoundException', async () => {
+    it('리뷰 강제 삭제: cascade + 미처리 신고 RESOLVED(사유 메모) + 감사, 재삭제는 404', async () => {
       const actor = await admin();
       const review = await createReview(prisma);
       const comment = await commentOn(review.id);
@@ -485,7 +485,7 @@ describe('AdminModerationService (real DB)', () => {
       ]);
 
       expect(reviewDeleted).toEqual({ status: 'fulfilled', value: true });
-      // 리뷰 삭제가 먼저면 댓글은 이미 내려가 NotFoundException
+      // 리뷰 삭제가 먼저면 댓글은 이미 내려가 404
       if (commentDeleted.status === 'rejected') {
         expect(commentDeleted.reason).toThrowDomain(404);
       }

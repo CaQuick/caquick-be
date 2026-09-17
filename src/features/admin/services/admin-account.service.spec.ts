@@ -51,12 +51,12 @@ describe('AdminAccountService (real DB)', () => {
   };
 
   describe('requireAdminContext (공통)', () => {
-    it('존재하지 않는 계정이면 UnauthorizedException', async () => {
+    it('존재하지 않는 계정이면 401', async () => {
       await expect(service.adminMe(BigInt(999_999))).rejects.toThrowDomain(401);
     });
 
     it.each(['USER', 'SELLER'] as const)(
-      '%s 계정이면 ForbiddenException',
+      '%s 계정이면 403',
       async (accountType) => {
         const account = await createAccount(prisma, {
           account_type: accountType,
@@ -65,7 +65,7 @@ describe('AdminAccountService (real DB)', () => {
       },
     );
 
-    it('정지된 ADMIN 계정이면 ForbiddenException', async () => {
+    it('정지된 ADMIN 계정이면 403', async () => {
       const account = await createAccount(prisma, {
         account_type: 'ADMIN',
         status: 'SUSPENDED',
@@ -73,7 +73,7 @@ describe('AdminAccountService (real DB)', () => {
       await expect(service.adminMe(account.id)).rejects.toThrowDomain(403);
     });
 
-    it('탈퇴(soft-delete)한 ADMIN 계정이면 UnauthorizedException', async () => {
+    it('탈퇴(soft-delete)한 ADMIN 계정이면 401', async () => {
       const account = await createAccount(prisma, {
         account_type: 'ADMIN',
         deleted_at: new Date(),
@@ -124,7 +124,7 @@ describe('AdminAccountService (real DB)', () => {
       expect(result.mustChangePassword).toBe(false);
     });
 
-    it('컨텍스트 통과 후 행이 사라졌으면 NotFoundException', async () => {
+    it('컨텍스트 통과 후 행이 사라졌으면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'ADMIN' });
       const repo = service['repo'];
       const spy = jest
@@ -249,7 +249,7 @@ describe('AdminAccountService (real DB)', () => {
       spy.mockRestore();
     });
 
-    it('이미 쓰이는 username이면 BadRequestException', async () => {
+    it('이미 쓰이는 username이면 400', async () => {
       const actor = await makeAdmin({ username: 'taken.name' });
 
       await expect(
@@ -275,7 +275,7 @@ describe('AdminAccountService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('사전 조회를 지나친 unique 충돌(P2002)도 BadRequestException으로 좁힌다', async () => {
+    it('사전 조회를 지나친 unique 충돌(P2002)도 400으로 좁힌다', async () => {
       const actor = await makeAdmin();
       const repo = service['repo'];
       const spy = jest

@@ -149,7 +149,7 @@ describe('AdminProductService (real DB)', () => {
       expect(result.orderItemCount).toBe(1);
     });
 
-    it('없거나 삭제된 상품이면 NotFoundException', async () => {
+    it('없거나 삭제된 상품이면 404', async () => {
       const deleted = await createProduct(prisma);
       await prisma.product.update({
         where: { id: deleted.id },
@@ -198,7 +198,7 @@ describe('AdminProductService (real DB)', () => {
       expect(await prisma.auditLog.count()).toBe(0);
     });
 
-    it('없는 상품이면 NotFoundException', async () => {
+    it('없는 상품이면 404', async () => {
       await expect(
         service.adminSetProductActive(await admin(), {
           productId: '999999',
@@ -207,7 +207,7 @@ describe('AdminProductService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('삭제된 상품은 잠금 단계에서 NotFoundException(되살리지 않음)', async () => {
+    it('삭제된 상품은 잠금 단계에서 404(되살리지 않음)', async () => {
       const product = await createProduct(prisma, { is_active: false });
       await prisma.product.update({
         where: { id: product.id },

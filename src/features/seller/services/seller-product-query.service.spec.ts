@@ -58,13 +58,13 @@ describe('SellerProductQueryService (real DB)', () => {
   }
 
   describe('공통 예외 (requireSellerContext)', () => {
-    it('계정이 없으면 UnauthorizedException', async () => {
+    it('계정이 없으면 401', async () => {
       await expect(
         service.sellerProduct(BigInt(99999), BigInt(1)),
       ).rejects.toThrowDomain(401);
     });
 
-    it('판매자 계정이 아니면 ForbiddenException', async () => {
+    it('판매자 계정이 아니면 403', async () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.sellerProduct(userAccount.id, BigInt(1)),
@@ -146,14 +146,14 @@ describe('SellerProductQueryService (real DB)', () => {
   });
 
   describe('sellerProduct', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerProduct(account.id, BigInt(999999)),
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 상품이면 NotFoundException', async () => {
+    it('다른 매장 상품이면 404', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
       const othersProduct = await createSellerProduct(other.store.id);

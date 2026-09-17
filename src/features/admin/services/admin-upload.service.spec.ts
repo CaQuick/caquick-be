@@ -73,7 +73,7 @@ describe('AdminUploadService (real DB)', () => {
     },
   );
 
-  it('ADMIN이 아니면 ForbiddenException', async () => {
+  it('ADMIN이 아니면 403', async () => {
     const seller = await createAccount(prisma, { account_type: 'SELLER' });
     await expect(
       service.adminCreateUploadUrl(seller.id, {

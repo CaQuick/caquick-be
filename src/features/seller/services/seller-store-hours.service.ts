@@ -1,11 +1,7 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import type { CursorInput } from '@/common/dto/inputs/cursor.input';
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
@@ -19,12 +15,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  CLOSE_BEFORE_OPEN,
-  INVALID_DAY_OF_WEEK,
-  OPEN_CLOSE_TIME_REQUIRED,
-  SPECIAL_CLOSURE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAY_OF_WEEK,
   MAX_SPECIAL_CLOSURE_REASON_LENGTH,
@@ -100,18 +90,18 @@ export class SellerStoreHoursService extends SellerBaseService {
       input.dayOfWeek < MIN_DAY_OF_WEEK ||
       input.dayOfWeek > MAX_DAY_OF_WEEK
     ) {
-      throw new BadRequestException(INVALID_DAY_OF_WEEK);
+      throw new DomainException('INVALID_DAY_OF_WEEK');
     }
 
     const openTime = input.isClosed ? null : this.toTime(input.openTime);
     const closeTime = input.isClosed ? null : this.toTime(input.closeTime);
 
     if (!input.isClosed && (!openTime || !closeTime)) {
-      throw new BadRequestException(OPEN_CLOSE_TIME_REQUIRED);
+      throw new DomainException('OPEN_CLOSE_TIME_REQUIRED');
     }
 
     if (openTime && closeTime && openTime >= closeTime) {
-      throw new BadRequestException(CLOSE_BEFORE_OPEN);
+      throw new DomainException('CLOSE_BEFORE_OPEN');
     }
 
     const row = await this.repo.upsertStoreBusinessHour({
@@ -149,7 +139,7 @@ export class SellerStoreHoursService extends SellerBaseService {
         closureId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
+      if (!found) throw new DomainException('SPECIAL_CLOSURE_NOT_FOUND');
     }
 
     const closureDate = toDateRequired(input.closureDate, 'closureDate');
@@ -193,7 +183,7 @@ export class SellerStoreHoursService extends SellerBaseService {
       closureId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException(SPECIAL_CLOSURE_NOT_FOUND);
+    if (!found) throw new DomainException('SPECIAL_CLOSURE_NOT_FOUND');
 
     await this.repo.softDeleteStoreSpecialClosure(closureId);
     await this.auditLogs.createAuditLog({

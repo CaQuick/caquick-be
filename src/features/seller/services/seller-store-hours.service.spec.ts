@@ -125,7 +125,7 @@ describe('SellerStoreHoursService (real DB)', () => {
   });
 
   describe('sellerUpsertStoreBusinessHour', () => {
-    it('dayOfWeek가 0~6 범위 밖이면 BadRequestException', async () => {
+    it('dayOfWeek가 0~6 범위 밖이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreBusinessHour(account.id, {
@@ -137,7 +137,7 @@ describe('SellerStoreHoursService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('영업일인데 시간이 없으면 BadRequestException', async () => {
+    it('영업일인데 시간이 없으면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreBusinessHour(account.id, {
@@ -149,7 +149,7 @@ describe('SellerStoreHoursService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('open >= close면 BadRequestException', async () => {
+    it('open >= close면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreBusinessHour(account.id, {
@@ -201,7 +201,7 @@ describe('SellerStoreHoursService (real DB)', () => {
   });
 
   describe('sellerUpsertStoreSpecialClosure', () => {
-    it('closureId를 줬는데 없으면 NotFoundException', async () => {
+    it('closureId를 줬는데 없으면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreSpecialClosure(account.id, {
@@ -248,7 +248,7 @@ describe('SellerStoreHoursService (real DB)', () => {
   });
 
   describe('sellerDeleteStoreSpecialClosure', () => {
-    it('존재하지 않는 closureId면 NotFoundException', async () => {
+    it('존재하지 않는 closureId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteStoreSpecialClosure(account.id, BigInt(999)),

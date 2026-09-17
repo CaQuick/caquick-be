@@ -124,7 +124,7 @@ describe('AdminRegionService (real DB)', () => {
           (await createRegion(prisma, { level: 1, is_active: false })).id,
       ],
       ['없는 지역', () => Promise.resolve(BigInt(999_999))],
-    ])('parentId가 %s이면 BadRequestException', async (_label, makeId) => {
+    ])('parentId가 %s이면 400', async (_label, makeId) => {
       await expect(
         service.adminCreateRegion(await admin(), {
           parentId: (await makeId()).toString(),
@@ -134,7 +134,7 @@ describe('AdminRegionService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('slug 충돌은 BadRequestException, 삭제된 slug는 복구한다', async () => {
+    it('slug 충돌은 400, 삭제된 slug는 복구한다', async () => {
       const old = await createRegion(prisma, { level: 1, slug: 'busan' });
       await expect(
         service.adminCreateRegion(await admin(), { name: 'x', slug: 'busan' }),
@@ -149,7 +149,7 @@ describe('AdminRegionService (real DB)', () => {
       expect(restored.name).toBe('부산');
     });
 
-    it('좌표가 범위 밖이면 BadRequestException', async () => {
+    it('좌표가 범위 밖이면 400', async () => {
       await expect(
         service.adminCreateRegion(await admin(), {
           name: 'x',
@@ -213,7 +213,7 @@ describe('AdminRegionService (real DB)', () => {
     });
 
     // 계층 불변식: 1차 비활성 → 활성 하위 없어야, 2차 활성 → 상위가 활성이어야(고아 활성 지역 방지)
-    it('활성 하위가 있는 1차 비활성화·상위가 비활성인 2차 활성화는 BadRequestException', async () => {
+    it('활성 하위가 있는 1차 비활성화·상위가 비활성인 2차 활성화는 400', async () => {
       const group = await createRegion(prisma, { level: 1 });
       const child = await createRegion(prisma, {
         level: 2,
@@ -261,7 +261,7 @@ describe('AdminRegionService (real DB)', () => {
       ).toBe(true);
     });
 
-    it('삭제된 지역의 slug로 바꾸면 BadRequestException(전역 unique 인덱스)', async () => {
+    it('삭제된 지역의 slug로 바꾸면 400(전역 unique 인덱스)', async () => {
       const gone = await createRegion(prisma, { slug: 'gone' });
       await prisma.region.update({
         where: { id: gone.id },
@@ -276,7 +276,7 @@ describe('AdminRegionService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('slug 충돌은 BadRequestException, 없으면 NotFoundException', async () => {
+    it('slug 충돌은 400, 없으면 404', async () => {
       await createRegion(prisma, { slug: 'taken' });
       const mine = await createRegion(prisma, { slug: 'mine' });
       await expect(
@@ -295,7 +295,7 @@ describe('AdminRegionService (real DB)', () => {
   });
 
   describe('adminCreateRegion 상위 확인', () => {
-    it('비활성·삭제된 1차를 상위로 주면 BadRequestException', async () => {
+    it('비활성·삭제된 1차를 상위로 주면 400', async () => {
       const inactive = await createRegion(prisma, {
         level: 1,
         is_active: false,
@@ -345,7 +345,7 @@ describe('AdminRegionService (real DB)', () => {
       }
     });
 
-    it('연결 매장이 있는 2차·활성 하위가 있는 1차는 BadRequestException, 없으면 soft-delete + 감사', async () => {
+    it('연결 매장이 있는 2차·활성 하위가 있는 1차는 400, 없으면 soft-delete + 감사', async () => {
       const group = await createRegion(prisma, { level: 1 });
       const child = await createRegion(prisma, {
         level: 2,

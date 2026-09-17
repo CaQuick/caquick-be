@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
@@ -17,20 +13,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import {
-  BANNER_NOT_FOUND,
-  CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK,
-  CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
-  INVALID_EXPOSURE_WINDOW,
-  LINK_CATEGORY_NOT_VISIBLE,
-  LINK_CATEGORY_REQUIRED,
-  LINK_FIELDS_MISMATCH,
-  LINK_PRODUCT_NOT_VISIBLE,
-  LINK_PRODUCT_REQUIRED,
-  LINK_STORE_NOT_VISIBLE,
-  LINK_STORE_REQUIRED,
-  LINK_URL_REQUIRED,
-} from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_BANNER_TITLE_LENGTH,
   MAX_URL_LENGTH,
@@ -238,7 +220,7 @@ export class AdminBannerService extends AdminBaseService {
         afterJson: this.auditSnapshot(after),
       }),
     );
-    if (!row) throw new NotFoundException(BANNER_NOT_FOUND);
+    if (!row) throw new DomainException('BANNER_NOT_FOUND');
 
     return toAdminBannerOutput(row);
   }
@@ -257,14 +239,14 @@ export class AdminBannerService extends AdminBaseService {
       action: AuditActionType.DELETE,
       beforeJson: this.auditSnapshot(before),
     }));
-    if (!deleted) throw new NotFoundException(BANNER_NOT_FOUND);
+    if (!deleted) throw new DomainException('BANNER_NOT_FOUND');
 
     return true;
   }
 
   private async requireBanner(bannerId: bigint): Promise<Banner> {
     const row = await this.repo.findBannerById(bannerId);
-    if (!row) throw new NotFoundException(BANNER_NOT_FOUND);
+    if (!row) throw new DomainException('BANNER_NOT_FOUND');
     return row;
   }
 
@@ -386,10 +368,10 @@ export class AdminBannerService extends AdminBaseService {
    */
   private async validateExposure(final: BannerExposure): Promise<void> {
     if (final.startsAt && final.endsAt && final.startsAt >= final.endsAt) {
-      throw new BadRequestException(INVALID_EXPOSURE_WINDOW);
+      throw new DomainException('INVALID_EXPOSURE_WINDOW');
     }
     if (final.placement === 'CATEGORY' && final.linkType !== 'CATEGORY') {
-      throw new BadRequestException(CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK);
+      throw new DomainException('CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK');
     }
 
     switch (final.linkType) {
@@ -397,38 +379,38 @@ export class AdminBannerService extends AdminBaseService {
         return;
       case 'URL':
         if (!final.linkUrl || final.linkUrl.trim().length === 0) {
-          throw new BadRequestException(LINK_URL_REQUIRED);
+          throw new DomainException('LINK_URL_REQUIRED');
         }
         return;
       case 'PRODUCT':
         if (!final.linkProductId) {
-          throw new BadRequestException(LINK_PRODUCT_REQUIRED);
+          throw new DomainException('LINK_PRODUCT_REQUIRED');
         }
         if (!(await this.repo.isProductVisible(final.linkProductId))) {
-          throw new NotFoundException(LINK_PRODUCT_NOT_VISIBLE);
+          throw new DomainException('LINK_PRODUCT_NOT_VISIBLE');
         }
         return;
       case 'STORE':
         if (!final.linkStoreId) {
-          throw new BadRequestException(LINK_STORE_REQUIRED);
+          throw new DomainException('LINK_STORE_REQUIRED');
         }
         if (!(await this.repo.isStoreVisible(final.linkStoreId))) {
-          throw new NotFoundException(LINK_STORE_NOT_VISIBLE);
+          throw new DomainException('LINK_STORE_NOT_VISIBLE');
         }
         return;
       case 'CATEGORY': {
         if (!final.linkCategoryId) {
-          throw new BadRequestException(LINK_CATEGORY_REQUIRED);
+          throw new DomainException('LINK_CATEGORY_REQUIRED');
         }
         const categoryType = await this.repo.findVisibleCategoryType(
           final.linkCategoryId,
         );
         if (!categoryType) {
-          throw new NotFoundException(LINK_CATEGORY_NOT_VISIBLE);
+          throw new DomainException('LINK_CATEGORY_NOT_VISIBLE');
         }
         if (final.placement === 'CATEGORY' && categoryType !== 'EVENT') {
-          throw new BadRequestException(
-            CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY,
+          throw new DomainException(
+            'CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY',
           );
         }
         return;
@@ -464,7 +446,7 @@ export class AdminBannerService extends AdminBaseService {
     };
 
     if (!allowed[intendedLinkType]) {
-      throw new BadRequestException(LINK_FIELDS_MISMATCH);
+      throw new DomainException('LINK_FIELDS_MISMATCH');
     }
   }
 }

@@ -1,14 +1,7 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
-
-import {
-  ACCOUNT_NOT_ACTIVE,
-  ACCOUNT_NOT_FOUND,
-  ADMIN_ONLY,
-} from '@/features/admin/constants/admin-error-messages';
+import { DomainException } from '@/common/errors/error-catalog';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
 import type { IAuditLogRepository } from '@/features/audit-log';
 import { AccountType } from '@/generated/prisma/client';
-
 export interface AdminContext {
   accountId: bigint;
 }
@@ -27,12 +20,12 @@ export abstract class AdminBaseService {
     accountId: bigint,
   ): Promise<AdminContext> {
     const account = await this.repo.findAdminAccountContext(accountId);
-    if (!account) throw new UnauthorizedException(ACCOUNT_NOT_FOUND);
+    if (!account) throw new DomainException('SESSION_ACCOUNT_MISSING');
     if (account.account_type !== AccountType.ADMIN) {
-      throw new ForbiddenException(ADMIN_ONLY);
+      throw new DomainException('ADMIN_ONLY');
     }
     if (account.status !== 'ACTIVE') {
-      throw new ForbiddenException(ACCOUNT_NOT_ACTIVE);
+      throw new DomainException('ACCOUNT_NOT_ACTIVE');
     }
     return { accountId: account.id };
   }

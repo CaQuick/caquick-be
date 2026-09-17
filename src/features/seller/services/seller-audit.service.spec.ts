@@ -98,7 +98,7 @@ describe('SellerAuditService (real DB)', () => {
       );
     });
 
-    it('잘못된 targetType이면 BadRequestException', async () => {
+    it('잘못된 targetType이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerAuditLogs(account.id, {

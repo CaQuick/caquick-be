@@ -79,14 +79,14 @@ describe('SellerConversationService (real DB)', () => {
   });
 
   describe('sellerConversationMessages', () => {
-    it('존재하지 않는 conversationId면 NotFoundException', async () => {
+    it('존재하지 않는 conversationId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerConversationMessages(account.id, BigInt(999)),
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 conversation이면 NotFoundException', async () => {
+    it('다른 매장 conversation이면 404', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
       const conv = await setupConversation(other.store.id);
@@ -119,7 +119,7 @@ describe('SellerConversationService (real DB)', () => {
   });
 
   describe('sellerSendConversationMessage', () => {
-    it('존재하지 않는 conversationId면 NotFoundException', async () => {
+    it('존재하지 않는 conversationId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerSendConversationMessage(account.id, {
@@ -130,7 +130,7 @@ describe('SellerConversationService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('잘못된 bodyFormat이면 BadRequestException', async () => {
+    it('잘못된 bodyFormat이면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const conv = await setupConversation(store.id);
       await expect(
@@ -142,7 +142,7 @@ describe('SellerConversationService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('TEXT 포맷인데 bodyText 없음 → BadRequestException', async () => {
+    it('TEXT 포맷인데 bodyText 없음 → 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const conv = await setupConversation(store.id);
       await expect(
@@ -153,7 +153,7 @@ describe('SellerConversationService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('HTML 포맷인데 bodyHtml 없음 → BadRequestException', async () => {
+    it('HTML 포맷인데 bodyHtml 없음 → 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const conv = await setupConversation(store.id);
       await expect(

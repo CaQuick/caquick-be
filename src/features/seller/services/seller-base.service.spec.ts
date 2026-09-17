@@ -68,20 +68,20 @@ describe('SellerBaseService (real DB)', () => {
   });
 
   describe('requireSellerContext', () => {
-    it('계정이 존재하지 않으면 UnauthorizedException', async () => {
+    it('계정이 존재하지 않으면 401', async () => {
       await expect(
         service.testRequireSellerContext(BigInt(99999)),
       ).rejects.toThrowDomain(401);
     });
 
-    it('SELLER가 아닌 계정이면 ForbiddenException', async () => {
+    it('SELLER가 아닌 계정이면 403', async () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.testRequireSellerContext(userAccount.id),
       ).rejects.toThrowDomain(403);
     });
 
-    it('SELLER인데 store가 없으면 NotFoundException', async () => {
+    it('SELLER인데 store가 없으면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
       await expect(
         service.testRequireSellerContext(account.id),
@@ -97,7 +97,7 @@ describe('SellerBaseService (real DB)', () => {
   });
 
   describe('parseIdList', () => {
-    it('중복된 ID면 BadRequestException', () => {
+    it('중복된 ID면 400', () => {
       expect(() => service.testParseIdList(['1', '2', '1'])).toThrowDomain(400);
     });
 
@@ -116,7 +116,7 @@ describe('SellerBaseService (real DB)', () => {
       expect(service.testToTime(undefined)).toBeNull();
     });
 
-    it('잘못된 문자열이면 BadRequestException', () => {
+    it('잘못된 문자열이면 400', () => {
       expect(() => service.testToTime('not-a-date')).toThrowDomain(400);
     });
 
@@ -127,7 +127,7 @@ describe('SellerBaseService (real DB)', () => {
   });
 
   describe('toDecimal', () => {
-    it('잘못된 형식이면 BadRequestException', () => {
+    it('잘못된 형식이면 400', () => {
       expect(() => service.testToDecimal('not-a-number')).toThrowDomain(400);
     });
 
@@ -145,7 +145,7 @@ describe('SellerBaseService (real DB)', () => {
   });
 
   describe('cleanCurrency', () => {
-    it('잘못된 통화 형식이면 BadRequestException', () => {
+    it('잘못된 통화 형식이면 400', () => {
       expect(() => service.testCleanCurrency('ABCD')).toThrowDomain(400);
     });
 
@@ -159,19 +159,19 @@ describe('SellerBaseService (real DB)', () => {
   });
 
   describe('assertPositiveRange', () => {
-    it('범위 미만이면 BadRequestException', () => {
+    it('범위 미만이면 400', () => {
       expect(() =>
         service.testAssertPositiveRange(0, 1, 100, 'x'),
       ).toThrowDomain(400);
     });
 
-    it('범위 초과면 BadRequestException', () => {
+    it('범위 초과면 400', () => {
       expect(() =>
         service.testAssertPositiveRange(101, 1, 100, 'x'),
       ).toThrowDomain(400);
     });
 
-    it('정수가 아니면 BadRequestException', () => {
+    it('정수가 아니면 400', () => {
       expect(() =>
         service.testAssertPositiveRange(1.5, 1, 100, 'x'),
       ).toThrowDomain(400);

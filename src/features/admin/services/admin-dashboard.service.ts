@@ -1,11 +1,8 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { toDate } from '@/common/utils/date-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
-import {
-  DASHBOARD_RANGE_TOO_LONG,
-  INVALID_DATE_RANGE,
-} from '@/features/admin/constants/admin-error-messages';
 import { MAX_DASHBOARD_RANGE_DAYS } from '@/features/admin/constants/admin.constants';
 import type { AdminDashboardSummaryInput } from '@/features/admin/dto/inputs/admin-dashboard-summary.input';
 import type { AdminSearchKeywordSnapshotInput } from '@/features/admin/dto/inputs/admin-search-keyword-snapshot.input';
@@ -44,9 +41,9 @@ export class AdminDashboardService extends AdminBaseService {
     const from = toDate(input.from);
     const to = toDate(input.to);
     if (!from || !to || from > to)
-      throw new BadRequestException(INVALID_DATE_RANGE);
+      throw new DomainException('INVALID_DATE_RANGE');
     if (to.getTime() - from.getTime() > MAX_DASHBOARD_RANGE_DAYS * DAY_MS) {
-      throw new BadRequestException(DASHBOARD_RANGE_TOO_LONG);
+      throw new DomainException('DASHBOARD_RANGE_TOO_LONG');
     }
 
     const [

@@ -65,7 +65,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
 
   // ─── Template upsert ──
   describe('sellerUpsertProductCustomTemplate', () => {
-    it('없는 productId면 NotFoundException', async () => {
+    it('없는 productId면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
         service.sellerUpsertProductCustomTemplate(accountId, {
@@ -104,7 +104,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
   });
 
   describe('sellerSetProductCustomTemplateActive', () => {
-    it('없는 templateId면 NotFoundException', async () => {
+    it('없는 templateId면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
         service.sellerSetProductCustomTemplateActive(accountId, {
@@ -114,7 +114,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 template이면 NotFoundException', async () => {
+    it('다른 매장 template이면 404', async () => {
       const me = await setupSellerWithProduct();
       const other = await setupSellerWithProduct();
       const othersTemplate = await createTemplate(other.product.id);
@@ -149,7 +149,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
   });
 
   describe('sellerUpsertProductCustomTextToken', () => {
-    it('templateId가 없으면 NotFoundException', async () => {
+    it('templateId가 없으면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
         service.sellerUpsertProductCustomTextToken(accountId, {
@@ -160,7 +160,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('tokenId를 줬는데 다른 template 소속이면 NotFoundException', async () => {
+    it('tokenId를 줬는데 다른 template 소속이면 404', async () => {
       const me = await setupSellerWithProduct();
       const other = await setupSellerWithProduct();
       const myTpl = await createTemplate(me.product.id);
@@ -225,7 +225,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
   });
 
   describe('sellerDeleteProductCustomTextToken', () => {
-    it('없는 tokenId면 NotFoundException', async () => {
+    it('없는 tokenId면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
         service.sellerDeleteProductCustomTextToken(accountId, BigInt(999999)),
@@ -254,7 +254,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
   });
 
   describe('sellerReorderProductCustomTextTokens', () => {
-    it('tokenIds 길이 불일치면 BadRequestException', async () => {
+    it('tokenIds 길이 불일치면 400', async () => {
       const { accountId, product } = await setupSellerWithProduct();
       const tpl = await createTemplate(product.id);
       await expect(

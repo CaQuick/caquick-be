@@ -101,7 +101,7 @@ describe('Seller Store Resolvers (real DB)', () => {
     expect(result.items).toHaveLength(1);
   });
 
-  it('Mutation.sellerDeleteStoreSpecialClosure: 타인 closure 접근은 NotFoundException', async () => {
+  it('Mutation.sellerDeleteStoreSpecialClosure: 타인 closure 접근은 404', async () => {
     const me = await setupSellerWithStore(prisma);
     const other = await setupSellerWithStore(prisma);
     const othersClosure = await prisma.storeSpecialClosure.create({

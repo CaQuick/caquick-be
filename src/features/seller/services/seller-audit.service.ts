@@ -1,5 +1,6 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseIdCursor } from '@/common/utils/keyset-cursor';
 import {
@@ -11,7 +12,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { INVALID_AUDIT_TARGET_TYPE } from '@/features/seller/constants/seller-error-messages';
 import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -64,6 +64,6 @@ export class SellerAuditService extends SellerBaseService {
     if (raw === 'ORDER') return AuditTargetType.ORDER;
     if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
     if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
-    throw new BadRequestException(INVALID_AUDIT_TARGET_TYPE);
+    throw new DomainException('INVALID_AUDIT_TARGET_TYPE');
   }
 }

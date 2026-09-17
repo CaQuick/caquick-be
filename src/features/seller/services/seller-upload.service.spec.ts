@@ -95,7 +95,7 @@ describe('SellerUploadService (real DB)', () => {
     ).toBe(false);
   });
 
-  it('SELLER가 아니면 ForbiddenException', async () => {
+  it('SELLER가 아니면 403', async () => {
     const user = await createAccount(prisma, { account_type: 'USER' });
     await expect(
       service.sellerCreateUploadUrl(user.id, {
@@ -106,7 +106,7 @@ describe('SellerUploadService (real DB)', () => {
     ).rejects.toThrowDomain(403);
   });
 
-  it('매장이 없는 판매자면 NotFoundException', async () => {
+  it('매장이 없는 판매자면 404', async () => {
     const seller = await createAccount(prisma, { account_type: 'SELLER' });
     await expect(
       service.sellerCreateUploadUrl(seller.id, {

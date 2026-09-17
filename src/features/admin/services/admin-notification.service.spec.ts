@@ -157,7 +157,7 @@ describe('AdminNotificationService (real DB)', () => {
     });
 
     // 앞 청크는 커밋된 채 남는다 — 조용히 실패하면 재시도가 중복 발송이 되므로 건수를 감사에 남기고 알린다
-    it('청크 사이에 실패하면 저장된 건수를 감사(interrupted)에 남기고 InternalServerErrorException', async () => {
+    it('청크 사이에 실패하면 저장된 건수를 감사(interrupted)에 남기고 500', async () => {
       const actor = await admin();
       await prisma.account.createMany({
         data: Array.from({ length: 1_050 }, (_, i) => ({

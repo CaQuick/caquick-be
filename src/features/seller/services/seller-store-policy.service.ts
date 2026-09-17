@@ -1,5 +1,6 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate, toDateRequired } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
@@ -12,10 +13,6 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import {
-  DAILY_CAPACITY_NOT_FOUND,
-  STORE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_DAILY_CAPACITY,
   MAX_DAYS_AHEAD,
@@ -89,7 +86,7 @@ export class SellerStorePolicyService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!current) throw new DomainException('STORE_NOT_FOUND');
 
     this.assertPositiveRange(
       input.pickupSlotIntervalMinutes,
@@ -152,7 +149,7 @@ export class SellerStorePolicyService extends SellerBaseService {
         capacityId,
         ctx.storeId,
       );
-      if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
+      if (!found) throw new DomainException('DAILY_CAPACITY_NOT_FOUND');
     }
 
     this.assertPositiveRange(
@@ -199,7 +196,7 @@ export class SellerStorePolicyService extends SellerBaseService {
       capacityId,
       ctx.storeId,
     );
-    if (!found) throw new NotFoundException(DAILY_CAPACITY_NOT_FOUND);
+    if (!found) throw new DomainException('DAILY_CAPACITY_NOT_FOUND');
 
     await this.repo.softDeleteStoreDailyCapacity(capacityId);
     await this.auditLogs.createAuditLog({

@@ -69,7 +69,7 @@ describe('Seller Conversation Resolvers (real DB)', () => {
     expect(result.items).toHaveLength(1);
   });
 
-  it('Mutation.sellerSendConversationMessage: 타 store conversation은 NotFoundException 전파', async () => {
+  it('Mutation.sellerSendConversationMessage: 타 store conversation은 404 전파', async () => {
     const me = await setupSellerWithStore(prisma);
     const other = await setupSellerWithStore(prisma);
     const othersConv = await createConv(other.store.id);

@@ -61,7 +61,7 @@ describe('SellerOrderService (real DB)', () => {
   }
 
   describe('공통 예외', () => {
-    it('판매자 계정이 아니면 ForbiddenException', async () => {
+    it('판매자 계정이 아니면 403', async () => {
       const userAccount = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.sellerOrder(userAccount.id, BigInt(10)),
@@ -133,7 +133,7 @@ describe('SellerOrderService (real DB)', () => {
       expect(filtered.totalCount).toBe(2);
     });
 
-    it('잘못된 status enum이면 BadRequestException', async () => {
+    it('잘못된 status enum이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerOrderList(account.id, { status: 'INVALID' as never }),
@@ -151,14 +151,14 @@ describe('SellerOrderService (real DB)', () => {
   });
 
   describe('sellerOrder', () => {
-    it('존재하지 않는 orderId면 NotFoundException', async () => {
+    it('존재하지 않는 orderId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerOrder(account.id, BigInt(999999)),
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 주문은 NotFoundException', async () => {
+    it('다른 매장 주문은 404', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
       const othersOrder = await createStoreOrder(other.store.id);
@@ -229,7 +229,7 @@ describe('SellerOrderService (real DB)', () => {
   });
 
   describe('sellerUpdateOrderStatus', () => {
-    it('주문이 없으면 NotFoundException', async () => {
+    it('주문이 없으면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdateOrderStatus(account.id, {
@@ -240,7 +240,7 @@ describe('SellerOrderService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('상태 전이가 잘못되면 BadRequestException (SUBMITTED → MADE 차단)', async () => {
+    it('상태 전이가 잘못되면 400 (SUBMITTED → MADE 차단)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createStoreOrder(store.id);
       await expect(
@@ -252,7 +252,7 @@ describe('SellerOrderService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('CANCELED 전환 시 note 누락되면 BadRequestException', async () => {
+    it('CANCELED 전환 시 note 누락되면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createStoreOrder(store.id);
       await expect(

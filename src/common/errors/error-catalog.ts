@@ -328,6 +328,284 @@ export const ERROR_CATALOG = {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '주문번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
   },
+  // ── 판매자
+  SELLER_ONLY: {
+    status: HttpStatus.FORBIDDEN,
+    message: '판매자 계정만 이용할 수 있습니다.',
+  },
+  DUPLICATE_IDS: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '중복된 id가 있습니다.',
+  },
+  INVALID_TIME_VALUE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '시간 형식이 올바르지 않습니다.',
+  },
+  INVALID_CURRENCY_FORMAT: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '통화 코드 형식이 올바르지 않습니다.',
+  },
+  FIELD_OUT_OF_RANGE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field, min, max }) =>
+      `${field}은(는) ${min}~${max} 사이여야 합니다.`,
+  },
+  IDS_LENGTH_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) => `${field} 개수가 일치하지 않습니다.`,
+  },
+  INVALID_IDS: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) => `${field}에 유효하지 않은 id가 있습니다.`,
+  },
+  SALE_PRICE_EXCEEDS_REGULAR: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '할인가는 정가 이하여야 합니다.',
+  },
+  PRODUCT_IMAGE_LIMIT_EXCEEDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) => `상품 이미지는 최대 ${max}장까지 등록할 수 있습니다.`,
+  },
+  PRODUCT_IMAGE_MIN_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '상품 이미지는 1장 이상 필요합니다.',
+  },
+  PRODUCT_IMAGE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '상품 이미지를 찾을 수 없습니다.',
+  },
+  OPTION_GROUP_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '옵션 그룹을 찾을 수 없습니다.',
+  },
+  OPTION_ITEM_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '옵션 항목을 찾을 수 없습니다.',
+  },
+  INVALID_SELECT_RANGE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'minSelect/maxSelect 값이 올바르지 않습니다.',
+  },
+  MAX_SELECT_BELOW_MIN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'maxSelect는 minSelect 이상이어야 합니다.',
+  },
+  CUSTOM_TEMPLATE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '커스텀 템플릿을 찾을 수 없습니다.',
+  },
+  CUSTOM_TEXT_TOKEN_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '커스텀 텍스트 토큰을 찾을 수 없습니다.',
+  },
+  INVALID_DAY_OF_WEEK: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'dayOfWeek는 0~6이어야 합니다.',
+  },
+  OPEN_CLOSE_TIME_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'openTime과 closeTime이 필요합니다.',
+  },
+  CLOSE_BEFORE_OPEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'closeTime은 openTime보다 늦어야 합니다.',
+  },
+  SPECIAL_CLOSURE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '임시 휴무를 찾을 수 없습니다.',
+  },
+  DAILY_CAPACITY_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '일별 수용량을 찾을 수 없습니다.',
+  },
+  FAQ_TOPIC_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: 'FAQ 주제를 찾을 수 없습니다.',
+  },
+  INVALID_AUDIT_TARGET_TYPE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '감사 로그 대상 유형이 올바르지 않습니다.',
+  },
+  CONVERSATION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '대화를 찾을 수 없습니다.',
+  },
+  BODY_TEXT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'TEXT 형식에는 bodyText가 필요합니다.',
+  },
+  BODY_HTML_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'HTML 형식에는 bodyHtml이 필요합니다.',
+  },
+  INVALID_BODY_FORMAT: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '본문 형식이 올바르지 않습니다.',
+  },
+  CANCELLATION_NOTE_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '취소 사유가 필요합니다.',
+  },
+  // ── 관리자
+  ADMIN_ONLY: {
+    status: HttpStatus.FORBIDDEN,
+    message: '관리자 계정만 이용할 수 있습니다.',
+  },
+  ACCOUNT_NOT_ACTIVE: {
+    status: HttpStatus.FORBIDDEN,
+    message: '활성 상태의 계정이 아닙니다.',
+  },
+  ACCOUNT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '계정을 찾을 수 없습니다.',
+  },
+  USERNAME_TAKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이미 사용 중인 아이디입니다.',
+  },
+  SELLER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '판매자 계정을 찾을 수 없습니다.',
+  },
+  USER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '사용자 계정을 찾을 수 없습니다.',
+  },
+  CANNOT_CHANGE_OWN_STATUS: {
+    status: HttpStatus.FORBIDDEN,
+    message: '본인 계정의 상태는 변경할 수 없습니다.',
+  },
+  CANNOT_CHANGE_ADMIN_STATUS: {
+    status: HttpStatus.FORBIDDEN,
+    message: '관리자 계정의 상태는 변경할 수 없습니다.',
+  },
+  ONLY_ACTIVE_CAN_BE_SUSPENDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'ACTIVE 상태의 계정만 정지할 수 있습니다.',
+  },
+  ONLY_SUSPENDED_CAN_BE_REINSTATED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'SUSPENDED 상태의 계정만 복구할 수 있습니다.',
+  },
+  CATEGORY_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '카테고리를 찾을 수 없습니다.',
+  },
+  CATEGORY_NAME_TAKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '같은 유형에 이미 사용 중인 카테고리 이름입니다.',
+  },
+  TAG_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '태그를 찾을 수 없습니다.',
+  },
+  TAG_NAME_TAKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이미 사용 중인 태그 이름입니다.',
+  },
+  REVIEW_REPORT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '리뷰 신고를 찾을 수 없습니다.',
+  },
+  REVIEW_REPORT_ALREADY_RESOLVED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이미 처리된 리뷰 신고입니다.',
+  },
+  REGION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '지역을 찾을 수 없습니다.',
+  },
+  PARENT_REGION_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'parentId는 활성 1차 지역이어야 합니다.',
+  },
+  REGION_SLUG_TAKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이미 사용 중인 지역 slug입니다.',
+  },
+  REGION_HAS_STORES: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '해당 지역에 연결된 매장이 있습니다.',
+  },
+  REGION_HAS_CHILDREN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '해당 지역에 활성 하위 지역이 있습니다.',
+  },
+  REGION_HAS_ACTIVE_CHILDREN: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '1차 지역을 비활성화하려면 활성 하위 지역을 먼저 비활성화해야 합니다.',
+  },
+  REGION_PARENT_INACTIVE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '상위 지역이 비활성이거나 삭제되었습니다.',
+  },
+  INVALID_DATE_RANGE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'from은 to보다 늦을 수 없습니다.',
+  },
+  DASHBOARD_RANGE_TOO_LONG: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '조회 기간은 366일 이하여야 합니다.',
+  },
+  REGION_NOT_SELECTABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'regionId는 활성 2차 지역이어야 합니다.',
+  },
+  BANNER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '배너를 찾을 수 없습니다.',
+  },
+  LINK_URL_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'URL 링크 유형에는 linkUrl이 필요합니다.',
+  },
+  LINK_PRODUCT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'PRODUCT 링크 유형에는 linkProductId가 필요합니다.',
+  },
+  LINK_STORE_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'STORE 링크 유형에는 linkStoreId가 필요합니다.',
+  },
+  LINK_CATEGORY_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'CATEGORY 링크 유형에는 linkCategoryId가 필요합니다.',
+  },
+  LINK_FIELDS_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '링크 필드가 linkType과 일치하지 않습니다.',
+  },
+  LINK_PRODUCT_NOT_VISIBLE: {
+    status: HttpStatus.NOT_FOUND,
+    message: '링크 상품이 없거나 노출 상태가 아닙니다(비활성·삭제·매장 숨김).',
+  },
+  LINK_STORE_NOT_VISIBLE: {
+    status: HttpStatus.NOT_FOUND,
+    message: '링크 매장이 없거나 노출 상태가 아닙니다(비활성·삭제).',
+  },
+  LINK_CATEGORY_NOT_VISIBLE: {
+    status: HttpStatus.NOT_FOUND,
+    message: '링크 카테고리가 없거나 노출 상태가 아닙니다(비활성·삭제).',
+  },
+  CATEGORY_PLACEMENT_REQUIRES_CATEGORY_LINK: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'CATEGORY 배치에는 linkType CATEGORY가 필요합니다.',
+  },
+  CATEGORY_PLACEMENT_REQUIRES_EVENT_CATEGORY: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'CATEGORY 배치에는 EVENT 카테고리 링크가 필요합니다.',
+  },
+  INVALID_EXPOSURE_WINDOW: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'startsAt은 endsAt보다 빨라야 합니다.',
+  },
+  NOTIFICATION_FANOUT_INTERRUPTED: {
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    // 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복.
+    message: ({ sentCount }) =>
+      `알림 발송이 ${sentCount}건 이후 중단되었습니다. 재발송 시 중복되므로 감사 로그를 확인하세요.`,
+  },
 } as const satisfies Record<string, ErrorEntry>;
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;

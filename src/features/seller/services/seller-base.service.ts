@@ -1,22 +1,6 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import type { IAuditLogRepository } from '@/features/audit-log';
-import {
-  ACCOUNT_NOT_FOUND,
-  DUPLICATE_IDS,
-  fieldRangeError,
-  INVALID_CURRENCY_FORMAT,
-  INVALID_TIME_VALUE,
-  SELLER_ONLY,
-  STORE_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   isSellerAccount,
   SellerRepository,
@@ -38,12 +22,12 @@ export abstract class SellerBaseService {
     accountId: bigint,
   ): Promise<SellerContext> {
     const account = await this.repo.findSellerAccountContext(accountId);
-    if (!account) throw new UnauthorizedException(ACCOUNT_NOT_FOUND);
+    if (!account) throw new DomainException('SESSION_ACCOUNT_MISSING');
     if (!isSellerAccount(account.account_type)) {
-      throw new ForbiddenException(SELLER_ONLY);
+      throw new DomainException('SELLER_ONLY');
     }
     if (!account.store) {
-      throw new NotFoundException(STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
 
     return {
@@ -56,7 +40,7 @@ export abstract class SellerBaseService {
     const parsed = rawIds.map((id) => parseId(id));
     const set = new Set(parsed.map((id) => id.toString()));
     if (set.size !== parsed.length) {
-      throw new BadRequestException(DUPLICATE_IDS);
+      throw new DomainException('DUPLICATE_IDS');
     }
     return parsed;
   }
@@ -65,7 +49,7 @@ export abstract class SellerBaseService {
     if (raw === undefined || raw === null) return null;
     const date = raw instanceof Date ? raw : new Date(raw);
     if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException(INVALID_TIME_VALUE);
+      throw new DomainException('INVALID_TIME_VALUE');
     }
     return date;
   }
@@ -84,7 +68,7 @@ export abstract class SellerBaseService {
   protected cleanCurrency(raw?: string | null): string {
     const value = (raw ?? 'KRW').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(value)) {
-      throw new BadRequestException(INVALID_CURRENCY_FORMAT);
+      throw new DomainException('INVALID_CURRENCY_FORMAT');
     }
     return value;
   }
@@ -96,7 +80,7 @@ export abstract class SellerBaseService {
     field: string,
   ): void {
     if (!Number.isInteger(value) || value < min || value > max) {
-      throw new BadRequestException(fieldRangeError(field, min, max));
+      throw new DomainException('FIELD_OUT_OF_RANGE', { field, min, max });
     }
   }
 }

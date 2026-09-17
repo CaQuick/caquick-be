@@ -169,7 +169,7 @@ describe('AdminBannerService (real DB)', () => {
       expect(result.linkStoreId).toBeNull();
     });
 
-    it('없거나 삭제된 배너면 NotFoundException', async () => {
+    it('없거나 삭제된 배너면 404', async () => {
       await expect(
         service.adminBanner(await admin(), BigInt(999_999)),
       ).rejects.toThrowDomain(404);
@@ -232,7 +232,7 @@ describe('AdminBannerService (real DB)', () => {
       ['STORE', 'linkStoreId'],
       ['CATEGORY', 'linkCategoryId'],
     ] as const)(
-      'linkType=%s인데 대상이 없으면 NotFoundException',
+      'linkType=%s인데 대상이 없으면 404',
       async (linkType, field) => {
         await expect(
           service.adminCreateBanner(await admin(), {
@@ -286,7 +286,7 @@ describe('AdminBannerService (real DB)', () => {
           ).id.toString(),
         }),
       ],
-    ])('%s 링크는 NotFoundException(노출 불가)', async (_label, makeLink) => {
+    ])('%s 링크는 404(노출 불가)', async (_label, makeLink) => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'HOME_MAIN',
@@ -296,7 +296,7 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('CATEGORY 지면은 linkType CATEGORY가 아니면 BadRequestException', async () => {
+    it('CATEGORY 지면은 linkType CATEGORY가 아니면 400', async () => {
       await expect(
         service.adminCreateBanner(await admin(), {
           placement: 'CATEGORY',
@@ -305,7 +305,7 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('CATEGORY 지면에 EVENT가 아닌 카테고리를 연결하면 BadRequestException', async () => {
+    it('CATEGORY 지면에 EVENT가 아닌 카테고리를 연결하면 400', async () => {
       const style = await createCategory(prisma, { category_type: 'STYLE' });
       await expect(
         service.adminCreateBanner(await admin(), {
@@ -350,19 +350,16 @@ describe('AdminBannerService (real DB)', () => {
         new Date('2026-10-01T00:00:00Z'),
         new Date('2026-10-01T00:00:00Z'),
       ],
-    ])(
-      '노출 기간 %s이면 BadRequestException',
-      async (_label, startsAt, endsAt) => {
-        await expect(
-          service.adminCreateBanner(await admin(), {
-            placement: 'HOME_MAIN',
-            imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
-            startsAt,
-            endsAt,
-          }),
-        ).rejects.toThrowDomain(400);
-      },
-    );
+    ])('노출 기간 %s이면 400', async (_label, startsAt, endsAt) => {
+      await expect(
+        service.adminCreateBanner(await admin(), {
+          placement: 'HOME_MAIN',
+          imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
+          startsAt,
+          endsAt,
+        }),
+      ).rejects.toThrowDomain(400);
+    });
 
     it('한쪽만 있는 노출 기간은 허용된다', async () => {
       const result = await service.adminCreateBanner(await admin(), {
@@ -374,7 +371,7 @@ describe('AdminBannerService (real DB)', () => {
       expect(result.endsAt).not.toBeNull();
     });
 
-    it('linkType=PRODUCT인데 삭제된 상품이면 NotFoundException', async () => {
+    it('linkType=PRODUCT인데 삭제된 상품이면 404', async () => {
       const product = await createProduct(prisma);
       await prisma.product.update({
         where: { id: product.id },
@@ -399,7 +396,7 @@ describe('AdminBannerService (real DB)', () => {
       ['STORE', {}],
       ['CATEGORY', {}],
     ] as const)(
-      'linkType=%s에 필수 링크 값이 없으면 BadRequestException (%o)',
+      'linkType=%s에 필수 링크 값이 없으면 400 (%o)',
       async (linkType, extra) => {
         await expect(
           service.adminCreateBanner(await admin(), {
@@ -421,7 +418,7 @@ describe('AdminBannerService (real DB)', () => {
       ['STORE', { linkStoreId: '1', linkCategoryId: '1' }],
       ['CATEGORY', { linkCategoryId: '1', linkStoreId: '1' }],
     ] as const)(
-      'linkType=%s에 무관한 링크 필드가 섞이면 BadRequestException (%o)',
+      'linkType=%s에 무관한 링크 필드가 섞이면 400 (%o)',
       async (linkType, extra) => {
         await expect(
           service.adminCreateBanner(await admin(), {
@@ -463,7 +460,7 @@ describe('AdminBannerService (real DB)', () => {
   });
 
   describe('adminUpdateBanner', () => {
-    it('존재하지 않는 bannerId면 NotFoundException', async () => {
+    it('존재하지 않는 bannerId면 404', async () => {
       await expect(
         service.adminUpdateBanner(await admin(), {
           bannerId: '999999',
@@ -521,7 +518,7 @@ describe('AdminBannerService (real DB)', () => {
       expect(result.linkStoreId).toBeNull();
     });
 
-    it('linkType 변경 NONE → STORE인데 대상 매장이 없으면 NotFoundException', async () => {
+    it('linkType 변경 NONE → STORE인데 대상 매장이 없으면 404', async () => {
       const banner = await makeBanner();
 
       await expect(
@@ -533,7 +530,7 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('병합 결과로 검증한다: 기존 startsAt보다 앞선 endsAt만 보내면 BadRequestException', async () => {
+    it('병합 결과로 검증한다: 기존 startsAt보다 앞선 endsAt만 보내면 400', async () => {
       const banner = await prisma.banner.create({
         data: {
           placement: 'HOME_MAIN',
@@ -550,7 +547,7 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('병합 결과로 검증한다: 링크 NONE인 배너를 CATEGORY 지면으로만 바꾸면 BadRequestException', async () => {
+    it('병합 결과로 검증한다: 링크 NONE인 배너를 CATEGORY 지면으로만 바꾸면 400', async () => {
       const banner = await makeBanner({ placement: 'HOME_MAIN' });
 
       await expect(
@@ -577,7 +574,7 @@ describe('AdminBannerService (real DB)', () => {
       expect(result.linkStoreId).toBe(other.id.toString());
     });
 
-    it('linkType 미변경 + 무관한 링크 필드를 set하면 BadRequestException', async () => {
+    it('linkType 미변경 + 무관한 링크 필드를 set하면 400', async () => {
       const store = await createStore(prisma);
       const banner = await makeBanner({
         link_type: 'STORE',
@@ -592,7 +589,7 @@ describe('AdminBannerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('linkType 미변경 + 필수 링크 값을 null로 지우면 BadRequestException', async () => {
+    it('linkType 미변경 + 필수 링크 값을 null로 지우면 400', async () => {
       const store = await createStore(prisma);
       const banner = await makeBanner({
         link_type: 'STORE',
@@ -609,13 +606,13 @@ describe('AdminBannerService (real DB)', () => {
   });
 
   describe('adminDeleteBanner', () => {
-    it('존재하지 않으면 NotFoundException', async () => {
+    it('존재하지 않으면 404', async () => {
       await expect(
         service.adminDeleteBanner(await admin(), BigInt(999_999)),
       ).rejects.toThrowDomain(404);
     });
 
-    it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 NotFoundException', async () => {
+    it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 404', async () => {
       const banner = await makeBanner();
       const [a, b] = [await admin(), await admin()];
       const results = await Promise.allSettled([
@@ -629,7 +626,7 @@ describe('AdminBannerService (real DB)', () => {
       expect(await auditCount(banner.id, 'DELETE')).toBe(1);
     });
 
-    it('soft-delete + audit(BANNER/DELETE), 재삭제는 NotFoundException', async () => {
+    it('soft-delete + audit(BANNER/DELETE), 재삭제는 404', async () => {
       const banner = await makeBanner();
       const actor = await admin();
 

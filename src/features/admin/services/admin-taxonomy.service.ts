@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { parseIdCursor } from '@/common/utils/keyset-cursor';
@@ -16,12 +12,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import {
-  CATEGORY_NAME_TAKEN,
-  CATEGORY_NOT_FOUND,
-  TAG_NAME_TAKEN,
-  TAG_NOT_FOUND,
-} from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_CATEGORY_DESCRIPTION_LENGTH,
   MAX_CATEGORY_NAME_LENGTH,
@@ -89,7 +79,7 @@ export class AdminTaxonomyService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const name = cleanRequiredText(input.name, MAX_CATEGORY_NAME_LENGTH);
     if (await this.repo.existsActiveCategoryName(input.categoryType, name)) {
-      throw new BadRequestException(CATEGORY_NAME_TAKEN);
+      throw new DomainException('CATEGORY_NAME_TAKEN');
     }
     const data = {
       category_type: input.categoryType,
@@ -118,7 +108,7 @@ export class AdminTaxonomyService extends AdminBaseService {
   ): Promise<AdminCategoryOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const current = await this.repo.findCategoryById(parseId(input.categoryId));
-    if (!current) throw new NotFoundException(CATEGORY_NOT_FOUND);
+    if (!current) throw new DomainException('CATEGORY_NOT_FOUND');
 
     const data: Prisma.CategoryUpdateInput = {
       ...(input.name !== undefined
@@ -143,7 +133,7 @@ export class AdminTaxonomyService extends AdminBaseService {
         data.name,
       ))
     ) {
-      throw new BadRequestException(CATEGORY_NAME_TAKEN);
+      throw new DomainException('CATEGORY_NAME_TAKEN');
     }
 
     // before는 repository가 잠금 뒤 트랜잭션 안에서 읽는다 — current는 검증용
@@ -159,7 +149,7 @@ export class AdminTaxonomyService extends AdminBaseService {
         afterJson: this.categorySnapshot(after),
       }),
     );
-    if (!row) throw new NotFoundException(CATEGORY_NOT_FOUND);
+    if (!row) throw new DomainException('CATEGORY_NOT_FOUND');
     return toAdminCategoryOutput(row);
   }
 
@@ -179,7 +169,7 @@ export class AdminTaxonomyService extends AdminBaseService {
         beforeJson: this.categorySnapshot(before),
       }),
     );
-    if (!deleted) throw new NotFoundException(CATEGORY_NOT_FOUND);
+    if (!deleted) throw new DomainException('CATEGORY_NOT_FOUND');
     return true;
   }
 
@@ -216,7 +206,7 @@ export class AdminTaxonomyService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const name = cleanRequiredText(input.name, MAX_TAG_NAME_LENGTH);
     if (await this.repo.existsActiveTagName(name)) {
-      throw new BadRequestException(TAG_NAME_TAKEN);
+      throw new DomainException('TAG_NAME_TAKEN');
     }
     const row = await this.repo.createOrRestoreTag(name, (created) => ({
       actorAccountId: ctx.accountId,
@@ -235,10 +225,10 @@ export class AdminTaxonomyService extends AdminBaseService {
   ): Promise<AdminTagOutput> {
     const ctx = await this.requireAdminContext(accountId);
     const current = await this.repo.findTagById(parseId(input.tagId));
-    if (!current) throw new NotFoundException(TAG_NOT_FOUND);
+    if (!current) throw new DomainException('TAG_NOT_FOUND');
     const name = cleanRequiredText(input.name, MAX_TAG_NAME_LENGTH);
     if (name !== current.name && (await this.repo.existsActiveTagName(name))) {
-      throw new BadRequestException(TAG_NAME_TAKEN);
+      throw new DomainException('TAG_NAME_TAKEN');
     }
 
     const row = await this.repo.updateTag(
@@ -253,7 +243,7 @@ export class AdminTaxonomyService extends AdminBaseService {
         afterJson: { name: after.name },
       }),
     );
-    if (!row) throw new NotFoundException(TAG_NOT_FOUND);
+    if (!row) throw new DomainException('TAG_NOT_FOUND');
     return toAdminTagOutput(row);
   }
 
@@ -267,7 +257,7 @@ export class AdminTaxonomyService extends AdminBaseService {
       action: AuditActionType.DELETE,
       beforeJson: { name: before.name },
     }));
-    if (!deleted) throw new NotFoundException(TAG_NOT_FOUND);
+    if (!deleted) throw new DomainException('TAG_NOT_FOUND');
     return true;
   }
 

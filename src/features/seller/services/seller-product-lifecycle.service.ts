@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
@@ -15,10 +11,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  PRODUCT_NOT_FOUND,
-  SALE_PRICE_EXCEEDS_REGULAR,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   DEFAULT_PREPARATION_TIME_MINUTES,
   MAX_PRODUCT_DESCRIPTION_LENGTH,
@@ -132,7 +124,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId: created.id,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
     return toProductOutput(detail);
   }
 
@@ -148,7 +140,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const data = this.buildProductUpdateData(input);
     if (typeof data.base_design_image_url === 'string') {
@@ -189,7 +181,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }
@@ -204,7 +196,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
     await this.productRepository.softDeleteProduct(productId);
     await this.auditLogs.createAuditLog({
@@ -232,7 +224,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!current) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
     await this.productRepository.updateProduct({
       productId,
@@ -260,7 +252,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
     return toProductOutput(detail);
   }
 
@@ -285,7 +277,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
         'salePrice',
       );
       if (regularPrice !== undefined && salePrice > regularPrice) {
-        throw new BadRequestException(SALE_PRICE_EXCEEDS_REGULAR);
+        throw new DomainException('SALE_PRICE_EXCEEDS_REGULAR');
       }
     }
   }

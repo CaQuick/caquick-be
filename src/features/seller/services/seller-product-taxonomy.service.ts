@@ -1,20 +1,12 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  invalidIdsError,
-  PRODUCT_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import type { SellerSetProductCategoriesInput } from '@/features/seller/dto/inputs/seller-set-product-categories.input';
 import type { SellerSetProductTagsInput } from '@/features/seller/dto/inputs/seller-set-product-tags.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -46,13 +38,13 @@ export class SellerProductTaxonomyService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const categoryIds = this.parseIdList(input.categoryIds);
     const categories =
       await this.productRepository.findCategoryIds(categoryIds);
     if (categories.length !== categoryIds.length) {
-      throw new BadRequestException(invalidIdsError('categoryIds'));
+      throw new DomainException('INVALID_IDS', { field: 'categoryIds' });
     }
 
     await this.productRepository.replaceProductCategories({
@@ -76,7 +68,7 @@ export class SellerProductTaxonomyService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }
@@ -93,12 +85,12 @@ export class SellerProductTaxonomyService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const tagIds = this.parseIdList(input.tagIds);
     const tags = await this.productRepository.findTagIds(tagIds);
     if (tags.length !== tagIds.length) {
-      throw new BadRequestException(invalidIdsError('tagIds'));
+      throw new DomainException('INVALID_IDS', { field: 'tagIds' });
     }
 
     await this.productRepository.replaceProductTags({
@@ -122,7 +114,7 @@ export class SellerProductTaxonomyService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!detail) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
   }
