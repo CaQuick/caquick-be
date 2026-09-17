@@ -6,7 +6,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AccountType } from '@prisma/client';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
@@ -29,6 +28,7 @@ import { CredentialAuthService } from '@/features/auth/services/credential-auth.
 import type { CredentialRole } from '@/features/auth/services/credential-auth.service.interface';
 import { TokenService } from '@/features/auth/services/token.service';
 import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
+import { AccountType } from '@/generated/prisma/client';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 function makeCredential(

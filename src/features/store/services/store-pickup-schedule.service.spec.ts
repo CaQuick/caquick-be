@@ -1,10 +1,14 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { OrderStatus, PrismaClient, Store } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
 import type { StorePickupCalendar } from '@/features/store/types/store-pickup-schedule-output.type';
+import type {
+  OrderStatus,
+  PrismaClient,
+  Store,
+} from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createOrder, createOrderItem, createStore } from '@/test/factories';

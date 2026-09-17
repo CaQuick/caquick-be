@@ -10,7 +10,7 @@
  * 정리 시 위 prefix에 매칭되는 row와 그 종속 데이터(주문/리뷰/찜/...)를
  * 삭제한 뒤 다시 삽입하므로, 수동으로 만든 다른 데이터는 보존된다.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 export const SEED_USER_EMAIL_PREFIX = 'seed-user-';
 export const SEED_STORE_NAME_PREFIX = '[SEED] ';

@@ -5,11 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActionType,
-  AuditTargetType,
-  ConversationBodyFormat,
-} from '@prisma/client';
 
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -52,6 +47,11 @@ import type {
   SellerConversationOutput,
   SellerCursorConnection,
 } from '@/features/seller/types/seller-output.type';
+import {
+  AuditActionType,
+  AuditTargetType,
+  ConversationBodyFormat,
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {

@@ -5,7 +5,6 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
@@ -34,6 +33,7 @@ import {
   TOKEN_SERVICE,
   type ITokenService,
 } from '@/features/auth/services/token.service.interface';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /**

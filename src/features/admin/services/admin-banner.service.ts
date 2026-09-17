@@ -4,14 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditActionType,
-  AuditTargetType,
-  type Banner,
-  type BannerLinkType,
-  type BannerPlacement,
-  type Prisma,
-} from '@prisma/client';
 
 import { toDate } from '@/common/utils/date-parser';
 import {
@@ -56,6 +48,14 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import {
+  AuditActionType,
+  AuditTargetType,
+  type Banner,
+  type BannerLinkType,
+  type BannerPlacement,
+  type Prisma,
+} from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
 

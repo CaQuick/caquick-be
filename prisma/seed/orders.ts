@@ -9,7 +9,7 @@
  *   o5 PICKED_UP  - p4×1 (리뷰 미작성 → hasReviewableItem=true)
  *   o6 CANCELED   - p2×1
  */
-import type { OrderStatus, PrismaClient } from '@prisma/client';
+import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';

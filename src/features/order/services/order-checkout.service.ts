@@ -6,12 +6,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -19,6 +19,7 @@ import type { CreateOrderOutput } from '@/features/order/types/create-order-outp
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { evaluateActiveUserAccount } from '@/features/user';
+import { Prisma } from '@/generated/prisma/client';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -380,15 +381,11 @@ export class OrderCheckoutService {
     throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
   }
 
-  /**
-   * P2002 충돌이 멱등 키 unique(uk_order_account_idempotency)에서 난 것인지 판별.
-   * MySQL은 meta.target에 제약 이름을 담는다 — 그 외(주문번호 등)는 재시도 대상.
-   */
+  /** P2002 충돌이 멱등 키 unique(uk_order_account_idempotency)에서 난 것인지 판별 — 그 외(주문번호 등)는 재시도 대상. */
   private isIdempotencyConflict(
     error: Prisma.PrismaClientKnownRequestError,
   ): boolean {
-    const target = error.meta?.target;
-    return typeof target === 'string' && target.includes('idempotency');
+    return uniqueConstraintName(error)?.includes('idempotency') ?? false;
   }
 
   /** 주문번호: ORD-YYYYMMDD-XXXXXX (KST 날짜 + 혼동 문자 제외 랜덤 6자리). */

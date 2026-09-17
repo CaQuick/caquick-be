@@ -1,11 +1,14 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
+  // 저장소는 CJS(package.json type 없음)라 nodenext 기본 생성물(./x.js import)이 jest에서 로드되지 않는다
+  moduleFormat        = "cjs"
+  importFileExtension = ""
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 /**

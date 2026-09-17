@@ -1,4 +1,4 @@
-import type { OrderStatus } from '@prisma/client';
+import type { OrderStatus } from '@/generated/prisma/client';
 
 /**
  * createOrder resolver 반환용 도메인 출력 타입.

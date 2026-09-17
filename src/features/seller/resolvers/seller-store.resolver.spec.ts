@@ -1,5 +1,4 @@
 import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
@@ -12,6 +11,7 @@ import { SellerStorePolicyService } from '@/features/seller/services/seller-stor
 import { SELLER_STORE_POLICY_SERVICE } from '@/features/seller/services/seller-store-policy.service.interface';
 import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
 import { SELLER_STORE_PROFILE_SERVICE } from '@/features/seller/services/seller-store-profile.service.interface';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';

@@ -1,10 +1,9 @@
-import type { Store } from '@prisma/client';
-
 import type { AdminStoreDetailRow } from '@/features/admin/repositories/admin.repository';
 import type {
   AdminStoreDetailOutput,
   AdminStoreOutput,
 } from '@/features/admin/types/admin-output.type';
+import type { Store } from '@/generated/prisma/client';
 
 /** 순수 매퍼(DI 없음). */
 export function toAdminStoreOutput(row: Store): AdminStoreOutput {

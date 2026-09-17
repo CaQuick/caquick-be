@@ -3,8 +3,7 @@ import type {
   PrismaClient,
   SellerProfile,
   Store,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 import { createStore } from '@/test/factories/store.factory';

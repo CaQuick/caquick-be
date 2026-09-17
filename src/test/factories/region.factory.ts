@@ -1,5 +1,4 @@
-import type { PrismaClient, Region } from '@prisma/client';
-
+import type { PrismaClient, Region } from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface RegionOverrides {

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
+
 import {
   Prisma,
   type ReviewReport,
   type ReviewReportReason,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
 /** 신고 대상 요약. account_id는 본인 작성물 판정용, content는 스냅샷용. */

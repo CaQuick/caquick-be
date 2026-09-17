@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+
+import { OrderStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class OrderStatusTransitionPolicy {

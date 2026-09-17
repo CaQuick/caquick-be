@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
 
 import {
   nextCursorOf,
@@ -26,6 +25,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /** 상품 조회와 강제 비활성. 내용 수정은 판매자 몫이라 관리자에게 열지 않는다. */
 @Injectable()

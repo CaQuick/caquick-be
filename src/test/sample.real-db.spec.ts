@@ -1,7 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { IdGenerator } from '@/common/providers/id-generator.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createUserProfile } from '@/test/factories';

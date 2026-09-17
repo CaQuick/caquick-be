@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import { KEYWORD_RANK_SNAPSHOT_SIZE } from '@/features/search/constants/search.constants';
+import { Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 
 export interface KeywordCountRow {

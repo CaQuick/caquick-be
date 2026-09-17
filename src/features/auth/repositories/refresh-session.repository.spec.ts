@@ -1,8 +1,8 @@
 import { ForbiddenException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createRefreshSession } from '@/test/factories';

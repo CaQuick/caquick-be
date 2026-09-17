@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type ReviewMediaType } from '@prisma/client';
 
+import { Prisma, type ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 export interface StoreReviewMediaRow {

@@ -1,5 +1,4 @@
-import type { PrismaClient, SearchEvent } from '@prisma/client';
-
+import type { PrismaClient, SearchEvent } from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface SearchEventOverrides {

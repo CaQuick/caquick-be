@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { type BannerLinkType, type CategoryType, Prisma } from '@prisma/client';
 
 import { RANKING_VALID_ORDER_STATUSES } from '@/features/store';
+import {
+  type BannerLinkType,
+  type CategoryType,
+  Prisma,
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 구매자 매장 상품 카드 row. product-storefront 매퍼 입력. */

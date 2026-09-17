@@ -1,4 +1,13 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+
+import {
+  REGION_NOT_SELECTABLE,
+  USERNAME_TAKEN,
+} from '@/features/admin/constants/admin-error-messages';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import {
   AccountType,
   AuditActionType,
@@ -11,16 +20,7 @@ import {
   Prisma,
   type ReviewReport,
   type Store,
-} from '@prisma/client';
-
-import {
-  REGION_NOT_SELECTABLE,
-  USERNAME_TAKEN,
-} from '@/features/admin/constants/admin-error-messages';
-import {
-  AUDIT_LOG_REPOSITORY,
-  type IAuditLogRepository,
-} from '@/features/audit-log';
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 행 잠금 대상 테이블. 고정 문자열만 raw로 들어간다. */

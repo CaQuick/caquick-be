@@ -1,4 +1,4 @@
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus } from '@/generated/prisma/client';
 
 /**
  * 주문 상태별 알림 제목(알림센터 라벨). 매핑이 없는 상태는 알림을 만들지 않는다.

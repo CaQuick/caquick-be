@@ -9,7 +9,8 @@
  * 발급된 테스트 accountId가 콘솔에 출력되며, GraphQL Playground에서 dev 토큰
  * 발급 헬퍼(POST /auth/dev/issue-token)와 함께 사용한다.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma/client';
+import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
 
 import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
@@ -32,7 +33,11 @@ async function main(): Promise<void> {
     throw new Error('seed는 production 환경에서 실행할 수 없습니다.');
   }
 
-  const prisma = new PrismaClient();
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL must be set');
+  const prisma = new PrismaClient({
+    adapter: createMariaDbAdapter(databaseUrl),
+  });
   try {
     log('기존 시드 영역 정리 중...');
     await resetSeedScope(prisma);

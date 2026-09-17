@@ -1,7 +1,7 @@
 /**
  * 시드 검색 히스토리 (user1, 3건).
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededUser } from './users';
 

@@ -4,11 +4,11 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-import { NotificationEvent, NotificationType } from '@prisma/client';
 
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { NotificationEvent, NotificationType } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

@@ -8,7 +8,7 @@
  *   p4 글레이즈드 도넛 (다른 매장)
  *   p5 비활성 상품 (찜 가시성 검증용)
  */
-import type { PrismaClient, Product, Store } from '@prisma/client';
+import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';

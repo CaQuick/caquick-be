@@ -1,6 +1,5 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { AccountCredentialRepository } from '@/features/auth/repositories/account-credential.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createAccountCredential } from '@/test/factories';

@@ -249,7 +249,7 @@ yarn install
 # 2. 환경 변수 (.env 직접 생성 — 아래 "필요 환경 변수" 표 참고)
 touch .env
 
-# 3. DB 마이그레이션
+# 3. DB 마이그레이션 (Prisma 클라이언트는 yarn install의 postinstall이 src/generated/에 생성)
 yarn prisma:migrate:dev
 
 # 4. (선택) 시드 데이터 주입
@@ -289,7 +289,8 @@ yarn start:dev
 | `yarn test:cov` | 커버리지 측정 (임계 미달 시 비-0 종료) |
 | `yarn dto:check` | SDL ↔ DTO 동기화 검사 (마이그레이션 중 warning 모드) |
 | `yarn validate` | lint + tsc + dto:check + test:cov 일괄. push 전 권장 |
-| `yarn prisma:migrate:dev` | DB 마이그레이션 생성/적용 |
+| `yarn prisma:migrate:dev` | DB 마이그레이션 생성/적용 + 클라이언트 재생성 |
+| `yarn prisma:generate` | Prisma 클라이언트 생성 (`src/generated/prisma`, 스키마 변경 후) |
 | `yarn prisma:studio` | Prisma Studio (GUI DB 브라우저) |
 | `yarn graphql:codegen` | SDL → TypeScript 타입 생성 |
 | `yarn graphql:docs` | SpectaQL HTML 문서 빌드 (`public/`) |

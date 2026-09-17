@@ -1,7 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { UserRepository } from '@/features/user/repositories/user.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

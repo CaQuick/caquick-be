@@ -3,7 +3,7 @@ import type {
   AuditLog,
   AuditTargetType,
   Prisma,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 /**
  * AuditLog Repository 토큰 (Nest DI 주입용).

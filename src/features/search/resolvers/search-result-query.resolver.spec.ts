@@ -1,5 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository, ProductSearchService } from '@/features/product';
 import { SearchResultQueryResolver } from '@/features/search/resolvers/search-result-query.resolver';
@@ -8,6 +6,7 @@ import { StoreSearchService } from '@/features/store';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createStore } from '@/test/factories';

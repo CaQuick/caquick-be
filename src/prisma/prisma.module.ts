@@ -4,7 +4,9 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
+import type { DatabaseConfig } from '@/config/database.config';
 import {
   createExtendedPrismaClient,
   PrismaService,
@@ -21,7 +23,11 @@ import {
   providers: [
     {
       provide: PrismaService,
-      useFactory: createExtendedPrismaClient,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        createExtendedPrismaClient(
+          config.getOrThrow<DatabaseConfig>('database').url,
+        ),
     },
   ],
   exports: [PrismaService],

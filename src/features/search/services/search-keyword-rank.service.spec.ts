@@ -1,10 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import {
   SearchKeywordRankService,
   truncateToHour,
 } from '@/features/search/services/search-keyword-rank.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createKeywordRankSnapshot, createSearchEvent } from '@/test/factories';

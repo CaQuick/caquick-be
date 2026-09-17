@@ -1,7 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createCategory } from '@/test/factories';

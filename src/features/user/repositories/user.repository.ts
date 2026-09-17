@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType, IdentityProvider, Prisma } from '@prisma/client';
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { buildReviewLikedNotification } from '@/features/notification';
 import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/user/constants/user.constants';
+import {
+  AccountType,
+  IdentityProvider,
+  Prisma,
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /**

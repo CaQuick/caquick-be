@@ -1,5 +1,3 @@
-import type { Prisma, StoreMapProvider } from '@prisma/client';
-
 import {
   LATITUDE_RANGE,
   LONGITUDE_RANGE,
@@ -21,6 +19,7 @@ import {
   MAX_STORE_PHONE_LENGTH,
   MAX_STORE_URL_LENGTH,
 } from '@/features/store/constants/store-field-limits';
+import type { Prisma, StoreMapProvider } from '@/generated/prisma/client';
 
 /**
  * 매장 기본 정보 부분 수정 입력. undefined는 유지, null/빈 문자열은 제거(nullable 컬럼).

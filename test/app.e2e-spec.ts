@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AccountType } from '@prisma/client';
 import request from 'supertest';
 import { App } from 'supertest/types';
 
@@ -9,6 +8,8 @@ import { AppModule } from './../src/app.module';
 import { ACCOUNT_REPOSITORY } from './../src/features/auth/repositories/account.repository.interface';
 import { UserRepository } from './../src/features/user/repositories/user.repository';
 import { PrismaService } from './../src/prisma';
+
+import { AccountType } from '@/generated/prisma/client';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;

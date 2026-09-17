@@ -1,11 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
-import type { PrismaClient, Store } from '@prisma/client';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreSearchService } from '@/features/store/services/store-search.service';
+import type { PrismaClient, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

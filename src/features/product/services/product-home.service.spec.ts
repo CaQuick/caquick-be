@@ -1,9 +1,8 @@
-import type { PrismaClient, Product, Store } from '@prisma/client';
-
 import { RandomService } from '@/common/providers/random.service';
 import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AccountType, AuditTargetType, Prisma } from '@prisma/client';
 
 import { SELLER_AUDIT_TARGET_TYPES } from '@/features/seller/constants/seller.constants';
+import {
+  AccountType,
+  AuditTargetType,
+  Prisma,
+} from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
 @Injectable()

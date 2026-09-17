@@ -1,5 +1,8 @@
-import type { Category, CategoryType, PrismaClient } from '@prisma/client';
-
+import type {
+  Category,
+  CategoryType,
+  PrismaClient,
+} from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface CategoryOverrides {

@@ -1,11 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
 import { UserWishlistQueryResolver } from '@/features/user/resolvers/user-wishlist-query.resolver';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {

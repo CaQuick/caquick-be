@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 
 import { buildStoreBasicInfoUpdateData } from '@/features/store/services/store-basic-info.helper';
+import { Prisma } from '@/generated/prisma/client';
 
 describe('buildStoreBasicInfoUpdateData', () => {
   it('빈 입력이면 빈 update 데이터', () => {
