@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import {
@@ -15,12 +11,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import {
-  REVIEW_COMMENT_NOT_FOUND,
-  REVIEW_NOT_FOUND,
-  REVIEW_REPORT_ALREADY_RESOLVED,
-  REVIEW_REPORT_NOT_FOUND,
-} from '@/features/admin/constants/admin-error-messages';
 import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminDeleteReviewCommentInput } from '@/features/admin/dto/inputs/admin-delete-review-comment.input';
 import type { AdminDeleteReviewInput } from '@/features/admin/dto/inputs/admin-delete-review.input';
@@ -96,7 +86,7 @@ export class AdminModerationService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findReviewReportDetailById(reportId);
     const detail = row ? toAdminReviewReportDetailOutput(row) : null;
-    if (!detail) throw new NotFoundException(REVIEW_REPORT_NOT_FOUND);
+    if (!detail) throw new DomainException('REVIEW_REPORT_NOT_FOUND');
     return detail;
   }
 
@@ -112,10 +102,10 @@ export class AdminModerationService extends AdminBaseService {
       actorAccountId: ctx.accountId,
     });
     if (result === 'not-found') {
-      throw new NotFoundException(REVIEW_REPORT_NOT_FOUND);
+      throw new DomainException('REVIEW_REPORT_NOT_FOUND');
     }
     if (result === 'already-resolved') {
-      throw new BadRequestException(REVIEW_REPORT_ALREADY_RESOLVED);
+      throw new DomainException('REVIEW_REPORT_ALREADY_RESOLVED');
     }
     return toAdminReviewReportOutput(result);
   }
@@ -187,7 +177,7 @@ export class AdminModerationService extends AdminBaseService {
       reason: cleanRequiredText(input.reason, MAX_REASON_LENGTH),
       actorAccountId: ctx.accountId,
     });
-    if (!deleted) throw new NotFoundException(REVIEW_NOT_FOUND);
+    if (!deleted) throw new DomainException('REVIEW_NOT_FOUND');
     return true;
   }
 
@@ -201,7 +191,7 @@ export class AdminModerationService extends AdminBaseService {
       reason: cleanRequiredText(input.reason, MAX_REASON_LENGTH),
       actorAccountId: ctx.accountId,
     });
-    if (!deleted) throw new NotFoundException(REVIEW_COMMENT_NOT_FOUND);
+    if (!deleted) throw new DomainException('REVIEW_COMMENT_NOT_FOUND');
     return true;
   }
 }

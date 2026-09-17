@@ -139,7 +139,7 @@ describe('AdminStoreService (real DB)', () => {
       expect(result.orderItemCount).toBe(1);
     });
 
-    it('없거나 삭제된 매장이면 NotFoundException', async () => {
+    it('없거나 삭제된 매장이면 404', async () => {
       const deleted = await createStore(prisma, { deleted_at: new Date() });
       await expect(
         service.adminStore(await admin(), deleted.id),
@@ -186,7 +186,7 @@ describe('AdminStoreService (real DB)', () => {
       expect(await prisma.auditLog.count()).toBe(0);
     });
 
-    it('없는 매장이면 NotFoundException', async () => {
+    it('없는 매장이면 404', async () => {
       await expect(
         service.adminSetStoreActive(await admin(), {
           storeId: '999999',
@@ -264,7 +264,7 @@ describe('AdminStoreService (real DB)', () => {
       expect(cleared.regionId).toBeNull();
     });
 
-    it('regionId 빈 문자열은 해제가 아니라 BadRequestException(기존 연결 유지)', async () => {
+    it('regionId 빈 문자열은 해제가 아니라 400(기존 연결 유지)', async () => {
       const region = await district();
       const store = await createStore(prisma, { region_id: region.id });
       await expect(
@@ -287,7 +287,7 @@ describe('AdminStoreService (real DB)', () => {
           (await createRegion(prisma, { level: 2, is_active: false })).id,
       ],
       ['없는 지역', () => Promise.resolve(BigInt(999_999))],
-    ])('%s을 regionId로 주면 BadRequestException', async (_label, makeId) => {
+    ])('%s을 regionId로 주면 400', async (_label, makeId) => {
       const store = await createStore(prisma);
       await expect(
         service.adminUpdateStoreBasicInfo(await admin(), {
@@ -297,7 +297,7 @@ describe('AdminStoreService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('판매자와 같은 규칙: 필수 공백·좌표 형식·길이 초과는 BadRequestException', async () => {
+    it('판매자와 같은 규칙: 필수 공백·좌표 형식·길이 초과는 400', async () => {
       const store = await createStore(prisma);
       const base = { storeId: store.id.toString() };
       await expect(
@@ -347,7 +347,7 @@ describe('AdminStoreService (real DB)', () => {
       expect(second.store_name).toBe(firstAfter.store_name);
     });
 
-    it('삭제된 매장은 잠금 단계에서 NotFoundException(되살리지 않음)', async () => {
+    it('삭제된 매장은 잠금 단계에서 404(되살리지 않음)', async () => {
       const store = await createStore(prisma, { deleted_at: new Date() });
       await expect(
         service.adminUpdateStoreBasicInfo(await admin(), {

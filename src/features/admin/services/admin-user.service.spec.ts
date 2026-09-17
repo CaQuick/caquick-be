@@ -205,7 +205,7 @@ describe('AdminUserService (real DB)', () => {
           (await createAccount(prisma, { account_type: 'SELLER' })).id,
       ],
       ['없는 계정', () => Promise.resolve(BigInt(999_999))],
-    ])('%s이면 NotFoundException', async (_label, makeId) => {
+    ])('%s이면 404', async (_label, makeId) => {
       await expect(
         service.adminUser(await admin(), await makeId()),
       ).rejects.toThrowDomain(404);
@@ -304,7 +304,7 @@ describe('AdminUserService (real DB)', () => {
           (await createAccount(prisma, { deleted_at: new Date() })).id,
       ],
       ['없는 계정', () => Promise.resolve(BigInt(999_999))],
-    ])('%s은 NotFoundException', async (_label, makeId) => {
+    ])('%s은 404', async (_label, makeId) => {
       await expect(
         service.adminSuspendAccount(await admin(), {
           accountId: (await makeId()).toString(),
@@ -313,7 +313,7 @@ describe('AdminUserService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('PENDING 계정은 정지할 수 없다(BadRequestException) — 복구 시 승인 없이 ACTIVE가 되는 경로 차단', async () => {
+    it('PENDING 계정은 정지할 수 없다(400) — 복구 시 승인 없이 ACTIVE가 되는 경로 차단', async () => {
       const pending = await createAccount(prisma, {
         account_type: 'USER',
         status: 'PENDING',
@@ -399,7 +399,7 @@ describe('AdminUserService (real DB)', () => {
       ).toBe(0);
     });
 
-    it('PENDING 계정은 복구할 수 없다(BadRequestException)', async () => {
+    it('PENDING 계정은 복구할 수 없다(400)', async () => {
       const pending = await createAccount(prisma, {
         account_type: 'USER',
         status: 'PENDING',

@@ -107,7 +107,7 @@ describe('AdminTaxonomyService (real DB)', () => {
       expect(audit.actor_account_id).toBe(actor);
     });
 
-    it('같은 type의 같은 이름이 활성 상태로 있으면 BadRequestException, 다른 type이면 허용', async () => {
+    it('같은 type의 같은 이름이 활성 상태로 있으면 400, 다른 type이면 허용', async () => {
       await createCategory(prisma, { category_type: 'EVENT', name: '생일' });
       await expect(
         service.adminCreateCategory(await admin(), {
@@ -174,7 +174,7 @@ describe('AdminTaxonomyService (real DB)', () => {
       expect(audit.after_json).toMatchObject({ name: '새', isActive: false });
     });
 
-    it('이름 충돌이면 BadRequestException, 없으면 NotFoundException', async () => {
+    it('이름 충돌이면 400, 없으면 404', async () => {
       await createCategory(prisma, { category_type: 'EVENT', name: '점유' });
       const mine = await createCategory(prisma, {
         category_type: 'EVENT',
@@ -295,7 +295,7 @@ describe('AdminTaxonomyService (real DB)', () => {
       ).toBe(4);
     });
 
-    it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 NotFoundException', async () => {
+    it('두 관리자가 동시에 삭제해도 감사는 1건이고 한쪽은 404', async () => {
       const tag = await createTag(prisma, { name: 'race' });
       const [a, b] = [await admin(), await admin()];
       const results = await Promise.allSettled([
@@ -313,7 +313,7 @@ describe('AdminTaxonomyService (real DB)', () => {
       ).toBe(1);
     });
 
-    it('이름 충돌은 BadRequestException, 없는 태그는 NotFoundException', async () => {
+    it('이름 충돌은 400, 없는 태그는 404', async () => {
       await createTag(prisma, { name: 'taken' });
       const mine = await createTag(prisma, { name: 'mine' });
       await expect(

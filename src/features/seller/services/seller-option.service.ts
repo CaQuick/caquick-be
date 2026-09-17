@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   cleanNullableText,
@@ -15,15 +11,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  idsMismatchError,
-  INVALID_SELECT_RANGE,
-  invalidIdsError,
-  MAX_SELECT_BELOW_MIN,
-  OPTION_GROUP_NOT_FOUND,
-  OPTION_ITEM_NOT_FOUND,
-  PRODUCT_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
   MAX_OPTION_GROUP_NAME_LENGTH,
@@ -71,12 +58,12 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const minSelect = input.minSelect ?? 1;
     const maxSelect = input.maxSelect ?? 1;
     if (minSelect < 0 || maxSelect < minSelect) {
-      throw new BadRequestException(INVALID_SELECT_RANGE);
+      throw new DomainException('INVALID_SELECT_RANGE');
     }
 
     const row = await this.productRepository.createOptionGroup({
@@ -121,13 +108,13 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw new DomainException('OPTION_GROUP_NOT_FOUND');
     }
 
     const finalMin = input.minSelect ?? current.min_select;
     const finalMax = input.maxSelect ?? current.max_select;
     if (finalMax < finalMin) {
-      throw new BadRequestException(MAX_SELECT_BELOW_MIN);
+      throw new DomainException('MAX_SELECT_BELOW_MIN');
     }
 
     const row = await this.productRepository.updateOptionGroup({
@@ -190,7 +177,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!current || current.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw new DomainException('OPTION_GROUP_NOT_FOUND');
     }
 
     await this.productRepository.softDeleteOptionGroup(optionGroupId);
@@ -221,18 +208,20 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const groups =
       await this.productRepository.listOptionGroupsByProduct(productId);
     if (groups.length !== optionGroupIds.length) {
-      throw new BadRequestException(idsMismatchError('optionGroupIds'));
+      throw new DomainException('IDS_LENGTH_MISMATCH', {
+        field: 'optionGroupIds',
+      });
     }
 
     const idSet = new Set(groups.map((g) => g.id.toString()));
     for (const id of optionGroupIds) {
       if (!idSet.has(id.toString())) {
-        throw new BadRequestException(invalidIdsError('optionGroupIds'));
+        throw new DomainException('INVALID_IDS', { field: 'optionGroupIds' });
       }
     }
 
@@ -265,7 +254,7 @@ export class SellerOptionService extends SellerBaseService {
       await this.productRepository.findOptionGroupById(optionGroupId);
 
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw new DomainException('OPTION_GROUP_NOT_FOUND');
     }
 
     const imageUrl = cleanNullableText(input.imageUrl, MAX_URL_LENGTH);
@@ -316,7 +305,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
+      throw new DomainException('OPTION_ITEM_NOT_FOUND');
     }
 
     const imageUrl =
@@ -385,7 +374,7 @@ export class SellerOptionService extends SellerBaseService {
     const current =
       await this.productRepository.findOptionItemById(optionItemId);
     if (!current || current.option_group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_ITEM_NOT_FOUND);
+      throw new DomainException('OPTION_ITEM_NOT_FOUND');
     }
 
     await this.productRepository.softDeleteOptionItem(optionItemId);
@@ -414,19 +403,21 @@ export class SellerOptionService extends SellerBaseService {
     const group =
       await this.productRepository.findOptionGroupById(optionGroupId);
     if (!group || group.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(OPTION_GROUP_NOT_FOUND);
+      throw new DomainException('OPTION_GROUP_NOT_FOUND');
     }
 
     const items =
       await this.productRepository.listOptionItemsByGroup(optionGroupId);
     if (items.length !== optionItemIds.length) {
-      throw new BadRequestException(idsMismatchError('optionItemIds'));
+      throw new DomainException('IDS_LENGTH_MISMATCH', {
+        field: 'optionItemIds',
+      });
     }
 
     const idSet = new Set(items.map((item) => item.id.toString()));
     for (const id of optionItemIds) {
       if (!idSet.has(id.toString())) {
-        throw new BadRequestException(invalidIdsError('optionItemIds'));
+        throw new DomainException('INVALID_IDS', { field: 'optionItemIds' });
       }
     }
 

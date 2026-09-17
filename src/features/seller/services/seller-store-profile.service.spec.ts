@@ -62,14 +62,14 @@ describe('SellerStoreProfileService (real DB)', () => {
   }
 
   describe('requireSellerContext (공통)', () => {
-    it('판매자 계정이 아니면 ForbiddenException', async () => {
+    it('판매자 계정이 아니면 403', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
         403,
       );
     });
 
-    it('SELLER인데 store가 없으면 NotFoundException', async () => {
+    it('SELLER인데 store가 없으면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'SELLER' });
       await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
         404,
@@ -90,7 +90,7 @@ describe('SellerStoreProfileService (real DB)', () => {
       expect(result.sellerAccountId).toBe(account.id.toString());
     });
 
-    it('store가 없으면 NotFoundException', async () => {
+    it('store가 없으면 404', async () => {
       const account = await setupSellerWithoutStore();
       await expect(service.sellerMyStore(account.id)).rejects.toThrowDomain(
         404,
@@ -123,7 +123,7 @@ describe('SellerStoreProfileService (real DB)', () => {
       expect(auditLogs[0].target_type).toBe('STORE');
     });
 
-    it('store가 없으면 NotFoundException', async () => {
+    it('store가 없으면 404', async () => {
       const account = await setupSellerWithoutStore();
       await expect(
         service.sellerUpdateStoreBasicInfo(account.id, {

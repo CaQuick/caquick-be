@@ -60,7 +60,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
   }
 
   describe('sellerCreateProduct', () => {
-    it('regularPrice가 범위 밖(<1)이면 BadRequestException', async () => {
+    it('regularPrice가 범위 밖(<1)이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerCreateProduct(account.id, {
@@ -71,7 +71,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('salePrice > regularPrice면 BadRequestException', async () => {
+    it('salePrice > regularPrice면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerCreateProduct(account.id, {
@@ -114,7 +114,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
   });
 
   describe('sellerUpdateProduct', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdateProduct(account.id, {
@@ -183,7 +183,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
   });
 
   describe('sellerDeleteProduct', () => {
-    it('존재하지 않으면 NotFoundException', async () => {
+    it('존재하지 않으면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteProduct(account.id, BigInt(999999)),
@@ -224,7 +224,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
       expect(auditLogs).toHaveLength(1);
     });
 
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerSetProductActive(account.id, {

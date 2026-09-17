@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import {
   LATITUDE_RANGE,
   LONGITUDE_RANGE,
@@ -12,15 +8,6 @@ import {
 } from '@/common/utils/decimal-parser';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import {
-  PARENT_REGION_INVALID,
-  REGION_HAS_ACTIVE_CHILDREN,
-  REGION_HAS_CHILDREN,
-  REGION_HAS_STORES,
-  REGION_NOT_FOUND,
-  REGION_PARENT_INACTIVE,
-  REGION_SLUG_TAKEN,
-} from '@/features/admin/constants/admin-error-messages';
 import { MAX_REGION_NAME_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminCreateRegionInput } from '@/features/admin/dto/inputs/admin-create-region.input';
 import type { AdminRegionListInput } from '@/features/admin/dto/inputs/admin-region-list.input';
@@ -75,11 +62,11 @@ export class AdminRegionService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const parentId = parseOptionalId(input.parentId);
     if (parentId !== null && !(await this.repo.isActiveRegionGroup(parentId))) {
-      throw new BadRequestException(PARENT_REGION_INVALID);
+      throw new DomainException('PARENT_REGION_INVALID');
     }
     const slug = input.slug.trim();
     if (await this.repo.existsActiveRegionSlug(slug)) {
-      throw new BadRequestException(REGION_SLUG_TAKEN);
+      throw new DomainException('REGION_SLUG_TAKEN');
     }
     const data = {
       parent_id: parentId,
@@ -101,9 +88,9 @@ export class AdminRegionService extends AdminBaseService {
       afterJson: this.snapshot(created),
     }));
     if (row === 'parent-not-active') {
-      throw new BadRequestException(PARENT_REGION_INVALID);
+      throw new DomainException('PARENT_REGION_INVALID');
     }
-    if (row === 'slug-taken') throw new BadRequestException(REGION_SLUG_TAKEN);
+    if (row === 'slug-taken') throw new DomainException('REGION_SLUG_TAKEN');
     return toAdminRegionOutput(row);
   }
 
@@ -114,7 +101,7 @@ export class AdminRegionService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const regionId = parseId(input.regionId);
     const current = await this.repo.findRegionById(regionId);
-    if (!current) throw new NotFoundException(REGION_NOT_FOUND);
+    if (!current) throw new DomainException('REGION_NOT_FOUND');
 
     const data: Prisma.RegionUpdateInput = {
       ...(input.name !== undefined
@@ -139,7 +126,7 @@ export class AdminRegionService extends AdminBaseService {
       data.slug !== current.slug &&
       (await this.repo.existsActiveRegionSlug(data.slug))
     ) {
-      throw new BadRequestException(REGION_SLUG_TAKEN);
+      throw new DomainException('REGION_SLUG_TAKEN');
     }
 
     const row = await this.repo.updateRegion(
@@ -156,13 +143,13 @@ export class AdminRegionService extends AdminBaseService {
     );
     switch (row) {
       case 'not-found':
-        throw new NotFoundException(REGION_NOT_FOUND);
+        throw new DomainException('REGION_NOT_FOUND');
       case 'slug-taken':
-        throw new BadRequestException(REGION_SLUG_TAKEN);
+        throw new DomainException('REGION_SLUG_TAKEN');
       case 'has-active-children':
-        throw new BadRequestException(REGION_HAS_ACTIVE_CHILDREN);
+        throw new DomainException('REGION_HAS_ACTIVE_CHILDREN');
       case 'parent-not-active':
-        throw new BadRequestException(REGION_PARENT_INACTIVE);
+        throw new DomainException('REGION_PARENT_INACTIVE');
       default:
         return toAdminRegionOutput(row);
     }
@@ -181,11 +168,10 @@ export class AdminRegionService extends AdminBaseService {
       action: AuditActionType.DELETE,
       beforeJson: this.snapshot(before),
     }));
-    if (result === 'not-found') throw new NotFoundException(REGION_NOT_FOUND);
-    if (result === 'has-stores')
-      throw new BadRequestException(REGION_HAS_STORES);
+    if (result === 'not-found') throw new DomainException('REGION_NOT_FOUND');
+    if (result === 'has-stores') throw new DomainException('REGION_HAS_STORES');
     if (result === 'has-children') {
-      throw new BadRequestException(REGION_HAS_CHILDREN);
+      throw new DomainException('REGION_HAS_CHILDREN');
     }
     return true;
   }

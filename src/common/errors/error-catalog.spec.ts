@@ -29,6 +29,11 @@ const RENDER_PARAMS: Partial<
   NICKNAME_LENGTH_INVALID: { min: 2, max: 12 },
   INVALID_PHONE_FORMAT: { example: '010-1234-5678' },
   INVALID_LIMIT: { max: 50 },
+  FIELD_OUT_OF_RANGE: { field: 'capacity', min: 1, max: 100 },
+  IDS_LENGTH_MISMATCH: { field: 'imageIds' },
+  INVALID_IDS: { field: 'imageIds' },
+  PRODUCT_IMAGE_LIMIT_EXCEEDED: { max: 10 },
+  NOTIFICATION_FANOUT_INTERRUPTED: { sentCount: 120 },
 };
 
 // 필터 밖 경로(Apollo가 리졸버 진입 전에 만드는 에러)는 카탈로그 코드가 아니라 Apollo 자체 code를 낸다:

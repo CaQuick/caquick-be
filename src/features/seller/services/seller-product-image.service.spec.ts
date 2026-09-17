@@ -60,7 +60,7 @@ describe('SellerProductImageService (real DB)', () => {
   }
 
   describe('sellerAddProductImage', () => {
-    it('이미지가 이미 5개면 BadRequestException (IMAGE_LIMIT_EXCEEDED)', async () => {
+    it('이미지가 이미 5개면 400 (PRODUCT_IMAGE_LIMIT_EXCEEDED)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
       for (let i = 1; i <= 4; i++) {
@@ -99,7 +99,7 @@ describe('SellerProductImageService (real DB)', () => {
       expect(images).toHaveLength(2);
     });
 
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerAddProductImage(account.id, {
@@ -111,7 +111,7 @@ describe('SellerProductImageService (real DB)', () => {
   });
 
   describe('sellerDeleteProductImage', () => {
-    it('이미지가 최소 1개 제약에 걸리면 BadRequestException', async () => {
+    it('이미지가 최소 1개 제약에 걸리면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
       const image = await prisma.productImage.findFirstOrThrow({
@@ -123,14 +123,14 @@ describe('SellerProductImageService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('존재하지 않는 imageId면 NotFoundException', async () => {
+    it('존재하지 않는 imageId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteProductImage(account.id, BigInt(999999)),
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장의 이미지면 NotFoundException', async () => {
+    it('다른 매장의 이미지면 404', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
       const othersProduct = await createSellerProduct(other.store.id);
@@ -164,7 +164,7 @@ describe('SellerProductImageService (real DB)', () => {
   });
 
   describe('sellerReorderProductImages', () => {
-    it('imageIds 길이가 불일치하면 BadRequestException', async () => {
+    it('imageIds 길이가 불일치하면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
 
@@ -199,7 +199,7 @@ describe('SellerProductImageService (real DB)', () => {
       expect(result[1].id).toBe(img1.id.toString());
     });
 
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerReorderProductImages(account.id, {
@@ -209,7 +209,7 @@ describe('SellerProductImageService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('매장 imageId 집합과 입력 배열이 안 맞으면 BadRequestException(invalidIds)', async () => {
+    it('매장 imageId 집합과 입력 배열이 안 맞으면 400(invalidIds)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
       const otherProduct = await createSellerProduct(store.id);

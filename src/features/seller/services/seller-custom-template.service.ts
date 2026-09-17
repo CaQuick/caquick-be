@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
@@ -12,13 +8,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  CUSTOM_TEMPLATE_NOT_FOUND,
-  CUSTOM_TEXT_TOKEN_NOT_FOUND,
-  idsMismatchError,
-  invalidIdsError,
-  PRODUCT_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   DEFAULT_TOKEN_MAX_LENGTH,
   MAX_TOKEN_DEFAULT_TEXT_LENGTH,
@@ -63,7 +52,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const baseImageUrl = cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH);
     assertOwnedUploadUrl(
@@ -104,7 +93,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const template =
       await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(CUSTOM_TEMPLATE_NOT_FOUND);
+      throw new DomainException('CUSTOM_TEMPLATE_NOT_FOUND');
     }
 
     const row = await this.productRepository.setCustomTemplateActive(
@@ -138,7 +127,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const template =
       await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(CUSTOM_TEMPLATE_NOT_FOUND);
+      throw new DomainException('CUSTOM_TEMPLATE_NOT_FOUND');
     }
 
     if (tokenId) {
@@ -149,7 +138,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
         token.template.product.store_id !== ctx.storeId ||
         token.template.id !== templateId
       ) {
-        throw new NotFoundException(CUSTOM_TEXT_TOKEN_NOT_FOUND);
+        throw new DomainException('CUSTOM_TEXT_TOKEN_NOT_FOUND');
       }
     }
 
@@ -192,7 +181,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const token = await this.productRepository.findCustomTextTokenById(tokenId);
     if (!token || token.template.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(CUSTOM_TEXT_TOKEN_NOT_FOUND);
+      throw new DomainException('CUSTOM_TEXT_TOKEN_NOT_FOUND');
     }
 
     await this.productRepository.softDeleteCustomTextToken(tokenId);
@@ -222,19 +211,19 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const template =
       await this.productRepository.findCustomTemplateById(templateId);
     if (!template || template.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(CUSTOM_TEMPLATE_NOT_FOUND);
+      throw new DomainException('CUSTOM_TEMPLATE_NOT_FOUND');
     }
 
     const tokens =
       await this.productRepository.listCustomTextTokens(templateId);
     if (tokens.length !== tokenIds.length) {
-      throw new BadRequestException(idsMismatchError('tokenIds'));
+      throw new DomainException('IDS_LENGTH_MISMATCH', { field: 'tokenIds' });
     }
 
     const idSet = new Set(tokens.map((token) => token.id.toString()));
     for (const id of tokenIds) {
       if (!idSet.has(id.toString())) {
-        throw new BadRequestException(invalidIdsError('tokenIds'));
+        throw new DomainException('INVALID_IDS', { field: 'tokenIds' });
       }
     }
 

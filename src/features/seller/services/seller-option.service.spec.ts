@@ -62,7 +62,7 @@ describe('SellerOptionService (real DB)', () => {
 
   // ─── OptionGroup ──
   describe('sellerCreateOptionGroup', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerCreateOptionGroup(accountId, {
@@ -72,7 +72,7 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('maxSelect < minSelect면 BadRequestException', async () => {
+    it('maxSelect < minSelect면 400', async () => {
       const { accountId, product } = await setupProductForSeller();
       await expect(
         service.sellerCreateOptionGroup(accountId, {
@@ -123,7 +123,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerUpdateOptionGroup', () => {
-    it('존재하지 않는 optionGroupId면 NotFoundException', async () => {
+    it('존재하지 않는 optionGroupId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerUpdateOptionGroup(accountId, {
@@ -133,7 +133,7 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 소유 group이면 NotFoundException', async () => {
+    it('다른 매장 소유 group이면 404', async () => {
       const me = await setupProductForSeller();
       const other = await setupProductForSeller();
       const othersGroup = await createOptionGroup(other.product.id);
@@ -146,7 +146,7 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('maxSelect < minSelect(기존값+신규값 조합)면 BadRequestException', async () => {
+    it('maxSelect < minSelect(기존값+신규값 조합)면 400', async () => {
       const { accountId, product } = await setupProductForSeller();
       const group = await prisma.productOptionGroup.create({
         data: {
@@ -195,7 +195,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerDeleteOptionGroup', () => {
-    it('없으면 NotFoundException', async () => {
+    it('없으면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerDeleteOptionGroup(accountId, BigInt(999999)),
@@ -221,7 +221,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerReorderOptionGroups', () => {
-    it('optionGroupIds 길이 불일치면 BadRequestException', async () => {
+    it('optionGroupIds 길이 불일치면 400', async () => {
       const { accountId, product } = await setupProductForSeller();
       await expect(
         service.sellerReorderOptionGroups(accountId, {
@@ -249,7 +249,7 @@ describe('SellerOptionService (real DB)', () => {
 
   // ─── OptionItem ──
   describe('sellerCreateOptionItem', () => {
-    it('없는 optionGroupId면 NotFoundException', async () => {
+    it('없는 optionGroupId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerCreateOptionItem(accountId, {
@@ -274,7 +274,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerUpdateOptionItem', () => {
-    it('없는 optionItemId면 NotFoundException', async () => {
+    it('없는 optionItemId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerUpdateOptionItem(accountId, {
@@ -284,7 +284,7 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 item이면 NotFoundException', async () => {
+    it('다른 매장 item이면 404', async () => {
       const me = await setupProductForSeller();
       const other = await setupProductForSeller();
       const othersGroup = await createOptionGroup(other.product.id);
@@ -316,7 +316,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerDeleteOptionItem', () => {
-    it('없으면 NotFoundException', async () => {
+    it('없으면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerDeleteOptionItem(accountId, BigInt(999999)),
@@ -340,7 +340,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerReorderOptionItems', () => {
-    it('optionItemIds 길이 불일치면 BadRequestException', async () => {
+    it('optionItemIds 길이 불일치면 400', async () => {
       const { accountId, product } = await setupProductForSeller();
       const group = await createOptionGroup(product.id);
       await expect(
@@ -435,7 +435,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerReorderOptionGroups 추가 예외', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerReorderOptionGroups(accountId, {
@@ -445,9 +445,9 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('매장 그룹 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
+    it('매장 그룹 집합에 없는 id가 섞이면 400(invalidIds)', async () => {
       const { accountId, product } = await setupProductForSeller();
-      // 길이 일치 분기(idsMismatchError) 대신 invalidIds 분기를 타도록
+      // 길이 일치 분기(IDS_LENGTH_MISMATCH) 대신 invalidIds 분기를 타도록
       // 본인 product에 그룹 1개를 미리 만들어 둔다.
       await createOptionGroup(product.id);
       const otherProduct = await createProduct(prisma, {
@@ -466,7 +466,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerCreateOptionItem 타 매장 그룹 접근', () => {
-    it('다른 매장의 group이면 NotFoundException', async () => {
+    it('다른 매장의 group이면 404', async () => {
       const me = await setupProductForSeller();
       const other = await setupProductForSeller();
       const othersGroup = await createOptionGroup(other.product.id);
@@ -481,7 +481,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerDeleteOptionItem 타 매장 접근', () => {
-    it('다른 매장의 item이면 NotFoundException', async () => {
+    it('다른 매장의 item이면 404', async () => {
       const me = await setupProductForSeller();
       const other = await setupProductForSeller();
       const othersGroup = await createOptionGroup(other.product.id);
@@ -496,7 +496,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerReorderOptionItems 추가 예외', () => {
-    it('없는 optionGroupId면 NotFoundException', async () => {
+    it('없는 optionGroupId면 404', async () => {
       const { accountId } = await setupProductForSeller();
       await expect(
         service.sellerReorderOptionItems(accountId, {
@@ -506,7 +506,7 @@ describe('SellerOptionService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('매장 item 집합에 없는 id가 섞이면 BadRequestException(invalidIds)', async () => {
+    it('매장 item 집합에 없는 id가 섞이면 400(invalidIds)', async () => {
       const { accountId, product } = await setupProductForSeller();
       const group = await createOptionGroup(product.id);
       const otherProduct = await createProduct(prisma, {

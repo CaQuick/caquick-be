@@ -106,7 +106,7 @@ describe('SellerStorePolicyService (real DB)', () => {
   });
 
   describe('sellerUpdatePickupPolicy', () => {
-    it('pickupSlotIntervalMinutes 범위 밖이면 BadRequestException', async () => {
+    it('pickupSlotIntervalMinutes 범위 밖이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdatePickupPolicy(account.id, {
@@ -117,7 +117,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('minLeadTimeMinutes 범위 밖이면 BadRequestException', async () => {
+    it('minLeadTimeMinutes 범위 밖이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdatePickupPolicy(account.id, {
@@ -128,7 +128,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('maxDaysAhead 범위 밖이면 BadRequestException', async () => {
+    it('maxDaysAhead 범위 밖이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdatePickupPolicy(account.id, {
@@ -166,7 +166,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       expect(auditLogs[0].after_json).not.toBeNull();
     });
 
-    it('store가 없으면 NotFoundException', async () => {
+    it('store가 없으면 404', async () => {
       const account = await setupSellerWithoutStore();
       await expect(
         service.sellerUpdatePickupPolicy(account.id, {
@@ -179,7 +179,7 @@ describe('SellerStorePolicyService (real DB)', () => {
   });
 
   describe('sellerUpsertStoreDailyCapacity', () => {
-    it('capacityId가 없으면 NotFoundException', async () => {
+    it('capacityId가 없으면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreDailyCapacity(account.id, {
@@ -190,7 +190,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('capacity 범위 밖이면 BadRequestException', async () => {
+    it('capacity 범위 밖이면 400', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpsertStoreDailyCapacity(account.id, {
@@ -235,7 +235,7 @@ describe('SellerStorePolicyService (real DB)', () => {
   });
 
   describe('sellerDeleteStoreDailyCapacity', () => {
-    it('존재하지 않는 capacityId면 NotFoundException', async () => {
+    it('존재하지 않는 capacityId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteStoreDailyCapacity(account.id, BigInt(999)),

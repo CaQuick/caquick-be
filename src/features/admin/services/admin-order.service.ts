@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -13,7 +9,6 @@ import {
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { ORDER_NOT_FOUND } from '@/features/admin/constants/admin-error-messages';
 import {
   ADMIN_CANCEL_NOTE_PREFIX,
   MAX_ADMIN_CANCEL_NOTE_LENGTH,
@@ -90,7 +85,7 @@ export class AdminOrderService extends AdminBaseService {
   ): Promise<AdminOrderDetailOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.orderRepository.findOrderDetailForAdmin(orderId);
-    if (!row) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!row) throw new DomainException('ORDER_NOT_FOUND');
     return toAdminOrderDetailOutput(row);
   }
 
@@ -104,7 +99,7 @@ export class AdminOrderService extends AdminBaseService {
     const current = await this.orderRepository.findOrderDetailForAdmin(
       parseId(input.orderId),
     );
-    if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!current) throw new DomainException('ORDER_NOT_FOUND');
     this.statusPolicy.assertSellerTransition(
       current.status,
       OrderStatus.CANCELED,
@@ -128,7 +123,7 @@ export class AdminOrderService extends AdminBaseService {
         }
       },
     });
-    if (updated === 'not-found') throw new NotFoundException(ORDER_NOT_FOUND);
+    if (updated === 'not-found') throw new DomainException('ORDER_NOT_FOUND');
     if (updated === 'not-cancellable') {
       // 사전 검사 뒤 상태가 바뀐 경쟁 — 같은 규칙으로 다시 던진다
       const latest = await this.orderRepository.findOrderDetailForAdmin(
@@ -138,7 +133,7 @@ export class AdminOrderService extends AdminBaseService {
         latest?.status ?? OrderStatus.CANCELED,
         OrderStatus.CANCELED,
       );
-      throw new BadRequestException(ORDER_NOT_FOUND);
+      throw new DomainException('ORDER_NOT_CANCELLABLE');
     }
     return toAdminOrderSummaryOutput(updated);
   }

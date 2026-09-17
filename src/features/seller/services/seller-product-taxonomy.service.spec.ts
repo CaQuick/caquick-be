@@ -54,7 +54,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
   }
 
   describe('sellerSetProductCategories', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerSetProductCategories(account.id, {
@@ -64,7 +64,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('존재하지 않는 categoryId가 있으면 BadRequestException', async () => {
+    it('존재하지 않는 categoryId가 있으면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
 
@@ -93,7 +93,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
   });
 
   describe('sellerSetProductTags', () => {
-    it('존재하지 않는 productId면 NotFoundException', async () => {
+    it('존재하지 않는 productId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerSetProductTags(account.id, {
@@ -103,7 +103,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('존재하지 않는 tagId가 있으면 BadRequestException', async () => {
+    it('존재하지 않는 tagId가 있으면 400', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
 

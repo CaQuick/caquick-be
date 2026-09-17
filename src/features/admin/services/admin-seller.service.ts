@@ -1,11 +1,7 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import argon2 from 'argon2';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import {
   LATITUDE_RANGE,
@@ -22,11 +18,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import {
-  REGION_NOT_SELECTABLE,
-  SELLER_NOT_FOUND,
-  USERNAME_TAKEN,
-} from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
@@ -102,7 +93,7 @@ export class AdminSellerService extends AdminBaseService {
   ): Promise<AdminSellerOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findSellerAccountById(targetAccountId);
-    if (!row) throw new NotFoundException(SELLER_NOT_FOUND);
+    if (!row) throw new DomainException('SELLER_NOT_FOUND');
     return toAdminSellerOutput(row);
   }
 
@@ -112,12 +103,12 @@ export class AdminSellerService extends AdminBaseService {
   ): Promise<AdminSellerOutput> {
     const ctx = await this.requireAdminContext(accountId);
     if (await this.repo.existsCredentialUsername(input.username)) {
-      throw new BadRequestException(USERNAME_TAKEN);
+      throw new DomainException('USERNAME_TAKEN');
     }
 
     const regionId = parseOptionalId(input.store.regionId);
     if (regionId !== null && !(await this.repo.isRegionSelectable(regionId))) {
-      throw new BadRequestException(REGION_NOT_SELECTABLE);
+      throw new DomainException('REGION_NOT_SELECTABLE');
     }
 
     const passwordHash = await argon2.hash(input.password, {
@@ -185,7 +176,7 @@ export class AdminSellerService extends AdminBaseService {
     );
     // 자격증명이 없거나 삭제된 계정은 초기화할 로그인 수단이 없다(로그인도 삭제된 자격증명을 제외한다)
     if (!target?.credential || target.credential.deleted_at !== null) {
-      throw new NotFoundException(SELLER_NOT_FOUND);
+      throw new DomainException('SELLER_NOT_FOUND');
     }
 
     const passwordHash = await argon2.hash(input.newPassword, {

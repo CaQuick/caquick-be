@@ -57,7 +57,7 @@ describe('Seller Content Resolvers (real DB)', () => {
     expect(result[0].title).toBe('F1');
   });
 
-  it('Mutation.sellerDeleteFaqTopic: 타 매장 topic이면 NotFoundException 전파', async () => {
+  it('Mutation.sellerDeleteFaqTopic: 타 매장 topic이면 404 전파', async () => {
     const me = await setupSellerWithStore(prisma);
     const other = await setupSellerWithStore(prisma);
     const othersFaq = await prisma.storeFaqTopic.create({

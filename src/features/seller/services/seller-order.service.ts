@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId } from '@/common/utils/id-parser';
@@ -19,10 +15,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
-import {
-  CANCELLATION_NOTE_REQUIRED,
-  ORDER_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
@@ -125,7 +117,7 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!row) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!row) throw new DomainException('ORDER_NOT_FOUND');
     return this.toOrderDetailOutput(row);
   }
 
@@ -141,13 +133,13 @@ export class SellerOrderService extends SellerBaseService {
       orderId,
       storeId: ctx.storeId,
     });
-    if (!current) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!current) throw new DomainException('ORDER_NOT_FOUND');
 
     this.statusPolicy.assertSellerTransition(current.status, toStatus);
 
     if (this.statusPolicy.requiresCancellationNote(toStatus)) {
       if (!input.note || input.note.trim().length === 0) {
-        throw new BadRequestException(CANCELLATION_NOTE_REQUIRED);
+        throw new DomainException('CANCELLATION_NOTE_REQUIRED');
       }
     }
 
@@ -163,7 +155,7 @@ export class SellerOrderService extends SellerBaseService {
         this.statusPolicy.assertSellerTransition(from, toStatus),
     });
 
-    if (!updated) throw new NotFoundException(ORDER_NOT_FOUND);
+    if (!updated) throw new DomainException('ORDER_NOT_FOUND');
 
     return this.toOrderSummaryOutput(updated);
   }

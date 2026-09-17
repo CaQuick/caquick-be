@@ -105,7 +105,7 @@ describe('SellerFaqService (real DB)', () => {
   });
 
   describe('sellerUpdateFaqTopic', () => {
-    it('존재하지 않는 topicId면 NotFoundException', async () => {
+    it('존재하지 않는 topicId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerUpdateFaqTopic(account.id, {
@@ -115,7 +115,7 @@ describe('SellerFaqService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('다른 매장 소유 FAQ는 NotFoundException으로 차단', async () => {
+    it('다른 매장 소유 FAQ는 404로 차단', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
       const otherFaq = await prisma.storeFaqTopic.create({
@@ -175,7 +175,7 @@ describe('SellerFaqService (real DB)', () => {
   });
 
   describe('sellerDeleteFaqTopic', () => {
-    it('존재하지 않는 topicId면 NotFoundException', async () => {
+    it('존재하지 않는 topicId면 404', async () => {
       const { account } = await setupSellerWithStore(prisma);
       await expect(
         service.sellerDeleteFaqTopic(account.id, BigInt(999)),

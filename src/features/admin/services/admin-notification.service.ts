@@ -1,12 +1,8 @@
-import {
-  Inject,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { NOTIFICATION_FANOUT_INTERRUPTED } from '@/features/admin/constants/admin-error-messages';
 import {
   MAX_NOTIFICATION_BODY_LENGTH,
   MAX_NOTIFICATION_TITLE_LENGTH,
@@ -92,9 +88,9 @@ export class AdminNotificationService extends AdminBaseService {
           0,
           true,
         );
-        throw new InternalServerErrorException(
-          NOTIFICATION_FANOUT_INTERRUPTED(sentCount),
-        );
+        throw new DomainException('NOTIFICATION_FANOUT_INTERRUPTED', {
+          sentCount,
+        });
       }
     }
 

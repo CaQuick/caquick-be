@@ -1,5 +1,6 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import { parseIdCursor } from '@/common/utils/keyset-cursor';
@@ -12,7 +13,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import { PRODUCT_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import type { SellerProductListInput } from '@/features/seller/dto/inputs/seller-product-list.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -76,7 +76,7 @@ export class SellerProductQueryService extends SellerBaseService {
       storeId: ctx.storeId,
     });
 
-    if (!row) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!row) throw new DomainException('PRODUCT_NOT_FOUND');
     return toProductOutput(row);
   }
 }

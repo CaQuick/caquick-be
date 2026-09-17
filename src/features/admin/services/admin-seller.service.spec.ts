@@ -216,7 +216,7 @@ describe('AdminSellerService (real DB)', () => {
         async () => (await createAccount(prisma, { account_type: 'ADMIN' })).id,
       ],
       ['없는 계정', () => Promise.resolve(BigInt(999_999))],
-    ])('%s이면 NotFoundException', async (_label, makeId) => {
+    ])('%s이면 404', async (_label, makeId) => {
       await expect(
         service.adminSeller(await admin(), await makeId()),
       ).rejects.toThrowDomain(404);
@@ -289,7 +289,7 @@ describe('AdminSellerService (real DB)', () => {
           (await createRegion(prisma, { level: 2, is_active: false })).id,
       ],
       ['없는 지역', () => Promise.resolve(BigInt(999_999))],
-    ])('%s을 regionId로 주면 BadRequestException', async (_label, makeId) => {
+    ])('%s을 regionId로 주면 400', async (_label, makeId) => {
       await expect(
         service.adminCreateSeller(await admin(), {
           ...validInput,
@@ -298,7 +298,7 @@ describe('AdminSellerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('regionId 빈 문자열은 BadRequestException(값 없음으로 보지 않는다)', async () => {
+    it('regionId 빈 문자열은 400(값 없음으로 보지 않는다)', async () => {
       await expect(
         service.adminCreateSeller(await admin(), {
           ...validInput,
@@ -313,7 +313,7 @@ describe('AdminSellerService (real DB)', () => {
       ['Infinity', { longitude: 'Infinity' }],
       ['위도 범위 밖', { latitude: '91' }],
       ['경도 범위 밖', { longitude: '-180.5' }],
-    ])('좌표 %s이면 BadRequestException', async (_label, coords) => {
+    ])('좌표 %s이면 400', async (_label, coords) => {
       await expect(
         service.adminCreateSeller(await admin(), {
           ...validInput,
@@ -322,7 +322,7 @@ describe('AdminSellerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('이미 쓰이는 username(관리자 것 포함)이면 BadRequestException', async () => {
+    it('이미 쓰이는 username(관리자 것 포함)이면 400', async () => {
       const actor = await admin();
       await createAccountCredential(prisma, {
         account_type: 'ADMIN',
@@ -415,7 +415,7 @@ describe('AdminSellerService (real DB)', () => {
             .account_id,
       ],
       ['없는 계정', () => Promise.resolve(BigInt(999_999))],
-    ])('%s이면 NotFoundException', async (_label, makeId) => {
+    ])('%s이면 404', async (_label, makeId) => {
       await expect(
         service.adminResetSellerPassword(await admin(), {
           accountId: (await makeId()).toString(),

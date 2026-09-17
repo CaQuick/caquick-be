@@ -1,10 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { STORE_NOT_FOUND } from '@/features/seller/constants/seller-error-messages';
 import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerBaseService } from '@/features/seller/services/seller-base.service';
@@ -28,7 +28,7 @@ export class SellerStoreProfileService extends SellerBaseService {
   async sellerMyStore(accountId: bigint): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const store = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!store) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!store) throw new DomainException('STORE_NOT_FOUND');
     return toStoreOutput(store);
   }
 
@@ -38,7 +38,7 @@ export class SellerStoreProfileService extends SellerBaseService {
   ): Promise<SellerStoreOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const current = await this.repo.findStoreBySellerAccountId(ctx.accountId);
-    if (!current) throw new NotFoundException(STORE_NOT_FOUND);
+    if (!current) throw new DomainException('STORE_NOT_FOUND');
 
     // 갱신 규칙은 store feature의 공용 헬퍼가 단일 소스(관리자 대리 수정과 공유)
     const data = buildStoreBasicInfoUpdateData(input);

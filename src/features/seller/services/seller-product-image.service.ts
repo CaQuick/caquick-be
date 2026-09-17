@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
@@ -12,14 +8,6 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
-import {
-  IMAGE_LIMIT_EXCEEDED,
-  IMAGE_MIN_REQUIRED,
-  idsMismatchError,
-  invalidIdsError,
-  PRODUCT_IMAGE_NOT_FOUND,
-  PRODUCT_NOT_FOUND,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_PRODUCT_IMAGES,
   MAX_URL_LENGTH,
@@ -59,11 +47,13 @@ export class SellerProductImageService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const count = await this.productRepository.countProductImages(productId);
     if (count >= MAX_PRODUCT_IMAGES) {
-      throw new BadRequestException(IMAGE_LIMIT_EXCEEDED);
+      throw new DomainException('PRODUCT_IMAGE_LIMIT_EXCEEDED', {
+        max: MAX_PRODUCT_IMAGES,
+      });
     }
 
     const imageUrl = cleanRequiredText(input.imageUrl, MAX_URL_LENGTH);
@@ -102,14 +92,14 @@ export class SellerProductImageService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const image = await this.productRepository.findProductImageById(imageId);
     if (!image || image.product.store_id !== ctx.storeId) {
-      throw new NotFoundException(PRODUCT_IMAGE_NOT_FOUND);
+      throw new DomainException('PRODUCT_IMAGE_NOT_FOUND');
     }
 
     const count = await this.productRepository.countProductImages(
       image.product_id,
     );
     if (count <= MIN_PRODUCT_IMAGES) {
-      throw new BadRequestException(IMAGE_MIN_REQUIRED);
+      throw new DomainException('PRODUCT_IMAGE_MIN_REQUIRED');
     }
 
     await this.productRepository.softDeleteProductImage(imageId);
@@ -140,17 +130,17 @@ export class SellerProductImageService extends SellerBaseService {
         productId,
         storeId: ctx.storeId,
       });
-    if (!product) throw new NotFoundException(PRODUCT_NOT_FOUND);
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const existing = await this.productRepository.listProductImages(productId);
     if (existing.length !== imageIds.length) {
-      throw new BadRequestException(idsMismatchError('imageIds'));
+      throw new DomainException('IDS_LENGTH_MISMATCH', { field: 'imageIds' });
     }
 
     const existingSet = new Set(existing.map((row) => row.id.toString()));
     for (const id of imageIds) {
       if (!existingSet.has(id.toString())) {
-        throw new BadRequestException(invalidIdsError('imageIds'));
+        throw new DomainException('INVALID_IDS', { field: 'imageIds' });
       }
     }
 

@@ -1,12 +1,7 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import type { CursorInput } from '@/common/dto/inputs/cursor.input';
+import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
 import {
@@ -31,12 +26,6 @@ import {
   toEventPreview,
   toLastMessagePreview,
 } from '@/features/conversation';
-import {
-  BODY_HTML_REQUIRED,
-  BODY_TEXT_REQUIRED,
-  CONVERSATION_NOT_FOUND,
-  INVALID_BODY_FORMAT,
-} from '@/features/seller/constants/seller-error-messages';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
@@ -108,7 +97,7 @@ export class SellerConversationService extends SellerBaseService {
         conversationId,
         storeId: ctx.storeId,
       });
-    if (!conversation) throw new NotFoundException(CONVERSATION_NOT_FOUND);
+    if (!conversation) throw new DomainException('CONVERSATION_NOT_FOUND');
 
     const normalized = normalizeCursorInput({
       limit: input?.limit ?? null,
@@ -145,7 +134,7 @@ export class SellerConversationService extends SellerBaseService {
         conversationId,
         storeId: ctx.storeId,
       });
-    if (!conversation) throw new NotFoundException(CONVERSATION_NOT_FOUND);
+    if (!conversation) throw new DomainException('CONVERSATION_NOT_FOUND');
 
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
     const bodyText = cleanNullableText(
@@ -158,10 +147,10 @@ export class SellerConversationService extends SellerBaseService {
     );
 
     if (bodyFormat === ConversationBodyFormat.TEXT && !bodyText) {
-      throw new BadRequestException(BODY_TEXT_REQUIRED);
+      throw new DomainException('BODY_TEXT_REQUIRED');
     }
     if (bodyFormat === ConversationBodyFormat.HTML && !bodyHtml) {
-      throw new BadRequestException(BODY_HTML_REQUIRED);
+      throw new DomainException('BODY_HTML_REQUIRED');
     }
 
     const row =
@@ -282,7 +271,7 @@ export class SellerConversationService extends SellerBaseService {
   private toConversationBodyFormat(raw: string): ConversationBodyFormat {
     if (raw === 'TEXT') return ConversationBodyFormat.TEXT;
     if (raw === 'HTML') return ConversationBodyFormat.HTML;
-    throw new BadRequestException(INVALID_BODY_FORMAT);
+    throw new DomainException('INVALID_BODY_FORMAT');
   }
 
   private toConversationOutput(row: {

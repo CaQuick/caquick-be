@@ -93,7 +93,7 @@ describe('Seller Product Resolvers (real DB)', () => {
     expect(list.items).toHaveLength(1);
   });
 
-  it('Mutation.sellerDeleteProduct: 타 store 상품 접근은 NotFoundException 전파', async () => {
+  it('Mutation.sellerDeleteProduct: 타 store 상품 접근은 404 전파', async () => {
     const me = await setupSellerWithStore(prisma);
     const other = await setupSellerWithStore(prisma);
     const othersProduct = await createProduct(prisma, {

@@ -177,7 +177,7 @@ describe('AdminOrderService (real DB)', () => {
       expect(result.statusHistories).toHaveLength(1);
     });
 
-    it('없거나 삭제된 주문이면 NotFoundException', async () => {
+    it('없거나 삭제된 주문이면 404', async () => {
       const deleted = await createOrder(prisma, { deleted_at: new Date() });
       await expect(
         service.adminOrder(await admin(), deleted.id),
@@ -230,7 +230,7 @@ describe('AdminOrderService (real DB)', () => {
     );
 
     it.each(['PICKED_UP', 'CANCELED'] as const)(
-      '%s 주문은 BadRequestException(판매자와 같은 전이 규칙)',
+      '%s 주문은 400(판매자와 같은 전이 규칙)',
       async (status) => {
         const { order } = await orderWithItem({ status });
         await expect(
@@ -247,7 +247,7 @@ describe('AdminOrderService (real DB)', () => {
       },
     );
 
-    it('사유가 공백이면 BadRequestException, 없는 주문은 NotFoundException', async () => {
+    it('사유가 공백이면 400, 없는 주문은 404', async () => {
       const { order } = await orderWithItem();
       await expect(
         service.adminCancelOrder(await admin(), {
