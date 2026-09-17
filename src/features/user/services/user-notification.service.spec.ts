@@ -47,7 +47,6 @@ describe('UserNotificationService (real DB)', () => {
     return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   }
 
-  // ─── viewerCounts ───
   describe('viewerCounts', () => {
     it('미읽 알림 수 / 위시리스트 수를 반환한다', async () => {
       const account = await setupUser();
@@ -86,7 +85,6 @@ describe('UserNotificationService (real DB)', () => {
     });
   });
 
-  // ─── myNotifications ───
   describe('myNotifications', () => {
     it('알림 목록을 created_at desc로 반환하고 DTO 변환한다', async () => {
       const account = await setupUser();
@@ -289,7 +287,6 @@ describe('UserNotificationService (real DB)', () => {
     });
   });
 
-  // ─── markNotificationRead ───
   describe('markNotificationRead', () => {
     it('미읽 상태면 read_at을 현재 시각으로 설정하고 true 반환', async () => {
       const account = await setupUser();
@@ -343,7 +340,6 @@ describe('UserNotificationService (real DB)', () => {
     });
   });
 
-  // ─── markAllNotificationsRead ───
   describe('markAllNotificationsRead', () => {
     it('해당 계정의 미읽 알림 모두를 읽음 처리', async () => {
       const account = await setupUser();

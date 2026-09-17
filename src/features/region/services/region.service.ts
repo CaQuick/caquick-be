@@ -20,13 +20,11 @@ import type {
 export class RegionService {
   constructor(private readonly repo: RegionRepository) {}
 
-  /** 1차 광역 지역 목록 (전국 포함). */
   async regionGroups(): Promise<RegionGroupOutput[]> {
     const rows = await this.repo.findActiveGroups();
     return rows.map(toRegionGroupOutput);
   }
 
-  /** 특정 1차 지역의 2차 시군구 목록. 존재하지 않는 1차면 404. */
   async regions(parentIdStr: string): Promise<RegionOutput[]> {
     const parentId = parseId(parentIdStr);
     const exists = await this.repo.existsActiveGroup(parentId);
@@ -37,7 +35,6 @@ export class RegionService {
     return rows.map(toRegionOutput);
   }
 
-  /** 지역명 자동검색. 빈 검색어는 빈 배열. */
   async searchRegions(
     input: SearchRegionsInput,
   ): Promise<RegionSearchResultOutput[]> {

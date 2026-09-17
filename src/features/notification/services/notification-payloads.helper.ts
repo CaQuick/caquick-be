@@ -10,10 +10,8 @@ import {
 } from '@/generated/prisma/client';
 
 /**
- * 알림 내용(type·event·문구)의 단일 소스 (이슈 #203).
- * "무엇을 알릴지"는 여기서, "언제 어떤 row로 저장할지"는 각 repository가
- * 트랜잭션 안에서 담당한다 — 문구·채널 정책이 바뀌어도 데이터 계층은 불변.
- * DI-free 순수 함수만 둔다.
+ * "무엇을 알릴지"는 여기서, "언제 어떤 row로 저장할지"는 각 repository가 트랜잭션 안에서 담당한다 —
+ * 문구·채널 정책이 바뀌어도 데이터 계층은 불변. DI-free 순수 함수만 둔다.
  */
 
 export interface NotificationPayload {
@@ -23,7 +21,6 @@ export interface NotificationPayload {
   body: string;
 }
 
-/** 주문 상태 → 알림 이벤트. 알림 대상이 아닌 상태(SUBMITTED)는 null. */
 const ORDER_STATUS_NOTIFICATION_EVENTS: Partial<
   Record<OrderStatus, NotificationEvent>
 > = {
@@ -33,10 +30,7 @@ const ORDER_STATUS_NOTIFICATION_EVENTS: Partial<
   [OrderStatus.CANCELED]: NotificationEvent.ORDER_CANCELED,
 };
 
-/**
- * 주문 상태 변경 알림 payload. 알림 대상이 아닌 상태면 null을 반환하고,
- * 호출부는 그 경우 알림을 생성하지 않는다(SUBMITTED는 구매자 본인의 행위라 알림 없음).
- */
+/** SUBMITTED는 구매자 본인의 행위라 알림 없음(null). */
 export function buildOrderStatusNotification(
   orderNumber: string,
   toStatus: OrderStatus,
@@ -53,7 +47,7 @@ export function buildOrderStatusNotification(
   };
 }
 
-/** 리뷰 최초 좋아요 알림 payload(복원 좋아요는 호출부에서 알림 생략). */
+/** 복원 좋아요는 호출부에서 알림 생략. */
 export function buildReviewLikedNotification(): NotificationPayload {
   return {
     type: NotificationType.REVIEW_LIKE,

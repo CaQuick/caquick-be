@@ -21,12 +21,7 @@ import {
 
 const NICKNAME_REGEX = /^[A-Za-z0-9가-힣_]+$/;
 
-/**
- * 프로필 부분 수정 입력.
- *
- * "최소 한 필드 이상 전송" 규칙은 도메인 invariant 이므로 service 에서 검증한다
- * (class-validator 만으로 깔끔히 표현하기 어렵다).
- */
+/** "최소 한 필드 이상 전송" 규칙은 도메인 invariant라 service에서 검증한다(class-validator로 표현하기 어렵다). */
 export class UpdateMyProfileInput {
   @IsOptional()
   @IsString()

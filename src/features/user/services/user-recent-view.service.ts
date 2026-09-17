@@ -9,7 +9,6 @@ import { RecentProductViewRepository } from '@/features/user/repositories/recent
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { RecentViewedProductConnection } from '@/features/user/types/user-mypage-output.type';
 
-/** 계정당 최대 보관 개수 */
 const MAX_RECENT_VIEWS = 50;
 
 @Injectable()
@@ -54,7 +53,6 @@ export class UserRecentViewService {
     const productId = parseId(productIdStr);
     const now = new Date();
 
-    // 상품 존재 확인 (active + 삭제되지 않은 것)
     const product = await this.productRepo.findActiveProduct(productId);
     if (!product) {
       throw new DomainException('PRODUCT_NOT_FOUND');
@@ -62,7 +60,6 @@ export class UserRecentViewService {
 
     await this.recentViewRepo.upsertView({ accountId, productId, now });
 
-    // 초과분 정리
     await this.recentViewRepo.deleteOldestOverLimit({
       accountId,
       maxCount: MAX_RECENT_VIEWS,

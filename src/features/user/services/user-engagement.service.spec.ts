@@ -38,7 +38,6 @@ describe('UserEngagementService (real DB)', () => {
       // 리뷰 작성자 (author) - createReview가 OrderItem 계정을 자동 사용
       const review = await createReview(prisma);
 
-      // 좋아요 누를 별도 유저
       const liker = await createAccount(prisma, { account_type: 'USER' });
       await createUserProfile(prisma, { account_id: liker.id });
 

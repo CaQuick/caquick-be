@@ -85,8 +85,7 @@ export class UserProfileService extends UserBaseService {
       if (isTaken) throw new DomainException('NICKNAME_TAKEN');
     }
 
-    // figma 명세: 이름은 필수값. DTO 가 trim + 빈 문자열 거절을 담당하지만,
-    // 서비스 단으로 들어온 이상 정규화 결과가 null 인 경우는 방어적으로 reject.
+    // 이름은 필수값. DTO가 trim + 빈 문자열 거절을 담당하지만, 정규화 결과가 null인 경우는 방어적으로 reject.
     let name: string | undefined = undefined;
     if (hasName) {
       const normalized = this.normalizeName(input.name);
@@ -120,11 +119,9 @@ export class UserProfileService extends UserBaseService {
   ): Promise<MePayload> {
     await this.requireActiveUser(accountId);
 
-    // DTO 의 @Transform 이 trim, @MinLength/@MaxLength 가 길이를 보장.
     const profileImageUrl = input.profileImageUrl;
 
-    // 우리가 발급한 presigned URL(이 버킷·해당 계정 prefix)인지 검증 —
-    // 클라이언트가 임의 URL 을 프로필 이미지로 저장하는 것을 방지한다.
+    // 우리가 발급한 presigned URL(이 버킷·해당 계정 prefix)인지 검증 — 클라이언트가 임의 URL을 프로필 이미지로 저장하는 것을 방지한다.
     if (
       !this.s3Service.isOwnedUploadUrl(
         profileImageUrl,

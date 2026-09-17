@@ -1,8 +1,5 @@
 import { registerAs } from '@nestjs/config';
 
-/**
- * 인증 설정 타입
- */
 export interface AuthConfig {
   jwtSecret: string;
   jwtAccessExpiresSeconds: number;
@@ -13,18 +10,12 @@ export interface AuthConfig {
   backendBaseUrl: string;
 }
 
-/**
- * 환경변수를 숫자로 파싱 (실패 시 기본값 반환)
- */
 function parseNumber(value: string | undefined, defaultValue: number): number {
   if (!value) return defaultValue;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
-/**
- * 환경변수를 불리언으로 파싱
- */
 function parseBoolean(
   value: string | undefined,
   defaultValue: boolean,
@@ -48,9 +39,6 @@ function readJwtSecret(): string | undefined {
   return undefined;
 }
 
-/**
- * 인증 설정
- */
 export default registerAs('auth', (): AuthConfig => {
   const isProd = process.env.NODE_ENV === 'production';
   const jwtSecret = readJwtSecret();

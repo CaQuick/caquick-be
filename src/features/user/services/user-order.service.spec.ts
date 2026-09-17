@@ -40,7 +40,6 @@ describe('UserOrderService (real DB)', () => {
     return account;
   }
 
-  // ─── listMyOrders ───
   describe('listMyOrders', () => {
     it('최근 생성 순서로 주문을 반환하고 대표상품/매장/추가 아이템 수를 집계한다', async () => {
       const account = await setupUser();
@@ -149,8 +148,6 @@ describe('UserOrderService (real DB)', () => {
       expect(result.totalCount).toBe(1);
     });
 
-    // offset/limit 범위 검증은 DTO (MyOrdersInput → UserPaginationInput) 로 이전됨.
-
     it('주문이 0건이면 빈 connection을 반환한다', async () => {
       const account = await setupUser();
 
@@ -161,7 +158,6 @@ describe('UserOrderService (real DB)', () => {
       expect(result.hasMore).toBe(false);
     });
 
-    // ─── hasReviewableItem ───
     describe('hasReviewableItem', () => {
       async function createPickedUpOrderWithItem(accountId: bigint) {
         const store = await createStore(prisma);
@@ -304,7 +300,6 @@ describe('UserOrderService (real DB)', () => {
     });
   });
 
-  // ─── getMyOrder ───
   describe('getMyOrder', () => {
     it('본인 주문의 상세(items/store/status) DTO를 반환한다', async () => {
       const account = await setupUser();

@@ -19,17 +19,11 @@ import {
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { LogContext } from '@/global/types/log.type';
 
-/**
- * REST HTTP 요청/응답을 로깅하는 인터셉터.
- * - GraphQL 이외의 http 컨텍스트에 대해서만 동작한다.
- */
+/** GraphQL 이외의 http 컨텍스트에 대해서만 동작한다. */
 @Injectable()
 export class HttpLoggingInterceptor implements NestInterceptor {
   constructor(private readonly logger: CustomLoggerService) {}
 
-  /**
-   * 요청 메타데이터를 수집하고, 응답 시점에 트랜잭션 로그를 남긴다.
-   */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType<'http'>() !== 'http') {
       return next.handle();

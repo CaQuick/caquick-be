@@ -24,10 +24,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 type ScopeKind = 'product' | 'store';
 const SCOPES: ScopeKind[] = ['product', 'store'];
 
-/**
- * 상품·매장 리뷰 목록은 같은 파이프라인(id 페이지 → hydrate → 집계)을 타므로
- * 공통 동작은 두 범위를 it.each로 한 번에 고정하고, 범위별 차이만 따로 둔다.
- */
+// 두 범위가 같은 파이프라인을 타므로 공통 동작은 it.each로 한 번에 고정하고, 범위별 차이만 따로 둔다.
 describe('ReviewListingService (real DB)', () => {
   let service: ReviewListingService;
   let prisma: PrismaClient;

@@ -7,7 +7,6 @@ export interface CursorConnection<T> {
   totalCount: number;
 }
 
-/** offset 목록 응답. SDL `*Connection`(offset형)과 1:1. */
 export interface OffsetConnection<T> {
   items: T[];
   totalCount: number;

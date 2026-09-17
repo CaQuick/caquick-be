@@ -1,7 +1,6 @@
 import type { AdminRegionRow } from '@/features/admin/repositories/admin.repository';
 import type { AdminRegionOutput } from '@/features/admin/types/admin-output.type';
 
-/** 순수 매퍼(DI 없음). */
 export function toAdminRegionOutput(row: AdminRegionRow): AdminRegionOutput {
   return {
     id: row.id.toString(),

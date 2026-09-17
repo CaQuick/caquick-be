@@ -72,10 +72,8 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
     const buildInfo = ts.getTsBuildInfoEmitOutputFilePath(options);
     expect(buildInfo).toBeDefined();
 
-    // 왜: buildinfo가 outDir 밖이면 deleteOutDir이 dist만 지우고 캐시는 살아남는다.
-    // tsc가 그 캐시를 보고 "전부 최신"으로 오판해 emit을 통째로 건너뛰고,
-    // dist/main.js가 없는 채 "Found 0 errors"만 출력된다 → 실행 시 MODULE_NOT_FOUND.
-    // rootDir 지정만으로 buildinfo가 루트로 밀려났던 회귀 이력이 있다(PR #60).
+    // buildinfo가 outDir 밖이면 deleteOutDir이 dist만 지우고 캐시는 살아남는다. tsc가 그 캐시를 보고 "전부 최신"으로
+    // 오판해 emit을 통째로 건너뛰고, dist/main.js가 없는 채 "Found 0 errors"만 출력된다 → 실행 시 MODULE_NOT_FOUND.
     const relativeToOutDir = path.relative(
       String(options.outDir),
       String(buildInfo),
@@ -91,9 +89,8 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
       false,
     );
 
-    // 왜: ecosystem.config.js(script: dist/main.js)와 start:prod(node dist/main)가
-    // 이 경로에 묶여 있다. rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로
-    // 올라가 dist/src/main.js로 밀리고 PM2 부팅이 깨진다(회귀 이력: c43b5ba).
+    // ecosystem.config.js(script: dist/main.js)와 start:prod(node dist/main)가 이 경로에 묶여 있다.
+    // rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로 올라가 dist/src/main.js로 밀리고 PM2 부팅이 깨진다.
     expect(path.relative(REPO_ROOT, jsOutput)).toBe(
       path.join('dist', 'main.js'),
     );

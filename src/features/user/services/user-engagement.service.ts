@@ -33,7 +33,6 @@ export class UserEngagementService extends UserBaseService {
     return true;
   }
 
-  /** 리뷰 좋아요 해제. 좋아요가 없어도 true(멱등). */
   async unlikeReview(accountId: bigint, reviewId: bigint): Promise<boolean> {
     await this.requireActiveUser(accountId);
 
@@ -45,7 +44,6 @@ export class UserEngagementService extends UserBaseService {
     return true;
   }
 
-  /** 리뷰 댓글 작성. 리뷰가 없으면 NOT_FOUND. */
   async writeReviewComment(
     accountId: bigint,
     input: WriteReviewCommentInput,
@@ -70,7 +68,6 @@ export class UserEngagementService extends UserBaseService {
     };
   }
 
-  /** 내 리뷰 댓글 삭제(soft). 본인 댓글이 아니면 FORBIDDEN. */
   async deleteMyReviewComment(
     accountId: bigint,
     commentId: bigint,

@@ -27,11 +27,7 @@ export class StoreTodayPickupService {
     private readonly clock: ClockService,
   ) {}
 
-  /**
-   * 오늘(KST) 픽업 가능 매장 리스트. 인기 매장과 동일 랭킹으로 정렬하되,
-   * 매장별 정책(요일 영업시간·특별휴무·슬롯 간격·리드타임·일일 capacity)을
-   * 모두 반영해 오늘 예약 가능 슬롯이 1개 이상인 매장만 노출한다.
-   */
+  /** 매장별 정책(요일 영업시간·특별휴무·슬롯 간격·리드타임·일일 capacity)을 모두 반영해 오늘 예약 가능 슬롯이 1개 이상인 매장만 노출한다. */
   async todayPickupStores(
     input?: TodayPickupStoresInput,
     accountId?: bigint,

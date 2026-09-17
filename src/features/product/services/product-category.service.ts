@@ -8,7 +8,6 @@ import type { CategoryItem } from '@/features/product/types/product-category-out
 export class ProductCategoryService {
   constructor(private readonly repo: ProductRepository) {}
 
-  /** 전역 카테고리 목록. type 필터 옵션, 활성만. */
   async categories(input?: CategoriesInput): Promise<CategoryItem[]> {
     const rows = await this.repo.listCategories(input?.type);
     return rows.map((row) => ({

@@ -43,10 +43,7 @@ import { AuditLogModule } from '@/features/audit-log';
 import { OrderModule } from '@/features/order';
 import { SearchModule } from '@/features/search';
 
-/**
- * 관리자(ADMIN) 도메인 모듈. seller와 대칭 구조이며 cross-feature로 쓰이지 않아 배럴이 없다.
- * DI는 구체 클래스 주입(2번째 구현 예정 없음).
- */
+/** cross-feature로 쓰이지 않아 배럴이 없다. DI는 구체 클래스 주입(2번째 구현 예정 없음). */
 @Module({
   imports: [AuditLogModule, OrderModule, SearchModule],
   providers: [

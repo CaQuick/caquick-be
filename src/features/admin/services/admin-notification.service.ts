@@ -18,11 +18,7 @@ import {
 } from '@/features/audit-log';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
-/**
- * SYSTEM/MARKETING 알림 발송. 분류 값은 있었지만 만들어내는 경로가 없었다.
- * ALL_USERS는 키셋으로 활성 USER를 훑어 청크 단위 createMany — 청크 사이 트랜잭션은 없다
- * (부분 실패 시 sentCount까지 저장된 상태, 재실행은 중복). 멱등 키·배치 잡은 범위 밖.
- */
+/** ALL_USERS는 키셋으로 활성 USER를 훑어 청크 단위 createMany — 청크 사이 트랜잭션은 없다(부분 실패 시 sentCount까지 저장된 상태, 재실행은 중복). 멱등 키·배치 잡은 범위 밖. */
 @Injectable()
 export class AdminNotificationService extends AdminBaseService {
   constructor(

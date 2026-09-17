@@ -7,7 +7,6 @@ import type {
   AdminTagOutput,
 } from '@/features/admin/types/admin-output.type';
 
-/** 순수 매퍼(DI 없음). */
 export function toAdminCategoryOutput(
   row: AdminCategoryRow,
 ): AdminCategoryOutput {

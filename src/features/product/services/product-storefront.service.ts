@@ -20,7 +20,6 @@ export class ProductStorefrontService {
     private readonly cards: ProductCardService,
   ) {}
 
-  /** 매장 상품 목록(커서). 활성 상품만. 카테고리/검색 필터. 카드는 공용 ProductCardService. */
   async storeProducts(
     input: StoreProductsInput,
     accountId?: bigint,
@@ -58,7 +57,6 @@ export class ProductStorefrontService {
     };
   }
 
-  /** 매장 보유 카테고리(사이드바). 빈 카테고리 제외. */
   async storeProductCategories(
     storeId: string,
   ): Promise<StoreProductCategory[]> {

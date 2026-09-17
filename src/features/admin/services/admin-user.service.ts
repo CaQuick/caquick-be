@@ -30,10 +30,7 @@ import {
   AuditTargetType,
 } from '@/generated/prisma/client';
 
-/**
- * 구매자 조회와 계정 정지/복구(USER·SELLER 공통).
- * 정지는 JwtBearerStrategy가 ACTIVE만 통과시키므로 즉시 모든 API가 막히고, refresh 세션도 폐기한다.
- */
+/** 정지는 JwtBearerStrategy가 ACTIVE만 통과시키므로 즉시 모든 API가 막히고, refresh 세션도 폐기한다. */
 @Injectable()
 export class AdminUserService extends AdminBaseService {
   constructor(

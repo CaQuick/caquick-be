@@ -131,7 +131,7 @@ describe('AdminAuditService (real DB)', () => {
       mid.id.toString(),
       old.id.toString(),
     ]);
-    // 탈퇴 계정도 FK가 없어 기록은 남고, 종류만 알 수 없다… 단 soft-delete라 계정 행은 남아 종류가 붙는다
+    // 탈퇴 계정도 soft-delete라 계정 행은 남아 종류가 붙는다
     expect(ranged.items[0].actorAccountType).toBe('USER');
 
     const page = await service.adminAuditLogs(actor, { limit: 2 });

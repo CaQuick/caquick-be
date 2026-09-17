@@ -10,7 +10,6 @@ import {
   type AdminOrderRow,
 } from '@/features/order';
 
-/** 순수 매퍼(DI 없음). 판매자 주문 매퍼와 같은 스냅샷 규칙. */
 export function toAdminOrderSummaryOutput(
   row: AdminOrderRow,
 ): AdminOrderSummaryOutput {

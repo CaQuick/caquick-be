@@ -14,11 +14,7 @@ export const TEST_S3_CONFIG = {
   presignExpiresSeconds: 600,
 };
 
-/**
- * 실물 S3Service를 주입한다 — URL 소유권 판정(isOwnedUploadUrl)은 네트워크 없이 동작하므로
- * mock 대신 실제 분류 로직을 태워 spec의 "발급된/외부 URL" 구분이 의미를 갖게 한다.
- * presign 발급(getSignedUrl)이 필요한 spec은 aws-sdk를 별도로 mock 한다.
- */
+/** URL 소유권 판정(isOwnedUploadUrl)은 네트워크 없이 동작하므로 mock 대신 실물을 태워 "발급된/외부 URL" 구분이 의미를 갖게 한다. presign이 필요한 spec은 aws-sdk를 별도로 mock 한다. */
 export function s3TestProviders(): Provider[] {
   return [
     S3Service,
@@ -30,7 +26,6 @@ export function s3TestProviders(): Provider[] {
   ];
 }
 
-/** 해당 계정·용도로 발급된 것처럼 보이는 publicUrl */
 export function ownedUploadUrl(
   purpose: UploadPurpose,
   accountId: bigint,

@@ -6,17 +6,8 @@ import type { IRefreshSessionRepository } from '@/features/auth/repositories/ref
 import type { AuthRefreshSession, Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
-/**
- * RefreshSession Repository 구체 구현.
- *
- * Prisma 의 `authRefreshSession` 테이블을 직접 다룬다.
- */
 @Injectable()
 export class RefreshSessionRepository implements IRefreshSessionRepository {
-  /**
-   * @param prisma PrismaService
-   * @param clock ClockService
-   */
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockService,

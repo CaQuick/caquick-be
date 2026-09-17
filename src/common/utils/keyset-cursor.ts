@@ -48,7 +48,6 @@ export function parseTimestampIdCursor(
   return { timestamp, id };
 }
 
-/** (시각, id) desc 페이지의 다음 커서 문자열. */
 export function buildTimestampIdCursor(timestamp: Date, id: bigint): string {
   return `${timestamp.getTime()}:${id.toString()}`;
 }
@@ -101,7 +100,6 @@ export function parseNumberIdCursor(
   return { value, id };
 }
 
-/** (정수 정렬키, id) desc 페이지의 다음 커서 문자열. */
 export function buildNumberIdCursor(value: number, id: bigint): string {
   return `${value}:${id.toString()}`;
 }

@@ -19,18 +19,8 @@ import {
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
 
-/**
- * 인증 토큰 발급/회전/검증 + refresh 쿠키 관리 서비스.
- *
- * AuthService 의 토큰 관련 책임을 분리한 결과물.
- */
 @Injectable()
 export class TokenService {
-  /**
-   * @param config ConfigService
-   * @param jwt JwtService
-   * @param refreshSessions RefreshSessionRepository
-   */
   constructor(
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
@@ -148,16 +138,10 @@ export class TokenService {
     );
   }
 
-  /**
-   * refresh token 랜덤 문자열을 생성한다. (32 bytes → 64 hex)
-   */
   private generateRefreshToken(): string {
     return generateRandomToken(32);
   }
 
-  /**
-   * Refresh 만료(일) 를 반환한다.
-   */
   private getRefreshDays(): number {
     return getEnvAsNumber(this.config, 'AUTH_REFRESH_EXPIRES_DAYS', 30);
   }

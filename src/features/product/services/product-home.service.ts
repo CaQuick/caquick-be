@@ -39,11 +39,7 @@ export class ProductHomeService {
     private readonly cards: ProductCardService,
   ) {}
 
-  /**
-   * 홈 '상황별 인기 케이크' 섹션. 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을
-   * 상품 단위로 적용해 상위 카드를 뽑고, 카테고리 대표 배너를 함께 반환한다.
-   * 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리, 정책 확정 사항).
-   */
+  /** 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을 상품 단위로 적용한다. 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리). */
   async popularCakes(
     input?: PopularCakesInput,
     accountId?: bigint,
@@ -99,11 +95,7 @@ export class ProductHomeService {
     return { banner: bannerOutput, items, rankedAt };
   }
 
-  /**
-   * 홈 '다른 사람들은 이렇게 만들었어요' 제작 후기(전체기간 좋아요순).
-   * Before(주문 커스텀 크롭)/After(리뷰 첫 이미지)가 모두 있는 리뷰만 후보.
-   * 데이터가 없으면 빈 배열(FE가 빈 상태 문구 처리).
-   */
+  /** Before(주문 커스텀 크롭)/After(리뷰 첫 이미지)가 모두 있는 리뷰만 후보 — 대비 연출이 섹션의 본질. */
   async customCakeShowcase(
     input?: CustomCakeShowcaseInput,
   ): Promise<CustomCakeShowcaseItem[]> {
@@ -139,10 +131,7 @@ export class ProductHomeService {
     return items;
   }
 
-  /**
-   * 홈 '렌덤 케이크 둘러보기'. 호출마다 후보 풀에서 무작위 재추출한다
-   * (호출 간 중복 허용 — '새로보기 1/3' 카운트는 FE 로컬 상태, 정책 확정 사항).
-   */
+  /** 호출마다 후보 풀에서 무작위 재추출한다(호출 간 중복 허용 — '새로보기 1/3' 카운트는 FE 로컬 상태). */
   async randomCakes(input?: RandomCakesInput): Promise<RandomCakesResult> {
     const limit = input?.limit ?? DEFAULT_RANDOM_CAKES_LIMIT;
     const categoryId =

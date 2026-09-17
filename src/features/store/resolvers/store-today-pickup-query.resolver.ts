@@ -11,10 +11,7 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/**
- * 오늘 픽업 가능 매장 조회 resolver. 비로그인도 접근 가능한 public query.
- * 옵셔널 인증으로 로그인 시에만 isWishlisted를 채운다.
- */
+/** 옵셔널 인증으로 로그인 시에만 isWishlisted를 채운다. */
 @Resolver('Query')
 export class StoreTodayPickupQueryResolver {
   constructor(private readonly service: StoreTodayPickupService) {}

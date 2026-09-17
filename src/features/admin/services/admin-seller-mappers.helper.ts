@@ -2,7 +2,7 @@ import type { AdminSellerRow } from '@/features/admin/repositories/admin.reposit
 import { activeOrNull } from '@/features/admin/services/admin-mappers.helper';
 import type { AdminSellerOutput } from '@/features/admin/types/admin-output.type';
 
-/** 순수 매퍼(DI 없음). nested relation은 soft-delete 자동 필터 밖이라 deleted_at을 직접 본다. */
+/** nested relation은 soft-delete 자동 필터 밖이라 deleted_at을 직접 본다. */
 export function toAdminSellerOutput(row: AdminSellerRow): AdminSellerOutput {
   const profile = activeOrNull(row.seller_profile);
   const store = activeOrNull(row.store);

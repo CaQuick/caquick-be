@@ -63,7 +63,6 @@ export class ReviewRepository {
           args.existingDeletedReviewId,
           new Date(),
         );
-        // soft-delete된 기존 리뷰를 복원 + 내용 교체
         const restored = await tx.review.update({
           where: { id: args.existingDeletedReviewId },
           data: {
@@ -74,7 +73,6 @@ export class ReviewRepository {
         });
         reviewId = restored.id;
 
-        // 기존 미디어 soft-delete
         await tx.reviewMedia.updateMany({
           where: { review_id: reviewId },
           data: { deleted_at: new Date() },
@@ -227,7 +225,6 @@ export class ReviewRepository {
     });
   }
 
-  /** 리뷰와 그 댓글을 겨냥한 PENDING 신고를 RESOLVED(작성자 삭제)로 닫는다. */
   private async closePendingReportsForReviewTx(
     tx: Prisma.TransactionClient,
     reviewId: bigint,

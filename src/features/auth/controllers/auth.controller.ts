@@ -67,34 +67,15 @@ function parseAccountIdString(raw: string): bigint {
   }
 }
 
-/**
- * 인증 관련 REST 컨트롤러
- *
- * - refresh 토큰은 HttpOnly Cookie, access 토큰은 Bearer로 전달
- */
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  /**
-   * @param auth AuthService
-   * @param oidcLogin OidcLoginService
-   * @param credentialAuth CredentialAuthService
-   */
   constructor(
     private readonly auth: AuthService,
     private readonly oidcLogin: OidcLoginService,
     private readonly credentialAuth: CredentialAuthService,
   ) {}
 
-  /**
-   * OIDC 로그인 시작
-   *
-   * GET /auth/oidc/:provider/start?returnTo=...
-   *
-   * @param provider provider
-   * @param returnTo return url
-   * @param res Response
-   */
   @ApiOperation({
     summary: 'OIDC 로그인 시작',
     description: '지정한 OIDC provider로 로그인 화면을 시작한다.',
@@ -118,7 +99,6 @@ export class AuthController {
     @Query('returnTo') returnTo: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    // provider 검증(잘못된 값이면 즉시 에러)
     parseOidcProvider(provider);
 
     const { redirectUrl } = await this.oidcLogin.startOidcLogin(
@@ -129,15 +109,6 @@ export class AuthController {
     res.redirect(redirectUrl);
   }
 
-  /**
-   * OIDC 콜백
-   *
-   * GET /auth/oidc/:provider/callback?code=...&state=...
-   *
-   * @param provider provider
-   * @param req Request
-   * @param res Response
-   */
   @ApiOperation({
     summary: 'OIDC 콜백 처리',
     description:
@@ -165,14 +136,6 @@ export class AuthController {
     res.redirect(returnTo);
   }
 
-  /**
-   * Access/Refresh 재발급 (rotation)
-   *
-   * POST /auth/refresh
-   *
-   * @param req Request
-   * @param res Response
-   */
   @ApiOperation({
     summary: 'Access/Refresh 재발급',
     description: 'Refresh 쿠키를 사용해 access token을 재발급한다.',
@@ -195,14 +158,6 @@ export class AuthController {
     res.status(200).json({ accessToken, tokenType: 'Bearer' });
   }
 
-  /**
-   * 로그아웃
-   *
-   * POST /auth/logout
-   *
-   * @param req Request
-   * @param res Response
-   */
   @ApiOperation({
     summary: '로그아웃',
     description: 'Refresh 세션을 폐기하고 쿠키를 제거한다.',
@@ -215,11 +170,6 @@ export class AuthController {
     res.status(204).send();
   }
 
-  /**
-   * 판매자 로그인
-   *
-   * POST /auth/seller/login
-   */
   @ApiCredentialLogin('판매자')
   @Post('seller/login')
   async sellerLogin(
@@ -237,11 +187,6 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
-  /**
-   * 판매자 refresh 재발급
-   *
-   * POST /auth/seller/refresh
-   */
   @ApiCredentialRefresh('판매자')
   @Post('seller/refresh')
   async sellerRefresh(
@@ -256,11 +201,6 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
-  /**
-   * 판매자 로그아웃
-   *
-   * POST /auth/seller/logout
-   */
   @ApiCredentialLogout('판매자')
   @Post('seller/logout')
   async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -268,18 +208,7 @@ export class AuthController {
     res.status(204).send();
   }
 
-  /**
-   * Dev 전용 access token 발급 (개발 환경 한정)
-   *
-   * POST /auth/dev/issue-token
-   *
-   * - NODE_ENV=production 인 경우 ForbiddenException
-   * - body: { accountId: string }
-   * - 응답: { accessToken, tokenType, expiresInSeconds }
-   *
-   * 시드(yarn prisma:seed) 데이터의 accountId 로 곧장 GraphQL Playground에서
-   * 마이페이지 API를 시험해 볼 수 있도록 OIDC 흐름을 우회한다.
-   */
+  /** 시드 데이터의 accountId로 OIDC 흐름을 우회해 GraphQL Playground에서 마이페이지 API를 시험하기 위한 것. */
   @ApiOperation({
     summary: '[DEV ONLY] Access token 즉시 발급',
     description:
@@ -311,11 +240,6 @@ export class AuthController {
     res.status(200).json(result);
   }
 
-  /**
-   * 판매자 비밀번호 변경
-   *
-   * POST /auth/seller/change-password
-   */
   @ApiChangePassword('판매자')
   @UseGuards(JwtAuthGuard)
   @Post('seller/change-password')
@@ -336,11 +260,6 @@ export class AuthController {
     res.status(200).json({ ok: true });
   }
 
-  /**
-   * 관리자 로그인
-   *
-   * POST /auth/admin/login
-   */
   @ApiCredentialLogin('관리자')
   @Post('admin/login')
   async adminLogin(
@@ -358,11 +277,6 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
-  /**
-   * 관리자 refresh 재발급
-   *
-   * POST /auth/admin/refresh
-   */
   @ApiCredentialRefresh('관리자')
   @Post('admin/refresh')
   async adminRefresh(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -374,11 +288,6 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
-  /**
-   * 관리자 로그아웃
-   *
-   * POST /auth/admin/logout
-   */
   @ApiCredentialLogout('관리자')
   @Post('admin/logout')
   async adminLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
@@ -386,11 +295,6 @@ export class AuthController {
     res.status(204).send();
   }
 
-  /**
-   * 관리자 비밀번호 변경
-   *
-   * POST /auth/admin/change-password
-   */
   @ApiChangePassword('관리자')
   @UseGuards(JwtAuthGuard)
   @Post('admin/change-password')

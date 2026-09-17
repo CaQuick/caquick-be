@@ -115,7 +115,6 @@ describe('UserMypageService (real DB)', () => {
 
       const result = await service.getOverview(account.id);
 
-      // 정확히 active 레코드만 카운트
       expect(result.counts.wishlistCount).toBe(2);
       expect(result.counts.myReviewCount).toBe(0);
     });
@@ -125,7 +124,6 @@ describe('UserMypageService (real DB)', () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
 
-      // 진행중: SUBMITTED
       const active1 = await createOrder(prisma, {
         account_id: account.id,
         status: 'SUBMITTED',

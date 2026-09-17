@@ -18,10 +18,7 @@ import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { ReviewReportResult } from '@/features/user/types/user-review-output.type';
 import type { ReviewReport } from '@/generated/prisma/client';
 
-/**
- * 리뷰·댓글 신고 접수. 처리(삭제/기각)는 관리자 API가 한다.
- * 대상 확인·본인 판정·멱등·생성은 repository가 대상·신고자를 잠근 한 트랜잭션에서 처리한다.
- */
+/** 처리(삭제/기각)는 관리자 API가 한다. 대상 확인·본인 판정·멱등·생성은 repository가 대상·신고자를 잠근 한 트랜잭션에서 처리한다. */
 @Injectable()
 export class UserReportService extends UserBaseService {
   constructor(

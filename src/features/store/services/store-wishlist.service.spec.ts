@@ -139,7 +139,6 @@ describe('StoreWishlistService (real DB)', () => {
   });
 
   describe('myWishlistedStores', () => {
-    /** 상품 1개 + 대표 이미지 1장 생성(카드 이미지 소스). */
     async function addProductWithImage(
       storeId: bigint,
       imageUrl: string,

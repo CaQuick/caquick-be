@@ -49,7 +49,6 @@ describe('UserWishlistService (real DB)', () => {
     return account;
   }
 
-  // ─── addToWishlist ───
   describe('addToWishlist', () => {
     it('처음 추가 시 wishlistItem row가 생성된다', async () => {
       const account = await setupUser();
@@ -178,7 +177,6 @@ describe('UserWishlistService (real DB)', () => {
     });
   });
 
-  // ─── removeFromWishlist ───
   describe('removeFromWishlist', () => {
     it('정상 soft-delete', async () => {
       const account = await setupUser();
@@ -217,7 +215,6 @@ describe('UserWishlistService (real DB)', () => {
     });
   });
 
-  // ─── myWishlist ───
   describe('myWishlist', () => {
     it('자기 찜만 반환 + 추가 시각 desc 정렬', async () => {
       const me = await setupUser();
@@ -319,8 +316,6 @@ describe('UserWishlistService (real DB)', () => {
       expect(page2.hasMore).toBe(false);
     });
 
-    // offset/limit 범위 검증은 DTO (MyWishlistInput → UserPaginationInput) 로 이전됨.
-
     it('재찜(복원)한 상품은 목록 최상단으로 온다', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);
@@ -407,7 +402,6 @@ describe('UserWishlistService (real DB)', () => {
     });
   });
 
-  // ─── myWishlistStoreGroups ───
   describe('myWishlistStoreGroups', () => {
     it('매장별 찜 상품 수를 집계하고 찜 수 desc로 정렬한다', async () => {
       const account = await setupUser();
@@ -490,7 +484,7 @@ describe('UserWishlistService (real DB)', () => {
 
       expect(groups.totalCount).toBe(1);
       expect(groups.items[0].wishlistedProductCount).toBe(1);
-      // 그룹 카운트 합 == 상품 찜 목록 totalCount (화면 01·02 카운트 일관성)
+      // 그룹 카운트 합 == 상품 찜 목록 totalCount(카운트 일관성)
       const groupSum = groups.items.reduce(
         (sum, g) => sum + g.wishlistedProductCount,
         0,

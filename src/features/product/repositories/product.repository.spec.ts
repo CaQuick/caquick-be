@@ -61,7 +61,6 @@ describe('ProductRepository (real DB)', () => {
     });
   }
 
-  // ─── Product list/fetch ──
   describe('listProductsByStore', () => {
     it('삭제된 카테고리 연결·태그로는 목록 필터에 걸리지 않는다', async () => {
       const store = await createStore(prisma);
@@ -315,7 +314,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── Product CRUD ──
   describe('createProduct / updateProduct / softDeleteProduct', () => {
     it('createProduct는 store_id를 결합하여 생성', async () => {
       const store = await createStore(prisma);
@@ -363,7 +361,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── Images ──
   describe('Product images', () => {
     it('countProductImages + addProductImage + listProductImages', async () => {
       const store = await createStore(prisma);
@@ -434,7 +431,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── Category / Tag ──
   describe('findCategoryIds / findTagIds / replaceProduct*', () => {
     it('findCategoryIds는 존재하는 id만 반환', async () => {
       const cat = await createCategory();
@@ -463,7 +459,6 @@ describe('ProductRepository (real DB)', () => {
       });
       expect(rows.map((r) => r.category_id)).toEqual([cat1.id]);
 
-      // 교체
       await repo.replaceProductCategories({
         productId: product.id,
         categoryIds: [cat2.id],
@@ -501,7 +496,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── OptionGroup / OptionItem ──
   describe('Option group/item', () => {
     it('createOptionGroup + findOptionGroupById(product.store_id 포함)', async () => {
       const store = await createStore(prisma);
@@ -645,7 +639,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── Custom Template / Text Token ──
   describe('Custom template / text token', () => {
     it('upsertProductCustomTemplate: 동일 product_id 재호출 시 같은 row 갱신', async () => {
       const store = await createStore(prisma);
@@ -767,7 +760,6 @@ describe('ProductRepository (real DB)', () => {
         },
       });
 
-      // list: 기본 sort_order 오름차순
       const listed = await repo.listCustomTextTokens(tpl.id);
       expect(listed.map((r) => r.id)).toEqual([t1.id, t2.id]);
 
@@ -787,7 +779,6 @@ describe('ProductRepository (real DB)', () => {
       expect(sortOrderByToken.get(t2.id)).toBe(0);
       expect(sortOrderByToken.get(t1.id)).toBe(1);
 
-      // soft-delete
       await repo.softDeleteCustomTextToken(t1.id);
       const after = await prisma.productCustomTextToken.findUnique({
         where: { id: t1.id },
@@ -796,7 +787,6 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  // ─── Misc ownership ──
   describe('findActiveProduct / findProductOwnership', () => {
     it('findActiveProduct는 is_active:true만 반환', async () => {
       const store = await createStore(prisma);

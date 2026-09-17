@@ -10,11 +10,9 @@ import {
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
-/** 관리자 주문 목록 행. 매장은 첫 품목으로 정한다(단일 매장 구조). */
 export type AdminOrderRow = Prisma.OrderGetPayload<{
   include: typeof adminOrderInclude;
 }>;
-/** 관리자 주문 상세 행: 전체 품목 + 구매자 요약 + 상태 이력. */
 export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
   include: typeof adminOrderDetailInclude;
 }>;
@@ -87,20 +85,14 @@ export interface OngoingOrderRow {
   }[];
 }
 
-/**
- * 일일 capacity 원자 검사 조건. 트랜잭션 안에서 capacity 행을 잠그고
- * 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다.
- */
+/** 트랜잭션 안에서 capacity 행을 잠그고 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다. */
 export interface DailyCapacityGuard {
   storeId: bigint;
-  /** @db.Date 비교용(해당 KST 달력일의 UTC 자정 표현). */
   dateOnlyUtc: Date;
-  /** pickup_at 범위 비교용 KST 자정 경계. */
   dayStartUtc: Date;
   dayEndUtc: Date;
 }
 
-/** 주문 생성 입력(스냅샷 값은 서비스가 계산해 전달). */
 export interface CreateSubmittedOrderArgs {
   accountId: bigint;
   orderNumber: string;
@@ -112,7 +104,7 @@ export interface CreateSubmittedOrderArgs {
   discountPrice: number;
   totalPrice: number;
   submittedAt: Date;
-  /** null이면 capacity 원자 검사 생략(호출부가 무제한으로 판단한 경우는 없음 — 항상 전달 권장). */
+  /** null이면 capacity 원자 검사 생략 — 항상 전달 권장. */
   capacityGuard: DailyCapacityGuard | null;
   item: {
     storeId: bigint;
@@ -132,7 +124,6 @@ export interface CreateSubmittedOrderArgs {
   };
 }
 
-/** 주문 생성 결과 row(생성 요약 응답용). */
 export interface CreatedOrderRow {
   id: bigint;
   order_number: string;
@@ -141,7 +132,6 @@ export interface CreatedOrderRow {
   total_price: number;
 }
 
-/** 리뷰 작성 가능 주문 아이템 row. UserReviewService 매핑 입력. */
 export interface ReviewableOrderItemRow {
   id: bigint;
   product_id: bigint;
@@ -160,10 +150,7 @@ export interface ReviewableOrderItemRow {
 export class OrderRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * 구매자 검증·주문자 fallback용 계정+프로필 조회.
-   * USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론).
-   */
+  /** USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론). */
   async findAccountWithProfileForCheckout(accountId: bigint): Promise<{
     account_type: AccountType;
     user_profile: {
@@ -184,13 +171,9 @@ export class OrderRepository {
   }
 
   /**
-   * SUBMITTED 주문 생성. Order + OrderItem + 옵션 스냅샷 + 상태 히스토리를
-   * 트랜잭션으로 원자 생성한다. SUBMITTED는 알림 미발송
-   * (알림은 판매자 상태 변경부터 — buildOrderStatusNotification 규칙).
-   * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를
-   * 재집계해, 동시 주문이 마지막 잔여를 함께 차지하는 race를 차단한다.
-   * capacity 초과면 null을 반환한다(호출부가 도메인 에러로 변환).
-   * order_number unique 충돌(P2002)은 호출부가 재시도한다.
+   * SUBMITTED는 알림 미발송(알림은 판매자 상태 변경부터 — buildOrderStatusNotification 규칙).
+   * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를 재집계해, 동시 주문이 마지막 잔여를
+   * 함께 차지하는 race를 차단한다. capacity 초과면 null(호출부가 도메인 에러로), order_number P2002는 호출부가 재시도한다.
    */
   async createSubmittedOrder(
     args: CreateSubmittedOrderArgs,
@@ -208,10 +191,7 @@ export class OrderRepository {
     });
   }
 
-  /**
-   * capacity 행 잠금 후 잔여 재검사. 레코드가 없으면 무제한(검사 통과).
-   * FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다.
-   */
+  /** 레코드가 없으면 무제한. FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다. */
   private async isCapacityExceededLocked(
     tx: Prisma.TransactionClient,
     guard: DailyCapacityGuard,
@@ -299,10 +279,7 @@ export class OrderRepository {
     });
   }
 
-  /**
-   * 멱등 키로 기존 주문 조회(replay 응답 재구성용, 이슈 #212).
-   * 상태가 이후 변경됐어도 현재 row를 그대로 반환한다.
-   */
+  /** 상태가 이후 변경됐어도 현재 row를 그대로 반환한다(replay 응답 재구성용). */
   async findOrderByIdempotencyKey(
     accountId: bigint,
     idempotencyKey: string,
@@ -320,10 +297,8 @@ export class OrderRepository {
   }
 
   /**
-   * 해당 멱등 키가 soft-delete된 주문에 점유돼 있는지 확인(릴리즈 리뷰 반영).
-   * MySQL unique(uk_order_account_idempotency)는 deleted_at을 보지 않으므로,
-   * 삭제된 주문도 키를 계속 점유한다 — 이 경우 같은 키로는 영영 생성이 불가하다.
-   * soft-delete 포함 조회가 목적이라 extension이 주입하는 활성 필터를 우회한다.
+   * MySQL unique(uk_order_account_idempotency)는 deleted_at을 보지 않으므로 삭제된 주문도 키를 계속 점유한다 —
+   * 같은 키로는 영영 생성이 불가하다. soft-delete 포함 조회가 목적이라 extension의 활성 필터를 우회한다.
    */
   async existsDeletedOrderWithIdempotencyKey(
     accountId: bigint,
@@ -437,12 +412,7 @@ export class OrderRepository {
     });
   }
 
-  /**
-   * 주어진 orderId 중 PICKED_UP 상태이며 active 리뷰가 미작성인 OrderItem을
-   * 1건 이상 가진 order의 ID 집합을 반환한다.
-   *
-   * 주의: list 매핑에서 order별 개별 쿼리(N+1) 회피용. 단일 IN 쿼리로 처리.
-   */
+  /** 목록 매핑의 order별 개별 쿼리(N+1)를 피하려고 단일 IN 쿼리로 집계한다. */
   async findReviewableOrderIds(args: {
     accountId: bigint;
     orderIds: bigint[];
@@ -471,11 +441,7 @@ export class OrderRepository {
     return new Set(rows.map((r) => r.order_id.toString()));
   }
 
-  /**
-   * 리뷰 작성 가능한 주문 아이템 페이지(마이페이지 '리뷰 남기기' 탭).
-   * 조건은 canWriteReview/findReviewableOrderIds와 동일: 픽업 완료 + 활성 리뷰 미존재
-   * (soft-delete된 리뷰는 재작성 가능으로 취급). 픽업 최신순 정렬.
-   */
+  /** 조건은 canWriteReview/findReviewableOrderIds와 동일(soft-delete된 리뷰는 재작성 가능으로 취급). */
   async listReviewableOrderItems(args: {
     accountId: bigint;
     offset: number;
@@ -604,7 +570,7 @@ export class OrderRepository {
     });
   }
 
-  /** 매장 주문 목록의 필터 조건. 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다(커서 제외). */
+  /** 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다(커서 제외). */
   private storeOrderScopeWhere(args: {
     storeId: bigint;
     status?: OrderStatus;
@@ -650,7 +616,6 @@ export class OrderRepository {
     };
   }
 
-  /** 매장 주문 전체 건수(커서 무관). */
   async countOrdersByStore(args: {
     storeId: bigint;
     status?: OrderStatus;
@@ -845,7 +810,7 @@ export class OrderRepository {
 
   // ── 관리자 ──
 
-  /** 관리자 주문 목록 조건(매장 스코프 없음). 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다. */
+  /** 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다. */
   private adminOrderScopeWhere(args: {
     keyword?: string;
     status?: OrderStatus;

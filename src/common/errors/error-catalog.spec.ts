@@ -39,7 +39,7 @@ const RENDER_PARAMS: Partial<
 
 // 필터 밖 경로(Apollo가 리졸버 진입 전에 만드는 에러)는 카탈로그 코드가 아니라 Apollo 자체 code를 낸다:
 // GRAPHQL_PARSE_FAILED · GRAPHQL_VALIDATION_FAILED · BAD_USER_INPUT(변수 강제) · PERSISTED_QUERY_NOT_FOUND ·
-// PERSISTED_QUERY_NOT_SUPPORTED · OPERATION_RESOLUTION_FAILURE. formatError로 덮지 않는다(D29).
+// PERSISTED_QUERY_NOT_SUPPORTED · OPERATION_RESOLUTION_FAILURE. formatError로 덮지 않는다.
 describe('ERROR_CATALOG (전수)', () => {
   it.each(CODES)(
     '%s — status는 허용 집합, 메시지는 한국어 비공백 문자열로 렌더된다',

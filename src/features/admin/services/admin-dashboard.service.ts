@@ -18,10 +18,7 @@ import {
 } from '@/features/audit-log';
 import { SearchRepository } from '@/features/search';
 
-/**
- * 대시보드 집계. 요청 시 계산하며 스냅샷 테이블은 두지 않는다(운영 규모가 작고 기간 상한이 있다).
- * 기간은 UTC created_at 기준 — KST 경계 환산은 클라이언트 몫(픽업 달력 규약과 분리).
- */
+/** 요청 시 계산하며 스냅샷 테이블은 두지 않는다(운영 규모가 작고 기간 상한이 있다). 기간은 UTC created_at 기준 — KST 경계 환산은 클라이언트 몫. */
 @Injectable()
 export class AdminDashboardService extends AdminBaseService {
   constructor(

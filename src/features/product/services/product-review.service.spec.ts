@@ -41,7 +41,6 @@ describe('ProductReviewService (real DB)', () => {
     await truncateAll();
   });
 
-  /** 상품에 리뷰 1건 생성(작성자 프로필 포함 옵션). */
   async function createProductReview(
     product: Product,
     args: {

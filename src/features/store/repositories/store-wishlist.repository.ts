@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** 찜한 매장 목록 조회 결과 row. myWishlistedStores 매퍼 입력. */
 export interface WishlistedStoreRow {
   created_at: Date;
   store: {
@@ -21,10 +20,8 @@ export class StoreWishlistRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 매장 찜 추가 (멱등). 없으면 생성, soft-delete된 경우 복원.
-   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
-   * addedAt 표기가 재찜을 반영하되, 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은
-   * created_at을 건드리지 않아 멱등 계약을 지킨다.
+   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — '찜 최신순' 정렬과 addedAt이 재찜을 반영하되,
+   * 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은 created_at을 건드리지 않아 멱등 계약을 지킨다.
    */
   async upsertStoreWishlist(args: {
     accountId: bigint;
@@ -57,7 +54,6 @@ export class StoreWishlistRepository {
     }
   }
 
-  /** 매장 찜 해제 (멱등). active 항목만 soft-delete. */
   async softDeleteStoreWishlist(args: {
     accountId: bigint;
     storeId: bigint;
@@ -73,10 +69,7 @@ export class StoreWishlistRepository {
     });
   }
 
-  /**
-   * 주어진 storeIds 중 사용자가 찜한 store_id 집합(string)을 단일 IN 쿼리로 반환.
-   * 비활성/soft-delete된 매장은 제외해 목록 가시성과 일관되게 한다(N+1 회피).
-   */
+  /** 비활성/soft-delete된 매장은 제외해 목록 가시성과 일관되게 한다. */
   async findWishlistedStoreIds(args: {
     accountId: bigint;
     storeIds: bigint[];
@@ -93,11 +86,7 @@ export class StoreWishlistRepository {
     return new Set(rows.map((r) => r.store_id.toString()));
   }
 
-  /**
-   * 내가 찜한 매장 목록 (찜 최신순). 비활성/soft-delete 매장은 목록·카운트 모두 제외해
-   * findWishlistedStoreIds의 가시성 조건과 일관되게 한다.
-   * soft-delete extension은 nested select에 deleted_at을 주입하지 않으므로 직접 명시한다.
-   */
+  /** 비활성/soft-delete 매장은 목록·카운트 모두 제외해 findWishlistedStoreIds와 일관되게. soft-delete extension은 nested select에 deleted_at을 주입하지 않으므로 직접 명시한다. */
   async findWishlistedStores(args: {
     accountId: bigint;
     offset: number;
@@ -136,7 +125,7 @@ export class StoreWishlistRepository {
     return { items, totalCount };
   }
 
-  /** 활성 USER 계정 여부. 매장 찜은 구매자(USER)만 가능 → 인기 랭킹 무결성 보호. */
+  /** 매장 찜은 구매자(USER)만 — 인기 랭킹 무결성 보호. */
   async isActiveUserAccount(accountId: bigint): Promise<boolean> {
     const account = await this.prisma.account.findFirst({
       where: { id: accountId, account_type: 'USER' },

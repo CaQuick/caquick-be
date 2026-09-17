@@ -23,7 +23,6 @@ import {
 } from '@/features/store/services/store-ranking.helper';
 import type { PopularStoreConnection } from '@/features/store/types/store-output.type';
 
-/** 점수화·정렬이 끝난 랭킹 항목. */
 export type ScoredStore = ScoredCandidate<StoreCandidateRow>;
 
 @Injectable()
@@ -36,12 +35,7 @@ export class StoreListingService {
     private readonly cards: StoreCardService,
   ) {}
 
-  /**
-   * 활성 매장 후보의 주문·찜·평점을 실시간 집계해 점수화·정렬한다.
-   * popularStores와 todayPickupStores가 동일 랭킹 정책을 공유한다.
-   *
-   * 실시간 집계는 매장 규모가 커지면 캐시/배치(스냅샷)로 최적화할 여지가 있다.
-   */
+  /** popularStores와 todayPickupStores가 동일 랭킹 정책을 공유한다. 실시간 집계는 매장 규모가 커지면 캐시/배치(스냅샷)로 최적화할 여지가 있다. */
   async rankActiveStores(
     regionIds: bigint[] | undefined,
     rankedAt: Date,
@@ -50,10 +44,7 @@ export class StoreListingService {
     return this.scoreStores(candidates, rankedAt);
   }
 
-  /**
-   * 주어진 후보 매장의 주문·찜·평점을 집계해 점수화·정렬한다.
-   * 키워드 매장 검색(후보를 검색어로 좁힌 뒤)도 같은 인기순을 쓴다.
-   */
+  /** 키워드 매장 검색(후보를 검색어로 좁힌 뒤)도 같은 인기순을 쓴다. */
   async scoreStores<T extends StoreCandidateRow>(
     candidates: T[],
     rankedAt: Date,
@@ -81,9 +72,6 @@ export class StoreListingService {
     );
   }
 
-  /**
-   * 인기 매장 리스트. 랭킹 후 페이지를 잘라 공용 매장 카드를 채운다.
-   */
   async popularStores(
     input?: PopularStoresInput,
     accountId?: bigint,

@@ -43,11 +43,7 @@ import {
   type Prisma,
 } from '@/generated/prisma/client';
 
-/**
- * 카테고리·태그 마스터 관리. 시드에서만 만들 수 있던 값을 운영자가 관리한다.
- * 삭제는 soft-delete + 상품 연결 해제. 삭제된 같은 이름은 새로 만들지 않고 복구한다 —
- * unique 인덱스가 삭제 행도 세므로 새 행을 만들 수 없기 때문이다.
- */
+/** 삭제된 같은 이름은 새로 만들지 않고 복구한다 — unique 인덱스가 삭제 행도 세므로 새 행을 만들 수 없기 때문이다. */
 @Injectable()
 export class AdminTaxonomyService extends AdminBaseService {
   constructor(

@@ -3,18 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { RANKING_VALID_ORDER_STATUSES } from '@/features/store/constants/store-ranking.constants';
 import { activeWhere, PrismaService } from '@/prisma';
 
-/** 집계 키. 매장 랭킹은 store_id, 상품 랭킹·판매 Best·판매순 정렬은 product_id. */
 export type OrderStatsKey = 'store_id' | 'product_id';
 
-/**
- * 주문 기반 통계(랭킹 신호). 매장·상품이 같은 유효 주문 정의(RANKING_VALID_ORDER_STATUSES·
- * 주문 생성 시각·삭제 주문 제외)를 공유하므로 키만 파라미터화한 1벌을 둔다(D35).
- */
+/** 매장·상품이 같은 유효 주문 정의(RANKING_VALID_ORDER_STATUSES·주문 생성 시각·삭제 주문 제외)를 공유하므로 키만 파라미터화한 1벌. */
 @Injectable()
 export class StoreStatsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 키별 최근 N일 유효 주문(아이템) 수. */
   async aggregateRecentOrderCounts(
     key: OrderStatsKey,
     ids: bigint[],
@@ -29,10 +24,7 @@ export class StoreStatsRepository {
     return new Map(rows.map((r) => [r[key], r._count._all]));
   }
 
-  /**
-   * 키별 최근 판매 수량 합(OrderItem.quantity). 인기 점수와 동일한 유효 주문 정의.
-   * 실시간 판매 Best·판매순 정렬이 공유한다.
-   */
+  /** 인기 점수와 동일한 유효 주문 정의 — 실시간 판매 Best·판매순 정렬이 공유한다. */
   async aggregateSoldQuantities(
     key: OrderStatsKey,
     ids: bigint[],

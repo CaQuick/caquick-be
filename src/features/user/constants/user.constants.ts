@@ -5,15 +5,14 @@ export const MAX_NICKNAME_LENGTH = 20;
 
 // ── 전화번호 ──
 
-// 정책: 010-XXXX-XXXX 고정 (13자). figma 명세 기준.
+// 010-XXXX-XXXX 고정(13자).
 export const PHONE_REGEX = /^010-\d{4}-\d{4}$/;
 export const PHONE_FORMAT_EXAMPLE = '010-XXXX-XXXX';
 
 // ── 생년월일 ──
 
-// figma 명세 외 정책 결정: 1900-01-01 이전 입력은 거부 (사실상 봇/오입력 방지).
-// GraphQL DateTime은 ISO string을 UTC로 해석하므로 비교 기준도 UTC 자정으로 둔다.
-// 운영 timezone과 무관하게 동일하게 동작.
+// 1900-01-01 이전 입력은 봇/오입력으로 보고 거부한다. GraphQL DateTime은 ISO string을 UTC로 해석하므로
+// 비교 기준도 UTC 자정으로 둔다 — 운영 timezone과 무관하게 동일하게 동작.
 export const MIN_BIRTH_DATE = new Date(Date.UTC(1900, 0, 1));
 
 // ── 페이지네이션 ──
@@ -27,13 +26,11 @@ export const MAX_REVIEW_COMMENT_LENGTH = 500;
 
 // ── 알림 ──
 
-// figma notification-center: "최근 3개월 내의 알림만 확인할 수 있어요."
-// 삭제가 아니라 조회 필터로만 강제한다(사용자 확정 정책).
+// "최근 3개월 내의 알림만 확인할 수 있어요." — 삭제가 아니라 조회 필터로만 강제한다.
 export const NOTIFICATION_VISIBLE_MONTHS = 3;
 
 // ── 리뷰·댓글 신고 ──
 
-/** SDL ReviewReportReason과 1:1. */
 export const REVIEW_REPORT_REASONS = [
   'SPAM',
   'ABUSE',

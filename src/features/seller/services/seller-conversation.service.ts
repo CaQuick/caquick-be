@@ -183,10 +183,7 @@ export class SellerConversationService extends SellerBaseService {
     return output;
   }
 
-  /**
-   * 실시간 이벤트 발행 — 대화방 메시지 + 구매자·판매자 목록 갱신.
-   * 저장 트랜잭션 밖의 부수효과라 실패해도 답장 자체는 성공으로 남는다.
-   */
+  /** 저장 트랜잭션 밖의 부수효과라 실패해도 답장 자체는 성공으로 남는다. */
   private async publishSellerReplyEvents(args: {
     conversation: {
       id: bigint;
@@ -196,8 +193,7 @@ export class SellerConversationService extends SellerBaseService {
     storeId: bigint;
     message: SellerConversationMessageOutput;
   }): Promise<void> {
-    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 예외가
-    // 이미 저장된 답장을 실패로 둔갑시키면 재시도 중복이 난다(리뷰 반영).
+    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 예외가 이미 저장된 답장을 실패로 둔갑시키면 재시도 중복이 난다.
     try {
       await this.doPublishSellerReplyEvents(args);
     } catch (e) {
@@ -227,9 +223,8 @@ export class SellerConversationService extends SellerBaseService {
       bodyHtml: args.message.bodyHtml,
       createdAt: args.message.createdAt,
     };
-    // 목록 이벤트는 발행 시점의 최신 커밋 상태를 단일 트랜잭션 스냅샷으로
-    // 조립한다 — 독립 조회로 쪼개면 경쟁 커밋이 끼어들어 혼합 상태가 나갈
-    // 수 있다(리뷰 반영). 메시지 스트림은 id 정렬.
+    // 목록 이벤트는 발행 시점의 최신 커밋 상태를 단일 트랜잭션 스냅샷으로 조립한다 — 독립 조회로 쪼개면
+    // 경쟁 커밋이 끼어들어 혼합 상태가 나갈 수 있다. 메시지 스트림은 id 정렬.
     const snapshot =
       await this.conversationRepository.getConversationEventSnapshot(
         args.conversation.id,

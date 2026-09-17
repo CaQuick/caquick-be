@@ -4,11 +4,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NextFunction, Request, Response } from 'express';
 
-/**
- * 문서 접근 전용 토큰 가드 미들웨어.
- * - Authorization: Bearer <token>
- * - Authorization: Basic <base64(user:token)>
- */
+/** Authorization: Bearer <token> 또는 Basic <base64(user:token)>. */
 @Injectable()
 export class DocsAccessMiddleware implements NestMiddleware {
   private readonly accessToken: string | null;

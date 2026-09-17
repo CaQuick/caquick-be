@@ -18,9 +18,6 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/**
- * 검색 진입 화면 조회 resolver. 개인화 필드가 없는 public query(인증 불필요).
- */
 @Resolver('Query')
 export class SearchEntryQueryResolver {
   constructor(

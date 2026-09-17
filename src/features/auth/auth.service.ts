@@ -13,21 +13,9 @@ import {
 import { TokenService } from '@/features/auth/services/token.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
-/**
- * 인증 도메인 진입 서비스 (일반 유저용 refresh / logout / dev token 발급).
- *
- * 다른 흐름은 별도 서비스가 담당:
- * - OIDC 시작/콜백: OidcLoginService
- * - 판매자·관리자 자격증명 (login / refresh / logout / changePassword): CredentialAuthService
- * - GraphQL `me` 조회: UserProfileService
- */
+/** 일반 유저용 refresh/logout/dev token. OIDC는 OidcLoginService, 판매자·관리자 자격증명은 CredentialAuthService가 담당한다. */
 @Injectable()
 export class AuthService {
-  /**
-   * @param tokens TokenService
-   * @param accounts AccountRepository
-   * @param refreshSessions RefreshSessionRepository
-   */
   constructor(
     private readonly tokens: TokenService,
     @Inject(ACCOUNT_REPOSITORY)
@@ -36,27 +24,12 @@ export class AuthService {
     private readonly refreshSessions: IRefreshSessionRepository,
   ) {}
 
-  /**
-   * Refresh 토큰으로 access 를 재발급하고 refresh 를 회전한다.
-   *
-   * @param req Request
-   * @param res Response
-   */
   async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
     const { accessToken } = await this.tokens.rotateRefresh(req, res);
     return { accessToken };
   }
 
-  /**
-   * 개발 환경 한정: accountId 만으로 access token을 즉시 발급한다.
-   *
-   * 운영자/FE가 OIDC 흐름을 거치지 않고 시드 데이터의 accountId 로 곧장
-   * GraphQL API를 시험하기 위함. production 환경에서는 controller 입구에서
-   * 차단된다.
-   *
-   * @param accountId 발급 대상 account id
-   * @returns 발급된 access token + 만료(초)
-   */
+  /** 시드 데이터의 accountId로 OIDC 흐름 없이 GraphQL API를 시험하기 위한 것. production은 controller 입구에서 차단된다. */
   async issueDevAccessToken(accountId: bigint): Promise<{
     accessToken: string;
     tokenType: 'Bearer';
@@ -78,14 +51,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * 로그아웃:
-   * - refresh 세션 revoke
-   * - refresh 쿠키 삭제
-   *
-   * @param req Request
-   * @param res Response
-   */
   async logout(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
       string | undefined;

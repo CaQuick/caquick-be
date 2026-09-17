@@ -5,7 +5,7 @@ import type {
 import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
 import type { StoreOutput } from '@/features/store';
 
-/** 판매자 SDL(SellerStore)에는 regionId가 없다 — 매핑은 store feature 1벌을 그대로 쓴다. */
+/** 판매자 SDL(SellerStore)에는 regionId가 없다. */
 export type SellerStoreOutput = Omit<StoreOutput, 'regionId'>;
 
 export interface SellerStoreBusinessHourOutput {

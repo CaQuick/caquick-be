@@ -31,10 +31,8 @@ export class ProductBestSellerService {
   ) {}
 
   /**
-   * 검색 진입 화면 '실시간 판매 Best'. 최근 24시간 유효 주문(인기 점수와 동일 상태 집합)의
-   * 수량 합 desc로 정렬하고, 동률은 인기 점수(→ 리뷰수 → id desc) 순으로 푼다(자체 판단).
-   * 판매가 0인 상품은 'Best'가 아니므로 제외 — 데이터가 적으면 빈 목록이 될 수 있다(사용자 확정).
-   * 호출 시점에 실시간 집계하며 rankedAt은 호출 시각이다(스냅샷 없음).
+   * 최근 24시간 유효 주문(인기 점수와 동일 상태 집합)의 수량 합 desc, 동률은 인기 점수(→ 리뷰수 → id desc) 순.
+   * 판매가 0인 상품은 'Best'가 아니므로 제외 — 데이터가 적으면 빈 목록이 될 수 있다. 호출 시점에 실시간 집계한다(스냅샷 없음).
    */
   async realtimeBestCakes(
     input?: RealtimeBestCakesInput,

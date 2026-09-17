@@ -2,12 +2,11 @@
 export { OrderModule } from '@/features/order/order.module';
 export {
   OrderRepository,
-  // 관리자 주문 조회 행(admin feature). 매핑 규칙은 admin이 갖고 저장·잠금·알림·감사는 여기가 단일 소스
   type AdminOrderDetailRow,
   type AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 export { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
-// 주문 품목·상태 이력 출력 1벌(D31). 구매자(user)·판매자(seller)·관리자(admin) 주문 상세가 같은 매퍼를 쓴다.
+// 주문 품목·상태 이력 출력 1벌. 구매자(user)·판매자(seller)·관리자(admin) 주문 상세가 같은 매퍼를 쓴다.
 export {
   toOrderItemDetail,
   toOrderStatusHistory,

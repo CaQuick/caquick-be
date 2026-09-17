@@ -32,10 +32,8 @@ type LockableTable =
   | 'review_report'
   | 'region';
 
-/** 조작과 함께 남길 감사 기록 인자. */
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 
-/** 관리자 계정 행 + 자격증명 요약. 목록·상세·생성이 같은 모양을 쓴다. */
 export type AdminAccountRow = Prisma.AccountGetPayload<{
   include: typeof adminAccountInclude;
 }>;
@@ -47,7 +45,6 @@ const authorInclude = {
   },
 } as const;
 
-/** 신고 상세 행 + 대상 원문(삭제 여부 포함). */
 export type AdminReviewReportDetailRow = Prisma.ReviewReportGetPayload<{
   include: typeof reviewReportDetailInclude;
 }>;
@@ -75,7 +72,6 @@ const reviewReportDetailInclude = {
   },
 } as const;
 
-/** 리뷰 행(관리자 시점) + 매장명·작성자·집계(삭제 제외). */
 export type AdminReviewRow = Prisma.ReviewGetPayload<{
   include: typeof adminReviewInclude;
 }>;
@@ -90,13 +86,11 @@ const adminReviewInclude = {
   },
 } as const;
 
-/** 리뷰 댓글 행 + 작성자. */
 export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
   include: typeof adminReviewCommentInclude;
 }>;
 const adminReviewCommentInclude = { ...authorInclude } as const;
 
-/** 감사 로그 행 + 행위자 계정 종류(AuditLog에는 FK가 없어 별도 조회로 붙인다). */
 export interface AdminAuditLogFilter {
   actorAccountId?: bigint;
   storeId?: bigint;
@@ -113,7 +107,6 @@ export type AdminAuditLogRow = Prisma.AuditLogGetPayload<
   actor: { account_type: AccountType } | null;
 };
 
-/** 지역 행 + 연결 매장 수(삭제 제외)·활성 하위 지역 수. */
 export type AdminRegionRow = Prisma.RegionGetPayload<{
   include: typeof regionInclude;
 }>;
@@ -133,11 +126,9 @@ const regionInclude = {
   },
 } as const;
 
-/** 카테고리 행 + 연결 상품 수(삭제 연결 제외). */
 export type AdminCategoryRow = Prisma.CategoryGetPayload<{
   include: typeof categoryInclude;
 }>;
-/** 태그 행 + 연결 상품 수(삭제 연결 제외). */
 export type AdminTagRow = Prisma.TagGetPayload<{
   include: typeof tagInclude;
 }>;
@@ -149,11 +140,9 @@ const tagInclude = {
   _count: { select: { product_tags: { where: activeWhere } } },
 } as const;
 
-/** 상품 행 + 소속 매장명. */
 export type AdminProductRow = Prisma.ProductGetPayload<{
   include: typeof productInclude;
 }>;
-/** 상품 상세 행 + 매장 상태·이미지·집계(삭제 제외). */
 export type AdminProductDetailRow = Prisma.ProductGetPayload<{
   include: typeof productDetailInclude;
 }>;
@@ -177,7 +166,6 @@ const productDetailInclude = {
   },
 } satisfies Prisma.ProductInclude;
 
-/** 매장 상세 행 + 소유 판매자 요약 + 집계(삭제 제외). */
 export type AdminStoreDetailRow = Prisma.StoreGetPayload<{
   include: typeof storeDetailInclude;
 }>;
@@ -200,7 +188,6 @@ const storeDetailInclude = {
   },
 } as const;
 
-/** 구매자 계정 행 + 프로필·연동 소셜·활동 집계. */
 export type AdminUserRow = Prisma.AccountGetPayload<{
   include: typeof userAccountInclude;
 }>;
@@ -387,7 +374,6 @@ export class AdminRepository {
    * 뒤에 트랜잭션 안에서 다시 읽어야 한다 — 서비스가 미리 읽은 값은 다른 관리자의 커밋으로
    * 낡을 수 있어 감사 before가 틀리거나, 그 사이 삭제된 행을 되살리거나, 같은 토글이 두 번
    * 감사된다. 잠금을 기다린 쪽은 최신 커밋을 본다.
-   * @returns 없거나 삭제됐으면 false
    */
   private async lockActiveRow(
     tx: Prisma.TransactionClient,
@@ -463,7 +449,6 @@ export class AdminRepository {
     });
   }
 
-  /** 목록과 같은 조건(커서 제외)으로 센다. */
   async countBanners(filter: {
     placement?: BannerPlacement;
     isActive?: boolean;
@@ -488,7 +473,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
   async updateBanner(
     args: { bannerId: bigint; data: Prisma.BannerUpdateInput },
     audit: (before: Banner, after: Banner) => AuditEntry,
@@ -507,7 +491,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
   async softDeleteBanner(
     bannerId: bigint,
     audit: (before: Banner) => AuditEntry,
@@ -548,7 +531,6 @@ export class AdminRepository {
     );
   }
 
-  /** 노출 가능한 카테고리의 종류. 없거나 비활성이면 null. */
   async findVisibleCategoryType(
     categoryId: bigint,
   ): Promise<CategoryType | null> {
@@ -624,7 +606,6 @@ export class AdminRepository {
     });
   }
 
-  /** 온보딩 시 지정 가능한 지역: 활성 2차(시군구). */
   async isRegionSelectable(regionId: bigint): Promise<boolean> {
     return (
       (await this.prisma.region.findFirst({
@@ -634,10 +615,7 @@ export class AdminRepository {
     );
   }
 
-  /**
-   * 계정 + 자격증명 + 사업자 프로필 + 매장 + 감사 기록을 한 트랜잭션으로 만든다.
-   * username 충돌(P2002)은 도메인 예외로 좁힌다.
-   */
+  /** username 충돌(P2002)은 도메인 예외로 좁힌다(createAdminAccount와 같은 이유). */
   async createSellerAccount(args: {
     actorAccountId: bigint;
     username: string;
@@ -708,7 +686,6 @@ export class AdminRepository {
     }
   }
 
-  /** 비밀번호 교체 + 변경 강제 + 전 세션 폐기 + 감사 기록을 한 트랜잭션으로. */
   async resetCredentialPassword(args: {
     accountId: bigint;
     passwordHash: string;
@@ -896,10 +873,7 @@ export class AdminRepository {
     });
   }
 
-  /**
-   * 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null.
-   * regionId(연결)는 같은 트랜잭션에서 지역을 잠가 확인한다 — 미리 확인한 값은 지역 삭제와 교차하면 낡는다.
-   */
+  /** regionId(연결)는 같은 트랜잭션에서 지역을 잠가 확인한다 — 미리 확인한 값은 지역 삭제와 교차하면 낡는다. */
   async updateStore(
     args: { storeId: bigint; data: Prisma.StoreUpdateInput; regionId?: bigint },
     audit: (before: Store, after: Store) => AuditEntry,
@@ -1108,7 +1082,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
   async updateCategory(
     args: { categoryId: bigint; data: Prisma.CategoryUpdateInput },
     audit: (before: AdminCategoryRow, after: AdminCategoryRow) => AuditEntry,
@@ -1131,7 +1104,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → soft-delete + 상품 연결 soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
   async softDeleteCategory(
     categoryId: bigint,
     audit: (before: AdminCategoryRow) => AuditEntry,
@@ -1217,7 +1189,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → 트랜잭션 안에서 before 읽기 → 갱신 → 감사. 없거나 삭제됐으면 null. */
   async updateTag(
     args: { tagId: bigint; name: string },
     audit: (before: AdminTagRow, after: AdminTagRow) => AuditEntry,
@@ -1238,7 +1209,6 @@ export class AdminRepository {
     });
   }
 
-  /** 잠금 → soft-delete + 상품 연결 soft-delete → 감사. 없거나 이미 삭제됐으면 false. */
   async softDeleteTag(
     tagId: bigint,
     audit: (before: AdminTagRow) => AuditEntry,
@@ -1319,11 +1289,6 @@ export class AdminRepository {
     });
   }
 
-  /**
-   * 신고 처리. 잠금 뒤 트랜잭션 안에서 상태를 보고 PENDING이 아니면 'already-resolved'.
-   * DELETE_TARGET은 대상 soft-delete(리뷰는 사진·댓글까지) + 같은 대상의 미처리 신고 전부 RESOLVED,
-   * REJECT는 이 건만 REJECTED. 감사는 신고(STATUS_CHANGE)와 대상 삭제(DELETE) 각각.
-   */
   async resolveReviewReport(args: {
     reportId: bigint;
     action: 'DELETE_TARGET' | 'REJECT';
@@ -1421,7 +1386,6 @@ export class AdminRepository {
     });
   }
 
-  /** 리뷰 강제 삭제. 잠금 → 사진·댓글 cascade → 미처리 신고 RESOLVED → 감사. 없거나 삭제됐으면 false. */
   async adminSoftDeleteReview(args: {
     reviewId: bigint;
     reason: string;
@@ -1455,7 +1419,6 @@ export class AdminRepository {
     });
   }
 
-  /** 댓글 강제 삭제. 잠금 → soft-delete → 미처리 신고 RESOLVED → 감사. 없거나 삭제됐으면 false. */
   async adminSoftDeleteReviewComment(args: {
     commentId: bigint;
     reason: string;
@@ -1666,7 +1629,6 @@ export class AdminRepository {
 
   // ── 알림 발송 ──
 
-  /** 활성(ACTIVE·미탈퇴) USER의 id를 키셋(id asc)으로 한 청크 읽는다. */
   async listActiveUserAccountIds(args: {
     afterId?: bigint;
     limit: number;
@@ -1684,7 +1646,6 @@ export class AdminRepository {
     return rows.map((r) => r.id);
   }
 
-  /** 주어진 ID 중 활성 USER인 것만 돌려준다(없거나 다른 타입·정지·탈퇴는 빠진다). */
   async filterActiveUserAccountIds(ids: bigint[]): Promise<bigint[]> {
     if (ids.length === 0) return [];
     const rows = await this.prisma.account.findMany({
@@ -1698,7 +1659,7 @@ export class AdminRepository {
     return rows.map((r) => r.id);
   }
 
-  /** 같은 내용의 알림을 여러 계정에 저장한다(createMany). event는 없다 — 시스템 이벤트가 아니다. */
+  /** event는 없다 — 시스템 이벤트가 아니다. */
   async createNotifications(
     accountIds: bigint[],
     payload: { type: NotificationType; title: string; body: string },
@@ -1738,7 +1699,6 @@ export class AdminRepository {
     });
   }
 
-  /** 상위로 지정 가능한 지역: 활성 1차. */
   async isActiveRegionGroup(regionId: bigint): Promise<boolean> {
     return (
       (await this.prisma.region.findFirst({
@@ -1959,7 +1919,6 @@ export class AdminRepository {
     });
   }
 
-  /** 기간 내 생성 주문의 상태별 건수와 취소 제외 결제 금액 합. */
   async aggregateOrdersBetween(
     from: Date,
     to: Date,

@@ -14,10 +14,7 @@ import {
   type BannerPlacementValue,
 } from '@/features/admin/constants/admin.constants';
 
-/**
- * 배너 등록 입력.
- * linkType 별로 어느 링크 필드를 쓰는지의 조합 검증은 도메인 invariant 로 service 에서 수행.
- */
+/** linkType별 링크 필드 조합은 도메인 invariant라 service에서 검증한다. */
 export class AdminCreateBannerInput {
   @IsIn(BANNER_PLACEMENTS)
   placement!: BannerPlacementValue;

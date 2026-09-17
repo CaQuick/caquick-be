@@ -80,7 +80,6 @@ describe('ConversationInquiryService (real DB)', () => {
     });
   }
 
-  // ─── storeInquiryContext ───
   describe('storeInquiryContext', () => {
     it('매장 정보·기본 인사말·FAQ 칩·요일별 상담시간을 반환한다', async () => {
       const buyer = await setupBuyer('김현진');
@@ -174,7 +173,6 @@ describe('ConversationInquiryService (real DB)', () => {
     });
   });
 
-  // ─── sendConversationMessage ───
   describe('sendConversationMessage', () => {
     it('첫 전송이면 대화를 생성하고 인사말(STORE) → 유저 메시지 순으로 저장한다', async () => {
       const buyer = await setupBuyer('김현진');
@@ -326,7 +324,6 @@ describe('ConversationInquiryService (real DB)', () => {
     });
   });
 
-  // ─── sendConversationFaqMessage ───
   describe('sendConversationFaqMessage', () => {
     it('첫 전송이면 인사말 → 유저 질문(TEXT) → 자동응답(HTML) 3건을 저장한다', async () => {
       const buyer = await setupBuyer();

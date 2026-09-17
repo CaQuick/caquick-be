@@ -7,7 +7,6 @@ import type {
   AdminProductOutput,
 } from '@/features/admin/types/admin-output.type';
 
-/** 순수 매퍼(DI 없음). */
 export function toAdminProductOutput(row: AdminProductRow): AdminProductOutput {
   return {
     id: row.id.toString(),

@@ -81,12 +81,8 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  // OIDC 흐름 (startOidcLogin / handleOidcCallback) 은 OidcLoginService 로 분리.
-  // 해당 케이스는 oidc-login.service.spec.ts 에서 다룬다.
-
   describe('refresh', () => {
     it('refresh 토큰을 성공적으로 회전시켜야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'old-refresh-token',
@@ -118,10 +114,8 @@ describe('AuthService', () => {
       mockRefreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
       mockJwt.sign.mockReturnValue('new-access-token');
 
-      // Act
       const result = await service.refresh(mockReq, mockRes);
 
-      // Assert
       expect(
         mockRefreshSessions.findActiveRefreshSessionByHash,
       ).toHaveBeenCalled();
@@ -135,21 +129,18 @@ describe('AuthService', () => {
     });
 
     it('refresh 토큰이 없으면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {},
       } as unknown as Request;
 
       const mockRes = {} as Response;
 
-      // Act & Assert
       await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
         'MISSING_REFRESH_TOKEN',
       );
     });
 
     it('유효하지 않은 refresh 토큰이면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'invalid-token',
@@ -162,7 +153,6 @@ describe('AuthService', () => {
         null,
       );
 
-      // Act & Assert
       await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
         'INVALID_REFRESH_TOKEN',
       );
@@ -171,7 +161,6 @@ describe('AuthService', () => {
 
   describe('logout', () => {
     it('refresh 세션을 revoke하고 쿠키를 삭제해야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'valid-token',
@@ -195,10 +184,8 @@ describe('AuthService', () => {
 
       mockRefreshSessions.revokeRefreshSession.mockResolvedValue({} as never);
 
-      // Act
       await service.logout(mockReq, mockRes);
 
-      // Assert
       expect(mockRefreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
         BigInt(1),
       );
@@ -206,7 +193,6 @@ describe('AuthService', () => {
     });
 
     it('refresh 토큰이 없어도 쿠키를 삭제해야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {},
       } as unknown as Request;
@@ -217,10 +203,8 @@ describe('AuthService', () => {
 
       mockConfig.get.mockReturnValue(undefined);
 
-      // Act
       await service.logout(mockReq, mockRes);
 
-      // Assert
       expect(mockRefreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
     });

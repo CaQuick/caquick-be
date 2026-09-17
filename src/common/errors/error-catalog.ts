@@ -9,7 +9,7 @@ interface ErrorEntry {
 }
 
 /**
- * 에러 코드 카탈로그(D13). `extensions.code`/REST `errorCode`로 나가는 정본이며 메시지는 부속이다.
+ * 에러 코드 카탈로그. `extensions.code`/REST `errorCode`로 나가는 정본이며 메시지는 부속이다.
  * 코드 1개 = status 1개 — 같은 뜻이라도 status가 다르면 코드를 나눈다(예: SESSION_ACCOUNT_MISSING 401 / ACCOUNT_NOT_FOUND 404).
  */
 export const ERROR_CATALOG = {
@@ -684,7 +684,6 @@ export function errorStatus(code: ErrorCode): HttpStatus {
   return ERROR_CATALOG[code].status;
 }
 
-/** 도메인 예외 1종. status·메시지는 카탈로그가 결정하고 호출부는 코드(+파라미터)만 넘긴다. */
 export class DomainException extends HttpException {
   readonly code: ErrorCode;
 

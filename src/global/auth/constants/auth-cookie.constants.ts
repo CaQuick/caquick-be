@@ -1,6 +1,3 @@
-/**
- * 인증 쿠키 이름 모음
- */
 export const AUTH_COOKIE = {
   REFRESH: 'caquick_rt',
 

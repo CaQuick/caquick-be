@@ -7,7 +7,7 @@ import {
 } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
-/** 신고 대상 요약. account_id는 본인 작성물 판정용, content는 스냅샷용. */
+/** account_id는 본인 작성물 판정용, content는 스냅샷용. */
 export interface ReportTargetRow {
   id: bigint;
   account_id: bigint;
@@ -21,10 +21,7 @@ export type SubmitReportResult =
   | { outcome: 'created' | 'already-pending'; report: ReviewReport }
   | { outcome: 'not-found' | 'own-content' };
 
-/**
- * 리뷰·댓글 신고 write/read. 대상은 구매자에게 보이는 상태(리뷰·댓글 미삭제 + 상품·매장 노출)여야
- * 신고할 수 있다 — 안 보이는 것을 신고하는 경로는 두지 않는다.
- */
+/** 대상은 구매자에게 보이는 상태(리뷰·댓글 미삭제 + 상품·매장 노출)여야 신고할 수 있다 — 안 보이는 것을 신고하는 경로는 두지 않는다. */
 @Injectable()
 export class ReviewReportRepository {
   constructor(private readonly prisma: PrismaService) {}

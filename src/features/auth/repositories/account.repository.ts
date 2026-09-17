@@ -17,15 +17,8 @@ import {
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
-/**
- * Account / AccountIdentity / UserProfile Repository 구체 구현.
- */
 @Injectable()
 export class AccountRepository implements IAccountRepository {
-  /**
-   * @param prisma PrismaService
-   * @param clock ClockService
-   */
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockService,
@@ -84,10 +77,8 @@ export class AccountRepository implements IAccountRepository {
 
         const now = this.clock.now();
 
-        // 탈퇴한 계정의 연동이 남아 있는 경우: 정책은 복구가 아니라 재가입이다.
-        // (nested include 라 soft-delete extension 이 account 를 걸러주지 않으므로 직접 확인한다.
-        //  이 확인이 없으면 삭제된 계정을 그대로 집어들어 마지막 조회에서만 null 이 되어
-        //  "Account upsert failed" 401 로 끝나던 경로다.)
+        // 탈퇴한 계정의 연동이 남아 있으면 복구가 아니라 재가입이다. nested include라 soft-delete extension이
+        // account를 걸러주지 않으므로 직접 확인한다 — 없으면 삭제된 계정을 집어들어 마지막 조회에서만 null이 된다.
         if (found?.account.deleted_at) {
           await this.retireWithdrawnIdentity(tx, found, now);
           return this.createNewIdentity(tx, args, now);
@@ -112,12 +103,7 @@ export class AccountRepository implements IAccountRepository {
     }
   }
 
-  /**
-   * 탈퇴 계정에 남아 있던 연동을 은퇴 처리한다(재가입 경로 확보).
-   *
-   * 탈퇴 시점에 처리되는 게 정상이지만, 그 처리가 없던 시절의 데이터가 남아 있을 수 있어
-   * 로그인 경로에서도 같은 규칙으로 정리한다.
-   */
+  /** 탈퇴 시점 처리가 없던 시절의 데이터가 남아 있을 수 있어 로그인 경로에서도 같은 규칙으로 정리한다. */
   private async retireWithdrawnIdentity(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
     found: { id: bigint; account_id: bigint; provider_subject: string },
@@ -135,9 +121,6 @@ export class AccountRepository implements IAccountRepository {
     });
   }
 
-  /**
-   * 기존 Identity 와 연결된 계정을 업데이트한다.
-   */
   private async updateExistingIdentity(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
     found: {
@@ -169,9 +152,8 @@ export class AccountRepository implements IAccountRepository {
       },
     });
 
-    // account email/name 은 null 일 때만 채움(변경 불가 정책).
-    // email 은 신규 가입 경로와 같은 기준(verified 인 값만)을 적용한다 — 예전에는 이 백필만
-    // emailVerified 를 보지 않아, 미인증 이메일이 뒤늦게 주입되고 전역 unique 와 충돌했다.
+    // account email/name은 null일 때만 채운다(변경 불가 정책). email은 신규 가입과 같은 기준(verified만) —
+    // 미인증 이메일이 뒤늦게 주입되면 전역 unique와 충돌한다.
     await tx.account.update({
       where: { id: found.account_id },
       data: {
@@ -200,9 +182,6 @@ export class AccountRepository implements IAccountRepository {
     return { account };
   }
 
-  /**
-   * 신규 Identity 를 생성하고 계정에 연결한다.
-   */
   private async createNewIdentity(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
     args: {
@@ -243,9 +222,6 @@ export class AccountRepository implements IAccountRepository {
     return { account };
   }
 
-  /**
-   * 신규 계정을 생성한다.
-   */
   private async createNewAccount(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
     email?: string,
@@ -273,12 +249,7 @@ export class AccountRepository implements IAccountRepository {
     return createdAccount.id;
   }
 
-  /**
-   * account.email 에 저장할 값을 정한다.
-   *
-   * 미인증 이메일은 저장하지 않는다 — 계정 통합은 하지 않지만, account.email 은 사용자에게
-   * 노출되는 값이라 provider 가 검증한 값만 싣는다.
-   */
+  /** 미인증 이메일은 저장하지 않는다 — account.email은 사용자에게 노출되는 값이라 provider가 검증한 값만 싣는다. */
   private resolveVerifiedEmail(
     email?: string,
     emailVerified?: boolean,
@@ -286,9 +257,6 @@ export class AccountRepository implements IAccountRepository {
     return email && emailVerified ? email : null;
   }
 
-  /**
-   * UserProfile 을 생성한다.
-   */
   private async createUserProfile(
     tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
     accountId: bigint,

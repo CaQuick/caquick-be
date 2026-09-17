@@ -10,9 +10,6 @@ export type QueryParams = Record<
   | undefined
 >;
 
-/**
- * QueryParams 객체를 쿼리 문자열로 변환
- */
 export function buildQueryString(queryParams: QueryParams): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(queryParams)) {
@@ -30,9 +27,6 @@ export function buildQueryString(queryParams: QueryParams): string {
   return parts.join('&');
 }
 
-/**
- * ParsedQs → 안전한 QueryParams로 변환
- */
 export function toQueryParams(qs: ParsedQs | undefined): QueryParams {
   if (!qs) return {};
 

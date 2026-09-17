@@ -4,9 +4,7 @@ import type {
   ConversationMessageOutput,
 } from '@/features/conversation/types/conversation-output.type';
 
-/** DI-free 순수 함수만 둔다 — subscription 이벤트 payload 변환. */
-
-/** 메시지 출력 → 이벤트 payload(날짜는 ISO 문자열). */
+/** 날짜는 ISO 문자열 — Redis JSON 직렬화를 거친다. */
 export function toConversationMessageEvent(
   message: ConversationMessageOutput,
 ): ConversationMessageEvent {
@@ -21,7 +19,6 @@ export function toConversationMessageEvent(
   };
 }
 
-/** 메시지 출력 → 목록 이벤트용 미리보기 텍스트. */
 export function toEventPreview(
   message: ConversationMessageOutput,
 ): string | null {

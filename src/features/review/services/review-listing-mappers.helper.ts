@@ -10,13 +10,11 @@ import type {
   StoreReview,
 } from '@/features/review/types/review-listing-output.type';
 
-/** 리뷰별 집계값(좋아요/isLiked) 매퍼 입력. */
 export interface ReviewStats {
   likeCount: number;
   isLiked: boolean;
 }
 
-/** 상품 리뷰 카드는 댓글 수까지 싣는다. */
 export interface ProductReviewStats extends ReviewStats {
   commentCount: number;
 }

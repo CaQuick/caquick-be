@@ -13,11 +13,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 전체 경로를 검증하는 통합 테스트.
- * 단위 단계의 상세 분기/예외는 *.service.spec.ts에서 담당하고, 이 파일에서는
- * resolver 어댑터 레이어가 정상적으로 의존성을 배선하는지만 1-2 케이스로 확인한다.
- */
+// 상세 분기/예외는 *.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 배선만 1-2 케이스로 본다.
 describe('User Profile Resolvers (real DB)', () => {
   let queryResolver: UserProfileQueryResolver;
   let mutationResolver: UserProfileMutationResolver;

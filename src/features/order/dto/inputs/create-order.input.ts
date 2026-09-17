@@ -15,7 +15,7 @@ import {
 import { PHONE_REGEX } from '@/features/user';
 
 export class CreateOrderInput {
-  // 정책: 8~64자, 공백 문자 불가(이슈 #212 사용자 확정 — 형식은 길이만 제한).
+  // 8~64자, 공백 문자 불가 — 형식은 길이만 제한한다.
   @IsString()
   @Length(8, 64)
   @Matches(/^\S+$/)

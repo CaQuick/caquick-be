@@ -429,9 +429,7 @@ describe('CredentialAuthService', () => {
       );
     });
 
-    // NOTE: currentPassword/newPassword 형식(빈 문자열, 길이, 복잡도)은 DTO 책임.
-    // - 길이/필수: change-password.input.spec.ts
-    // - 강 정책: strong-password.validator.spec.ts
+    // currentPassword/newPassword 형식(빈 문자열·길이·복잡도)은 DTO 책임 — change-password.input.spec·strong-password.validator.spec.
 
     it('현재 비밀번호가 틀리면 CURRENT_PASSWORD_INVALID', async () => {
       credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());

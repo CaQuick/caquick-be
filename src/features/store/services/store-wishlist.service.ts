@@ -21,7 +21,6 @@ export class StoreWishlistService {
     private readonly cards: StoreCardService,
   ) {}
 
-  /** 매장 찜 추가 (멱등). 존재하지 않거나 비활성 매장이면 404. */
   async addStoreToWishlist(
     accountId: bigint,
     storeIdStr: string,
@@ -44,10 +43,7 @@ export class StoreWishlistService {
     return true;
   }
 
-  /**
-   * 내가 찜한 매장 목록 (찜 최신순, offset 페이지네이션).
-   * 계정 타입 제한 없음 — 찜 추가가 USER 전용이므로 타 계정은 자연히 빈 목록.
-   */
+  /** 계정 타입 제한 없음 — 찜 추가가 USER 전용이므로 타 계정은 자연히 빈 목록. */
   async myWishlistedStores(
     accountId: bigint,
     input?: MyWishlistedStoresInput,
@@ -61,7 +57,7 @@ export class StoreWishlistService {
       limit,
     });
 
-    // 카드는 공용 StoreCardService — 찜 목록은 시안 기준 이미지 3장(WISHLISTED_STORE_IMAGE_LIMIT)
+    // 찜 목록은 시안 기준 이미지 3장(WISHLISTED_STORE_IMAGE_LIMIT)
     const cards = await this.cards.buildCards(
       items.map((row) => row.store),
       accountId,
@@ -78,7 +74,6 @@ export class StoreWishlistService {
     };
   }
 
-  /** 매장 찜 해제 (멱등). 없는 항목이어도 true. */
   async removeStoreFromWishlist(
     accountId: bigint,
     storeIdStr: string,

@@ -92,10 +92,7 @@ export class UserWishlistService extends UserBaseService {
     };
   }
 
-  /**
-   * 찜 상품의 매장별 그룹 목록 (찜 상품 수 desc → 최근 찜 desc → storeId desc).
-   * 가시성은 myWishlist와 동일 조건 → totalCount 합이 상품 찜 목록과 일치한다.
-   */
+  /** 가시성은 myWishlist와 동일 조건 → totalCount 합이 상품 찜 목록과 일치한다. */
   async myWishlistStoreGroups(
     accountId: bigint,
     input?: MyWishlistStoreGroupsInput,

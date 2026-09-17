@@ -17,10 +17,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repositories ↔ DB 통합 경로 검증.
- * 분기별 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기별 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('User Recent View Resolvers (real DB)', () => {
   let queryResolver: UserRecentViewQueryResolver;
   let mutationResolver: UserRecentViewMutationResolver;

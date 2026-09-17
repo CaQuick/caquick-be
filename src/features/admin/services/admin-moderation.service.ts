@@ -37,10 +37,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 
-/**
- * 리뷰 모더레이션 — 신고 큐 처리와 강제 삭제. 작성자 본인 삭제와 달리 사유를 남기고 미처리 신고를 닫는다.
- * 잠금·멱등·감사는 repository가 한 트랜잭션에서 처리한다.
- */
+/** 작성자 본인 삭제와 달리 사유를 남기고 미처리 신고를 닫는다. 잠금·멱등·감사는 repository가 한 트랜잭션에서 처리한다. */
 @Injectable()
 export class AdminModerationService extends AdminBaseService {
   constructor(

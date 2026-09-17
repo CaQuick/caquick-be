@@ -57,10 +57,7 @@ export type MyConversationConnection =
 export type ConversationMessageConnection =
   CursorConnection<ConversationMessageOutput>;
 
-/**
- * subscription 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO
- * 문자열로 나른다(DateTime 스칼라가 문자열도 직렬화 가능).
- */
+/** Redis JSON 직렬화를 거치므로 날짜는 ISO 문자열로 나른다(DateTime 스칼라가 문자열도 직렬화 가능). */
 export interface ConversationMessageEvent {
   id: string;
   conversationId: string;

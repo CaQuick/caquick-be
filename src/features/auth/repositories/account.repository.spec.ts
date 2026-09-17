@@ -239,7 +239,6 @@ describe('AccountRepository (real DB)', () => {
         emailVerified: true,
       });
 
-      // 새 계정으로 가입된다
       expect(result.account).not.toBeNull();
       expect(result.account!.id).not.toBe(withdrawn.id);
       expect(result.account!.deleted_at).toBeNull();

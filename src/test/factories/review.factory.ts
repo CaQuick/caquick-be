@@ -7,13 +7,6 @@ export interface ReviewOverrides {
   content?: string | null;
 }
 
-/**
- * Review 팩토리.
- *
- * - order_item_id가 주어지면 해당 아이템의 관계(account, store, product)를 그대로 사용
- * - order_item_id가 없으면 새 order item을 생성하고 그 관계를 사용
- * - account_id/store_id/product_id는 항상 order item에서 파생 (직접 override 불가, 일관성 보장)
- */
 export async function createReview(
   prisma: PrismaClient,
   overrides: ReviewOverrides = {},

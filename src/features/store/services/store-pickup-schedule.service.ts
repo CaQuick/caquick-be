@@ -35,7 +35,6 @@ import type {
 const MIN_SCHEDULE_YEAR = 1001;
 const MAX_SCHEDULE_YEAR = 9998;
 
-/** 월/일 범위 벌크 조회 결과(달력 판정 컨텍스트). */
 interface ScheduleContext {
   hoursByWeekday: Map<number, StoreWeekdayBusinessHourRow>;
   closureDates: Set<string>;
@@ -50,10 +49,7 @@ export class StorePickupScheduleService {
     private readonly clock: ClockService,
   ) {}
 
-  /**
-   * 매장별 월 픽업 가능 날짜. todayPickupStores와 동일한 매장 정책
-   * (요일 영업시간·특별휴무·일일 capacity·리드타임)을 월 단위로 판정한다.
-   */
+  /** todayPickupStores와 동일한 매장 정책(요일 영업시간·특별휴무·일일 capacity·리드타임)을 월 단위로 판정한다. */
   async pickupCalendar(
     storeId: bigint,
     yearMonth: string,
@@ -95,10 +91,7 @@ export class StorePickupScheduleService {
     return { yearMonth, days };
   }
 
-  /**
-   * 매장별 특정 날짜의 시간 슬롯(오전/오후). 영업하지 않는 날은 빈 배열,
-   * 선택 불가 날짜(과거·범위 초과·휴무·capacity 소진)는 전 슬롯 마감 표기.
-   */
+  /** 영업하지 않는 날은 빈 배열, 선택 불가 날짜(과거·범위 초과·휴무·capacity 소진)는 전 슬롯 마감 표기. */
   async pickupTimeSlots(
     storeId: bigint,
     date: string,
@@ -150,12 +143,7 @@ export class StorePickupScheduleService {
     };
   }
 
-  /**
-   * 특정 픽업 일시가 예약 가능한지 판정한다(주문 생성 재검증용).
-   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과
-   * capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다.
-   * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
-   */
+  /** 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과 capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다. 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임). */
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
@@ -189,9 +177,8 @@ export class StorePickupScheduleService {
     const result = evaluatePickupDay(input);
     if (result.reason !== null) return false;
 
-    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가 — 공용 판정(소진 여부)에
-    // 얹는 주문 생성 전용 확장 검사.
-    // (명세 외 정책 결정: capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석)
+    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가 — 공용 판정(소진 여부)에 얹는 주문 생성 전용 확장 검사.
+    // capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석한다.
     const quantity = args.additionalQuantity ?? 1;
     if (
       input.capacity !== undefined &&
@@ -235,10 +222,7 @@ export class StorePickupScheduleService {
     };
   }
 
-  /**
-   * 월/일 벌크 조회 컨텍스트를 해당 KST 달력일의 정책 입력으로 변환한다.
-   * 판정 자체는 공용 정책(store-pickup-policy.helper)이 담당한다.
-   */
+  /** 판정 자체는 공용 정책(store-pickup-policy.helper)이 담당한다. */
   private pickupDayInput(
     store: StorePickupPolicyRow,
     ctx: ScheduleContext,
@@ -261,7 +245,6 @@ export class StorePickupScheduleService {
   }
 }
 
-/** "HH:MM" 슬롯 시각을 자정 경과 분으로 변환(오전/오후 분리용). */
 function slotMinutes(slot: PickupSlot): number {
   const hours = Number(slot.time.slice(0, 2));
   const minutes = Number(slot.time.slice(3, 5));

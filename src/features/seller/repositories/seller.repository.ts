@@ -145,7 +145,6 @@ export class SellerRepository {
     });
   }
 
-  /** 특별휴무 전체 건수(커서 무관). */
   async countStoreSpecialClosures(storeId: bigint): Promise<number> {
     return this.prisma.storeSpecialClosure.count({
       where: { store_id: storeId },
@@ -205,7 +204,7 @@ export class SellerRepository {
     });
   }
 
-  /** 일별 생산 수량의 날짜 범위 조건. 목록과 카운트가 공유한다. */
+  /** 목록과 카운트가 공유한다. */
   private dailyCapacityScopeWhere(args: {
     storeId: bigint;
     fromDate?: Date;
@@ -224,7 +223,6 @@ export class SellerRepository {
     };
   }
 
-  /** 일별 생산 수량 전체 건수(커서 무관). */
   async countStoreDailyCapacities(args: {
     storeId: bigint;
     fromDate?: Date;

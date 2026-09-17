@@ -1,7 +1,6 @@
 import { DomainException } from '@/common/errors/error-catalog';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { evaluateActiveUserAccount } from '@/features/user';
-/** 구매자 대화 서비스 공통 — 활성 USER 판정(user feature 정책 헬퍼 공유). */
 export abstract class ConversationBaseService {
   protected constructor(protected readonly repo: ConversationRepository) {}
 

@@ -21,7 +21,7 @@ export function resolveMessage(exception: unknown): string {
   return 'Internal Server Error';
 }
 
-/** Apollo 관례의 분류값. `extensions.classification`으로만 노출하고 코드 정본은 카탈로그다(D29). */
+/** Apollo 관례의 분류값. `extensions.classification`으로만 노출하고 코드 정본은 카탈로그다. */
 const STATUS_CLASSIFICATION: Record<number, string> = {
   [HttpStatus.BAD_REQUEST]: 'BAD_USER_INPUT',
   [HttpStatus.UNAUTHORIZED]: 'UNAUTHENTICATED',
@@ -34,7 +34,6 @@ export function classifyStatus(status: number): string {
   return STATUS_CLASSIFICATION[status] ?? 'INTERNAL_SERVER_ERROR';
 }
 
-/** ValidationPipe exceptionFactory가 만든 BadRequestException({ message: ValidationError[] }) */
 export function isValidationException(exception: unknown): boolean {
   if (!(exception instanceof BadRequestException)) return false;
   const resp = exception.getResponse();

@@ -7,7 +7,6 @@ import type { ProductCardOutput } from '@/features/product/types/product-card-ou
 import { ReviewReadRepository, type ReviewStat } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 
-/** 카드에 필요한 상품 row 부분집합. 랭킹·검색·매장 상품·찜·최근 본 상품 row가 모두 만족한다. */
 export interface ProductCardSource {
   id: bigint;
   store_id: bigint;
@@ -23,10 +22,7 @@ export interface ProductCardSource {
   };
 }
 
-/**
- * 상품 카드 1벌(D28). 인기 케이크·판매 Best·검색·매장 상품·찜·최근 본 상품이 같은 카드를 쓴다 —
- * 대표 이미지·할인율·지역 라벨·평점·찜 여부 규칙을 한 곳에 둔다.
- */
+/** 대표 이미지·할인율·지역 라벨·평점·찜 여부 규칙을 한 곳에 둔다. */
 @Injectable()
 export class ProductCardService {
   constructor(
@@ -34,7 +30,6 @@ export class ProductCardService {
     private readonly reviews: ReviewReadRepository,
   ) {}
 
-  /** rows 순서를 유지한 카드 배열. viewerId가 없으면(비로그인) isWishlisted는 전부 false. */
   async buildCards(
     rows: ProductCardSource[],
     viewerId: bigint | undefined,

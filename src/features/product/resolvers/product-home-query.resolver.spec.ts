@@ -17,10 +17,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 랭킹/배너/필터 세부 검증은 service.spec.ts에서 담당.
- */
+// 랭킹/배너/필터 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductHome Query Resolver (real DB)', () => {
   let resolver: ProductHomeQueryResolver;
   let prisma: PrismaClient;

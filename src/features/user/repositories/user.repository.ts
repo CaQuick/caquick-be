@@ -11,12 +11,8 @@ import {
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /**
- * 알림 목록 select. 서브라인·딥링크용 연관 정보를 함께 당긴다.
- * - 직접 연결(store/product): 리뷰 좋아요 알림 등이 사용.
- * - order.items 폴백: 연관 ID를 저장하지 않던 과거 주문 알림 보강용.
- *   상품명은 주문 시점 스냅샷(product_name_snapshot)을 써 상품 삭제에도 안전하다.
- * nested select라 soft-delete 자동 필터가 닿지 않지만, 삭제된 매장·상품이어도
- * 알림 표기용 이름은 그대로 보여주는 게 정책이다(이름만 노출, 이동은 FE 판단).
+ * order.items 폴백은 연관 ID를 저장하지 않던 과거 주문 알림 보강용 — 상품명은 주문 시점 스냅샷을 써 상품 삭제에도 안전하다.
+ * nested select라 soft-delete 자동 필터가 닿지 않지만, 삭제된 매장·상품이어도 알림 표기용 이름은 그대로 보여주는 게 정책이다(이름만 노출, 이동은 FE 판단).
  */
 const notificationListSelect = {
   id: true,
@@ -78,15 +74,7 @@ export interface UserAccountWithProfile {
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * 화면에 노출 가능한 wishlist row 조건.
-   * - wishlist 자체가 active (deleted_at: null)
-   * - 연결된 product 가 active + soft-delete 아님
-   * - 연결된 store 가 active + soft-delete 아님
-   *
-   * count 와 list 가 같은 가시성 기준을 공유하도록 하여
-   * 마이페이지 카운트 카드와 실제 목록 길이 불일치를 방지한다.
-   */
+  /** count와 list가 같은 가시성 기준(활성 찜 + 활성 상품 + 활성 매장)을 공유해 마이페이지 카운트 카드와 실제 목록 길이 불일치를 막는다. */
   private visibleWishlistWhere(accountId: bigint, storeId?: bigint) {
     return {
       account_id: accountId,
@@ -111,8 +99,7 @@ export class UserRepository {
       },
       include: {
         user_profile: true,
-        // soft-deleted identity는 노출 대상 아님. 최근 로그인 순으로 정렬해
-        // FE가 "최근 로그인 provider" 표시할 때 별도 정렬 없이 사용 가능.
+        // 최근 로그인 순으로 정렬해 FE가 "최근 로그인 provider"를 별도 정렬 없이 표시한다
         account_identities: {
           where: activeWhere,
           orderBy: [{ last_login_at: 'desc' }, { id: 'asc' }],
@@ -177,8 +164,7 @@ export class UserRepository {
       args.birthDate !== undefined ||
       args.phoneNumber !== undefined;
 
-    // name은 account 테이블, 나머지는 user_profile 테이블이라
-    // 두 테이블 부분 실패 방지를 위해 transaction으로 묶는다.
+    // name은 account, 나머지는 user_profile — 두 테이블 부분 실패를 막으려고 트랜잭션으로 묶는다
     await this.prisma.$transaction(async (tx) => {
       if (hasName) {
         await tx.account.update({
@@ -252,14 +238,9 @@ export class UserRepository {
   }
 
   /**
-   * 탈퇴 계정에 연결된 소셜 연동을 은퇴 처리한다.
-   *
-   * soft-delete 만 하면 `(provider, provider_subject)` UNIQUE 가 그대로 남아
-   * 같은 소셜 계정으로 재가입할 때 identity 를 새로 만들 수 없다(MySQL unique index 는
-   * deleted_at 을 보지 않는다). subject 를 익명화해 자리를 비워 준다.
-   *
-   * updateMany 로는 컬럼 값을 기존 값 기반으로 바꿀 수 없어 row 단위로 처리한다.
-   * 한 계정의 연동 수는 provider 수준(한 자릿수)이라 비용 문제는 없다.
+   * soft-delete만 하면 (provider, provider_subject) UNIQUE가 그대로 남아 같은 소셜 계정으로 재가입할 때
+   * identity를 새로 만들 수 없다(MySQL unique index는 deleted_at을 보지 않는다). subject를 익명화해 자리를 비운다.
+   * updateMany로는 기존 값 기반 갱신이 안 돼 row 단위로 처리한다(연동 수는 provider 수준이라 비용 무관).
    */
   private async retireAccountIdentities(
     tx: Prisma.TransactionClient,
@@ -470,10 +451,8 @@ export class UserRepository {
   }
 
   /**
-   * 찜 추가 (멱등). 없으면 생성, soft-delete된 경우 복원.
-   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — 목록 '찜 최신순' 정렬과
-   * addedAt 표기가 재찜을 반영하되, 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은
-   * created_at을 건드리지 않아 멱등 계약을 지킨다(매장 찜 upsertStoreWishlist와 동일 정책).
+   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — '찜 최신순' 정렬과 addedAt이 재찜을 반영하되,
+   * 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은 created_at을 건드리지 않아 멱등 계약을 지킨다(매장 찜과 동일).
    */
   async upsertWishlistItem(args: {
     accountId: bigint;
@@ -509,9 +488,6 @@ export class UserRepository {
     }
   }
 
-  /**
-   * 찜 해제 (멱등). active 항목만 soft-delete.
-   */
   async softDeleteWishlistItem(args: {
     accountId: bigint;
     productId: bigint;
@@ -527,12 +503,7 @@ export class UserRepository {
     });
   }
 
-  /**
-   * 주어진 productIds 중 사용자가 찜한 것들의 product_id 집합을 단일 IN 쿼리로 반환.
-   * 매핑(N+1 회피)용. 가시성 조건(visibleWishlistWhere)을 myWishlist/wishlistCount와
-   * 공유하여, recent-view 등에 노출되는 isWishlisted 플래그가 실제 wishlist 표면
-   * (목록/카운트)과 일관되도록 한다.
-   */
+  /** 가시성 조건(visibleWishlistWhere)을 myWishlist/wishlistCount와 공유해 isWishlisted 플래그가 실제 찜 목록/카운트와 일관되게 한다. */
   async findWishlistedProductIds(args: {
     accountId: bigint;
     productIds: bigint[];
@@ -548,9 +519,6 @@ export class UserRepository {
     return new Set(rows.map((r) => r.product_id.toString()));
   }
 
-  /**
-   * 내 찜 목록 조회. 비활성/soft-delete된 product/store는 제외.
-   */
   async findWishlistItems(args: {
     accountId: bigint;
     offset: number;
@@ -619,11 +587,8 @@ export class UserRepository {
   }
 
   /**
-   * 매장별 그룹핑용 가시 찜 목록 전체 조회.
-   * WishlistItem에는 store_id가 없어(product 경유) Prisma groupBy로 매장 단위 집계가
-   * 불가능하다 → 최소 필드만 가져와 service에서 그룹핑한다(찜은 사용자당 소규모 전제).
-   * 가시성 조건은 findWishlistItems/wishlistCount와 동일(visibleWishlistWhere)해야
-   * 상품 찜 목록 totalCount와 그룹 카운트 합이 일치한다.
+   * WishlistItem에는 store_id가 없어(product 경유) Prisma groupBy로 매장 단위 집계가 불가능하다 → 최소 필드만
+   * 가져와 service에서 그룹핑한다(찜은 사용자당 소규모 전제). 가시성은 findWishlistItems와 동일해야 totalCount 합이 일치한다.
    */
   async findVisibleWishlistItemsForGrouping(accountId: bigint): Promise<
     {
@@ -727,7 +692,6 @@ export class UserRepository {
     });
   }
 
-  /** 리뷰 좋아요 해제(soft). 좋아요가 없어도 성공 처리(멱등). */
   async unlikeReview(args: {
     accountId: bigint;
     reviewId: bigint;
@@ -750,13 +714,9 @@ export class UserRepository {
   }
 
   /**
-   * 리뷰 댓글 작성. 리뷰가 없으면(soft-delete 포함) 생성하지 않는다.
-   * 공개 조회(reviewComments)와 동일하게 상품·매장 활성 가드를 적용해
-   * 작성 직후 조회 불가능한 댓글이 생기지 않게 한다.
-   *
-   * 리뷰 row를 FOR SHARE로 잠가 삭제 트랜잭션(review UPDATE → 댓글 정리)과
-   * 직렬화한다 — 체크와 insert 사이에 리뷰가 삭제되어 정리 대상에서 빠지는
-   * 댓글(리뷰 재작성 시 되살아나는 좀비 댓글)을 막는다.
+   * 공개 조회(reviewComments)와 동일한 상품·매장 활성 가드 — 작성 직후 조회 불가능한 댓글이 생기지 않게.
+   * 리뷰 row를 FOR SHARE로 잠가 삭제 트랜잭션(review UPDATE → 댓글 정리)과 직렬화한다 — 체크와 insert 사이에
+   * 리뷰가 삭제되어 정리 대상에서 빠지는 댓글(리뷰 재작성 시 되살아나는 좀비 댓글)을 막는다.
    */
   async createReviewComment(args: {
     accountId: bigint;
@@ -790,7 +750,6 @@ export class UserRepository {
     });
   }
 
-  /** 내 리뷰 댓글 soft-delete. 소유자 검증 포함. */
   async softDeleteMyReviewComment(args: {
     accountId: bigint;
     commentId: bigint;

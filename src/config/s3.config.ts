@@ -1,8 +1,5 @@
 import { registerAs } from '@nestjs/config';
 
-/**
- * S3 설정 타입
- */
 export interface S3Config {
   region: string;
   bucket: string;
@@ -11,12 +8,7 @@ export interface S3Config {
   presignExpiresSeconds: number;
 }
 
-/**
- * S3 설정
- *
- * 운영 환경에서는 IAM Role 사용을 권장하며,
- * 로컬/개발 환경에서는 Access Key로 인증한다.
- */
+/** 운영은 IAM Role, 로컬/개발은 Access Key로 인증한다. */
 export default registerAs('s3', (): S3Config => {
   const isProd = process.env.NODE_ENV === 'production';
   const bucket = process.env.AWS_S3_BUCKET?.trim() ?? '';

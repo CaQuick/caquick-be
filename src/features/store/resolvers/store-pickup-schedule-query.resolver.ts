@@ -7,9 +7,6 @@ import type {
   PickupTimeSlots,
 } from '@/features/store/types/pickup-schedule-output.type';
 
-/**
- * 매장별 픽업 달력·시간 슬롯 resolver. 비로그인도 접근 가능한 public query.
- */
 @Resolver('Query')
 export class StorePickupScheduleQueryResolver {
   constructor(private readonly service: StorePickupScheduleService) {}

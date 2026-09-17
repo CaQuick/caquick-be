@@ -13,7 +13,7 @@ import type {
   SearchKeywordTrend,
 } from '@/features/search/types/search-entry-output.type';
 
-/** 시 단위 절삭(정각). 시간대 오프셋이 정수 시간이라 UTC/KST 어느 쪽 정각과도 일치한다. */
+/** 시간대 오프셋이 정수 시간이라 UTC/KST 어느 쪽 정각과도 일치한다. */
 export function truncateToHour(date: Date): Date {
   return new Date(Math.floor(date.getTime() / HOUR_MS) * HOUR_MS);
 }
@@ -22,12 +22,7 @@ export function truncateToHour(date: Date): Date {
 export class SearchKeywordRankService {
   constructor(private readonly repo: SearchRepository) {}
 
-  /**
-   * 인기 검색어 스냅샷 생성. ranked_at = now의 정각, 윈도우 = [ranked_at - 24h, ranked_at).
-   * 같은 정각 스냅샷이 이미 있으면(크론·부트스트랩 중복 호출) 만들지 않는다(멱등).
-   * 이벤트가 하나도 없으면 스냅샷을 남기지 않아 직전 유효 스냅샷이 계속 노출된다.
-   * @returns 실제 생성 여부
-   */
+  /** 같은 정각 스냅샷이 이미 있으면 만들지 않는다(멱등). 이벤트가 하나도 없으면 스냅샷을 남기지 않아 직전 유효 스냅샷이 계속 노출된다. */
   async captureSnapshot(now: Date): Promise<boolean> {
     const rankedAt = truncateToHour(now);
     if (await this.repo.snapshotExists(rankedAt)) return false;
@@ -40,11 +35,7 @@ export class SearchKeywordRankService {
     return this.repo.createSnapshot({ rankedAt, rows });
   }
 
-  /**
-   * 최신 스냅샷 상위 limit + 직전 스냅샷 대비 변동.
-   * 직전 스냅샷은 "가장 최근의 이전 스냅샷"(정확히 1시간 전이 아닐 수 있음 —
-   * 서버 다운타임으로 빈 시간이 있어도 비교가 가능하도록. 자체 판단, 시안 외).
-   */
+  /** 직전 스냅샷은 "가장 최근의 이전 스냅샷"(정확히 1시간 전이 아닐 수 있음 — 서버 다운타임으로 빈 시간이 있어도 비교가 가능하도록). */
   async popularSearchKeywords(
     input?: PopularSearchKeywordsInput,
   ): Promise<PopularSearchKeywordsResult> {
@@ -63,10 +54,8 @@ export class SearchKeywordRankService {
         ? Promise.resolve([])
         : this.repo.listSnapshotRows(previousAt),
     ]);
-    // GROUP BY는 collation(ci) 기준으로 묶여 스냅샷마다 대표 표기(대소문자)가 다를 수
-    // 있다('3d' ↔ '3D'). JS Map은 대소문자를 구분하므로 소문자 키로 비교해 같은
-    // 검색어가 NEW로 오판되지 않게 방어한다(릴리즈 리뷰 반영 — collation 완전 동치는
-    // 아니지만 실사용 대표 케이스).
+    // GROUP BY는 collation(ci) 기준으로 묶여 스냅샷마다 대표 표기(대소문자)가 다를 수 있다('3d' ↔ '3D').
+    // JS Map은 대소문자를 구분하므로 소문자 키로 비교해 같은 검색어가 NEW로 오판되지 않게 방어한다.
     const previousRankByKeyword = new Map(
       previous.map((row) => [row.keyword.toLowerCase(), row.rank]),
     );

@@ -11,10 +11,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 달력 판정·슬롯 분기 세부 검증은 service.spec.ts에서 담당.
- */
+// 달력 판정·슬롯 분기 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('StorePickupSchedule Query Resolver (real DB)', () => {
   let resolver: StorePickupScheduleQueryResolver;
   let clock: ClockService;

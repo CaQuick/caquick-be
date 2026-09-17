@@ -17,10 +17,7 @@ import {
   type JwtUser,
 } from '@/global/auth';
 
-/**
- * 홈 화면 섹션 조회 resolver. 비로그인도 접근 가능한 public query.
- * popularCakes는 옵셔널 인증으로 로그인 시에만 카드의 isWishlisted를 채운다.
- */
+/** popularCakes는 옵셔널 인증으로 로그인 시에만 카드의 isWishlisted를 채운다. */
 @Resolver('Query')
 export class ProductHomeQueryResolver {
   constructor(private readonly service: ProductHomeService) {}
