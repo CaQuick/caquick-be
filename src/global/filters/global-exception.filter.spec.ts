@@ -82,7 +82,7 @@ describe('HttpExceptionFilter', () => {
       expect.objectContaining({
         message: 'bad input',
         code: 400,
-        errorCode: 'BAD_USER_INPUT',
+        errorCode: 'INTERNAL_ERROR',
       }),
     );
     expect(logger.txError).toHaveBeenCalled();

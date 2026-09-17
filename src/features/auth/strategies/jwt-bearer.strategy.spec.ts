@@ -83,7 +83,7 @@ describe('JwtBearerStrategy (real DB)', () => {
       },
     );
 
-    it('sub가 없으면 UnauthorizedException을 던진다', async () => {
+    it('sub가 없으면 INVALID_ACCESS_TOKEN', async () => {
       await expect(
         strategy.validate({
           sub: '',
@@ -91,10 +91,10 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrowDomain(401);
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
     });
 
-    it('typ이 access가 아니면 UnauthorizedException을 던진다', async () => {
+    it('typ이 access가 아니면 INVALID_ACCESS_TOKEN', async () => {
       await expect(
         strategy.validate({
           sub: '1',
@@ -102,10 +102,10 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrowDomain(401);
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
     });
 
-    it('존재하지 않는 계정이면 UnauthorizedException을 던진다', async () => {
+    it('존재하지 않는 계정이면 SESSION_ACCOUNT_MISSING', async () => {
       await expect(
         strategy.validate({
           sub: '99999',
@@ -113,10 +113,10 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrowDomain(401);
+      ).rejects.toThrowDomain('SESSION_ACCOUNT_MISSING');
     });
 
-    it('ACTIVE가 아닌 계정이면 ForbiddenException을 던진다', async () => {
+    it('ACTIVE가 아닌 계정이면 ACCOUNT_NOT_ACTIVE', async () => {
       const account = await createAccount(prisma, {
         account_type: 'USER',
         status: 'SUSPENDED',
@@ -129,10 +129,10 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrowDomain(403);
+      ).rejects.toThrowDomain('ACCOUNT_NOT_ACTIVE');
     });
 
-    it('유효하지 않은 sub 형식이면 UnauthorizedException을 던진다', async () => {
+    it('유효하지 않은 sub 형식이면 INVALID_ACCESS_TOKEN', async () => {
       await expect(
         strategy.validate({
           sub: 'not-a-number',
@@ -140,7 +140,7 @@ describe('JwtBearerStrategy (real DB)', () => {
           iat: 0,
           exp: 0,
         }),
-      ).rejects.toThrowDomain(401);
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
     });
   });
 

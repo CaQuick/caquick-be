@@ -143,8 +143,8 @@ describe('AuthService', () => {
       const mockRes = {} as Response;
 
       // Act & Assert
-      await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Missing refresh token.',
+      await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
+        'MISSING_REFRESH_TOKEN',
       );
     });
 
@@ -163,8 +163,8 @@ describe('AuthService', () => {
       );
 
       // Act & Assert
-      await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Invalid refresh token.',
+      await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
+        'INVALID_REFRESH_TOKEN',
       );
     });
   });

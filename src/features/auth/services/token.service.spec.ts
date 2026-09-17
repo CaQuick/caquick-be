@@ -138,9 +138,9 @@ describe('TokenService', () => {
       await expect(
         service.rotateRefresh(reqNoCookie, mockRes),
       ).rejects.toThrowDomain(401);
-      await expect(service.rotateRefresh(reqNoCookie, mockRes)).rejects.toThrow(
-        'Missing refresh token.',
-      );
+      await expect(
+        service.rotateRefresh(reqNoCookie, mockRes),
+      ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
     });
 
     it('활성 세션이 없으면 UnauthorizedException(Invalid)', async () => {
@@ -152,7 +152,7 @@ describe('TokenService', () => {
 
       await expect(
         service.rotateRefresh(reqWithCookie, mockRes),
-      ).rejects.toThrow('Invalid refresh token.');
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
     });
 
     it('정상 회전 시 새 access + accountId 를 반환하고 새 refresh 쿠키를 발급한다', async () => {

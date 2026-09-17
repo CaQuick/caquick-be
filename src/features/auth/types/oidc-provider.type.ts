@@ -1,5 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
-
+import { DomainException } from '@/common/errors/error-catalog';
 /**
  * 지원하는 OIDC Provider 타입
  */
@@ -17,5 +16,5 @@ export type OidcProvider = 'google' | 'kakao';
  */
 export function parseOidcProvider(raw: string): OidcProvider {
   if (raw === 'google' || raw === 'kakao') return raw;
-  throw new BadRequestException(`Unsupported OIDC provider: ${raw}`);
+  throw new DomainException('UNSUPPORTED_OIDC_PROVIDER', { provider: raw });
 }

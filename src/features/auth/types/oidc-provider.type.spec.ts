@@ -11,20 +11,22 @@ describe('parseOidcProvider', () => {
 
   it('지원하지 않는 provider이면 BadRequestException을 던진다', () => {
     expect(() => parseOidcProvider('facebook')).toThrowDomain(400);
-    expect(() => parseOidcProvider('facebook')).toThrow(
-      'Unsupported OIDC provider: facebook',
+    expect(() => parseOidcProvider('facebook')).toThrowDomain(
+      'UNSUPPORTED_OIDC_PROVIDER',
     );
   });
 
   it('빈 문자열이면 BadRequestException을 던진다', () => {
     expect(() => parseOidcProvider('')).toThrowDomain(400);
-    expect(() => parseOidcProvider('')).toThrow('Unsupported OIDC provider: ');
+    expect(() => parseOidcProvider('')).toThrowDomain(
+      'UNSUPPORTED_OIDC_PROVIDER',
+    );
   });
 
   it('대소문자를 구분한다', () => {
     expect(() => parseOidcProvider('Google')).toThrowDomain(400);
-    expect(() => parseOidcProvider('Google')).toThrow(
-      'Unsupported OIDC provider: Google',
+    expect(() => parseOidcProvider('Google')).toThrowDomain(
+      'UNSUPPORTED_OIDC_PROVIDER',
     );
   });
 });

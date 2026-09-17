@@ -50,8 +50,8 @@ describe('error', () => {
     it.each([
       [new DomainException('STORE_NOT_FOUND'), 'STORE_NOT_FOUND'],
       [VALIDATION_EXCEPTION, 'VALIDATION_FAILED'],
-      [new NotFoundException('x'), 'NOT_FOUND'],
-      [new HttpException('teapot', 418), 'INTERNAL_SERVER_ERROR'],
+      [new NotFoundException('x'), 'ROUTE_NOT_FOUND'],
+      [new HttpException('teapot', 418), 'INTERNAL_ERROR'],
       [new Error('boom'), 'INTERNAL_ERROR'],
       ['string', 'INTERNAL_ERROR'],
     ])('%p → %s', (exception, expected) => {

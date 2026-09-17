@@ -113,10 +113,28 @@ export default defineConfig(
     },
   },
 
-  // common/utils 는 순수 함수 — DI(Injectable/Inject)·ConfigService·Prisma 의존 금지.
+  // 예외는 DomainException(카탈로그 코드)로만 던진다 — Nest 예외 직접 생성 금지.
+  // 예외 1곳: main.ts ValidationPipe exceptionFactory(필터가 VALIDATION_FAILED로 매핑).
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'NewExpression[callee.name=/^(BadRequest|Unauthorized|Forbidden|NotFound|Conflict|InternalServerError|Http)Exception$/]',
+          message:
+            '예외는 new DomainException(코드)로 던진다 — 코드·status·메시지는 src/common/errors/error-catalog.ts.',
+        },
+      ],
+    },
+  },
+
+  // common/utils·errors 는 순수 함수/값 — DI(Injectable/Inject)·ConfigService·Prisma 의존 금지.
   // (DI 없는 값 클래스인 HttpException 류는 허용)
   {
-    files: ['src/common/utils/**/*.ts'],
+    files: ['src/common/utils/**/*.ts', 'src/common/errors/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

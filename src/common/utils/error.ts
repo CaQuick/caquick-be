@@ -1,6 +1,11 @@
-import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common';
 
-import { DomainException } from '@/common/errors/error-catalog';
+import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { isValidationErrorLike } from '@/common/utils/validation';
 
 export function resolveStatus(exception: unknown): number {
@@ -41,14 +46,13 @@ export function isValidationException(exception: unknown): boolean {
 }
 
 /**
- * 응답에 실을 에러 코드. 카탈로그 코드가 정본이고, 필터 밖에서 만들어지는 예외만 고정 코드로 뭉갠다.
- * 카탈로그로 아직 이관되지 않은 Nest 예외(07b·07c 전)는 분류값을 임시 코드로 쓴다.
+ * 응답에 실을 에러 코드. 카탈로그 코드가 정본이고, 필터 밖에서 만들어지는 예외만 고정 코드로 뭉갠다:
+ * ValidationPipe → VALIDATION_FAILED, 라우터의 미등록 경로 404 → ROUTE_NOT_FOUND, 나머지 → INTERNAL_ERROR.
+ * (앱 코드의 Nest 예외 직접 생성은 ESLint no-restricted-syntax가 막는다)
  */
-export function resolveErrorCode(exception: unknown): string {
+export function resolveErrorCode(exception: unknown): ErrorCode {
   if (exception instanceof DomainException) return exception.code;
   if (isValidationException(exception)) return 'VALIDATION_FAILED';
-  if (exception instanceof HttpException) {
-    return classifyStatus(exception.getStatus());
-  }
+  if (exception instanceof NotFoundException) return 'ROUTE_NOT_FOUND';
   return 'INTERNAL_ERROR';
 }

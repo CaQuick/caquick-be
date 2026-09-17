@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import {
   CURSOR_PAGE_DEFAULT_LIMIT,
   type CursorInput,
 } from '@/common/dto/inputs/cursor.input';
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
@@ -11,7 +12,6 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
@@ -93,7 +93,7 @@ export class ConversationCenterService extends ConversationBaseService {
       accountId,
     });
     if (!conversation) {
-      throw new NotFoundException(CONVERSATION_ERRORS.CONVERSATION_NOT_FOUND);
+      throw new DomainException('CONVERSATION_NOT_FOUND');
     }
 
     const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
