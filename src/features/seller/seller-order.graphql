@@ -63,91 +63,6 @@ input SellerOrderListInput {
   search: String
 }
 
-"""주문 상태 변경 이력 1건. 최신 변경이 먼저 온다."""
-type SellerOrderStatusHistory {
-  id: ID!
-  """변경 전 상태. 최초 생성 이력이면 null."""
-  fromStatus: OrderStatusType
-  """변경 후 상태."""
-  toStatus: OrderStatusType!
-  """변경 시각."""
-  changedAt: DateTime!
-  """변경 사유 메모. 취소(CANCELED) 전이에는 필수로 기록된다."""
-  note: String
-}
-
-"""
-주문 시점의 옵션 스냅샷. 판매자가 이후 옵션을 수정·삭제해도 주문 내용은 변하지 않도록
-주문 당시 값을 그대로 복사해 둔 것이다.
-"""
-type SellerOrderItemOptionSnapshot {
-  id: ID!
-  """옵션 그룹명(주문 당시)."""
-  groupNameSnapshot: String!
-  """선택한 옵션명(주문 당시)."""
-  optionTitleSnapshot: String!
-  """옵션 추가금(원, 주문 당시). 음수일 수 있다."""
-  optionPriceDeltaSnapshot: Int!
-}
-
-"""주문 시점의 커스텀 문구 스냅샷."""
-type SellerOrderItemCustomTextSnapshot {
-  id: ID!
-  """문구 토큰 키(주문 당시). 예: 케이크판 문구 슬롯 식별자."""
-  tokenKeySnapshot: String!
-  """토큰의 기본 문구(주문 당시)."""
-  defaultTextSnapshot: String!
-  """구매자가 실제로 입력한 문구."""
-  valueText: String!
-  """입력 화면 노출 순서. 오름차순."""
-  sortOrder: Int!
-}
-
-"""자유 편집 요청에 구매자가 첨부한 참고 이미지."""
-type SellerOrderItemCustomFreeEditAttachment {
-  id: ID!
-  """첨부 이미지 URL."""
-  imageUrl: String!
-  """첨부 순서. 오름차순."""
-  sortOrder: Int!
-}
-
-"""주문 시점의 자유 편집 요청 스냅샷. 구매자가 이미지 위에 영역을 지정해 요청한 내용이다."""
-type SellerOrderItemCustomFreeEditSnapshot {
-  id: ID!
-  """구매자가 지정한 편집 영역을 잘라낸 이미지 URL."""
-  cropImageUrl: String!
-  """해당 영역에 대한 요청 문구."""
-  descriptionText: String!
-  """요청 순서. 오름차순."""
-  sortOrder: Int!
-  """구매자가 참고로 붙인 이미지. 없으면 빈 배열."""
-  attachments: [SellerOrderItemCustomFreeEditAttachment!]!
-}
-
-"""주문 품목 1건. 가격·옵션은 전부 주문 당시 스냅샷이다."""
-type SellerOrderItemDetail {
-  id: ID!
-  storeId: ID!
-  productId: ID!
-  """상품명(주문 당시). 이후 상품명이 바뀌어도 이 값은 유지된다."""
-  productNameSnapshot: String!
-  """정가(원, 주문 당시)."""
-  regularPriceSnapshot: Int!
-  """할인가(원, 주문 당시). 할인이 없었으면 null이고 정가가 적용된다."""
-  salePriceSnapshot: Int
-  """주문 수량."""
-  quantity: Int!
-  """이 품목의 합계 금액(원). 옵션 추가금과 수량이 반영된 값이다."""
-  itemSubtotalPrice: Int!
-  """선택된 옵션(주문 당시 스냅샷)."""
-  optionItems: [SellerOrderItemOptionSnapshot!]!
-  """입력된 커스텀 문구(주문 당시 스냅샷)."""
-  customTexts: [SellerOrderItemCustomTextSnapshot!]!
-  """자유 편집 요청(주문 당시 스냅샷)."""
-  freeEdits: [SellerOrderItemCustomFreeEditSnapshot!]!
-}
-
 """주문 상세. items에는 내 매장 품목만 담긴다."""
 type SellerOrderDetail {
   id: ID!
@@ -182,9 +97,9 @@ type SellerOrderDetail {
   createdAt: DateTime!
   updatedAt: DateTime!
   """내 매장에 속한 주문 품목만 포함된다. 다른 매장 품목은 내려오지 않는다."""
-  items: [SellerOrderItemDetail!]!
+  items: [OrderItemDetail!]!
   """상태 변경 이력. 최신순."""
-  statusHistories: [SellerOrderStatusHistory!]!
+  statusHistories: [OrderStatusHistory!]!
 }
 
 """
