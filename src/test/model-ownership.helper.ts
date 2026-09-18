@@ -1,7 +1,7 @@
 // 소유권 검사기의 입력 공간을 코드에서 읽어 온다 — 스키마의 relation, src/features의 Prisma write 호출, 경계를 넘는 read.
 // 검사는 "어느 feature 파일에 물리 사이트가 있는가"로 판정한다(tx 클라이언트를 배럴 함수로 넘겨 소유 feature 안에서 write하는 것은 허용).
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
@@ -123,46 +123,224 @@ function propName(prop: ts.ObjectLiteralElementLike): string | null {
   return null;
 }
 
-/** 식별자는 스코프를 거슬러 올라가 `const X = {...}` 선언을 찾고, 조건식은 양쪽 분기를 모두 후보로 돌려준다 — include/select/where 상수를 따라가기 위해. */
-function findDeclaration(id: ts.Identifier): ts.Expression | undefined {
+/** 식별자는 스코프를 거슬러 올라가 `const X = {...}`·함수 선언을 찾고, 없으면 import를 따라 다른 파일의 export까지 본다. */
+function findDeclaration(id: ts.Identifier): ts.Node | undefined {
   for (
     let scope: ts.Node | undefined = id.parent;
     scope;
     scope = scope.parent
   ) {
     if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
-    for (const stmt of scope.statements) {
-      if (!ts.isVariableStatement(stmt)) continue;
-      for (const decl of stmt.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name) && decl.name.text === id.text)
-          return decl.initializer;
-      }
+    const found = findInStatements(scope.statements, id.text);
+    if (found) return found;
+  }
+  return findImported(id.getSourceFile(), id.text, 0);
+}
+
+function findInStatements(
+  statements: ts.NodeArray<ts.Statement>,
+  name: string,
+): ts.Node | undefined {
+  for (const stmt of statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === name) return stmt;
+    if (!ts.isVariableStatement(stmt)) continue;
+    for (const decl of stmt.declarationList.declarations) {
+      if (ts.isIdentifier(decl.name) && decl.name.text === name)
+        return decl.initializer;
     }
   }
   return undefined;
 }
 
+const moduleCache = new Map<string, ts.SourceFile | null>();
+
+/** `@/x` → src/x, `./x` → 상대 경로. `.ts` 또는 `/index.ts`. */
+function loadModule(fromFile: string, specifier: string): ts.SourceFile | null {
+  const base = specifier.startsWith('@/')
+    ? join(REPO_ROOT, 'src', specifier.slice(2))
+    : specifier.startsWith('.')
+      ? resolve(dirname(fromFile), specifier)
+      : null;
+  if (!base) return null;
+  for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
+    if (!moduleCache.has(candidate)) {
+      moduleCache.set(
+        candidate,
+        existsSync(candidate)
+          ? ts.createSourceFile(
+              candidate,
+              readFileSync(candidate, 'utf8'),
+              ts.ScriptTarget.ES2022,
+              true,
+            )
+          : null,
+      );
+    }
+    const sf = moduleCache.get(candidate);
+    if (sf) return sf;
+  }
+  return null;
+}
+
+const REEXPORT_DEPTH = 4;
+
+/** `import { X [as Y] } from '...'`를 따라 모듈의 export 선언을 찾는다. */
+function findImported(
+  sf: ts.SourceFile,
+  name: string,
+  depth: number,
+): ts.Node | undefined {
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    const bindings = stmt.importClause?.namedBindings;
+    if (
+      !bindings ||
+      !ts.isNamedImports(bindings) ||
+      !ts.isStringLiteral(stmt.moduleSpecifier)
+    )
+      continue;
+    const el = bindings.elements.find((e) => e.name.text === name);
+    if (!el) continue;
+    const mod = loadModule(sf.fileName, stmt.moduleSpecifier.text);
+    return mod
+      ? findExported(mod, (el.propertyName ?? el.name).text, depth + 1)
+      : undefined;
+  }
+  return undefined;
+}
+
+/** 모듈의 최상위 선언, 없으면 `export { X } from` / `export * from` 재export를 따라간다. */
+function findExported(
+  sf: ts.SourceFile,
+  name: string,
+  depth: number,
+): ts.Node | undefined {
+  if (depth > REEXPORT_DEPTH) return undefined;
+  const local = findInStatements(sf.statements, name);
+  if (local) return local;
+  for (const stmt of sf.statements) {
+    if (
+      !ts.isExportDeclaration(stmt) ||
+      !stmt.moduleSpecifier ||
+      !ts.isStringLiteral(stmt.moduleSpecifier)
+    )
+      continue;
+    const mod = loadModule(sf.fileName, stmt.moduleSpecifier.text);
+    if (!mod) continue;
+    if (!stmt.exportClause) {
+      const found = findExported(mod, name, depth + 1);
+      if (found) return found;
+      continue;
+    }
+    if (!ts.isNamedExports(stmt.exportClause)) continue;
+    const el = stmt.exportClause.elements.find((e) => e.name.text === name);
+    if (el)
+      return findExported(mod, (el.propertyName ?? el.name).text, depth + 1);
+  }
+  return undefined;
+}
+
+/** `this.x` / `this.x()` — 같은 클래스의 멤버(메서드·getter·프로퍼티) 선언. */
+function findClassMember(
+  access: ts.PropertyAccessExpression,
+): ts.ClassElement | undefined {
+  if (access.expression.kind !== ts.SyntaxKind.ThisKeyword) return undefined;
+  let node: ts.Node | undefined = access;
+  while (node && !ts.isClassLike(node)) node = node.parent;
+  return node?.members.find(
+    (m) =>
+      m.name && ts.isIdentifier(m.name) && m.name.text === access.name.text,
+  );
+}
+
+/** 함수 본문의 return 식(중첩 함수 안은 제외). 식 본문 화살표 함수는 그 식. */
+function returnExpressions(fn: ts.Node): ts.Expression[] {
+  if (ts.isArrowFunction(fn) && !ts.isBlock(fn.body)) return [fn.body];
+  const body =
+    ts.isFunctionLike(fn) && 'body' in fn && fn.body && ts.isBlock(fn.body)
+      ? fn.body
+      : undefined;
+  if (!body) return [];
+  const out: ts.Expression[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node) && node.expression)
+      out.push(node.expression);
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return out;
+}
+
+/** 멤버·선언이 만드는 객체: 메서드/getter/함수는 return 식, 프로퍼티는 초기값(화살표 함수면 그 본문). */
+function objectsOfDeclaration(
+  decl: ts.Node | undefined,
+  depth: number,
+): ts.ObjectLiteralExpression[] {
+  if (!decl) return [];
+  if (ts.isPropertyDeclaration(decl)) {
+    const init = decl.initializer;
+    if (!init) return [];
+    return ts.isArrowFunction(init) || ts.isFunctionExpression(init)
+      ? returnExpressions(init).flatMap((e) => resolveObjects(e, depth + 1))
+      : resolveObjects(init, depth + 1);
+  }
+  if (ts.isFunctionLike(decl))
+    return returnExpressions(decl).flatMap((e) => resolveObjects(e, depth + 1));
+  return [];
+}
+
+const NULLISH_OR = new Set([
+  ts.SyntaxKind.QuestionQuestionToken,
+  ts.SyntaxKind.BarBarToken,
+]);
+
+/**
+ * 식이 만들 수 있는 객체 리터럴 후보. 조건식·`??`·`||`는 양쪽 분기 모두, 배열은 원소 전부,
+ * 상수·클래스 멤버·헬퍼 함수(`this.visibleWhere(id)`, `buildArgs()`, `xs.map((x) => ({...}))`)는 본문의 return 식까지 따라간다.
+ */
 function resolveObjects(
-  expr: ts.Expression | undefined,
+  expr: ts.Node | undefined,
   depth = 0,
 ): ts.ObjectLiteralExpression[] {
   if (!expr || depth > 8) return [];
+  const next = (e: ts.Node | undefined): ts.ObjectLiteralExpression[] =>
+    resolveObjects(e, depth + 1);
   if (ts.isObjectLiteralExpression(expr)) return [expr];
+  if (ts.isArrayLiteralExpression(expr)) return expr.elements.flatMap(next);
   if (
     ts.isAsExpression(expr) ||
     ts.isSatisfiesExpression(expr) ||
-    ts.isParenthesizedExpression(expr)
+    ts.isParenthesizedExpression(expr) ||
+    ts.isNonNullExpression(expr) ||
+    ts.isAwaitExpression(expr)
   ) {
-    return resolveObjects(expr.expression, depth + 1);
+    return next(expr.expression);
   }
-  if (ts.isConditionalExpression(expr)) {
-    return [
-      ...resolveObjects(expr.whenTrue, depth + 1),
-      ...resolveObjects(expr.whenFalse, depth + 1),
-    ];
+  if (ts.isConditionalExpression(expr))
+    return [...next(expr.whenTrue), ...next(expr.whenFalse)];
+  if (ts.isBinaryExpression(expr) && NULLISH_OR.has(expr.operatorToken.kind))
+    return [...next(expr.left), ...next(expr.right)];
+  if (ts.isIdentifier(expr)) {
+    const decl = findDeclaration(expr);
+    return decl && ts.isFunctionDeclaration(decl) ? [] : next(decl);
   }
-  if (ts.isIdentifier(expr))
-    return resolveObjects(findDeclaration(expr), depth + 1);
+  if (ts.isPropertyAccessExpression(expr))
+    return objectsOfDeclaration(findClassMember(expr), depth);
+  if (ts.isCallExpression(expr)) {
+    const callee = expr.expression;
+    if (ts.isPropertyAccessExpression(callee)) {
+      if (callee.name.text === 'map') {
+        const fn = expr.arguments[0];
+        return fn && ts.isFunctionLike(fn)
+          ? returnExpressions(fn).flatMap(next)
+          : [];
+      }
+      return objectsOfDeclaration(findClassMember(callee), depth);
+    }
+    if (ts.isIdentifier(callee))
+      return objectsOfDeclaration(findDeclaration(callee), depth);
+  }
   return [];
 }
 
@@ -190,12 +368,16 @@ function propertiesOf(
   return props;
 }
 
+function lineOf(node: ts.Node): number {
+  const sf = node.getSourceFile();
+  return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+}
+
 /** data 안의 relation 키 아래 create/createMany/... 를 nested write로 센다(관계 체인을 따라 모델을 바꿔 가며). */
 function collectNestedWrites(
   obj: ts.ObjectLiteralExpression,
   model: string,
   schema: SchemaInfo,
-  sf: ts.SourceFile,
   out: Omit<WriteSite, 'file' | 'feature'>[],
 ): void {
   for (const prop of propertiesOf(obj)) {
@@ -204,7 +386,7 @@ function collectNestedWrites(
     const target = schema.relations[model]?.[name];
     for (const value of objectValues(prop)) {
       if (!target) {
-        collectNestedWrites(value, model, schema, sf, out);
+        collectNestedWrites(value, model, schema, out);
         continue;
       }
       for (const inner of propertiesOf(value)) {
@@ -213,11 +395,11 @@ function collectNestedWrites(
         out.push({
           model: target,
           method: `nested ${innerName}`,
-          line: sf.getLineAndCharacterOfPosition(inner.getStart(sf)).line + 1,
+          line: lineOf(inner),
           nested: true,
         });
         for (const innerValue of objectValues(inner))
-          collectNestedWrites(innerValue, target, schema, sf, out);
+          collectNestedWrites(innerValue, target, schema, out);
       }
     }
   }
@@ -254,7 +436,7 @@ export function collectWriteSites(
         // 인자를 상수로 넘기는 호출(prisma.x.create(args))도 같은 규칙으로 본다
         for (const arg of found.call.arguments) {
           for (const obj of resolveObjects(arg))
-            collectNestedWrites(obj, found.model, schema, sf, nested);
+            collectNestedWrites(obj, found.model, schema, nested);
         }
         sites.push(...nested.map((n) => ({ ...n, file, feature })));
       }
@@ -271,8 +453,8 @@ export function isAllowedWriter(site: WriteSite): boolean {
 
 export interface CrossRead {
   file: string;
-  kind: 'nested' | 'filter' | 'raw';
-  /** nested/filter: `Root.path->Target`, raw: `method:table,table` */
+  kind: 'nested' | 'filter' | 'raw' | 'opaque';
+  /** nested/filter: `Root.path->Target`, raw: `method:table,table`, opaque: `method:Root.path=식` */
   key: string;
 }
 
@@ -282,14 +464,6 @@ function serviceOfModel(model: string): string {
 
 const FILTER_WRAPPERS = new Set(['some', 'every', 'none', 'is', 'isNot']);
 const LOGICAL_KEYS = new Set(['AND', 'OR', 'NOT']);
-
-function arrayObjects(
-  expr: ts.Expression | undefined,
-): ts.ObjectLiteralExpression[] {
-  if (expr && ts.isArrayLiteralExpression(expr))
-    return expr.elements.flatMap((el) => resolveObjects(el));
-  return resolveObjects(expr);
-}
 
 /** where 객체: relation 키(직접 또는 some/is 래퍼)가 다른 서비스면 filter로 기록하고 그 안으로 내려간다. */
 function collectWhereReads(
@@ -309,7 +483,7 @@ function collectWhereReads(
         ? prop.name
         : undefined;
     if (LOGICAL_KEYS.has(name)) {
-      for (const el of arrayObjects(initializer))
+      for (const el of resolveObjects(initializer))
         collectWhereReads(el, model, rootService, path, schema, out);
       continue;
     }
@@ -356,7 +530,7 @@ function collectCrossReads(
         ? prop.initializer
         : undefined;
       for (const value of name === 'orderBy'
-        ? arrayObjects(initializer)
+        ? resolveObjects(initializer)
         : values) {
         for (const inner of propertiesOf(value)) {
           const rel = propName(inner);
@@ -400,6 +574,78 @@ function collectCrossReads(
     }
     for (const value of values)
       collectCrossReads(value, model, rootService, path, schema, out);
+  }
+}
+
+const STRUCTURAL_KEYS = new Set([
+  'where',
+  'include',
+  'select',
+  'orderBy',
+  'data',
+  ...NESTED_WRITE_KEYS,
+  ...FILTER_WRAPPERS,
+  ...LOGICAL_KEYS,
+]);
+
+/** 리터럴·enum 멤버·`new Date()`처럼 relation을 숨길 수 없는 값. */
+function isScalarLike(expr: ts.Expression): boolean {
+  if (ts.isArrayLiteralExpression(expr))
+    return expr.elements.every((el) => isScalarLike(el));
+  return (
+    ts.isLiteralExpression(expr) ||
+    ts.isTemplateExpression(expr) ||
+    ts.isPrefixUnaryExpression(expr) ||
+    ts.isNewExpression(expr) ||
+    expr.kind === ts.SyntaxKind.TrueKeyword ||
+    expr.kind === ts.SyntaxKind.FalseKeyword ||
+    expr.kind === ts.SyntaxKind.NullKeyword ||
+    (ts.isIdentifier(expr) && expr.text === 'undefined')
+  );
+}
+
+/**
+ * 구조 키(where/include/select/data/...)·relation 키 자리와 spread에 놓인 식이 객체 리터럴로 풀리지 않으면 opaque로 기록한다.
+ * 파라미터 pass-through(`data: args.data`)처럼 검사기가 볼 수 없는 자리를 허용 목록으로 고정해, 새 불투명 자리가 생기면 실패하게 한다.
+ */
+function collectOpaque(
+  expr: ts.Expression,
+  model: string,
+  path: string,
+  schema: SchemaInfo,
+  out: Set<string>,
+  method: string,
+): void {
+  const objects = resolveObjects(expr);
+  if (objects.length === 0) {
+    if (!isScalarLike(expr)) {
+      const text = expr
+        .getText(expr.getSourceFile())
+        .replace(/\s+/g, ' ')
+        .slice(0, 60);
+      out.add(`opaque:${method}:${path}=${text}`);
+    }
+    return;
+  }
+  for (const obj of objects) {
+    for (const prop of obj.properties) {
+      if (ts.isSpreadAssignment(prop)) {
+        collectOpaque(prop.expression, model, path, schema, out, method);
+        continue;
+      }
+      const name = propName(prop);
+      const value = ts.isPropertyAssignment(prop)
+        ? prop.initializer
+        : ts.isShorthandPropertyAssignment(prop)
+          ? prop.name
+          : undefined;
+      if (!name || !value) continue;
+      const target = schema.relations[model]?.[name];
+      if (target)
+        collectOpaque(value, target, `${path}.${name}`, schema, out, method);
+      else if (STRUCTURAL_KEYS.has(name))
+        collectOpaque(value, model, `${path}.${name}`, schema, out, method);
+    }
   }
 }
 
@@ -450,7 +696,9 @@ export function collectCrossReadsInFeatures(
       const found = prismaCall(node);
       if (found) {
         const rootService = serviceOfModel(found.model);
+        const method = enclosingMethodName(node);
         for (const arg of found.call.arguments) {
+          collectOpaque(arg, found.model, found.model, schema, keys, method);
           for (const obj of resolveObjects(arg))
             collectCrossReads(
               obj,
