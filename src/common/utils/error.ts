@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
+import {
+  DomainException,
+  ERROR_CATALOG,
+  type ErrorCode,
+} from '@/common/errors/error-catalog';
 import { isValidationErrorLike } from '@/common/utils/validation';
 
 export function resolveStatus(exception: unknown): number {
@@ -14,7 +18,11 @@ export function resolveStatus(exception: unknown): number {
     : HttpStatus.INTERNAL_SERVER_ERROR;
 }
 
+// ValidationPipe 예외의 message는 필드별 constraints 배열이라 Nest 기본 문구('Bad Request Exception')가 나간다 — 카탈로그 문구로 바꾼다.
 export function resolveMessage(exception: unknown): string {
+  if (isValidationException(exception)) {
+    return ERROR_CATALOG.VALIDATION_FAILED.message;
+  }
   if (exception instanceof HttpException || exception instanceof Error) {
     return exception.message;
   }

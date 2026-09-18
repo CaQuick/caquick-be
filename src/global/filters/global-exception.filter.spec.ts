@@ -135,7 +135,7 @@ describe('HttpExceptionFilter', () => {
     expect(res.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Validation Error',
+        message: '입력값이 올바르지 않습니다.',
         errorCode: 'VALIDATION_FAILED',
         data: [
           { property: 'email', constraints: { isEmail: 'must be email' } },
