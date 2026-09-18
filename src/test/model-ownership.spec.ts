@@ -6,6 +6,7 @@ import { FEATURE_SERVICE, MODEL_OWNERSHIP } from '@/test/model-ownership';
 import {
   collectWriteSites,
   isAllowedWriter,
+  listFeatureDirs,
   loadSchema,
   relPath,
   type WriteSite,
@@ -124,13 +125,9 @@ describe('모델 소유권 (단일 writer)', () => {
   });
 
   it('feature→서비스 매핑의 feature는 실제 디렉터리에 존재한다', () => {
-    const features = new Set(
-      collectWriteSites(schema)
-        .map((s) => s.feature)
-        .concat(Object.keys(FEATURE_SERVICE)),
-    );
+    const dirs = new Set(listFeatureDirs());
     for (const feature of Object.keys(FEATURE_SERVICE))
-      expect(features.has(feature)).toBe(true);
+      expect(dirs.has(feature)).toBe(true);
   });
 
   it('소유 feature 밖 write는 예외 목록과 정확히 일치한다', () => {
@@ -150,8 +147,10 @@ describe('모델 소유권 (단일 writer)', () => {
         join(dir, 'product', 'bad.repository.ts'),
         [
           'const payload = { rating: 5, media: { createMany: { data: [] } } } as const;',
+          'const createArgs = { data: { media: { create: [] } } };',
           'export function f(tx: any, prisma: any) {',
           '  tx.review.create({ data: payload });',
+          '  tx.review.create(createArgs);',
           '  prisma.order.update({ where: { id: 1n }, data: { status_histories: { create: {} } } });',
           '  this.prisma.product.update({ where: { id: 1n }, data: {} });',
           '}',
@@ -164,13 +163,13 @@ describe('모델 소유권 (단일 writer)', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('허용 밖 feature의 직접·nested write를 모두 잡고, 소유 feature의 write는 통과시킨다', () => {
+    it('허용 밖 feature의 직접·nested·상수 인자 write를 모두 잡고, 소유 feature의 write는 통과시킨다', () => {
       const found = groupViolations(collectWriteSites(schema, dir), dir);
       expect(found).toEqual([
         ['product/bad.repository.ts', 'Order', 1],
         ['product/bad.repository.ts', 'OrderStatusHistory', 1],
-        ['product/bad.repository.ts', 'Review', 1],
-        ['product/bad.repository.ts', 'ReviewMedia', 1],
+        ['product/bad.repository.ts', 'Review', 2],
+        ['product/bad.repository.ts', 'ReviewMedia', 2],
       ]);
       const ok = collectWriteSites(schema, dir).filter(
         (s) => s.feature === 'review',

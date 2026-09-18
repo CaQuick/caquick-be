@@ -59,6 +59,14 @@ export function featureOf(
   return relative(featuresDir, file).split('/')[0];
 }
 
+/** src/features 바로 아래 디렉터리 이름 — feature→서비스 매핑의 정합성 검사용. */
+export function listFeatureDirs(dir: string = FEATURES_DIR): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
 export function listFeatureSources(dir: string = FEATURES_DIR): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -243,9 +251,10 @@ export function collectWriteSites(
           nested: false,
         });
         const nested: Omit<WriteSite, 'file' | 'feature'>[] = [];
+        // 인자를 상수로 넘기는 호출(prisma.x.create(args))도 같은 규칙으로 본다
         for (const arg of found.call.arguments) {
-          if (ts.isObjectLiteralExpression(arg))
-            collectNestedWrites(arg, found.model, schema, sf, nested);
+          for (const obj of resolveObjects(arg))
+            collectNestedWrites(obj, found.model, schema, sf, nested);
         }
         sites.push(...nested.map((n) => ({ ...n, file, feature })));
       }
@@ -442,9 +451,9 @@ export function collectCrossReadsInFeatures(
       if (found) {
         const rootService = serviceOfModel(found.model);
         for (const arg of found.call.arguments) {
-          if (ts.isObjectLiteralExpression(arg))
+          for (const obj of resolveObjects(arg))
             collectCrossReads(
-              arg,
+              obj,
               found.model,
               rootService,
               found.model,

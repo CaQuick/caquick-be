@@ -132,16 +132,21 @@ describe('서비스 경계를 넘는 read', () => {
           '  async c() {',
           '    return this.prisma.review.count({ where: { media: { some: { deleted_at: null } } } });',
           '  }',
+          '  async d() {',
+          '    const args = { where: { store: { is_active: true } } };',
+          '    return this.prisma.review.count(args);',
+          '  }',
           '}',
         ].join('\n'),
       );
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('상수 include·relation 필터·raw JOIN을 잡고, 같은 서비스 안의 relation은 무시한다', () => {
+    it('상수 include·relation 필터·raw JOIN·상수 인자를 잡고, 같은 서비스 안의 relation은 무시한다', () => {
       expect(keysOf(dir)).toEqual([
         'review/probe.repository.ts|filter|Review.product->Product',
         'review/probe.repository.ts|filter|Review.product.store->Store',
+        'review/probe.repository.ts|filter|Review.store->Store',
         'review/probe.repository.ts|nested|Review.account->Account',
         'review/probe.repository.ts|nested|Review.account.user_profile->UserProfile',
         'review/probe.repository.ts|nested|Review.order_item->OrderItem',
