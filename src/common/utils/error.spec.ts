@@ -74,6 +74,12 @@ describe('error', () => {
   });
 
   describe('resolveMessage', () => {
+    it('ValidationPipe 예외면 카탈로그 VALIDATION_FAILED 문구를 반환한다', () => {
+      expect(resolveMessage(VALIDATION_EXCEPTION)).toBe(
+        '입력값이 올바르지 않습니다.',
+      );
+    });
+
     it('HttpException이면 메시지를 반환한다', () => {
       expect(resolveMessage(new HttpException('custom', 403))).toBe('custom');
     });

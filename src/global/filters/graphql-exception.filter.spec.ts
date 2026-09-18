@@ -106,6 +106,7 @@ describe('GraphQLExceptionFilter', () => {
       });
       const result = filter.format(exception, mockHost());
 
+      expect(result.message).toBe('입력값이 올바르지 않습니다.');
       expect(result.extensions).toEqual(
         expect.objectContaining({
           code: 'VALIDATION_FAILED',

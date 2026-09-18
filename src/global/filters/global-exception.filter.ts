@@ -87,7 +87,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
           .json(
             ApiResponseTemplate.ERROR_WITH_DATA(
               list,
-              'Validation Error',
+              message,
               status,
               errorCode,
             ),
