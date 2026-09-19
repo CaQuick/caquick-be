@@ -1,5 +1,5 @@
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
-import { UserRepository } from '@/features/user/repositories/user.repository';
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -11,15 +11,15 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 // 서비스/리졸버 spec으로는 직접 도달이 어려운 API contract만 좁게 검증한다.
-describe('UserRepository (real DB)', () => {
-  let repo: UserRepository;
+describe('AccountUserRepository (real DB)', () => {
+  let repo: AccountUserRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserRepository],
+      providers: [AccountUserRepository],
     });
-    repo = module.get(UserRepository);
+    repo = module.get(AccountUserRepository);
     prisma = p;
   });
 

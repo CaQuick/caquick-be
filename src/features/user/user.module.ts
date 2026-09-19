@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from '@/features/auth';
 import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
 import { ReviewModule } from '@/features/review';
@@ -9,8 +10,6 @@ import { UserMypageQueryResolver } from '@/features/user/resolvers/user-mypage-q
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
 import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
 import { UserOrderQueryResolver } from '@/features/user/resolvers/user-order-query.resolver';
-import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
-import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/user/resolvers/user-recent-view-query.resolver';
 import { UserReportMutationResolver } from '@/features/user/resolvers/user-report-mutation.resolver';
@@ -24,7 +23,6 @@ import { UserEngagementService } from '@/features/user/services/user-engagement.
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
 import { UserOrderService } from '@/features/user/services/user-order.service';
-import { UserProfileService } from '@/features/user/services/user-profile.service';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import { UserReportService } from '@/features/user/services/user-report.service';
 import { UserReviewService } from '@/features/user/services/user-review.service';
@@ -32,9 +30,8 @@ import { UserSearchService } from '@/features/user/services/user-search.service'
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 
 @Module({
-  imports: [OrderModule, ProductModule, ReviewModule],
+  imports: [AuthModule, OrderModule, ProductModule, ReviewModule],
   providers: [
-    UserProfileService,
     UserNotificationService,
     UserSearchService,
     UserEngagementService,
@@ -45,7 +42,6 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
     UserReviewService,
     UserWishlistService,
     UserRepository,
-    UserProfileQueryResolver,
     UserNotificationQueryResolver,
     UserSearchQueryResolver,
     UserMypageQueryResolver,
@@ -54,7 +50,6 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
     UserRecentViewMutationResolver,
     UserReviewQueryResolver,
     UserReviewMutationResolver,
-    UserProfileMutationResolver,
     UserNotificationMutationResolver,
     UserSearchMutationResolver,
     UserEngagementMutationResolver,

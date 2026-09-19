@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { MAX_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
+import { MAX_PAGINATION_LIMIT } from '@/features/auth';
 
 export class MyNotificationsInput {
   @IsOptional()

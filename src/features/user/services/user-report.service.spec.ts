@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { ReviewReportRepository } from '@/features/review/repositories/review-report.repository';
 import { ReviewRepository } from '@/features/review/repositories/review.repository';
@@ -28,6 +29,7 @@ describe('UserReportService (real DB)', () => {
       providers: [
         UserReportService,
         UserRepository,
+        AccountUserRepository,
         ReviewEngagementRepository,
         ReviewReportRepository,
         ReviewRepository,

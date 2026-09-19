@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
@@ -23,6 +24,7 @@ describe('User Engagement Resolver (real DB)', () => {
         UserEngagementMutationResolver,
         UserEngagementService,
         UserRepository,
+        AccountUserRepository,
       ],
     });
     resolver = module.get(UserEngagementMutationResolver);

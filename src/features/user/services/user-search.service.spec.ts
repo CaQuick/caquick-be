@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchService } from '@/features/user/services/user-search.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -16,7 +17,7 @@ describe('UserSearchService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserSearchService, UserRepository],
+      providers: [AccountUserRepository, UserSearchService, UserRepository],
     });
     service = module.get(UserSearchService);
     prisma = p;

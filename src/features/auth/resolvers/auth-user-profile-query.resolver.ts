@@ -1,11 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { UserProfileService } from '@/features/user/services/user-profile.service';
+import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import type {
   MePayload,
   NicknameAvailability,
-} from '@/features/user/types/user-output.type';
+} from '@/features/auth/types/auth-user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

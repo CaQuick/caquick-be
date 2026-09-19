@@ -1,4 +1,4 @@
-import { evaluateActiveUserAccount } from '@/features/user/services/user-account-policy.helper';
+import { evaluateActiveUserAccount } from '@/features/auth/services/auth-user-account-policy.helper';
 
 describe('evaluateActiveUserAccount', () => {
   const activeProfile = { deleted_at: null };

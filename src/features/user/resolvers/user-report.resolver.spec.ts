@@ -1,5 +1,4 @@
-// 분기/검증 세부는 user-report.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
-
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ReviewReportRepository } from '@/features/review/repositories/review-report.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserReportMutationResolver } from '@/features/user/resolvers/user-report-mutation.resolver';
@@ -14,6 +13,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
+// 분기/검증 세부는 user-report.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('User Report Resolver (real DB)', () => {
   let resolver: UserReportMutationResolver;
   let prisma: PrismaClient;
@@ -24,6 +24,7 @@ describe('User Report Resolver (real DB)', () => {
         UserReportMutationResolver,
         UserReportService,
         UserRepository,
+        AccountUserRepository,
         ReviewReportRepository,
       ],
     });

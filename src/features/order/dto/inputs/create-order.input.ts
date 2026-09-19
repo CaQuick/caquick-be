@@ -12,7 +12,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { PHONE_REGEX } from '@/features/user';
+import { PHONE_REGEX } from '@/features/auth';
 
 export class CreateOrderInput {
   // 8~64자, 공백 문자 불가 — 형식은 길이만 제한한다.

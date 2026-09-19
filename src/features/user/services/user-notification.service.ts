@@ -6,14 +6,12 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
+import { DEFAULT_PAGINATION_LIMIT } from '@/features/auth';
+import { AccountUserRepository, UserBaseService } from '@/features/auth';
 import { WishlistRepository } from '@/features/review';
-import {
-  DEFAULT_PAGINATION_LIMIT,
-  NOTIFICATION_VISIBLE_MONTHS,
-} from '@/features/user/constants/user.constants';
+import { NOTIFICATION_VISIBLE_MONTHS } from '@/features/user/constants/user.constants';
 import type { MyNotificationsInput } from '@/features/user/dto/inputs/my-notifications.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
 import { toNotificationItem } from '@/features/user/services/user-notification-mappers.helper';
 import type {
   NotificationConnection,
@@ -23,10 +21,11 @@ import type {
 @Injectable()
 export class UserNotificationService extends UserBaseService {
   constructor(
-    repo: UserRepository,
+    accounts: AccountUserRepository,
+    protected readonly repo: UserRepository,
     private readonly wishlists: WishlistRepository,
   ) {
-    super(repo);
+    super(accounts);
   }
 
   async viewerCounts(accountId: bigint): Promise<ViewerCounts> {

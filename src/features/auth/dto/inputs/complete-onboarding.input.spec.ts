@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { CompleteOnboardingInput } from '@/features/user/dto/inputs/complete-onboarding.input';
+import { CompleteOnboardingInput } from '@/features/auth/dto/inputs/complete-onboarding.input';
 
 function build(plain: object): CompleteOnboardingInput {
   return plainToInstance(CompleteOnboardingInput, plain);

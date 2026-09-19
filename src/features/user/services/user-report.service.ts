@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import { AccountUserRepository, UserBaseService } from '@/features/auth';
 import { ReviewReportRepository, type ReportTarget } from '@/features/review';
 import {
   MAX_REVIEW_REPORT_DETAIL_LENGTH,
@@ -10,8 +11,6 @@ import {
 } from '@/features/user/constants/user.constants';
 import type { ReportReviewCommentInput } from '@/features/user/dto/inputs/report-review-comment.input';
 import type { ReportReviewInput } from '@/features/user/dto/inputs/report-review.input';
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { ReviewReportResult } from '@/features/user/types/user-review-output.type';
 import type { ReviewReport } from '@/generated/prisma/client';
 
@@ -19,10 +18,10 @@ import type { ReviewReport } from '@/generated/prisma/client';
 @Injectable()
 export class UserReportService extends UserBaseService {
   constructor(
-    repo: UserRepository,
+    accounts: AccountUserRepository,
     private readonly reports: ReviewReportRepository,
   ) {
-    super(repo);
+    super(accounts);
   }
 
   async reportReview(

@@ -1,6 +1,6 @@
 import { DomainException } from '@/common/errors/error-catalog';
+import { evaluateActiveUserAccount } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
-import { evaluateActiveUserAccount } from '@/features/user';
 export abstract class ConversationBaseService {
   protected constructor(protected readonly repo: ConversationRepository) {}
 

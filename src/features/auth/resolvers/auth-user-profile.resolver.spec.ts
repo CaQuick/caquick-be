@@ -1,7 +1,7 @@
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserProfileMutationResolver } from '@/features/user/resolvers/user-profile-mutation.resolver';
-import { UserProfileQueryResolver } from '@/features/user/resolvers/user-profile-query.resolver';
-import { UserProfileService } from '@/features/user/services/user-profile.service';
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { UserProfileMutationResolver } from '@/features/auth/resolvers/auth-user-profile-mutation.resolver';
+import { UserProfileQueryResolver } from '@/features/auth/resolvers/auth-user-profile-query.resolver';
+import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -30,7 +30,7 @@ describe('User Profile Resolvers (real DB)', () => {
         UserProfileQueryResolver,
         UserProfileMutationResolver,
         UserProfileService,
-        UserRepository,
+        AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
       ],
     });

@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
+import { UpdateMyProfileInput } from '@/features/auth/dto/inputs/update-my-profile.input';
 
 function build(plain: object): UpdateMyProfileInput {
   return plainToInstance(UpdateMyProfileInput, plain);

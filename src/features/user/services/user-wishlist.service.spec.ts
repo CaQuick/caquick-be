@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
@@ -28,6 +29,7 @@ describe('UserWishlistService (real DB)', () => {
         ProductCardService,
         UserWishlistService,
         UserRepository,
+        AccountUserRepository,
         ProductRepository,
         ReviewReadRepository,
       ],

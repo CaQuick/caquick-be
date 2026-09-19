@@ -4,26 +4,26 @@ import { DomainException } from '@/common/errors/error-catalog';
 import {
   MAX_NICKNAME_LENGTH,
   MIN_NICKNAME_LENGTH,
-} from '@/features/user/constants/user.constants';
-import type { CompleteOnboardingInput } from '@/features/user/dto/inputs/complete-onboarding.input';
-import type { UpdateMyProfileImageInput } from '@/features/user/dto/inputs/update-my-profile-image.input';
-import type { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
+} from '@/features/auth/constants/auth-user.constants';
+import type { CompleteOnboardingInput } from '@/features/auth/dto/inputs/complete-onboarding.input';
+import type { UpdateMyProfileImageInput } from '@/features/auth/dto/inputs/update-my-profile-image.input';
+import type { UpdateMyProfileInput } from '@/features/auth/dto/inputs/update-my-profile.input';
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { UserBaseService } from '@/features/auth/services/auth-user-base.service';
 import type {
   MePayload,
   NicknameAvailability,
-} from '@/features/user/types/user-output.type';
+} from '@/features/auth/types/auth-user-output.type';
 import { S3Service } from '@/global/storage/s3.service';
 import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Injectable()
 export class UserProfileService extends UserBaseService {
   constructor(
-    repo: UserRepository,
+    accounts: AccountUserRepository,
     private readonly s3Service: S3Service,
   ) {
-    super(repo);
+    super(accounts);
   }
 
   async me(accountId: bigint): Promise<MePayload> {
@@ -46,10 +46,10 @@ export class UserProfileService extends UserBaseService {
       throw new DomainException('NAME_REQUIRED');
     }
 
-    const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
+    const isTaken = await this.accounts.isNicknameTaken(nickname, accountId);
     if (isTaken) throw new DomainException('NICKNAME_TAKEN');
 
-    await this.repo.completeOnboarding({
+    await this.accounts.completeOnboarding({
       accountId,
       name: account.name ? null : name,
       nickname,
@@ -81,7 +81,7 @@ export class UserProfileService extends UserBaseService {
       : undefined;
 
     if (nickname) {
-      const isTaken = await this.repo.isNicknameTaken(nickname, accountId);
+      const isTaken = await this.accounts.isNicknameTaken(nickname, accountId);
       if (isTaken) throw new DomainException('NICKNAME_TAKEN');
     }
 
@@ -102,7 +102,7 @@ export class UserProfileService extends UserBaseService {
       ? this.normalizePhoneNumber(input.phoneNumber)
       : undefined;
 
-    await this.repo.updateProfile({
+    await this.accounts.updateProfile({
       accountId,
       ...(hasNickname ? { nickname } : {}),
       ...(hasName ? { name } : {}),
@@ -132,7 +132,7 @@ export class UserProfileService extends UserBaseService {
       throw new DomainException('INVALID_PROFILE_IMAGE_URL');
     }
 
-    await this.repo.updateProfileImage({
+    await this.accounts.updateProfileImage({
       accountId,
       profileImageUrl,
     });
@@ -166,7 +166,7 @@ export class UserProfileService extends UserBaseService {
       };
     }
 
-    const isTaken = await this.repo.isNicknameTaken(trimmed, accountId);
+    const isTaken = await this.accounts.isNicknameTaken(trimmed, accountId);
     if (isTaken) {
       return { available: false, reason: '이미 사용 중인 닉네임입니다.' };
     }
@@ -194,7 +194,7 @@ export class UserProfileService extends UserBaseService {
     const now = new Date();
     const deletedNickname = `deleted_${accountId.toString()}`;
 
-    await this.repo.softDeleteAccount({
+    await this.accounts.softDeleteAccount({
       accountId,
       deletedNickname,
       now,

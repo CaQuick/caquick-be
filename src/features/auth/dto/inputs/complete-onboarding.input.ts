@@ -16,7 +16,7 @@ import {
   MIN_NICKNAME_LENGTH,
   PHONE_FORMAT_EXAMPLE,
   PHONE_REGEX,
-} from '@/features/user/constants/user.constants';
+} from '@/features/auth/constants/auth-user.constants';
 
 const NICKNAME_REGEX = /^[A-Za-z0-9가-힣_]+$/;
 

@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
@@ -22,6 +23,7 @@ describe('UserEngagementService (real DB)', () => {
         ReviewEngagementRepository,
         UserEngagementService,
         UserRepository,
+        AccountUserRepository,
       ],
     });
 

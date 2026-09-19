@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
@@ -36,6 +37,7 @@ describe('User Mypage Resolver (real DB)', () => {
         UserMypageQueryResolver,
         UserMypageService,
         UserRepository,
+        AccountUserRepository,
         OrderRepository,
         RecentProductViewRepository,
       ],
