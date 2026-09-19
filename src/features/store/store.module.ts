@@ -3,9 +3,12 @@ import { Module } from '@nestjs/common';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { ReviewModule } from '@/features/review';
+import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { AdminStoreMutationResolver } from '@/features/store/resolvers/store-admin-mutation.resolver';
+import { AdminStoreQueryResolver } from '@/features/store/resolvers/store-admin-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/store/resolvers/store-admin-seller-mutation.resolver';
 import { AdminSellerQueryResolver } from '@/features/store/resolvers/store-admin-seller-query.resolver';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
@@ -19,6 +22,7 @@ import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
 import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
+import { AdminStoreService } from '@/features/store/services/store-admin.service';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
@@ -67,6 +71,11 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     AdminSellerService,
     AdminSellerQueryResolver,
     AdminSellerMutationResolver,
+    // 관리자 매장 관리(목록·상세·기본 정보 수정·노출 토글)
+    StoreAdminRepository,
+    AdminStoreService,
+    AdminStoreQueryResolver,
+    AdminStoreMutationResolver,
   ],
   // StorePickupScheduleService는 주문 생성(order feature)의 픽업 일시 재검증이,
   // StoreSearchService는 검색 요약(search feature)의 매장 건수가 소비한다

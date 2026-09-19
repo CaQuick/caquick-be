@@ -16,11 +16,6 @@ export { StoreSearchService } from '@/features/store/services/store-search.servi
 export { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 // 매장·사업자 텍스트 컬럼 길이. 판매자(내 매장 수정)와 관리자(온보딩·대리 수정)가 공유한다.
 export * from '@/features/store/constants/store-field-limits';
-// 매장 기본 정보 부분 수정 규칙(길이·좌표·null 처리). 판매자 수정과 관리자 대리 수정이 같은 함수를 쓴다.
-export { buildStoreBasicInfoUpdateData } from '@/features/store/services/store-basic-info.helper';
-// 매장 행 출력 매핑. 판매자(내 매장)·관리자(매장 관리)가 같은 1벌을 쓴다.
-export { toStoreOutput } from '@/features/store/services/store-output-mappers.helper';
-export type { StoreOutput } from '@/features/store/types/store-record-output.type';
 // 영업시간 표기(주문 상세의 매장 정보). 매장 도메인 규칙이라 store가 소유한다.
 export { formatBusinessHours } from '@/features/store/services/business-hours-formatter';
 // 판매자 컨텍스트(계정→매장)와 공통 검증 베이스. seller 파생 서비스(상품·주문·대화·감사)가 상속한다 — P1-6(DB 재조회 유지).
