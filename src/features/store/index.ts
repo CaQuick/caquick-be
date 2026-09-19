@@ -23,3 +23,8 @@ export { StoreSellerRepository } from '@/features/store/repositories/store-selle
 export * from '@/features/store/constants/store-map-provider.constants';
 // 관리자 매장 집계(dashboard feature).
 export { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
+// conversation이 매장 컨텍스트·FAQ를 묻는 읽기 포트(P1-07d). 토큰 주입 — P4에서 서비스 클라이언트로 교체.
+export {
+  CATALOG_QUERY,
+  type ICatalogQuery,
+} from '@/features/store/repositories/store-catalog-query.repository.interface';

@@ -560,10 +560,22 @@ export function isAllowedWriter(site: WriteSite): boolean {
 
 export interface CrossRead {
   file: string;
-  kind: 'nested' | 'filter' | 'raw' | 'opaque';
-  /** nested/filter: `Root.path->Target`, raw: `method:table,table`, opaque: `method:Root.path=식` */
+  kind: 'nested' | 'filter' | 'raw' | 'opaque' | 'root';
+  /** nested/filter: `Root.path->Target`, raw: `method:table,table`, opaque: `method:Root.path=식`, root: `method:Model.호출` */
   key: string;
 }
+
+/** 다른 서비스 모델을 루트로 읽는 호출 — 포트/스냅샷으로 옮길 대상(write는 model-ownership.spec이 본다). */
+const ROOT_READ_METHODS = new Set([
+  'findUnique',
+  'findUniqueOrThrow',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'count',
+  'aggregate',
+  'groupBy',
+]);
 
 function serviceOfModel(model: string): string {
   return MODEL_OWNERSHIP[model].service;
@@ -830,6 +842,13 @@ export function collectCrossReadsInFeatures(
       if (found) {
         const rootService = serviceOfModel(found.model);
         const method = enclosingMethodName(node);
+        if (
+          fileService !== undefined &&
+          rootService !== fileService &&
+          ROOT_READ_METHODS.has(found.method)
+        ) {
+          keys.add(`root:${method}:${found.model}.${found.method}`);
+        }
         for (const arg of found.call.arguments) {
           collectOpaque(arg, found.model, found.model, schema, keys, method);
           for (const obj of resolveObjects(arg))

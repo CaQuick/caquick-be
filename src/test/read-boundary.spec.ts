@@ -7,13 +7,13 @@ import {
   loadSchema,
 } from '@/test/model-ownership.helper';
 
-// 서비스 경계를 넘는 읽기(nested include/select/_count, relation 필터, raw JOIN)를 허용 목록으로 고정한다.
+// 서비스 경계를 넘는 읽기(nested include/select/_count, relation 필터, raw JOIN, 다른 서비스 모델의 root read)를 허용 목록으로 고정한다.
 // P1 07x가 스냅샷·포트로 바꾸면 줄을 지우고, P4 federation 이관분만 남긴다. 새 항목은 늘리지 않는다.
 // 한계: Prisma.raw(table)처럼 테이블명이 동적인 raw SQL은 보지 못한다(admin.repository lockActiveRow — D2 해체로 소멸).
 
 const schema = loadSchema();
 
-/** 'file|kind|key' — nested/filter는 Root.path->Target, raw는 method:table,... */
+/** 'file|kind|key' — nested/filter는 Root.path->Target, raw는 method:table,..., root는 method:Model.호출 */
 const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/auth/repositories/account-admin.repository.ts|filter|Account.store->Store',
   'src/features/auth/repositories/account-admin.repository.ts|nested|Account._count.orders->Order',
@@ -22,6 +22,8 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/auth/repositories/account-admin.repository.ts|opaque|createSellerAccount:SellerProfile.data=args.profile',
   'src/features/auth/repositories/account-credential.repository.ts|nested|AccountCredential.account.store->Store',
   'src/features/conversation/repositories/conversation.repository.ts|nested|StoreConversation.store->Store',
+  'src/features/notification/repositories/notification-admin.repository.ts|root|filterActiveUserAccountIds:Account.findMany',
+  'src/features/notification/repositories/notification-admin.repository.ts|root|listActiveUserAccountIds:Account.findMany',
   'src/features/order/repositories/order.repository.ts|filter|OrderItem.review->Review',
   'src/features/order/repositories/order.repository.ts|nested|Order.account->Account',
   'src/features/order/repositories/order.repository.ts|nested|Order.account.user_profile->UserProfile',
@@ -31,6 +33,7 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/order/repositories/order.repository.ts|nested|OrderItem.store->Store',
   'src/features/order/repositories/order.repository.ts|nested|OrderItem.store.region->Region',
   'src/features/order/repositories/order.repository.ts|raw|isCapacityExceededLocked:store_daily_capacity',
+  'src/features/order/repositories/order.repository.ts|root|findAccountWithProfileForCheckout:Account.findFirst',
   'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.order_items->OrderItem',
   'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.reviews->Review',
   'src/features/product/repositories/product-admin.repository.ts|opaque|createBanner:Banner.data=data',
@@ -72,7 +75,10 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account->Account',
   'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account.user_profile->UserProfile',
   'src/features/review/repositories/review-engagement.repository.ts|raw|createReviewComment:product,review,store',
+  'src/features/review/repositories/review-engagement.repository.ts|root|likeReview:Product.findFirst',
+  'src/features/review/repositories/review-engagement.repository.ts|root|likeReview:Store.findFirst',
   'src/features/review/repositories/review-lock.helper.ts|opaque|resolvePendingReports:ReviewReport.where=args.where',
+  'src/features/review/repositories/review-order-item-snapshot.helper.ts|root|snapshotReviewOrderItem:OrderItem.findUniqueOrThrow',
   'src/features/review/repositories/review-read.repository.ts|filter|Review.product->Product',
   'src/features/review/repositories/review-read.repository.ts|filter|Review.store->Store',
   'src/features/review/repositories/review-read.repository.ts|nested|Review.account->Account',
@@ -85,9 +91,11 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/review/repositories/review-report.repository.ts|raw|submitReport:account',
   'src/features/review/repositories/review.repository.ts|nested|OrderItem.review->Review',
   'src/features/review/repositories/review.repository.ts|nested|Review.order_item->OrderItem',
+  'src/features/review/repositories/review.repository.ts|root|findOrderItemForReview:OrderItem.findFirst',
   'src/features/review/repositories/store-wishlist.repository.ts|filter|StoreWishlistItem.store->Store',
   'src/features/review/repositories/store-wishlist.repository.ts|nested|StoreWishlistItem.store->Store',
   'src/features/review/repositories/store-wishlist.repository.ts|nested|StoreWishlistItem.store.region->Region',
+  'src/features/review/repositories/store-wishlist.repository.ts|root|isActiveUserAccount:Account.findFirst',
   'src/features/review/repositories/wishlist.repository.ts|filter|WishlistItem.product->Product',
   'src/features/review/repositories/wishlist.repository.ts|filter|WishlistItem.product.store->Store',
   'src/features/review/repositories/wishlist.repository.ts|nested|WishlistItem.product->Product',
@@ -102,8 +110,12 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/store/repositories/store-seller.repository.ts|nested|Account.store->Store',
   'src/features/store/repositories/store-seller.repository.ts|opaque|updateFaqTopic:StoreFaqTopic.data=args.data',
   'src/features/store/repositories/store-seller.repository.ts|opaque|updateStore:Store.data=args.data',
+  'src/features/store/repositories/store-seller.repository.ts|root|findSellerAccountContext:Account.findFirst',
+  'src/features/store/repositories/store-stats.repository.ts|root|aggregateRecentOrderCounts:OrderItem.groupBy',
+  'src/features/store/repositories/store-stats.repository.ts|root|aggregateSoldQuantities:OrderItem.groupBy',
   'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesByKstDate:order,order_item',
   'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesInRange:order,order_item',
+  'src/features/store/repositories/store.repository.ts|root|aggregateWishlistCounts:StoreWishlistItem.groupBy',
 ];
 
 function keysOf(dir?: string): string[] {
@@ -186,7 +198,7 @@ describe('서비스 경계를 넘는 read', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('상수·클래스 멤버·헬퍼 함수(파라미터 전달 포함)·import·??·map으로 만든 include/where·`_count`(true·필터)와 raw JOIN을 어떤 수신자 이름에서든 잡고, 같은 서비스 안의 relation은 무시하며, 못 푸는 잎(??의 왼쪽·파라미터)은 opaque로 남긴다', () => {
+    it('상수·클래스 멤버·헬퍼 함수(파라미터 전달 포함)·import·??·map으로 만든 include/where·`_count`(true·필터)와 raw JOIN·다른 서비스 모델의 root read를 어떤 수신자 이름에서든 잡고, 같은 서비스 안의 relation은 무시하며, 못 푸는 잎(??의 왼쪽·파라미터)은 opaque로 남긴다', () => {
       expect(keysOf(dir)).toEqual([
         'review/probe.repository.ts|filter|Order._count.items.store->Store',
         'review/probe.repository.ts|filter|Review.account->Account',
@@ -211,6 +223,7 @@ describe('서비스 경계를 넘는 read', () => {
         'review/probe.repository.ts|opaque|g:Review=args',
         'review/probe.repository.ts|opaque|h:Review.data=args.data',
         'review/probe.repository.ts|raw|b:product,review',
+        'review/probe.repository.ts|root|k:Order.findMany',
       ]);
     });
   });

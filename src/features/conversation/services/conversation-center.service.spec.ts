@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -16,7 +17,11 @@ describe('ConversationCenterService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ConversationCenterService, ConversationRepository],
+      providers: [
+        ConversationCenterService,
+        ConversationRepository,
+        AccountUserRepository,
+      ],
     });
     service = module.get(ConversationCenterService);
     prisma = p;

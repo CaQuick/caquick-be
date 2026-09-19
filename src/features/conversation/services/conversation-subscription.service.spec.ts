@@ -1,9 +1,12 @@
 import { PubSub } from 'graphql-subscriptions';
 
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
 import { ConversationSubscriptionService } from '@/features/conversation/services/conversation-subscription.service';
+import { CATALOG_QUERY, StoreSellerRepository } from '@/features/store';
+import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -27,6 +30,9 @@ describe('ConversationSubscriptionService (real DB)', () => {
         ConversationInquiryService,
         ConversationEventsService,
         ConversationRepository,
+        AccountUserRepository,
+        StoreSellerRepository,
+        { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
         // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
         { provide: PUB_SUB, useValue: new PubSub() },
       ],

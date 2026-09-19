@@ -4,6 +4,8 @@ import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { ReviewModule } from '@/features/review';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
+import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
+import { CATALOG_QUERY } from '@/features/store/repositories/store-catalog-query.repository.interface';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -41,6 +43,8 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
   imports: [ReviewModule, AuditLogModule, AuthModule],
   providers: [
     StoreRepository,
+    // conversation이 쓰는 catalog 읽기 포트(P1-07d)
+    { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
     StoreStatsRepository,
     StoreCardService,
     StoreListingService,
@@ -81,6 +85,7 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
   // StoreSearchService는 검색 요약(search feature)의 매장 건수가 소비한다
   // StoreSellerRepository는 판매자 컨텍스트(계정→매장) 조회로 seller 파생 서비스 전부가 쓴다
   exports: [
+    CATALOG_QUERY,
     StorePickupScheduleService,
     StoreSearchService,
     StoreStatsRepository,
