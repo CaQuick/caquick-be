@@ -42,14 +42,19 @@ export class OutboxRepository {
     });
   }
 
+  /** tx 안(존재 확인)과 tx 밖(충돌 뒤 재조회 — 같은 tx의 스냅샷엔 승자의 커밋이 안 보인다) 둘 다 쓴다. */
   async findByEventId(
-    tx: Prisma.TransactionClient,
+    db: Pick<Prisma.TransactionClient, 'outbox'>,
     eventId: string,
   ): Promise<Pick<Outbox, 'id' | 'event_id' | 'payload_json'> | null> {
-    return tx.outbox.findUnique({
+    return db.outbox.findUnique({
       where: { event_id: eventId },
       select: { id: true, event_id: true, payload_json: true },
     });
+  }
+
+  get reader(): Pick<Prisma.TransactionClient, 'outbox'> {
+    return this.prisma;
   }
 
   /** 기한이 된 PENDING을 id 순으로 — 파티션 FIFO의 기준 순서. */

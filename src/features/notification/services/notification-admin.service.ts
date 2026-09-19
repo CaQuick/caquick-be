@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { uuidV5 } from '@/common/utils/uuid';
+import { deterministicUuid } from '@/common/utils/uuid';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -52,17 +52,37 @@ export class AdminNotificationService extends AdminBaseService {
       targetAccountIds: targets.map((id) => id.toString()),
       skippedAccountIds,
     };
-    const eventId = uuidV5(
+    const eventId = deterministicUuid(
       NOTIFICATION_BROADCAST_NAMESPACE,
       `${ctx.accountId}:${input.idempotencyKey}`,
     );
 
+    // 감사는 이벤트 적재와 같은 tx — 개별 알림 ID가 아니라 발송 요청 자체를 남긴다(대상은 afterJson)
     const result = await this.repo.requestBroadcast(
       notificationBroadcastRequestedEvent({
         eventId,
         actorAccountId: ctx.accountId,
         payload,
       }),
+      (tx) =>
+        this.auditLogs.createAuditLog(
+          {
+            actorAccountId: ctx.accountId,
+            storeId: null,
+            targetType: AuditTargetType.NOTIFICATION,
+            targetId: ctx.accountId,
+            action: AuditActionType.CREATE,
+            afterJson: {
+              eventId,
+              type: payload.type,
+              title: payload.title,
+              targetKind: input.targetKind,
+              sentCount: targets.length,
+              skippedCount: skippedAccountIds.length,
+            },
+          },
+          tx,
+        ),
     );
     if (!result.created) {
       // 재생 — 처음 확정한 대상이 정답. 이번 입력으로 다시 계산한 대상은 버린다
@@ -72,23 +92,6 @@ export class AdminNotificationService extends AdminBaseService {
         skippedAccountIds: first.skippedAccountIds,
       };
     }
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: null,
-      targetType: AuditTargetType.NOTIFICATION,
-      targetId: ctx.accountId,
-      action: AuditActionType.CREATE,
-      // 개별 알림 ID가 아니라 발송 요청 자체를 남긴다(대상은 afterJson)
-      afterJson: {
-        eventId,
-        type: payload.type,
-        title: payload.title,
-        targetKind: input.targetKind,
-        sentCount: targets.length,
-        skippedCount: skippedAccountIds.length,
-      },
-    });
     return { sentCount: targets.length, skippedAccountIds };
   }
 

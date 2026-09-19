@@ -1,4 +1,7 @@
-import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
@@ -20,6 +23,7 @@ import {
 describe('AdminNotificationService (real DB)', () => {
   let service: AdminNotificationService;
   let dispatcher: OutboxDispatcherService;
+  let auditLogs: IAuditLogRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -37,6 +41,7 @@ describe('AdminNotificationService (real DB)', () => {
     });
     service = module.get(AdminNotificationService);
     dispatcher = module.get(OutboxDispatcherService);
+    auditLogs = module.get(AUDIT_LOG_REPOSITORY);
     prisma = p;
   });
 
@@ -215,6 +220,52 @@ describe('AdminNotificationService (real DB)', () => {
       expect(
         (await prisma.notification.findMany()).map((n) => n.account_id),
       ).toEqual([user.id]);
+    });
+
+    it('같은 키의 동시 요청은 둘 다 성공하고 이벤트·감사는 1건이다(진 쪽은 tx 밖 재조회로 재생)', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const input = {
+        ...base,
+        targetKind: 'ACCOUNT_IDS' as const,
+        accountIds: [user.id.toString()],
+      };
+
+      const results = await Promise.all([
+        service.adminSendNotification(actor, input),
+        service.adminSendNotification(actor, input),
+      ]);
+
+      expect(results[0]).toEqual(results[1]);
+      expect(await prisma.outbox.count()).toBe(1);
+      expect(
+        await prisma.auditLog.count({ where: { target_type: 'NOTIFICATION' } }),
+      ).toBe(1);
+    });
+
+    it('감사 기록이 실패하면 이벤트도 남지 않는다(같은 tx) — 재요청이 정상 적재·감사한다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const input = {
+        ...base,
+        targetKind: 'ACCOUNT_IDS' as const,
+        accountIds: [user.id.toString()],
+      };
+      const spy = jest
+        .spyOn(auditLogs, 'createAuditLog')
+        .mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(service.adminSendNotification(actor, input)).rejects.toThrow(
+        'audit down',
+      );
+      expect(await prisma.outbox.count()).toBe(0);
+      spy.mockRestore();
+
+      await service.adminSendNotification(actor, input);
+      expect(await prisma.outbox.count()).toBe(1);
+      expect(
+        await prisma.auditLog.count({ where: { target_type: 'NOTIFICATION' } }),
+      ).toBe(1);
     });
 
     it('반증: 다른 관리자의 같은 키, 같은 관리자의 다른 키는 별도 발송이다', async () => {

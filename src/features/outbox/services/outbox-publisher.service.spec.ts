@@ -113,4 +113,23 @@ describe('OutboxPublisher (real DB)', () => {
     expect(inside.client_ip).toBeNull();
     expect(inside.user_agent).toHaveLength(512);
   });
+
+  it('publishOnce는 같은 eventId를 두 번 적재하지 않고 처음 payload를 돌려주며, findPublished는 tx 밖에서 같은 것을 읽는다', async () => {
+    const eventId = uuidAt(99);
+    const first = await prisma.$transaction((tx) =>
+      publisher.publishOnce(tx, { ...input, eventId }),
+    );
+    const replay = await prisma.$transaction((tx) =>
+      publisher.publishOnce(tx, { ...input, eventId, payload: { changed: 1 } }),
+    );
+
+    expect(first).toEqual({ eventId, created: true, payload: input.payload });
+    expect(replay).toEqual({ eventId, created: false, payload: input.payload });
+    expect(await prisma.outbox.count()).toBe(1);
+    expect(await publisher.findPublished(eventId)).toEqual({
+      eventId,
+      payload: input.payload,
+    });
+    expect(await publisher.findPublished(uuidAt(98))).toBeNull();
+  });
 });
