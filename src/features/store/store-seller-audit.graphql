@@ -6,54 +6,6 @@ extend type Query {
 }
 
 """
-감사 로그가 가리키는 대상 종류.
-"""
-enum SellerAuditTargetType {
-  """
-  매장 정보·영업시간·픽업 정책·FAQ 등 매장 단위 설정과 콘텐츠.
-  """
-  STORE
-  """
-  상품과 그 하위(이미지·옵션·커스텀 템플릿).
-  """
-  PRODUCT
-  """
-  주문. 상태 변경만 기록된다.
-  """
-  ORDER
-  """
-  구매자 문의 대화.
-  """
-  CONVERSATION
-  """
-  판매자 비밀번호 변경. targetId에는 비밀번호를 바꾼 판매자 본인의 계정 ID가 들어간다.
-  """
-  CHANGE_PASSWORD
-}
-
-"""
-감사 로그에 기록된 행위 종류.
-"""
-enum SellerAuditActionType {
-  """
-  생성.
-  """
-  CREATE
-  """
-  수정.
-  """
-  UPDATE
-  """
-  삭제(soft-delete 포함).
-  """
-  DELETE
-  """
-  상태 전이. 주문 상태 변경과 전용 활성화 뮤테이션(sellerSetProductActive·sellerSetProductCustomTemplateActive)만 해당한다. 일반 수정 안의 isActive 변경은 UPDATE로 기록된다.
-  """
-  STATUS_CHANGE
-}
-
-"""
 판매자 조작 감사 로그 1건. 매장 설정·상품·주문 변경 이력을 남긴다.
 로그는 누적만 되고 수정·삭제되지 않는다.
 """
@@ -70,7 +22,7 @@ type SellerAuditLog {
   """
   조작 대상 종류.
   """
-  targetType: SellerAuditTargetType!
+  targetType: AuditTargetType!
   """
   대상 리소스 ID.
   """
@@ -78,7 +30,7 @@ type SellerAuditLog {
   """
   기록된 행위 종류.
   """
-  action: SellerAuditActionType!
+  action: AuditActionType!
   """
   변경 전 값(JSON 문자열). 생성 조작이면 null.
   """
@@ -138,5 +90,5 @@ input SellerAuditLogListInput {
   """
   대상 종류 필터. 미지정 시 전체.
   """
-  targetType: SellerAuditTargetType
+  targetType: AuditTargetType
 }

@@ -6,27 +6,13 @@ extend type Mutation {
 }
 
 """
-판매자 업로드 용도. 용도마다 저장 경로가 다르고, 저장 입력은 같은 용도로 발급된 URL만 받는다.
-"""
-enum SellerUploadPurpose {
-  """
-  상품 이미지·커스텀 도안 바탕·옵션 선택지 이미지·커스텀 템플릿 바탕.
-  """
-  PRODUCT_IMAGE
-  """
-  매장 프로필(로고) 이미지.
-  """
-  STORE_IMAGE
-}
-
-"""
 판매자 업로드 URL 발급 입력.
 """
 input SellerCreateUploadUrlInput {
   """
   업로드 용도.
   """
-  purpose: SellerUploadPurpose!
+  purpose: UploadPurpose!
   """
   파일 MIME 타입. image/jpeg·image/png·image/webp만 허용, 아니면 BAD_USER_INPUT.
   """
