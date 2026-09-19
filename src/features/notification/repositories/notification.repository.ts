@@ -3,10 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
-/**
- * order.items 폴백은 연관 ID를 저장하지 않던 과거 주문 알림 보강용 — 상품명은 주문 시점 스냅샷을 써 상품 삭제에도 안전하다.
- * nested select라 soft-delete 자동 필터가 닿지 않지만, 삭제된 매장·상품이어도 알림 표기용 이름은 그대로 보여주는 게 정책이다(이름만 노출, 이동은 FE 판단).
- */
+/** 표시값(매장명·상품명·주문번호)은 생성 시점 스냅샷 컬럼 — 조회가 다른 도메인을 조인하지 않는다. */
 const notificationListSelect = {
   id: true,
   type: true,
@@ -19,22 +16,9 @@ const notificationListSelect = {
   product_id: true,
   order_id: true,
   review_id: true,
-  store: { select: { store_name: true } },
-  product: { select: { name: true } },
-  order: {
-    select: {
-      items: {
-        select: {
-          store_id: true,
-          product_id: true,
-          product_name_snapshot: true,
-          store: { select: { store_name: true } },
-        },
-        orderBy: { id: 'asc' as const },
-        take: 1,
-      },
-    },
-  },
+  store_name: true,
+  product_name: true,
+  order_number: true,
 } satisfies Prisma.NotificationSelect;
 
 export type NotificationListRow = Prisma.NotificationGetPayload<{

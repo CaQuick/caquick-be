@@ -772,7 +772,12 @@ export class OrderRepository {
         const firstItem = await tx.orderItem.findFirst({
           where: { order_id: order.id },
           orderBy: { id: 'asc' },
-          select: { product_id: true },
+          select: { product_id: true, product_name_snapshot: true },
+        });
+        // 표시값 스냅샷 — 매장명은 outbox 전환(08b) 전까지 여기서 읽어 싣는다
+        const store = await tx.store.findFirst({
+          where: { id: args.storeId },
+          select: { store_name: true },
         });
         await tx.notification.create({
           data: {
@@ -780,6 +785,9 @@ export class OrderRepository {
             order_id: order.id,
             store_id: args.storeId,
             product_id: firstItem?.product_id ?? null,
+            order_number: updatedOrder.order_number,
+            store_name: store?.store_name ?? null,
+            product_name: firstItem?.product_name_snapshot ?? null,
             ...notification,
           },
         });
@@ -925,7 +933,11 @@ export class OrderRepository {
       const firstItem = await tx.orderItem.findFirst({
         where: { order_id: current.id, ...activeWhere },
         orderBy: { id: 'asc' },
-        select: { product_id: true, store_id: true },
+        select: {
+          product_id: true,
+          store_id: true,
+          product_name_snapshot: true,
+        },
       });
       // 알림 내용은 notification feature가 단일 소스 — 판매자 취소와 같은 payload
       const notification = buildOrderStatusNotification(
@@ -933,12 +945,22 @@ export class OrderRepository {
         OrderStatus.CANCELED,
       );
       if (notification) {
+        // 표시값 스냅샷 — 매장명은 outbox 전환(08b) 전까지 여기서 읽어 싣는다
+        const store = firstItem
+          ? await tx.store.findFirst({
+              where: { id: firstItem.store_id },
+              select: { store_name: true },
+            })
+          : null;
         await tx.notification.create({
           data: {
             account_id: updated.account_id,
             order_id: current.id,
             store_id: firstItem?.store_id ?? null,
             product_id: firstItem?.product_id ?? null,
+            order_number: updated.order_number,
+            store_name: store?.store_name ?? null,
+            product_name: firstItem?.product_name_snapshot ?? null,
             ...notification,
           },
         });

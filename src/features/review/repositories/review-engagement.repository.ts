@@ -63,13 +63,26 @@ export class ReviewEngagementRepository {
         data: { review_id: review.id, account_id: args.accountId },
       });
 
-      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다(outbox 소비자 전환 전까지 직접 write)
+      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다(outbox 소비자 전환 전까지 직접 write).
+      // 표시값(매장명·상품명)은 생성 시점 스냅샷으로 싣는다 — 08b에서 이벤트 payload로 옮겨간다
+      const [product, store] = await Promise.all([
+        tx.product.findFirst({
+          where: { id: review.product_id },
+          select: { name: true },
+        }),
+        tx.store.findFirst({
+          where: { id: review.store_id },
+          select: { store_name: true },
+        }),
+      ]);
       await tx.notification.create({
         data: {
           account_id: review.account_id,
           review_id: review.id,
           store_id: review.store_id,
           product_id: review.product_id,
+          store_name: store?.store_name ?? null,
+          product_name: product?.name ?? null,
           ...buildReviewLikedNotification(),
         },
       });

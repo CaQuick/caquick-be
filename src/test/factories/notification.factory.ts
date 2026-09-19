@@ -21,6 +21,9 @@ export interface NotificationOverrides {
   order_id?: bigint | null;
   order_item_id?: bigint | null;
   review_id?: bigint | null;
+  store_name?: string | null;
+  product_name?: string | null;
+  order_number?: string | null;
 }
 
 export async function createNotification(
@@ -47,6 +50,9 @@ export async function createNotification(
       order_id: overrides.order_id ?? null,
       order_item_id: overrides.order_item_id ?? null,
       review_id: overrides.review_id ?? null,
+      store_name: overrides.store_name ?? null,
+      product_name: overrides.product_name ?? null,
+      order_number: overrides.order_number ?? null,
     },
   });
 }

@@ -175,7 +175,7 @@ describe('UserNotificationService (real DB)', () => {
       expect(result.items.map((i) => i.id)).toEqual([recent.id.toString()]);
     });
 
-    it('직접 연결된 매장·상품·리뷰 정보를 노출한다(리뷰 좋아요 형태)', async () => {
+    it('저장된 매장명·상품명 스냅샷을 그대로 노출한다(리뷰 좋아요 형태)', async () => {
       const account = await setupUser();
       const store = await createStore(prisma, { store_name: '달콤 케이크' });
       const product = await createProduct(prisma, {
@@ -195,6 +195,8 @@ describe('UserNotificationService (real DB)', () => {
         store_id: store.id,
         product_id: product.id,
         review_id: review.id,
+        store_name: store.store_name,
+        product_name: product.name,
       });
 
       const result = await service.myNotifications(account.id);
@@ -210,7 +212,7 @@ describe('UserNotificationService (real DB)', () => {
       });
     });
 
-    it('연관 ID가 없는 과거 주문 알림은 order.items로 매장·상품을 보강한다', async () => {
+    it('스냅샷이 비어 있으면 매장·상품을 조인하지 않고 null로 내린다(과거 알림은 07a 마이그레이션 백필이 채운다)', async () => {
       const account = await setupUser();
       const store = await createStore(prisma, { store_name: '해즈 케이크' });
       const product = await createProduct(prisma, { store_id: store.id });
@@ -226,7 +228,8 @@ describe('UserNotificationService (real DB)', () => {
         type: 'ORDER_STATUS',
         event: 'ORDER_PICKED_UP',
         order_id: order.id,
-        // store_id / product_id 미저장 — 과거 데이터 재현
+        store_id: store.id,
+        product_id: product.id,
       });
 
       const result = await service.myNotifications(account.id);
@@ -235,10 +238,9 @@ describe('UserNotificationService (real DB)', () => {
       expect(item).toMatchObject({
         orderId: order.id.toString(),
         storeId: store.id.toString(),
-        storeName: '해즈 케이크',
         productId: product.id.toString(),
-        // 주문 폴백의 상품명은 스냅샷을 쓴다(상품 삭제·개명에도 안전)
-        productName: '주문 시점 상품명',
+        storeName: null,
+        productName: null,
       });
     });
 
