@@ -2,6 +2,7 @@ import { Query } from '@nestjs/graphql';
 
 import { ConversationSubscriptionResolver } from '@/features/conversation/resolvers/conversation-subscription.resolver';
 import { SellerModule } from '@/features/seller/seller.module';
+import { StoreModule } from '@/features/store';
 import {
   collectHandlerAuth,
   collectRootFieldsWithPrefix,
@@ -13,6 +14,8 @@ describe('seller 루트 필드 인가 커버리지', () => {
   const sellerFields = collectRootFieldsWithPrefix('seller');
   const handlerAuth = collectHandlerAuth([
     ...resolverClassesOf(SellerModule),
+    // 판매자 매장 관리 핸들러는 store feature로 옮겨졌다(03a) — 03d에서 spec 통합
+    ...resolverClassesOf(StoreModule),
     ConversationSubscriptionResolver,
   ]);
 

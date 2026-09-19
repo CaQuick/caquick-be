@@ -2,20 +2,24 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
-import { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
-import { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
-import { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
-import { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
-import { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
-import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
-import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
-import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { SellerCreateFaqTopicInput } from '@/features/store/dto/inputs/seller-create-faq-topic.input';
+import { SellerUpdateFaqTopicInput } from '@/features/store/dto/inputs/seller-update-faq-topic.input';
+import { SellerUpdatePickupPolicyInput } from '@/features/store/dto/inputs/seller-update-pickup-policy.input';
+import { SellerUpdateStoreBasicInfoInput } from '@/features/store/dto/inputs/seller-update-store-basic-info.input';
+import { SellerUpsertStoreBusinessHourInput } from '@/features/store/dto/inputs/seller-upsert-store-business-hour.input';
+import { SellerUpsertStoreDailyCapacityInput } from '@/features/store/dto/inputs/seller-upsert-store-daily-capacity.input';
+import { SellerUpsertStoreSpecialClosureInput } from '@/features/store/dto/inputs/seller-upsert-store-special-closure.input';
+import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
+import { SellerStoreHoursService } from '@/features/store/services/store-seller-hours.service';
+import { SellerStorePolicyService } from '@/features/store/services/store-seller-policy.service';
+import { SellerStoreProfileService } from '@/features/store/services/store-seller-profile.service';
 import type {
+  SellerFaqTopicOutput,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/store/types/store-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -33,6 +37,7 @@ export class SellerStoreMutationResolver {
     private readonly profileService: SellerStoreProfileService,
     private readonly hoursService: SellerStoreHoursService,
     private readonly policyService: SellerStorePolicyService,
+    private readonly faqService: SellerFaqService,
   ) {}
 
   @Mutation('sellerUpdateStoreBasicInfo')
@@ -102,5 +107,32 @@ export class SellerStoreMutationResolver {
       accountId,
       parseId(capacityId),
     );
+  }
+
+  @Mutation('sellerCreateFaqTopic')
+  sellerCreateFaqTopic(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: SellerCreateFaqTopicInput,
+  ): Promise<SellerFaqTopicOutput> {
+    const accountId = parseAccountId(user);
+    return this.faqService.sellerCreateFaqTopic(accountId, input);
+  }
+
+  @Mutation('sellerUpdateFaqTopic')
+  sellerUpdateFaqTopic(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: SellerUpdateFaqTopicInput,
+  ): Promise<SellerFaqTopicOutput> {
+    const accountId = parseAccountId(user);
+    return this.faqService.sellerUpdateFaqTopic(accountId, input);
+  }
+
+  @Mutation('sellerDeleteFaqTopic')
+  sellerDeleteFaqTopic(
+    @CurrentUser() user: JwtUser,
+    @Args('topicId') topicId: string,
+  ): Promise<boolean> {
+    const accountId = parseAccountId(user);
+    return this.faqService.sellerDeleteFaqTopic(accountId, parseId(topicId));
   }
 }

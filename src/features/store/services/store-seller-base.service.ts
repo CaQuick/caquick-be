@@ -3,8 +3,8 @@ import { parseId } from '@/common/utils/id-parser';
 import type { IAuditLogRepository } from '@/features/audit-log';
 import {
   isSellerAccount,
-  SellerRepository,
-} from '@/features/seller/repositories/seller.repository';
+  StoreSellerRepository,
+} from '@/features/store/repositories/store-seller.repository';
 import { Prisma } from '@/generated/prisma/client';
 
 export interface SellerContext {
@@ -14,7 +14,7 @@ export interface SellerContext {
 
 export abstract class SellerBaseService {
   protected constructor(
-    protected readonly repo: SellerRepository,
+    protected readonly repo: StoreSellerRepository,
     protected readonly auditLogs: IAuditLogRepository,
   ) {}
 

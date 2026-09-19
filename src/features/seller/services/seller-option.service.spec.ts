@@ -1,8 +1,8 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerOptionService } from '@/features/seller/services/seller-option.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -23,7 +23,7 @@ describe('SellerOptionService (real DB)', () => {
       providers: [
         ...s3TestProviders(),
         SellerOptionService,
-        SellerRepository,
+        StoreSellerRepository,
         ProductRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

@@ -1,8 +1,9 @@
 import type {
+  SellerFaqTopicOutput,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreSpecialClosureOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/store/types/store-seller-output.type';
 
 export interface StoreBusinessHourRow {
   id: bigint;
@@ -63,6 +64,30 @@ export function toStoreDailyCapacityOutput(
     id: row.id.toString(),
     capacityDate: row.capacity_date,
     capacity: row.capacity,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export interface FaqTopicRow {
+  id: bigint;
+  store_id: bigint;
+  title: string;
+  answer_html: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export function toFaqTopicOutput(row: FaqTopicRow): SellerFaqTopicOutput {
+  return {
+    id: row.id.toString(),
+    storeId: row.store_id.toString(),
+    title: row.title,
+    answerHtml: row.answer_html,
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

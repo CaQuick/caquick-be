@@ -4,11 +4,7 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
-import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
-import type {
-  SellerAuditLogOutput,
-  SellerFaqTopicOutput,
-} from '@/features/seller/types/seller-output.type';
+import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -22,18 +18,7 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('SELLER')
 export class SellerContentQueryResolver {
-  constructor(
-    private readonly faqService: SellerFaqService,
-    private readonly auditService: SellerAuditService,
-  ) {}
-
-  @Query('sellerFaqTopics')
-  sellerFaqTopics(
-    @CurrentUser() user: JwtUser,
-  ): Promise<SellerFaqTopicOutput[]> {
-    const accountId = parseAccountId(user);
-    return this.faqService.sellerFaqTopics(accountId);
-  }
+  constructor(private readonly auditService: SellerAuditService) {}
 
   @Query('sellerAuditLogs')
   sellerAuditLogs(

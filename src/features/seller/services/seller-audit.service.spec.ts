@@ -2,7 +2,8 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
-import { SellerFaqService } from '@/features/seller/services/seller-faq.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
 import { Prisma, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -17,6 +18,7 @@ describe('SellerAuditService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreSellerRepository,
         SellerAuditService,
         SellerFaqService,
         SellerRepository,

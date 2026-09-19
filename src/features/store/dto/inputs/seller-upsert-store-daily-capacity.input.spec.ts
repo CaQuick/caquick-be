@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
+import { SellerUpsertStoreDailyCapacityInput } from '@/features/store/dto/inputs/seller-upsert-store-daily-capacity.input';
 
 function build(plain: object): SellerUpsertStoreDailyCapacityInput {
   return plainToInstance(SellerUpsertStoreDailyCapacityInput, plain);

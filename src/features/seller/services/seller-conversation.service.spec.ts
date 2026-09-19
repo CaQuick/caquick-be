@@ -4,8 +4,8 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ConversationRepository } from '@/features/conversation';
 import { ConversationEventsService } from '@/features/conversation';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -21,7 +21,7 @@ describe('SellerConversationService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         SellerConversationService,
-        SellerRepository,
+        StoreSellerRepository,
         ConversationRepository,
         ConversationEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },

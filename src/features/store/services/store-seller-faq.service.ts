@@ -10,19 +10,19 @@ import {
 import {
   MAX_FAQ_ANSWER_HTML_LENGTH,
   MAX_FAQ_TITLE_LENGTH,
-} from '@/features/seller/constants/seller.constants';
-import type { SellerCreateFaqTopicInput } from '@/features/seller/dto/inputs/seller-create-faq-topic.input';
-import type { SellerUpdateFaqTopicInput } from '@/features/seller/dto/inputs/seller-update-faq-topic.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import { toFaqTopicOutput } from '@/features/seller/services/seller-content-mappers.helper';
-import type { SellerFaqTopicOutput } from '@/features/seller/types/seller-output.type';
+} from '@/features/store/constants/store-seller.constants';
+import type { SellerCreateFaqTopicInput } from '@/features/store/dto/inputs/seller-create-faq-topic.input';
+import type { SellerUpdateFaqTopicInput } from '@/features/store/dto/inputs/seller-update-faq-topic.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
+import { toFaqTopicOutput } from '@/features/store/services/store-seller-mappers.helper';
+import type { SellerFaqTopicOutput } from '@/features/store/types/store-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerFaqService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
   ) {

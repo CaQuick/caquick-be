@@ -1,8 +1,8 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerUploadMutationResolver } from '@/features/seller/resolvers/seller-upload-mutation.resolver';
 import { SellerUploadService } from '@/features/seller/services/seller-upload.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -26,7 +26,7 @@ describe('SellerUploadService (real DB)', () => {
         ...s3TestProviders(),
         SellerUploadService,
         SellerUploadMutationResolver,
-        SellerRepository,
+        StoreSellerRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });

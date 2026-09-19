@@ -14,15 +14,14 @@ import {
 } from '@/features/audit-log';
 import { ProductRepository } from '@/features/product';
 import type { SellerProductListInput } from '@/features/seller/dto/inputs/seller-product-list.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 
 @Injectable()
 export class SellerProductQueryService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,

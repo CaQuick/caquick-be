@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
+import { SellerDateCursorInput } from '@/features/store/dto/inputs/seller-date-cursor.input';
 
 function build(plain: object): SellerDateCursorInput {
   return plainToInstance(SellerDateCursorInput, plain);

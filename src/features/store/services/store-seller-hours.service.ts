@@ -19,25 +19,25 @@ import {
   MAX_DAY_OF_WEEK,
   MAX_SPECIAL_CLOSURE_REASON_LENGTH,
   MIN_DAY_OF_WEEK,
-} from '@/features/seller/constants/seller.constants';
-import type { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
-import type { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
+} from '@/features/store/constants/store-seller.constants';
+import type { SellerUpsertStoreBusinessHourInput } from '@/features/store/dto/inputs/seller-upsert-store-business-hour.input';
+import type { SellerUpsertStoreSpecialClosureInput } from '@/features/store/dto/inputs/seller-upsert-store-special-closure.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 import {
   toStoreBusinessHourOutput,
   toStoreSpecialClosureOutput,
-} from '@/features/seller/services/seller-store-mappers.helper';
+} from '@/features/store/services/store-seller-mappers.helper';
 import type {
   SellerStoreBusinessHourOutput,
   SellerStoreSpecialClosureOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/store/types/store-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerStoreHoursService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
   ) {

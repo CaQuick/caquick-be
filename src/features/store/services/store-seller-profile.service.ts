@@ -5,11 +5,12 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import type { SellerStoreOutput } from '@/features/seller/types/seller-output.type';
-import { buildStoreBasicInfoUpdateData, toStoreOutput } from '@/features/store';
+import type { SellerUpdateStoreBasicInfoInput } from '@/features/store/dto/inputs/seller-update-store-basic-info.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { buildStoreBasicInfoUpdateData } from '@/features/store/services/store-basic-info.helper';
+import { toStoreOutput } from '@/features/store/services/store-output-mappers.helper';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
+import type { SellerStoreOutput } from '@/features/store/types/store-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
@@ -17,7 +18,7 @@ import { S3Service } from '@/global/storage/s3.service';
 @Injectable()
 export class SellerStoreProfileService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly s3: S3Service,

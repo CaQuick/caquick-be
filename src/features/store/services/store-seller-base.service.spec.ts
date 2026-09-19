@@ -1,6 +1,6 @@
 import type { IAuditLogRepository } from '@/features/audit-log';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -8,7 +8,7 @@ import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 class TestableSellerBaseService extends SellerBaseService {
-  constructor(repo: SellerRepository, auditLogs: IAuditLogRepository) {
+  constructor(repo: StoreSellerRepository, auditLogs: IAuditLogRepository) {
     super(repo, auditLogs);
   }
 
@@ -48,9 +48,9 @@ describe('SellerBaseService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [SellerRepository],
+      providers: [StoreSellerRepository],
     });
-    const repo = module.get(SellerRepository);
+    const repo = module.get(StoreSellerRepository);
     const auditLogs: IAuditLogRepository = {
       createAuditLog: jest.fn(),
     };

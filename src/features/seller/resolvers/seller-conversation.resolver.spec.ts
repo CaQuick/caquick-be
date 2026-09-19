@@ -4,10 +4,10 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ConversationRepository } from '@/features/conversation';
 import { ConversationEventsService } from '@/features/conversation';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerConversationMutationResolver } from '@/features/seller/resolvers/seller-conversation-mutation.resolver';
 import { SellerConversationQueryResolver } from '@/features/seller/resolvers/seller-conversation-query.resolver';
 import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -26,7 +26,7 @@ describe('Seller Conversation Resolvers (real DB)', () => {
         SellerConversationQueryResolver,
         SellerConversationMutationResolver,
         SellerConversationService,
-        SellerRepository,
+        StoreSellerRepository,
         ConversationRepository,
         ConversationEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },

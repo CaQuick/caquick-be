@@ -18,12 +18,11 @@ import type { SellerReorderProductCustomTextTokensInput } from '@/features/selle
 import type { SellerSetProductCustomTemplateActiveInput } from '@/features/seller/dto/inputs/seller-set-product-custom-template-active.input';
 import type { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
 import type { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerCustomTemplateOutput,
   SellerCustomTextTokenOutput,
 } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
@@ -31,7 +30,7 @@ import { S3Service } from '@/global/storage/s3.service';
 @Injectable()
 export class SellerCustomTemplateService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,
