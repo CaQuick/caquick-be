@@ -26,6 +26,7 @@ import {
 import type { SellerDateCursorInput } from '@/features/store/dto/inputs/seller-date-cursor.input';
 import type { SellerUpdatePickupPolicyInput } from '@/features/store/dto/inputs/seller-update-pickup-policy.input';
 import type { SellerUpsertStoreDailyCapacityInput } from '@/features/store/dto/inputs/seller-upsert-store-daily-capacity.input';
+import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { toStoreOutput } from '@/features/store/services/store-output-mappers.helper';
 import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
@@ -42,6 +43,7 @@ export class SellerStorePolicyService extends SellerBaseService {
     repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly capacities: StoreCapacityRepository,
   ) {
     super(repo, auditLogs);
   }
@@ -161,15 +163,19 @@ export class SellerStorePolicyService extends SellerBaseService {
 
     const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
 
+    // write는 StoreCapacityRepository — 변경 이벤트를 같은 tx에 적재해 order 복제본이 따라온다(D7-a)
     const row = capacityId
-      ? await this.repo.updateStoreDailyCapacity(capacityId, {
+      ? await this.capacities.updateStoreDailyCapacity({
+          capacityId,
           capacityDate,
           capacity: input.capacity,
+          actorAccountId: ctx.accountId,
         })
-      : await this.repo.createStoreDailyCapacity({
+      : await this.capacities.upsertStoreDailyCapacity({
           storeId: ctx.storeId,
           capacityDate,
           capacity: input.capacity,
+          actorAccountId: ctx.accountId,
         });
 
     await this.auditLogs.createAuditLog({
@@ -198,7 +204,10 @@ export class SellerStorePolicyService extends SellerBaseService {
     );
     if (!found) throw new DomainException('DAILY_CAPACITY_NOT_FOUND');
 
-    await this.repo.softDeleteStoreDailyCapacity(capacityId);
+    await this.capacities.softDeleteStoreDailyCapacity({
+      capacityId,
+      actorAccountId: ctx.accountId,
+    });
     await this.auditLogs.createAuditLog({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,

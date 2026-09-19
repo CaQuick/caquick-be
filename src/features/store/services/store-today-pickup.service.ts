@@ -6,6 +6,7 @@ import { kstDayBoundaries } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
+import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import {
@@ -22,6 +23,7 @@ import type {
 export class StoreTodayPickupService {
   constructor(
     private readonly repo: StoreRepository,
+    private readonly booked: BookedQuantityPort,
     private readonly listingService: StoreListingService,
     private readonly cards: StoreCardService,
     private readonly clock: ClockService,
@@ -51,7 +53,7 @@ export class StoreTodayPickupService {
         this.repo.findBusinessHoursByWeekday(storeIds, weekday),
         this.repo.findSpecialClosureStoreIds(storeIds, dateOnlyUtc),
         this.repo.findDailyCapacities(storeIds, dateOnlyUtc),
-        this.repo.sumPickupQuantitiesInRange(storeIds, dayStartUtc, dayEndUtc),
+        this.booked.sumByStore(storeIds, dayStartUtc, dayEndUtc),
       ]);
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),

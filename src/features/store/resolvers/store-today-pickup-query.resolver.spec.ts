@@ -8,6 +8,7 @@ import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';
@@ -35,6 +36,7 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
         StoreRepository,
         StoreWishlistRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(StoreTodayPickupQueryResolver);

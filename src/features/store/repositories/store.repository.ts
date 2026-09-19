@@ -166,32 +166,6 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, r.capacity]));
   }
 
-  /** capacity(일별 생산 가능 '수량') 소진 판정용 — CANCELED·soft-delete 주문은 제외한다. */
-  async sumPickupQuantitiesInRange(
-    storeIds: bigint[],
-    rangeStart: Date,
-    rangeEnd: Date,
-  ): Promise<Map<bigint, number>> {
-    if (storeIds.length === 0) return new Map();
-    const rows = await this.prisma.$queryRaw<
-      { store_id: bigint; booked_quantity: bigint }[]
-    >(Prisma.sql`
-      SELECT oi.store_id AS store_id,
-             CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked_quantity
-      FROM order_item oi
-      JOIN \`order\` o
-        ON o.id = oi.order_id
-        AND o.deleted_at IS NULL
-        AND o.status <> 'CANCELED'
-        AND o.pickup_at >= ${rangeStart}
-        AND o.pickup_at < ${rangeEnd}
-      WHERE oi.store_id IN (${Prisma.join(storeIds)})
-        AND oi.deleted_at IS NULL
-      GROUP BY oi.store_id
-    `);
-    return new Map(rows.map((r) => [r.store_id, Number(r.booked_quantity)]));
-  }
-
   async findStoreForPickupSchedule(
     storeId: bigint,
   ): Promise<StorePickupPolicyRow | null> {
@@ -251,31 +225,6 @@ export class StoreRepository {
     return new Map(
       rows.map((r) => [r.capacity_date.toISOString().slice(0, 10), r.capacity]),
     );
-  }
-
-  /** capacity 소진 판정용 — CANCELED·soft-delete 주문은 제외한다. KST는 DST 없는 고정 +9h라 INTERVAL 9 HOUR 변환으로 달력일을 묶는다. */
-  async sumPickupQuantitiesByKstDate(
-    storeId: bigint,
-    rangeStart: Date,
-    rangeEnd: Date,
-  ): Promise<Map<string, number>> {
-    const rows = await this.prisma.$queryRaw<
-      { pickup_date: string; booked_quantity: bigint }[]
-    >(Prisma.sql`
-      SELECT DATE_FORMAT(DATE_ADD(o.pickup_at, INTERVAL 9 HOUR), '%Y-%m-%d') AS pickup_date,
-             CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked_quantity
-      FROM order_item oi
-      JOIN \`order\` o
-        ON o.id = oi.order_id
-        AND o.deleted_at IS NULL
-        AND o.status <> 'CANCELED'
-        AND o.pickup_at >= ${rangeStart}
-        AND o.pickup_at < ${rangeEnd}
-      WHERE oi.store_id = ${storeId}
-        AND oi.deleted_at IS NULL
-      GROUP BY pickup_date
-    `);
-    return new Map(rows.map((r) => [r.pickup_date, Number(r.booked_quantity)]));
   }
 
   async existsActiveStore(storeId: bigint): Promise<boolean> {

@@ -147,56 +147,12 @@ export class StoreSellerRepository {
     });
   }
 
-  async updateStoreDailyCapacity(
-    capacityId: bigint,
-    data: { capacityDate: Date; capacity: number },
-  ) {
-    return this.prisma.storeDailyCapacity.update({
-      where: { id: capacityId },
-      data: {
-        capacity_date: data.capacityDate,
-        capacity: data.capacity,
-      },
-    });
-  }
-
-  async createStoreDailyCapacity(args: {
-    storeId: bigint;
-    capacityDate: Date;
-    capacity: number;
-  }) {
-    return this.prisma.storeDailyCapacity.upsert({
-      where: {
-        store_id_capacity_date: {
-          store_id: args.storeId,
-          capacity_date: args.capacityDate,
-        },
-      },
-      create: {
-        store_id: args.storeId,
-        capacity_date: args.capacityDate,
-        capacity: args.capacity,
-      },
-      update: {
-        deleted_at: null,
-        capacity: args.capacity,
-      },
-    });
-  }
-
   async findStoreDailyCapacityById(id: bigint, storeId: bigint) {
     return this.prisma.storeDailyCapacity.findFirst({
       where: {
         id,
         store_id: storeId,
       },
-    });
-  }
-
-  async softDeleteStoreDailyCapacity(id: bigint): Promise<void> {
-    await this.prisma.storeDailyCapacity.update({
-      where: { id },
-      data: { deleted_at: new Date() },
     });
   }
 
