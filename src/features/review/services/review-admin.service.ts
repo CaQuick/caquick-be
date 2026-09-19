@@ -12,30 +12,30 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import type { AdminDeleteReviewCommentInput } from '@/features/admin/dto/inputs/admin-delete-review-comment.input';
-import type { AdminDeleteReviewInput } from '@/features/admin/dto/inputs/admin-delete-review.input';
-import type { AdminResolveReviewReportInput } from '@/features/admin/dto/inputs/admin-resolve-review-report.input';
-import type { AdminReviewCommentListInput } from '@/features/admin/dto/inputs/admin-review-comment-list.input';
-import type { AdminReviewListInput } from '@/features/admin/dto/inputs/admin-review-list.input';
-import type { AdminReviewReportListInput } from '@/features/admin/dto/inputs/admin-review-report-list.input';
-import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import {
-  toAdminReviewCommentOutput,
-  toAdminReviewOutput,
-  toAdminReviewReportDetailOutput,
-  toAdminReviewReportOutput,
-} from '@/features/admin/services/admin-moderation-mappers.helper';
-import type {
-  AdminReviewCommentOutput,
-  AdminReviewOutput,
-  AdminReviewReportDetailOutput,
-  AdminReviewReportOutput,
-} from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
+import type { AdminDeleteReviewCommentInput } from '@/features/review/dto/inputs/admin-delete-review-comment.input';
+import type { AdminDeleteReviewInput } from '@/features/review/dto/inputs/admin-delete-review.input';
+import type { AdminResolveReviewReportInput } from '@/features/review/dto/inputs/admin-resolve-review-report.input';
+import type { AdminReviewCommentListInput } from '@/features/review/dto/inputs/admin-review-comment-list.input';
+import type { AdminReviewListInput } from '@/features/review/dto/inputs/admin-review-list.input';
+import type { AdminReviewReportListInput } from '@/features/review/dto/inputs/admin-review-report-list.input';
+import { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
+import {
+  toAdminReviewCommentOutput,
+  toAdminReviewOutput,
+  toAdminReviewReportDetailOutput,
+  toAdminReviewReportOutput,
+} from '@/features/review/services/review-admin-mappers.helper';
+import type {
+  AdminReviewCommentOutput,
+  AdminReviewOutput,
+  AdminReviewReportDetailOutput,
+  AdminReviewReportOutput,
+} from '@/features/review/types/review-admin-output.type';
 
 /** 작성자 본인 삭제와 달리 사유를 남기고 미처리 신고를 닫는다. 잠금·멱등·감사는 repository가 한 트랜잭션에서 처리한다. */
 @Injectable()
@@ -44,7 +44,7 @@ export class AdminModerationService extends AdminBaseService {
     accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
-    protected readonly repo: AdminRepository,
+    protected readonly repo: ReviewAdminRepository,
   ) {
     super(accounts, auditLogs);
   }

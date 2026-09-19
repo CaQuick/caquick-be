@@ -1,19 +1,5 @@
 import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 
-// ── 리뷰 모더레이션 ──
-
-export const REVIEW_REPORT_STATUSES = [
-  'PENDING',
-  'RESOLVED',
-  'REJECTED',
-] as const;
-export type ReviewReportStatusValue = (typeof REVIEW_REPORT_STATUSES)[number];
-export const REVIEW_REPORT_TARGET_TYPES = ['REVIEW', 'REVIEW_COMMENT'] as const;
-export type ReviewReportTargetTypeValue =
-  (typeof REVIEW_REPORT_TARGET_TYPES)[number];
-export const REVIEW_REPORT_ACTIONS = ['DELETE_TARGET', 'REJECT'] as const;
-export type ReviewReportActionValue = (typeof REVIEW_REPORT_ACTIONS)[number];
-
 // ── 주문 ──
 
 export const ORDER_STATUSES = [

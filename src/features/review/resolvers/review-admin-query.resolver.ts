@@ -3,16 +3,16 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
-import { AdminReviewCommentListInput } from '@/features/admin/dto/inputs/admin-review-comment-list.input';
-import { AdminReviewListInput } from '@/features/admin/dto/inputs/admin-review-list.input';
-import { AdminReviewReportListInput } from '@/features/admin/dto/inputs/admin-review-report-list.input';
-import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
+import { AdminReviewCommentListInput } from '@/features/review/dto/inputs/admin-review-comment-list.input';
+import { AdminReviewListInput } from '@/features/review/dto/inputs/admin-review-list.input';
+import { AdminReviewReportListInput } from '@/features/review/dto/inputs/admin-review-report-list.input';
+import { AdminModerationService } from '@/features/review/services/review-admin.service';
 import type {
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
   AdminReviewReportOutput,
-} from '@/features/admin/types/admin-output.type';
+} from '@/features/review/types/review-admin-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

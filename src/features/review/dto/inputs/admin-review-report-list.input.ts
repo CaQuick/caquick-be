@@ -6,7 +6,7 @@ import {
   REVIEW_REPORT_TARGET_TYPES,
   type ReviewReportStatusValue,
   type ReviewReportTargetTypeValue,
-} from '@/features/admin/constants/admin.constants';
+} from '@/features/review/constants/review.constants';
 
 export class AdminReviewReportListInput extends CursorInput {
   /** SDL 기본값 PENDING. null을 명시하면 전체. */

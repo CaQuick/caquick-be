@@ -3,13 +3,13 @@ import type {
   AdminReviewCommentRow,
   AdminReviewReportDetailRow,
   AdminReviewRow,
-} from '@/features/admin/repositories/admin.repository';
+} from '@/features/review/repositories/review-admin.repository';
 import type {
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
   AdminReviewReportOutput,
-} from '@/features/admin/types/admin-output.type';
+} from '@/features/review/types/review-admin-output.type';
 
 /** 작성자 노출 정책은 common 헬퍼가 단일 소스(리뷰 화면과 동일). */
 function nicknameOf(account: {
