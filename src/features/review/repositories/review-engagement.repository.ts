@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 
 import { buildReviewLikedNotification } from '@/features/notification';
 import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/review/constants/review.constants';
+import {
+  lockParentReviewOfComment,
+  resolvePendingReports,
+} from '@/features/review/repositories/review-lock.helper';
 import { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
@@ -146,28 +150,18 @@ export class ReviewEngagementRepository {
 
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      // 잠금 순서는 리뷰 → 댓글 → 신고. 리뷰 삭제(softDeleteReview)가 리뷰를 잠근 뒤 신고·댓글을
-      // 닫으므로 댓글부터 잠그면 신고 행을 사이에 두고 교착한다
-      await tx.$queryRaw`
-        SELECT r.id FROM review r
-        JOIN review_comment c ON c.review_id = r.id
-        WHERE c.id = ${args.commentId}
-        FOR UPDATE OF r`;
+      await lockParentReviewOfComment(tx, args.commentId);
       const deleted = await tx.reviewComment.updateMany({
         where: { id: args.commentId, ...activeWhere },
         data: { deleted_at: now },
       });
       // 리뷰 잠금을 기다리는 사이 리뷰 삭제가 댓글까지 지웠으면 그쪽이 신고도 닫았다
       if (deleted.count === 0) return 'not-found';
-      // 대상이 사라진 미처리 신고는 닫는다
-      await tx.reviewReport.updateMany({
-        where: { status: 'PENDING', review_comment_id: args.commentId },
-        data: {
-          status: 'RESOLVED',
-          resolved_at: now,
-          resolution_note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
-          updated_at: now,
-        },
+      await resolvePendingReports(tx, {
+        where: { review_comment_id: args.commentId },
+        now,
+        resolvedByAccountId: null,
+        note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
       });
       return 'deleted';
     });

@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
 import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/review/constants/review.constants';
-import type { Prisma, ReviewMediaType } from '@/generated/prisma/client';
+import { resolvePendingReports } from '@/features/review/repositories/review-lock.helper';
+import type { ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
 @Injectable()
@@ -58,11 +59,17 @@ export class ReviewRepository {
       if (args.existingDeletedReviewId) {
         // 같은 id가 새 내용으로 복원되므로, 옛 내용을 겨냥한 미처리 신고가 남아 있으면 닫는다
         // (삭제 시점에 이미 닫혔어야 하지만 방어적으로 한 번 더)
-        await this.closePendingReportsForReviewTx(
-          tx,
-          args.existingDeletedReviewId,
-          new Date(),
-        );
+        await resolvePendingReports(tx, {
+          where: {
+            OR: [
+              { review_id: args.existingDeletedReviewId },
+              { review_comment: { review_id: args.existingDeletedReviewId } },
+            ],
+          },
+          now: new Date(),
+          resolvedByAccountId: null,
+          note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
+        });
         const restored = await tx.review.update({
           where: { id: args.existingDeletedReviewId },
           data: {
@@ -202,7 +209,17 @@ export class ReviewRepository {
 
       if (result.count > 0) {
         // 대상이 사라진 미처리 신고는 닫는다 — 같은 id가 재작성으로 복원될 때 새 내용에 붙지 않게
-        await this.closePendingReportsForReviewTx(tx, args.reviewId, args.now);
+        await resolvePendingReports(tx, {
+          where: {
+            OR: [
+              { review_id: args.reviewId },
+              { review_comment: { review_id: args.reviewId } },
+            ],
+          },
+          now: args.now,
+          resolvedByAccountId: null,
+          note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
+        });
         await tx.reviewMedia.updateMany({
           where: {
             review_id: args.reviewId,
@@ -222,28 +239,6 @@ export class ReviewRepository {
       }
 
       return result.count > 0;
-    });
-  }
-
-  private async closePendingReportsForReviewTx(
-    tx: Prisma.TransactionClient,
-    reviewId: bigint,
-    now: Date,
-  ): Promise<void> {
-    await tx.reviewReport.updateMany({
-      where: {
-        status: 'PENDING',
-        OR: [
-          { review_id: reviewId },
-          { review_comment: { review_id: reviewId } },
-        ],
-      },
-      data: {
-        status: 'RESOLVED',
-        resolved_at: now,
-        resolution_note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
-        updated_at: now,
-      },
     });
   }
 }
