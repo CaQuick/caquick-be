@@ -24,6 +24,8 @@ import s3Config from '@/config/s3.config';
 import { AdminModule } from '@/features/admin/admin.module';
 import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
+import { DashboardModule } from '@/features/dashboard/dashboard.module';
+import { NotificationModule } from '@/features/notification';
 import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
 import { StoreModule } from '@/features/store';
@@ -106,6 +108,8 @@ import { PrismaModule } from '@/prisma';
     StoreModule,
     UserModule,
     AdminModule,
+    NotificationModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [],

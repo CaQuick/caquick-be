@@ -469,4 +469,28 @@ export class AccountAdminRepository {
       return { changed: true };
     });
   }
+
+  // ── 대시보드·감사 로그 화면용 집계(dashboard feature가 배럴로 소비) ──
+
+  async countAccountsCreatedBetween(
+    accountType: AccountType,
+    from: Date,
+    to: Date,
+  ): Promise<number> {
+    return this.prisma.account.count({
+      where: { account_type: accountType, created_at: { gte: from, lte: to } },
+    });
+  }
+
+  /** 감사 로그 행위자 종류 — AuditLog에 계정 FK가 없어 화면이 id로 한 번에 붙인다. 삭제된 계정도 포함(기록 보존). */
+  async findAccountTypesByIds(
+    ids: bigint[],
+  ): Promise<Map<string, AccountType>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.account.findMany({
+      where: { id: { in: ids }, deleted_at: undefined },
+      select: { id: true, account_type: true },
+    });
+    return new Map(rows.map((a) => [a.id.toString(), a.account_type]));
+  }
 }

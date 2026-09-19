@@ -1,0 +1,42 @@
+import { UseGuards } from '@nestjs/common';
+import { Args, Query, Resolver } from '@nestjs/graphql';
+
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { parseId } from '@/common/utils/id-parser';
+import { AdminOrderListInput } from '@/features/order/dto/inputs/admin-order-list.input';
+import { AdminOrderService } from '@/features/order/services/order-admin.service';
+import type {
+  AdminOrderDetailOutput,
+  AdminOrderSummaryOutput,
+} from '@/features/order/types/order-admin-output.type';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  parseAccountId,
+  type JwtUser,
+} from '@/global/auth';
+
+@Resolver('Query')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+export class AdminOrderQueryResolver {
+  constructor(private readonly orderService: AdminOrderService) {}
+
+  @Query('adminOrders')
+  adminOrders(
+    @CurrentUser() user: JwtUser,
+    @Args('input', { nullable: true }) input?: AdminOrderListInput,
+  ): Promise<CursorConnection<AdminOrderSummaryOutput>> {
+    return this.orderService.adminOrders(parseAccountId(user), input);
+  }
+
+  @Query('adminOrder')
+  adminOrder(
+    @CurrentUser() user: JwtUser,
+    @Args('orderId') orderId: string,
+  ): Promise<AdminOrderDetailOutput> {
+    return this.orderService.adminOrder(parseAccountId(user), parseId(orderId));
+  }
+}

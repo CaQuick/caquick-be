@@ -91,6 +91,8 @@ describe('CredentialAuthService', () => {
       createAuditLog: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
+      countAuditLogs: jest.fn(),
+      listAuditLogs: jest.fn(),
     };
 
     mockConfig = {

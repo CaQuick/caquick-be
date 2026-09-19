@@ -507,4 +507,9 @@ export class ProductAdminRepository {
       return true;
     });
   }
+
+  /** 대시보드 집계(dashboard feature가 배럴로 소비). */
+  async countActiveProducts(): Promise<number> {
+    return this.prisma.product.count({ where: { is_active: true } });
+  }
 }

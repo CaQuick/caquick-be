@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 
 import { SELLER_AUDIT_TARGET_TYPES } from '@/features/audit-log/constants/audit-log.constants';
 import type {
+  AuditLogFilter,
   IAuditLogRepository,
   SellerAuditLogScope,
 } from '@/features/audit-log/repositories/audit-log.repository.interface';
@@ -93,6 +94,43 @@ export class AuditLogRepository implements IAuditLogRepository {
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
         ...this.sellerAuditLogWhere(args),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
+    });
+  }
+
+  private auditLogWhere(args: AuditLogFilter): Prisma.AuditLogWhereInput {
+    return {
+      ...(args.actorAccountId !== undefined
+        ? { actor_account_id: args.actorAccountId }
+        : {}),
+      ...(args.storeId !== undefined ? { store_id: args.storeId } : {}),
+      ...(args.targetType ? { target_type: args.targetType } : {}),
+      ...(args.targetId !== undefined ? { target_id: args.targetId } : {}),
+      ...(args.action ? { action: args.action } : {}),
+      ...(args.fromCreatedAt || args.toCreatedAt
+        ? {
+            created_at: {
+              ...(args.fromCreatedAt ? { gte: args.fromCreatedAt } : {}),
+              ...(args.toCreatedAt ? { lte: args.toCreatedAt } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  async countAuditLogs(args: AuditLogFilter): Promise<number> {
+    return this.prisma.auditLog.count({ where: this.auditLogWhere(args) });
+  }
+
+  async listAuditLogs(
+    args: AuditLogFilter & { limit: number; cursor?: bigint },
+  ): Promise<AuditLog[]> {
+    return this.prisma.auditLog.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.auditLogWhere(args),
       },
       orderBy: { id: 'desc' },
       take: args.limit + 1,

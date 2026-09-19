@@ -156,4 +156,9 @@ export class StoreAdminRepository {
       return { row: after, changed: true };
     });
   }
+
+  /** 대시보드 집계(dashboard feature가 배럴로 소비). */
+  async countActiveStores(): Promise<number> {
+    return this.prisma.store.count({ where: { is_active: true } });
+  }
 }

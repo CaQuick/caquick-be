@@ -47,6 +47,7 @@ import { ReviewListingService } from '@/features/review/services/review-listing.
     WishlistRepository,
     StoreWishlistRepository,
     RecentProductViewRepository,
+    ReviewAdminRepository,
   ],
 })
 export class ReviewModule {}
