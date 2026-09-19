@@ -74,7 +74,8 @@ input AdminSendNotificationInput {
 """
 type AdminSendNotificationResult {
   """
-  대상으로 확정된 활성 USER 수. 저장은 백그라운드 소비자가 하므로 조회 시점에는 아직 일부가 없을 수 있다.
+  요청 시점에 대상으로 확정된 활성 USER 수. 저장은 백그라운드 소비자가 하므로 조회 시점에는 아직 일부가 없을 수 있고,
+  요청 이후 정지·탈퇴한 계정은 발송에서 제외되므로 실제 저장 건수는 이보다 적을 수 있다.
   """
   sentCount: Int!
   """

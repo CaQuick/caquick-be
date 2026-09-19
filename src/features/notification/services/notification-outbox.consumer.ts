@@ -27,8 +27,8 @@ import {
 import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
 
 /**
- * 알림 생성의 단일 진입점(outbox 소비자). 전달은 at-least-once라 (source_event_id, account_id) unique + skipDuplicates로
- * 재전달을 흡수한다. created_at은 이벤트 발생 시각(occurred_at)이다.
+ * 알림 생성의 단일 진입점(outbox 소비자). 전달은 at-least-once라 (source_event_id, account_id) unique로 재전달을 흡수한다.
+ * created_at은 이벤트 발생 시각(occurred_at)이다.
  */
 @Injectable()
 @SubscribeOutbox(
@@ -92,7 +92,9 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
   }
 
   /**
-   * ACCOUNT_IDS는 확정 목록을, ALL_USERS는 요청 시점 컷오프 이하 활성 USER를 키셋 페이지로 훑어 청크 단위로 넣는다.
+   * ACCOUNT_IDS는 확정 목록을, ALL_USERS는 요청 시점 컷오프 이하를 키셋 페이지로 훑어 청크 단위로 넣는다.
+   * 두 경우 모두 **발송 시점에 활성 USER인 계정만** 저장한다 — 요청 이후 정지·탈퇴한 계정에 알림이 남지 않게 한다
+   * (그래서 실제 저장 건수는 응답의 sentCount보다 적을 수 있다. SDL에 명시).
    * 재전달 시 이미 들어간 계정은 createFromEvent가 건너뛴다(청크 중간 실패 뒤 재시도도 안전).
    */
   private async onBroadcastRequested(event: OutboxEvent): Promise<void> {
@@ -109,10 +111,9 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
     if (p.audience.kind === 'ACCOUNT_IDS') {
       const ids = p.audience.accountIds.map(parseId);
       for (let i = 0; i < ids.length; i += NOTIFICATION_FANOUT_BATCH_SIZE) {
-        await this.repo.createFromEvent(
-          event.eventId,
-          toRows(ids.slice(i, i + NOTIFICATION_FANOUT_BATCH_SIZE)),
-        );
+        const chunk = ids.slice(i, i + NOTIFICATION_FANOUT_BATCH_SIZE);
+        const eligible = await this.audience.filterActiveUserAccountIds(chunk);
+        await this.repo.createFromEvent(event.eventId, toRows(eligible));
       }
       return;
     }

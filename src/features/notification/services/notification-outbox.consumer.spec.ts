@@ -182,7 +182,40 @@ describe('NotificationOutboxConsumer (real DB)', () => {
       ).toBe(1_005);
     });
 
-    it('ALL_USERS는 요청 시점 컷오프(maxAccountId) 이하 활성 USER만 페이지로 훑고, 컷오프 뒤 가입자·비활성은 제외한다', async () => {
+    it('ACCOUNT_IDS도 발송 시점 활성 USER만 저장한다 — 요청 뒤 정지된 계정은 제외', async () => {
+      const [stays, suspended] = await Promise.all([
+        prisma.account.create({
+          data: { account_type: 'USER', status: 'ACTIVE', email: 'a@x.com' },
+        }),
+        prisma.account.create({
+          data: { account_type: 'USER', status: 'ACTIVE', email: 'b@x.com' },
+        }),
+      ]);
+      // 요청 시점엔 둘 다 활성 → payload에 둘 다 들어간 상태에서 한 명이 정지된다
+      await prisma.account.update({
+        where: { id: suspended.id },
+        data: { status: 'SUSPENDED' },
+      });
+
+      await consumer.handle(
+        event('notification.broadcast_requested', {
+          type: 'SYSTEM',
+          title: '공지',
+          body: '본문',
+          audience: {
+            kind: 'ACCOUNT_IDS',
+            accountIds: [stays.id.toString(), suspended.id.toString()],
+          },
+          skippedAccountIds: [],
+        }),
+      );
+
+      expect(
+        (await prisma.notification.findMany()).map((n) => n.account_id),
+      ).toEqual([stays.id]);
+    });
+
+    it('ALL_USERS는 요청 시점 컷오프(maxAccountId) 이하 활성 USER만 페이지로 훑고, 컷오프 뒤 가입자·비활성는 제외한다', async () => {
       await bulkUsers(1_002);
       const cutoff = (await prisma.account.aggregate({ _max: { id: true } }))
         ._max.id!;
