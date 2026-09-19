@@ -24,12 +24,12 @@ import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
 import { DashboardModule } from '@/features/dashboard/dashboard.module';
+import { MypageModule } from '@/features/mypage/mypage.module';
 import { NotificationModule } from '@/features/notification';
 import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
 import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
-import { UserModule } from '@/features/user/user.module';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
@@ -105,9 +105,9 @@ import { PrismaModule } from '@/prisma';
     RegionModule,
     SearchModule,
     StoreModule,
-    UserModule,
     NotificationModule,
     DashboardModule,
+    MypageModule,
   ],
   controllers: [],
   providers: [],

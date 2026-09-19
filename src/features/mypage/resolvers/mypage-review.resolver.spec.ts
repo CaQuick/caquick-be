@@ -1,0 +1,165 @@
+import { UserReviewMutationResolver } from '@/features/mypage/resolvers/mypage-review-mutation.resolver';
+import { UserReviewQueryResolver } from '@/features/mypage/resolvers/mypage-review-query.resolver';
+import { UserReviewService } from '@/features/mypage/services/mypage-review.service';
+import { OrderRepository } from '@/features/order';
+import { ReviewRepository } from '@/features/review/repositories/review.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createStore,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+const VALID_CONTENT = '맛있게 잘 먹었습니다. 다음에 또 주문할게요.';
+
+describe('User Review Resolvers (real DB)', () => {
+  let queryResolver: UserReviewQueryResolver;
+  let mutationResolver: UserReviewMutationResolver;
+  let prisma: PrismaClient;
+  let s3Service: jest.Mocked<S3Service>;
+
+  beforeAll(async () => {
+    s3Service = {
+      createUploadUrl: jest.fn(),
+      isOwnedUploadUrl: jest.fn(),
+    } as unknown as jest.Mocked<S3Service>;
+
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [
+        UserReviewQueryResolver,
+        UserReviewMutationResolver,
+        UserReviewService,
+        ReviewRepository,
+        OrderRepository,
+        { provide: S3Service, useValue: s3Service },
+      ],
+    });
+    queryResolver = module.get(UserReviewQueryResolver);
+    mutationResolver = module.get(UserReviewMutationResolver);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+    jest.clearAllMocks();
+    s3Service.isOwnedUploadUrl.mockReturnValue(true);
+  });
+
+  async function setupReviewableItem() {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const store = await createStore(prisma);
+    const product = await createProduct(prisma, { store_id: store.id });
+    const order = await createOrder(prisma, {
+      account_id: account.id,
+      status: 'PICKED_UP',
+    });
+    const item = await createOrderItem(prisma, {
+      order_id: order.id,
+      product_id: product.id,
+      product_name_snapshot: '상품',
+    });
+    return { accountId: account.id, orderItemId: item.id };
+  }
+
+  it('Mutation.writeReview: 유효 입력이면 DB에 Review 생성 후 DTO 반환', async () => {
+    const ctx = await setupReviewableItem();
+
+    const result = await mutationResolver.writeReview(
+      { accountId: ctx.accountId.toString() },
+      {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      },
+    );
+
+    expect(result.rating).toBe(5);
+    const saved = await prisma.review.findUniqueOrThrow({
+      where: { id: BigInt(result.reviewId) },
+    });
+    expect(saved.account_id).toBe(ctx.accountId);
+  });
+
+  it('Mutation.writeReview: 발급되지 않은 미디어 URL이면 BadRequest', async () => {
+    const ctx = await setupReviewableItem();
+    s3Service.isOwnedUploadUrl.mockReturnValue(false);
+
+    await expect(
+      mutationResolver.writeReview(
+        { accountId: ctx.accountId.toString() },
+        {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [
+            {
+              mediaType: 'IMAGE',
+              mediaUrl: 'https://evil.example.com/x.jpg',
+              sortOrder: 0,
+            },
+          ],
+        },
+      ),
+    ).rejects.toThrowDomain(400);
+    expect(await prisma.review.count()).toBe(0);
+  });
+
+  // 입력 형식 검증(rating·content 길이)은 DTO + ValidationPipe 책임.
+
+  it('Query.myReviews: 본인 리뷰 목록이 DB에서 조회되어 반환된다', async () => {
+    const ctx = await setupReviewableItem();
+    await mutationResolver.writeReview(
+      { accountId: ctx.accountId.toString() },
+      {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 4,
+        content: VALID_CONTENT,
+      },
+    );
+
+    const result = await queryResolver.myReviews(
+      { accountId: ctx.accountId.toString() },
+      { offset: 0, limit: 10 },
+    );
+
+    expect(result.totalCount).toBe(1);
+    expect(result.items[0].rating).toBe(4);
+  });
+
+  it('Query.myReviewableOrderItems: 작성 가능 아이템이 조회되고 작성 후엔 빠진다', async () => {
+    const ctx = await setupReviewableItem();
+
+    const before = await queryResolver.myReviewableOrderItems({
+      accountId: ctx.accountId.toString(),
+    });
+    expect(before.totalCount).toBe(1);
+    expect(before.items[0].orderItemId).toBe(ctx.orderItemId.toString());
+
+    await mutationResolver.writeReview(
+      { accountId: ctx.accountId.toString() },
+      {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+      },
+    );
+
+    const after = await queryResolver.myReviewableOrderItems({
+      accountId: ctx.accountId.toString(),
+    });
+    expect(after.totalCount).toBe(0);
+  });
+});

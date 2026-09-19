@@ -7,10 +7,12 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
+import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { UserOrderService } from '@/features/order/services/order-my.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { ProductModule } from '@/features/product';
 import { StoreModule } from '@/features/store';
@@ -32,6 +34,9 @@ import { StoreModule } from '@/features/store';
     AdminOrderService,
     AdminOrderQueryResolver,
     AdminOrderMutationResolver,
+    // 구매자 주문 목록·상세
+    UserOrderService,
+    UserOrderQueryResolver,
   ],
   exports: [OrderRepository, OrderStatusTransitionPolicy],
 })
