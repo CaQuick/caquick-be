@@ -22,7 +22,7 @@ import {
 } from '@/features/audit-log';
 import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
-  MAX_CONVERSATION_BODY_TEXT_LENGTH,
+  MAX_INQUIRY_BODY_TEXT_LENGTH,
 } from '@/features/conversation/constants/conversation.constants';
 import type { SellerSendConversationMessageInput } from '@/features/conversation/dto/inputs/seller-send-conversation-message.input';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
@@ -136,7 +136,7 @@ export class SellerConversationService extends SellerBaseService {
     const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
     const bodyText = cleanNullableText(
       input.bodyText,
-      MAX_CONVERSATION_BODY_TEXT_LENGTH,
+      MAX_INQUIRY_BODY_TEXT_LENGTH,
     );
     const bodyHtml = cleanNullableText(
       input.bodyHtml,
