@@ -19,6 +19,7 @@ import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
+import outboxConfig from '@/config/outbox.config';
 import redisConfig from '@/config/redis.config';
 import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
@@ -26,6 +27,7 @@ import { ConversationModule } from '@/features/conversation';
 import { DashboardModule } from '@/features/dashboard/dashboard.module';
 import { MypageModule } from '@/features/mypage/mypage.module';
 import { NotificationModule } from '@/features/notification';
+import { OutboxModule } from '@/features/outbox';
 import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
 import { StoreModule } from '@/features/store';
@@ -53,6 +55,7 @@ import { PrismaModule } from '@/prisma';
         databaseConfig,
         docsConfig,
         oidcConfig,
+        outboxConfig,
         redisConfig,
         s3Config,
       ],
@@ -106,6 +109,7 @@ import { PrismaModule } from '@/prisma';
     SearchModule,
     StoreModule,
     NotificationModule,
+    OutboxModule,
     DashboardModule,
     MypageModule,
   ],

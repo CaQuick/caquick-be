@@ -1,7 +1,9 @@
-import { isIP } from 'node:net';
-
 import { Injectable } from '@nestjs/common';
 
+import {
+  normalizeIpForPersistence,
+  normalizeUserAgentForPersistence,
+} from '@/common/utils/http-meta';
 import { SELLER_AUDIT_TARGET_TYPES } from '@/features/audit-log/constants/audit-log.constants';
 import type {
   AuditLogFilter,
@@ -16,8 +18,6 @@ import {
 } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 import { PrismaService } from '@/prisma';
-
-const MAX_USER_AGENT_LENGTH = 512;
 
 /**
  * ip/ua는 단일 write 진입점에서 요청 컨텍스트(ALS)로부터 자동 보강한다 —
@@ -136,22 +136,4 @@ export class AuditLogRepository implements IAuditLogRepository {
       take: args.limit + 1,
     });
   }
-}
-
-/**
- * trust proxy 환경에서 req.ip는 프록시가 넘긴 값이라 malformed·overlong 값이 그대로 오면 ip_address VarChar(64)
- * 초과로 insert가 실패할 수 있다. 유효한 IPv4/IPv6가 아니면 null로 떨어뜨린다.
- */
-function normalizeIpForPersistence(
-  value: string | null | undefined,
-): string | null {
-  if (!value) return null;
-  return isIP(value) !== 0 ? value : null;
-}
-
-function normalizeUserAgentForPersistence(
-  value: string | null | undefined,
-): string | null {
-  if (!value) return null;
-  return value.slice(0, MAX_USER_AGENT_LENGTH);
 }
