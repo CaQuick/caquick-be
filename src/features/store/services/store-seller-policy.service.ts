@@ -9,6 +9,7 @@ import {
   normalizeCursorInput,
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
+import type { AuditEntry } from '@/features/audit-log';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -35,6 +36,7 @@ import type {
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
 } from '@/features/store/types/store-seller-output.type';
+import type { StoreDailyCapacity } from '@/generated/prisma/client';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
@@ -109,33 +111,33 @@ export class SellerStorePolicyService extends SellerBaseService {
       'maxDaysAhead',
     );
 
-    const updated = await this.repo.updateStore({
-      storeId: ctx.storeId,
-      data: {
-        pickup_slot_interval_minutes: input.pickupSlotIntervalMinutes,
-        min_lead_time_minutes: input.minLeadTimeMinutes,
-        max_days_ahead: input.maxDaysAhead,
+    const updated = await this.repo.updateStore(
+      {
+        storeId: ctx.storeId,
+        data: {
+          pickup_slot_interval_minutes: input.pickupSlotIntervalMinutes,
+          min_lead_time_minutes: input.minLeadTimeMinutes,
+          max_days_ahead: input.maxDaysAhead,
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      beforeJson: {
-        pickupSlotIntervalMinutes: current.pickup_slot_interval_minutes,
-        minLeadTimeMinutes: current.min_lead_time_minutes,
-        maxDaysAhead: current.max_days_ahead,
-      },
-      afterJson: {
-        pickupSlotIntervalMinutes: updated.pickup_slot_interval_minutes,
-        minLeadTimeMinutes: updated.min_lead_time_minutes,
-        maxDaysAhead: updated.max_days_ahead,
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.UPDATE,
+        beforeJson: {
+          pickupSlotIntervalMinutes: current.pickup_slot_interval_minutes,
+          minLeadTimeMinutes: current.min_lead_time_minutes,
+          maxDaysAhead: current.max_days_ahead,
+        },
+        afterJson: {
+          pickupSlotIntervalMinutes: created.pickup_slot_interval_minutes,
+          minLeadTimeMinutes: created.min_lead_time_minutes,
+          maxDaysAhead: created.max_days_ahead,
+        },
+      }),
+    );
     return toStoreOutput(updated);
   }
 
@@ -164,31 +166,36 @@ export class SellerStorePolicyService extends SellerBaseService {
     const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
 
     // write는 StoreCapacityRepository — 변경 이벤트를 같은 tx에 적재해 order 복제본이 따라온다(D7-a)
-    const row = capacityId
-      ? await this.capacities.updateStoreDailyCapacity({
-          capacityId,
-          capacityDate,
-          capacity: input.capacity,
-          actorAccountId: ctx.accountId,
-        })
-      : await this.capacities.upsertStoreDailyCapacity({
-          storeId: ctx.storeId,
-          capacityDate,
-          capacity: input.capacity,
-          actorAccountId: ctx.accountId,
-        });
-
-    await this.auditLogs.createAuditLog({
+    const auditCapacity = (created: StoreDailyCapacity): AuditEntry => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
       targetId: ctx.storeId,
       action: capacityId ? AuditActionType.UPDATE : AuditActionType.CREATE,
       afterJson: {
-        capacityDate: row.capacity_date.toISOString().slice(0, 10),
-        capacity: row.capacity,
+        capacityDate: created.capacity_date.toISOString().slice(0, 10),
+        capacity: created.capacity,
       },
     });
+    const row = capacityId
+      ? await this.capacities.updateStoreDailyCapacity(
+          {
+            capacityId,
+            capacityDate,
+            capacity: input.capacity,
+            actorAccountId: ctx.accountId,
+          },
+          auditCapacity,
+        )
+      : await this.capacities.upsertStoreDailyCapacity(
+          {
+            storeId: ctx.storeId,
+            capacityDate,
+            capacity: input.capacity,
+            actorAccountId: ctx.accountId,
+          },
+          auditCapacity,
+        );
 
     return toStoreDailyCapacityOutput(row);
   }
@@ -204,21 +211,23 @@ export class SellerStorePolicyService extends SellerBaseService {
     );
     if (!found) throw new DomainException('DAILY_CAPACITY_NOT_FOUND');
 
-    await this.capacities.softDeleteStoreDailyCapacity({
-      capacityId,
-      actorAccountId: ctx.accountId,
-    });
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.DELETE,
-      beforeJson: {
-        capacityDate: found.capacity_date.toISOString().slice(0, 10),
-        capacity: found.capacity,
+    await this.capacities.softDeleteStoreDailyCapacity(
+      {
+        capacityId,
+        actorAccountId: ctx.accountId,
       },
-    });
+      () => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.DELETE,
+        beforeJson: {
+          capacityDate: found.capacity_date.toISOString().slice(0, 10),
+          capacity: found.capacity,
+        },
+      }),
+    );
     return true;
   }
 }

@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import {
   ConversationBodyFormat,
   ConversationSenderType,
@@ -17,7 +22,11 @@ export interface ConversationMessageEntry {
 
 @Injectable()
 export class ConversationRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
 
   /**
    * (updated_at, id) desc 키셋. 커서가 id 단독이면 정렬 순서와 무관한 행을 잘라내 목록에서 영영 빠지는
@@ -537,13 +546,16 @@ export class ConversationRepository {
     }
   }
 
-  async createSellerConversationMessage(args: {
-    conversationId: bigint;
-    sellerAccountId: bigint;
-    bodyFormat: ConversationBodyFormat;
-    bodyText: string | null;
-    bodyHtml: string | null;
-  }) {
+  async createSellerConversationMessage(
+    args: {
+      conversationId: bigint;
+      sellerAccountId: bigint;
+      bodyFormat: ConversationBodyFormat;
+      bodyText: string | null;
+      bodyHtml: string | null;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 DB 시계로 시각을 채번해 커밋 순서와 시각 순서를
       // 대화 단위로 일치시킨다(읽음 마커 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약).
@@ -569,6 +581,9 @@ export class ConversationRepository {
           updated_at: now,
         },
       });
+
+      // 판매자 답장은 감사 대상이다 — 메시지 저장과 같은 트랜잭션에 남긴다(P1-12)
+      await this.auditLogs.recordAudit(tx, audit(message));
 
       return message;
     });

@@ -1,8 +1,11 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
 import { OutboxDispatcherService } from '@/features/outbox';
 import type { OutboxEvent } from '@/features/outbox';
 import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -37,6 +40,15 @@ function event(
 }
 
 // catalog 설정 변경 → order 복제본(order_store_daily_limit). 복제본이 주문 생성의 유일한 capacity 소스다(D7-a).
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.STORE,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
+
 describe('OrderStoreDailyLimitConsumer (real DB)', () => {
   let consumer: OrderStoreDailyLimitConsumer;
   let capacities: StoreCapacityRepository;
@@ -50,6 +62,7 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
         OrderStoreDailyLimitConsumer,
         OrderStoreDailyLimitRepository,
         StoreCapacityRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ...outboxTestProviders(),
       ],
     });
@@ -73,12 +86,15 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
   describe('발행 → 소비 통합', () => {
     it('판매자 설정이 복제본에 반영되고, 삭제하면 값이 비워진다(tombstone)', async () => {
       const store = await createStore(prisma);
-      const row = await capacities.upsertStoreDailyCapacity({
-        storeId: store.id,
-        capacityDate: DATE,
-        capacity: 30,
-        actorAccountId: ACTOR,
-      });
+      const row = await capacities.upsertStoreDailyCapacity(
+        {
+          storeId: store.id,
+          capacityDate: DATE,
+          capacity: 30,
+          actorAccountId: ACTOR,
+        },
+        () => AUDIT_ENTRY,
+      );
 
       await drainOutbox(dispatcher);
       expect(await limits()).toMatchObject([
@@ -90,10 +106,13 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
         },
       ]);
 
-      await capacities.softDeleteStoreDailyCapacity({
-        capacityId: row.id,
-        actorAccountId: ACTOR,
-      });
+      await capacities.softDeleteStoreDailyCapacity(
+        {
+          capacityId: row.id,
+          actorAccountId: ACTOR,
+        },
+        () => AUDIT_ENTRY,
+      );
       await drainOutbox(dispatcher);
       // 행은 남고 capacity만 비운다 — 기준점(source_updated_at)이 사라지면 오래된 설정이 되살아난다
       expect(await limits()).toMatchObject([
@@ -103,21 +122,27 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
 
     it('날짜 변경은 이전 날짜 복제본을 지우고 새 날짜로 옮긴다', async () => {
       const store = await createStore(prisma);
-      const row = await capacities.upsertStoreDailyCapacity({
-        storeId: store.id,
-        capacityDate: DATE,
-        capacity: 30,
-        actorAccountId: ACTOR,
-      });
+      const row = await capacities.upsertStoreDailyCapacity(
+        {
+          storeId: store.id,
+          capacityDate: DATE,
+          capacity: 30,
+          actorAccountId: ACTOR,
+        },
+        () => AUDIT_ENTRY,
+      );
       await drainOutbox(dispatcher);
 
       const moved = new Date('2026-06-02T00:00:00.000Z');
-      await capacities.updateStoreDailyCapacity({
-        capacityId: row.id,
-        capacityDate: moved,
-        capacity: 40,
-        actorAccountId: ACTOR,
-      });
+      await capacities.updateStoreDailyCapacity(
+        {
+          capacityId: row.id,
+          capacityDate: moved,
+          capacity: 40,
+          actorAccountId: ACTOR,
+        },
+        () => AUDIT_ENTRY,
+      );
       await drainOutbox(dispatcher);
 
       // 옛 날짜는 tombstone으로 남고 새 날짜에 설정이 생긴다

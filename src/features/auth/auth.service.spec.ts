@@ -63,7 +63,7 @@ describe('AuthService', () => {
     };
 
     mockAuditLogs = {
-      createAuditLog: jest.fn(),
+      recordAudit: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
       countAuditLogs: jest.fn(),

@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { OutboxPublisher } from '@/features/outbox';
 import { storeDailyCapacityChangedEvent } from '@/features/store/events/store-daily-capacity-changed.event';
 import type { Prisma, StoreDailyCapacity } from '@/generated/prisma/client';
@@ -14,15 +19,20 @@ export class StoreCapacityRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxPublisher,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
   ) {}
 
   /** 같은 매장·날짜의 soft-delete row가 있으면 복구한다(unique 충돌 회피). */
-  async upsertStoreDailyCapacity(args: {
-    storeId: bigint;
-    capacityDate: Date;
-    capacity: number;
-    actorAccountId: bigint;
-  }): Promise<StoreDailyCapacity> {
+  async upsertStoreDailyCapacity(
+    args: {
+      storeId: bigint;
+      capacityDate: Date;
+      capacity: number;
+      actorAccountId: bigint;
+    },
+    audit: (row: StoreDailyCapacity) => AuditEntry,
+  ): Promise<StoreDailyCapacity> {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.storeDailyCapacity.upsert({
         where: {
@@ -39,17 +49,21 @@ export class StoreCapacityRepository {
         update: { deleted_at: null, capacity: args.capacity },
       });
       await this.publishChanged(tx, row, row.capacity, args.actorAccountId);
+      await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
   }
 
   /** 날짜가 바뀌면 이전 날짜의 복제본은 삭제 이벤트로, 새 날짜는 설정 이벤트로 알린다. */
-  async updateStoreDailyCapacity(args: {
-    capacityId: bigint;
-    capacityDate: Date;
-    capacity: number;
-    actorAccountId: bigint;
-  }): Promise<StoreDailyCapacity> {
+  async updateStoreDailyCapacity(
+    args: {
+      capacityId: bigint;
+      capacityDate: Date;
+      capacity: number;
+      actorAccountId: bigint;
+    },
+    audit: (row: StoreDailyCapacity) => AuditEntry,
+  ): Promise<StoreDailyCapacity> {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.storeDailyCapacity.findUniqueOrThrow({
         where: { id: args.capacityId },
@@ -72,20 +86,25 @@ export class StoreCapacityRepository {
         );
       }
       await this.publishChanged(tx, row, row.capacity, args.actorAccountId);
+      await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
   }
 
-  async softDeleteStoreDailyCapacity(args: {
-    capacityId: bigint;
-    actorAccountId: bigint;
-  }): Promise<void> {
+  async softDeleteStoreDailyCapacity(
+    args: {
+      capacityId: bigint;
+      actorAccountId: bigint;
+    },
+    audit: (row: StoreDailyCapacity) => AuditEntry,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.storeDailyCapacity.update({
         where: { id: args.capacityId },
         data: { deleted_at: new Date() },
       });
       await this.publishChanged(tx, row, null, args.actorAccountId);
+      await this.auditLogs.recordAudit(tx, audit(row));
     });
   }
 

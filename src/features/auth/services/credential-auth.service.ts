@@ -164,25 +164,26 @@ export class CredentialAuthService {
       type: argon2.argon2id,
     });
 
-    await this.credentials.updatePasswordHash({
-      accountId: args.accountId,
-      passwordHash: newHash,
-      now,
-    });
-    await this.refreshSessions.revokeAllRefreshSessions(args.accountId, now);
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: args.accountId,
-      storeId: credential.account.store?.id ?? null,
-      targetType: AuditTargetType.CHANGE_PASSWORD,
-      targetId: args.accountId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        changedAt: now.toISOString(),
+    // 교체·세션 무효화·감사를 한 트랜잭션에서(P1-12)
+    await this.credentials.changePassword(
+      {
+        accountId: args.accountId,
+        passwordHash: newHash,
+        now,
       },
-      ipAddress: tryClientIp(args.req),
-      userAgent: tryUserAgent(args.req),
-    });
+      () => ({
+        actorAccountId: args.accountId,
+        storeId: credential.account.store?.id ?? null,
+        targetType: AuditTargetType.CHANGE_PASSWORD,
+        targetId: args.accountId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          changedAt: now.toISOString(),
+        },
+        ipAddress: tryClientIp(args.req),
+        userAgent: tryUserAgent(args.req),
+      }),
+    );
   }
 
   private async requireSessionCredential(

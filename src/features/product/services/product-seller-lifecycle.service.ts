@@ -153,7 +153,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
       input.salePrice !== undefined ? input.salePrice : current.sale_price;
     this.validateProductPrices(nextRegularPrice, nextSalePrice);
 
-    const updated = await this.productRepository.updateProduct(
+    await this.productRepository.updateProduct(
       {
         productId,
         data,

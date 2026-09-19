@@ -67,24 +67,21 @@ export class AdminNotificationService extends AdminBaseService {
         payload,
       }),
       (tx) =>
-        this.auditLogs.createAuditLog(
-          {
-            actorAccountId: ctx.accountId,
-            storeId: null,
-            targetType: AuditTargetType.NOTIFICATION,
-            targetId: ctx.accountId,
-            action: AuditActionType.CREATE,
-            afterJson: {
-              eventId,
-              type: payload.type,
-              title: payload.title,
-              targetKind: input.targetKind,
-              sentCount,
-              skippedCount: skippedAccountIds.length,
-            },
+        this.auditLogs.recordAudit(tx, {
+          actorAccountId: ctx.accountId,
+          storeId: null,
+          targetType: AuditTargetType.NOTIFICATION,
+          targetId: ctx.accountId,
+          action: AuditActionType.CREATE,
+          afterJson: {
+            eventId,
+            type: payload.type,
+            title: payload.title,
+            targetKind: input.targetKind,
+            sentCount,
+            skippedCount: skippedAccountIds.length,
           },
-          tx,
-        ),
+        }),
     );
     if (!result.created) {
       // 재생 — 처음 확정한 대상이 정답. 이번 입력으로 다시 계산한 대상은 버린다

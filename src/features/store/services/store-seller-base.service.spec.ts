@@ -1,4 +1,6 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import type { IAuditLogRepository } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -48,11 +50,14 @@ describe('SellerBaseService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreSellerRepository],
+      providers: [
+        StoreSellerRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     const repo = module.get(StoreSellerRepository);
     const auditLogs: IAuditLogRepository = {
-      createAuditLog: jest.fn(),
+      recordAudit: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
       countAuditLogs: jest.fn(),

@@ -150,25 +150,27 @@ export class SellerConversationService extends SellerBaseService {
       throw new DomainException('BODY_HTML_REQUIRED');
     }
 
+    // 감사 기록은 repository가 메시지 저장과 같은 트랜잭션에서 남긴다(P1-12)
     const row =
-      await this.conversationRepository.createSellerConversationMessage({
-        conversationId,
-        sellerAccountId: ctx.accountId,
-        bodyFormat,
-        bodyText,
-        bodyHtml,
-      });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.CONVERSATION,
-      targetId: conversationId,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        messageId: row.id.toString(),
-      },
-    });
+      await this.conversationRepository.createSellerConversationMessage(
+        {
+          conversationId,
+          sellerAccountId: ctx.accountId,
+          bodyFormat,
+          bodyText,
+          bodyHtml,
+        },
+        (created) => ({
+          actorAccountId: ctx.accountId,
+          storeId: ctx.storeId,
+          targetType: AuditTargetType.CONVERSATION,
+          targetId: conversationId,
+          action: AuditActionType.CREATE,
+          afterJson: {
+            messageId: created.id.toString(),
+          },
+        }),
+      );
 
     const output = this.toConversationMessageOutput(row);
     await this.publishSellerReplyEvents({

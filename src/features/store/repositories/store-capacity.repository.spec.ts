@@ -1,4 +1,7 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -7,13 +10,26 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 import { outboxPublisherProviders } from '@/test/outbox';
 
 // 일일 capacity write는 변경 이벤트(StoreDailyCapacityChanged)를 같은 tx에 적재해야 order 복제본이 따라온다(D7-a).
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.STORE,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
+
 describe('StoreCapacityRepository (real DB)', () => {
   let repo: StoreCapacityRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreCapacityRepository, ...outboxPublisherProviders()],
+      providers: [
+        StoreCapacityRepository,
+        ...outboxPublisherProviders(),
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     repo = module.get(StoreCapacityRepository);
     prisma = p;
@@ -36,12 +52,15 @@ describe('StoreCapacityRepository (real DB)', () => {
   it('upsert는 설정을 만들고 변경 이벤트를 같은 tx에 적재한다', async () => {
     const store = await createStore(prisma);
 
-    const row = await repo.upsertStoreDailyCapacity({
-      storeId: store.id,
-      capacityDate: DATE,
-      capacity: 100,
-      actorAccountId: ACTOR,
-    });
+    const row = await repo.upsertStoreDailyCapacity(
+      {
+        storeId: store.id,
+        capacityDate: DATE,
+        capacity: 100,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
     expect(row.capacity).toBe(100);
     const [event] = await events();
@@ -70,12 +89,15 @@ describe('StoreCapacityRepository (real DB)', () => {
       },
     });
 
-    const row = await repo.upsertStoreDailyCapacity({
-      storeId: store.id,
-      capacityDate: DATE,
-      capacity: 100,
-      actorAccountId: ACTOR,
-    });
+    const row = await repo.upsertStoreDailyCapacity(
+      {
+        storeId: store.id,
+        capacityDate: DATE,
+        capacity: 100,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
     expect(row.id).toBe(seed.id);
     expect(row.deleted_at).toBeNull();
@@ -84,19 +106,25 @@ describe('StoreCapacityRepository (real DB)', () => {
 
   it('update가 날짜를 바꾸면 이전 날짜 해제 + 새 날짜 설정으로 이벤트 2건을 낸다', async () => {
     const store = await createStore(prisma);
-    const seed = await repo.upsertStoreDailyCapacity({
-      storeId: store.id,
-      capacityDate: DATE,
-      capacity: 50,
-      actorAccountId: ACTOR,
-    });
+    const seed = await repo.upsertStoreDailyCapacity(
+      {
+        storeId: store.id,
+        capacityDate: DATE,
+        capacity: 50,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
-    await repo.updateStoreDailyCapacity({
-      capacityId: seed.id,
-      capacityDate: new Date('2026-06-02T00:00:00.000Z'),
-      capacity: 200,
-      actorAccountId: ACTOR,
-    });
+    await repo.updateStoreDailyCapacity(
+      {
+        capacityId: seed.id,
+        capacityDate: new Date('2026-06-02T00:00:00.000Z'),
+        capacity: 200,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
     const payloads = (await events()).map((e) => e.payload_json);
     expect(payloads).toMatchObject([
@@ -108,19 +136,25 @@ describe('StoreCapacityRepository (real DB)', () => {
 
   it('날짜가 그대로면 해제 이벤트 없이 설정 이벤트만 낸다', async () => {
     const store = await createStore(prisma);
-    const seed = await repo.upsertStoreDailyCapacity({
-      storeId: store.id,
-      capacityDate: DATE,
-      capacity: 50,
-      actorAccountId: ACTOR,
-    });
+    const seed = await repo.upsertStoreDailyCapacity(
+      {
+        storeId: store.id,
+        capacityDate: DATE,
+        capacity: 50,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
-    await repo.updateStoreDailyCapacity({
-      capacityId: seed.id,
-      capacityDate: DATE,
-      capacity: 200,
-      actorAccountId: ACTOR,
-    });
+    await repo.updateStoreDailyCapacity(
+      {
+        capacityId: seed.id,
+        capacityDate: DATE,
+        capacity: 200,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
     const payloads = (await events()).map((e) => e.payload_json);
     expect(payloads).toMatchObject([
@@ -131,17 +165,23 @@ describe('StoreCapacityRepository (real DB)', () => {
 
   it('softDelete는 설정을 지우고 capacity null 이벤트를 낸다', async () => {
     const store = await createStore(prisma);
-    const seed = await repo.upsertStoreDailyCapacity({
-      storeId: store.id,
-      capacityDate: DATE,
-      capacity: 50,
-      actorAccountId: ACTOR,
-    });
+    const seed = await repo.upsertStoreDailyCapacity(
+      {
+        storeId: store.id,
+        capacityDate: DATE,
+        capacity: 50,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
-    await repo.softDeleteStoreDailyCapacity({
-      capacityId: seed.id,
-      actorAccountId: ACTOR,
-    });
+    await repo.softDeleteStoreDailyCapacity(
+      {
+        capacityId: seed.id,
+        actorAccountId: ACTOR,
+      },
+      () => AUDIT_ENTRY,
+    );
 
     const after = await prisma.storeDailyCapacity.findUniqueOrThrow({
       where: { id: seed.id },

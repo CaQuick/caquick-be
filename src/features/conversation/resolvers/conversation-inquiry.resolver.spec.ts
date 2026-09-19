@@ -1,6 +1,8 @@
 // 전체 경로(리졸버→서비스→레포→DB) 통합 검증만 담당. 분기·예외 세부는 service.spec.ts에서 담당
 import { PubSub } from 'graphql-subscriptions';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationInquiryMutationResolver } from '@/features/conversation/resolvers/conversation-inquiry-mutation.resolver';
@@ -36,6 +38,7 @@ describe('Conversation Inquiry Resolvers (real DB)', () => {
         AccountUserRepository,
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
         { provide: PUB_SUB, useValue: new PubSub() },
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     queryResolver = module.get(ConversationInquiryQueryResolver);

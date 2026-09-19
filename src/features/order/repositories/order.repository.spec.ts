@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
@@ -5,6 +7,7 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { OutboxDispatcherService } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { OrderStatus } from '@/generated/prisma/client';
+import { RequestContextService } from '@/global/request-context';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -25,12 +28,14 @@ describe('OrderRepository (real DB)', () => {
   let repo: OrderRepository;
   let prisma: PrismaClient;
   let dispatcher: OutboxDispatcherService;
+  let requestContext: RequestContextService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       imports: OUTBOX_TEST_IMPORTS,
       providers: [
         OrderRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ...outboxTestProviders(),
         NotificationOutboxConsumer,
         NotificationRepository,
@@ -39,6 +44,7 @@ describe('OrderRepository (real DB)', () => {
     });
     repo = module.get(OrderRepository);
     dispatcher = module.get(OutboxDispatcherService);
+    requestContext = module.get(RequestContextService);
     prisma = p;
   });
 
@@ -615,6 +621,36 @@ describe('OrderRepository (real DB)', () => {
       });
       expect(auditLogs).toHaveLength(1);
       expect(auditLogs[0].action).toBe('STATUS_CHANGE');
+    });
+
+    // 이전에는 이 경로가 auditLog를 직접 만들며 ip/ua를 인자로만 받아 늘 null로 남았다(P1-12).
+    it('ip/ua를 넘기지 않아도 요청 컨텍스트에서 보강해 감사에 남긴다', async () => {
+      const store = await createStore(prisma);
+      const buyer = await setupBuyer();
+      const order = await setupOrderForStore(store.id, buyer.id);
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      await requestContext.run(
+        { clientIp: '203.0.113.9', userAgent: 'seller-app' },
+        async () => {
+          await repo.updateOrderStatusBySeller({
+            orderId: order.id,
+            storeId: store.id,
+            actorAccountId: seller.id,
+            toStatus: OrderStatus.CONFIRMED,
+            assertTransition: () => undefined,
+            note: null,
+            now: new Date('2026-04-22T10:00:00Z'),
+          });
+        },
+      );
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { target_id: order.id, target_type: 'ORDER' },
+      });
+      expect(auditLogs).toHaveLength(1);
+      expect(auditLogs[0].ip_address).toBe('203.0.113.9');
+      expect(auditLogs[0].user_agent).toBe('seller-app');
     });
 
     it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {

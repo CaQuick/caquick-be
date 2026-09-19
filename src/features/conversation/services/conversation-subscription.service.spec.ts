@@ -1,5 +1,7 @@
 import { PubSub } from 'graphql-subscriptions';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
@@ -35,6 +37,7 @@ describe('ConversationSubscriptionService (real DB)', () => {
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
         // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
         { provide: PUB_SUB, useValue: new PubSub() },
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(ConversationSubscriptionService);

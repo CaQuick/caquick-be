@@ -40,28 +40,28 @@ export class SellerFaqService extends SellerBaseService {
     input: SellerCreateFaqTopicInput,
   ): Promise<SellerFaqTopicOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const row = await this.repo.createFaqTopic({
-      storeId: ctx.storeId,
-      title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
-      answerHtml: cleanRequiredText(
-        input.answerHtml,
-        MAX_FAQ_ANSWER_HTML_LENGTH,
-      ),
-      sortOrder: input.sortOrder ?? 0,
-      isActive: input.isActive ?? true,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        topicId: row.id.toString(),
+    const row = await this.repo.createFaqTopic(
+      {
+        storeId: ctx.storeId,
+        title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH),
+        answerHtml: cleanRequiredText(
+          input.answerHtml,
+          MAX_FAQ_ANSWER_HTML_LENGTH,
+        ),
+        sortOrder: input.sortOrder ?? 0,
+        isActive: input.isActive ?? true,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.CREATE,
+        afterJson: {
+          topicId: created.id.toString(),
+        },
+      }),
+    );
     return toFaqTopicOutput(row);
   }
 
@@ -78,38 +78,40 @@ export class SellerFaqService extends SellerBaseService {
     });
     if (!current) throw new DomainException('FAQ_TOPIC_NOT_FOUND');
 
-    const row = await this.repo.updateFaqTopic({
-      topicId,
-      data: {
-        ...(input.title !== undefined
-          ? { title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
-          : {}),
-        ...(input.answerHtml !== undefined
-          ? {
-              answer_html: cleanRequiredText(
-                input.answerHtml,
-                MAX_FAQ_ANSWER_HTML_LENGTH,
-              ),
-            }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    const row = await this.repo.updateFaqTopic(
+      {
+        topicId,
+        data: {
+          ...(input.title !== undefined
+            ? { title: cleanRequiredText(input.title, MAX_FAQ_TITLE_LENGTH) }
+            : {}),
+          ...(input.answerHtml !== undefined
+            ? {
+                answer_html: cleanRequiredText(
+                  input.answerHtml,
+                  MAX_FAQ_ANSWER_HTML_LENGTH,
+                ),
+              }
+            : {}),
+          ...(input.sortOrder !== undefined
+            ? { sort_order: input.sortOrder }
+            : {}),
+          ...(input.isActive !== undefined
+            ? { is_active: input.isActive }
+            : {}),
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        topicId: row.id.toString(),
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          topicId: created.id.toString(),
+        },
+      }),
+    );
     return toFaqTopicOutput(row);
   }
 
@@ -124,8 +126,7 @@ export class SellerFaqService extends SellerBaseService {
     });
     if (!current) throw new DomainException('FAQ_TOPIC_NOT_FOUND');
 
-    await this.repo.softDeleteFaqTopic(topicId);
-    await this.auditLogs.createAuditLog({
+    await this.repo.softDeleteFaqTopic(topicId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -134,8 +135,7 @@ export class SellerFaqService extends SellerBaseService {
       beforeJson: {
         topicId: current.id.toString(),
       },
-    });
-
+    }));
     return true;
   }
 }

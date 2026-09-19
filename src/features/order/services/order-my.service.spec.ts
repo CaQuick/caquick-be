@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -24,6 +26,7 @@ describe('UserOrderService (real DB)', () => {
       providers: [
         UserOrderService,
         OrderRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),
       ],

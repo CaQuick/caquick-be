@@ -503,7 +503,7 @@ describe('AdminModerationService (real DB)', () => {
       const review = await createReview(prisma);
       const auditLogs = service['auditLogs'];
       const spy = jest
-        .spyOn(auditLogs, 'createAuditLog')
+        .spyOn(auditLogs, 'recordAudit')
         .mockRejectedValueOnce(new Error('audit down'));
       await expect(
         service.adminDeleteReview(await admin(), {

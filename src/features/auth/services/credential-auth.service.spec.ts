@@ -55,6 +55,13 @@ function makeCredential(
   };
 }
 
+/** changePassword에 넘긴 감사 항목 콜백을 실행해 항목을 꺼낸다(repository가 tx 안에서 하는 일). */
+function auditEntryOf(mock: unknown) {
+  const calls = (mock as jest.Mock).mock.calls;
+  const audit = calls[calls.length - 1][1] as () => unknown;
+  return audit();
+}
+
 describe('CredentialAuthService', () => {
   let service: CredentialAuthService;
   let credentials: jest.Mocked<IAccountCredentialRepository>;
@@ -78,7 +85,7 @@ describe('CredentialAuthService', () => {
       findCredentialByUsername: jest.fn(),
       findCredentialByAccountId: jest.fn(),
       updateLastLogin: jest.fn(),
-      updatePasswordHash: jest.fn(),
+      changePassword: jest.fn(),
     };
 
     refreshSessions = {
@@ -90,7 +97,7 @@ describe('CredentialAuthService', () => {
     };
 
     auditLogs = {
-      createAuditLog: jest.fn(),
+      recordAudit: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
       countAuditLogs: jest.fn(),
@@ -396,22 +403,21 @@ describe('CredentialAuthService', () => {
 
       await change();
 
-      expect(credentials.updatePasswordHash).toHaveBeenCalledWith({
-        accountId: BigInt(10),
-        passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
-        now: expect.any(Date),
+      // 교체·세션 무효화·감사는 repository가 한 트랜잭션에서 한다(P1-12) — 서비스는 항목만 넘긴다
+      expect(credentials.changePassword).toHaveBeenCalledWith(
+        {
+          accountId: BigInt(10),
+          passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
+          now: expect.any(Date),
+        },
+        expect.any(Function),
+      );
+      expect(refreshSessions.revokeAllRefreshSessions).not.toHaveBeenCalled();
+      expect(auditEntryOf(credentials.changePassword)).toMatchObject({
+        actorAccountId: BigInt(10),
+        storeId: BigInt(5),
+        targetId: BigInt(10),
       });
-      expect(refreshSessions.revokeAllRefreshSessions).toHaveBeenCalledWith(
-        BigInt(10),
-        expect.any(Date),
-      );
-      expect(auditLogs.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(10),
-          storeId: BigInt(5),
-          targetId: BigInt(10),
-        }),
-      );
     });
 
     it('관리자는 매장이 없어 audit storeId가 null이다', async () => {
@@ -426,9 +432,9 @@ describe('CredentialAuthService', () => {
 
       await change({ role: 'ADMIN' });
 
-      expect(auditLogs.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({ storeId: null }),
-      );
+      expect(auditEntryOf(credentials.changePassword)).toMatchObject({
+        storeId: null,
+      });
     });
 
     it('자격증명이 없으면 CREDENTIAL_NOT_FOUND', async () => {
@@ -458,7 +464,7 @@ describe('CredentialAuthService', () => {
       await expect(
         change({ currentPassword: 'Wrong!123' }),
       ).rejects.toThrowDomain('CURRENT_PASSWORD_INVALID');
-      expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
+      expect(credentials.changePassword).not.toHaveBeenCalled();
     });
 
     it('새 비밀번호가 현재와 같으면 PASSWORD_UNCHANGED', async () => {
@@ -468,7 +474,7 @@ describe('CredentialAuthService', () => {
       await expect(
         change({ newPassword: 'OldPassword!123' }),
       ).rejects.toThrowDomain('PASSWORD_UNCHANGED');
-      expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
+      expect(credentials.changePassword).not.toHaveBeenCalled();
     });
   });
 });
