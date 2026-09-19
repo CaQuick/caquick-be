@@ -270,7 +270,7 @@ yarn start:dev
 | **서버** | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL` |
 | **DB** | `DATABASE_URL` |
 | **Redis (선택)** | `REDIS_URL` — GraphQL subscription PubSub. 미설정 시 `redis://localhost:6379`(로컬 docker-compose) |
-| **JWT / Auth** | `JWT_ACCESS_SECRET`(없으면 `JWT_SECRET`으로 폴백), `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE` |
+| **JWT / Auth** | `JWT_PRIVATE_KEY_PEM_B64`(또는 `JWT_PRIVATE_KEY_PATH`) — RS256 서명키. 운영 필수, 그 외에는 미설정 시 임시 키 생성(재시작하면 토큰 무효). `JWT_PUBLIC_KEY_PEM_B64`/`JWT_PUBLIC_KEY_PATH`는 생략 시 개인키에서 유도. `JWT_ISSUER`(기본 `caquick-identity`), `JWT_AUDIENCE`(기본 `caquick-api`), `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE` |
 | **OIDC (Google)** | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL` |
 | **OIDC (Kakao)** | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL` |
 | **OIDC (공통)** | `OIDC_TEMP_COOKIE_MAX_AGE_MS` |

@@ -13,11 +13,16 @@ import type { AuthConfig } from '@/config/auth.config';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
 import {
+  ACCOUNT_REPOSITORY,
+  type AccountForJwt,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
+import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
+import type { AccessTokenClaims } from '@/global/auth/types/jwt-payload.type';
 
 @Injectable()
 export class TokenService {
@@ -26,20 +31,31 @@ export class TokenService {
     private readonly jwt: JwtService,
     @Inject(REFRESH_SESSION_REPOSITORY)
     private readonly refreshSessions: IRefreshSessionRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accounts: IAccountRepository,
   ) {}
 
-  signAccessToken(accountId: bigint): string {
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + this.getAccessExpiresSeconds();
-
-    const payload: AccessTokenPayload = {
-      sub: accountId.toString(),
+  /** iat·exp·iss·aud·kid는 서명 옵션(JwtModule)이 붙인다 — 여기서는 신원 클레임만 만든다. */
+  signAccessToken(account: AccountForJwt): string {
+    const claims: AccessTokenClaims = {
+      sub: account.id.toString(),
       typ: 'access',
-      iat: now,
-      exp,
+      role: account.account_type,
+      mustChangePassword: account.credential?.must_change_password ?? false,
+      ...(account.store ? { storeId: account.store.id.toString() } : {}),
     };
 
-    return this.jwt.sign(payload);
+    return this.jwt.sign(claims);
+  }
+
+  /** 발급 시점의 계정 상태를 클레임에 담기 위해 매번 조회한다(재발급 포함). */
+  async signAccessTokenFor(accountId: bigint): Promise<string> {
+    const account = await this.accounts.findAccountForJwt(accountId);
+    if (!account) throw new DomainException('SESSION_ACCOUNT_MISSING');
+    if (account.status !== 'ACTIVE') {
+      throw new DomainException('ACCOUNT_NOT_ACTIVE');
+    }
+    return this.signAccessToken(account);
   }
 
   getAccessExpiresSeconds(): number {
@@ -55,7 +71,7 @@ export class TokenService {
     req: Request;
     res: Response;
   }): Promise<{ accessToken: string }> {
-    const accessToken = this.signAccessToken(args.accountId);
+    const accessToken = await this.signAccessTokenFor(args.accountId);
 
     const refreshToken = this.generateRefreshToken();
     const refreshHash = this.sha256Hex(refreshToken);
@@ -113,7 +129,7 @@ export class TokenService {
       newExpiresAt,
     });
 
-    const accessToken = this.signAccessToken(session.account_id);
+    const accessToken = await this.signAccessTokenFor(session.account_id);
 
     AuthCookie.setRefreshCookie(res, {
       refreshToken: newRefreshToken,

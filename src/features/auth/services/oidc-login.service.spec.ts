@@ -42,7 +42,14 @@ describe('OidcLoginService', () => {
       findIdentityByProviderSubject: jest.fn(),
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      findAccountForJwt: jest.fn(),
+      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다(P1-11b) — 기본값을 깔아 둔다
+      findAccountForJwt: jest.fn().mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
+      }),
     };
 
     mockRefreshSessions = {

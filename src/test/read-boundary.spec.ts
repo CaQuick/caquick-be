@@ -21,6 +21,7 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/auth/repositories/account-admin.repository.ts|nested|Account.store->Store',
   'src/features/auth/repositories/account-admin.repository.ts|opaque|createSellerAccount:SellerProfile.data=args.profile',
   'src/features/auth/repositories/account-credential.repository.ts|nested|AccountCredential.account.store->Store',
+  'src/features/auth/repositories/account.repository.ts|nested|Account.store->Store',
   'src/features/conversation/repositories/conversation.repository.ts|nested|StoreConversation.store->Store',
   'src/features/notification/repositories/notification-admin.repository.ts|root|filterActiveUserAccountIds:Account.findMany',
   'src/features/notification/repositories/notification-admin.repository.ts|root|listActiveUserAccountIds:Account.findMany',

@@ -1,7 +1,23 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`Auth REST Swagger 문서 /auth/* operation 13개의 문서가 스냅샷과 같다 1`] = `
+exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문서가 스냅샷과 같다 1`] = `
 {
+  "/.well-known/jwks.json": {
+    "get": {
+      "description": "액세스 토큰 서명 검증용 RSA 공개키를 JWK Set으로 돌려준다. kid는 RFC 7638 썸프린트다.",
+      "operationId": "JwksController_getJwks",
+      "parameters": [],
+      "responses": {
+        "200": {
+          "description": "JWK Set",
+        },
+      },
+      "summary": "JWKS (공개키 목록)",
+      "tags": [
+        "Auth",
+      ],
+    },
+  },
   "/auth/admin/change-password": {
     "post": {
       "description": "현재 비밀번호를 검증하고 새 비밀번호로 변경한다. 초기 비밀번호 상태(mustChangePassword)가 해제된다.",

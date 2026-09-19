@@ -44,7 +44,14 @@ describe('AuthService', () => {
       findIdentityByProviderSubject: jest.fn(),
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      findAccountForJwt: jest.fn(),
+      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다(P1-11b) — 기본값을 깔아 둔다
+      findAccountForJwt: jest.fn().mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
+      }),
     };
 
     mockRefreshSessions = {
@@ -232,6 +239,7 @@ describe('AuthService', () => {
         status: 'ACTIVE',
         account_type: 'USER',
         credential: null,
+        store: null,
       });
 
       const result = await service.issueDevAccessToken(BigInt(1));
@@ -241,9 +249,13 @@ describe('AuthService', () => {
         tokenType: 'Bearer',
         expiresInSeconds: 900,
       });
-      expect(mockJwt.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: '1', typ: 'access' }),
-      );
+      // 신원 클레임만 담고 시간·발급자 클레임은 서명 옵션이 붙인다(P1-13)
+      expect(mockJwt.sign).toHaveBeenCalledWith({
+        sub: '1',
+        typ: 'access',
+        role: 'USER',
+        mustChangePassword: false,
+      });
     });
 
     it('존재하지 않는 accountId면 NotFoundException', async () => {
@@ -260,6 +272,7 @@ describe('AuthService', () => {
         id: BigInt(2),
         status: 'SUSPENDED',
         account_type: 'USER',
+        store: null,
         credential: null,
       });
 
