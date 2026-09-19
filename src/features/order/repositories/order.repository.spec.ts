@@ -1,3 +1,4 @@
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -33,6 +34,7 @@ describe('OrderRepository (real DB)', () => {
         ...outboxTestProviders(),
         NotificationOutboxConsumer,
         NotificationRepository,
+        NotificationAdminRepository,
       ],
     });
     repo = module.get(OrderRepository);

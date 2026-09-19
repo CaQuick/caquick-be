@@ -1,3 +1,4 @@
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import type { OutboxEvent } from '@/features/outbox';
@@ -11,6 +12,7 @@ import {
   createReview,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 const OCCURRED_AT = new Date('2026-09-19T12:00:00.000Z');
 
@@ -41,7 +43,13 @@ describe('NotificationOutboxConsumer (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [NotificationOutboxConsumer, NotificationRepository],
+      providers: [
+        NotificationOutboxConsumer,
+        NotificationRepository,
+        // 대상 조회 repository가 발행 API를 주입받는다(08b)
+        NotificationAdminRepository,
+        ...outboxPublisherProviders(),
+      ],
     });
     consumer = module.get(NotificationOutboxConsumer);
     prisma = p;
@@ -140,34 +148,70 @@ describe('NotificationOutboxConsumer (real DB)', () => {
     });
   });
 
-  it('notification.broadcast_requested는 대상 전원에게 청크 단위로 만들고 재전달에도 한 번씩만 남는다', async () => {
-    await prisma.account.createMany({
-      data: Array.from({ length: 1_005 }, (_, i) => ({
-        account_type: 'USER' as const,
-        status: 'ACTIVE' as const,
-        email: `bulk${i}@example.com`,
-      })),
-    });
-    const ids = (await prisma.account.findMany({ select: { id: true } })).map(
-      (a) => a.id.toString(),
-    );
-    const broadcast = event('notification.broadcast_requested', {
-      type: 'MARKETING',
-      title: '이벤트',
-      body: '본문',
-      targetAccountIds: ids,
-      skippedAccountIds: [],
+  describe('notification.broadcast_requested', () => {
+    async function bulkUsers(count: number, prefix = 'bulk'): Promise<void> {
+      await prisma.account.createMany({
+        data: Array.from({ length: count }, (_, i) => ({
+          account_type: 'USER' as const,
+          status: 'ACTIVE' as const,
+          email: `${prefix}${i}@example.com`,
+        })),
+      });
+    }
+
+    it('ACCOUNT_IDS 목록은 청크 단위로 만들고 재전달에도 한 번씩만 남는다', async () => {
+      await bulkUsers(1_005);
+      const ids = (await prisma.account.findMany({ select: { id: true } })).map(
+        (a) => a.id.toString(),
+      );
+      const broadcast = event('notification.broadcast_requested', {
+        type: 'MARKETING',
+        title: '이벤트',
+        body: '본문',
+        audience: { kind: 'ACCOUNT_IDS', accountIds: ids },
+        skippedAccountIds: [],
+      });
+
+      await consumer.handle(broadcast);
+      await consumer.handle(broadcast);
+
+      expect(
+        await prisma.notification.count({
+          where: { type: 'MARKETING', event: null, title: '이벤트' },
+        }),
+      ).toBe(1_005);
     });
 
-    await consumer.handle(broadcast);
-    await consumer.handle(broadcast);
+    it('ALL_USERS는 요청 시점 컷오프(maxAccountId) 이하 활성 USER만 페이지로 훑고, 컷오프 뒤 가입자·비활성은 제외한다', async () => {
+      await bulkUsers(1_002);
+      const cutoff = (await prisma.account.aggregate({ _max: { id: true } }))
+        ._max.id!;
+      await prisma.account.create({
+        data: { account_type: 'USER', status: 'SUSPENDED', email: 's@x.com' },
+      });
+      await bulkUsers(3, 'late');
 
-    expect(await prisma.notification.count()).toBe(1_005);
-    expect(
-      await prisma.notification.count({
-        where: { type: 'MARKETING', event: null, title: '이벤트' },
-      }),
-    ).toBe(1_005);
+      await consumer.handle(
+        event('notification.broadcast_requested', {
+          type: 'SYSTEM',
+          title: '공지',
+          body: '본문',
+          audience: {
+            kind: 'ALL_USERS',
+            maxAccountId: cutoff.toString(),
+            count: 1_002,
+          },
+          skippedAccountIds: [],
+        }),
+      );
+
+      expect(await prisma.notification.count()).toBe(1_002);
+      expect(
+        await prisma.notification.count({
+          where: { account_id: { gt: cutoff } },
+        }),
+      ).toBe(0);
+    });
   });
 
   it.each([
@@ -189,7 +233,7 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         type: 'SPAM',
         title: 't',
         body: 'b',
-        targetAccountIds: [],
+        audience: { kind: 'ACCOUNT_IDS', accountIds: [] },
         skippedAccountIds: [],
       },
     ],
@@ -199,7 +243,17 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         type: 'SYSTEM',
         title: 't',
         body: 'b',
-        targetAccountIds: [1],
+        audience: { kind: 'ACCOUNT_IDS', accountIds: [1] },
+        skippedAccountIds: [],
+      },
+    ],
+    [
+      'notification.broadcast_requested',
+      {
+        type: 'SYSTEM',
+        title: 't',
+        body: 'b',
+        audience: { kind: 'ALL_USERS', maxAccountId: 5, count: 1 },
         skippedAccountIds: [],
       },
     ],

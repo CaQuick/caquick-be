@@ -11,10 +11,11 @@ import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import {
   MAX_NOTIFICATION_BODY_LENGTH,
   MAX_NOTIFICATION_TITLE_LENGTH,
-  NOTIFICATION_FANOUT_BATCH_SIZE,
 } from '@/features/notification/constants/notification-admin.constants';
 import type { AdminSendNotificationInput } from '@/features/notification/dto/inputs/admin-send-notification.input';
 import {
+  audienceCount,
+  type BroadcastAudience,
   NOTIFICATION_BROADCAST_NAMESPACE,
   type NotificationBroadcastRequestedPayload,
   notificationBroadcastRequestedEvent,
@@ -44,12 +45,13 @@ export class AdminNotificationService extends AdminBaseService {
     input: AdminSendNotificationInput,
   ): Promise<AdminSendNotificationResultOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const { targets, skippedAccountIds } = await this.resolveTargets(input);
+    const { audience, skippedAccountIds } = await this.resolveAudience(input);
+    const sentCount = audienceCount(audience);
     const payload: NotificationBroadcastRequestedPayload = {
       type: input.type,
       title: cleanRequiredText(input.title, MAX_NOTIFICATION_TITLE_LENGTH),
       body: cleanRequiredText(input.body, MAX_NOTIFICATION_BODY_LENGTH),
-      targetAccountIds: targets.map((id) => id.toString()),
+      audience,
       skippedAccountIds,
     };
     const eventId = deterministicUuid(
@@ -77,7 +79,7 @@ export class AdminNotificationService extends AdminBaseService {
               type: payload.type,
               title: payload.title,
               targetKind: input.targetKind,
-              sentCount: targets.length,
+              sentCount,
               skippedCount: skippedAccountIds.length,
             },
           },
@@ -88,17 +90,20 @@ export class AdminNotificationService extends AdminBaseService {
       // 재생 — 처음 확정한 대상이 정답. 이번 입력으로 다시 계산한 대상은 버린다
       const first = parseNotificationBroadcastRequestedPayload(result.payload);
       return {
-        sentCount: first.targetAccountIds.length,
+        sentCount: audienceCount(first.audience),
         skippedAccountIds: first.skippedAccountIds,
       };
     }
-    return { sentCount: targets.length, skippedAccountIds };
+    return { sentCount, skippedAccountIds };
   }
 
-  /** ACCOUNT_IDS는 활성 USER만 남기고 나머지를 skipped로, ALL_USERS는 활성 USER 전체를 키셋으로 모은다. */
-  private async resolveTargets(
+  /**
+   * ACCOUNT_IDS는 활성 USER만 남기고 나머지를 skipped로. ALL_USERS는 전원을 모으지 않고
+   * 요청 시점 컷오프(최대 id)·건수만 확정한다 — 소비자가 컷오프 이하를 페이지로 훑는다(대상 규모에 무관하게 유계).
+   */
+  private async resolveAudience(
     input: AdminSendNotificationInput,
-  ): Promise<{ targets: bigint[]; skippedAccountIds: string[] }> {
+  ): Promise<{ audience: BroadcastAudience; skippedAccountIds: string[] }> {
     if (input.targetKind === 'ACCOUNT_IDS') {
       // DTO가 ACCOUNT_IDS일 때 비어 있지 않음을 보장한다. 중복은 한 번으로
       const requested = [
@@ -108,23 +113,25 @@ export class AdminNotificationService extends AdminBaseService {
         (await this.repo.filterActiveUserAccountIds(requested)).map(String),
       );
       return {
-        targets: requested.filter((id) => eligible.has(String(id))),
+        audience: {
+          kind: 'ACCOUNT_IDS',
+          accountIds: requested
+            .filter((id) => eligible.has(String(id)))
+            .map(String),
+        },
         skippedAccountIds: requested
           .filter((id) => !eligible.has(String(id)))
           .map(String),
       };
     }
-    const targets: bigint[] = [];
-    let afterId: bigint | undefined;
-    for (;;) {
-      const ids = await this.repo.listActiveUserAccountIds({
-        afterId,
-        limit: NOTIFICATION_FANOUT_BATCH_SIZE,
-      });
-      targets.push(...ids);
-      if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) break;
-      afterId = ids[ids.length - 1];
-    }
-    return { targets, skippedAccountIds: [] };
+    const snapshot = await this.repo.snapshotActiveUserAudience();
+    return {
+      audience: {
+        kind: 'ALL_USERS',
+        maxAccountId: (snapshot.maxAccountId ?? 0n).toString(),
+        count: snapshot.count,
+      },
+      skippedAccountIds: [],
+    };
   }
 }

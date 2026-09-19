@@ -6,6 +6,7 @@ import {
   NOTIFICATION_BROADCAST_REQUESTED,
   parseNotificationBroadcastRequestedPayload,
 } from '@/features/notification/events/notification-broadcast-requested.event';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import {
   type NotificationEventRow,
   NotificationRepository,
@@ -36,7 +37,10 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
   NOTIFICATION_BROADCAST_REQUESTED,
 )
 export class NotificationOutboxConsumer implements OutboxConsumer {
-  constructor(private readonly repo: NotificationRepository) {}
+  constructor(
+    private readonly repo: NotificationRepository,
+    private readonly audience: NotificationAdminRepository,
+  ) {}
 
   async handle(event: OutboxEvent): Promise<void> {
     switch (event.eventType) {
@@ -87,25 +91,43 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
     ]);
   }
 
-  /** 대상은 요청 시점에 확정된 목록 — 청크 단위로 넣고, 재전달 시 이미 들어간 계정은 unique로 건너뛴다. */
+  /**
+   * ACCOUNT_IDS는 확정 목록을, ALL_USERS는 요청 시점 컷오프 이하 활성 USER를 키셋 페이지로 훑어 청크 단위로 넣는다.
+   * 재전달 시 이미 들어간 계정은 createFromEvent가 건너뛴다(청크 중간 실패 뒤 재시도도 안전).
+   */
   private async onBroadcastRequested(event: OutboxEvent): Promise<void> {
     const p = parseNotificationBroadcastRequestedPayload(event.payload);
-    for (
-      let offset = 0;
-      offset < p.targetAccountIds.length;
-      offset += NOTIFICATION_FANOUT_BATCH_SIZE
-    ) {
-      const rows: NotificationEventRow[] = p.targetAccountIds
-        .slice(offset, offset + NOTIFICATION_FANOUT_BATCH_SIZE)
-        .map((id) => ({
-          account_id: parseId(id),
-          type: p.type,
-          event: null,
-          title: p.title,
-          body: p.body,
-          created_at: event.occurredAt,
-        }));
-      await this.repo.createFromEvent(event.eventId, rows);
+    const toRows = (ids: bigint[]): NotificationEventRow[] =>
+      ids.map((account_id) => ({
+        account_id,
+        type: p.type,
+        event: null,
+        title: p.title,
+        body: p.body,
+        created_at: event.occurredAt,
+      }));
+    if (p.audience.kind === 'ACCOUNT_IDS') {
+      const ids = p.audience.accountIds.map(parseId);
+      for (let i = 0; i < ids.length; i += NOTIFICATION_FANOUT_BATCH_SIZE) {
+        await this.repo.createFromEvent(
+          event.eventId,
+          toRows(ids.slice(i, i + NOTIFICATION_FANOUT_BATCH_SIZE)),
+        );
+      }
+      return;
+    }
+    const maxId = parseId(p.audience.maxAccountId);
+    let afterId: bigint | undefined;
+    for (;;) {
+      const ids = await this.audience.listActiveUserAccountIds({
+        afterId,
+        maxId,
+        limit: NOTIFICATION_FANOUT_BATCH_SIZE,
+      });
+      if (ids.length === 0) return;
+      await this.repo.createFromEvent(event.eventId, toRows(ids));
+      if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) return;
+      afterId = ids[ids.length - 1];
     }
   }
 }

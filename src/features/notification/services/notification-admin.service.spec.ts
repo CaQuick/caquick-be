@@ -167,6 +167,34 @@ describe('AdminNotificationService (real DB)', () => {
       expect(rows.every((r) => r.type === 'MARKETING')).toBe(true);
     });
 
+    it('대상은 요청 시점 컷오프로 확정된다 — 응답 뒤 가입한 USER는 받지 않고 payload에 계정 목록을 싣지 않는다', async () => {
+      const actor = await admin();
+      const early = await createAccount(prisma, { account_type: 'USER' });
+
+      const result = await service.adminSendNotification(actor, {
+        ...base,
+        targetKind: 'ALL_USERS',
+      });
+      const late = await createAccount(prisma, { account_type: 'USER' });
+
+      expect(result.sentCount).toBe(1);
+      const [row] = await prisma.outbox.findMany();
+      expect(row.payload_json).toMatchObject({
+        audience: {
+          kind: 'ALL_USERS',
+          maxAccountId: early.id.toString(),
+          count: 1,
+        },
+      });
+      await drainOutbox(dispatcher);
+      expect(
+        (await prisma.notification.findMany()).map((n) => n.account_id),
+      ).toEqual([early.id]);
+      expect(
+        await prisma.notification.count({ where: { account_id: late.id } }),
+      ).toBe(0);
+    });
+
     it('청크(1,000) 경계를 넘어도 빠짐없이 한 번씩 저장하고, 소비자 재전달에도 중복되지 않는다', async () => {
       const actor = await admin();
       await bulkUsers(1_050);

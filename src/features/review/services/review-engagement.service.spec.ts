@@ -1,4 +1,5 @@
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OutboxDispatcherService } from '@/features/outbox';
@@ -35,6 +36,7 @@ describe('UserEngagementService (real DB)', () => {
         ...outboxTestProviders(),
         NotificationOutboxConsumer,
         NotificationRepository,
+        NotificationAdminRepository,
       ],
     });
 

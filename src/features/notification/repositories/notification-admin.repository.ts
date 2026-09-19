@@ -12,15 +12,37 @@ export class NotificationAdminRepository {
     private readonly outbox: OutboxPublisher,
   ) {}
 
+  /** ALL_USERS 대상 확정 — 전원을 싣는 대신 요청 시점 컷오프(최대 id)와 건수만 남긴다. */
+  async snapshotActiveUserAudience(): Promise<{
+    maxAccountId: bigint | null;
+    count: number;
+  }> {
+    const result = await this.prisma.account.aggregate({
+      where: { account_type: AccountType.USER, status: 'ACTIVE' },
+      _count: { _all: true },
+      _max: { id: true },
+    });
+    return { maxAccountId: result._max.id, count: result._count._all };
+  }
+
+  /** 소비자가 컷오프(maxId) 이하 활성 USER를 키셋으로 훑는다. */
   async listActiveUserAccountIds(args: {
     afterId?: bigint;
+    maxId?: bigint;
     limit: number;
   }): Promise<bigint[]> {
     const rows = await this.prisma.account.findMany({
       where: {
         account_type: AccountType.USER,
         status: 'ACTIVE',
-        ...(args.afterId !== undefined ? { id: { gt: args.afterId } } : {}),
+        ...(args.afterId !== undefined || args.maxId !== undefined
+          ? {
+              id: {
+                ...(args.afterId !== undefined ? { gt: args.afterId } : {}),
+                ...(args.maxId !== undefined ? { lte: args.maxId } : {}),
+              },
+            }
+          : {}),
       },
       select: { id: true },
       orderBy: { id: 'asc' },

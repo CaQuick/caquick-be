@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
@@ -44,6 +45,7 @@ describe('AdminOrderService (real DB)', () => {
         ...outboxTestProviders(),
         NotificationOutboxConsumer,
         NotificationRepository,
+        NotificationAdminRepository,
       ],
     });
     service = module.get(AdminOrderService);

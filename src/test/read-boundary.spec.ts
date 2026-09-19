@@ -24,6 +24,7 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/conversation/repositories/conversation.repository.ts|nested|StoreConversation.store->Store',
   'src/features/notification/repositories/notification-admin.repository.ts|root|filterActiveUserAccountIds:Account.findMany',
   'src/features/notification/repositories/notification-admin.repository.ts|root|listActiveUserAccountIds:Account.findMany',
+  'src/features/notification/repositories/notification-admin.repository.ts|root|snapshotActiveUserAudience:Account.aggregate',
   'src/features/order/repositories/order.repository.ts|filter|OrderItem.review->Review',
   'src/features/order/repositories/order.repository.ts|nested|Order.account->Account',
   'src/features/order/repositories/order.repository.ts|nested|Order.account.user_profile->UserProfile',
