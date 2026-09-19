@@ -8,6 +8,7 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
+import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('TokenService', () => {
   let service: TokenService;
@@ -29,6 +30,8 @@ describe('TokenService', () => {
   beforeEach(async () => {
     config = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     jwt = {
@@ -86,9 +89,9 @@ describe('TokenService', () => {
       expect(service.getAccessExpiresSeconds()).toBe(900);
     });
 
-    it('env override 적용', () => {
-      config.get.mockImplementation((key: string) =>
-        key === 'JWT_ACCESS_EXPIRES_SECONDS' ? '300' : undefined,
+    it('설정값(authConfig)을 그대로 쓴다', () => {
+      config.getOrThrow.mockReturnValue(
+        testAuthConfig({ jwtAccessExpiresSeconds: 300 }),
       );
       expect(service.getAccessExpiresSeconds()).toBe(300);
     });

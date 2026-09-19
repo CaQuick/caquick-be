@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import type { Application as ExpressApplication } from 'express';
 
 import { AppModule } from '@/app.module';
+import type { AuthConfig } from '@/config/auth.config';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { ApiResponseInterceptor } from '@/global/interceptors/api-response.interceptor';
@@ -29,12 +30,9 @@ async function bootstrap(): Promise<void> {
 
   const configService = app.get(ConfigService);
   const isProd = configService.get<string>('NODE_ENV') === 'production';
+  // 허용 오리진 목록도 authConfig가 단일 소스(P1-11a)
   const frontendFromEnv =
-    configService
-      .get<string>('FRONTEND_BASE_URL')
-      ?.split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean) ?? [];
+    configService.getOrThrow<AuthConfig>('auth').frontendOrigins;
   const allowedOrigins: string[] = isProd
     ? [
         'https://www.caquick.site',

@@ -4,12 +4,12 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
 import { DomainException } from '@/common/errors/error-catalog';
-import { getEnvAsNumber } from '@/common/helpers/config.helper';
 import {
   generateRandomToken,
   sha256Hex as sha256HexUtil,
 } from '@/common/utils/crypto';
 import { tryClientIp, tryUserAgent } from '@/common/utils/http-meta';
+import type { AuthConfig } from '@/config/auth.config';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
 import {
@@ -43,7 +43,11 @@ export class TokenService {
   }
 
   getAccessExpiresSeconds(): number {
-    return getEnvAsNumber(this.config, 'JWT_ACCESS_EXPIRES_SECONDS', 900);
+    return this.authConfig().jwtAccessExpiresSeconds;
+  }
+
+  private authConfig(): AuthConfig {
+    return this.config.getOrThrow<AuthConfig>('auth');
   }
 
   async issueAuthTokens(args: {
@@ -143,6 +147,6 @@ export class TokenService {
   }
 
   private getRefreshDays(): number {
-    return getEnvAsNumber(this.config, 'AUTH_REFRESH_EXPIRES_DAYS', 30);
+    return this.authConfig().refreshExpiresInDays;
   }
 }

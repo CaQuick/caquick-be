@@ -19,6 +19,7 @@ import {
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -31,6 +32,8 @@ describe('AuthService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     mockJwt = {

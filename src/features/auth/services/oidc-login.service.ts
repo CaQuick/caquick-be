@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import type { AuthConfig } from '@/config/auth.config';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
@@ -198,9 +199,7 @@ export class OidcLoginService {
 
   /** 오픈 리다이렉트 방지. */
   private normalizeReturnTo(raw: string | undefined): string {
-    const frontend =
-      this.config.get<string>('FRONTEND_BASE_URL')?.trim() ??
-      'http://localhost:3000';
+    const frontend = this.config.getOrThrow<AuthConfig>('auth').frontendBaseUrl;
 
     if (!raw || raw.trim().length === 0) return frontend;
 
@@ -240,8 +239,7 @@ export class OidcLoginService {
 
   private getCallbackRedirectUri(provider: OidcProvider): string {
     const backendBase =
-      this.config.get<string>('BACKEND_BASE_URL')?.trim() ??
-      'http://localhost:4000';
+      this.config.getOrThrow<AuthConfig>('auth').backendBaseUrl;
 
     return `${backendBase}/auth/oidc/${provider}/callback`;
   }
