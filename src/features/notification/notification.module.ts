@@ -9,15 +9,18 @@ import { UserNotificationMutationResolver } from '@/features/notification/resolv
 import { UserNotificationQueryResolver } from '@/features/notification/resolvers/notification-my-query.resolver';
 import { AdminNotificationService } from '@/features/notification/services/notification-admin.service';
 import { UserNotificationService } from '@/features/notification/services/notification-my.service';
+import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
+import { OutboxModule } from '@/features/outbox';
 
-/** 알림 소유 feature: 구매자 알림센터(목록·읽음)와 관리자 일괄 발송. 이벤트 소비자(outbox)는 08b에서 붙는다. */
+/** 알림 소유 feature: 구매자 알림센터(목록·읽음)·관리자 일괄 발송 요청·outbox 소비자(알림 생성의 단일 진입점). */
 @Module({
-  imports: [AuthModule, AuditLogModule],
+  imports: [AuthModule, AuditLogModule, OutboxModule],
   providers: [
     NotificationAdminRepository,
     AdminNotificationService,
     AdminNotificationMutationResolver,
     NotificationRepository,
+    NotificationOutboxConsumer,
     UserNotificationService,
     UserNotificationQueryResolver,
     UserNotificationMutationResolver,

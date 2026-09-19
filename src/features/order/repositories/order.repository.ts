@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-import { buildOrderStatusNotification } from '@/features/notification';
+import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
+import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
   AuditTargetType,
@@ -147,7 +148,10 @@ export interface ReviewableOrderItemRow {
 
 @Injectable()
 export class OrderRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxPublisher,
+  ) {}
 
   /** USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론). */
   async findAccountWithProfileForCheckout(accountId: bigint): Promise<{
@@ -717,36 +721,33 @@ export class OrderRepository {
         },
       });
 
-      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다
-      const notification = buildOrderStatusNotification(
-        updatedOrder.order_number,
-        args.toStatus,
+      // 상태 전이 이벤트(outbox, 같은 tx) — 알림은 notification 소비자가 만든다. payload는 생산 시점 스냅샷.
+      // 주문은 단일 상품 구조라 첫 item으로 상품이 확정된다(다상품 확장 시 재검토).
+      const firstItem = await tx.orderItem.findFirst({
+        where: { order_id: order.id },
+        orderBy: { id: 'asc' },
+        select: {
+          product_id: true,
+          product_name_snapshot: true,
+          store_name_snapshot: true,
+        },
+      });
+      await this.outbox.publish(
+        tx,
+        orderStatusChangedEvent({
+          orderId: order.id,
+          orderNumber: updatedOrder.order_number,
+          buyerAccountId: updatedOrder.account_id,
+          fromStatus,
+          toStatus: args.toStatus,
+          storeId: args.storeId,
+          storeName: firstItem?.store_name_snapshot ?? null,
+          productId: firstItem?.product_id ?? null,
+          productName: firstItem?.product_name_snapshot ?? null,
+          occurredAt: args.now,
+          actorAccountId: args.actorAccountId,
+        }),
       );
-      if (notification) {
-        // 알림센터 서브라인·딥링크용 연관 ID. 주문은 단일 상품 구조라
-        // 첫 item으로 상품이 확정된다(다상품 확장 시 재검토).
-        const firstItem = await tx.orderItem.findFirst({
-          where: { order_id: order.id },
-          orderBy: { id: 'asc' },
-          select: {
-            product_id: true,
-            product_name_snapshot: true,
-            store_name_snapshot: true,
-          },
-        });
-        await tx.notification.create({
-          data: {
-            account_id: updatedOrder.account_id,
-            order_id: order.id,
-            store_id: args.storeId,
-            product_id: firstItem?.product_id ?? null,
-            order_number: updatedOrder.order_number,
-            store_name: firstItem?.store_name_snapshot ?? null,
-            product_name: firstItem?.product_name_snapshot ?? null,
-            ...notification,
-          },
-        });
-      }
 
       await tx.auditLog.create({
         data: {
@@ -895,25 +896,23 @@ export class OrderRepository {
           store_name_snapshot: true,
         },
       });
-      // 알림 내용은 notification feature가 단일 소스 — 판매자 취소와 같은 payload
-      const notification = buildOrderStatusNotification(
-        updated.order_number,
-        OrderStatus.CANCELED,
+      // 상태 전이 이벤트(outbox, 같은 tx) — 판매자 취소와 같은 계약
+      await this.outbox.publish(
+        tx,
+        orderStatusChangedEvent({
+          orderId: current.id,
+          orderNumber: updated.order_number,
+          buyerAccountId: updated.account_id,
+          fromStatus: current.status,
+          toStatus: OrderStatus.CANCELED,
+          storeId: firstItem?.store_id ?? null,
+          storeName: firstItem?.store_name_snapshot ?? null,
+          productId: firstItem?.product_id ?? null,
+          productName: firstItem?.product_name_snapshot ?? null,
+          occurredAt: args.now,
+          actorAccountId: args.actorAccountId,
+        }),
       );
-      if (notification) {
-        await tx.notification.create({
-          data: {
-            account_id: updated.account_id,
-            order_id: current.id,
-            store_id: firstItem?.store_id ?? null,
-            product_id: firstItem?.product_id ?? null,
-            order_number: updated.order_number,
-            store_name: firstItem?.store_name_snapshot ?? null,
-            product_name: firstItem?.product_name_snapshot ?? null,
-            ...notification,
-          },
-        });
-      }
 
       await tx.auditLog.create({
         data: {

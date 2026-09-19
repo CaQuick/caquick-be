@@ -6,9 +6,10 @@ import {
   normalizeIpForPersistence,
   normalizeUserAgentForPersistence,
 } from '@/common/utils/http-meta';
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
 import type { OutboxEventInput } from '@/features/outbox/types/outbox-event.type';
-import type { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 
 /**
@@ -31,7 +32,7 @@ export class OutboxPublisher {
     const occurredAt = event.occurredAt ?? this.clock.now();
     const ctx = this.requestContext.get();
     const row = await this.repo.insert(tx, {
-      eventId: this.ids.uuid(),
+      eventId: event.eventId ?? this.ids.uuid(),
       aggregateType: event.aggregateType,
       aggregateId: event.aggregateId,
       eventType: event.eventType,
@@ -42,5 +43,46 @@ export class OutboxPublisher {
       userAgent: normalizeUserAgentForPersistence(ctx?.userAgent),
     });
     return { eventId: row.event_id };
+  }
+
+  /**
+   * 멱등 발행 — 같은 eventId가 이미 있으면 적재하지 않고 그 payload를 돌려준다(요청 재생용).
+   * 존재 확인 뒤 적재하고, 그 사이 경쟁으로 unique에 걸리면 다시 읽는다.
+   */
+  async publishOnce(
+    tx: Prisma.TransactionClient,
+    event: OutboxEventInput & { eventId: string },
+  ): Promise<{ eventId: string; created: boolean; payload: Prisma.JsonValue }> {
+    const existing = await this.repo.findByEventId(tx, event.eventId);
+    if (existing) {
+      return {
+        eventId: existing.event_id,
+        created: false,
+        payload: existing.payload_json,
+      };
+    }
+    try {
+      await this.publish(tx, event);
+      return {
+        eventId: event.eventId,
+        created: true,
+        payload: event.payload as Prisma.JsonValue,
+      };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        uniqueConstraintName(error) === 'uk_outbox_event'
+      ) {
+        const raced = await this.repo.findByEventId(tx, event.eventId);
+        if (raced) {
+          return {
+            eventId: raced.event_id,
+            created: false,
+            payload: raced.payload_json,
+          };
+        }
+      }
+      throw error;
+    }
   }
 }

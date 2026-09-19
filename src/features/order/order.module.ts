@@ -14,13 +14,20 @@ import { AdminOrderService } from '@/features/order/services/order-admin.service
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
+import { OutboxModule } from '@/features/outbox';
 import { ProductModule } from '@/features/product';
 import { StoreModule } from '@/features/store';
 
 @Module({
   // 주문 생성이 상품 옵션 조회(ProductRepository)와 픽업 판정
   // (StorePickupScheduleService)을 소비한다 — 배럴 공개 API 경유.
-  imports: [ProductModule, StoreModule, AuditLogModule, AuthModule],
+  imports: [
+    ProductModule,
+    StoreModule,
+    AuditLogModule,
+    AuthModule,
+    OutboxModule,
+  ],
   providers: [
     OrderRepository,
     OrderStatusTransitionPolicy,

@@ -3,6 +3,8 @@ import {
   ArrayNotEmpty,
   IsIn,
   IsString,
+  Length,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 
@@ -24,6 +26,11 @@ export class AdminSendNotificationInput {
 
   @IsString()
   body!: string;
+
+  @IsString()
+  @Length(8, 64)
+  @Matches(/^\S+$/)
+  idempotencyKey!: string;
 
   @IsIn(ADMIN_NOTIFICATION_TARGET_KINDS)
   targetKind!: AdminNotificationTargetKindValue;

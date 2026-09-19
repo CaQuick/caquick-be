@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
-import { buildReviewLikedNotification } from '@/features/notification';
+import { OutboxPublisher } from '@/features/outbox';
 import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/review/constants/review.constants';
+import { reviewLikedEvent } from '@/features/review/events/review-liked.event';
 import {
   lockParentReviewOfComment,
   resolvePendingReports,
@@ -12,7 +13,10 @@ import { activeWhere, PrismaService } from '@/prisma';
 /** 리뷰 좋아요·댓글 write. 잠금 순서(리뷰 → 댓글 → 신고)는 review 소유 repository들이 같은 규칙을 공유한다. */
 @Injectable()
 export class ReviewEngagementRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxPublisher,
+  ) {}
 
   async countMyReviews(accountId: bigint): Promise<number> {
     return this.prisma.review.count({ where: { account_id: accountId } });
@@ -30,6 +34,7 @@ export class ReviewEngagementRepository {
           account_id: true,
           store_id: true,
           product_id: true,
+          product_name_snapshot: true,
         },
       });
 
@@ -63,29 +68,24 @@ export class ReviewEngagementRepository {
         data: { review_id: review.id, account_id: args.accountId },
       });
 
-      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다(outbox 소비자 전환 전까지 직접 write).
-      // 표시값(매장명·상품명)은 생성 시점 스냅샷으로 싣는다 — 08b에서 이벤트 payload로 옮겨간다
-      const [product, store] = await Promise.all([
-        tx.product.findFirst({
-          where: { id: review.product_id },
-          select: { name: true },
-        }),
-        tx.store.findFirst({
-          where: { id: review.store_id },
-          select: { store_name: true },
-        }),
-      ]);
-      await tx.notification.create({
-        data: {
-          account_id: review.account_id,
-          review_id: review.id,
-          store_id: review.store_id,
-          product_id: review.product_id,
-          store_name: store?.store_name ?? null,
-          product_name: product?.name ?? null,
-          ...buildReviewLikedNotification(),
-        },
+      // 최초 좋아요 이벤트(outbox, 같은 tx) — 알림은 notification 소비자가 만든다.
+      // 상품명은 리뷰의 작성 시점 스냅샷, 매장명은 리뷰에 스냅샷이 없어 여기서 읽는다(P4 federation 전까지)
+      const store = await tx.store.findFirst({
+        where: { id: review.store_id },
+        select: { store_name: true },
       });
+      await this.outbox.publish(
+        tx,
+        reviewLikedEvent({
+          reviewId: review.id,
+          authorAccountId: review.account_id,
+          likerAccountId: args.accountId,
+          storeId: review.store_id,
+          storeName: store?.store_name ?? null,
+          productId: review.product_id,
+          productName: review.product_name_snapshot,
+        }),
+      );
 
       return 'liked';
     });

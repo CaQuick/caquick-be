@@ -13,6 +13,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('User Order Resolver (real DB)', () => {
   let resolver: UserOrderQueryResolver;
@@ -20,7 +21,13 @@ describe('User Order Resolver (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserOrderQueryResolver, UserOrderService, OrderRepository],
+      providers: [
+        UserOrderQueryResolver,
+        UserOrderService,
+        OrderRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
+      ],
     });
     resolver = module.get(UserOrderQueryResolver);
     prisma = p;

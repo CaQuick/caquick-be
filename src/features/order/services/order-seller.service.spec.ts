@@ -14,6 +14,7 @@ import {
   setupSellerWithStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('SellerOrderService (real DB)', () => {
   let service: SellerOrderService;
@@ -30,6 +31,8 @@ describe('SellerOrderService (real DB)', () => {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
         },
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     service = module.get(SellerOrderService);

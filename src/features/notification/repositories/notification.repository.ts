@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import { Prisma } from '@/generated/prisma/client';
+import {
+  type NotificationEvent,
+  type NotificationType,
+  Prisma,
+} from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
 /** 표시값(매장명·상품명·주문번호)은 생성 시점 스냅샷 컬럼 — 조회가 다른 도메인을 조인하지 않는다. */
@@ -25,10 +29,73 @@ export type NotificationListRow = Prisma.NotificationGetPayload<{
   select: typeof notificationListSelect;
 }>;
 
-/** 구매자 알림센터(목록·미읽 수·읽음 처리). 알림 생성은 이벤트 소비자(08b)와 관리자 발송이 맡는다. */
+/** outbox 소비자가 만드는 알림 1건. 표시값은 이벤트 payload의 생산 시점 스냅샷. */
+export interface NotificationEventRow {
+  account_id: bigint;
+  type: NotificationType;
+  event: NotificationEvent | null;
+  title: string;
+  body: string;
+  store_id?: bigint | null;
+  product_id?: bigint | null;
+  order_id?: bigint | null;
+  review_id?: bigint | null;
+  store_name?: string | null;
+  product_name?: string | null;
+  order_number?: string | null;
+  /** 이벤트 발생 시각(outbox occurred_at) */
+  created_at: Date;
+}
+
+/** 구매자 알림센터(목록·미읽 수·읽음 처리)와 이벤트 소비 저장. 알림 생성은 outbox 소비자만 한다. */
 @Injectable()
 export class NotificationRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * at-least-once 재전달 흡수: 같은 이벤트로 이미 들어간 계정은 빼고 넣는다(unique (source_event_id, account_id)가 최종 방어).
+   * skipDuplicates(INSERT IGNORE)는 FK 위반 같은 다른 오류까지 삼켜 조용히 0건이 되므로 쓰지 않는다. 반환은 새로 들어간 건수.
+   */
+  async createFromEvent(
+    sourceEventId: string,
+    rows: NotificationEventRow[],
+  ): Promise<number> {
+    if (rows.length === 0) return 0;
+    const delivered = new Set(
+      (
+        await this.prisma.notification.findMany({
+          where: {
+            source_event_id: sourceEventId,
+            account_id: { in: rows.map((row) => row.account_id) },
+          },
+          select: { account_id: true },
+        })
+      ).map((row) => row.account_id.toString()),
+    );
+    const fresh = rows.filter(
+      (row) => !delivered.has(row.account_id.toString()),
+    );
+    if (fresh.length === 0) return 0;
+    const result = await this.prisma.notification.createMany({
+      data: fresh.map((row) => ({
+        account_id: row.account_id,
+        type: row.type,
+        event: row.event,
+        title: row.title,
+        body: row.body,
+        store_id: row.store_id ?? null,
+        product_id: row.product_id ?? null,
+        order_id: row.order_id ?? null,
+        review_id: row.review_id ?? null,
+        store_name: row.store_name ?? null,
+        product_name: row.product_name ?? null,
+        order_number: row.order_number ?? null,
+        created_at: row.created_at,
+        source_event_id: sourceEventId,
+      })),
+    });
+    return result.count;
+  }
 
   /** 3개월 밖 미읽 알림까지 세면 목록(myNotifications)과 배지 수가 어긋난다. */
   async countUnreadNotifications(args: {

@@ -75,7 +75,6 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account->Account',
   'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account.user_profile->UserProfile',
   'src/features/review/repositories/review-engagement.repository.ts|raw|createReviewComment:product,review,store',
-  'src/features/review/repositories/review-engagement.repository.ts|root|likeReview:Product.findFirst',
   'src/features/review/repositories/review-engagement.repository.ts|root|likeReview:Store.findFirst',
   'src/features/review/repositories/review-lock.helper.ts|opaque|resolvePendingReports:ReviewReport.where=args.where',
   'src/features/review/repositories/review-order-item-snapshot.helper.ts|root|snapshotReviewOrderItem:OrderItem.findUniqueOrThrow',

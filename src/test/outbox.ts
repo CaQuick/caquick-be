@@ -1,7 +1,60 @@
-import type {
-  DispatchSummary,
-  OutboxDispatcherService,
-} from '@/features/outbox';
+import type { ModuleMetadata, Provider } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { DiscoveryModule } from '@nestjs/core';
+
+import { ClockService } from '@/common/providers/clock.service';
+import { IdGenerator } from '@/common/providers/id-generator.service';
+import type { OutboxConfig } from '@/config/outbox.config';
+import type { DispatchSummary } from '@/features/outbox';
+import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
+import { OutboxDispatcherService } from '@/features/outbox/services/outbox-dispatcher.service';
+import { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.service';
+
+export const OUTBOX_TEST_CONFIG: OutboxConfig = {
+  dispatchEnabled: false,
+  pollIntervalMs: 1_000,
+  batchSize: 100,
+  maxAttempts: 5,
+  partitionConcurrency: 4,
+};
+
+/** spec 모듈에 발행·소비 배선을 붙인다. 소비자는 spec이 providers에 직접 넣는다(@SubscribeOutbox로 발견). */
+export const OUTBOX_TEST_IMPORTS: NonNullable<ModuleMetadata['imports']> = [
+  DiscoveryModule,
+];
+
+/** 발행만 필요한 spec(OrderRepository 등 발행 repository를 주입하는 곳)용 — 디스패처·DiscoveryModule 없이. */
+export function outboxPublisherProviders(
+  omit: { clock?: boolean; ids?: boolean } = {},
+): Provider[] {
+  return [
+    OutboxRepository,
+    OutboxPublisher,
+    ...(omit.clock ? [] : [ClockService]),
+    ...(omit.ids ? [] : [IdGenerator]),
+  ];
+}
+
+/** ClockService·IdGenerator·ConfigService를 spec이 따로 넣으면 그쪽을 빼고(중복 provider 방지) 실제 구현 대신 그 값을 쓴다. */
+export function outboxTestProviders(
+  omit: { clock?: boolean; ids?: boolean; config?: boolean } = {},
+): Provider[] {
+  return [
+    OutboxRepository,
+    OutboxPublisher,
+    OutboxDispatcherService,
+    ...(omit.clock ? [] : [ClockService]),
+    ...(omit.ids ? [] : [IdGenerator]),
+    ...(omit.config
+      ? []
+      : [
+          {
+            provide: ConfigService,
+            useValue: { getOrThrow: () => OUTBOX_TEST_CONFIG },
+          },
+        ]),
+  ];
+}
 
 /**
  * 폴링 없이 outbox를 소진한다 — spec이 이벤트 소비 결과를 동기로 단언하기 위한 헬퍼.

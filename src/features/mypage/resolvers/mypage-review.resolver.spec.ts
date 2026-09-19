@@ -16,6 +16,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 const VALID_CONTENT = '맛있게 잘 먹었습니다. 다음에 또 주문할게요.';
 
@@ -39,6 +40,8 @@ describe('User Review Resolvers (real DB)', () => {
         ReviewRepository,
         OrderRepository,
         { provide: S3Service, useValue: s3Service },
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     queryResolver = module.get(UserReviewQueryResolver);

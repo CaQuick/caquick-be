@@ -1057,6 +1057,9 @@ model Notification {
   product_name String? @db.VarChar(200)
   order_number String? @db.VarChar(30)
 
+  // 생성 원인 outbox 이벤트(at-least-once 재전달 dedupe). 관리자 일괄 발송은 이벤트 1건에 계정별 1행이라 계정과 함께 unique.
+  source_event_id String? @db.Char(36)
+
   read_at DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
@@ -1071,6 +1074,7 @@ model Notification {
   order_item OrderItem? @relation(fields: [order_item_id], references: [id])
   review     Review?    @relation(fields: [review_id], references: [id])
 
+  @@unique([source_event_id, account_id], map: "uk_notification_source_account")
   @@index([account_id, created_at], map: "idx_notification_account")
   @@index([account_id, read_at], map: "idx_notification_unread")
   @@index([store_id], map: "idx_notification_store")

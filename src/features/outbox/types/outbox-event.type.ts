@@ -9,6 +9,8 @@ export interface OutboxEventInput {
   /** 기본값 clock.now(). 소비자는 이 값을 생성 시각(notification.created_at 등)으로 쓴다. */
   occurredAt?: Date;
   actorAccountId?: bigint | null;
+  /** 결정적 ID(uuid v5 등)를 주면 같은 ID의 재발행은 unique로 거부된다 — publishOnce와 함께 멱등 요청에 쓴다. 기본 랜덤 uuid. */
+  eventId?: string;
 }
 
 /** 소비자에게 전달되는 이벤트. */

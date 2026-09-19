@@ -42,6 +42,16 @@ export class OutboxRepository {
     });
   }
 
+  async findByEventId(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+  ): Promise<Pick<Outbox, 'id' | 'event_id' | 'payload_json'> | null> {
+    return tx.outbox.findUnique({
+      where: { event_id: eventId },
+      select: { id: true, event_id: true, payload_json: true },
+    });
+  }
+
   /** 기한이 된 PENDING을 id 순으로 — 파티션 FIFO의 기준 순서. */
   async findDue(now: Date, limit: number): Promise<OutboxRow[]> {
     return this.prisma.outbox.findMany({

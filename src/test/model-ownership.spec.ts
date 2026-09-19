@@ -20,12 +20,6 @@ const schema = loadSchema();
 /** [파일, 모델, 사이트 수] — 소유 feature 밖에서 write하는 현재 코드. P1 종료 시 빈 표가 목표. */
 const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
   ['src/features/order/repositories/order.repository.ts', 'AuditLog', 2],
-  ['src/features/order/repositories/order.repository.ts', 'Notification', 2],
-  [
-    'src/features/review/repositories/review-engagement.repository.ts',
-    'Notification',
-    1,
-  ],
 ];
 
 function groupViolations(
@@ -63,7 +57,7 @@ describe('모델 소유권 (단일 writer)', () => {
   it('소유 feature 밖 write는 예외 목록과 정확히 일치한다', () => {
     const found = groupViolations(collectWriteSites(schema));
     expect(found).toEqual(WRITE_EXCEPTIONS);
-    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(5);
+    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(2);
   });
 
   describe('검사기 반증', () => {

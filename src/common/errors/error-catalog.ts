@@ -604,12 +604,6 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: 'startsAt은 endsAt보다 빨라야 합니다.',
   },
-  NOTIFICATION_FANOUT_INTERRUPTED: {
-    status: HttpStatus.INTERNAL_SERVER_ERROR,
-    // 청크 사이 실패. 그때까지 저장된 건수는 감사 로그(interrupted)에 남는다 — 재실행은 그만큼 중복.
-    message: ({ sentCount }) =>
-      `알림 발송이 ${sentCount}건 이후 중단되었습니다. 재발송 시 중복되므로 감사 로그를 확인하세요.`,
-  },
   // ── 인증(로그인·토큰)
   INVALID_ACCESS_TOKEN: {
     status: HttpStatus.UNAUTHORIZED,

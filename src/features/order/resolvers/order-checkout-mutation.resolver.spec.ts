@@ -17,6 +17,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -38,6 +39,8 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         StoreRepository,
         ClockService,
         RandomService,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders({ clock: true }),
       ],
     });
     resolver = module.get(OrderCheckoutMutationResolver);

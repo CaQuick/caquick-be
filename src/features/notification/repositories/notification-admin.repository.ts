@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 
-import { AccountType, type NotificationType } from '@/generated/prisma/client';
+import { type OutboxEventInput, OutboxPublisher } from '@/features/outbox';
+import { AccountType, type Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
-/** 관리자 일괄 발송의 대상 계정 조회와 알림 생성. 이벤트 기반 발송(outbox)은 08b에서 붙는다. */
+/** 관리자 일괄 발송의 대상 계정 조회와 발송 요청 이벤트 적재. */
 @Injectable()
 export class NotificationAdminRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxPublisher,
+  ) {}
 
   async listActiveUserAccountIds(args: {
     afterId?: bigint;
@@ -38,20 +42,10 @@ export class NotificationAdminRepository {
     return rows.map((r) => r.id);
   }
 
-  /** event는 없다 — 시스템 이벤트가 아니다. */
-  async createNotifications(
-    accountIds: bigint[],
-    payload: { type: NotificationType; title: string; body: string },
-  ): Promise<number> {
-    if (accountIds.length === 0) return 0;
-    const result = await this.prisma.notification.createMany({
-      data: accountIds.map((account_id) => ({
-        account_id,
-        type: payload.type,
-        title: payload.title,
-        body: payload.body,
-      })),
-    });
-    return result.count;
+  /** 발송 요청을 이벤트 1건으로 적재한다(fan-out은 소비자). 같은 eventId면 적재하지 않고 처음 payload를 돌려준다. */
+  async requestBroadcast(
+    event: OutboxEventInput & { eventId: string },
+  ): Promise<{ created: boolean; payload: Prisma.JsonValue }> {
+    return this.prisma.$transaction((tx) => this.outbox.publishOnce(tx, event));
   }
 }
