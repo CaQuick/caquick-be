@@ -27,3 +27,8 @@ export type {
 } from '@/features/review/types/review-listing-output.type';
 // 관리자 신고 집계(dashboard feature).
 export { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
+// 리뷰 좋아요 이벤트 계약(outbox). 소비자(notification)는 payload 스냅샷만 읽는다.
+export {
+  parseReviewLikedPayload,
+  REVIEW_LIKED,
+} from '@/features/review/events/review-liked.event';

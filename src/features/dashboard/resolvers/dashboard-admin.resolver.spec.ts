@@ -13,6 +13,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 // 집계 세부 검증은 dashboard-admin.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('Admin Dashboard Resolver (real DB)', () => {
@@ -31,6 +32,8 @@ describe('Admin Dashboard Resolver (real DB)', () => {
         AccountAdminRepository,
         SearchRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     resolver = module.get(AdminDashboardQueryResolver);

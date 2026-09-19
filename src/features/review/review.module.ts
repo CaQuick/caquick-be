@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
+import { OutboxModule } from '@/features/outbox';
 import { ProductReviewRepository } from '@/features/review/repositories/product-review.repository';
 import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
 import { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
@@ -23,7 +24,7 @@ import { UserReportService } from '@/features/review/services/review-report.serv
 
 @Module({
   // 관리자 모더레이션: 관리자 컨텍스트(AuthModule)·감사 기록(AuditLogModule)
-  imports: [AuthModule, AuditLogModule],
+  imports: [AuthModule, AuditLogModule, OutboxModule],
   providers: [
     ReviewReadRepository,
     ReviewRepository,

@@ -16,6 +16,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('UserReportService (real DB)', () => {
   let service: UserReportService;
@@ -31,6 +32,8 @@ describe('UserReportService (real DB)', () => {
         ReviewEngagementRepository,
         ReviewReportRepository,
         ReviewRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     service = module.get(UserReportService);

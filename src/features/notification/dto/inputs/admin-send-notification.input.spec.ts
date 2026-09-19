@@ -9,7 +9,12 @@ function build(plain: object): AdminSendNotificationInput {
   return plainToInstance(AdminSendNotificationInput, plain);
 }
 
-const base = { type: 'SYSTEM', title: 't', body: 'b' };
+const base = {
+  type: 'SYSTEM',
+  title: 't',
+  body: 'b',
+  idempotencyKey: 'notice-key-1',
+};
 
 describe('AdminSendNotificationInput', () => {
   it('ALL_USERS는 accountIds 없이 통과', async () => {
@@ -38,4 +43,15 @@ describe('AdminSendNotificationInput', () => {
       expect(errors.map((e) => e.property)).toEqual(['type']);
     },
   );
+
+  it.each([
+    ['8자 미만', 'short'],
+    ['공백 포함', 'has space key'],
+    ['누락', undefined],
+  ])('idempotencyKey %s 거절', async (_label, idempotencyKey) => {
+    const errors = await validate(
+      build({ ...base, targetKind: 'ALL_USERS', idempotencyKey }),
+    );
+    expect(errors.map((e) => e.property)).toEqual(['idempotencyKey']);
+  });
 });

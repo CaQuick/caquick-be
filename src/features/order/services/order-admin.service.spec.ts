@@ -3,9 +3,13 @@ import { BadRequestException } from '@nestjs/common';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
+import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
+import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
+import { OutboxDispatcherService } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -17,24 +21,36 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  drainOutbox,
+  OUTBOX_TEST_IMPORTS,
+  outboxTestProviders,
+} from '@/test/outbox';
 
 describe('AdminOrderService (real DB)', () => {
   let service: AdminOrderService;
   let orderRepo: OrderRepository;
   let prisma: PrismaClient;
+  let dispatcher: OutboxDispatcherService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
+      imports: OUTBOX_TEST_IMPORTS,
       providers: [
         AdminOrderService,
         AccountAdminRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        ...outboxTestProviders(),
+        NotificationOutboxConsumer,
+        NotificationRepository,
+        NotificationAdminRepository,
       ],
     });
     service = module.get(AdminOrderService);
     orderRepo = module.get(OrderRepository);
+    dispatcher = module.get(OutboxDispatcherService);
     prisma = p;
   });
 
@@ -211,6 +227,7 @@ describe('AdminOrderService (real DB)', () => {
         });
         expect(history.from_status).toBe(status);
         expect(history.note).toBe('[관리자] 가게 사정');
+        await drainOutbox(dispatcher);
         const notification = await prisma.notification.findFirstOrThrow({
           where: { order_id: order.id },
         });
@@ -345,6 +362,7 @@ describe('AdminOrderService (real DB)', () => {
           where: { order_id: order.id },
         }),
       ).toBe(1);
+      await drainOutbox(dispatcher);
       expect(
         await prisma.notification.count({ where: { order_id: order.id } }),
       ).toBe(1);

@@ -11,6 +11,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('User Engagement Resolver (real DB)', () => {
   let resolver: UserEngagementMutationResolver;
@@ -23,6 +24,8 @@ describe('User Engagement Resolver (real DB)', () => {
         UserEngagementMutationResolver,
         UserEngagementService,
         AccountUserRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     resolver = module.get(UserEngagementMutationResolver);

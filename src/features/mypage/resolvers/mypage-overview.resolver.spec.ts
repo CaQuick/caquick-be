@@ -20,6 +20,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('User Mypage Resolver (real DB)', () => {
   let resolver: UserMypageQueryResolver;
@@ -38,6 +39,8 @@ describe('User Mypage Resolver (real DB)', () => {
         AccountUserRepository,
         OrderRepository,
         RecentProductViewRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
       ],
     });
     resolver = module.get(UserMypageQueryResolver);

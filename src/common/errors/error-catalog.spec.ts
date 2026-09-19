@@ -33,7 +33,6 @@ const RENDER_PARAMS: Partial<
   IDS_LENGTH_MISMATCH: { field: 'imageIds' },
   INVALID_IDS: { field: 'imageIds' },
   PRODUCT_IMAGE_LIMIT_EXCEEDED: { max: 10 },
-  NOTIFICATION_FANOUT_INTERRUPTED: { sentCount: 120 },
   UNSUPPORTED_OIDC_PROVIDER: { provider: 'facebook' },
 };
 

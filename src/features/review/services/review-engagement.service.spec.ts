@@ -1,4 +1,8 @@
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
+import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
+import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
+import { OutboxDispatcherService } from '@/features/outbox';
 import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { UserEngagementService } from '@/features/review/services/review-engagement.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -11,21 +15,33 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  drainOutbox,
+  OUTBOX_TEST_IMPORTS,
+  outboxTestProviders,
+} from '@/test/outbox';
 
 describe('UserEngagementService (real DB)', () => {
   let service: UserEngagementService;
   let prisma: PrismaClient;
+  let dispatcher: OutboxDispatcherService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
+      imports: OUTBOX_TEST_IMPORTS,
       providers: [
         ReviewEngagementRepository,
         UserEngagementService,
         AccountUserRepository,
+        ...outboxTestProviders(),
+        NotificationOutboxConsumer,
+        NotificationRepository,
+        NotificationAdminRepository,
       ],
     });
 
     service = module.get(UserEngagementService);
+    dispatcher = module.get(OutboxDispatcherService);
     prisma = p;
   });
 
@@ -55,6 +71,8 @@ describe('UserEngagementService (real DB)', () => {
       });
       expect(like).toBeDefined();
 
+      // 알림은 outbox 소비자가 만든다 — 이벤트 소진 뒤 본다. 표시값은 이벤트 payload 스냅샷
+      await drainOutbox(dispatcher);
       const notification = await prisma.notification.findFirstOrThrow({
         where: {
           account_id: review.account_id,
@@ -64,6 +82,12 @@ describe('UserEngagementService (real DB)', () => {
         },
       });
       expect(notification.title).toContain('좋아요');
+      expect(notification).toMatchObject({
+        store_id: review.store_id,
+        product_id: review.product_id,
+        product_name: review.product_name_snapshot,
+      });
+      expect(notification.store_name).not.toBeNull();
     });
 
     it('자기 리뷰에 좋아요 시 400이 발생하고 ReviewLike/알림이 생성되지 않는다', async () => {
@@ -80,10 +104,12 @@ describe('UserEngagementService (real DB)', () => {
       });
       expect(likeCount).toBe(0);
 
+      await drainOutbox(dispatcher);
       const notifCount = await prisma.notification.count({
         where: { review_id: review.id },
       });
       expect(notifCount).toBe(0);
+      expect(await prisma.outbox.count()).toBe(0);
     });
 
     it('존재하지 않는 리뷰면 404를 던진다', async () => {

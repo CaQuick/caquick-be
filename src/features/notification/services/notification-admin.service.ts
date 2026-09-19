@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { deterministicUuid } from '@/common/utils/uuid';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -11,14 +11,24 @@ import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import {
   MAX_NOTIFICATION_BODY_LENGTH,
   MAX_NOTIFICATION_TITLE_LENGTH,
-  NOTIFICATION_FANOUT_BATCH_SIZE,
 } from '@/features/notification/constants/notification-admin.constants';
 import type { AdminSendNotificationInput } from '@/features/notification/dto/inputs/admin-send-notification.input';
+import {
+  audienceCount,
+  type BroadcastAudience,
+  NOTIFICATION_BROADCAST_NAMESPACE,
+  type NotificationBroadcastRequestedPayload,
+  notificationBroadcastRequestedEvent,
+  parseNotificationBroadcastRequestedPayload,
+} from '@/features/notification/events/notification-broadcast-requested.event';
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import type { AdminSendNotificationResultOutput } from '@/features/notification/types/notification-admin-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
-/** ALL_USERS는 키셋으로 활성 USER를 훑어 청크 단위 createMany — 청크 사이 트랜잭션은 없다(부분 실패 시 sentCount까지 저장된 상태, 재실행은 중복). 멱등 키·배치 잡은 범위 밖. */
+/**
+ * 대상은 요청 시점에 확정하고 이벤트 1건만 적재한다 — 저장(fan-out)은 outbox 소비자가 청크 단위로 한다.
+ * 같은 관리자·같은 idempotencyKey는 이벤트를 다시 적재하지 않고 처음 응답을 재생한다(중복 발송 없음).
+ */
 @Injectable()
 export class AdminNotificationService extends AdminBaseService {
   constructor(
@@ -35,15 +45,65 @@ export class AdminNotificationService extends AdminBaseService {
     input: AdminSendNotificationInput,
   ): Promise<AdminSendNotificationResultOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const payload = {
+    const { audience, skippedAccountIds } = await this.resolveAudience(input);
+    const sentCount = audienceCount(audience);
+    const payload: NotificationBroadcastRequestedPayload = {
       type: input.type,
       title: cleanRequiredText(input.title, MAX_NOTIFICATION_TITLE_LENGTH),
       body: cleanRequiredText(input.body, MAX_NOTIFICATION_BODY_LENGTH),
+      audience,
+      skippedAccountIds,
     };
+    const eventId = deterministicUuid(
+      NOTIFICATION_BROADCAST_NAMESPACE,
+      `${ctx.accountId}:${input.idempotencyKey}`,
+    );
 
-    let sentCount = 0;
-    const skippedAccountIds: string[] = [];
+    // 감사는 이벤트 적재와 같은 tx — 개별 알림 ID가 아니라 발송 요청 자체를 남긴다(대상은 afterJson)
+    const result = await this.repo.requestBroadcast(
+      notificationBroadcastRequestedEvent({
+        eventId,
+        actorAccountId: ctx.accountId,
+        payload,
+      }),
+      (tx) =>
+        this.auditLogs.createAuditLog(
+          {
+            actorAccountId: ctx.accountId,
+            storeId: null,
+            targetType: AuditTargetType.NOTIFICATION,
+            targetId: ctx.accountId,
+            action: AuditActionType.CREATE,
+            afterJson: {
+              eventId,
+              type: payload.type,
+              title: payload.title,
+              targetKind: input.targetKind,
+              sentCount,
+              skippedCount: skippedAccountIds.length,
+            },
+          },
+          tx,
+        ),
+    );
+    if (!result.created) {
+      // 재생 — 처음 확정한 대상이 정답. 이번 입력으로 다시 계산한 대상은 버린다
+      const first = parseNotificationBroadcastRequestedPayload(result.payload);
+      return {
+        sentCount: audienceCount(first.audience),
+        skippedAccountIds: first.skippedAccountIds,
+      };
+    }
+    return { sentCount, skippedAccountIds };
+  }
 
+  /**
+   * ACCOUNT_IDS는 활성 USER만 남기고 나머지를 skipped로. ALL_USERS는 전원을 모으지 않고
+   * 요청 시점 컷오프(최대 id)·건수만 확정한다 — 소비자가 컷오프 이하를 페이지로 훑는다(대상 규모에 무관하게 유계).
+   */
+  private async resolveAudience(
+    input: AdminSendNotificationInput,
+  ): Promise<{ audience: BroadcastAudience; skippedAccountIds: string[] }> {
     if (input.targetKind === 'ACCOUNT_IDS') {
       // DTO가 ACCOUNT_IDS일 때 비어 있지 않음을 보장한다. 중복은 한 번으로
       const requested = [
@@ -52,79 +112,26 @@ export class AdminNotificationService extends AdminBaseService {
       const eligible = new Set(
         (await this.repo.filterActiveUserAccountIds(requested)).map(String),
       );
-      const targets = requested.filter((id) => eligible.has(String(id)));
-      for (const id of requested) {
-        if (!eligible.has(String(id))) skippedAccountIds.push(id.toString());
-      }
-      sentCount = await this.repo.createNotifications(targets, payload);
-    } else {
-      let afterId: bigint | undefined;
-      let interrupted = false;
-      try {
-        for (;;) {
-          const ids = await this.repo.listActiveUserAccountIds({
-            afterId,
-            limit: NOTIFICATION_FANOUT_BATCH_SIZE,
-          });
-          if (ids.length === 0) break;
-          sentCount += await this.repo.createNotifications(ids, payload);
-          afterId = ids[ids.length - 1];
-          if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) break;
-        }
-      } catch {
-        // 앞 청크는 이미 커밋됐다. 조용히 실패하면 재시도가 그만큼 중복 발송이 되므로
-        // 저장된 건수를 감사에 남기고 그 사실을 오류로 알린다
-        interrupted = true;
-      }
-      if (interrupted) {
-        await this.audit(
-          ctx.accountId,
-          payload,
-          input.targetKind,
-          sentCount,
-          0,
-          true,
-        );
-        throw new DomainException('NOTIFICATION_FANOUT_INTERRUPTED', {
-          sentCount,
-        });
-      }
+      return {
+        audience: {
+          kind: 'ACCOUNT_IDS',
+          accountIds: requested
+            .filter((id) => eligible.has(String(id)))
+            .map(String),
+        },
+        skippedAccountIds: requested
+          .filter((id) => !eligible.has(String(id)))
+          .map(String),
+      };
     }
-
-    await this.audit(
-      ctx.accountId,
-      payload,
-      input.targetKind,
-      sentCount,
-      skippedAccountIds.length,
-      false,
-    );
-    return { sentCount, skippedAccountIds };
-  }
-
-  /** 개별 알림 ID가 아니라 발송 행위 자체를 남긴다(대상은 afterJson). */
-  private audit(
-    actorAccountId: bigint,
-    payload: { type: string; title: string },
-    targetKind: string,
-    sentCount: number,
-    skippedCount: number,
-    interrupted: boolean,
-  ): Promise<unknown> {
-    return this.auditLogs.createAuditLog({
-      actorAccountId,
-      storeId: null,
-      targetType: AuditTargetType.NOTIFICATION,
-      targetId: actorAccountId,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        type: payload.type,
-        title: payload.title,
-        targetKind,
-        sentCount,
-        skippedCount,
-        interrupted,
+    const snapshot = await this.repo.snapshotActiveUserAudience();
+    return {
+      audience: {
+        kind: 'ALL_USERS',
+        maxAccountId: (snapshot.maxAccountId ?? 0n).toString(),
+        count: snapshot.count,
       },
-    });
+      skippedAccountIds: [],
+    };
   }
 }
