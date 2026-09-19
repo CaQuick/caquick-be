@@ -1,11 +1,11 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { AdminDeleteReviewCommentInput } from '@/features/admin/dto/inputs/admin-delete-review-comment.input';
-import { AdminDeleteReviewInput } from '@/features/admin/dto/inputs/admin-delete-review.input';
-import { AdminResolveReviewReportInput } from '@/features/admin/dto/inputs/admin-resolve-review-report.input';
-import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
-import type { AdminReviewReportOutput } from '@/features/admin/types/admin-output.type';
+import { AdminDeleteReviewCommentInput } from '@/features/review/dto/inputs/admin-delete-review-comment.input';
+import { AdminDeleteReviewInput } from '@/features/review/dto/inputs/admin-delete-review.input';
+import { AdminResolveReviewReportInput } from '@/features/review/dto/inputs/admin-resolve-review-report.input';
+import { AdminModerationService } from '@/features/review/services/review-admin.service';
+import type { AdminReviewReportOutput } from '@/features/review/types/review-admin-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

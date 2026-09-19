@@ -1,12 +1,12 @@
 // 분기/검증 세부는 admin-moderation.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 
-import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminModerationMutationResolver } from '@/features/admin/resolvers/admin-moderation-mutation.resolver';
-import { AdminModerationQueryResolver } from '@/features/admin/resolvers/admin-moderation-query.resolver';
-import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
+import { AdminModerationMutationResolver } from '@/features/review/resolvers/review-admin-mutation.resolver';
+import { AdminModerationQueryResolver } from '@/features/review/resolvers/review-admin-query.resolver';
+import { AdminModerationService } from '@/features/review/services/review-admin.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -24,7 +24,7 @@ describe('Admin Moderation Resolvers (real DB)', () => {
         AdminModerationQueryResolver,
         AdminModerationMutationResolver,
         AdminModerationService,
-        AdminRepository,
+        ReviewAdminRepository,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],

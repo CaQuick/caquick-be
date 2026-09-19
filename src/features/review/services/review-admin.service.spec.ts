@@ -1,8 +1,8 @@
-import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
+import { AdminModerationService } from '@/features/review/services/review-admin.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -23,7 +23,7 @@ describe('AdminModerationService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         AdminModerationService,
-        AdminRepository,
+        ReviewAdminRepository,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],

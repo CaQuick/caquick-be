@@ -4,7 +4,7 @@ import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import {
   REVIEW_REPORT_ACTIONS,
   type ReviewReportActionValue,
-} from '@/features/admin/constants/admin.constants';
+} from '@/features/review/constants/review.constants';
 
 export class AdminResolveReviewReportInput {
   @IsString()

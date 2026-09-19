@@ -15,12 +15,6 @@ export {
 export { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 export { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 export { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
-// review 테이블 잠금·신고 종결 1벌 — 관리자 모더레이션(admin)이 자기 tx를 넘겨 쓴다.
-export {
-  lockActiveReviewRow,
-  lockParentReviewOfComment,
-  resolvePendingReports,
-} from '@/features/review/repositories/review-lock.helper';
 // 공개 리뷰 읽기(집계·row 조회·쇼케이스). 리뷰 상세·댓글(product)과 홈 쇼케이스(product)가 소비한다.
 export {
   ReviewReadRepository,
