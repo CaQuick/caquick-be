@@ -6,6 +6,7 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
+import { WishlistRepository } from '@/features/review';
 import {
   DEFAULT_PAGINATION_LIMIT,
   NOTIFICATION_VISIBLE_MONTHS,
@@ -21,16 +22,23 @@ import type {
 
 @Injectable()
 export class UserNotificationService extends UserBaseService {
-  constructor(repo: UserRepository) {
+  constructor(
+    repo: UserRepository,
+    private readonly wishlists: WishlistRepository,
+  ) {
     super(repo);
   }
 
   async viewerCounts(accountId: bigint): Promise<ViewerCounts> {
     await this.requireActiveUser(accountId);
-    return this.repo.getViewerCounts({
-      accountId,
-      notificationSince: this.notificationVisibleSince(),
-    });
+    const [unreadNotificationCount, wishlistCount] = await Promise.all([
+      this.repo.countUnreadNotifications({
+        accountId,
+        notificationSince: this.notificationVisibleSince(),
+      }),
+      this.wishlists.countWishlistItems(accountId),
+    ]);
+    return { unreadNotificationCount, wishlistCount };
   }
 
   async myNotifications(

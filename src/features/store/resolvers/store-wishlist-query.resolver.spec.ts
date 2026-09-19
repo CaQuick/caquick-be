@@ -1,7 +1,7 @@
 // 전체 경로(리졸버→서비스→레포지토리→DB) 통합 검증. 분기/집계 세부 검증은 store-wishlist.service.spec.ts에서 담당.
 
 import { ReviewReadRepository } from '@/features/review';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
 import { StoreCardService } from '@/features/store/services/store-card.service';

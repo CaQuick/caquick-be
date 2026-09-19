@@ -6,6 +6,11 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
+  lockActiveReviewRow,
+  lockParentReviewOfComment,
+  resolvePendingReports,
+} from '@/features/review';
+import {
   AccountType,
   AuditActionType,
   AuditTargetType,
@@ -22,15 +27,7 @@ import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
 /** 행 잠금 대상 테이블. 고정 문자열만 raw로 들어간다. */
 type LockableTable =
-  | 'store'
-  | 'product'
-  | 'banner'
-  | 'category'
-  | 'tag'
-  | 'review'
-  | 'review_comment'
-  | 'review_report'
-  | 'region';
+  'store' | 'product' | 'banner' | 'category' | 'tag' | 'region';
 
 export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];
 
@@ -385,22 +382,6 @@ export class AdminRepository {
       WHERE id = ${id} AND deleted_at IS NULL
       FOR UPDATE`;
     return rows.length > 0;
-  }
-
-  /**
-   * 댓글을 잠그기 전에 부모 리뷰부터 잠근다(리뷰 → 댓글 → 신고). 리뷰 삭제 경로(관리자·작성자)가
-   * 리뷰를 잠근 뒤 신고·댓글을 닫으므로, 댓글부터 잠그면 신고 행을 사이에 두고 교착한다.
-   * 리뷰가 이미 삭제됐어도 잠근다 — 순서만 맞으면 된다.
-   */
-  private async lockParentReviewOfComment(
-    tx: Prisma.TransactionClient,
-    commentId: bigint,
-  ): Promise<void> {
-    await tx.$queryRaw`
-      SELECT r.id FROM review r
-      JOIN review_comment c ON c.review_id = r.id
-      WHERE c.id = ${commentId}
-      FOR UPDATE OF r`;
   }
 
   /**
@@ -1316,11 +1297,11 @@ export class AdminRepository {
       // 다른 신고를 동시에 처리하는 두 트랜잭션이 서로의 잠금을 기다리는 교착이 생기지 않는다.
       // 대상이 이미 삭제됐으면 잠기지 않지만 신고 처리는 계속돼야 한다
       if (target.kind === 'review_comment') {
-        await this.lockParentReviewOfComment(tx, target.id);
+        await lockParentReviewOfComment(tx, target.id);
       }
-      await this.lockActiveRow(tx, target.kind, target.id);
+      await lockActiveReviewRow(tx, target.kind, target.id);
 
-      if (!(await this.lockActiveRow(tx, 'review_report', args.reportId))) {
+      if (!(await lockActiveReviewRow(tx, 'review_report', args.reportId))) {
         return 'not-found';
       }
       const report = await tx.reviewReport.findFirstOrThrow({
@@ -1393,7 +1374,7 @@ export class AdminRepository {
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      if (!(await this.lockActiveRow(tx, 'review', args.reviewId)))
+      if (!(await lockActiveReviewRow(tx, 'review', args.reviewId)))
         return false;
       await this.softDeleteTargetTx(
         tx,
@@ -1403,18 +1384,17 @@ export class AdminRepository {
         { reportId: null, note: args.reason },
       );
       // 리뷰와 함께 내려간 댓글을 겨냥한 신고도 닫는다(작성자 삭제 경로와 같은 범위)
-      await this.resolvePendingReportsTx(
-        tx,
-        {
+      await resolvePendingReports(tx, {
+        where: {
           OR: [
             { review_id: args.reviewId },
             { review_comment: { review_id: args.reviewId } },
           ],
         },
         now,
-        args.actorAccountId,
-        args.reason,
-      );
+        resolvedByAccountId: args.actorAccountId,
+        note: args.reason,
+      });
       return true;
     });
   }
@@ -1426,8 +1406,8 @@ export class AdminRepository {
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      await this.lockParentReviewOfComment(tx, args.commentId);
-      if (!(await this.lockActiveRow(tx, 'review_comment', args.commentId))) {
+      await lockParentReviewOfComment(tx, args.commentId);
+      if (!(await lockActiveReviewRow(tx, 'review_comment', args.commentId))) {
         return false;
       }
       await this.softDeleteTargetTx(
@@ -1437,13 +1417,12 @@ export class AdminRepository {
         args.actorAccountId,
         { reportId: null, note: args.reason },
       );
-      await this.resolvePendingReportsTx(
-        tx,
-        { review_comment_id: args.commentId },
+      await resolvePendingReports(tx, {
+        where: { review_comment_id: args.commentId },
         now,
-        args.actorAccountId,
-        args.reason,
-      );
+        resolvedByAccountId: args.actorAccountId,
+        note: args.reason,
+      });
       return true;
     });
   }
@@ -1517,25 +1496,6 @@ export class AdminRepository {
       },
       tx,
     );
-  }
-
-  private async resolvePendingReportsTx(
-    tx: Prisma.TransactionClient,
-    targetWhere: Prisma.ReviewReportWhereInput,
-    now: Date,
-    actorAccountId: bigint,
-    note: string,
-  ): Promise<void> {
-    await tx.reviewReport.updateMany({
-      where: { status: 'PENDING', ...targetWhere },
-      data: {
-        status: 'RESOLVED',
-        resolved_by_account_id: actorAccountId,
-        resolved_at: now,
-        resolution_note: note,
-        updated_at: now,
-      },
-    });
   }
 
   // ── 리뷰·댓글 조회(관리자) ──

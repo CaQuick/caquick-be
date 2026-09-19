@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { ReviewEngagementRepository } from '@/features/review';
 import { MAX_REVIEW_COMMENT_LENGTH } from '@/features/user/constants/user.constants';
 import type { WriteReviewCommentInput } from '@/features/user/dto/inputs/write-review-comment.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
@@ -11,14 +12,17 @@ import type { MyReviewComment } from '@/features/user/types/user-review-output.t
 
 @Injectable()
 export class UserEngagementService extends UserBaseService {
-  constructor(repo: UserRepository) {
+  constructor(
+    repo: UserRepository,
+    private readonly engagement: ReviewEngagementRepository,
+  ) {
     super(repo);
   }
 
   async likeReview(accountId: bigint, reviewId: bigint): Promise<boolean> {
     await this.requireActiveUser(accountId);
 
-    const result = await this.repo.likeReview({
+    const result = await this.engagement.likeReview({
       accountId,
       reviewId,
     });
@@ -36,7 +40,7 @@ export class UserEngagementService extends UserBaseService {
   async unlikeReview(accountId: bigint, reviewId: bigint): Promise<boolean> {
     await this.requireActiveUser(accountId);
 
-    const result = await this.repo.unlikeReview({ accountId, reviewId });
+    const result = await this.engagement.unlikeReview({ accountId, reviewId });
     if (result === 'not-found') {
       throw new DomainException('REVIEW_NOT_FOUND');
     }
@@ -51,7 +55,7 @@ export class UserEngagementService extends UserBaseService {
     await this.requireActiveUser(accountId);
 
     const content = cleanRequiredText(input.content, MAX_REVIEW_COMMENT_LENGTH);
-    const created = await this.repo.createReviewComment({
+    const created = await this.engagement.createReviewComment({
       accountId,
       reviewId: parseId(input.reviewId),
       content,
@@ -74,7 +78,7 @@ export class UserEngagementService extends UserBaseService {
   ): Promise<boolean> {
     await this.requireActiveUser(accountId);
 
-    const result = await this.repo.softDeleteMyReviewComment({
+    const result = await this.engagement.softDeleteMyReviewComment({
       accountId,
       commentId,
     });

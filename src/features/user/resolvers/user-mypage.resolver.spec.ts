@@ -2,7 +2,9 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
-import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
+import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserMypageQueryResolver } from '@/features/user/resolvers/user-mypage-query.resolver';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
@@ -26,6 +28,8 @@ describe('User Mypage Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewEngagementRepository,
+        WishlistRepository,
         ProductCardService,
         ReviewReadRepository,
         ProductRepository,

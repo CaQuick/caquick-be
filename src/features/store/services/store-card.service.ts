@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 
 import { roundRatingAverage } from '@/common/utils/rating';
 import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review';
 import { POPULAR_STORE_CAKE_IMAGE_LIMIT } from '@/features/store/constants/store-ranking.constants';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { StoreCardOutput } from '@/features/store/types/store-card-output.type';

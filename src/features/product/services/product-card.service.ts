@@ -4,7 +4,11 @@ import { roundRatingAverage } from '@/common/utils/rating';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
-import { ReviewReadRepository, type ReviewStat } from '@/features/review';
+import {
+  ReviewReadRepository,
+  WishlistRepository,
+  type ReviewStat,
+} from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 
 export interface ProductCardSource {
@@ -28,6 +32,7 @@ export class ProductCardService {
   constructor(
     private readonly repo: ProductRepository,
     private readonly reviews: ReviewReadRepository,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
   async buildCards(
@@ -44,7 +49,7 @@ export class ProductCardService {
         : this.reviews.aggregateReviewStats('product_id', productIds),
       // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
       viewerId !== undefined
-        ? this.repo.findWishlistedProductIds({
+        ? this.wishlists.findWishlistedProductIds({
             accountId: viewerId,
             productIds,
           })

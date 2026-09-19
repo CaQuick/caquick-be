@@ -1,7 +1,8 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
-import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/user/resolvers/user-recent-view-query.resolver';
@@ -26,6 +27,7 @@ describe('User Recent View Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         ReviewReadRepository,
         UserRecentViewQueryResolver,

@@ -4,8 +4,8 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ProductCardService, ProductRepository } from '@/features/product';
+import { RecentProductViewRepository } from '@/features/review';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
-import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { RecentViewedProductConnection } from '@/features/user/types/user-mypage-output.type';
 

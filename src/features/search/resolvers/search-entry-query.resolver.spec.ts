@@ -5,6 +5,7 @@ import {
 } from '@/features/product';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
@@ -33,6 +34,7 @@ describe('SearchEntry Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         ReviewReadRepository,
         StoreStatsRepository,

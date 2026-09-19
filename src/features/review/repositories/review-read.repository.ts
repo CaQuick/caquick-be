@@ -167,6 +167,10 @@ export class ReviewReadRepository {
     }));
   }
 
+  async countProductReviews(productId: bigint): Promise<number> {
+    return this.prisma.review.count({ where: { product_id: productId } });
+  }
+
   async countReviews(args: {
     scope: ReviewScope;
     photoOnly: boolean;

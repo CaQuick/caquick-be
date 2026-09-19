@@ -3,6 +3,7 @@ import { ProductRepository } from '@/features/product/repositories/product.repos
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type {
   OrderStatus,
@@ -32,6 +33,7 @@ describe('ProductBestSellerService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         ProductBestSellerService,
         ProductRepository,

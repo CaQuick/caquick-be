@@ -1,3 +1,4 @@
+import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -17,7 +18,11 @@ describe('UserEngagementService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserEngagementService, UserRepository],
+      providers: [
+        ReviewEngagementRepository,
+        UserEngagementService,
+        UserRepository,
+      ],
     });
 
     service = module.get(UserEngagementService);

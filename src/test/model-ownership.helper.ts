@@ -23,7 +23,20 @@ const WRITE_METHODS = new Set([
 const NESTED_WRITE_KEYS = new Set([...WRITE_METHODS, 'connectOrCreate']);
 /** relation 재연결 — FK 컬럼을 상대 모델이 가지면(inverse 측) 상대 row를 고치는 write다. */
 const RELINK_KEYS = new Set(['connect', 'disconnect', 'set']);
-const RECEIVERS = new Set(['tx', 'prisma', 'db', 'client']);
+/** Prisma delegate 메서드. `<수신자>.<model>.<메서드>(` 꼴이면 수신자 이름과 무관하게 Prisma 호출로 본다(`trx`·`client` 등 어떤 이름이든). */
+const DELEGATE_METHODS = new Set([
+  ...WRITE_METHODS,
+  'createManyAndReturn',
+  'updateManyAndReturn',
+  'findUnique',
+  'findUniqueOrThrow',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'count',
+  'aggregate',
+  'groupBy',
+]);
 
 export interface SchemaInfo {
   models: string[];
@@ -101,18 +114,7 @@ export interface WriteSite {
   nested: boolean;
 }
 
-function isReceiver(expr: ts.Expression): boolean {
-  if (ts.isIdentifier(expr)) return RECEIVERS.has(expr.text);
-  if (
-    ts.isPropertyAccessExpression(expr) &&
-    expr.expression.kind === ts.SyntaxKind.ThisKeyword
-  ) {
-    return RECEIVERS.has(expr.name.text);
-  }
-  return false;
-}
-
-/** `receiver.<model>.<method>(...)` 꼴이면 { model, method }를 돌려준다. */
+/** `<수신자>.<model 접근자>.<delegate 메서드>(...)` 꼴이면 { model, method }를 돌려준다. */
 function prismaCall(
   node: ts.Node,
 ): { model: string; method: string; call: ts.CallExpression } | null {
@@ -122,10 +124,9 @@ function prismaCall(
   )
     return null;
   const methodAccess = node.expression;
+  if (!DELEGATE_METHODS.has(methodAccess.name.text)) return null;
   if (!ts.isPropertyAccessExpression(methodAccess.expression)) return null;
-  const modelAccess = methodAccess.expression;
-  if (!isReceiver(modelAccess.expression)) return null;
-  const model = accessorToModel(modelAccess.name.text);
+  const model = accessorToModel(methodAccess.expression.name.text);
   if (!(model in MODEL_OWNERSHIP)) return null;
   return { model, method: methodAccess.name.text, call: node };
 }
@@ -613,24 +614,27 @@ function collectWhereReads(
   }
 }
 
-/** `_count: true`는 모든 list relation, `_count: { select: {...} }`는 고른 relation만 센다. */
+/** `_count: true`는 모든 list relation, `_count: { select: {...} }`는 고른 relation(과 그 쿼리 객체)만 센다. */
 function countedRelations(
   count: ts.ObjectLiteralElementLike,
   model: string,
   schema: SchemaInfo,
-): string[] {
+): Array<[rel: string, query: ts.ObjectLiteralElementLike | null]> {
   const init = ts.isPropertyAssignment(count) ? count.initializer : undefined;
   if (init?.kind === ts.SyntaxKind.TrueKeyword)
     return Object.entries(schema.relationMeta[model] ?? {})
       .filter(([, meta]) => meta.list)
-      .map(([rel]) => rel);
+      .map(([rel]) => [rel, null]);
   return objectValues(count)
     .flatMap((countObj) =>
       propertiesOf(countObj).filter((p) => propName(p) === 'select'),
     )
     .flatMap((sel) => objectValues(sel))
-    .flatMap((selObj) => propertiesOf(selObj).map(propName))
-    .filter((rel): rel is string => rel !== null);
+    .flatMap((selObj) => propertiesOf(selObj))
+    .flatMap((p) => {
+      const rel = propName(p);
+      return rel ? [[rel, p] as [string, ts.ObjectLiteralElementLike]] : [];
+    });
 }
 
 /** 쿼리 객체를 relation을 따라 내려가며 다른 서비스 모델로 나가는 include/select/_count/orderBy(nested)와 where(filter)를 모은다. */
@@ -662,10 +666,26 @@ function collectCrossReads(
           const rel = propName(inner);
           if (!rel) continue;
           if (rel === '_count') {
-            for (const cRel of countedRelations(inner, model, schema)) {
+            for (const [cRel, query] of countedRelations(
+              inner,
+              model,
+              schema,
+            )) {
               const cTarget = schema.relations[model]?.[cRel];
-              if (cTarget && serviceOfModel(cTarget) !== rootService)
-                out.add(`nested:${path}._count.${cRel}->${cTarget}`);
+              if (!cTarget) continue;
+              const countPath = `${path}._count.${cRel}`;
+              if (serviceOfModel(cTarget) !== rootService)
+                out.add(`nested:${countPath}->${cTarget}`);
+              // `_count: { select: { items: { where: {...} } } }` — 필터된 카운트의 where도 대상 모델로 본다
+              for (const q of query ? objectValues(query) : [])
+                collectCrossReads(
+                  q,
+                  cTarget,
+                  rootService,
+                  countPath,
+                  schema,
+                  out,
+                );
             }
             continue;
           }

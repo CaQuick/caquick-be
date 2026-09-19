@@ -28,7 +28,7 @@ import type {
   SearchProductConnection,
   SearchProductFacets,
 } from '@/features/product/types/product-search-output.type';
-import { ReviewReadRepository } from '@/features/review';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -50,6 +50,7 @@ export class ProductSearchService {
     private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
     private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
   /** 인기/판매순은 메모리 점수화라 DB 페이지네이션이 불가해 정렬 5종을 같은 파이프라인(후보 전량 로드 → 정렬 → offset)으로 통일했다. */
@@ -184,7 +185,7 @@ export class ProductSearchService {
     );
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
-        this.repo.aggregateProductWishlistCounts(ids),
+        this.wishlists.aggregateProductWishlistCounts(ids),
         this.reviews.aggregateReviewStats('product_id', ids),
         this.stats.aggregateRecentOrderCounts('product_id', ids, since),
         this.reviews.globalReviewAverage(),

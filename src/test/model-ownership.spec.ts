@@ -13,7 +13,7 @@ import {
 } from '@/test/model-ownership.helper';
 
 // 모델별 단일 writer(D1 서비스 경계)를 코드로 강제한다. 판정은 write 호출이 놓인 feature 파일 기준(P1-2).
-// 아래 예외 목록은 P1 시작 시점 실측(92 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
+// 아래 예외 목록은 P1 진행 중 실측(시작 92 → 현재 66 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
 
 const schema = loadSchema();
 
@@ -40,12 +40,17 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
   ['src/features/admin/repositories/admin.repository.ts', 'Review', 1],
   ['src/features/admin/repositories/admin.repository.ts', 'ReviewComment', 2],
   ['src/features/admin/repositories/admin.repository.ts', 'ReviewMedia', 1],
-  ['src/features/admin/repositories/admin.repository.ts', 'ReviewReport', 3],
+  ['src/features/admin/repositories/admin.repository.ts', 'ReviewReport', 2],
   ['src/features/admin/repositories/admin.repository.ts', 'SellerProfile', 1],
   ['src/features/admin/repositories/admin.repository.ts', 'Store', 3],
   ['src/features/admin/repositories/admin.repository.ts', 'Tag', 4],
   ['src/features/order/repositories/order.repository.ts', 'AuditLog', 2],
   ['src/features/order/repositories/order.repository.ts', 'Notification', 2],
+  [
+    'src/features/review/repositories/review-engagement.repository.ts',
+    'Notification',
+    1,
+  ],
   ['src/features/seller/repositories/seller.repository.ts', 'Store', 1],
   [
     'src/features/seller/repositories/seller.repository.ts',
@@ -63,25 +68,6 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
     'StoreSpecialClosure',
     3,
   ],
-  [
-    'src/features/store/repositories/store-wishlist.repository.ts',
-    'StoreWishlistItem',
-    3,
-  ],
-  [
-    'src/features/user/repositories/recent-product-view.repository.ts',
-    'RecentProductView',
-    4,
-  ],
-  [
-    'src/features/user/repositories/review-report.repository.ts',
-    'ReviewReport',
-    1,
-  ],
-  ['src/features/user/repositories/review.repository.ts', 'Review', 3],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewComment', 1],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewMedia', 3],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewReport', 1],
   ['src/features/user/repositories/user.repository.ts', 'Account', 3],
   ['src/features/user/repositories/user.repository.ts', 'AccountIdentity', 1],
   [
@@ -89,13 +75,9 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
     'AuthRefreshSession',
     1,
   ],
-  ['src/features/user/repositories/user.repository.ts', 'Notification', 3],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewComment', 2],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewLike', 3],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewReport', 1],
+  ['src/features/user/repositories/user.repository.ts', 'Notification', 2],
   ['src/features/user/repositories/user.repository.ts', 'SearchHistory', 2],
   ['src/features/user/repositories/user.repository.ts', 'UserProfile', 4],
-  ['src/features/user/repositories/user.repository.ts', 'WishlistItem', 3],
 ];
 
 function groupViolations(
@@ -133,7 +115,7 @@ describe('모델 소유권 (단일 writer)', () => {
   it('소유 feature 밖 write는 예외 목록과 정확히 일치한다', () => {
     const found = groupViolations(collectWriteSites(schema));
     expect(found).toEqual(WRITE_EXCEPTIONS);
-    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(92);
+    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(66);
   });
 
   describe('검사기 반증', () => {
@@ -153,13 +135,14 @@ describe('모델 소유권 (단일 writer)', () => {
           'export class Bad {',
           '  constructor(private readonly prisma: any) {}',
           '  private buildArgs() { return { data: { media: { create: [] } } }; }',
-          '  f(tx: any, prisma: any, flag: boolean) {',
+          '  f(tx: any, prisma: any, flag: boolean, trx: any) {',
           '    tx.review.create({ data: payload });',
           '    tx.review.create(createArgs);',
           '    tx.review.create(this.buildArgs());',
           '    tx.review.create(payloadOf());',
           '    tx.review.create(wrap({ data: { media: { create: [] } } }));',
           '    tx.orderItem.update({ where: { id: 1n }, data: { review: { connect: { id: 1n } } } });',
+          '    trx.review.delete({ where: { id: 1n } });',
           '    prisma.order.update({ where: { id: 1n }, data: { ...(flag && { status_histories: { create: {} } }) } });',
           '    prisma.order.update({ where: { id: 1n }, data: { status_histories: { create: {} } } });',
           '    prisma.order.update({ where: { id: 1n }, data: { items: { create: [{ review: { create: {} } }] } } });',
@@ -181,13 +164,13 @@ describe('모델 소유권 (단일 writer)', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('허용 밖 feature의 직접·nested(객체·배열·&&)·inverse 측 connect·상수·헬퍼(파라미터 전달 포함) 인자 write를 모두 잡고, 소유 feature의 write와 FK 보유 측 connect는 통과시킨다', () => {
+    it('허용 밖 feature의 직접·nested(객체·배열·&&)·inverse 측 connect·상수·헬퍼(파라미터 전달 포함) 인자 write를 수신자 이름과 무관하게 모두 잡고, 소유 feature의 write와 FK 보유 측 connect는 통과시킨다', () => {
       const found = groupViolations(collectWriteSites(schema, dir), dir);
       expect(found).toEqual([
         ['product/bad.repository.ts', 'Order', 3],
         ['product/bad.repository.ts', 'OrderItem', 2],
         ['product/bad.repository.ts', 'OrderStatusHistory', 2],
-        ['product/bad.repository.ts', 'Review', 7],
+        ['product/bad.repository.ts', 'Review', 8],
         ['product/bad.repository.ts', 'ReviewMedia', 5],
       ]);
       const ok = collectWriteSites(schema, dir).filter(

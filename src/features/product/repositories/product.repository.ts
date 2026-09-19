@@ -1020,26 +1020,6 @@ export class ProductRepository {
     });
   }
 
-  async countProductReviews(productId: bigint): Promise<number> {
-    return this.prisma.review.count({
-      where: { product_id: productId },
-    });
-  }
-
-  async isProductWishlisted(args: {
-    accountId: bigint;
-    productId: bigint;
-  }): Promise<boolean> {
-    const found = await this.prisma.wishlistItem.findFirst({
-      where: {
-        account_id: args.accountId,
-        product_id: args.productId,
-      },
-      select: { id: true },
-    });
-    return Boolean(found);
-  }
-
   async findActiveCakesForRanking(args: {
     categoryId?: bigint;
     regionIds?: bigint[];
@@ -1144,35 +1124,6 @@ export class ProductRepository {
     return this.prisma.product.count({
       where: buildProductSearchWhere(filter),
     });
-  }
-
-  async findWishlistedProductIds(args: {
-    accountId: bigint;
-    productIds: bigint[];
-  }): Promise<Set<string>> {
-    if (args.productIds.length === 0) return new Set();
-    const rows = await this.prisma.wishlistItem.findMany({
-      where: {
-        account_id: args.accountId,
-        product_id: { in: args.productIds },
-        // 찜 목록(myWishlist)과 같은 가시성 — 비활성/삭제 상품·매장의 찜은 카드에서도 false
-        product: { ...visibleWhere, store: visibleWhere },
-      },
-      select: { product_id: true },
-    });
-    return new Set(rows.map((r) => r.product_id.toString()));
-  }
-
-  async aggregateProductWishlistCounts(
-    productIds: bigint[],
-  ): Promise<Map<bigint, number>> {
-    if (productIds.length === 0) return new Map();
-    const rows = await this.prisma.wishlistItem.groupBy({
-      by: ['product_id'],
-      where: { product_id: { in: productIds } },
-      _count: { _all: true },
-    });
-    return new Map(rows.map((r) => [r.product_id, r._count._all]));
   }
 
   /** 링크 대상(상품/매장/카테고리)이 비활성/삭제된 배너는 건너뛴다. */

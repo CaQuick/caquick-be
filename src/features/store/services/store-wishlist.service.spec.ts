@@ -1,5 +1,5 @@
 import { ReviewReadRepository } from '@/features/review';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';

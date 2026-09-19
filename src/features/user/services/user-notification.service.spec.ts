@@ -1,3 +1,4 @@
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationService } from '@/features/user/services/user-notification.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -21,7 +22,7 @@ describe('UserNotificationService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserNotificationService, UserRepository],
+      providers: [WishlistRepository, UserNotificationService, UserRepository],
     });
     service = module.get(UserNotificationService);
     prisma = p;

@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
 
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
-import { buildReviewLikedNotification } from '@/features/notification';
-import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/user/constants/user.constants';
 import {
   AccountType,
   IdentityProvider,
   Prisma,
 } from '@/generated/prisma/client';
-import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 /**
  * order.items 폴백은 연관 ID를 저장하지 않던 과거 주문 알림 보강용 — 상품명은 주문 시점 스냅샷을 써 상품 삭제에도 안전하다.
@@ -73,20 +71,6 @@ export interface UserAccountWithProfile {
 @Injectable()
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  /** count와 list가 같은 가시성 기준(활성 찜 + 활성 상품 + 활성 매장)을 공유해 마이페이지 카운트 카드와 실제 목록 길이 불일치를 막는다. */
-  private visibleWishlistWhere(accountId: bigint, storeId?: bigint) {
-    return {
-      account_id: accountId,
-      ...activeWhere,
-      product: {
-        ...visibleWhere,
-        // 매장별 보기 → 매장 선택 화면의 매장 필터
-        ...(storeId !== undefined ? { store_id: storeId } : {}),
-        store: visibleWhere,
-      },
-    } as const;
-  }
 
   async findAccountWithProfile(
     accountId: bigint,
@@ -266,30 +250,18 @@ export class UserRepository {
     }
   }
 
-  async getViewerCounts(args: {
+  /** 3개월 밖 미읽 알림까지 세면 목록(myNotifications)과 배지 수가 어긋난다. */
+  async countUnreadNotifications(args: {
     accountId: bigint;
     notificationSince: Date;
-  }): Promise<{
-    unreadNotificationCount: number;
-    wishlistCount: number;
-  }> {
-    const { accountId, notificationSince } = args;
-    const [unreadNotificationCount, wishlistCount] =
-      await this.prisma.$transaction([
-        // 3개월 밖 미읽 알림까지 세면 목록(myNotifications)과 배지 수가 어긋난다
-        this.prisma.notification.count({
-          where: {
-            account_id: accountId,
-            read_at: null,
-            created_at: { gte: notificationSince },
-          },
-        }),
-        this.prisma.wishlistItem.count({
-          where: this.visibleWishlistWhere(accountId),
-        }),
-      ]);
-
-    return { unreadNotificationCount, wishlistCount };
+  }): Promise<number> {
+    return this.prisma.notification.count({
+      where: {
+        account_id: args.accountId,
+        read_at: null,
+        created_at: { gte: args.notificationSince },
+      },
+    });
   }
 
   async listNotifications(args: {
@@ -442,352 +414,5 @@ export class UserRepository {
       data: { deleted_at: args.now },
     });
     return result.count;
-  }
-
-  async countWishlistItems(accountId: bigint): Promise<number> {
-    return this.prisma.wishlistItem.count({
-      where: this.visibleWishlistWhere(accountId),
-    });
-  }
-
-  /**
-   * 복원(재찜) 시에만 created_at을 재찜 시점으로 갱신한다 — '찜 최신순' 정렬과 addedAt이 재찜을 반영하되,
-   * 이미 active인 찜에 대한 중복 요청(더블 탭·재시도)은 created_at을 건드리지 않아 멱등 계약을 지킨다(매장 찜과 동일).
-   */
-  async upsertWishlistItem(args: {
-    accountId: bigint;
-    productId: bigint;
-    now: Date;
-  }): Promise<void> {
-    const restored = await this.prisma.wishlistItem.updateMany({
-      where: {
-        account_id: args.accountId,
-        product_id: args.productId,
-        deleted_at: { not: null },
-      },
-      data: { deleted_at: null, created_at: args.now, updated_at: args.now },
-    });
-    if (restored.count > 0) return;
-
-    try {
-      await this.prisma.wishlistItem.create({
-        data: {
-          account_id: args.accountId,
-          product_id: args.productId,
-        },
-      });
-    } catch (error) {
-      // active 찜이 이미 존재(unique 충돌) — 멱등이므로 무시
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        return;
-      }
-      throw error;
-    }
-  }
-
-  async softDeleteWishlistItem(args: {
-    accountId: bigint;
-    productId: bigint;
-    now: Date;
-  }): Promise<void> {
-    await this.prisma.wishlistItem.updateMany({
-      where: {
-        account_id: args.accountId,
-        product_id: args.productId,
-        ...activeWhere,
-      },
-      data: { deleted_at: args.now },
-    });
-  }
-
-  /** 가시성 조건(visibleWishlistWhere)을 myWishlist/wishlistCount와 공유해 isWishlisted 플래그가 실제 찜 목록/카운트와 일관되게 한다. */
-  async findWishlistedProductIds(args: {
-    accountId: bigint;
-    productIds: bigint[];
-  }): Promise<Set<string>> {
-    if (args.productIds.length === 0) return new Set();
-    const rows = await this.prisma.wishlistItem.findMany({
-      where: {
-        ...this.visibleWishlistWhere(args.accountId),
-        product_id: { in: args.productIds },
-      },
-      select: { product_id: true },
-    });
-    return new Set(rows.map((r) => r.product_id.toString()));
-  }
-
-  async findWishlistItems(args: {
-    accountId: bigint;
-    offset: number;
-    limit: number;
-    storeId?: bigint;
-  }): Promise<{
-    items: {
-      product_id: bigint;
-      created_at: Date;
-      product: {
-        store_id: bigint;
-        name: string;
-        regular_price: number;
-        sale_price: number | null;
-        images: { image_url: string }[];
-        store: {
-          store_name: string;
-          address_city: string | null;
-          address_neighborhood: string | null;
-          region: { name: string } | null;
-        };
-      };
-    }[];
-    totalCount: number;
-  }> {
-    const where = this.visibleWishlistWhere(args.accountId, args.storeId);
-
-    const [rows, totalCount] = await this.prisma.$transaction([
-      this.prisma.wishlistItem.findMany({
-        where,
-        // 같은 밀리초 생성 시 페이지 경계 흔들림 방지를 위해 product_id를 보조 정렬키로 둔다.
-        orderBy: [{ created_at: 'desc' }, { product_id: 'desc' }],
-        skip: args.offset,
-        take: args.limit,
-        select: {
-          product_id: true,
-          created_at: true,
-          product: {
-            select: {
-              store_id: true,
-              name: true,
-              regular_price: true,
-              sale_price: true,
-              store: {
-                select: {
-                  store_name: true,
-                  address_city: true,
-                  address_neighborhood: true,
-                  region: { select: { name: true } },
-                },
-              },
-              images: {
-                where: activeWhere,
-                orderBy: { sort_order: 'asc' },
-                take: 1,
-                select: { image_url: true },
-              },
-            },
-          },
-        },
-      }),
-      this.prisma.wishlistItem.count({ where }),
-    ]);
-
-    return { items: rows, totalCount };
-  }
-
-  /**
-   * WishlistItem에는 store_id가 없어(product 경유) Prisma groupBy로 매장 단위 집계가 불가능하다 → 최소 필드만
-   * 가져와 service에서 그룹핑한다(찜은 사용자당 소규모 전제). 가시성은 findWishlistItems와 동일해야 totalCount 합이 일치한다.
-   */
-  async findVisibleWishlistItemsForGrouping(accountId: bigint): Promise<
-    {
-      created_at: Date;
-      product: {
-        store: {
-          id: bigint;
-          store_name: string;
-          profile_image_url: string | null;
-        };
-      };
-    }[]
-  > {
-    return this.prisma.wishlistItem.findMany({
-      where: this.visibleWishlistWhere(accountId),
-      select: {
-        created_at: true,
-        product: {
-          select: {
-            store: {
-              select: {
-                id: true,
-                store_name: true,
-                profile_image_url: true,
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  async countMyReviews(accountId: bigint): Promise<number> {
-    return this.prisma.review.count({
-      where: { account_id: accountId },
-    });
-  }
-
-  async likeReview(args: {
-    accountId: bigint;
-    reviewId: bigint;
-  }): Promise<'liked' | 'already-liked' | 'not-found' | 'self-like'> {
-    return this.prisma.$transaction(async (tx) => {
-      const review = await tx.review.findFirst({
-        where: {
-          id: args.reviewId,
-        },
-        select: {
-          id: true,
-          account_id: true,
-          store_id: true,
-          product_id: true,
-        },
-      });
-
-      if (!review) return 'not-found';
-      if (review.account_id === args.accountId) return 'self-like';
-
-      const existing = await tx.reviewLike.findFirst({
-        where: {
-          review_id: review.id,
-          account_id: args.accountId,
-          // soft-delete 필터 우회: 해제(soft-delete)된 좋아요도 찾아 복원한다.
-          // uk_review_like 유니크 제약 때문에 새로 create하면 충돌한다.
-          deleted_at: undefined,
-        },
-        select: { id: true, deleted_at: true },
-      });
-
-      if (existing && existing.deleted_at === null) return 'already-liked';
-
-      if (existing) {
-        // 해제했던 좋아요 복원. 좋아요↔해제 반복으로 인한 알림 스팸을 막기 위해
-        // 알림은 최초 좋아요(신규 생성)에만 발송한다.
-        await tx.reviewLike.update({
-          where: { id: existing.id },
-          data: { deleted_at: null },
-        });
-        return 'liked';
-      }
-
-      await tx.reviewLike.create({
-        data: {
-          review_id: review.id,
-          account_id: args.accountId,
-        },
-      });
-
-      // 알림 내용은 notification feature가 단일 소스 — 여기는 저장 위임만 한다
-      await tx.notification.create({
-        data: {
-          account_id: review.account_id,
-          review_id: review.id,
-          store_id: review.store_id,
-          product_id: review.product_id,
-          ...buildReviewLikedNotification(),
-        },
-      });
-
-      return 'liked';
-    });
-  }
-
-  async unlikeReview(args: {
-    accountId: bigint;
-    reviewId: bigint;
-  }): Promise<'unliked' | 'not-found'> {
-    const review = await this.prisma.review.findFirst({
-      where: { id: args.reviewId },
-      select: { id: true },
-    });
-    if (!review) return 'not-found';
-
-    await this.prisma.reviewLike.updateMany({
-      where: {
-        review_id: args.reviewId,
-        account_id: args.accountId,
-        ...activeWhere,
-      },
-      data: { deleted_at: new Date() },
-    });
-    return 'unliked';
-  }
-
-  /**
-   * 공개 조회(reviewComments)와 동일한 상품·매장 활성 가드 — 작성 직후 조회 불가능한 댓글이 생기지 않게.
-   * 리뷰 row를 FOR SHARE로 잠가 삭제 트랜잭션(review UPDATE → 댓글 정리)과 직렬화한다 — 체크와 insert 사이에
-   * 리뷰가 삭제되어 정리 대상에서 빠지는 댓글(리뷰 재작성 시 되살아나는 좀비 댓글)을 막는다.
-   */
-  async createReviewComment(args: {
-    accountId: bigint;
-    reviewId: bigint;
-    content: string;
-  }): Promise<
-    | { id: bigint; review_id: bigint; content: string; created_at: Date }
-    | 'review-not-found'
-  > {
-    return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`
-        SELECT r.id
-        FROM review r
-        JOIN product p
-          ON p.id = r.product_id AND p.is_active = 1 AND p.deleted_at IS NULL
-        JOIN store s
-          ON s.id = p.store_id AND s.is_active = 1 AND s.deleted_at IS NULL
-        WHERE r.id = ${args.reviewId} AND r.deleted_at IS NULL
-        FOR SHARE OF r
-      `);
-      if (locked.length === 0) return 'review-not-found';
-
-      return tx.reviewComment.create({
-        data: {
-          review_id: args.reviewId,
-          account_id: args.accountId,
-          content: args.content,
-        },
-        select: { id: true, review_id: true, content: true, created_at: true },
-      });
-    });
-  }
-
-  async softDeleteMyReviewComment(args: {
-    accountId: bigint;
-    commentId: bigint;
-  }): Promise<'deleted' | 'not-found' | 'forbidden'> {
-    const comment = await this.prisma.reviewComment.findFirst({
-      // extension이 주입하지만 재삭제 방지 계약을 코드에서 바로 읽도록 명시한다
-      where: { id: args.commentId, ...activeWhere },
-      select: { id: true, account_id: true },
-    });
-    if (!comment) return 'not-found';
-    if (comment.account_id !== args.accountId) return 'forbidden';
-
-    const now = new Date();
-    return this.prisma.$transaction(async (tx) => {
-      // 잠금 순서는 리뷰 → 댓글 → 신고. 리뷰 삭제(softDeleteReview)가 리뷰를 잠근 뒤 신고·댓글을
-      // 닫으므로 댓글부터 잠그면 신고 행을 사이에 두고 교착한다
-      await tx.$queryRaw`
-        SELECT r.id FROM review r
-        JOIN review_comment c ON c.review_id = r.id
-        WHERE c.id = ${args.commentId}
-        FOR UPDATE OF r`;
-      const deleted = await tx.reviewComment.updateMany({
-        where: { id: args.commentId, ...activeWhere },
-        data: { deleted_at: now },
-      });
-      // 리뷰 잠금을 기다리는 사이 리뷰 삭제가 댓글까지 지웠으면 그쪽이 신고도 닫았다
-      if (deleted.count === 0) return 'not-found';
-      // 대상이 사라진 미처리 신고는 닫는다
-      await tx.reviewReport.updateMany({
-        where: { status: 'PENDING', review_comment_id: args.commentId },
-        data: {
-          status: 'RESOLVED',
-          resolved_at: now,
-          resolution_note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
-          updated_at: now,
-        },
-      });
-      return 'deleted';
-    });
   }
 }
