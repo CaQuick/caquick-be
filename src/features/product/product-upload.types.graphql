@@ -1,0 +1,18 @@
+"""
+업로드 용도. 용도마다 저장 경로가 다르고, 저장 입력은 같은 용도로 발급된 URL만 받는다.
+역할별 허용 범위: 판매자 PRODUCT_IMAGE·STORE_IMAGE, 관리자 BANNER_IMAGE·STORE_IMAGE(밖이면 BAD_USER_INPUT).
+"""
+enum UploadPurpose {
+  """
+  상품 이미지·커스텀 도안 바탕·옵션 선택지 이미지·커스텀 템플릿 바탕(판매자).
+  """
+  PRODUCT_IMAGE
+  """
+  매장 프로필(로고) 이미지(판매자·관리자).
+  """
+  STORE_IMAGE
+  """
+  플랫폼 배너 이미지(관리자).
+  """
+  BANNER_IMAGE
+}

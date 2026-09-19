@@ -6,27 +6,13 @@ extend type Mutation {
 }
 
 """
-관리자 업로드 용도. 용도마다 저장 경로가 다르고, 저장 입력은 같은 용도로 발급된 URL만 받는다.
-"""
-enum AdminUploadPurpose {
-  """
-  배너 이미지.
-  """
-  BANNER_IMAGE
-  """
-  매장 프로필(로고) 이미지.
-  """
-  STORE_IMAGE
-}
-
-"""
 관리자 업로드 URL 발급 입력.
 """
 input AdminCreateUploadUrlInput {
   """
   업로드 용도.
   """
-  purpose: AdminUploadPurpose!
+  purpose: UploadPurpose!
   """
   파일 MIME 타입. image/jpeg·image/png·image/webp만 허용, 아니면 BAD_USER_INPUT.
   """

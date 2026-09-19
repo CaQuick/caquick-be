@@ -6,90 +6,6 @@ extend type Query {
 }
 
 """
-감사 로그가 가리키는 대상 종류(전체).
-"""
-enum AdminAuditTargetType {
-  """
-  매장 설정·콘텐츠.
-  """
-  STORE
-  """
-  상품과 그 하위.
-  """
-  PRODUCT
-  """
-  주문 상태 변경.
-  """
-  ORDER
-  """
-  구매자 문의 대화.
-  """
-  CONVERSATION
-  """
-  비밀번호 변경. targetId는 바꾼 계정 ID.
-  """
-  CHANGE_PASSWORD
-  """
-  계정(관리자·판매자 생성, 정지/복구, 비밀번호 초기화).
-  """
-  ACCOUNT
-  """
-  플랫폼 배너.
-  """
-  BANNER
-  """
-  카테고리 마스터.
-  """
-  CATEGORY
-  """
-  태그 마스터.
-  """
-  TAG
-  """
-  지역 마스터.
-  """
-  REGION
-  """
-  리뷰 강제 삭제.
-  """
-  REVIEW
-  """
-  리뷰 댓글 강제 삭제.
-  """
-  REVIEW_COMMENT
-  """
-  신고 처리.
-  """
-  REVIEW_REPORT
-  """
-  관리자 알림 발송.
-  """
-  NOTIFICATION
-}
-
-"""
-감사 로그에 기록된 행위 종류.
-"""
-enum AdminAuditActionType {
-  """
-  생성.
-  """
-  CREATE
-  """
-  수정.
-  """
-  UPDATE
-  """
-  삭제(soft-delete 포함).
-  """
-  DELETE
-  """
-  상태 전이.
-  """
-  STATUS_CHANGE
-}
-
-"""
 감사 로그 1건. 누적만 되고 수정·삭제되지 않는다.
 """
 type AdminAuditLog {
@@ -109,7 +25,7 @@ type AdminAuditLog {
   """
   조작 대상 종류.
   """
-  targetType: AdminAuditTargetType!
+  targetType: AuditTargetType!
   """
   대상 리소스 ID.
   """
@@ -117,7 +33,7 @@ type AdminAuditLog {
   """
   기록된 행위 종류.
   """
-  action: AdminAuditActionType!
+  action: AuditActionType!
   """
   변경 전 값(JSON 문자열). 없으면 null.
   """
@@ -185,7 +101,7 @@ input AdminAuditLogListInput {
   """
   대상 종류 필터.
   """
-  targetType: AdminAuditTargetType
+  targetType: AuditTargetType
   """
   대상 ID 필터(targetType과 함께 쓰면 특정 리소스의 이력).
   """
@@ -193,7 +109,7 @@ input AdminAuditLogListInput {
   """
   행위 종류 필터.
   """
-  action: AdminAuditActionType
+  action: AuditActionType
   """
   기록 시각 하한(이상).
   """
