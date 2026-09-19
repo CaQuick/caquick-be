@@ -78,13 +78,18 @@ export class OrderCheckoutService {
     // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
     const preparationDeadlineMs =
       now.getTime() + product.preparation_time_minutes * 60_000;
+    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다(D7-a)
+    const capacityGuard = this.buildCapacityGuard(
+      product.store_id,
+      input.pickupAt,
+    );
     const pickupAvailable =
       input.pickupAt.getTime() >= preparationDeadlineMs &&
       (await this.pickupSchedule.isPickupSlotAvailable({
         storeId: product.store_id,
         pickupAt: input.pickupAt,
-        additionalQuantity: quantity,
-      }));
+      })) &&
+      !(await this.orderRepo.isDailyCapacityExceeded(capacityGuard, quantity));
     if (!pickupAvailable) {
       // 같은 키의 동시 재시도가 방금 capacity를 채운 것일 수 있다 — 거절 전에 키를 재조회해,
       // 내 주문이 이미 생성돼 있으면 실패 대신 replay로 응답한다(응답 유실 재시도가 '가득 참' 실패를 받는 race 차단).
@@ -128,7 +133,7 @@ export class OrderCheckoutService {
       discountPrice,
       totalPrice: itemSubtotalPrice,
       submittedAt,
-      capacityGuard: this.buildCapacityGuard(product.store_id, input.pickupAt),
+      capacityGuard,
       item: {
         storeId: product.store_id,
         productId: product.id,

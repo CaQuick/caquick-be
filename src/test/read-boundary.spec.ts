@@ -33,7 +33,6 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/order/repositories/order.repository.ts|nested|Order.items.store.business_hours->StoreBusinessHour',
   'src/features/order/repositories/order.repository.ts|nested|OrderItem.store->Store',
   'src/features/order/repositories/order.repository.ts|nested|OrderItem.store.region->Region',
-  'src/features/order/repositories/order.repository.ts|raw|isCapacityExceededLocked:store_daily_capacity',
   'src/features/order/repositories/order.repository.ts|root|findAccountWithProfileForCheckout:Account.findFirst',
   'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.order_items->OrderItem',
   'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.reviews->Review',
@@ -113,8 +112,6 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/store/repositories/store-seller.repository.ts|root|findSellerAccountContext:Account.findFirst',
   'src/features/store/repositories/store-stats.repository.ts|root|aggregateRecentOrderCounts:OrderItem.groupBy',
   'src/features/store/repositories/store-stats.repository.ts|root|aggregateSoldQuantities:OrderItem.groupBy',
-  'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesByKstDate:order,order_item',
-  'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesInRange:order,order_item',
   'src/features/store/repositories/store.repository.ts|root|aggregateWishlistCounts:StoreWishlistItem.groupBy',
 ];
 

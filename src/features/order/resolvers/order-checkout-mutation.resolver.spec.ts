@@ -8,6 +8,7 @@ import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -41,6 +42,7 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         RandomService,
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders({ clock: true }),
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(OrderCheckoutMutationResolver);

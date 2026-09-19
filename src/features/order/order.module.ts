@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 
+import { BOOKED_QUANTITY_QUERY } from '@/common/ports/booked-quantity.port';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
+import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
@@ -14,6 +17,7 @@ import { AdminOrderService } from '@/features/order/services/order-admin.service
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
+import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
 import { OutboxModule } from '@/features/outbox';
 import { ProductModule } from '@/features/product';
 import { StoreModule } from '@/features/store';
@@ -30,6 +34,11 @@ import { StoreModule } from '@/features/store';
   ],
   providers: [
     OrderRepository,
+    // catalog 픽업 판정이 읽는 예약 수량(booked) 포트 구현(D7-a)
+    { provide: BOOKED_QUANTITY_QUERY, useClass: OrderBookedRepository },
+    // 일일 capacity 복제본 + 변경 이벤트 소비자(D7-a)
+    OrderStoreDailyLimitRepository,
+    OrderStoreDailyLimitConsumer,
     OrderStatusTransitionPolicy,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
@@ -45,6 +54,10 @@ import { StoreModule } from '@/features/store';
     UserOrderService,
     UserOrderQueryResolver,
   ],
-  exports: [OrderRepository, OrderStatusTransitionPolicy],
+  exports: [
+    OrderRepository,
+    OrderStatusTransitionPolicy,
+    BOOKED_QUANTITY_QUERY,
+  ],
 })
 export class OrderModule {}

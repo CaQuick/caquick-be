@@ -1,12 +1,17 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { SellerStorePolicyService } from '@/features/store/services/store-seller-policy.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { setupSellerWithStore } from '@/test/factories';
+import {
+  createStoreDailyCapacity,
+  setupSellerWithStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('SellerStorePolicyService (real DB)', () => {
   let service: SellerStorePolicyService;
@@ -17,6 +22,9 @@ describe('SellerStorePolicyService (real DB)', () => {
       providers: [
         SellerStorePolicyService,
         StoreSellerRepository,
+        // capacity write는 변경 이벤트를 함께 적재한다(D7-a)
+        StoreCapacityRepository,
+        ...outboxPublisherProviders(),
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
@@ -57,20 +65,16 @@ describe('SellerStorePolicyService (real DB)', () => {
   describe('sellerStoreDailyCapacities', () => {
     it('일별 용량 목록과 fromDate/toDate 필터가 동작한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      await prisma.storeDailyCapacity.createMany({
-        data: [
-          {
-            store_id: store.id,
-            capacity_date: new Date('2026-03-30'),
-            capacity: 50,
-          },
-          {
-            store_id: store.id,
-            capacity_date: new Date('2026-04-15'),
-            capacity: 100,
-          },
-        ],
-      });
+      for (const [date, capacity] of [
+        ['2026-03-30', 50],
+        ['2026-04-15', 100],
+      ] as const) {
+        await createStoreDailyCapacity(prisma, {
+          store_id: store.id,
+          capacity_date: new Date(date),
+          capacity,
+        });
+      }
 
       const result = await service.sellerStoreDailyCapacities(account.id, {
         fromDate: new Date('2026-04-01'),
@@ -84,12 +88,10 @@ describe('SellerStorePolicyService (real DB)', () => {
     it('cursor 페이지네이션이 동작한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       for (let i = 1; i <= 3; i++) {
-        await prisma.storeDailyCapacity.create({
-          data: {
-            store_id: store.id,
-            capacity_date: new Date(`2026-05-0${i}`),
-            capacity: 10 * i,
-          },
+        await createStoreDailyCapacity(prisma, {
+          store_id: store.id,
+          capacity_date: new Date(`2026-05-0${i}`),
+          capacity: 10 * i,
         });
       }
       const first = await service.sellerStoreDailyCapacities(account.id, {
@@ -216,12 +218,10 @@ describe('SellerStorePolicyService (real DB)', () => {
 
     it('capacityId가 있으면 update 경로로 갱신', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      const created = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date('2026-04-01'),
-          capacity: 100,
-        },
+      const created = await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date('2026-04-01'),
+        capacity: 100,
       });
 
       const result = await service.sellerUpsertStoreDailyCapacity(account.id, {
@@ -244,12 +244,10 @@ describe('SellerStorePolicyService (real DB)', () => {
 
     it('soft-delete + audit log(beforeJson 포함)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      const capacity = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date('2026-04-01'),
-          capacity: 100,
-        },
+      const capacity = await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date('2026-04-01'),
+        capacity: 100,
       });
 
       const result = await service.sellerDeleteStoreDailyCapacity(

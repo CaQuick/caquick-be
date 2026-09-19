@@ -28,3 +28,8 @@ export {
   CATALOG_QUERY,
   type ICatalogQuery,
 } from '@/features/store/repositories/store-catalog-query.repository.interface';
+// 일일 capacity 변경 이벤트 계약(outbox, D7-a). 소비자(order)가 복제본을 갱신한다.
+export {
+  parseStoreDailyCapacityChangedPayload,
+  STORE_DAILY_CAPACITY_CHANGED,
+} from '@/features/store/events/store-daily-capacity-changed.event';

@@ -3,6 +3,7 @@ import { StoreRepository } from '@/features/store/repositories/store.repository'
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';
@@ -24,6 +25,7 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(StorePickupScheduleQueryResolver);

@@ -7,9 +7,15 @@ import type {
   PrismaClient,
   Store,
 } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createOrder, createOrderItem, createStore } from '@/test/factories';
+import {
+  createOrder,
+  createOrderItem,
+  createStore,
+  createStoreDailyCapacity,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 // 2026-09-16(수) 16:00 KST 고정. 요일·자정 경계 계산이 모두 이 시각 기준.
@@ -22,7 +28,12 @@ describe('StorePickupScheduleService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StorePickupScheduleService, StoreRepository, ClockService],
+      providers: [
+        StorePickupScheduleService,
+        StoreRepository,
+        ClockService,
+        ...bookedQuantityProviders(),
+      ],
     });
     service = module.get(StorePickupScheduleService);
     clock = module.get(ClockService);
@@ -77,8 +88,10 @@ describe('StorePickupScheduleService (real DB)', () => {
     dateOnlyUtc: Date,
     capacity: number,
   ): Promise<void> {
-    await prisma.storeDailyCapacity.create({
-      data: { store_id: store.id, capacity_date: dateOnlyUtc, capacity },
+    await createStoreDailyCapacity(prisma, {
+      store_id: store.id,
+      capacity_date: dateOnlyUtc,
+      capacity,
     });
   }
 
@@ -562,28 +575,6 @@ describe('StorePickupScheduleService (real DB)', () => {
       expect(
         slots.afternoon.find((slot) => slot.time === '16:00')?.available,
       ).toBe(true);
-    });
-
-    it('capacity 잔여가 additionalQuantity보다 작으면 불가하다', async () => {
-      const store = await createStore(prisma);
-      await openAllWeek(store);
-      await setCapacity(store, new Date(Date.UTC(2026, 8, 18)), 3);
-      await book(store, VALID_PICKUP_AT, 2);
-
-      await expect(
-        service.isPickupSlotAvailable({
-          storeId: store.id,
-          pickupAt: VALID_PICKUP_AT,
-          additionalQuantity: 2,
-        }),
-      ).resolves.toBe(false);
-      await expect(
-        service.isPickupSlotAvailable({
-          storeId: store.id,
-          pickupAt: VALID_PICKUP_AT,
-          additionalQuantity: 1,
-        }),
-      ).resolves.toBe(true);
     });
 
     it('없거나 비활성 매장은 불가하다', async () => {

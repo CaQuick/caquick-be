@@ -194,24 +194,45 @@ export class OrderRepository {
     });
   }
 
-  /** 레코드가 없으면 무제한. FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다. */
-  private async isCapacityExceededLocked(
+  /** tx 밖 사전 검증(잠금 없음) — 거절을 tx 전에 내리고, 최종 판정은 createSubmittedOrder의 잠금 재검사가 한다. */
+  async isDailyCapacityExceeded(
+    guard: DailyCapacityGuard,
+    quantity: number,
+  ): Promise<boolean> {
+    return this.capacityExceeded(this.prisma, guard, quantity, false);
+  }
+
+  /** FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다. */
+  private isCapacityExceededLocked(
     tx: Prisma.TransactionClient,
     guard: DailyCapacityGuard,
     quantity: number,
   ): Promise<boolean> {
-    const capacityRows = await tx.$queryRaw<{ capacity: number }[]>(Prisma.sql`
+    return this.capacityExceeded(tx, guard, quantity, true);
+  }
+
+  /**
+   * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다(D7-a).
+   * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
+   */
+  private async capacityExceeded(
+    db: Prisma.TransactionClient,
+    guard: DailyCapacityGuard,
+    quantity: number,
+    forUpdate: boolean,
+  ): Promise<boolean> {
+    const capacityRows = await db.$queryRaw<{ capacity: number }[]>(Prisma.sql`
       SELECT capacity
-      FROM store_daily_capacity
+      FROM order_store_daily_limit
       WHERE store_id = ${guard.storeId}
-        AND capacity_date = ${guard.dateOnlyUtc}
-        AND deleted_at IS NULL
-      FOR UPDATE
+        AND booking_date = ${guard.dateOnlyUtc}
+        AND capacity IS NOT NULL
+      ${forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty}
     `);
     const capacity = capacityRows[0]?.capacity;
     if (capacity === undefined) return false;
 
-    const bookedRows = await tx.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
+    const bookedRows = await db.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
       SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked
       FROM order_item oi
       JOIN \`order\` o

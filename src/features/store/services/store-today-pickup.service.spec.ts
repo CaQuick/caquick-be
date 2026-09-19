@@ -7,6 +7,7 @@ import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import type { PrismaClient, Store } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -14,6 +15,7 @@ import {
   createOrder,
   createOrderItem,
   createStore,
+  createStoreDailyCapacity,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -40,6 +42,7 @@ describe('StoreTodayPickupService (real DB)', () => {
         StoreRepository,
         StoreWishlistRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     service = module.get(StoreTodayPickupService);
@@ -173,23 +176,19 @@ describe('StoreTodayPickupService (real DB)', () => {
     it('일일 capacity가 소진된 매장은 제외한다(CANCELED 주문 미집계)', async () => {
       const full = await createStore(prisma, { store_name: '마감매장' });
       await openToday(full, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: full.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: full.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(full, 2);
 
       const available = await createStore(prisma, { store_name: '여유매장' });
       await openToday(available, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: available.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: available.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(available, 1);
       // CANCELED 주문은 capacity를 소모하지 않는다
@@ -211,12 +210,10 @@ describe('StoreTodayPickupService (real DB)', () => {
       // 주문 1건이라도 quantity=2면 capacity 2를 전부 소진한다
       const store = await createStore(prisma, { store_name: '수량마감매장' });
       await openToday(store, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(store, 1, 2);
 

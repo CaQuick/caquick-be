@@ -15,6 +15,7 @@ export * from './search-history.factory';
 export * from './search-keyword-rank-snapshot.factory';
 export * from './seller.factory';
 export * from './sequence';
+export * from './store-daily-capacity.factory';
 export * from './store-wishlist.factory';
 export * from './store.factory';
 export * from './tag.factory';

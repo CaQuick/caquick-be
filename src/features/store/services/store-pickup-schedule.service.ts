@@ -11,6 +11,7 @@ import {
   toKstYmd,
 } from '@/common/utils/kst-time';
 import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/store/constants/store-pickup-schedule.constants';
+import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import {
   StoreRepository,
   type StorePickupPolicyRow,
@@ -46,6 +47,7 @@ interface ScheduleContext {
 export class StorePickupScheduleService {
   constructor(
     private readonly repo: StoreRepository,
+    private readonly booked: BookedQuantityPort,
     private readonly clock: ClockService,
   ) {}
 
@@ -143,11 +145,15 @@ export class StorePickupScheduleService {
     };
   }
 
-  /** 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과 capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다. 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임). */
+  /**
+   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합을 확인한다.
+   * **capacity는 보지 않는다** — 일일 수량 판정은 order가 자기 복제본으로만 한다(D7-a).
+   * 여기서 catalog 설정을 함께 보면 복제 지연 구간에 두 소스가 어긋나 "복제본 없으면 무제한"이 깨진다.
+   * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
+   */
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
-    additionalQuantity?: number;
   }): Promise<boolean> {
     const store = await this.repo.findStoreForPickupSchedule(args.storeId);
     if (!store) return false;
@@ -171,21 +177,12 @@ export class StorePickupScheduleService {
       new Date(Date.UTC(year, month - 1, day + 1)),
       kstMidnightUtc(year, month, day),
       kstMidnightUtc(year, month, day + 1),
+      { withCapacity: false },
     );
 
     const input = this.pickupDayInput(store, ctx, now, year, month, day);
     const result = evaluatePickupDay(input);
     if (result.reason !== null) return false;
-
-    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가 — 공용 판정(소진 여부)에 얹는 주문 생성 전용 확장 검사.
-    // capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석한다.
-    const quantity = args.additionalQuantity ?? 1;
-    if (
-      input.capacity !== undefined &&
-      input.booked + quantity > input.capacity
-    ) {
-      return false;
-    }
 
     const pickupMinutes = kstMinutesOfDay(args.pickupAt);
     return result.slots.some(
@@ -193,12 +190,14 @@ export class StorePickupScheduleService {
     );
   }
 
+  /** withCapacity=false면 capacity·예약 수량을 읽지 않는다(주문 생성 재검증 — 수량 판정은 order 몫). */
   private async loadScheduleContext(
     storeId: bigint,
     fromDateOnly: Date,
     toDateOnly: Date,
     rangeStartUtc: Date,
     rangeEndUtc: Date,
+    options: { withCapacity: boolean } = { withCapacity: true },
   ): Promise<ScheduleContext> {
     const [hours, closureDates, capacities, bookedByDate] = await Promise.all([
       this.repo.findBusinessHoursForStore(storeId),
@@ -207,12 +206,16 @@ export class StorePickupScheduleService {
         fromDateOnly,
         toDateOnly,
       ),
-      this.repo.findDailyCapacitiesInRange(storeId, fromDateOnly, toDateOnly),
-      this.repo.sumPickupQuantitiesByKstDate(
-        storeId,
-        rangeStartUtc,
-        rangeEndUtc,
-      ),
+      options.withCapacity
+        ? this.repo.findDailyCapacitiesInRange(
+            storeId,
+            fromDateOnly,
+            toDateOnly,
+          )
+        : new Map<string, number>(),
+      options.withCapacity
+        ? this.booked.sumByKstDate(storeId, rangeStartUtc, rangeEndUtc)
+        : new Map<string, number>(),
     ]);
     return {
       hoursByWeekday: new Map(hours.map((h) => [h.day_of_week, h])),

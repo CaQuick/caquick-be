@@ -8,6 +8,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createStore,
+  createStoreDailyCapacity,
   setupSellerWithStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -238,62 +239,15 @@ describe('StoreSellerRepository (real DB)', () => {
     });
   });
 
-  describe('storeDailyCapacity (create/update/findById/softDelete/list)', () => {
-    it('create: 새 row 생성', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      const row = await repo.createStoreDailyCapacity({
-        storeId: store.id,
-        capacityDate: new Date('2026-06-01'),
-        capacity: 100,
-      });
-      expect(row.capacity).toBe(100);
-    });
-
-    it('create: soft-delete row 가 있으면 복구', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      const seed = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date('2026-06-01'),
-          capacity: 50,
-          deleted_at: new Date(),
-        },
-      });
-      const row = await repo.createStoreDailyCapacity({
-        storeId: store.id,
-        capacityDate: new Date('2026-06-01'),
-        capacity: 100,
-      });
-      expect(row.id).toBe(seed.id);
-      expect(row.deleted_at).toBeNull();
-      expect(row.capacity).toBe(100);
-    });
-
-    it('updateStoreDailyCapacity: 날짜·캐파 갱신', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      const seed = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date('2026-06-01'),
-          capacity: 50,
-        },
-      });
-      const updated = await repo.updateStoreDailyCapacity(seed.id, {
-        capacityDate: new Date('2026-06-02'),
-        capacity: 200,
-      });
-      expect(updated.capacity).toBe(200);
-    });
-
+  // write(생성·수정·삭제)는 StoreCapacityRepository — 변경 이벤트를 함께 적재하므로 그쪽 spec이 담당한다
+  describe('storeDailyCapacity (findById/list)', () => {
     it('findStoreDailyCapacityById: 본인 매장만', async () => {
       const me = await setupSellerWithStore(prisma);
       const other = await setupSellerWithStore(prisma);
-      const otherCap = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: other.store.id,
-          capacity_date: new Date('2026-06-01'),
-          capacity: 1,
-        },
+      const otherCap = await createStoreDailyCapacity(prisma, {
+        store_id: other.store.id,
+        capacity_date: new Date('2026-06-01'),
+        capacity: 1,
       });
       const result = await repo.findStoreDailyCapacityById(
         otherCap.id,
@@ -302,43 +256,19 @@ describe('StoreSellerRepository (real DB)', () => {
       expect(result).toBeNull();
     });
 
-    it('softDelete 후 deleted_at 채워짐', async () => {
-      const { store } = await setupSellerWithStore(prisma);
-      const seed = await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date('2026-06-01'),
-          capacity: 50,
-        },
-      });
-      await repo.softDeleteStoreDailyCapacity(seed.id);
-      const after = await prisma.storeDailyCapacity.findUnique({
-        where: { id: seed.id },
-      });
-      expect(after?.deleted_at).not.toBeNull();
-    });
-
     it('list: fromDate / toDate 필터 + cursor', async () => {
       const { store } = await setupSellerWithStore(prisma);
-      await prisma.storeDailyCapacity.createMany({
-        data: [
-          {
-            store_id: store.id,
-            capacity_date: new Date('2026-05-30'),
-            capacity: 10,
-          },
-          {
-            store_id: store.id,
-            capacity_date: new Date('2026-06-15'),
-            capacity: 20,
-          },
-          {
-            store_id: store.id,
-            capacity_date: new Date('2026-07-05'),
-            capacity: 30,
-          },
-        ],
-      });
+      for (const [date, capacity] of [
+        ['2026-05-30', 10],
+        ['2026-06-15', 20],
+        ['2026-07-05', 30],
+      ] as const) {
+        await createStoreDailyCapacity(prisma, {
+          store_id: store.id,
+          capacity_date: new Date(date),
+          capacity,
+        });
+      }
 
       const inRange = await repo.listStoreDailyCapacities({
         storeId: store.id,

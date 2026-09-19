@@ -80,6 +80,8 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   SearchKeywordRankSnapshot: catalog(['search']),
 
   Order: order(),
+  // catalog capacity 복제본(D7-a) — order가 소유, 소비자만 쓴다
+  OrderStoreDailyLimit: order(),
   OrderStatusHistory: order(),
   OrderItem: order(),
   OrderItemOptionItem: order(),

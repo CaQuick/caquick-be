@@ -1,5 +1,6 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { SellerStoreMutationResolver } from '@/features/store/resolvers/store-seller-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/store/resolvers/store-seller-query.resolver';
@@ -12,6 +13,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 import { s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('Seller Store Resolvers (real DB)', () => {
@@ -30,6 +32,9 @@ describe('Seller Store Resolvers (real DB)', () => {
         SellerStorePolicyService,
         SellerFaqService,
         StoreSellerRepository,
+        // capacity write는 변경 이벤트를 함께 적재한다(D7-a)
+        StoreCapacityRepository,
+        ...outboxPublisherProviders(),
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

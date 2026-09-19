@@ -2,8 +2,11 @@ import { Module } from '@nestjs/common';
 
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
+import { OutboxModule } from '@/features/outbox';
 import { ReviewModule } from '@/features/review';
+import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
+import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
 import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
 import { CATALOG_QUERY } from '@/features/store/repositories/store-catalog-query.repository.interface';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
@@ -40,9 +43,11 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
 
 @Module({
   // AuthModule: 관리자 컨텍스트·판매자 계정 생성 tx(AccountAdminRepository)
-  imports: [ReviewModule, AuditLogModule, AuthModule],
+  imports: [ReviewModule, AuditLogModule, AuthModule, OutboxModule],
   providers: [
     StoreRepository,
+    // 예약 수량(booked)은 order가 제공 — 지연 바인딩 포트(D7-a)
+    BookedQuantityPort,
     // conversation이 쓰는 catalog 읽기 포트(P1-07d)
     { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
     StoreStatsRepository,
@@ -62,6 +67,8 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreSearchQueryResolver,
     // 판매자 매장 관리(내 매장·영업시간·휴무·일별 수량·FAQ) — 매장 도메인이 소유한다
     StoreSellerRepository,
+    // 일일 capacity write — 변경 이벤트로 order 복제본을 갱신한다(D7-a)
+    StoreCapacityRepository,
     SellerStoreProfileService,
     SellerStoreHoursService,
     SellerStorePolicyService,
