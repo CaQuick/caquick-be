@@ -1,0 +1,38 @@
+extend type Mutation {
+  """
+  이미지 업로드용 Presigned URL을 발급한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND. 상품·옵션·커스텀 템플릿·매장 로고의 URL 필드는 여기서 발급된 publicUrl만 받는다.
+  """
+  sellerCreateUploadUrl(input: SellerCreateUploadUrlInput!): UploadUrl!
+}
+
+"""
+판매자 업로드 용도. 용도마다 저장 경로가 다르고, 저장 입력은 같은 용도로 발급된 URL만 받는다.
+"""
+enum SellerUploadPurpose {
+  """
+  상품 이미지·커스텀 도안 바탕·옵션 선택지 이미지·커스텀 템플릿 바탕.
+  """
+  PRODUCT_IMAGE
+  """
+  매장 프로필(로고) 이미지.
+  """
+  STORE_IMAGE
+}
+
+"""
+판매자 업로드 URL 발급 입력.
+"""
+input SellerCreateUploadUrlInput {
+  """
+  업로드 용도.
+  """
+  purpose: SellerUploadPurpose!
+  """
+  파일 MIME 타입. image/jpeg·image/png·image/webp만 허용, 아니면 BAD_USER_INPUT.
+  """
+  contentType: String!
+  """
+  파일 크기(바이트). 1 이상 5MB 이하, 아니면 BAD_USER_INPUT.
+  """
+  contentLength: Int!
+}
