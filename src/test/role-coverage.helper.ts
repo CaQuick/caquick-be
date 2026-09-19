@@ -1,6 +1,6 @@
 /**
  * 입력 공간을 SDL에서 읽어 온다 — 접두 필드가 생기면 표에 자동으로 줄이 늘고, 그 필드를 처리하는 메서드가
- * RolesGuard + @Roles(role)를 갖추지 않으면 실패한다. seller·admin 커버리지 spec이 공유한다.
+ * RolesGuard + @Roles(role)를 갖추지 않으면 실패한다. roles-coverage spec(역할별 표)과 admin 커버리지 spec이 공유한다.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -104,8 +104,37 @@ export function violationsOf(
 }
 
 export function resolverClassesOf(module: Ctor): Ctor[] {
-  const providers = Reflect.getMetadata('providers', module) as unknown[];
+  const providers =
+    (Reflect.getMetadata('providers', module) as unknown[] | undefined) ?? [];
   return providers.filter(
     (p): p is Ctor => typeof p === 'function' && p.name.endsWith('Resolver'),
   );
+}
+
+/**
+ * src/features 아래 모든 `*.module.ts`를 읽어 Resolver 클래스를 모은다 — 새 feature 모듈이 생기면 자동으로 포함된다.
+ * AppModule을 import하지 않는 이유: GraphQL 드라이버 설정의 타입이 ts-jest 해석 아래서 어긋나 suite가 열리지 않는다.
+ */
+export function collectFeatureResolverClasses(
+  dir: string = FEATURES_DIR,
+): Ctor[] {
+  const out: Ctor[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectFeatureResolverClasses(full));
+      continue;
+    }
+    if (!entry.name.endsWith('.module.ts')) continue;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- 파일 목록이 동적이라 정적 import 불가
+    const exported = require(full) as Record<string, unknown>;
+    for (const value of Object.values(exported)) {
+      if (
+        typeof value === 'function' &&
+        Reflect.hasMetadata('providers', value)
+      )
+        out.push(...resolverClassesOf(value as Ctor));
+    }
+  }
+  return out;
 }

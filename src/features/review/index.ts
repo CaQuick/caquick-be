@@ -20,12 +20,10 @@ export {
   lockActiveReviewRow,
   lockParentReviewOfComment,
   resolvePendingReports,
-  type ReviewLockTable,
 } from '@/features/review/repositories/review-lock.helper';
 // 공개 리뷰 읽기(집계·row 조회·쇼케이스). 리뷰 상세·댓글(product)과 홈 쇼케이스(product)가 소비한다.
 export {
   ReviewReadRepository,
-  type ProductReviewRow,
   type ReviewStat,
 } from '@/features/review/repositories/review-read.repository';
 // 리뷰 카드·미디어 매핑. 리뷰 상세(product)와 내 리뷰(user)가 같은 1벌을 쓴다.

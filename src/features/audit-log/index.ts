@@ -4,7 +4,6 @@ export { AuditLogModule } from '@/features/audit-log/audit-log.module';
 export {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
-  type SellerAuditLogScope,
 } from '@/features/audit-log/repositories/audit-log.repository.interface';
 // 판매자 화면(내 매장 감사 로그, store feature)에 노출하는 대상 종류.
 export {
