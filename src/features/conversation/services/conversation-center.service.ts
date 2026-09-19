@@ -12,6 +12,7 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
@@ -23,8 +24,8 @@ import type {
 
 @Injectable()
 export class ConversationCenterService extends ConversationBaseService {
-  constructor(repo: ConversationRepository) {
-    super(repo);
+  constructor(repo: ConversationRepository, accounts: AccountUserRepository) {
+    super(repo, accounts);
   }
 
   async myConversations(

@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { AccountUserRepository } from '@/features/auth';
 import { MAX_INQUIRY_BODY_TEXT_LENGTH } from '@/features/conversation/constants/conversation.constants';
 import type { SendConversationFaqMessageInput } from '@/features/conversation/dto/inputs/send-conversation-faq-message.input';
 import type { SendConversationMessageInput } from '@/features/conversation/dto/inputs/send-conversation-message.input';
@@ -23,6 +24,7 @@ import type {
   ConversationMessagesPayload,
   StoreInquiryContextOutput,
 } from '@/features/conversation/types/conversation-output.type';
+import { CATALOG_QUERY, type ICatalogQuery } from '@/features/store';
 import {
   ConversationBodyFormat,
   ConversationSenderType,
@@ -34,9 +36,11 @@ export class ConversationInquiryService extends ConversationBaseService {
 
   constructor(
     repo: ConversationRepository,
+    accounts: AccountUserRepository,
     private readonly events: ConversationEventsService,
+    @Inject(CATALOG_QUERY) private readonly catalog: ICatalogQuery,
   ) {
-    super(repo);
+    super(repo, accounts);
   }
 
   async storeInquiryContext(
@@ -48,7 +52,7 @@ export class ConversationInquiryService extends ConversationBaseService {
 
     const store = await this.requireInquiryStore(storeId);
     const [faqTopics, conversation] = await Promise.all([
-      this.repo.listActiveFaqTopics(storeId),
+      this.catalog.listActiveFaqTopics(storeId),
       this.repo.findConversationByAccountAndStore({ accountId, storeId }),
     ]);
 
@@ -108,7 +112,7 @@ export class ConversationInquiryService extends ConversationBaseService {
     const storeId = parseId(input.storeId);
     const store = await this.requireInquiryStore(storeId);
 
-    const topic = await this.repo.findActiveFaqTopic({
+    const topic = await this.catalog.findActiveFaqTopic({
       storeId,
       faqTopicId: parseId(input.faqTopicId),
     });
@@ -244,7 +248,7 @@ export class ConversationInquiryService extends ConversationBaseService {
   }
 
   private async requireInquiryStore(storeId: bigint) {
-    const store = await this.repo.findInquiryStore(storeId);
+    const store = await this.catalog.findInquiryStore(storeId);
     if (!store) {
       throw new DomainException('STORE_NOT_FOUND');
     }

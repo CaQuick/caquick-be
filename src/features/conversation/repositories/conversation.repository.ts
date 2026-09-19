@@ -5,7 +5,7 @@ import {
   ConversationSenderType,
   Prisma,
 } from '@/generated/prisma/client';
-import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
+import { PrismaService } from '@/prisma';
 
 export interface ConversationMessageEntry {
   senderType: ConversationSenderType;
@@ -89,59 +89,6 @@ export class ConversationRepository {
   async countConversationMessages(conversationId: bigint): Promise<number> {
     return this.prisma.storeConversationMessage.count({
       where: { conversation_id: conversationId },
-    });
-  }
-
-  async findUserAccountForInquiry(accountId: bigint) {
-    return this.prisma.account.findFirst({
-      where: { id: accountId },
-      select: {
-        id: true,
-        account_type: true,
-        deleted_at: true,
-        user_profile: { select: { nickname: true, deleted_at: true } },
-      },
-    });
-  }
-
-  async findInquiryStore(storeId: bigint) {
-    return this.prisma.store.findFirst({
-      where: { id: storeId, ...visibleWhere },
-      select: {
-        id: true,
-        store_name: true,
-        profile_image_url: true,
-        greeting_message: true,
-        business_hours: {
-          where: activeWhere,
-          orderBy: { day_of_week: 'asc' },
-          select: {
-            day_of_week: true,
-            is_closed: true,
-            open_time: true,
-            close_time: true,
-          },
-        },
-      },
-    });
-  }
-
-  async listActiveFaqTopics(storeId: bigint) {
-    return this.prisma.storeFaqTopic.findMany({
-      where: { store_id: storeId, is_active: true },
-      orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
-      select: { id: true, title: true },
-    });
-  }
-
-  async findActiveFaqTopic(args: { storeId: bigint; faqTopicId: bigint }) {
-    return this.prisma.storeFaqTopic.findFirst({
-      where: {
-        id: args.faqTopicId,
-        store_id: args.storeId,
-        is_active: true,
-      },
-      select: { id: true, title: true, answer_html: true },
     });
   }
 
@@ -392,19 +339,7 @@ export class ConversationRepository {
   async findConversationAccess(conversationId: bigint) {
     return this.prisma.storeConversation.findFirst({
       where: { id: conversationId },
-      select: {
-        id: true,
-        account_id: true,
-        store_id: true,
-        store: { select: { seller_account_id: true } },
-      },
-    });
-  }
-
-  async findStoreBySellerAccount(sellerAccountId: bigint) {
-    return this.prisma.store.findFirst({
-      where: { seller_account_id: sellerAccountId, ...activeWhere },
-      select: { id: true },
+      select: { id: true, account_id: true, store_id: true },
     });
   }
 

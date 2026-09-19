@@ -1,13 +1,19 @@
 import { DomainException } from '@/common/errors/error-catalog';
-import { evaluateActiveUserAccount } from '@/features/auth';
+import {
+  AccountUserRepository,
+  evaluateActiveUserAccount,
+} from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 export abstract class ConversationBaseService {
-  protected constructor(protected readonly repo: ConversationRepository) {}
+  protected constructor(
+    protected readonly repo: ConversationRepository,
+    private readonly accounts: AccountUserRepository,
+  ) {}
 
   protected async requireActiveUser(
     accountId: bigint,
   ): Promise<{ nickname: string }> {
-    const account = await this.repo.findUserAccountForInquiry(accountId);
+    const account = await this.accounts.findAccountWithProfile(accountId);
     switch (evaluateActiveUserAccount(account)) {
       case 'ACCOUNT_NOT_FOUND':
         throw new DomainException('SESSION_ACCOUNT_MISSING');
