@@ -15,7 +15,10 @@ import { AppModule } from '@/app.module';
 import type { AuthConfig } from '@/config/auth.config';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
-import { ApiResponseInterceptor } from '@/global/interceptors/api-response.interceptor';
+import {
+  ApiResponseInterceptor,
+  RAW_RESPONSE_PATHS,
+} from '@/global/interceptors/api-response.interceptor';
 import { GqlLoggingInterceptor } from '@/global/interceptors/gql-logging.interceptor';
 import { HttpLoggingInterceptor } from '@/global/interceptors/http-logging.interceptor';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
@@ -88,7 +91,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(
     new HttpLoggingInterceptor(logger),
     new GqlLoggingInterceptor(logger),
-    new ApiResponseInterceptor(new Set(['/health', '/health/profiles'])),
+    new ApiResponseInterceptor(RAW_RESPONSE_PATHS),
   );
 
   const gqlExceptionFilter = new GraphQLExceptionFilter(logger);
