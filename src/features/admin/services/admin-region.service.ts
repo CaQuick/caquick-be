@@ -16,13 +16,13 @@ import {
   AdminRepository,
   type AdminRegionRow,
 } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminRegionOutput } from '@/features/admin/services/admin-region-mappers.helper';
 import type { AdminRegionOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import {
   AuditActionType,
   AuditTargetType,
@@ -33,11 +33,12 @@ import {
 @Injectable()
 export class AdminRegionService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminRegions(

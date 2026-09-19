@@ -40,3 +40,6 @@ export interface IAuditLogRepository {
     args: SellerAuditLogScope & { limit: number; cursor?: bigint },
   ): Promise<AuditLog[]>;
 }
+
+/** createAuditLog 인자 — 도메인 repository가 tx 안에서 기록할 항목을 받을 때 쓴다. */
+export type AuditEntry = Parameters<IAuditLogRepository['createAuditLog']>[0];

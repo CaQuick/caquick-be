@@ -1,16 +1,16 @@
 import { Mutation } from '@nestjs/graphql';
 
-import { AdminModule } from '@/features/admin/admin.module';
 import {
+  collectFeatureResolverClasses,
   collectHandlerAuth,
   collectRootFieldsWithPrefix,
-  resolverClassesOf,
   violationsOf,
 } from '@/test/role-coverage.helper';
 
 describe('admin 루트 필드 인가 커버리지', () => {
   const adminFields = collectRootFieldsWithPrefix('admin');
-  const handlerAuth = collectHandlerAuth(resolverClassesOf(AdminModule));
+  // 관리자 핸들러가 도메인 feature로 흩어지는 중(04a~)이라 모든 feature 모듈에서 찾는다 — 04e에서 roles-coverage.spec으로 통합
+  const handlerAuth = collectHandlerAuth(collectFeatureResolverClasses());
 
   it('SDL에서 admin 접두 루트 필드를 읽어 왔다(입력 공간이 비어 있지 않다)', () => {
     expect(adminFields.length).toBeGreaterThan(0);

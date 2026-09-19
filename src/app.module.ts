@@ -75,6 +75,8 @@ import { PrismaModule } from '@/prisma';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const isProd = configService.get<string>('NODE_ENV') === 'production';
+        // ts-jest(모듈 해석이 cjs/esm으로 갈림)에서 플러그인 제네릭 타입이 어긋나 spec이 AppModule을 못 연다 — 드라이버 설정 타입으로 고정
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc에는 불필요하지만 ts-jest 해석에서 필요
         return {
           typePaths: [
             isProd
@@ -93,7 +95,7 @@ import { PrismaModule } from '@/prisma';
               : ApolloServerPluginLandingPageLocalDefault({ embed: true }),
           ],
           context: buildGraphqlContext,
-        };
+        } as Omit<ApolloDriverConfig, 'driver'>;
       },
     }),
     SystemModule,

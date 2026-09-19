@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -9,12 +10,10 @@ import {
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminSetStoreActiveInput } from '@/features/admin/dto/inputs/admin-set-store-active.input';
 import type { AdminStoreListInput } from '@/features/admin/dto/inputs/admin-store-list.input';
 import type { AdminUpdateStoreBasicInfoInput } from '@/features/admin/dto/inputs/admin-update-store-basic-info.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminStoreDetailOutput } from '@/features/admin/services/admin-store-mappers.helper';
 import type {
   AdminStoreDetailOutput,
@@ -24,6 +23,8 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
+import { StoreSellerRepository } from '@/features/store';
 import { buildStoreBasicInfoUpdateData, toStoreOutput } from '@/features/store';
 import {
   AuditActionType,
@@ -53,12 +54,14 @@ function snapshot(row: Store, keys: (keyof Store)[]): Prisma.InputJsonObject {
 @Injectable()
 export class AdminStoreService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly stores: StoreSellerRepository,
+    protected readonly repo: AdminRepository,
     private readonly s3: S3Service,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminStores(
@@ -144,7 +147,7 @@ export class AdminStoreService extends AdminBaseService {
       // 빈 문자열은 해제가 아니라 형식 오류(BAD_USER_INPUT). 해제는 명시적 null만
       const parsed = parseOptionalId(regionId);
       // 빠른 거절 — 최종 판정은 repository가 지역을 잠근 뒤 같은 트랜잭션에서 한다
-      if (parsed !== null && !(await this.repo.isRegionSelectable(parsed))) {
+      if (parsed !== null && !(await this.stores.isRegionSelectable(parsed))) {
         throw new DomainException('REGION_NOT_SELECTABLE');
       }
       // 관계 필드는 connect/disconnect로 — null은 연결 해제

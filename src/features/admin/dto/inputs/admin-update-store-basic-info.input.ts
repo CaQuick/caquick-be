@@ -3,7 +3,7 @@ import { IsIn, IsOptional, IsString, ValidateIf } from 'class-validator';
 import {
   STORE_MAP_PROVIDERS,
   type StoreMapProviderValue,
-} from '@/features/admin/constants/admin.constants';
+} from '@/features/store';
 
 /**
  * 부분 수정 입력. non-null 컬럼(storeName·storePhone·addressFull·mapProvider)은 명시적 null을

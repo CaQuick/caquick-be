@@ -3,12 +3,19 @@ import { Module } from '@nestjs/common';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { AccountCredentialRepository } from '@/features/auth/repositories/account-credential.repository';
 import { ACCOUNT_CREDENTIAL_REPOSITORY } from '@/features/auth/repositories/account-credential.repository.interface';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
 import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh-session.repository.interface';
+import { AdminAccountMutationResolver } from '@/features/auth/resolvers/auth-admin-account-mutation.resolver';
+import { AdminAccountQueryResolver } from '@/features/auth/resolvers/auth-admin-account-query.resolver';
+import { AdminUserMutationResolver } from '@/features/auth/resolvers/auth-admin-user-mutation.resolver';
+import { AdminUserQueryResolver } from '@/features/auth/resolvers/auth-admin-user-query.resolver';
+import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
+import { AdminUserService } from '@/features/auth/services/auth-admin-user.service';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
@@ -38,7 +45,16 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
       useClass: RefreshSessionRepository,
     },
     JwtBearerStrategy,
+    // 관리자용 계정 관리(관리자·구매자 계정) — identity가 소유한다. 판매자 온보딩 화면은 store(매장 생성 tx 콜백)
+    AccountAdminRepository,
+    AdminAccountService,
+    AdminUserService,
+    AdminAccountQueryResolver,
+    AdminAccountMutationResolver,
+    AdminUserQueryResolver,
+    AdminUserMutationResolver,
   ],
-  exports: [AuthService],
+  // AccountAdminRepository는 관리자 컨텍스트(AdminBaseService) 조회로 admin 파생 서비스 전부가 쓴다
+  exports: [AuthService, AccountAdminRepository],
 })
 export class AuthModule {}

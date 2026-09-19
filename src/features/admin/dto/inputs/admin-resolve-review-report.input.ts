@@ -1,7 +1,7 @@
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import {
-  MAX_REASON_LENGTH,
   REVIEW_REPORT_ACTIONS,
   type ReviewReportActionValue,
 } from '@/features/admin/constants/admin.constants';

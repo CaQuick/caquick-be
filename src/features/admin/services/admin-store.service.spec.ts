@@ -2,6 +2,8 @@ import { AdminRepository } from '@/features/admin/repositories/admin.repository'
 import { AdminStoreService } from '@/features/admin/services/admin-store.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -27,9 +29,11 @@ describe('AdminStoreService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreSellerRepository,
         ...s3TestProviders(),
         AdminStoreService,
         AdminRepository,
+        AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });

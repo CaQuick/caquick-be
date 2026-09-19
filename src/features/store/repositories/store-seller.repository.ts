@@ -311,6 +311,16 @@ export class StoreSellerRepository {
       },
     });
   }
+
+  /** 매장에 연결할 수 있는 지역은 2단계·활성뿐(판매자 계정 생성·관리자 매장 수정 공용). */
+  async isRegionSelectable(regionId: bigint): Promise<boolean> {
+    return (
+      (await this.prisma.region.findFirst({
+        where: { id: regionId, level: 2, is_active: true },
+        select: { id: true },
+      })) !== null
+    );
+  }
 }
 
 export function isSellerAccount(accountType: AccountType): boolean {

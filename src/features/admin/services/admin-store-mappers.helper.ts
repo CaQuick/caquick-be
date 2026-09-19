@@ -1,5 +1,5 @@
+import { activeOrNull } from '@/common/utils/active-or-null';
 import type { AdminStoreDetailRow } from '@/features/admin/repositories/admin.repository';
-import { activeOrNull } from '@/features/admin/services/admin-mappers.helper';
 import type { AdminStoreDetailOutput } from '@/features/admin/types/admin-output.type';
 import { toStoreOutput } from '@/features/store';
 

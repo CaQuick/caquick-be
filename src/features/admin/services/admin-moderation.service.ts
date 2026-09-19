@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -11,7 +12,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminDeleteReviewCommentInput } from '@/features/admin/dto/inputs/admin-delete-review-comment.input';
 import type { AdminDeleteReviewInput } from '@/features/admin/dto/inputs/admin-delete-review.input';
 import type { AdminResolveReviewReportInput } from '@/features/admin/dto/inputs/admin-resolve-review-report.input';
@@ -19,7 +19,6 @@ import type { AdminReviewCommentListInput } from '@/features/admin/dto/inputs/ad
 import type { AdminReviewListInput } from '@/features/admin/dto/inputs/admin-review-list.input';
 import type { AdminReviewReportListInput } from '@/features/admin/dto/inputs/admin-review-report-list.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import {
   toAdminReviewCommentOutput,
   toAdminReviewOutput,
@@ -36,16 +35,18 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 
 /** 작성자 본인 삭제와 달리 사유를 남기고 미처리 신고를 닫는다. 잠금·멱등·감사는 repository가 한 트랜잭션에서 처리한다. */
 @Injectable()
 export class AdminModerationService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminReviewReports(

@@ -26,3 +26,4 @@ export { formatBusinessHours } from '@/features/store/services/business-hours-fo
 // 판매자 컨텍스트(계정→매장)와 공통 검증 베이스. seller 파생 서비스(상품·주문·대화·감사)가 상속한다 — P1-6(DB 재조회 유지).
 export { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 export { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+export * from '@/features/store/constants/store-map-provider.constants';
