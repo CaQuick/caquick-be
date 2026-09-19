@@ -15,6 +15,7 @@ import { OidcClientService } from '@/features/auth/services/oidc-client.service'
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { TokenService } from '@/features/auth/services/token.service';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('OidcLoginService', () => {
   let service: OidcLoginService;
@@ -27,6 +28,8 @@ describe('OidcLoginService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     mockOidc = {
@@ -132,10 +135,9 @@ describe('OidcLoginService', () => {
 
     it('returnTo가 undefined이면 기본 프론트 URL을 사용한다', async () => {
       const mockRes = { cookie: jest.fn() } as unknown as Response;
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'FRONTEND_BASE_URL') return 'http://front.example';
-        return undefined;
-      });
+      mockConfig.getOrThrow.mockReturnValue(
+        testAuthConfig({ frontendBaseUrl: 'http://front.example' }),
+      );
       mockOidc.buildAuthorizationUrl.mockResolvedValue({
         authorizationUrl: 'https://a',
         state: 's',

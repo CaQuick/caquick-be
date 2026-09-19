@@ -9,6 +9,7 @@ import {
 } from 'openid-client';
 
 import { mustGetEnv } from '@/common/helpers/config.helper';
+import type { AuthConfig } from '@/config/auth.config';
 import type { OidcProvider } from '@/features/auth/types/oidc-provider.type';
 import { IdentityProvider } from '@/generated/prisma/client';
 
@@ -118,8 +119,7 @@ export class OidcClientService {
     tokenEndpointAuthMethod: ClientAuthMethod;
   } {
     const backendBaseUrl =
-      this.config.get<string>('BACKEND_BASE_URL')?.trim() ??
-      'http://localhost:4000';
+      this.config.getOrThrow<AuthConfig>('auth').backendBaseUrl;
 
     if (provider === 'google') {
       const issuerUrl = this.mustGet('OIDC_GOOGLE_ISSUER_URL');

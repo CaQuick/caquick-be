@@ -25,6 +25,7 @@ import {
 import { TokenService } from '@/features/auth/services/token.service';
 import { AccountType } from '@/generated/prisma/client';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 function makeCredential(
   overrides: Partial<AccountCredentialWithAccount> & {
@@ -97,6 +98,8 @@ describe('CredentialAuthService', () => {
 
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     const module: TestingModule = await Test.createTestingModule({
