@@ -950,6 +950,12 @@ model Review {
   rating  Decimal @db.Decimal(2, 1)
   content String? @db.Text
 
+  // 작성 시점 주문 품목 스냅샷(P1-07b). 목록·상세·쇼케이스가 order_item을 조인하지 않게 한다.
+  product_name_snapshot String  @db.VarChar(200)
+  /// [{ groupName, optionTitle }] — 주문 시 선택 옵션(활성, id 순). 없으면 null.
+  option_summary        Json?
+  before_image_url      String? @db.VarChar(2048)
+
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)

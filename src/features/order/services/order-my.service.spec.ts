@@ -8,6 +8,7 @@ import {
   createOrder,
   createOrderItem,
   createProduct,
+  createReview,
   createStore,
   createUserProfile,
 } from '@/test/factories';
@@ -173,23 +174,20 @@ describe('UserOrderService (real DB)', () => {
         return { store, product, order, item };
       }
 
-      async function createReview(args: {
+      async function makeReview(args: {
         orderItemId: bigint;
         accountId: bigint;
         storeId: bigint;
         productId: bigint;
         deletedAt?: Date | null;
       }) {
-        return prisma.review.create({
-          data: {
-            order_item_id: args.orderItemId,
-            account_id: args.accountId,
-            store_id: args.storeId,
-            product_id: args.productId,
-            rating: 5,
-            content: '리뷰 더미 텍스트입니다. 만족합니다.',
-            deleted_at: args.deletedAt ?? null,
-          },
+        return createReview(prisma, {
+          order_item_id: args.orderItemId,
+          account_id: args.accountId,
+          store_id: args.storeId,
+          product_id: args.productId,
+          content: '리뷰 더미 텍스트입니다. 만족합니다.',
+          deleted_at: args.deletedAt ?? null,
         });
       }
 
@@ -208,7 +206,7 @@ describe('UserOrderService (real DB)', () => {
         const { item, store, product } = await createPickedUpOrderWithItem(
           account.id,
         );
-        await createReview({
+        await makeReview({
           orderItemId: item.id,
           accountId: account.id,
           storeId: store.id,
@@ -225,7 +223,7 @@ describe('UserOrderService (real DB)', () => {
         const { item, store, product } = await createPickedUpOrderWithItem(
           account.id,
         );
-        await createReview({
+        await makeReview({
           orderItemId: item.id,
           accountId: account.id,
           storeId: store.id,
@@ -281,7 +279,7 @@ describe('UserOrderService (real DB)', () => {
         const { item, store, product, order } =
           await createPickedUpOrderWithItem(account.id);
         // item1에는 리뷰가 있고, item2에는 없음
-        await createReview({
+        await makeReview({
           orderItemId: item.id,
           accountId: account.id,
           storeId: store.id,
@@ -397,14 +395,11 @@ describe('UserOrderService (real DB)', () => {
         product_id: product.id,
       });
 
-      await prisma.review.create({
-        data: {
-          order_item_id: item.id,
-          account_id: account.id,
-          store_id: store.id,
-          product_id: product.id,
-          rating: 5,
-        },
+      await createReview(prisma, {
+        order_item_id: item.id,
+        account_id: account.id,
+        store_id: store.id,
+        product_id: product.id,
       });
 
       const result = await service.getMyOrder(account.id, order.id);

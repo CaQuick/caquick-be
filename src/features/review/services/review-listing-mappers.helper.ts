@@ -1,4 +1,5 @@
 import { anonymizeReviewAuthor } from '@/common/utils/review-author';
+import { parseOptionSummary } from '@/features/review/repositories/review-order-item-snapshot.helper';
 import type {
   ProductReviewRow,
   ReviewMediaRow,
@@ -43,10 +44,7 @@ export function toProductReview(
     commentCount: stats.commentCount,
     authorNickname: author.nickname,
     authorProfileImageUrl: author.profileImageUrl,
-    customOptions: row.order_item.option_items.map((option) => ({
-      groupName: option.group_name_snapshot,
-      optionTitle: option.option_title_snapshot,
-    })),
+    customOptions: parseOptionSummary(row.option_summary),
     createdAt: row.created_at,
   };
 }
@@ -63,7 +61,7 @@ export function toStoreReview(
     likeCount: stats.likeCount,
     isLiked: stats.isLiked,
     authorNickname: anonymizeReviewAuthor(row.account.user_profile).nickname,
-    productName: row.order_item.product_name_snapshot,
+    productName: row.product_name_snapshot,
     createdAt: row.created_at,
   };
 }

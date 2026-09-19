@@ -106,15 +106,12 @@ describe('UserMypageService (real DB)', () => {
         order_id: myOrder.id,
         product_id: product.id,
       });
-      await prisma.review.create({
-        data: {
-          order_item_id: myOrderItem.id,
-          account_id: account.id,
-          store_id: myOrderItem.store_id,
-          product_id: myOrderItem.product_id,
-          rating: 5,
-          deleted_at: new Date(),
-        },
+      await createReview(prisma, {
+        order_item_id: myOrderItem.id,
+        account_id: account.id,
+        store_id: myOrderItem.store_id,
+        product_id: myOrderItem.product_id,
+        deleted_at: new Date(),
       });
 
       const result = await service.getOverview(account.id);

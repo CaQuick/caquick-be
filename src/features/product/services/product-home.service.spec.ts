@@ -3,6 +3,7 @@ import { ProductRepository } from '@/features/product/repositories/product.repos
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { ReviewReadRepository } from '@/features/review';
+import { snapshotReviewOrderItem } from '@/features/review/repositories/review-order-item-snapshot.helper';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
@@ -599,6 +600,11 @@ describe('ProductHomeService (real DB)', () => {
           description_text: '첫 번째',
           sort_order: 0,
         },
+      });
+      // before 이미지는 작성 시점 스냅샷(07b) — 크롭을 만든 뒤 작성 경로와 같은 규칙으로 다시 찍는다
+      await prisma.review.update({
+        where: { id: review },
+        data: await snapshotReviewOrderItem(prisma, row.order_item_id),
       });
 
       const result = await service.customCakeShowcase();

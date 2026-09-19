@@ -82,18 +82,7 @@ export class ProductReviewRepository {
             sort_order: true,
           },
         },
-        order_item: {
-          select: {
-            option_items: {
-              where: activeWhere,
-              orderBy: { id: 'asc' },
-              select: {
-                group_name_snapshot: true,
-                option_title_snapshot: true,
-              },
-            },
-          },
-        },
+        option_summary: true,
         product: {
           select: {
             id: true,

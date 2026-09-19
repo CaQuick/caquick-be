@@ -29,12 +29,7 @@ export interface ProductReviewRow {
   created_at: Date;
   account: ReviewAuthorRow;
   media: ReviewMediaRow[];
-  order_item: {
-    option_items: {
-      group_name_snapshot: string;
-      option_title_snapshot: string;
-    }[];
-  };
+  option_summary: Prisma.JsonValue | null;
 }
 
 export interface StoreReviewRow {
@@ -46,11 +41,11 @@ export interface StoreReviewRow {
     user_profile: { nickname: string; deleted_at: Date | null } | null;
   };
   media: ReviewMediaRow[];
-  order_item: { product_name_snapshot: string };
+  product_name_snapshot: string;
 }
 
 export interface ReviewListRow extends ProductReviewRow {
-  order_item: ProductReviewRow['order_item'] & StoreReviewRow['order_item'];
+  product_name_snapshot: string;
 }
 
 export type ReviewStatsKey = 'store_id' | 'product_id';
@@ -69,7 +64,7 @@ export interface ShowcaseReviewRow {
     user_profile: { nickname: string; deleted_at: Date | null } | null;
   };
   media: { media_url: string }[];
-  order_item: { free_edits: { crop_image_url: string }[] };
+  before_image_url: string | null;
 }
 
 /** 쓰기(작성·수정·삭제)는 user feature의 ReviewRepository 소관. */
@@ -212,19 +207,8 @@ export class ReviewReadRepository {
             sort_order: true,
           },
         },
-        order_item: {
-          select: {
-            product_name_snapshot: true,
-            option_items: {
-              where: activeWhere,
-              orderBy: { id: 'asc' },
-              select: {
-                group_name_snapshot: true,
-                option_title_snapshot: true,
-              },
-            },
-          },
-        },
+        product_name_snapshot: true,
+        option_summary: true,
       },
     });
   }
@@ -295,8 +279,8 @@ export class ReviewReadRepository {
   }
 
   /**
-   * Before(주문 커스텀 자유편집 크롭)/After(리뷰 이미지)가 모두 있는 리뷰만 후보 — 대비 연출이 섹션의 본질이라
-   * 한쪽 없는 카드는 제외. 목록 좋아요순과 형태가 달라(범위 필터·커서 없음, EXISTS 2) SQL을 따로 둔다.
+   * Before(작성 시점 스냅샷 before_image_url)/After(리뷰 이미지)가 모두 있는 리뷰만 후보 — 대비 연출이 섹션의 본질이라
+   * 한쪽 없는 카드는 제외. 목록 좋아요순과 형태가 달라(범위 필터·커서 없음) SQL을 따로 둔다.
    */
   async listShowcaseReviewIdsByLikes(
     limit: number,
@@ -319,10 +303,7 @@ export class ReviewReadRepository {
             AND m.deleted_at IS NULL
             AND m.media_type = 'IMAGE'
         )
-        AND EXISTS (
-          SELECT 1 FROM order_item_custom_free_edit fe
-          WHERE fe.order_item_id = r.order_item_id AND fe.deleted_at IS NULL
-        )
+        AND r.before_image_url IS NOT NULL
       GROUP BY r.id
       ORDER BY like_count DESC, r.id DESC
       LIMIT ${limit}
@@ -354,16 +335,7 @@ export class ReviewReadRepository {
           take: 1,
           select: { media_url: true },
         },
-        order_item: {
-          select: {
-            free_edits: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              take: 1,
-              select: { crop_image_url: true },
-            },
-          },
-        },
+        before_image_url: true,
       },
     });
   }

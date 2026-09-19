@@ -121,6 +121,77 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.media.some((m) => m.media_type === 'VIDEO')).toBe(true);
     });
 
+    it('작성 시점에 주문 품목의 상품명·활성 옵션(id 순)·커스텀 크롭 첫 장을 리뷰에 복사한다', async () => {
+      const ctx = await setupReviewableOrderItem();
+      const group = await prisma.productOptionGroup.create({
+        data: { product_id: ctx.productId, name: '모양' },
+      });
+      const items = await Promise.all(
+        ['동그라미', '하트', '삭제된 옵션'].map((title) =>
+          prisma.productOptionItem.create({
+            data: { option_group_id: group.id, title },
+          }),
+        ),
+      );
+      for (const [i, item] of items.entries()) {
+        await prisma.orderItemOptionItem.create({
+          data: {
+            order_item_id: ctx.orderItemId,
+            option_group_id: group.id,
+            option_item_id: item.id,
+            group_name_snapshot: '모양',
+            option_title_snapshot: item.title,
+            deleted_at: i === 2 ? new Date() : null,
+          },
+        });
+      }
+      for (const [url, sortOrder] of [
+        ['https://img/second.png', 1],
+        ['https://img/first.png', 0],
+      ] as const) {
+        await prisma.orderItemCustomFreeEdit.create({
+          data: {
+            order_item_id: ctx.orderItemId,
+            crop_image_url: url,
+            description_text: '요청',
+            sort_order: sortOrder,
+          },
+        });
+      }
+
+      const result = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+        media: [],
+      });
+
+      const saved = await prisma.review.findUniqueOrThrow({
+        where: { id: BigInt(result.reviewId) },
+      });
+      expect(saved.product_name_snapshot).toBe('상품R 스냅샷');
+      expect(saved.option_summary).toEqual([
+        { groupName: '모양', optionTitle: '동그라미' },
+        { groupName: '모양', optionTitle: '하트' },
+      ]);
+      expect(saved.before_image_url).toBe('https://img/first.png');
+    });
+
+    it('옵션·크롭이 없는 품목이면 option_summary·before_image_url은 null', async () => {
+      const ctx = await setupReviewableOrderItem();
+      const result = await service.writeReview(ctx.accountId, {
+        orderItemId: ctx.orderItemId.toString(),
+        rating: 5,
+        content: VALID_CONTENT,
+        media: [],
+      });
+      const saved = await prisma.review.findUniqueOrThrow({
+        where: { id: BigInt(result.reviewId) },
+      });
+      expect(saved.option_summary).toBeNull();
+      expect(saved.before_image_url).toBeNull();
+    });
+
     describe('미디어 URL 소유권', () => {
       const OWNED = 'https://bucket.s3.ap-northeast-2.amazonaws.com/owned.jpg';
       const FOREIGN = 'https://evil.example.com/x.jpg';
@@ -386,6 +457,14 @@ describe('UserReviewService (real DB)', () => {
         ],
       });
       await service.deleteMyReview(ctx.accountId, first.reviewId);
+      // 복원도 작성 시점 규칙으로 스냅샷을 다시 찍는지 — 삭제 후 생긴 크롭이 반영돼야 한다
+      await prisma.orderItemCustomFreeEdit.create({
+        data: {
+          order_item_id: ctx.orderItemId,
+          crop_image_url: 'https://img/late-crop.png',
+          description_text: '요청',
+        },
+      });
 
       // 다시 작성 → 같은 row 복원, rating/content/media 모두 새 값으로 교체되어야 함
       const restored = await service.writeReview(ctx.accountId, {
@@ -413,6 +492,7 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.deleted_at).toBeNull();
       expect(Number(saved.rating)).toBe(5);
       expect(saved.content).toBe(NEW_CONTENT);
+      expect(saved.before_image_url).toBe('https://img/late-crop.png');
 
       // media: 새 값 2건만 남고 stale 1건은 정리됐는지 확인
       const mediaRows = await prisma.reviewMedia.findMany({

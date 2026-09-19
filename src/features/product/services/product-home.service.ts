@@ -112,7 +112,7 @@ export class ProductHomeService {
     const items: CustomCakeShowcaseItem[] = [];
     for (const entry of ranked) {
       const row = rowById.get(entry.id.toString());
-      const beforeImageUrl = row?.order_item.free_edits[0]?.crop_image_url;
+      const beforeImageUrl = row?.before_image_url;
       const afterImageUrl = row?.media[0]?.media_url;
       // 후보 SQL이 존재를 보장하지만, 조회 사이의 삭제 경합에 대비해 한 번 더 방어
       if (!row || !beforeImageUrl || !afterImageUrl) continue;
