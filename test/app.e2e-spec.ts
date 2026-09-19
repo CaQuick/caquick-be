@@ -14,7 +14,6 @@ import { AccountType } from '@/generated/prisma/client';
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   let jwt: JwtService;
-  let originalJwtSecret: string | undefined;
   const mockAccountRepository = {
     findAccountForJwt: jest.fn().mockResolvedValue({
       id: BigInt(1),
@@ -49,9 +48,7 @@ describe('AppController (e2e)', () => {
   };
 
   beforeAll(async () => {
-    originalJwtSecret = process.env.JWT_ACCESS_SECRET;
-    process.env.JWT_ACCESS_SECRET = 'test_jwt_secret';
-
+    // 서명 키는 authConfig가 만든다(RS256, 미설정이면 임시 키) — 시크릿 env는 더 이상 쓰이지 않는다
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -70,11 +67,6 @@ describe('AppController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
-    if (originalJwtSecret === undefined) {
-      delete process.env.JWT_ACCESS_SECRET;
-      return;
-    }
-    process.env.JWT_ACCESS_SECRET = originalJwtSecret;
   });
 
   it('/health (GET)', () => {
@@ -88,6 +80,7 @@ describe('AppController (e2e)', () => {
     const accessToken = jwt.sign({
       sub: '1',
       typ: 'access',
+      role: 'USER',
     });
 
     const response = await request(app.getHttpServer())
@@ -183,7 +176,7 @@ describe('AppController (e2e)', () => {
 
   it('만료된 JWT가 전달되면 GraphQL me 쿼리는 에러를 반환해야 한다', async () => {
     const expiredToken = jwt.sign(
-      { sub: '1', typ: 'access' },
+      { sub: '1', typ: 'access', role: 'USER' },
       { expiresIn: '0s' },
     );
 

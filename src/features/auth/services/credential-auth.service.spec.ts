@@ -14,6 +14,7 @@ import {
   type AccountCredentialWithAccount,
   type IAccountCredentialRepository,
 } from '@/features/auth/repositories/account-credential.repository.interface';
+import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -118,6 +119,18 @@ describe('CredentialAuthService', () => {
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
+        },
+        {
+          provide: ACCOUNT_REPOSITORY,
+          useValue: {
+            findAccountForJwt: jest.fn().mockResolvedValue({
+              id: BigInt(1),
+              status: 'ACTIVE',
+              account_type: 'USER',
+              credential: null,
+              store: null,
+            }),
+          },
         },
         {
           provide: AUDIT_LOG_REPOSITORY,

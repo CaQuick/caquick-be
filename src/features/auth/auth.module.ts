@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
+import { JwksController } from '@/features/auth/controllers/jwks.controller';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { AccountCredentialRepository } from '@/features/auth/repositories/account-credential.repository';
 import { ACCOUNT_CREDENTIAL_REPOSITORY } from '@/features/auth/repositories/account-credential.repository.interface';
@@ -29,7 +30,7 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 
 @Module({
   imports: [AuthGlobalModule, AuditLogModule],
-  controllers: [AuthController],
+  controllers: [AuthController, JwksController],
   providers: [
     AuthService,
     OidcClientService,

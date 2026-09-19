@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
+import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
@@ -55,6 +56,18 @@ describe('TokenService', () => {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
         },
+        {
+          provide: ACCOUNT_REPOSITORY,
+          useValue: {
+            findAccountForJwt: jest.fn().mockResolvedValue({
+              id: BigInt(1),
+              status: 'ACTIVE',
+              account_type: 'USER',
+              credential: null,
+              store: null,
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -64,22 +77,41 @@ describe('TokenService', () => {
   });
 
   describe('signAccessToken', () => {
-    it('payload(sub/typ/iat/exp) 로 access token 을 서명한다', () => {
-      config.get.mockImplementation((key: string) => {
-        if (key === 'JWT_ACCESS_EXPIRES_SECONDS') return '900';
-        return undefined;
+    it('신원 클레임(sub·typ·role·mustChangePassword)만 서명한다 — 시간·발급자는 서명 옵션 몫', () => {
+      const result = service.signAccessToken({
+        id: BigInt(42),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
       });
-
-      const result = service.signAccessToken(BigInt(42));
 
       expect(result).toBe('signed-token');
       expect(jwt.sign).toHaveBeenCalledTimes(1);
-      const payload = jwt.sign.mock.calls[0][0] as {
-        sub: string;
-        typ: string;
-      };
-      expect(payload.sub).toBe('42');
-      expect(payload.typ).toBe('access');
+      expect(jwt.sign).toHaveBeenCalledWith({
+        sub: '42',
+        typ: 'access',
+        role: 'USER',
+        mustChangePassword: false,
+      });
+    });
+
+    it('판매자는 storeId를, 비밀번호 변경 대상은 플래그를 클레임에 담는다', () => {
+      service.signAccessToken({
+        id: BigInt(7),
+        status: 'ACTIVE',
+        account_type: 'SELLER',
+        credential: { must_change_password: true },
+        store: { id: BigInt(3) },
+      });
+
+      expect(jwt.sign).toHaveBeenCalledWith({
+        sub: '7',
+        typ: 'access',
+        role: 'SELLER',
+        mustChangePassword: true,
+        storeId: '3',
+      });
     });
   });
 

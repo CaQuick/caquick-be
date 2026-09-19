@@ -6,9 +6,18 @@ import {
   parseEnvNumber,
   parseEnvString,
 } from '@/common/utils/env-parse';
+import {
+  buildKeyMaterial,
+  generateEphemeralKeyMaterial,
+  type JwtKeyMaterial,
+  readPem,
+} from '@/config/jwt-key';
 
 export interface AuthConfig {
-  jwtSecret: string;
+  /** RS256 서명/검증 키 + JWKS 공개용 JWK(P1-13). kid는 RFC 7638 썸프린트다. */
+  jwtKeys: JwtKeyMaterial;
+  jwtIssuer: string;
+  jwtAudience: string;
   jwtAccessExpiresSeconds: number;
   refreshExpiresInDays: number;
   cookieDomain?: string;
@@ -22,15 +31,29 @@ export interface AuthConfig {
 }
 
 /**
- * JWT 시크릿 — JWT_ACCESS_SECRET 우선, 없으면 JWT_SECRET.
- * 공백만 있는 값은 미설정으로 본다(strategy·module이 이 값을 그대로 서명키로 쓴다).
+ * 서명 키 — base64 PEM(JWT_PRIVATE_KEY_PEM_B64) 또는 파일 경로(JWT_PRIVATE_KEY_PATH).
+ * 공개키는 생략하면 개인키에서 유도한다. 미설정이면 운영에서 부팅을 막고, 그 외에는 임시 키를 만든다.
  */
-function readJwtSecret(): string | undefined {
-  for (const key of ['JWT_ACCESS_SECRET', 'JWT_SECRET'] as const) {
-    const value = process.env[key]?.trim();
-    if (value) return value;
+function readJwtKeys(isProd: boolean): JwtKeyMaterial {
+  const privateKeyPem = readPem({
+    base64: process.env.JWT_PRIVATE_KEY_PEM_B64,
+    path: process.env.JWT_PRIVATE_KEY_PATH,
+  });
+  if (!privateKeyPem) {
+    if (isProd) {
+      throw new Error(
+        'JWT_PRIVATE_KEY_PEM_B64 or JWT_PRIVATE_KEY_PATH must be set in production environment',
+      );
+    }
+    return generateEphemeralKeyMaterial();
   }
-  return undefined;
+  return buildKeyMaterial({
+    privateKeyPem,
+    publicKeyPem: readPem({
+      base64: process.env.JWT_PUBLIC_KEY_PEM_B64,
+      path: process.env.JWT_PUBLIC_KEY_PATH,
+    }),
+  });
 }
 
 /** 알 수 없는 값은 가장 보수적인 기본값(lax)으로. */
@@ -47,16 +70,11 @@ function parseSameSite(
 
 export default registerAs('auth', (): AuthConfig => {
   const isProd = process.env.NODE_ENV === 'production';
-  const jwtSecret = readJwtSecret();
-
-  if (isProd && !jwtSecret) {
-    throw new Error(
-      'JWT_SECRET or JWT_ACCESS_SECRET must be set in production environment',
-    );
-  }
 
   return {
-    jwtSecret: jwtSecret ?? 'dev_jwt_secret',
+    jwtKeys: readJwtKeys(isProd),
+    jwtIssuer: parseEnvString(process.env.JWT_ISSUER) ?? 'caquick-identity',
+    jwtAudience: parseEnvString(process.env.JWT_AUDIENCE) ?? 'caquick-api',
     jwtAccessExpiresSeconds: parseEnvNumber(
       process.env.JWT_ACCESS_EXPIRES_SECONDS,
       900,

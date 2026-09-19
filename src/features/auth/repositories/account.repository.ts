@@ -283,6 +283,8 @@ export class AccountRepository implements IAccountRepository {
         status: true,
         account_type: true,
         credential: { select: { must_change_password: true } },
+        // 판매자 토큰의 storeId 클레임용 — 서비스 분리 후에는 identity가 들고 있을 값이다(P4 federation)
+        store: { select: { id: true } },
       },
     });
   }

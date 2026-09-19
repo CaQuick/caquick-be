@@ -43,7 +43,7 @@ export class AuthService {
       throw new DomainException('ACCOUNT_NOT_ACTIVE');
     }
 
-    const accessToken = this.tokens.signAccessToken(accountId);
+    const accessToken = this.tokens.signAccessToken(account);
     return {
       accessToken,
       tokenType: 'Bearer',

@@ -3,6 +3,7 @@ import { AccountRepository } from '@/features/auth/repositories/account.reposito
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createAccountCredential } from '@/test/factories';
@@ -53,6 +54,7 @@ describe('JwtBearerStrategy (real DB)', () => {
       const result = await strategy.validate({
         sub: account.id.toString(),
         typ: 'access',
+        role: 'USER',
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 3600,
       });
@@ -74,6 +76,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         const result = await strategy.validate({
           sub: credential.account_id.toString(),
           typ: 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         });
@@ -88,6 +91,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         strategy.validate({
           sub: '',
           typ: 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         }),
@@ -99,6 +103,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         strategy.validate({
           sub: '1',
           typ: 'refresh' as 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         }),
@@ -110,6 +115,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         strategy.validate({
           sub: '99999',
           typ: 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         }),
@@ -126,6 +132,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         strategy.validate({
           sub: account.id.toString(),
           typ: 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         }),
@@ -137,6 +144,7 @@ describe('JwtBearerStrategy (real DB)', () => {
         strategy.validate({
           sub: 'not-a-number',
           typ: 'access',
+          role: 'USER',
           iat: 0,
           exp: 0,
         }),
@@ -146,8 +154,8 @@ describe('JwtBearerStrategy (real DB)', () => {
 
   describe('constructor', () => {
     // 시크릿 검증(폴백·공백·prod)은 auth.config.spec이 담당한다. 여기서는 해석값을 그대로 쓰는지만 본다.
-    it('authConfig.jwtSecret으로 생성된다', () => {
-      const getOrThrow = jest.fn().mockReturnValue({ jwtSecret: 'resolved' });
+    it('authConfig의 공개키·iss·aud로 생성된다', () => {
+      const getOrThrow = jest.fn().mockReturnValue(TEST_AUTH_CONFIG);
       const config = { getOrThrow } as never;
       const accounts = {} as never;
 

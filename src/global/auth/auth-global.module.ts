@@ -14,10 +14,21 @@ import { RolesGuard } from '@/global/auth/guards/roles.guard';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        // 시크릿 해석(폴백·공백·prod fail-fast)은 authConfig가 단일 소스다.
-        secret: config.getOrThrow<AuthConfig>('auth').jwtSecret,
-      }),
+      useFactory: (config: ConfigService) => {
+        // 키 해석(env b64/파일·prod fail-fast)과 iss/aud는 authConfig가 단일 소스다.
+        const auth = config.getOrThrow<AuthConfig>('auth');
+        return {
+          privateKey: auth.jwtKeys.privateKeyPem,
+          publicKey: auth.jwtKeys.publicKeyPem,
+          signOptions: {
+            algorithm: 'RS256' as const,
+            issuer: auth.jwtIssuer,
+            audience: auth.jwtAudience,
+            keyid: auth.jwtKeys.kid,
+            expiresIn: auth.jwtAccessExpiresSeconds,
+          },
+        };
+      },
     }),
   ],
   providers: [JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard],

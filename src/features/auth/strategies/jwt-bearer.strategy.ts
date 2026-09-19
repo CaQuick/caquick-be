@@ -18,13 +18,17 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(ACCOUNT_REPOSITORY)
     private readonly accounts: IAccountRepository,
   ) {
-    // 시크릿 해석(폴백·공백·prod fail-fast)은 authConfig가 단일 소스다.
-    const { jwtSecret } = config.getOrThrow<AuthConfig>('auth');
+    // 키 해석과 iss/aud는 authConfig가 단일 소스다. 검증은 공개키로만 하고 알고리즘을 RS256으로 고정한다
+    // (alg 혼동 공격 차단 — HS256 토큰을 공개키로 검증하게 두지 않는다).
+    const auth = config.getOrThrow<AuthConfig>('auth');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret,
+      secretOrKey: auth.jwtKeys.publicKeyPem,
+      algorithms: ['RS256'],
+      issuer: auth.jwtIssuer,
+      audience: auth.jwtAudience,
     });
   }
 

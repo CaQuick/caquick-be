@@ -10,7 +10,6 @@ import { PrismaService } from '@/prisma';
 // AppModule을 compile만 해서(리스닝·스키마 빌드 없음) 모든 provider가 실제 모듈 경계 안에서 resolve되는지 본다.
 const ENV_DEFAULTS: Record<string, string> = {
   DATABASE_URL: 'mysql://wiring:wiring@localhost:3306/wiring',
-  JWT_ACCESS_SECRET: 'module-wiring-secret',
   OIDC_GOOGLE_ISSUER_URL: 'https://accounts.google.com',
   OIDC_GOOGLE_CLIENT_ID: 'wiring',
   OIDC_GOOGLE_CLIENT_SECRET: 'wiring',
