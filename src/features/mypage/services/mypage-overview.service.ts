@@ -54,7 +54,6 @@ export class UserMypageService {
       },
       ongoingOrders: ongoingOrders.map((order) => {
         const firstItem = order.items[0];
-        const firstImage = firstItem?.product?.images?.[0];
 
         return {
           orderId: order.id.toString(),
@@ -64,7 +63,8 @@ export class UserMypageService {
           pickupAt: order.pickup_at,
           representativeProductName:
             firstItem?.product_name_snapshot ?? '상품 정보 없음',
-          representativeProductImageUrl: firstImage?.image_url ?? null,
+          representativeProductImageUrl:
+            firstItem?.product_thumbnail_url_snapshot ?? null,
           totalPrice: order.total_price,
         };
       }),

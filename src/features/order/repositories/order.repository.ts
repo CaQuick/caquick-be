@@ -62,10 +62,8 @@ export interface MyOrderRow {
   total_price: number;
   items: {
     product_name_snapshot: string;
-    store: { store_name: string };
-    product: {
-      images: { image_url: string }[];
-    };
+    store_name_snapshot: string;
+    product_thumbnail_url_snapshot: string | null;
   }[];
   _count: { items: number };
 }
@@ -79,9 +77,7 @@ export interface OngoingOrderRow {
   total_price: number;
   items: {
     product_name_snapshot: string;
-    product: {
-      images: { image_url: string }[];
-    };
+    product_thumbnail_url_snapshot: string | null;
   }[];
 }
 
@@ -110,6 +106,8 @@ export interface CreateSubmittedOrderArgs {
     storeId: bigint;
     productId: bigint;
     productNameSnapshot: string;
+    storeNameSnapshot: string;
+    productThumbnailUrlSnapshot: string | null;
     regularPriceSnapshot: number;
     salePriceSnapshot: number | null;
     quantity: number;
@@ -136,10 +134,11 @@ export interface ReviewableOrderItemRow {
   id: bigint;
   product_id: bigint;
   product_name_snapshot: string;
+  store_name_snapshot: string;
+  product_thumbnail_url_snapshot: string | null;
   order: { picked_up_at: Date | null } | null;
-  product: { images: { image_url: string }[] } | null;
+  /** 지역 표기만 현재 매장에서 읽는다(매장명은 스냅샷). */
   store: {
-    store_name: string;
     address_city: string | null;
     address_neighborhood: string | null;
     region: { name: string } | null;
@@ -246,6 +245,9 @@ export class OrderRepository {
             store_id: args.item.storeId,
             product_id: args.item.productId,
             product_name_snapshot: args.item.productNameSnapshot,
+            store_name_snapshot: args.item.storeNameSnapshot,
+            product_thumbnail_url_snapshot:
+              args.item.productThumbnailUrlSnapshot,
             regular_price_snapshot: args.item.regularPriceSnapshot,
             sale_price_snapshot: args.item.salePriceSnapshot,
             quantity: args.item.quantity,
@@ -335,18 +337,6 @@ export class OrderRepository {
           where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
-          include: {
-            product: {
-              select: {
-                images: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                  take: 1,
-                  select: { image_url: true },
-                },
-              },
-            },
-          },
         },
       },
     });
@@ -375,21 +365,6 @@ export class OrderRepository {
           where: activeWhere,
           orderBy: { id: 'asc' },
           take: 1,
-          include: {
-            store: {
-              select: { store_name: true },
-            },
-            product: {
-              select: {
-                images: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                  take: 1,
-                  select: { image_url: true },
-                },
-              },
-            },
-          },
         },
         _count: {
           select: { items: { where: activeWhere } },
@@ -472,20 +447,11 @@ export class OrderRepository {
           id: true,
           product_id: true,
           product_name_snapshot: true,
+          store_name_snapshot: true,
+          product_thumbnail_url_snapshot: true,
           order: { select: { picked_up_at: true } },
-          product: {
-            select: {
-              images: {
-                where: activeWhere,
-                orderBy: { sort_order: 'asc' },
-                take: 1,
-                select: { image_url: true },
-              },
-            },
-          },
           store: {
             select: {
-              store_name: true,
               address_city: true,
               address_neighborhood: true,
               region: { select: { name: true } },
@@ -530,16 +496,6 @@ export class OrderRepository {
                 business_hours: {
                   where: activeWhere,
                   orderBy: { day_of_week: 'asc' },
-                },
-              },
-            },
-            product: {
-              select: {
-                images: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                  take: 1,
-                  select: { image_url: true },
                 },
               },
             },
@@ -772,12 +728,11 @@ export class OrderRepository {
         const firstItem = await tx.orderItem.findFirst({
           where: { order_id: order.id },
           orderBy: { id: 'asc' },
-          select: { product_id: true, product_name_snapshot: true },
-        });
-        // 표시값 스냅샷 — 매장명은 outbox 전환(08b) 전까지 여기서 읽어 싣는다
-        const store = await tx.store.findFirst({
-          where: { id: args.storeId },
-          select: { store_name: true },
+          select: {
+            product_id: true,
+            product_name_snapshot: true,
+            store_name_snapshot: true,
+          },
         });
         await tx.notification.create({
           data: {
@@ -786,7 +741,7 @@ export class OrderRepository {
             store_id: args.storeId,
             product_id: firstItem?.product_id ?? null,
             order_number: updatedOrder.order_number,
-            store_name: store?.store_name ?? null,
+            store_name: firstItem?.store_name_snapshot ?? null,
             product_name: firstItem?.product_name_snapshot ?? null,
             ...notification,
           },
@@ -937,6 +892,7 @@ export class OrderRepository {
           product_id: true,
           store_id: true,
           product_name_snapshot: true,
+          store_name_snapshot: true,
         },
       });
       // 알림 내용은 notification feature가 단일 소스 — 판매자 취소와 같은 payload
@@ -945,13 +901,6 @@ export class OrderRepository {
         OrderStatus.CANCELED,
       );
       if (notification) {
-        // 표시값 스냅샷 — 매장명은 outbox 전환(08b) 전까지 여기서 읽어 싣는다
-        const store = firstItem
-          ? await tx.store.findFirst({
-              where: { id: firstItem.store_id },
-              select: { store_name: true },
-            })
-          : null;
         await tx.notification.create({
           data: {
             account_id: updated.account_id,
@@ -959,7 +908,7 @@ export class OrderRepository {
             store_id: firstItem?.store_id ?? null,
             product_id: firstItem?.product_id ?? null,
             order_number: updated.order_number,
-            store_name: store?.store_name ?? null,
+            store_name: firstItem?.store_name_snapshot ?? null,
             product_name: firstItem?.product_name_snapshot ?? null,
             ...notification,
           },

@@ -22,19 +22,6 @@ export class ReviewRepository {
       include: {
         order: { select: { status: true, account_id: true } },
         review: { select: { id: true, deleted_at: true } },
-        store: { select: { store_name: true } },
-        product: {
-          select: {
-            id: true,
-            name: true,
-            images: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              take: 1,
-              select: { image_url: true },
-            },
-          },
-        },
       },
     });
   }
@@ -131,18 +118,8 @@ export class ReviewRepository {
           select: {
             id: true,
             product_name_snapshot: true,
-            store: { select: { store_name: true } },
-            product: {
-              select: {
-                id: true,
-                images: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                  take: 1,
-                  select: { image_url: true },
-                },
-              },
-            },
+            store_name_snapshot: true,
+            product_thumbnail_url_snapshot: true,
           },
         },
         media: {
@@ -171,18 +148,8 @@ export class ReviewRepository {
             select: {
               id: true,
               product_name_snapshot: true,
-              store: { select: { store_name: true } },
-              product: {
-                select: {
-                  id: true,
-                  images: {
-                    where: activeWhere,
-                    orderBy: { sort_order: 'asc' },
-                    take: 1,
-                    select: { image_url: true },
-                  },
-                },
-              },
+              store_name_snapshot: true,
+              product_thumbnail_url_snapshot: true,
             },
           },
           media: {

@@ -130,7 +130,7 @@ describe('OrderRepository (real DB)', () => {
       expect(rows.map((r) => r.id)).not.toContain(oldOrder.id);
     });
 
-    it('첫 item + 첫 image까지 포함하여 반환', async () => {
+    it('첫 item(주문 시점 썸네일 스냅샷 포함)을 반환한다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -158,7 +158,9 @@ describe('OrderRepository (real DB)', () => {
       });
       expect(rows[0].items).toHaveLength(1);
       expect(rows[0].items[0].product_name_snapshot).toBe('케이크');
-      expect(rows[0].items[0].product.images).toHaveLength(1);
+      expect(rows[0].items[0].product_thumbnail_url_snapshot).toBe(
+        'https://i.example/1.png',
+      );
     });
   });
 

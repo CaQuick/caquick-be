@@ -177,6 +177,19 @@ describe('OrderCheckoutService (real DB)', () => {
       const { product, sizeSmallId, candleId } = await makeProductWithOptions(
         store.id,
       );
+      // 썸네일 스냅샷은 활성 첫 이미지(sort_order 순) — 뒤 순서를 먼저 만들어 정렬을 확인한다
+      for (const [url, sortOrder] of [
+        ['https://img/second.png', 1],
+        ['https://img/first.png', 0],
+      ] as const) {
+        await prisma.productImage.create({
+          data: {
+            product_id: product.id,
+            image_url: url,
+            sort_order: sortOrder,
+          },
+        });
+      }
       const buyer = await makeBuyer();
 
       const result = await service.createOrder(
@@ -213,6 +226,8 @@ describe('OrderCheckoutService (real DB)', () => {
 
       const [item] = saved.items;
       expect(item.product_name_snapshot).toBe(product.name);
+      expect(item.store_name_snapshot).toBe(store.store_name);
+      expect(item.product_thumbnail_url_snapshot).toBe('https://img/first.png');
       expect(item.regular_price_snapshot).toBe(30000);
       expect(item.sale_price_snapshot).toBe(25000);
       expect(item.quantity).toBe(2);
