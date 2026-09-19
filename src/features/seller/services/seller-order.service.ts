@@ -24,18 +24,17 @@ import {
 } from '@/features/order';
 import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
 } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { OrderStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerOrderService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,

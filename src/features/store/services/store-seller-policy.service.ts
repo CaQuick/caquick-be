@@ -22,24 +22,24 @@ import {
   MIN_DAYS_AHEAD,
   MIN_LEAD_TIME_MINUTES,
   MIN_PICKUP_SLOT_INTERVAL_MINUTES,
-} from '@/features/seller/constants/seller.constants';
-import type { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
-import type { SellerUpdatePickupPolicyInput } from '@/features/seller/dto/inputs/seller-update-pickup-policy.input';
-import type { SellerUpsertStoreDailyCapacityInput } from '@/features/seller/dto/inputs/seller-upsert-store-daily-capacity.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
-import { toStoreDailyCapacityOutput } from '@/features/seller/services/seller-store-mappers.helper';
+} from '@/features/store/constants/store-seller.constants';
+import type { SellerDateCursorInput } from '@/features/store/dto/inputs/seller-date-cursor.input';
+import type { SellerUpdatePickupPolicyInput } from '@/features/store/dto/inputs/seller-update-pickup-policy.input';
+import type { SellerUpsertStoreDailyCapacityInput } from '@/features/store/dto/inputs/seller-upsert-store-daily-capacity.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { toStoreOutput } from '@/features/store/services/store-output-mappers.helper';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
+import { toStoreDailyCapacityOutput } from '@/features/store/services/store-seller-mappers.helper';
 import type {
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
-} from '@/features/seller/types/seller-output.type';
-import { toStoreOutput } from '@/features/store';
+} from '@/features/store/types/store-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerStorePolicyService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
   ) {

@@ -24,10 +24,9 @@ import {
 import type { SellerCreateProductInput } from '@/features/seller/dto/inputs/seller-create-product.input';
 import type { SellerSetProductActiveInput } from '@/features/seller/dto/inputs/seller-set-product-active.input';
 import type { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toProductOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductOutput } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import {
   AuditActionType,
   AuditTargetType,
@@ -39,7 +38,7 @@ import { S3Service } from '@/global/storage/s3.service';
 @Injectable()
 export class SellerProductLifecycleService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,

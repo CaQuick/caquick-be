@@ -1,8 +1,8 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -17,7 +17,7 @@ describe('SellerProductTaxonomyService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         SellerProductTaxonomyService,
-        SellerRepository,
+        StoreSellerRepository,
         ProductRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

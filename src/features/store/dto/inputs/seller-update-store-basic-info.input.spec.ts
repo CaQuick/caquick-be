@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
+import { SellerUpdateStoreBasicInfoInput } from '@/features/store/dto/inputs/seller-update-store-basic-info.input';
 
 function build(plain: object): SellerUpdateStoreBasicInfoInput {
   return plainToInstance(SellerUpdateStoreBasicInfoInput, plain);

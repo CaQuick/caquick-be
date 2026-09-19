@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerUpsertStoreSpecialClosureInput } from '@/features/seller/dto/inputs/seller-upsert-store-special-closure.input';
+import { SellerUpsertStoreSpecialClosureInput } from '@/features/store/dto/inputs/seller-upsert-store-special-closure.input';
 
 function build(plain: object): SellerUpsertStoreSpecialClosureInput {
   return plainToInstance(SellerUpsertStoreSpecialClosureInput, plain);

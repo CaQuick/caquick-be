@@ -1,7 +1,7 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerStoreHoursService } from '@/features/store/services/store-seller-hours.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -16,7 +16,7 @@ describe('SellerStoreHoursService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         SellerStoreHoursService,
-        SellerRepository,
+        StoreSellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

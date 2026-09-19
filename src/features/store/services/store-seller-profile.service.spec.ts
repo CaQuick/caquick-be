@@ -1,8 +1,8 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import type { SellerUpdateStoreBasicInfoInput } from '@/features/seller/dto/inputs/seller-update-store-basic-info.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import type { SellerUpdateStoreBasicInfoInput } from '@/features/store/dto/inputs/seller-update-store-basic-info.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerStoreProfileService } from '@/features/store/services/store-seller-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -23,7 +23,7 @@ describe('SellerStoreProfileService (real DB)', () => {
       providers: [
         ...s3TestProviders(),
         SellerStoreProfileService,
-        SellerRepository,
+        StoreSellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

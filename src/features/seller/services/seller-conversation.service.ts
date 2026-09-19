@@ -31,12 +31,11 @@ import {
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
 } from '@/features/seller/constants/seller.constants';
 import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
 } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import {
   AuditActionType,
   AuditTargetType,
@@ -48,7 +47,7 @@ export class SellerConversationService extends SellerBaseService {
   private readonly logger = new Logger(SellerConversationService.name);
 
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly conversationRepository: ConversationRepository,

@@ -15,10 +15,9 @@ import {
 } from '@/features/seller/constants/seller.constants';
 import type { SellerAddProductImageInput } from '@/features/seller/dto/inputs/seller-add-product-image.input';
 import type { SellerReorderProductImagesInput } from '@/features/seller/dto/inputs/seller-reorder-product-images.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toProductImageOutput } from '@/features/seller/services/seller-product-mappers.helper';
 import type { SellerProductImageOutput } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
@@ -26,7 +25,7 @@ import { S3Service } from '@/global/storage/s3.service';
 @Injectable()
 export class SellerProductImageService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,

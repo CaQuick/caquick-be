@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { SellerUpsertStoreBusinessHourInput } from '@/features/seller/dto/inputs/seller-upsert-store-business-hour.input';
+import { SellerUpsertStoreBusinessHourInput } from '@/features/store/dto/inputs/seller-upsert-store-business-hour.input';
 
 function build(plain: object): SellerUpsertStoreBusinessHourInput {
   return plainToInstance(SellerUpsertStoreBusinessHourInput, plain);

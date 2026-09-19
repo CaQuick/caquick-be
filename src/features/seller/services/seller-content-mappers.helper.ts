@@ -2,22 +2,8 @@ import {
   SELLER_AUDIT_TARGET_TYPES,
   type SellerAuditTargetType,
 } from '@/features/seller/constants/seller.constants';
-import type {
-  SellerAuditLogOutput,
-  SellerFaqTopicOutput,
-} from '@/features/seller/types/seller-output.type';
+import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
 import { type AuditTargetType, Prisma } from '@/generated/prisma/client';
-
-export interface FaqTopicRow {
-  id: bigint;
-  store_id: bigint;
-  title: string;
-  answer_html: string;
-  sort_order: number;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
 
 export interface AuditLogRow {
   id: bigint;
@@ -31,19 +17,6 @@ export interface AuditLogRow {
   ip_address: string | null;
   user_agent: string | null;
   created_at: Date;
-}
-
-export function toFaqTopicOutput(row: FaqTopicRow): SellerFaqTopicOutput {
-  return {
-    id: row.id.toString(),
-    storeId: row.store_id.toString(),
-    title: row.title,
-    answerHtml: row.answer_html,
-    sortOrder: row.sort_order,
-    isActive: row.is_active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
 }
 
 export function toAuditLogOutput(row: AuditLogRow): SellerAuditLogOutput {

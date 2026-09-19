@@ -3,36 +3,6 @@ import type {
   OrderStatusHistoryOutput,
 } from '@/features/order';
 import type { SellerAuditTargetType } from '@/features/seller/constants/seller.constants';
-import type { StoreOutput } from '@/features/store';
-
-/** 판매자 SDL(SellerStore)에는 regionId가 없다. */
-export type SellerStoreOutput = Omit<StoreOutput, 'regionId'>;
-
-export interface SellerStoreBusinessHourOutput {
-  id: string;
-  dayOfWeek: number;
-  isClosed: boolean;
-  openTime: Date | null;
-  closeTime: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface SellerStoreSpecialClosureOutput {
-  id: string;
-  closureDate: Date;
-  reason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface SellerStoreDailyCapacityOutput {
-  id: string;
-  capacityDate: Date;
-  capacity: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export interface SellerCategoryOutput {
   id: string;
@@ -170,17 +140,6 @@ export interface SellerConversationMessageOutput {
   bodyText: string | null;
   bodyHtml: string | null;
   createdAt: Date;
-}
-
-export interface SellerFaqTopicOutput {
-  id: string;
-  storeId: string;
-  title: string;
-  answerHtml: string;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface SellerAuditLogOutput {

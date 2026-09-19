@@ -14,19 +14,20 @@ import {
 } from '@/features/audit-log';
 import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
 import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import { toAuditLogOutput } from '@/features/seller/services/seller-content-mappers.helper';
 import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerAuditService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    context: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly sellerRepo: SellerRepository,
   ) {
-    super(repo, auditLogs);
+    super(context, auditLogs);
   }
 
   async sellerAuditLogs(
@@ -47,8 +48,8 @@ export class SellerAuditService extends SellerBaseService {
         : undefined,
     };
     const [rows, totalCount] = await Promise.all([
-      this.repo.listAuditLogsBySeller({ ...scope, ...normalized }),
-      this.repo.countAuditLogsBySeller(scope),
+      this.sellerRepo.listAuditLogsBySeller({ ...scope, ...normalized }),
+      this.sellerRepo.countAuditLogsBySeller(scope),
     ]);
 
     return toCursorConnection(

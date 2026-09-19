@@ -5,15 +5,14 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import type { SellerCreateUploadUrlInput } from '@/features/seller/dto/inputs/seller-create-upload-url.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { S3Service } from '@/global/storage/s3.service';
 import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Injectable()
 export class SellerUploadService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly s3: S3Service,

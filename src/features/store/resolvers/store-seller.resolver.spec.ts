@@ -1,11 +1,12 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerStoreMutationResolver } from '@/features/seller/resolvers/seller-store-mutation.resolver';
-import { SellerStoreQueryResolver } from '@/features/seller/resolvers/seller-store-query.resolver';
-import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
-import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
-import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerStoreMutationResolver } from '@/features/store/resolvers/store-seller-mutation.resolver';
+import { SellerStoreQueryResolver } from '@/features/store/resolvers/store-seller-query.resolver';
+import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
+import { SellerStoreHoursService } from '@/features/store/services/store-seller-hours.service';
+import { SellerStorePolicyService } from '@/features/store/services/store-seller-policy.service';
+import { SellerStoreProfileService } from '@/features/store/services/store-seller-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -27,7 +28,8 @@ describe('Seller Store Resolvers (real DB)', () => {
         SellerStoreProfileService,
         SellerStoreHoursService,
         SellerStorePolicyService,
-        SellerRepository,
+        SellerFaqService,
+        StoreSellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
@@ -112,6 +114,33 @@ describe('Seller Store Resolvers (real DB)', () => {
       mutationResolver.sellerDeleteStoreSpecialClosure(
         { accountId: me.account.id.toString() },
         othersClosure.id.toString(),
+      ),
+    ).rejects.toThrowDomain(404);
+  });
+  it('Mutation.sellerCreateFaqTopic + Query.sellerFaqTopics: DB 왕복 반영', async () => {
+    const { account } = await setupSellerWithStore(prisma);
+    await mutationResolver.sellerCreateFaqTopic(
+      { accountId: account.id.toString() },
+      { title: 'F1', answerHtml: '<p>a</p>' },
+    );
+    const result = await queryResolver.sellerFaqTopics({
+      accountId: account.id.toString(),
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toBe('F1');
+  });
+
+  it('Mutation.sellerDeleteFaqTopic: 타 매장 topic이면 404 전파', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const other = await setupSellerWithStore(prisma);
+    const othersFaq = await prisma.storeFaqTopic.create({
+      data: { store_id: other.store.id, title: 'X', answer_html: '<p>x</p>' },
+    });
+
+    await expect(
+      mutationResolver.sellerDeleteFaqTopic(
+        { accountId: me.account.id.toString() },
+        othersFaq.id.toString(),
       ),
     ).rejects.toThrowDomain(404);
   });

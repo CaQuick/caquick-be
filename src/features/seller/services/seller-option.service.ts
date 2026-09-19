@@ -24,12 +24,11 @@ import type { SellerReorderOptionGroupsInput } from '@/features/seller/dto/input
 import type { SellerReorderOptionItemsInput } from '@/features/seller/dto/inputs/seller-reorder-option-items.input';
 import type { SellerUpdateOptionGroupInput } from '@/features/seller/dto/inputs/seller-update-option-group.input';
 import type { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/seller-update-option-item.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerBaseService } from '@/features/seller/services/seller-base.service';
 import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
 } from '@/features/seller/types/seller-output.type';
+import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { assertOwnedUploadUrl } from '@/global/storage/assert-owned-upload-url';
 import { S3Service } from '@/global/storage/s3.service';
@@ -37,7 +36,7 @@ import { S3Service } from '@/global/storage/s3.service';
 @Injectable()
 export class SellerOptionService extends SellerBaseService {
   constructor(
-    repo: SellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly productRepository: ProductRepository,

@@ -18,7 +18,6 @@ import type { SellerUpdateOptionItemInput } from '@/features/seller/dto/inputs/s
 import type { SellerUpdateProductInput } from '@/features/seller/dto/inputs/seller-update-product.input';
 import type { SellerUpsertProductCustomTemplateInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-template.input';
 import type { SellerUpsertProductCustomTextTokenInput } from '@/features/seller/dto/inputs/seller-upsert-product-custom-text-token.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
 import { SellerProductMutationResolver } from '@/features/seller/resolvers/seller-product-mutation.resolver';
 import { SellerProductQueryResolver } from '@/features/seller/resolvers/seller-product-query.resolver';
 import { SellerCustomTemplateService } from '@/features/seller/services/seller-custom-template.service';
@@ -27,6 +26,7 @@ import { SellerProductImageService } from '@/features/seller/services/seller-pro
 import { SellerProductLifecycleService } from '@/features/seller/services/seller-product-lifecycle.service';
 import { SellerProductQueryService } from '@/features/seller/services/seller-product-query.service';
 import { SellerProductTaxonomyService } from '@/features/seller/services/seller-product-taxonomy.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -51,7 +51,7 @@ describe('Seller Product Resolvers (real DB)', () => {
         SellerProductTaxonomyService,
         SellerOptionService,
         SellerCustomTemplateService,
-        SellerRepository,
+        StoreSellerRepository,
         ProductRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,

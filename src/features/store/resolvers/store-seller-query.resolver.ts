@@ -3,16 +3,18 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
-import { SellerDateCursorInput } from '@/features/seller/dto/inputs/seller-date-cursor.input';
-import { SellerStoreHoursService } from '@/features/seller/services/seller-store-hours.service';
-import { SellerStorePolicyService } from '@/features/seller/services/seller-store-policy.service';
-import { SellerStoreProfileService } from '@/features/seller/services/seller-store-profile.service';
+import { SellerDateCursorInput } from '@/features/store/dto/inputs/seller-date-cursor.input';
+import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
+import { SellerStoreHoursService } from '@/features/store/services/store-seller-hours.service';
+import { SellerStorePolicyService } from '@/features/store/services/store-seller-policy.service';
+import { SellerStoreProfileService } from '@/features/store/services/store-seller-profile.service';
 import type {
+  SellerFaqTopicOutput,
   SellerStoreBusinessHourOutput,
   SellerStoreDailyCapacityOutput,
   SellerStoreOutput,
   SellerStoreSpecialClosureOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/store/types/store-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -30,6 +32,7 @@ export class SellerStoreQueryResolver {
     private readonly profileService: SellerStoreProfileService,
     private readonly hoursService: SellerStoreHoursService,
     private readonly policyService: SellerStorePolicyService,
+    private readonly faqService: SellerFaqService,
   ) {}
 
   @Query('sellerMyStore')
@@ -62,5 +65,13 @@ export class SellerStoreQueryResolver {
   ): Promise<CursorConnection<SellerStoreDailyCapacityOutput>> {
     const accountId = parseAccountId(user);
     return this.policyService.sellerStoreDailyCapacities(accountId, input);
+  }
+
+  @Query('sellerFaqTopics')
+  sellerFaqTopics(
+    @CurrentUser() user: JwtUser,
+  ): Promise<SellerFaqTopicOutput[]> {
+    const accountId = parseAccountId(user);
+    return this.faqService.sellerFaqTopics(accountId);
   }
 }

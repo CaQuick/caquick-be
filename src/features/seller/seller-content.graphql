@@ -1,59 +1,6 @@
 extend type Query {
-  """내 매장 FAQ 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerFaqTopics: [SellerFaqTopic!]!
   """내 매장 감사 로그 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
   sellerAuditLogs(input: SellerAuditLogListInput): SellerAuditLogConnection!
-}
-
-extend type Mutation {
-  """FAQ 항목을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerCreateFaqTopic(input: SellerCreateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerUpdateFaqTopic(input: SellerUpdateFaqTopicInput!): SellerFaqTopic!
-  """FAQ 항목을 삭제한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND."""
-  sellerDeleteFaqTopic(topicId: ID!): Boolean!
-
-}
-
-"""매장 FAQ 항목. 문의 채팅에서 자동응답 카드로 노출된다."""
-type SellerFaqTopic {
-  id: ID!
-  storeId: ID!
-  """FAQ 질문 제목. 채팅에서 버튼 라벨로 쓰인다."""
-  title: String!
-  """FAQ 답변 본문(HTML). 서버 측 sanitize는 아직 적용돼 있지 않다."""
-  answerHtml: String!
-  """노출 순서. 오름차순이고 같으면 id 오름차순."""
-  sortOrder: Int!
-  """노출 여부. false면 구매자에게 보이지 않는다."""
-  isActive: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
-"""FAQ 항목 생성 입력."""
-input SellerCreateFaqTopicInput {
-  """FAQ 질문 제목."""
-  title: String!
-  """FAQ 답변 본문(HTML)."""
-  answerHtml: String!
-  """노출 순서. 오름차순이고 같으면 id 오름차순. 미지정 시 0이라 기존이 모두 0이면 맨 뒤에 온다."""
-  sortOrder: Int
-  """노출 여부. 기본 true."""
-  isActive: Boolean = true
-}
-
-"""FAQ 항목 수정 입력. 전달한 필드만 변경된다(부분 수정)."""
-input SellerUpdateFaqTopicInput {
-  topicId: ID!
-  """FAQ 질문 제목."""
-  title: String
-  """FAQ 답변 본문(HTML)."""
-  answerHtml: String
-  """노출 순서."""
-  sortOrder: Int
-  """노출 여부."""
-  isActive: Boolean
 }
 
 """감사 로그가 가리키는 대상 종류."""
