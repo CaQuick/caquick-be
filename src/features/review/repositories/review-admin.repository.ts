@@ -454,4 +454,9 @@ export class ReviewAdminRepository {
       where: this.reviewCommentFilterWhere(filter),
     });
   }
+
+  /** 대시보드 집계(dashboard feature가 배럴로 소비). */
+  async countPendingReviewReports(): Promise<number> {
+    return this.prisma.reviewReport.count({ where: { status: 'PENDING' } });
+  }
 }

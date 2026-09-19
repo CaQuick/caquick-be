@@ -17,3 +17,5 @@ export type { RealtimeBestCakesResult } from '@/features/product/types/product-b
 export type { HomeBanner } from '@/features/product/types/product-home-output.type';
 // 검색 요약(search feature)의 상품 건수. 검색 조건은 product feature의 where 빌더가 단일 소스.
 export { ProductSearchService } from '@/features/product/services/product-search.service';
+// 관리자 상품 집계(dashboard feature).
+export { ProductAdminRepository } from '@/features/product/repositories/product-admin.repository';

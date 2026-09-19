@@ -963,4 +963,57 @@ export class OrderRepository {
       return updated;
     });
   }
+
+  // ── 대시보드 집계(dashboard feature가 배럴로 소비) ──
+
+  async aggregateOrdersBetween(
+    from: Date,
+    to: Date,
+  ): Promise<{
+    counts: {
+      submitted: number;
+      confirmed: number;
+      made: number;
+      pickedUp: number;
+      canceled: number;
+    };
+    amountSum: number;
+  }> {
+    const grouped = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: { created_at: { gte: from, lte: to } },
+      _count: { _all: true },
+      _sum: { total_price: true },
+    });
+    const counts = {
+      submitted: 0,
+      confirmed: 0,
+      made: 0,
+      pickedUp: 0,
+      canceled: 0,
+    };
+    let amountSum = 0;
+    for (const g of grouped) {
+      const n = g._count._all;
+      switch (g.status) {
+        case 'SUBMITTED':
+          counts.submitted = n;
+          break;
+        case 'CONFIRMED':
+          counts.confirmed = n;
+          break;
+        case 'MADE':
+          counts.made = n;
+          break;
+        case 'PICKED_UP':
+          counts.pickedUp = n;
+          break;
+        case 'CANCELED':
+          counts.canceled = n;
+          break;
+      }
+      if (g.status !== 'CANCELED') amountSum += g._sum.total_price ?? 0;
+    }
+    return { counts, amountSum };
+  }
 }

@@ -22,3 +22,5 @@ export { formatBusinessHours } from '@/features/store/services/business-hours-fo
 export { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 export { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 export * from '@/features/store/constants/store-map-provider.constants';
+// 관리자 매장 집계(dashboard feature).
+export { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';

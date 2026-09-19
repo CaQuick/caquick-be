@@ -91,6 +91,7 @@ import { StoreModule } from '@/features/store';
     ProductBestSellerService,
     ProductSearchService,
     ProductCardService,
+    ProductAdminRepository,
   ],
 })
 export class ProductModule {}

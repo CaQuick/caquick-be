@@ -55,6 +55,8 @@ describe('SellerBaseService (real DB)', () => {
       createAuditLog: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
+      countAuditLogs: jest.fn(),
+      listAuditLogs: jest.fn(),
     };
     service = new TestableSellerBaseService(repo, auditLogs);
     prisma = p;

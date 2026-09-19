@@ -5,6 +5,17 @@ import type {
   Prisma,
 } from '@/generated/prisma/client';
 
+/** 관리자 전역 조회 필터. */
+export interface AuditLogFilter {
+  actorAccountId?: bigint;
+  storeId?: bigint;
+  targetType?: AuditTargetType;
+  targetId?: bigint;
+  action?: AuditActionType;
+  fromCreatedAt?: Date;
+  toCreatedAt?: Date;
+}
+
 /** 판매자 화면 조회 범위: 본인이 행위자이거나 본인 매장이 대상인 기록. */
 export interface SellerAuditLogScope {
   sellerAccountId: bigint;
@@ -38,6 +49,12 @@ export interface IAuditLogRepository {
   countAuditLogsBySeller(scope: SellerAuditLogScope): Promise<number>;
   listAuditLogsBySeller(
     args: SellerAuditLogScope & { limit: number; cursor?: bigint },
+  ): Promise<AuditLog[]>;
+
+  /** 관리자 전역 목록·건수. 행위자 종류는 호출자가 identity에서 붙인다(AuditLog에 계정 FK가 없다). */
+  countAuditLogs(filter: AuditLogFilter): Promise<number>;
+  listAuditLogs(
+    args: AuditLogFilter & { limit: number; cursor?: bigint },
   ): Promise<AuditLog[]>;
 }
 

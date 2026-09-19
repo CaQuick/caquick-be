@@ -3,3 +3,4 @@ export {
   buildOrderStatusNotification,
   buildReviewLikedNotification,
 } from '@/features/notification/services/notification-payloads.helper';
+export { NotificationModule } from '@/features/notification/notification.module';

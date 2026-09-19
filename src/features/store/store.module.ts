@@ -85,6 +85,7 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     StoreSearchService,
     StoreStatsRepository,
     StoreSellerRepository,
+    StoreAdminRepository,
   ],
 })
 export class StoreModule {}

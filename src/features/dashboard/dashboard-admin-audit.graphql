@@ -1,0 +1,205 @@
+extend type Query {
+  """
+  감사 로그를 전역으로 최신순 조회한다(판매자·관리자 조작 전부). 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminAuditLogs(input: AdminAuditLogListInput): AdminAuditLogConnection!
+}
+
+"""
+감사 로그가 가리키는 대상 종류(전체).
+"""
+enum AdminAuditTargetType {
+  """
+  매장 설정·콘텐츠.
+  """
+  STORE
+  """
+  상품과 그 하위.
+  """
+  PRODUCT
+  """
+  주문 상태 변경.
+  """
+  ORDER
+  """
+  구매자 문의 대화.
+  """
+  CONVERSATION
+  """
+  비밀번호 변경. targetId는 바꾼 계정 ID.
+  """
+  CHANGE_PASSWORD
+  """
+  계정(관리자·판매자 생성, 정지/복구, 비밀번호 초기화).
+  """
+  ACCOUNT
+  """
+  플랫폼 배너.
+  """
+  BANNER
+  """
+  카테고리 마스터.
+  """
+  CATEGORY
+  """
+  태그 마스터.
+  """
+  TAG
+  """
+  지역 마스터.
+  """
+  REGION
+  """
+  리뷰 강제 삭제.
+  """
+  REVIEW
+  """
+  리뷰 댓글 강제 삭제.
+  """
+  REVIEW_COMMENT
+  """
+  신고 처리.
+  """
+  REVIEW_REPORT
+  """
+  관리자 알림 발송.
+  """
+  NOTIFICATION
+}
+
+"""
+감사 로그에 기록된 행위 종류.
+"""
+enum AdminAuditActionType {
+  """
+  생성.
+  """
+  CREATE
+  """
+  수정.
+  """
+  UPDATE
+  """
+  삭제(soft-delete 포함).
+  """
+  DELETE
+  """
+  상태 전이.
+  """
+  STATUS_CHANGE
+}
+
+"""
+감사 로그 1건. 누적만 되고 수정·삭제되지 않는다.
+"""
+type AdminAuditLog {
+  id: ID!
+  """
+  조작한 계정 ID.
+  """
+  actorAccountId: ID!
+  """
+  조작한 계정 종류. 계정이 지워졌으면 null.
+  """
+  actorAccountType: AccountType
+  """
+  관련 매장 ID. 매장과 무관한 조작이면 null.
+  """
+  storeId: ID
+  """
+  조작 대상 종류.
+  """
+  targetType: AdminAuditTargetType!
+  """
+  대상 리소스 ID.
+  """
+  targetId: ID!
+  """
+  기록된 행위 종류.
+  """
+  action: AdminAuditActionType!
+  """
+  변경 전 값(JSON 문자열). 없으면 null.
+  """
+  beforeJson: String
+  """
+  변경 후 값(JSON 문자열). 없으면 null.
+  """
+  afterJson: String
+  """
+  요청 IP. 수집하지 못했으면 null.
+  """
+  ipAddress: String
+  """
+  요청 User-Agent. 수집하지 못했으면 null.
+  """
+  userAgent: String
+  """
+  기록 시각.
+  """
+  createdAt: DateTime!
+}
+
+"""
+감사 로그 목록 페이지. 최신 기록이 먼저 온다.
+"""
+type AdminAuditLogConnection {
+  """
+  감사 로그. 최신 기록이 먼저 온다.
+  """
+  items: [AdminAuditLog!]!
+  """
+  조건에 맞는 전체 건수.
+  """
+  totalCount: Int!
+  """
+  다음 페이지 존재 여부. limit+1 조회로 판정하므로 추가 쿼리가 없다.
+  """
+  hasMore: Boolean!
+  """
+  다음 페이지 커서. null이면 마지막 페이지다.
+  """
+  nextCursor: String
+}
+
+"""
+감사 로그 조회 조건. 모든 필터는 AND로 결합된다.
+"""
+input AdminAuditLogListInput {
+  """
+  한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT.
+  """
+  limit: Int = 20
+  """
+  이전 응답의 nextCursor. 첫 페이지는 생략한다.
+  """
+  cursor: String
+  """
+  조작한 계정 ID 필터.
+  """
+  actorAccountId: ID
+  """
+  관련 매장 ID 필터.
+  """
+  storeId: ID
+  """
+  대상 종류 필터.
+  """
+  targetType: AdminAuditTargetType
+  """
+  대상 ID 필터(targetType과 함께 쓰면 특정 리소스의 이력).
+  """
+  targetId: ID
+  """
+  행위 종류 필터.
+  """
+  action: AdminAuditActionType
+  """
+  기록 시각 하한(이상).
+  """
+  fromCreatedAt: DateTime
+  """
+  기록 시각 상한(이하).
+  """
+  toCreatedAt: DateTime
+}

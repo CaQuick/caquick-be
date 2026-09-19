@@ -29,3 +29,5 @@ export type {
   ProductReview,
   ReviewMedia,
 } from '@/features/review/types/review-listing-output.type';
+// 관리자 신고 집계(dashboard feature).
+export { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';

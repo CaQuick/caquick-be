@@ -56,6 +56,8 @@ describe('AuthService', () => {
       createAuditLog: jest.fn(),
       countAuditLogsBySeller: jest.fn(),
       listAuditLogsBySeller: jest.fn(),
+      countAuditLogs: jest.fn(),
+      listAuditLogs: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
