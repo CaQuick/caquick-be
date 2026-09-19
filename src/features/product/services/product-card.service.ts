@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { roundRatingAverage } from '@/common/utils/rating';
+import { buildRegionLabel } from '@/common/utils/region-label';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
@@ -9,7 +10,6 @@ import {
   WishlistRepository,
   type ReviewStat,
 } from '@/features/review';
-import { buildRegionLabel } from '@/features/store';
 
 export interface ProductCardSource {
   id: bigint;

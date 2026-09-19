@@ -6,7 +6,6 @@ import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
 import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserMypageService } from '@/features/user/services/user-mypage.service';
 import { OrderStatus } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -37,7 +36,6 @@ describe('UserMypageService (real DB)', () => {
         ReviewReadRepository,
         ProductRepository,
         UserMypageService,
-        UserRepository,
         AccountUserRepository,
         OrderRepository,
         RecentProductViewRepository,

@@ -1,7 +1,7 @@
 import { roundRatingAverage } from '@/common/utils/rating';
+import { buildRegionLabel } from '@/common/utils/region-label';
 import type { ReviewStat } from '@/features/review';
 import type { StoreDetailRow } from '@/features/store/repositories/store.repository';
-import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import type { StoreDetail } from '@/features/store/types/store-detail-output.type';
 
 function toRatingAverage(stat: ReviewStat | undefined): number {

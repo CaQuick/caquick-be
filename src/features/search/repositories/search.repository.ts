@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { KEYWORD_RANK_SNAPSHOT_SIZE } from '@/features/search/constants/search.constants';
 import { Prisma } from '@/generated/prisma/client';
-import { PrismaService } from '@/prisma/prisma.service';
+import { activeWhere, PrismaService } from '@/prisma';
 
 export interface KeywordCountRow {
   keyword: string;
@@ -127,5 +127,71 @@ export class SearchRepository {
       take: limit,
       select: { rank: true, keyword: true, search_count: true },
     });
+  }
+
+  // ── 구매자 최근 검색어(목록·삭제) ──
+
+  async listSearchHistories(args: {
+    accountId: bigint;
+    offset: number;
+    limit: number;
+  }): Promise<{
+    items: {
+      id: bigint;
+      keyword: string;
+      last_used_at: Date;
+    }[];
+    totalCount: number;
+  }> {
+    const where = {
+      account_id: args.accountId,
+    };
+
+    const [items, totalCount] = await this.prisma.$transaction([
+      this.prisma.searchHistory.findMany({
+        where,
+        orderBy: { last_used_at: 'desc' },
+        skip: args.offset,
+        take: args.limit,
+        select: {
+          id: true,
+          keyword: true,
+          last_used_at: true,
+        },
+      }),
+      this.prisma.searchHistory.count({ where }),
+    ]);
+
+    return { items, totalCount };
+  }
+
+  async deleteSearchHistory(args: {
+    accountId: bigint;
+    id: bigint;
+    now: Date;
+  }): Promise<boolean> {
+    const result = await this.prisma.searchHistory.updateMany({
+      where: {
+        id: args.id,
+        account_id: args.accountId,
+        ...activeWhere,
+      },
+      data: { deleted_at: args.now },
+    });
+    return result.count > 0;
+  }
+
+  async clearSearchHistories(args: {
+    accountId: bigint;
+    now: Date;
+  }): Promise<number> {
+    const result = await this.prisma.searchHistory.updateMany({
+      where: {
+        account_id: args.accountId,
+        ...activeWhere,
+      },
+      data: { deleted_at: args.now },
+    });
+    return result.count;
   }
 }

@@ -22,6 +22,11 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/auth/repositories/account-admin.repository.ts|opaque|createSellerAccount:SellerProfile.data=args.profile',
   'src/features/auth/repositories/account-credential.repository.ts|nested|AccountCredential.account.store->Store',
   'src/features/conversation/repositories/conversation.repository.ts|nested|StoreConversation.store->Store',
+  'src/features/notification/repositories/notification.repository.ts|nested|Notification.order->Order',
+  'src/features/notification/repositories/notification.repository.ts|nested|Notification.order.items->OrderItem',
+  'src/features/notification/repositories/notification.repository.ts|nested|Notification.order.items.store->Store',
+  'src/features/notification/repositories/notification.repository.ts|nested|Notification.product->Product',
+  'src/features/notification/repositories/notification.repository.ts|nested|Notification.store->Store',
   'src/features/order/repositories/order.repository.ts|filter|OrderItem.review->Review',
   'src/features/order/repositories/order.repository.ts|nested|Order.account->Account',
   'src/features/order/repositories/order.repository.ts|nested|Order.account.user_profile->UserProfile',
@@ -119,11 +124,6 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/store/repositories/store-seller.repository.ts|opaque|updateStore:Store.data=args.data',
   'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesByKstDate:order,order_item',
   'src/features/store/repositories/store.repository.ts|raw|sumPickupQuantitiesInRange:order,order_item',
-  'src/features/user/repositories/user.repository.ts|nested|Notification.order->Order',
-  'src/features/user/repositories/user.repository.ts|nested|Notification.order.items->OrderItem',
-  'src/features/user/repositories/user.repository.ts|nested|Notification.order.items.store->Store',
-  'src/features/user/repositories/user.repository.ts|nested|Notification.product->Product',
-  'src/features/user/repositories/user.repository.ts|nested|Notification.store->Store',
 ];
 
 function keysOf(dir?: string): string[] {

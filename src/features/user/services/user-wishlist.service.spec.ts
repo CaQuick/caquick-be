@@ -3,7 +3,6 @@ import { ProductRepository } from '@/features/product/repositories/product.repos
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -28,7 +27,6 @@ describe('UserWishlistService (real DB)', () => {
         WishlistRepository,
         ProductCardService,
         UserWishlistService,
-        UserRepository,
         AccountUserRepository,
         ProductRepository,
         ReviewReadRepository,

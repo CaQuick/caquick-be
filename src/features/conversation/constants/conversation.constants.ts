@@ -6,8 +6,7 @@ export const GREETING_STORE_NAME_PLACEHOLDER = '{storeName}';
 export const DEFAULT_GREETING_TEMPLATE =
   '안녕하세요! {nickname} 고객님.\n{storeName} 입니다 😄\n무엇을 도와드릴까요?';
 
+// 구매자 문의와 판매자 답장이 같은 본문 정책을 쓴다.
 export const MAX_INQUIRY_BODY_TEXT_LENGTH = 2000;
-// 판매자 답장도 구매자 문의와 같은 본문 정책.
-export const MAX_CONVERSATION_BODY_TEXT_LENGTH = MAX_INQUIRY_BODY_TEXT_LENGTH;
 // store.greeting_message VARCHAR(500)과 동일 상한
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;

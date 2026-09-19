@@ -7,7 +7,6 @@ import {
   ReviewEngagementRepository,
   WishlistRepository,
 } from '@/features/review';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';
 
 const ONGOING_ORDER_DAYS = 90;
@@ -17,7 +16,6 @@ const RECENT_VIEW_LIMIT = 20;
 @Injectable()
 export class UserMypageService {
   constructor(
-    private readonly userRepository: UserRepository,
     private readonly orderRepository: OrderRepository,
     private readonly recentProductViewRepository: RecentProductViewRepository,
     private readonly cards: ProductCardService,
