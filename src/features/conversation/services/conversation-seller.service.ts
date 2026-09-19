@@ -21,20 +21,18 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
-  ConversationEventsService,
-  ConversationRepository,
-  toEventPreview,
-  toLastMessagePreview,
-} from '@/features/conversation';
-import {
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_CONVERSATION_BODY_TEXT_LENGTH,
-} from '@/features/seller/constants/seller.constants';
-import type { SellerSendConversationMessageInput } from '@/features/seller/dto/inputs/seller-send-conversation-message.input';
+} from '@/features/conversation/constants/conversation.constants';
+import type { SellerSendConversationMessageInput } from '@/features/conversation/dto/inputs/seller-send-conversation-message.input';
+import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
+import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/conversation/types/conversation-seller-output.type';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import {
   AuditActionType,

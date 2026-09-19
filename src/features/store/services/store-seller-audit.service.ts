@@ -12,22 +12,21 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import type { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { toAuditLogOutput } from '@/features/seller/services/seller-content-mappers.helper';
-import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
-import { SellerBaseService, StoreSellerRepository } from '@/features/store';
+import type { SellerAuditLogListInput } from '@/features/store/dto/inputs/seller-audit-log-list.input';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerBaseService } from '@/features/store/services/store-seller-base.service';
+import { toAuditLogOutput } from '@/features/store/services/store-seller-mappers.helper';
+import type { SellerAuditLogOutput } from '@/features/store/types/store-seller-output.type';
 import { AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerAuditService extends SellerBaseService {
   constructor(
-    context: StoreSellerRepository,
+    repo: StoreSellerRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
-    private readonly sellerRepo: SellerRepository,
   ) {
-    super(context, auditLogs);
+    super(repo, auditLogs);
   }
 
   async sellerAuditLogs(
@@ -48,8 +47,8 @@ export class SellerAuditService extends SellerBaseService {
         : undefined,
     };
     const [rows, totalCount] = await Promise.all([
-      this.sellerRepo.listAuditLogsBySeller({ ...scope, ...normalized }),
-      this.sellerRepo.countAuditLogsBySeller(scope),
+      this.auditLogs.listAuditLogsBySeller({ ...scope, ...normalized }),
+      this.auditLogs.countAuditLogsBySeller(scope),
     ]);
 
     return toCursorConnection(

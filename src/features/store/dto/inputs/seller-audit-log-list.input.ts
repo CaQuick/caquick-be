@@ -4,7 +4,7 @@ import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import {
   SELLER_AUDIT_TARGET_TYPES,
   type SellerAuditTargetType,
-} from '@/features/seller/constants/seller.constants';
+} from '@/features/audit-log';
 
 export class SellerAuditLogListInput extends CursorInput {
   @IsOptional()

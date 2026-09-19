@@ -1,7 +1,8 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
-import { SellerOrderService } from '@/features/seller/services/seller-order.service';
+import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { OrderStatus, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';

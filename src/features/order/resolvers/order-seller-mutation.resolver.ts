@@ -1,9 +1,9 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
-import { SellerOrderService } from '@/features/seller/services/seller-order.service';
-import type { SellerOrderSummaryOutput } from '@/features/seller/types/seller-output.type';
+import { SellerUpdateOrderStatusInput } from '@/features/order/dto/inputs/seller-update-order-status.input';
+import { SellerOrderService } from '@/features/order/services/order-seller.service';
+import type { SellerOrderSummaryOutput } from '@/features/order/types/order-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

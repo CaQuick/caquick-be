@@ -2,7 +2,11 @@ import { isIP } from 'node:net';
 
 import { Injectable } from '@nestjs/common';
 
-import type { IAuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository.interface';
+import { SELLER_AUDIT_TARGET_TYPES } from '@/features/audit-log/constants/audit-log.constants';
+import type {
+  IAuditLogRepository,
+  SellerAuditLogScope,
+} from '@/features/audit-log/repositories/audit-log.repository.interface';
 import {
   type AuditActionType,
   type AuditLog,
@@ -56,6 +60,42 @@ export class AuditLogRepository implements IAuditLogRepository {
           args.userAgent ?? ctx?.userAgent,
         ),
       },
+    });
+  }
+
+  private sellerAuditLogWhere(
+    args: SellerAuditLogScope,
+  ): Prisma.AuditLogWhereInput {
+    return {
+      OR: [
+        { actor_account_id: args.sellerAccountId },
+        { store_id: args.storeId },
+      ],
+      // 관리자 조작(REVIEW·ACCOUNT 등)이 매장 ID를 달고 기록돼도 판매자 화면 enum 밖이라 제외한다
+      target_type: {
+        in: args.targetType
+          ? [args.targetType]
+          : [...SELLER_AUDIT_TARGET_TYPES],
+      },
+    };
+  }
+
+  async countAuditLogsBySeller(scope: SellerAuditLogScope): Promise<number> {
+    return this.prisma.auditLog.count({
+      where: this.sellerAuditLogWhere(scope),
+    });
+  }
+
+  async listAuditLogsBySeller(
+    args: SellerAuditLogScope & { limit: number; cursor?: bigint },
+  ): Promise<AuditLog[]> {
+    return this.prisma.auditLog.findMany({
+      where: {
+        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
+        ...this.sellerAuditLogWhere(args),
+      },
+      orderBy: { id: 'desc' },
+      take: args.limit + 1,
     });
   }
 }

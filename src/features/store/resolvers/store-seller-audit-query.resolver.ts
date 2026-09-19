@@ -2,9 +2,9 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
-import { SellerAuditLogListInput } from '@/features/seller/dto/inputs/seller-audit-log-list.input';
-import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
-import type { SellerAuditLogOutput } from '@/features/seller/types/seller-output.type';
+import { SellerAuditLogListInput } from '@/features/store/dto/inputs/seller-audit-log-list.input';
+import { SellerAuditService } from '@/features/store/services/store-seller-audit.service';
+import type { SellerAuditLogOutput } from '@/features/store/types/store-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -17,7 +17,7 @@ import {
 @Resolver('Query')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('SELLER')
-export class SellerContentQueryResolver {
+export class SellerAuditQueryResolver {
   constructor(private readonly auditService: SellerAuditService) {}
 
   @Query('sellerAuditLogs')

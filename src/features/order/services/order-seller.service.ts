@@ -14,20 +14,20 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import type { SellerOrderListInput } from '@/features/order/dto/inputs/seller-order-list.input';
+import type { SellerUpdateOrderStatusInput } from '@/features/order/dto/inputs/seller-update-order-status.input';
+import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderRepository } from '@/features/order/repositories/order.repository';
 import {
-  OrderRepository,
-  OrderStatusTransitionPolicy,
   toOrderItemDetail,
   toOrderStatusHistory,
   type OrderItemDetailRow,
   type OrderStatusHistoryRow,
-} from '@/features/order';
-import type { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
-import type { SellerUpdateOrderStatusInput } from '@/features/seller/dto/inputs/seller-update-order-status.input';
+} from '@/features/order/services/order-output-mappers.helper';
 import type {
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/order/types/order-seller-output.type';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { OrderStatus } from '@/generated/prisma/client';
 

@@ -54,6 +54,8 @@ describe('AuthService', () => {
 
     mockAuditLogs = {
       createAuditLog: jest.fn(),
+      countAuditLogsBySeller: jest.fn(),
+      listAuditLogsBySeller: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

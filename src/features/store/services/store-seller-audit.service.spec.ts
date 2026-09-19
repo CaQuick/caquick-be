@@ -1,8 +1,7 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { SellerRepository } from '@/features/seller/repositories/seller.repository';
-import { SellerAuditService } from '@/features/seller/services/seller-audit.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { SellerAuditService } from '@/features/store/services/store-seller-audit.service';
 import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
 import { Prisma, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -21,7 +20,6 @@ describe('SellerAuditService (real DB)', () => {
         StoreSellerRepository,
         SellerAuditService,
         SellerFaqService,
-        SellerRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

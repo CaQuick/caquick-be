@@ -4,11 +4,11 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 import { CursorInput } from '@/common/dto/inputs/cursor.input';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
-import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import { SellerConversationService } from '@/features/conversation/services/conversation-seller.service';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/conversation/types/conversation-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
