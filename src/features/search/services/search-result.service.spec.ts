@@ -1,4 +1,6 @@
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository, ProductSearchService } from '@/features/product';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
@@ -31,6 +33,7 @@ describe('SearchResultService (real DB)', () => {
         SearchResultService,
         ProductSearchService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StoreSearchService,
         StoreListingService,
         StoreRepository,

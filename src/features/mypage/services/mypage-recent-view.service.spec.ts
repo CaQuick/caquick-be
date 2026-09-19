@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserRecentViewService } from '@/features/mypage/services/mypage-recent-view.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -31,6 +33,7 @@ describe('UserRecentViewService (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         AccountUserRepository,
       ],
     });

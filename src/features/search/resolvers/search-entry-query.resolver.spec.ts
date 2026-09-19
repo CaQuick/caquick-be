@@ -1,4 +1,6 @@
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import {
   ProductBestSellerService,
   ProductRepository,
@@ -45,6 +47,7 @@ describe('SearchEntry Resolvers (real DB)', () => {
         SearchRepository,
         ProductBestSellerService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ClockService,
       ],
     });

@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
 import { ProductCardService } from '@/features/product/services/product-card.service';
@@ -24,6 +26,7 @@ describe('ProductStorefront Query Resolver (real DB)', () => {
         ProductStorefrontQueryResolver,
         ProductStorefrontService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     resolver = module.get(ProductStorefrontQueryResolver);

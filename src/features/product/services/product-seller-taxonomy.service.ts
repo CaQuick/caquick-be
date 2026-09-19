@@ -46,21 +46,23 @@ export class SellerProductTaxonomyService extends SellerBaseService {
       throw new DomainException('INVALID_IDS', { field: 'categoryIds' });
     }
 
-    await this.productRepository.replaceProductCategories({
-      productId,
-      categoryIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        categoryIds: categoryIds.map((id) => id.toString()),
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12)
+    await this.productRepository.replaceProductCategories(
+      {
+        productId,
+        categoryIds,
       },
-    });
+      () => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          categoryIds: categoryIds.map((id) => id.toString()),
+        },
+      }),
+    );
 
     const detail =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -92,21 +94,22 @@ export class SellerProductTaxonomyService extends SellerBaseService {
       throw new DomainException('INVALID_IDS', { field: 'tagIds' });
     }
 
-    await this.productRepository.replaceProductTags({
-      productId,
-      tagIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        tagIds: tagIds.map((id) => id.toString()),
+    await this.productRepository.replaceProductTags(
+      {
+        productId,
+        tagIds,
       },
-    });
+      () => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          tagIds: tagIds.map((id) => id.toString()),
+        },
+      }),
+    );
 
     const detail =
       await this.productRepository.findProductByIdIncludingInactive({

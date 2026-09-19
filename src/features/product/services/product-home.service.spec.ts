@@ -1,4 +1,6 @@
 import { RandomService } from '@/common/providers/random.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
@@ -36,6 +38,7 @@ describe('ProductHomeService (real DB)', () => {
         StoreStatsRepository,
         ProductHomeService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ReviewReadRepository,
         RandomService,
       ],

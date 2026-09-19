@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserRecentViewMutationResolver } from '@/features/mypage/resolvers/mypage-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/mypage/resolvers/mypage-recent-view-query.resolver';
@@ -35,6 +37,7 @@ describe('User Recent View Resolvers (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         AccountUserRepository,
       ],
     });

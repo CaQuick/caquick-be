@@ -1,9 +1,21 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.PRODUCT,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
 
 describe('ProductRepository (real DB)', () => {
   let repo: ProductRepository;
@@ -11,7 +23,10 @@ describe('ProductRepository (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductRepository],
+      providers: [
+        ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     repo = module.get(ProductRepository);
     prisma = p;
@@ -317,15 +332,19 @@ describe('ProductRepository (real DB)', () => {
   describe('createProduct / updateProduct / softDeleteProduct', () => {
     it('createProduct는 store_id를 결합하여 생성', async () => {
       const store = await createStore(prisma);
-      const result = await repo.createProduct({
-        storeId: store.id,
-        data: {
-          name: '신상',
-          regular_price: 10000,
-          currency: 'KRW',
-          is_active: true,
+      const result = await repo.createProduct(
+        {
+          storeId: store.id,
+          initialImageUrl: 'https://img/initial.png',
+          data: {
+            name: '신상',
+            regular_price: 10000,
+            currency: 'KRW',
+            is_active: true,
+          },
         },
-      });
+        () => AUDIT_ENTRY,
+      );
       expect(result.store_id).toBe(store.id);
       expect(result.name).toBe('신상');
     });
@@ -338,10 +357,13 @@ describe('ProductRepository (real DB)', () => {
         regular_price: 15000,
         is_active: true,
       });
-      const result = await repo.updateProduct({
-        productId: product.id,
-        data: { name: '신' },
-      });
+      const result = await repo.updateProduct(
+        {
+          productId: product.id,
+          data: { name: '신' },
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(result.name).toBe('신');
       expect(result.regular_price).toBe(15000);
       expect(result.is_active).toBe(true);
@@ -351,7 +373,7 @@ describe('ProductRepository (real DB)', () => {
     it('softDeleteProduct는 deleted_at + is_active:false', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
-      await repo.softDeleteProduct(product.id);
+      await repo.softDeleteProduct(product.id, () => AUDIT_ENTRY);
 
       const after = await prisma.product.findUnique({
         where: { id: product.id },
@@ -367,11 +389,14 @@ describe('ProductRepository (real DB)', () => {
       const product = await createProduct(prisma, { store_id: store.id });
 
       expect(await repo.countProductImages(product.id)).toBe(0);
-      await repo.addProductImage({
-        productId: product.id,
-        imageUrl: 'https://i.example/1.png',
-        sortOrder: 0,
-      });
+      await repo.addProductImage(
+        {
+          productId: product.id,
+          imageUrl: 'https://i.example/1.png',
+          sortOrder: 0,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(await repo.countProductImages(product.id)).toBe(1);
 
       const list = await repo.listProductImages(product.id);
@@ -392,7 +417,7 @@ describe('ProductRepository (real DB)', () => {
       const found = await repo.findProductImageById(image.id);
       expect(found?.product.store_id).toBe(store.id);
 
-      await repo.softDeleteProductImage(image.id);
+      await repo.softDeleteProductImage(image.id, () => AUDIT_ENTRY);
       const after = await prisma.productImage.findUnique({
         where: { id: image.id },
       });
@@ -412,10 +437,13 @@ describe('ProductRepository (real DB)', () => {
         data: { product_id: product.id, image_url: 'c', sort_order: 2 },
       });
 
-      const result = await repo.reorderProductImages({
-        productId: product.id,
-        imageIds: [img3.id, img1.id, img2.id],
-      });
+      const result = await repo.reorderProductImages(
+        {
+          productId: product.id,
+          imageIds: [img3.id, img1.id, img2.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(result.map((r) => r.id)).toEqual([img3.id, img1.id, img2.id]);
       // 정렬 결과뿐 아니라 sort_order 값 자체가 0,1,2로 재할당됐는지 확인
       const sortOrderByImage = new Map(
@@ -450,29 +478,38 @@ describe('ProductRepository (real DB)', () => {
       const cat1 = await createCategory('A');
       const cat2 = await createCategory('B');
 
-      await repo.replaceProductCategories({
-        productId: product.id,
-        categoryIds: [cat1.id],
-      });
+      await repo.replaceProductCategories(
+        {
+          productId: product.id,
+          categoryIds: [cat1.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       let rows = await prisma.productCategory.findMany({
         where: { product_id: product.id },
       });
       expect(rows.map((r) => r.category_id)).toEqual([cat1.id]);
 
-      await repo.replaceProductCategories({
-        productId: product.id,
-        categoryIds: [cat2.id],
-      });
+      await repo.replaceProductCategories(
+        {
+          productId: product.id,
+          categoryIds: [cat2.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       rows = await prisma.productCategory.findMany({
         where: { product_id: product.id },
       });
       expect(rows.map((r) => r.category_id)).toEqual([cat2.id]);
 
       // 빈 배열: 전부 제거
-      await repo.replaceProductCategories({
-        productId: product.id,
-        categoryIds: [],
-      });
+      await repo.replaceProductCategories(
+        {
+          productId: product.id,
+          categoryIds: [],
+        },
+        () => AUDIT_ENTRY,
+      );
       rows = await prisma.productCategory.findMany({
         where: { product_id: product.id },
       });
@@ -485,10 +522,13 @@ describe('ProductRepository (real DB)', () => {
       const t1 = await createTag('A');
       const t2 = await createTag('B');
 
-      await repo.replaceProductTags({
-        productId: product.id,
-        tagIds: [t1.id, t2.id],
-      });
+      await repo.replaceProductTags(
+        {
+          productId: product.id,
+          tagIds: [t1.id, t2.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       const rows = await prisma.productTag.findMany({
         where: { product_id: product.id },
       });
@@ -501,10 +541,13 @@ describe('ProductRepository (real DB)', () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
 
-      const group = await repo.createOptionGroup({
-        productId: product.id,
-        data: { name: '사이즈' },
-      });
+      const group = await repo.createOptionGroup(
+        {
+          productId: product.id,
+          data: { name: '사이즈' },
+        },
+        () => AUDIT_ENTRY,
+      );
 
       const found = await repo.findOptionGroupById(group.id);
       expect(found?.product.store_id).toBe(store.id);
@@ -516,10 +559,13 @@ describe('ProductRepository (real DB)', () => {
       const group = await createOptionGroup(product.id);
       await createOptionItem(group.id);
 
-      const result = await repo.updateOptionGroup({
-        optionGroupId: group.id,
-        data: { name: '새 이름' },
-      });
+      const result = await repo.updateOptionGroup(
+        {
+          optionGroupId: group.id,
+          data: { name: '새 이름' },
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(result.name).toBe('새 이름');
       expect(result.option_items).toHaveLength(1);
     });
@@ -549,7 +595,7 @@ describe('ProductRepository (real DB)', () => {
       const product = await createProduct(prisma, { store_id: store.id });
       const group = await createOptionGroup(product.id);
 
-      await repo.softDeleteOptionGroup(group.id);
+      await repo.softDeleteOptionGroup(group.id, () => AUDIT_ENTRY);
       const after = await prisma.productOptionGroup.findUnique({
         where: { id: group.id },
       });
@@ -577,10 +623,13 @@ describe('ProductRepository (real DB)', () => {
       const g1 = await createOptionGroup(product.id, 0);
       const g2 = await createOptionGroup(product.id, 1);
 
-      const rows = await repo.reorderOptionGroups({
-        productId: product.id,
-        optionGroupIds: [g2.id, g1.id],
-      });
+      const rows = await repo.reorderOptionGroups(
+        {
+          productId: product.id,
+          optionGroupIds: [g2.id, g1.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(rows.map((r) => r.id)).toEqual([g2.id, g1.id]);
 
       const sortOrderByGroup = new Map(
@@ -599,25 +648,34 @@ describe('ProductRepository (real DB)', () => {
       const product = await createProduct(prisma, { store_id: store.id });
       const group = await createOptionGroup(product.id);
 
-      const item = await repo.createOptionItem({
-        optionGroupId: group.id,
-        data: { title: 'L' },
-      });
+      const item = await repo.createOptionItem(
+        {
+          optionGroupId: group.id,
+          data: { title: 'L' },
+        },
+        () => AUDIT_ENTRY,
+      );
 
       const found = await repo.findOptionItemById(item.id);
       expect(found?.option_group.product.store_id).toBe(store.id);
 
-      const updated = await repo.updateOptionItem({
-        optionItemId: item.id,
-        data: { title: 'XL' },
-      });
+      const updated = await repo.updateOptionItem(
+        {
+          optionItemId: item.id,
+          data: { title: 'XL' },
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.title).toBe('XL');
 
       const item2 = await createOptionItem(group.id, 1);
-      const reordered = await repo.reorderOptionItems({
-        optionGroupId: group.id,
-        optionItemIds: [item2.id, item.id],
-      });
+      const reordered = await repo.reorderOptionItems(
+        {
+          optionGroupId: group.id,
+          optionItemIds: [item2.id, item.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(reordered.map((r) => r.id)).toEqual([item2.id, item.id]);
 
       const sortOrderByItem = new Map(
@@ -630,7 +688,7 @@ describe('ProductRepository (real DB)', () => {
       expect(sortOrderByItem.get(item2.id)).toBe(0);
       expect(sortOrderByItem.get(item.id)).toBe(1);
 
-      await repo.softDeleteOptionItem(item.id);
+      await repo.softDeleteOptionItem(item.id, () => AUDIT_ENTRY);
       const after = await prisma.productOptionItem.findUnique({
         where: { id: item.id },
       });
@@ -644,16 +702,22 @@ describe('ProductRepository (real DB)', () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
 
-      const first = await repo.upsertProductCustomTemplate({
-        productId: product.id,
-        baseImageUrl: 'https://i.example/a.png',
-        isActive: true,
-      });
-      const second = await repo.upsertProductCustomTemplate({
-        productId: product.id,
-        baseImageUrl: 'https://i.example/b.png',
-        isActive: false,
-      });
+      const first = await repo.upsertProductCustomTemplate(
+        {
+          productId: product.id,
+          baseImageUrl: 'https://i.example/a.png',
+          isActive: true,
+        },
+        () => AUDIT_ENTRY,
+      );
+      const second = await repo.upsertProductCustomTemplate(
+        {
+          productId: product.id,
+          baseImageUrl: 'https://i.example/b.png',
+          isActive: false,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(second.id).toBe(first.id);
       expect(second.base_image_url).toBe('https://i.example/b.png');
       expect(second.is_active).toBe(false);
@@ -687,7 +751,11 @@ describe('ProductRepository (real DB)', () => {
       const found = await repo.findCustomTemplateById(tpl.id);
       expect(found?.product.store_id).toBe(store.id);
 
-      const toggled = await repo.setCustomTemplateActive(tpl.id, false);
+      const toggled = await repo.setCustomTemplateActive(
+        tpl.id,
+        false,
+        () => AUDIT_ENTRY,
+      );
       expect(toggled.is_active).toBe(false);
     });
 
@@ -696,33 +764,39 @@ describe('ProductRepository (real DB)', () => {
       const product = await createProduct(prisma, { store_id: store.id });
       const tpl = await createTemplate(product.id);
 
-      const created = await repo.upsertCustomTextToken({
-        templateId: tpl.id,
-        tokenKey: 'NAME',
-        defaultText: '가',
-        maxLength: 30,
-        sortOrder: 0,
-        isRequired: true,
-        posX: 10,
-        posY: 20,
-        width: 100,
-        height: 50,
-      });
+      const created = await repo.upsertCustomTextToken(
+        {
+          templateId: tpl.id,
+          tokenKey: 'NAME',
+          defaultText: '가',
+          maxLength: 30,
+          sortOrder: 0,
+          isRequired: true,
+          posX: 10,
+          posY: 20,
+          width: 100,
+          height: 50,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(created.token_key).toBe('NAME');
 
-      const updated = await repo.upsertCustomTextToken({
-        tokenId: created.id,
-        templateId: tpl.id,
-        tokenKey: 'NAME2',
-        defaultText: '나',
-        maxLength: 40,
-        sortOrder: 0,
-        isRequired: false,
-        posX: null,
-        posY: null,
-        width: null,
-        height: null,
-      });
+      const updated = await repo.upsertCustomTextToken(
+        {
+          tokenId: created.id,
+          templateId: tpl.id,
+          tokenKey: 'NAME2',
+          defaultText: '나',
+          maxLength: 40,
+          sortOrder: 0,
+          isRequired: false,
+          posX: null,
+          posY: null,
+          width: null,
+          height: null,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.id).toBe(created.id);
       expect(updated.token_key).toBe('NAME2');
     });
@@ -764,10 +838,13 @@ describe('ProductRepository (real DB)', () => {
       expect(listed.map((r) => r.id)).toEqual([t1.id, t2.id]);
 
       // reorder: 순서가 뒤집히고 sort_order 값이 0, 1로 재할당됨
-      const reordered = await repo.reorderCustomTextTokens({
-        templateId: tpl.id,
-        tokenIds: [t2.id, t1.id],
-      });
+      const reordered = await repo.reorderCustomTextTokens(
+        {
+          templateId: tpl.id,
+          tokenIds: [t2.id, t1.id],
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(reordered.map((r) => r.id)).toEqual([t2.id, t1.id]);
       const sortOrderByToken = new Map(
         (
@@ -779,7 +856,7 @@ describe('ProductRepository (real DB)', () => {
       expect(sortOrderByToken.get(t2.id)).toBe(0);
       expect(sortOrderByToken.get(t1.id)).toBe(1);
 
-      await repo.softDeleteCustomTextToken(t1.id);
+      await repo.softDeleteCustomTextToken(t1.id, () => AUDIT_ENTRY);
       const after = await prisma.productCustomTextToken.findUnique({
         where: { id: t1.id },
       });

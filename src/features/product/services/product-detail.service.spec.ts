@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
 import { ReviewReadRepository } from '@/features/review/repositories/review-read.repository';
@@ -25,6 +27,7 @@ describe('ProductDetailService (real DB)', () => {
         ReviewReadRepository,
         ProductDetailService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(ProductDetailService);

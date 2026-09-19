@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserWishlistMutationResolver } from '@/features/mypage/resolvers/mypage-wishlist-mutation.resolver';
 import { UserWishlistQueryResolver } from '@/features/mypage/resolvers/mypage-wishlist-query.resolver';
@@ -33,6 +35,7 @@ describe('User Wishlist Resolver (real DB)', () => {
         UserWishlistService,
         AccountUserRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     mutationResolver = module.get(UserWishlistMutationResolver);

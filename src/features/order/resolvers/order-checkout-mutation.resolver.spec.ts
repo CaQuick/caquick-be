@@ -1,5 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
@@ -36,6 +38,7 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         OrderCheckoutService,
         OrderRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,

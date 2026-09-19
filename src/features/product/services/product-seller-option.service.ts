@@ -65,35 +65,35 @@ export class SellerOptionService extends SellerBaseService {
       throw new DomainException('INVALID_SELECT_RANGE');
     }
 
-    const row = await this.productRepository.createOptionGroup({
-      productId,
-      data: {
-        name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
-        description: cleanNullableText(
-          input.description,
-          MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
-        ),
-        is_required: input.isRequired ?? true,
-        min_select: minSelect,
-        max_select: maxSelect,
-        option_requires_description: input.optionRequiresDescription ?? false,
-        option_requires_image: input.optionRequiresImage ?? false,
-        sort_order: input.sortOrder ?? 0,
-        is_active: input.isActive ?? true,
+    const row = await this.productRepository.createOptionGroup(
+      {
+        productId,
+        data: {
+          name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
+          description: cleanNullableText(
+            input.description,
+            MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
+          ),
+          is_required: input.isRequired ?? true,
+          min_select: minSelect,
+          max_select: maxSelect,
+          option_requires_description: input.optionRequiresDescription ?? false,
+          option_requires_image: input.optionRequiresImage ?? false,
+          sort_order: input.sortOrder ?? 0,
+          is_active: input.isActive ?? true,
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        optionGroupId: row.id.toString(),
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.CREATE,
+        afterJson: {
+          optionGroupId: created.id.toString(),
+        },
+      }),
+    );
     return this.toOptionGroupOutput(row);
   }
 
@@ -116,55 +116,60 @@ export class SellerOptionService extends SellerBaseService {
       throw new DomainException('MAX_SELECT_BELOW_MIN');
     }
 
-    const row = await this.productRepository.updateOptionGroup({
-      optionGroupId,
-      data: {
-        ...(input.name !== undefined
-          ? {
-              name: cleanRequiredText(input.name, MAX_OPTION_GROUP_NAME_LENGTH),
-            }
-          : {}),
-        ...(input.description !== undefined
-          ? {
-              description: cleanNullableText(
-                input.description,
-                MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
-              ),
-            }
-          : {}),
-        ...(input.isRequired !== undefined
-          ? { is_required: input.isRequired }
-          : {}),
-        ...(input.minSelect !== undefined
-          ? { min_select: input.minSelect }
-          : {}),
-        ...(input.maxSelect !== undefined
-          ? { max_select: input.maxSelect }
-          : {}),
-        ...(input.optionRequiresDescription !== undefined
-          ? { option_requires_description: input.optionRequiresDescription }
-          : {}),
-        ...(input.optionRequiresImage !== undefined
-          ? { option_requires_image: input.optionRequiresImage }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    const row = await this.productRepository.updateOptionGroup(
+      {
+        optionGroupId,
+        data: {
+          ...(input.name !== undefined
+            ? {
+                name: cleanRequiredText(
+                  input.name,
+                  MAX_OPTION_GROUP_NAME_LENGTH,
+                ),
+              }
+            : {}),
+          ...(input.description !== undefined
+            ? {
+                description: cleanNullableText(
+                  input.description,
+                  MAX_OPTION_GROUP_DESCRIPTION_LENGTH,
+                ),
+              }
+            : {}),
+          ...(input.isRequired !== undefined
+            ? { is_required: input.isRequired }
+            : {}),
+          ...(input.minSelect !== undefined
+            ? { min_select: input.minSelect }
+            : {}),
+          ...(input.maxSelect !== undefined
+            ? { max_select: input.maxSelect }
+            : {}),
+          ...(input.optionRequiresDescription !== undefined
+            ? { option_requires_description: input.optionRequiresDescription }
+            : {}),
+          ...(input.optionRequiresImage !== undefined
+            ? { option_requires_image: input.optionRequiresImage }
+            : {}),
+          ...(input.sortOrder !== undefined
+            ? { sort_order: input.sortOrder }
+            : {}),
+          ...(input.isActive !== undefined
+            ? { is_active: input.isActive }
+            : {}),
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: current.product_id,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        optionGroupId: optionGroupId.toString(),
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: current.product_id,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          optionGroupId: optionGroupId.toString(),
+        },
+      }),
+    );
     return this.toOptionGroupOutput(row);
   }
 
@@ -179,8 +184,7 @@ export class SellerOptionService extends SellerBaseService {
       throw new DomainException('OPTION_GROUP_NOT_FOUND');
     }
 
-    await this.productRepository.softDeleteOptionGroup(optionGroupId);
-    await this.auditLogs.createAuditLog({
+    await this.productRepository.softDeleteOptionGroup(optionGroupId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -189,8 +193,7 @@ export class SellerOptionService extends SellerBaseService {
       beforeJson: {
         optionGroupId: optionGroupId.toString(),
       },
-    });
-
+    }));
     return true;
   }
 
@@ -224,22 +227,22 @@ export class SellerOptionService extends SellerBaseService {
       }
     }
 
-    const rows = await this.productRepository.reorderOptionGroups({
-      productId,
-      optionGroupIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        optionGroupIds: optionGroupIds.map((id) => id.toString()),
+    const rows = await this.productRepository.reorderOptionGroups(
+      {
+        productId,
+        optionGroupIds,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          optionGroupIds: optionGroupIds.map((id) => id.toString()),
+        },
+      }),
+    );
     return rows.map((row) => this.toOptionGroupOutput(row));
   }
 
@@ -265,32 +268,32 @@ export class SellerOptionService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    const row = await this.productRepository.createOptionItem({
-      optionGroupId,
-      data: {
-        title: cleanRequiredText(input.title, MAX_OPTION_ITEM_TITLE_LENGTH),
-        description: cleanNullableText(
-          input.description,
-          MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
-        ),
-        image_url: imageUrl,
-        price_delta: input.priceDelta ?? 0,
-        sort_order: input.sortOrder ?? 0,
-        is_active: input.isActive ?? true,
+    const row = await this.productRepository.createOptionItem(
+      {
+        optionGroupId,
+        data: {
+          title: cleanRequiredText(input.title, MAX_OPTION_ITEM_TITLE_LENGTH),
+          description: cleanNullableText(
+            input.description,
+            MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
+          ),
+          image_url: imageUrl,
+          price_delta: input.priceDelta ?? 0,
+          sort_order: input.sortOrder ?? 0,
+          is_active: input.isActive ?? true,
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: group.product_id,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        optionItemId: row.id.toString(),
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: group.product_id,
+        action: AuditActionType.CREATE,
+        afterJson: {
+          optionItemId: created.id.toString(),
+        },
+      }),
+    );
     return this.toOptionItemOutput(row);
   }
 
@@ -321,47 +324,49 @@ export class SellerOptionService extends SellerBaseService {
       );
     }
 
-    const row = await this.productRepository.updateOptionItem({
-      optionItemId,
-      data: {
-        ...(input.title !== undefined
-          ? {
-              title: cleanRequiredText(
-                input.title,
-                MAX_OPTION_ITEM_TITLE_LENGTH,
-              ),
-            }
-          : {}),
-        ...(input.description !== undefined
-          ? {
-              description: cleanNullableText(
-                input.description,
-                MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
-              ),
-            }
-          : {}),
-        ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
-        ...(input.priceDelta !== undefined
-          ? { price_delta: input.priceDelta }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sort_order: input.sortOrder }
-          : {}),
-        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+    const row = await this.productRepository.updateOptionItem(
+      {
+        optionItemId,
+        data: {
+          ...(input.title !== undefined
+            ? {
+                title: cleanRequiredText(
+                  input.title,
+                  MAX_OPTION_ITEM_TITLE_LENGTH,
+                ),
+              }
+            : {}),
+          ...(input.description !== undefined
+            ? {
+                description: cleanNullableText(
+                  input.description,
+                  MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
+                ),
+              }
+            : {}),
+          ...(imageUrl !== undefined ? { image_url: imageUrl } : {}),
+          ...(input.priceDelta !== undefined
+            ? { price_delta: input.priceDelta }
+            : {}),
+          ...(input.sortOrder !== undefined
+            ? { sort_order: input.sortOrder }
+            : {}),
+          ...(input.isActive !== undefined
+            ? { is_active: input.isActive }
+            : {}),
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: current.option_group.product_id,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        optionItemId: row.id.toString(),
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: current.option_group.product_id,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          optionItemId: created.id.toString(),
+        },
+      }),
+    );
     return this.toOptionItemOutput(row);
   }
 
@@ -376,8 +381,7 @@ export class SellerOptionService extends SellerBaseService {
       throw new DomainException('OPTION_ITEM_NOT_FOUND');
     }
 
-    await this.productRepository.softDeleteOptionItem(optionItemId);
-    await this.auditLogs.createAuditLog({
+    await this.productRepository.softDeleteOptionItem(optionItemId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -386,8 +390,7 @@ export class SellerOptionService extends SellerBaseService {
       beforeJson: {
         optionItemId: optionItemId.toString(),
       },
-    });
-
+    }));
     return true;
   }
 
@@ -420,22 +423,22 @@ export class SellerOptionService extends SellerBaseService {
       }
     }
 
-    const rows = await this.productRepository.reorderOptionItems({
-      optionGroupId,
-      optionItemIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: group.product_id,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        optionItemIds: optionItemIds.map((id) => id.toString()),
+    const rows = await this.productRepository.reorderOptionItems(
+      {
+        optionGroupId,
+        optionItemIds,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: group.product_id,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          optionItemIds: optionItemIds.map((id) => id.toString()),
+        },
+      }),
+    );
     return rows.map((row) => this.toOptionItemOutput(row));
   }
 
