@@ -9,6 +9,7 @@ import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detai
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
 import { StoreSearchQueryResolver } from '@/features/store/resolvers/store-search-query.resolver';
+import { SellerAuditQueryResolver } from '@/features/store/resolvers/store-seller-audit-query.resolver';
 import { SellerStoreMutationResolver } from '@/features/store/resolvers/store-seller-mutation.resolver';
 import { SellerStoreQueryResolver } from '@/features/store/resolvers/store-seller-query.resolver';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
@@ -19,6 +20,7 @@ import { StoreDetailService } from '@/features/store/services/store-detail.servi
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
 import { StoreSearchService } from '@/features/store/services/store-search.service';
+import { SellerAuditService } from '@/features/store/services/store-seller-audit.service';
 import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
 import { SellerStoreHoursService } from '@/features/store/services/store-seller-hours.service';
 import { SellerStorePolicyService } from '@/features/store/services/store-seller-policy.service';
@@ -53,6 +55,9 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     SellerFaqService,
     SellerStoreQueryResolver,
     SellerStoreMutationResolver,
+    // 내 매장 감사 로그 — 조회 범위(내 매장·내 행위)는 audit-log 포트가, 판매자 컨텍스트는 store가 가진다
+    SellerAuditService,
+    SellerAuditQueryResolver,
   ],
   // StorePickupScheduleService는 주문 생성(order feature)의 픽업 일시 재검증이,
   // StoreSearchService는 검색 요약(search feature)의 매장 건수가 소비한다

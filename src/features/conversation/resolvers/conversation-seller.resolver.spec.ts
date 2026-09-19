@@ -2,11 +2,11 @@ import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import { ConversationRepository } from '@/features/conversation';
-import { ConversationEventsService } from '@/features/conversation';
-import { SellerConversationMutationResolver } from '@/features/seller/resolvers/seller-conversation-mutation.resolver';
-import { SellerConversationQueryResolver } from '@/features/seller/resolvers/seller-conversation-query.resolver';
-import { SellerConversationService } from '@/features/seller/services/seller-conversation.service';
+import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { SellerConversationMutationResolver } from '@/features/conversation/resolvers/conversation-seller-mutation.resolver';
+import { SellerConversationQueryResolver } from '@/features/conversation/resolvers/conversation-seller-query.resolver';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
+import { SellerConversationService } from '@/features/conversation/services/conversation-seller.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';

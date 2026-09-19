@@ -1,6 +1,7 @@
 import { Query } from '@nestjs/graphql';
 
-import { ConversationSubscriptionResolver } from '@/features/conversation/resolvers/conversation-subscription.resolver';
+import { ConversationModule } from '@/features/conversation';
+import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
 import { SellerModule } from '@/features/seller/seller.module';
 import { StoreModule } from '@/features/store';
@@ -15,10 +16,11 @@ describe('seller 루트 필드 인가 커버리지', () => {
   const sellerFields = collectRootFieldsWithPrefix('seller');
   const handlerAuth = collectHandlerAuth([
     ...resolverClassesOf(SellerModule),
-    // 판매자 매장·상품 핸들러는 store·product feature로 옮겨졌다(03a·03b) — 03d에서 spec 통합
+    // 판매자 핸들러는 전부 도메인 feature로 옮겨졌다(03a~03c) — 03d에서 spec 통합
     ...resolverClassesOf(StoreModule),
     ...resolverClassesOf(ProductModule),
-    ConversationSubscriptionResolver,
+    ...resolverClassesOf(OrderModule),
+    ...resolverClassesOf(ConversationModule),
   ]);
 
   it('SDL에서 seller 접두 루트 필드를 읽어 왔다(입력 공간이 비어 있지 않다)', () => {

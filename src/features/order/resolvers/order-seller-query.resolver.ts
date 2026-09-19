@@ -3,12 +3,12 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
-import { SellerOrderListInput } from '@/features/seller/dto/inputs/seller-order-list.input';
-import { SellerOrderService } from '@/features/seller/services/seller-order.service';
+import { SellerOrderListInput } from '@/features/order/dto/inputs/seller-order-list.input';
+import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import type {
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
-} from '@/features/seller/types/seller-output.type';
+} from '@/features/order/types/order-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

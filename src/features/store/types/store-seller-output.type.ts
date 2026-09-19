@@ -1,3 +1,4 @@
+import type { SellerAuditTargetType } from '@/features/audit-log';
 import type { StoreOutput } from '@/features/store/types/store-record-output.type';
 
 /** 판매자 SDL(SellerStore)에는 regionId가 없다. */
@@ -38,4 +39,18 @@ export interface SellerFaqTopicOutput {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface SellerAuditLogOutput {
+  id: string;
+  actorAccountId: string;
+  storeId: string | null;
+  targetType: SellerAuditTargetType;
+  targetId: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE';
+  beforeJson: string | null;
+  afterJson: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
 }

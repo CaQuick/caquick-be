@@ -53,6 +53,8 @@ describe('SellerBaseService (real DB)', () => {
     const repo = module.get(StoreSellerRepository);
     const auditLogs: IAuditLogRepository = {
       createAuditLog: jest.fn(),
+      countAuditLogsBySeller: jest.fn(),
+      listAuditLogsBySeller: jest.fn(),
     };
     service = new TestableSellerBaseService(repo, auditLogs);
     prisma = p;
