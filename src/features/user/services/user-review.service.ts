@@ -5,12 +5,12 @@ import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { OrderRepository } from '@/features/order';
 import { toReviewMedia } from '@/features/review';
+import { ReviewRepository } from '@/features/review';
 import { buildRegionLabel } from '@/features/store';
 import type { CreateReviewMediaUploadUrlInput } from '@/features/user/dto/inputs/create-review-media-upload-url.input';
 import type { MyReviewableOrderItemsInput } from '@/features/user/dto/inputs/my-reviewable-order-items.input';
 import type { MyReviewsInput } from '@/features/user/dto/inputs/my-reviews.input';
 import type { WriteReviewInput } from '@/features/user/dto/inputs/write-review.input';
-import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import type {
   MyReview,
   MyReviewableOrderItemConnection,

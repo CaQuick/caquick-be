@@ -1,7 +1,7 @@
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductReviewQueryResolver } from '@/features/product/resolvers/product-review-query.resolver';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
 import { ReviewReadRepository } from '@/features/review';
+import { ProductReviewRepository } from '@/features/review/repositories/product-review.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

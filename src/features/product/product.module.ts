@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCategoryQueryResolver } from '@/features/product/resolvers/product-category-query.resolver';
 import { ProductDetailQueryResolver } from '@/features/product/resolvers/product-detail-query.resolver';
@@ -23,7 +22,6 @@ import { StoreModule } from '@/features/store';
   imports: [ReviewModule, StoreModule],
   providers: [
     ProductRepository,
-    ProductReviewRepository,
     ProductCardService,
     ProductDetailService,
     ProductDetailQueryResolver,

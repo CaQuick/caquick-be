@@ -1,5 +1,5 @@
 import { OrderRepository } from '@/features/order';
-import { ReviewRepository } from '@/features/user/repositories/review.repository';
+import { ReviewRepository } from '@/features/review/repositories/review.repository';
 import { UserReviewService } from '@/features/user/services/user-review.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';

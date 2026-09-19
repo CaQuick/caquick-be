@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { ReviewModule } from '@/features/review';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
@@ -24,7 +23,6 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
   providers: [
     StoreRepository,
     StoreStatsRepository,
-    StoreWishlistRepository,
     StoreCardService,
     StoreListingService,
     StoreWishlistService,

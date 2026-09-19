@@ -4,6 +4,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ProductCardService, ProductRepository } from '@/features/product';
+import { WishlistRepository } from '@/features/review';
 import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
 import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
@@ -20,6 +21,7 @@ export class UserWishlistService extends UserBaseService {
     repo: UserRepository,
     private readonly productRepository: ProductRepository,
     private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {
     super(repo);
   }
@@ -36,7 +38,7 @@ export class UserWishlistService extends UserBaseService {
       throw new DomainException('PRODUCT_NOT_FOUND');
     }
 
-    await this.repo.upsertWishlistItem({
+    await this.wishlists.upsertWishlistItem({
       accountId,
       productId,
       now: new Date(),
@@ -51,7 +53,7 @@ export class UserWishlistService extends UserBaseService {
     await this.requireActiveUser(accountId);
     const productId = parseId(productIdStr);
 
-    await this.repo.softDeleteWishlistItem({
+    await this.wishlists.softDeleteWishlistItem({
       accountId,
       productId,
       now: new Date(),
@@ -70,7 +72,7 @@ export class UserWishlistService extends UserBaseService {
     // "0"도 유효 후보로 취급해 truthy 체크가 아닌 null/undefined 체크로 거른다(parseId가 검증).
     const storeId = input?.storeId != null ? parseId(input.storeId) : undefined;
 
-    const { items, totalCount } = await this.repo.findWishlistItems({
+    const { items, totalCount } = await this.wishlists.findWishlistItems({
       accountId,
       offset,
       limit,
@@ -102,7 +104,8 @@ export class UserWishlistService extends UserBaseService {
     const offset = input?.offset ?? 0;
     const limit = input?.limit ?? DEFAULT_PAGINATION_LIMIT;
 
-    const rows = await this.repo.findVisibleWishlistItemsForGrouping(accountId);
+    const rows =
+      await this.wishlists.findVisibleWishlistItemsForGrouping(accountId);
 
     const groups = new Map<
       bigint,

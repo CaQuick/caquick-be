@@ -3,16 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import { ReviewReportRepository, type ReportTarget } from '@/features/review';
 import {
   MAX_REVIEW_REPORT_DETAIL_LENGTH,
   MAX_REVIEW_REPORT_SNAPSHOT_LENGTH,
 } from '@/features/user/constants/user.constants';
 import type { ReportReviewCommentInput } from '@/features/user/dto/inputs/report-review-comment.input';
 import type { ReportReviewInput } from '@/features/user/dto/inputs/report-review.input';
-import {
-  ReviewReportRepository,
-  type ReportTarget,
-} from '@/features/user/repositories/review-report.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { ReviewReportResult } from '@/features/user/types/user-review-output.type';

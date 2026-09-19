@@ -3,12 +3,12 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
+import { StoreWishlistRepository } from '@/features/review';
 import {
   DEFAULT_WISHLISTED_STORES_LIMIT,
   WISHLISTED_STORE_IMAGE_LIMIT,
 } from '@/features/store/constants/store-wishlist.constants';
 import type { MyWishlistedStoresInput } from '@/features/store/dto/inputs/my-wishlisted-stores.input';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import type { MyWishlistedStoresConnection } from '@/features/store/types/store-wishlist-output.type';

@@ -4,6 +4,7 @@ import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   DEFAULT_POPULAR_STORES_LIMIT,
@@ -11,7 +12,6 @@ import {
 } from '@/features/store/constants/store-ranking.constants';
 import type { PopularStoresInput } from '@/features/store/dto/inputs/popular-stores.input';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import {
   StoreRepository,
   type StoreCandidateRow,

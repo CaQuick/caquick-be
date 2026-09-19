@@ -6,7 +6,6 @@ import { parseIdCursor } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
 import { DEFAULT_REVIEW_COMMENTS_LIMIT } from '@/features/product/constants/product-review.constants';
 import type { ReviewCommentsInput } from '@/features/product/dto/inputs/review-comments.input';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import {
   toReviewCommentItem,
   toReviewDetailProduct,
@@ -15,6 +14,7 @@ import type {
   ReviewCommentConnection,
   ReviewDetail,
 } from '@/features/product/types/product-review-output.type';
+import { ProductReviewRepository } from '@/features/review';
 import { ReviewReadRepository, toProductReview } from '@/features/review';
 
 @Injectable()

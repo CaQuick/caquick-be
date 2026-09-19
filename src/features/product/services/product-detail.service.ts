@@ -5,10 +5,15 @@ import { parseId } from '@/common/utils/id-parser';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { toProductDetail } from '@/features/product/services/product-detail-mappers.helper';
 import type { ProductDetail } from '@/features/product/types/product-detail-output.type';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 
 @Injectable()
 export class ProductDetailService {
-  constructor(private readonly repo: ProductRepository) {}
+  constructor(
+    private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly wishlists: WishlistRepository,
+  ) {}
 
   async productDetail(
     productIdRaw: string,
@@ -21,9 +26,9 @@ export class ProductDetailService {
     }
 
     const [reviewCount, isWishlisted] = await Promise.all([
-      this.repo.countProductReviews(productId),
+      this.reviews.countProductReviews(productId),
       accountId !== undefined
-        ? this.repo.isProductWishlisted({ accountId, productId })
+        ? this.wishlists.isProductWishlisted({ accountId, productId })
         : Promise.resolve(false),
     ]);
 

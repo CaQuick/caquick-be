@@ -1,3 +1,4 @@
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
 import { UserNotificationQueryResolver } from '@/features/user/resolvers/user-notification-query.resolver';
@@ -20,6 +21,7 @@ describe('User Notification Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         UserNotificationQueryResolver,
         UserNotificationMutationResolver,
         UserNotificationService,

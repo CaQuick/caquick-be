@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import type { ProductReviewRow } from '@/features/review';
+import type { ProductReviewRow } from '@/features/review/repositories/review-read.repository';
 import type { Prisma } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 

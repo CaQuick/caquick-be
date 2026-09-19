@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { ReviewReadRepository } from '@/features/review';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { StoreWishlistRepository } from '@/features/review';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { toStoreDetail } from '@/features/store/services/store-detail-mappers.helper';
 import type { StoreDetail } from '@/features/store/types/store-detail-output.type';

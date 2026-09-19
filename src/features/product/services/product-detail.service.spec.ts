@@ -1,5 +1,7 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
+import { ReviewReadRepository } from '@/features/review/repositories/review-read.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -18,7 +20,12 @@ describe('ProductDetailService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductDetailService, ProductRepository],
+      providers: [
+        WishlistRepository,
+        ReviewReadRepository,
+        ProductDetailService,
+        ProductRepository,
+      ],
     });
     service = module.get(ProductDetailService);
     prisma = p;

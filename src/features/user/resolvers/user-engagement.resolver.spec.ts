@@ -1,3 +1,4 @@
+import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
 import { UserEngagementService } from '@/features/user/services/user-engagement.service';
@@ -18,6 +19,7 @@ describe('User Engagement Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewEngagementRepository,
         UserEngagementMutationResolver,
         UserEngagementService,
         UserRepository,

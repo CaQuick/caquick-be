@@ -1,7 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreCardService } from '@/features/store/services/store-card.service';

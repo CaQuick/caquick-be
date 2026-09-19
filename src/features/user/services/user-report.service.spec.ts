@@ -1,5 +1,6 @@
-import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
-import { ReviewRepository } from '@/features/user/repositories/review.repository';
+import { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
+import { ReviewReportRepository } from '@/features/review/repositories/review-report.repository';
+import { ReviewRepository } from '@/features/review/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserReportService } from '@/features/user/services/user-report.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -19,7 +20,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 describe('UserReportService (real DB)', () => {
   let service: UserReportService;
   let reviewRepo: ReviewRepository;
-  let userRepo: UserRepository;
+  let engagement: ReviewEngagementRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -27,13 +28,14 @@ describe('UserReportService (real DB)', () => {
       providers: [
         UserReportService,
         UserRepository,
+        ReviewEngagementRepository,
         ReviewReportRepository,
         ReviewRepository,
       ],
     });
     service = module.get(UserReportService);
     reviewRepo = module.get(ReviewRepository);
-    userRepo = module.get(UserRepository);
+    engagement = module.get(ReviewEngagementRepository);
     prisma = p;
   });
 
@@ -250,7 +252,7 @@ describe('UserReportService (real DB)', () => {
       });
 
       expect(
-        await userRepo.softDeleteMyReviewComment({
+        await engagement.softDeleteMyReviewComment({
           accountId: commenter,
           commentId: comment.id,
         }),
@@ -410,7 +412,7 @@ describe('UserReportService (real DB)', () => {
           accountId: author,
           now: new Date(),
         }),
-        userRepo.softDeleteMyReviewComment({
+        engagement.softDeleteMyReviewComment({
           accountId: commenter,
           commentId: comment.id,
         }),

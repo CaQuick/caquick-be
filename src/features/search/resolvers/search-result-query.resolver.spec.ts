@@ -2,11 +2,12 @@ import { ClockService } from '@/common/providers/clock.service';
 import { ProductRepository, ProductSearchService } from '@/features/product';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { SearchResultQueryResolver } from '@/features/search/resolvers/search-result-query.resolver';
 import { SearchResultService } from '@/features/search/services/search-result.service';
 import { StoreSearchService } from '@/features/store';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
@@ -24,6 +25,7 @@ describe('SearchResultQueryResolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         StoreCardService,
         ReviewReadRepository,

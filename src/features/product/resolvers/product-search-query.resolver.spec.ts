@@ -4,6 +4,7 @@ import { ProductSearchQueryResolver } from '@/features/product/resolvers/product
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
 import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
@@ -20,6 +21,7 @@ describe('ProductSearchQueryResolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         ReviewReadRepository,
         StoreStatsRepository,

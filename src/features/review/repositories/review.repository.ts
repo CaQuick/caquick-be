@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/user/constants/user.constants';
+import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/review/constants/review.constants';
 import type { Prisma, ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 

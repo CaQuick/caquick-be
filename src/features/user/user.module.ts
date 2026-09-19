@@ -3,9 +3,6 @@ import { Module } from '@nestjs/common';
 import { OrderModule } from '@/features/order';
 import { ProductModule } from '@/features/product';
 import { ReviewModule } from '@/features/review';
-import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
-import { ReviewReportRepository } from '@/features/user/repositories/review-report.repository';
-import { ReviewRepository } from '@/features/user/repositories/review.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserEngagementMutationResolver } from '@/features/user/resolvers/user-engagement-mutation.resolver';
 import { UserMypageQueryResolver } from '@/features/user/resolvers/user-mypage-query.resolver';
@@ -42,15 +39,12 @@ import { UserWishlistService } from '@/features/user/services/user-wishlist.serv
     UserSearchService,
     UserEngagementService,
     UserReportService,
-    ReviewReportRepository,
     UserMypageService,
     UserOrderService,
     UserRecentViewService,
     UserReviewService,
     UserWishlistService,
     UserRepository,
-    RecentProductViewRepository,
-    ReviewRepository,
     UserProfileQueryResolver,
     UserNotificationQueryResolver,
     UserSearchQueryResolver,

@@ -1,6 +1,6 @@
 import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
 import { StoreCardService } from '@/features/store/services/store-card.service';

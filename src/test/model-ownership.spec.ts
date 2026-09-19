@@ -13,7 +13,7 @@ import {
 } from '@/test/model-ownership.helper';
 
 // 모델별 단일 writer(D1 서비스 경계)를 코드로 강제한다. 판정은 write 호출이 놓인 feature 파일 기준(P1-2).
-// 아래 예외 목록은 P1 시작 시점 실측(92 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
+// 아래 예외 목록은 P1 진행 중 실측(시작 92 → 현재 67 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
 
 const schema = loadSchema();
 
@@ -46,6 +46,11 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
   ['src/features/admin/repositories/admin.repository.ts', 'Tag', 4],
   ['src/features/order/repositories/order.repository.ts', 'AuditLog', 2],
   ['src/features/order/repositories/order.repository.ts', 'Notification', 2],
+  [
+    'src/features/review/repositories/review-engagement.repository.ts',
+    'Notification',
+    1,
+  ],
   ['src/features/seller/repositories/seller.repository.ts', 'Store', 1],
   [
     'src/features/seller/repositories/seller.repository.ts',
@@ -63,25 +68,6 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
     'StoreSpecialClosure',
     3,
   ],
-  [
-    'src/features/store/repositories/store-wishlist.repository.ts',
-    'StoreWishlistItem',
-    3,
-  ],
-  [
-    'src/features/user/repositories/recent-product-view.repository.ts',
-    'RecentProductView',
-    4,
-  ],
-  [
-    'src/features/user/repositories/review-report.repository.ts',
-    'ReviewReport',
-    1,
-  ],
-  ['src/features/user/repositories/review.repository.ts', 'Review', 3],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewComment', 1],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewMedia', 3],
-  ['src/features/user/repositories/review.repository.ts', 'ReviewReport', 1],
   ['src/features/user/repositories/user.repository.ts', 'Account', 3],
   ['src/features/user/repositories/user.repository.ts', 'AccountIdentity', 1],
   [
@@ -89,13 +75,9 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
     'AuthRefreshSession',
     1,
   ],
-  ['src/features/user/repositories/user.repository.ts', 'Notification', 3],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewComment', 2],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewLike', 3],
-  ['src/features/user/repositories/user.repository.ts', 'ReviewReport', 1],
+  ['src/features/user/repositories/user.repository.ts', 'Notification', 2],
   ['src/features/user/repositories/user.repository.ts', 'SearchHistory', 2],
   ['src/features/user/repositories/user.repository.ts', 'UserProfile', 4],
-  ['src/features/user/repositories/user.repository.ts', 'WishlistItem', 3],
 ];
 
 function groupViolations(
@@ -133,7 +115,7 @@ describe('모델 소유권 (단일 writer)', () => {
   it('소유 feature 밖 write는 예외 목록과 정확히 일치한다', () => {
     const found = groupViolations(collectWriteSites(schema));
     expect(found).toEqual(WRITE_EXCEPTIONS);
-    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(92);
+    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(67);
   });
 
   describe('검사기 반증', () => {

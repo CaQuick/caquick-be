@@ -21,7 +21,7 @@ import type {
   PopularCakesResult,
   RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
-import { ReviewReadRepository } from '@/features/review';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
@@ -37,6 +37,7 @@ export class ProductHomeService {
     private readonly stats: StoreStatsRepository,
     private readonly random: RandomService,
     private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
   /** 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을 상품 단위로 적용한다. 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리). */
@@ -71,7 +72,7 @@ export class ProductHomeService {
 
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
-        this.repo.aggregateProductWishlistCounts(productIds),
+        this.wishlists.aggregateProductWishlistCounts(productIds),
         this.reviewRepo.aggregateReviewStats('product_id', productIds),
         this.stats.aggregateRecentOrderCounts('product_id', productIds, since),
         this.reviewRepo.globalReviewAverage(),

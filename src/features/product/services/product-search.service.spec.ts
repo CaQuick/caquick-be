@@ -3,6 +3,7 @@ import { ProductRepository } from '@/features/product/repositories/product.repos
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
 import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -30,6 +31,7 @@ describe('ProductSearchService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         ProductSearchService,
         ProductRepository,

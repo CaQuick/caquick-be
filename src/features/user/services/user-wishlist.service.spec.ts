@@ -1,6 +1,7 @@
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -23,6 +24,7 @@ describe('UserWishlistService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
         ProductCardService,
         UserWishlistService,
         UserRepository,

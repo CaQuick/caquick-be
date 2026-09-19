@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import { OrderRepository } from '@/features/order';
 import { ProductCardService } from '@/features/product';
-import { RecentProductViewRepository } from '@/features/user/repositories/recent-product-view.repository';
+import {
+  RecentProductViewRepository,
+  ReviewEngagementRepository,
+  WishlistRepository,
+} from '@/features/review';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { MyPageOverview } from '@/features/user/types/user-mypage-output.type';
 
@@ -17,6 +21,8 @@ export class UserMypageService {
     private readonly orderRepository: OrderRepository,
     private readonly recentProductViewRepository: RecentProductViewRepository,
     private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
+    private readonly engagement: ReviewEngagementRepository,
   ) {}
 
   async getOverview(accountId: bigint): Promise<MyPageOverview> {
@@ -25,8 +31,8 @@ export class UserMypageService {
 
     const [wishlistCount, myReviewCount, ongoingOrders, recentViews] =
       await Promise.all([
-        this.userRepository.countWishlistItems(accountId),
-        this.userRepository.countMyReviews(accountId),
+        this.wishlists.countWishlistItems(accountId),
+        this.engagement.countMyReviews(accountId),
         this.orderRepository.findOngoingOrdersByAccount({
           accountId,
           since,
