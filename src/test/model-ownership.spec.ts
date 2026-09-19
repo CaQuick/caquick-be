@@ -135,13 +135,14 @@ describe('모델 소유권 (단일 writer)', () => {
           'export class Bad {',
           '  constructor(private readonly prisma: any) {}',
           '  private buildArgs() { return { data: { media: { create: [] } } }; }',
-          '  f(tx: any, prisma: any, flag: boolean) {',
+          '  f(tx: any, prisma: any, flag: boolean, trx: any) {',
           '    tx.review.create({ data: payload });',
           '    tx.review.create(createArgs);',
           '    tx.review.create(this.buildArgs());',
           '    tx.review.create(payloadOf());',
           '    tx.review.create(wrap({ data: { media: { create: [] } } }));',
           '    tx.orderItem.update({ where: { id: 1n }, data: { review: { connect: { id: 1n } } } });',
+          '    trx.review.delete({ where: { id: 1n } });',
           '    prisma.order.update({ where: { id: 1n }, data: { ...(flag && { status_histories: { create: {} } }) } });',
           '    prisma.order.update({ where: { id: 1n }, data: { status_histories: { create: {} } } });',
           '    prisma.order.update({ where: { id: 1n }, data: { items: { create: [{ review: { create: {} } }] } } });',
@@ -163,13 +164,13 @@ describe('모델 소유권 (단일 writer)', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('허용 밖 feature의 직접·nested(객체·배열·&&)·inverse 측 connect·상수·헬퍼(파라미터 전달 포함) 인자 write를 모두 잡고, 소유 feature의 write와 FK 보유 측 connect는 통과시킨다', () => {
+    it('허용 밖 feature의 직접·nested(객체·배열·&&)·inverse 측 connect·상수·헬퍼(파라미터 전달 포함) 인자 write를 수신자 이름과 무관하게 모두 잡고, 소유 feature의 write와 FK 보유 측 connect는 통과시킨다', () => {
       const found = groupViolations(collectWriteSites(schema, dir), dir);
       expect(found).toEqual([
         ['product/bad.repository.ts', 'Order', 3],
         ['product/bad.repository.ts', 'OrderItem', 2],
         ['product/bad.repository.ts', 'OrderStatusHistory', 2],
-        ['product/bad.repository.ts', 'Review', 7],
+        ['product/bad.repository.ts', 'Review', 8],
         ['product/bad.repository.ts', 'ReviewMedia', 5],
       ]);
       const ok = collectWriteSites(schema, dir).filter(
