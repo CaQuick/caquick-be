@@ -1,6 +1,6 @@
 /**
  * 입력 공간을 SDL에서 읽어 온다 — 접두 필드가 생기면 표에 자동으로 줄이 늘고, 그 필드를 처리하는 메서드가
- * RolesGuard + @Roles(role)를 갖추지 않으면 실패한다. roles-coverage spec(역할별 표)과 admin 커버리지 spec이 공유한다.
+ * RolesGuard + @Roles(role)를 갖추지 않으면 실패한다. roles-coverage spec이 역할별 표로 돌린다.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -103,7 +103,7 @@ export function violationsOf(
   return reasons;
 }
 
-export function resolverClassesOf(module: Ctor): Ctor[] {
+function resolverClassesOf(module: Ctor): Ctor[] {
   const providers =
     (Reflect.getMetadata('providers', module) as unknown[] | undefined) ?? [];
   return providers.filter(

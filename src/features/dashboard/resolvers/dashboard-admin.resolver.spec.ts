@@ -8,14 +8,13 @@ import { ProductAdminRepository } from '@/features/product/repositories/product-
 import { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
 import { SearchRepository } from '@/features/search';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
-// 집계 세부 검증은 admin-dashboard.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
-
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
+// 집계 세부 검증은 dashboard-admin.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('Admin Dashboard Resolver (real DB)', () => {
   let resolver: AdminDashboardQueryResolver;
   let prisma: PrismaClient;
