@@ -4,10 +4,6 @@ export { ReviewModule } from '@/features/review/review.module';
 export { ReviewRepository } from '@/features/review/repositories/review.repository';
 export { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
 export {
-  ReviewReportRepository,
-  type ReportTarget,
-} from '@/features/review/repositories/review-report.repository';
-export {
   ProductReviewRepository,
   type ReviewCommentRow,
   type ReviewDetailProductRow,

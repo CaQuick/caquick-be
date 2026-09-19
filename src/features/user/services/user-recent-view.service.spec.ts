@@ -4,7 +4,6 @@ import { ProductCardService } from '@/features/product/services/product-card.ser
 import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -32,7 +31,6 @@ describe('UserRecentViewService (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
-        UserRepository,
         AccountUserRepository,
       ],
     });

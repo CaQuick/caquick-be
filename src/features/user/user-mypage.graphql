@@ -1,49 +1,87 @@
 extend type Query {
-  """마이페이지 메인 화면 집계 데이터. 로그인 필수. 본인 데이터만 대상이 된다."""
+  """
+  마이페이지 메인 화면 집계 데이터. 로그인 필수. 본인 데이터만 대상이 된다.
+  """
   myPageOverview: MyPageOverview!
 }
 
-"""마이페이지 메인 집계"""
+"""
+마이페이지 메인 집계
+"""
 type MyPageOverview {
-  """상단 카운트 카드"""
+  """
+  상단 카운트 카드
+  """
   counts: MyPageCounts!
-  """진행중인 주문 요약 (최근 3개월, 최대 5건)"""
+  """
+  진행중인 주문 요약 (최근 3개월, 최대 5건)
+  """
   ongoingOrders: [OngoingOrderSummary!]!
-  """최근 본 상품 (최대 20건)"""
+  """
+  최근 본 상품 (최대 20건)
+  """
   recentViewedProducts: [RecentViewedProduct!]!
 }
 
-"""마이페이지 상단 카운트 카드."""
+"""
+마이페이지 상단 카운트 카드.
+"""
 type MyPageCounts {
-  """상품 찜 수"""
+  """
+  상품 찜 수
+  """
   wishlistCount: Int!
-  """내가 작성한 리뷰 수"""
+  """
+  내가 작성한 리뷰 수
+  """
   myReviewCount: Int!
 }
 
-"""진행중 주문 요약 카드. 픽업 완료·취소는 제외된다."""
+"""
+진행중 주문 요약 카드. 픽업 완료·취소는 제외된다.
+"""
 type OngoingOrderSummary {
   orderId: ID!
-  """주문번호."""
+  """
+  주문번호.
+  """
   orderNumber: String!
-  """현재 주문 상태."""
+  """
+  현재 주문 상태.
+  """
   status: OrderStatusType!
-  """주문 생성 시각."""
+  """
+  주문 생성 시각.
+  """
   createdAt: DateTime!
-  """픽업 예정 일시."""
+  """
+  픽업 예정 일시.
+  """
   pickupAt: DateTime!
-  """첫 번째 OrderItem 기준 대표 상품명"""
+  """
+  첫 번째 OrderItem 기준 대표 상품명
+  """
   representativeProductName: String!
-  """첫 번째 OrderItem 기준 대표 이미지 URL"""
+  """
+  첫 번째 OrderItem 기준 대표 이미지 URL
+  """
   representativeProductImageUrl: String
-  """총 가격"""
+  """
+  총 가격
+  """
   totalPrice: Int!
 }
 
-"""최근 본 상품 항목. 공용 상품 카드 + 마지막으로 본 시각."""
+"""
+최근 본 상품 항목. 공용 상품 카드 + 마지막으로 본 시각.
+"""
 type RecentViewedProduct {
-  """상품 카드."""
+  """
+  상품 카드.
+  """
   product: ProductCard!
-  """마지막으로 본 시각. 목록 정렬 기준이다."""
+  """
+  마지막으로 본 시각. 목록 정렬 기준이다.
+  """
   viewedAt: DateTime!
 }

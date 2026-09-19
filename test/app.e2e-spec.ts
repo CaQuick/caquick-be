@@ -5,8 +5,8 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 
 import { AppModule } from './../src/app.module';
+import { AccountUserRepository } from './../src/features/auth/repositories/account-user.repository';
 import { ACCOUNT_REPOSITORY } from './../src/features/auth/repositories/account.repository.interface';
-import { UserRepository } from './../src/features/user/repositories/user.repository';
 import { PrismaService } from './../src/prisma';
 
 import { AccountType } from '@/generated/prisma/client';
@@ -57,7 +57,7 @@ describe('AppController (e2e)', () => {
     })
       .overrideProvider(ACCOUNT_REPOSITORY)
       .useValue(mockAccountRepository)
-      .overrideProvider(UserRepository)
+      .overrideProvider(AccountUserRepository)
       .useValue(mockUserRepository)
       .overrideProvider(PrismaService)
       .useValue(mockPrismaService)

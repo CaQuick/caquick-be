@@ -1,3 +1,4 @@
+import { buildRegionLabel } from '@/common/utils/region-label';
 import { anonymizeReviewAuthor } from '@/common/utils/review-author';
 import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type {
@@ -8,7 +9,6 @@ import type {
   ReviewCommentRow,
   ReviewDetailProductRow,
 } from '@/features/review';
-import { buildRegionLabel } from '@/features/store';
 
 export function toReviewDetailProduct(
   row: ReviewDetailProductRow,

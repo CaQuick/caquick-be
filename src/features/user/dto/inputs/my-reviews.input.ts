@@ -1,3 +1,3 @@
-import { UserPaginationInput } from '@/features/user/dto/inputs/user-pagination.input';
+import { UserPaginationInput } from '@/common/dto/inputs/user-pagination.input';
 
 export class MyReviewsInput extends UserPaginationInput {}

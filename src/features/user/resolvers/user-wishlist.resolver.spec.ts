@@ -3,7 +3,6 @@ import { ProductRepository } from '@/features/product/repositories/product.repos
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserWishlistMutationResolver } from '@/features/user/resolvers/user-wishlist-mutation.resolver';
 import { UserWishlistQueryResolver } from '@/features/user/resolvers/user-wishlist-query.resolver';
 import { UserWishlistService } from '@/features/user/services/user-wishlist.service';
@@ -32,7 +31,6 @@ describe('User Wishlist Resolver (real DB)', () => {
         UserWishlistMutationResolver,
         UserWishlistQueryResolver,
         UserWishlistService,
-        UserRepository,
         AccountUserRepository,
         ProductRepository,
       ],

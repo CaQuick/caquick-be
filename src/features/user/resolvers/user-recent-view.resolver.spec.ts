@@ -4,7 +4,6 @@ import { ProductCardService } from '@/features/product/services/product-card.ser
 import { ReviewReadRepository } from '@/features/review';
 import { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserRecentViewMutationResolver } from '@/features/user/resolvers/user-recent-view-mutation.resolver';
 import { UserRecentViewQueryResolver } from '@/features/user/resolvers/user-recent-view-query.resolver';
 import { UserRecentViewService } from '@/features/user/services/user-recent-view.service';
@@ -36,7 +35,6 @@ describe('User Recent View Resolvers (real DB)', () => {
         UserRecentViewService,
         RecentProductViewRepository,
         ProductRepository,
-        UserRepository,
         AccountUserRepository,
       ],
     });

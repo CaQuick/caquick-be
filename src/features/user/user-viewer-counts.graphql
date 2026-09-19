@@ -1,0 +1,20 @@
+extend type Query {
+  """
+  상단/하단 공통 UI용 카운트 정보 조회. 로그인 필수. 본인 데이터만 대상이 된다.
+  """
+  viewerCounts: ViewerCounts!
+}
+
+"""
+뷰어 카운트 정보
+"""
+type ViewerCounts {
+  """
+  읽지 않은 알림 수
+  """
+  unreadNotificationCount: Int!
+  """
+  위시리스트 아이템 수
+  """
+  wishlistCount: Int!
+}

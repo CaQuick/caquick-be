@@ -13,9 +13,13 @@ import { StoreWishlistRepository } from '@/features/review/repositories/store-wi
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { AdminModerationMutationResolver } from '@/features/review/resolvers/review-admin-mutation.resolver';
 import { AdminModerationQueryResolver } from '@/features/review/resolvers/review-admin-query.resolver';
+import { UserEngagementMutationResolver } from '@/features/review/resolvers/review-engagement-mutation.resolver';
 import { ReviewListingQueryResolver } from '@/features/review/resolvers/review-listing-query.resolver';
+import { UserReportMutationResolver } from '@/features/review/resolvers/review-report-mutation.resolver';
 import { AdminModerationService } from '@/features/review/services/review-admin.service';
+import { UserEngagementService } from '@/features/review/services/review-engagement.service';
 import { ReviewListingService } from '@/features/review/services/review-listing.service';
+import { UserReportService } from '@/features/review/services/review-report.service';
 
 @Module({
   // 관리자 모더레이션: 관리자 컨텍스트(AuthModule)·감사 기록(AuditLogModule)
@@ -36,6 +40,11 @@ import { ReviewListingService } from '@/features/review/services/review-listing.
     AdminModerationService,
     AdminModerationQueryResolver,
     AdminModerationMutationResolver,
+    // 구매자 리뷰 참여(좋아요·댓글)·신고 — 리뷰 도메인이 소유한다
+    UserEngagementService,
+    UserReportService,
+    UserEngagementMutationResolver,
+    UserReportMutationResolver,
   ],
   // review 소유 모델의 write는 전부 이 feature의 repository를 거친다(소유 맵). 구매자·매장·상품 서비스가 배럴로 주입받는다.
   exports: [

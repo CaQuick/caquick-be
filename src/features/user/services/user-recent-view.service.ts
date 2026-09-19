@@ -6,7 +6,6 @@ import { hasMoreByOffset } from '@/common/utils/pagination';
 import { ProductCardService, ProductRepository } from '@/features/product';
 import { RecentProductViewRepository } from '@/features/review';
 import type { MyRecentViewedProductsInput } from '@/features/user/dto/inputs/my-recent-viewed-products.input';
-import { UserRepository } from '@/features/user/repositories/user.repository';
 import type { RecentViewedProductConnection } from '@/features/user/types/user-mypage-output.type';
 
 const MAX_RECENT_VIEWS = 50;
@@ -16,7 +15,6 @@ export class UserRecentViewService {
   constructor(
     private readonly recentViewRepo: RecentProductViewRepository,
     private readonly productRepo: ProductRepository,
-    private readonly userRepo: UserRepository,
     private readonly cards: ProductCardService,
   ) {}
 

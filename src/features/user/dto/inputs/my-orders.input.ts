@@ -1,6 +1,6 @@
 import { IsArray, IsEnum, IsOptional } from 'class-validator';
 
-import { UserPaginationInput } from '@/features/user/dto/inputs/user-pagination.input';
+import { UserPaginationInput } from '@/common/dto/inputs/user-pagination.input';
 import { OrderStatus } from '@/generated/prisma/client';
 
 export class MyOrdersInput extends UserPaginationInput {
