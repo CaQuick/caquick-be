@@ -149,6 +149,7 @@ describe('모델 소유권 (단일 writer)', () => {
           'const payload = { rating: 5, media: { createMany: { data: [] } } } as const;',
           'const createArgs = { data: { media: { create: [] } } };',
           'function payloadOf() { return { data: { media: { create: [] } } }; }',
+          'const wrap = (args: any) => args;',
           'export class Bad {',
           '  constructor(private readonly prisma: any) {}',
           '  private buildArgs() { return { data: { media: { create: [] } } }; }',
@@ -157,6 +158,7 @@ describe('모델 소유권 (단일 writer)', () => {
           '    tx.review.create(createArgs);',
           '    tx.review.create(this.buildArgs());',
           '    tx.review.create(payloadOf());',
+          '    tx.review.create(wrap({ data: { media: { create: [] } } }));',
           '    prisma.order.update({ where: { id: 1n }, data: { status_histories: { create: {} } } });',
           '    prisma.order.update({ where: { id: 1n }, data: { items: { create: [{ review: { create: {} } }] } } });',
           '    this.prisma.product.update({ where: { id: 1n }, data: {} });',
@@ -171,14 +173,14 @@ describe('모델 소유권 (단일 writer)', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('허용 밖 feature의 직접·nested(객체·배열)·상수·헬퍼 인자 write를 모두 잡고, 소유 feature의 write는 통과시킨다', () => {
+    it('허용 밖 feature의 직접·nested(객체·배열)·상수·헬퍼(파라미터 전달 포함) 인자 write를 모두 잡고, 소유 feature의 write는 통과시킨다', () => {
       const found = groupViolations(collectWriteSites(schema, dir), dir);
       expect(found).toEqual([
         ['product/bad.repository.ts', 'Order', 2],
         ['product/bad.repository.ts', 'OrderItem', 1],
         ['product/bad.repository.ts', 'OrderStatusHistory', 1],
-        ['product/bad.repository.ts', 'Review', 5],
-        ['product/bad.repository.ts', 'ReviewMedia', 4],
+        ['product/bad.repository.ts', 'Review', 6],
+        ['product/bad.repository.ts', 'ReviewMedia', 5],
       ]);
       const ok = collectWriteSites(schema, dir).filter(
         (s) => s.feature === 'review',

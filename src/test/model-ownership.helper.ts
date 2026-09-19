@@ -272,41 +272,86 @@ function returnExpressions(fn: ts.Node): ts.Expression[] {
   return out;
 }
 
-/** 멤버·선언이 만드는 객체: 메서드/getter/함수는 return 식, 프로퍼티는 초기값(화살표 함수면 그 본문). */
-function objectsOfDeclaration(
-  decl: ts.Node | undefined,
-  depth: number,
-): ts.ObjectLiteralExpression[] {
-  if (!decl) return [];
-  if (ts.isPropertyDeclaration(decl)) {
-    const init = decl.initializer;
-    if (!init) return [];
-    return ts.isArrowFunction(init) || ts.isFunctionExpression(init)
-      ? returnExpressions(init).flatMap((e) => resolveObjects(e, depth + 1))
-      : resolveObjects(init, depth + 1);
-  }
-  if (ts.isFunctionLike(decl))
-    return returnExpressions(decl).flatMap((e) => resolveObjects(e, depth + 1));
-  return [];
-}
-
 const NULLISH_OR = new Set([
   ts.SyntaxKind.QuestionQuestionToken,
   ts.SyntaxKind.BarBarToken,
 ]);
+const MAX_HOPS = 32;
+
+/** 헬퍼를 따라 들어갈 때의 문맥: 호출 인자로 묶인 파라미터와 재귀 깊이. */
+interface ResolveCtx {
+  hops: number;
+  bindings: ReadonlyMap<string, { expr: ts.Expression; ctx: ResolveCtx }>;
+}
+const ROOT_CTX: ResolveCtx = { hops: 0, bindings: new Map() };
+
+/** 헬퍼 본문에서 나온 객체 리터럴이 어떤 바인딩 아래 있었는지 — 그 안쪽을 다시 풀 때 파라미터를 잇기 위해. */
+const objectCtx = new WeakMap<ts.Node, ResolveCtx>();
+
+function ctxOf(node: ts.Node | undefined): ResolveCtx {
+  for (let cur = node; cur; cur = cur.parent) {
+    const ctx = objectCtx.get(cur);
+    if (ctx) return ctx;
+  }
+  return ROOT_CTX;
+}
+
+/** 호출 인자를 함수 파라미터 이름에 묶는다(구조 분해 파라미터는 묶지 않음, 빠진 인자는 기본값). */
+function bindParams(
+  fn: ts.SignatureDeclaration,
+  args: readonly ts.Expression[],
+  callerCtx: ResolveCtx,
+): ResolveCtx {
+  const bindings = new Map(callerCtx.bindings);
+  fn.parameters.forEach((param, i) => {
+    if (!ts.isIdentifier(param.name)) return;
+    const arg = args[i];
+    if (arg) bindings.set(param.name.text, { expr: arg, ctx: callerCtx });
+    else if (param.initializer)
+      bindings.set(param.name.text, {
+        expr: param.initializer,
+        ctx: { hops: callerCtx.hops + 1, bindings: new Map() },
+      });
+    else bindings.delete(param.name.text);
+  });
+  return { hops: callerCtx.hops + 1, bindings };
+}
+
+function callResults(
+  fn: ts.Node | undefined,
+  args: readonly ts.Expression[],
+  callerCtx: ResolveCtx,
+): ts.Expression[] {
+  if (!fn) return [];
+  const target =
+    ts.isPropertyDeclaration(fn) &&
+    fn.initializer &&
+    (ts.isArrowFunction(fn.initializer) ||
+      ts.isFunctionExpression(fn.initializer))
+      ? fn.initializer
+      : fn;
+  if (!ts.isFunctionLike(target)) return [];
+  const ctx = bindParams(target, args, callerCtx);
+  return returnExpressions(target).flatMap((e) => constituents(e, ctx));
+}
 
 /**
- * 식이 만들 수 있는 객체 리터럴 후보. 조건식·`??`·`||`는 양쪽 분기 모두, 배열은 원소 전부,
- * 상수·클래스 멤버·헬퍼 함수(`this.visibleWhere(id)`, `buildArgs()`, `xs.map((x) => ({...}))`)는 본문의 return 식까지 따라간다.
+ * 식이 실행 시 될 수 있는 값의 잎: 조건식·`??`·`||`는 양쪽, 배열은 원소 전부, 상수·클래스 멤버·헬퍼 함수
+ * (`this.visibleWhere(id)`, `buildArgs()`, `xs.map((x) => ({...}))`)는 본문 return 식까지, 호출 인자는 파라미터에 묶어 따라간다.
+ * 객체 리터럴로 풀리지 않는 잎(파라미터·외부 값)은 그대로 돌려줘 호출자가 opaque로 다루게 한다.
  */
-function resolveObjects(
+function constituents(
   expr: ts.Node | undefined,
-  depth = 0,
-): ts.ObjectLiteralExpression[] {
-  if (!expr || depth > 8) return [];
-  const next = (e: ts.Node | undefined): ts.ObjectLiteralExpression[] =>
-    resolveObjects(e, depth + 1);
-  if (ts.isObjectLiteralExpression(expr)) return [expr];
+  ctx: ResolveCtx,
+): ts.Expression[] {
+  if (!expr) return [];
+  if (ctx.hops > MAX_HOPS) return ts.isExpression(expr) ? [expr] : [];
+  const next = (e: ts.Node | undefined): ts.Expression[] =>
+    constituents(e, { ...ctx, hops: ctx.hops + 1 });
+  if (ts.isObjectLiteralExpression(expr)) {
+    if (ctx.bindings.size > 0) objectCtx.set(expr, ctx);
+    return [expr];
+  }
   if (ts.isArrayLiteralExpression(expr)) return expr.elements.flatMap(next);
   if (
     ts.isAsExpression(expr) ||
@@ -322,26 +367,56 @@ function resolveObjects(
   if (ts.isBinaryExpression(expr) && NULLISH_OR.has(expr.operatorToken.kind))
     return [...next(expr.left), ...next(expr.right)];
   if (ts.isIdentifier(expr)) {
+    const bound = ctx.bindings.get(expr.text);
+    if (bound)
+      return constituents(bound.expr, {
+        ...bound.ctx,
+        hops: ctx.hops + 1,
+      });
     const decl = findDeclaration(expr);
-    return decl && ts.isFunctionDeclaration(decl) ? [] : next(decl);
+    if (!decl || ts.isFunctionDeclaration(decl)) return [expr];
+    return constituents(decl, { hops: ctx.hops + 1, bindings: new Map() });
   }
-  if (ts.isPropertyAccessExpression(expr))
-    return objectsOfDeclaration(findClassMember(expr), depth);
+  if (ts.isPropertyAccessExpression(expr)) {
+    const member = findClassMember(expr);
+    if (member && ts.isPropertyDeclaration(member) && member.initializer)
+      return ts.isFunctionLike(member.initializer)
+        ? [expr]
+        : next(member.initializer);
+    if (member && ts.isGetAccessorDeclaration(member))
+      return callResults(member, [], ctx);
+    return [expr];
+  }
   if (ts.isCallExpression(expr)) {
     const callee = expr.expression;
     if (ts.isPropertyAccessExpression(callee)) {
       if (callee.name.text === 'map') {
         const fn = expr.arguments[0];
         return fn && ts.isFunctionLike(fn)
-          ? returnExpressions(fn).flatMap(next)
-          : [];
+          ? returnExpressions(fn).flatMap((e) =>
+              constituents(e, bindParams(fn, [], ctx)),
+            )
+          : [expr];
       }
-      return objectsOfDeclaration(findClassMember(callee), depth);
+      const results = callResults(findClassMember(callee), expr.arguments, ctx);
+      return findClassMember(callee) ? results : [expr];
     }
-    if (ts.isIdentifier(callee))
-      return objectsOfDeclaration(findDeclaration(callee), depth);
+    if (ts.isIdentifier(callee)) {
+      const decl = findDeclaration(callee);
+      return decl ? callResults(decl, expr.arguments, ctx) : [expr];
+    }
+    return [expr];
   }
-  return [];
+  if (ts.isFunctionLike(expr)) return [];
+  return ts.isExpression(expr) ? [expr] : [];
+}
+
+/** 식이 만들 수 있는 객체 리터럴 후보. 문맥을 안 주면 가장 가까운 헬퍼 바인딩(있으면)을 잇는다. */
+function resolveObjects(
+  expr: ts.Node | undefined,
+  ctx: ResolveCtx = ctxOf(expr),
+): ts.ObjectLiteralExpression[] {
+  return constituents(expr, ctx).filter(ts.isObjectLiteralExpression);
 }
 
 function objectValues(
@@ -605,8 +680,8 @@ function isScalarLike(expr: ts.Expression): boolean {
 }
 
 /**
- * 구조 키(where/include/select/data/...)·relation 키 자리와 spread에 놓인 식이 객체 리터럴로 풀리지 않으면 opaque로 기록한다.
- * 파라미터 pass-through(`data: args.data`)처럼 검사기가 볼 수 없는 자리를 허용 목록으로 고정해, 새 불투명 자리가 생기면 실패하게 한다.
+ * 구조 키(where/include/select/data/...)·relation 키 자리와 spread에 놓인 식의 잎이 객체 리터럴로 풀리지 않으면 opaque로 기록한다.
+ * 파라미터 pass-through(`data: args.data`, `args.where ?? 기본값`의 왼쪽)처럼 검사기가 볼 수 없는 자리를 허용 목록으로 고정해, 새 불투명 자리가 생기면 실패하게 한다.
  */
 function collectOpaque(
   expr: ts.Expression,
@@ -616,19 +691,17 @@ function collectOpaque(
   out: Set<string>,
   method: string,
 ): void {
-  const objects = resolveObjects(expr);
-  if (objects.length === 0) {
-    if (!isScalarLike(expr)) {
-      const text = expr
-        .getText(expr.getSourceFile())
+  for (const leaf of constituents(expr, ctxOf(expr))) {
+    if (!ts.isObjectLiteralExpression(leaf)) {
+      if (isScalarLike(leaf)) continue;
+      const text = leaf
+        .getText(leaf.getSourceFile())
         .replace(/\s+/g, ' ')
         .slice(0, 60);
       out.add(`opaque:${method}:${path}=${text}`);
+      continue;
     }
-    return;
-  }
-  for (const obj of objects) {
-    for (const prop of obj.properties) {
+    for (const prop of leaf.properties) {
       if (ts.isSpreadAssignment(prop)) {
         collectOpaque(prop.expression, model, path, schema, out, method);
         continue;
