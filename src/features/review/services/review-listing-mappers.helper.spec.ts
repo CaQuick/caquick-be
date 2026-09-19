@@ -23,7 +23,7 @@ function storeRow(o: Partial<StoreReviewRow> = {}): StoreReviewRow {
     content: '맛있어요',
     created_at: new Date('2026-01-01T00:00:00.000Z'),
     account: { user_profile: { nickname: '구매자1', deleted_at: null } },
-    order_item: { product_name_snapshot: '레터링 케이크' },
+    product_name_snapshot: '레터링 케이크',
     media: [MEDIA],
     ...o,
   };
@@ -42,11 +42,7 @@ function productRow(o: Partial<ProductReviewRow> = {}): ProductReviewRow {
         deleted_at: null,
       },
     },
-    order_item: {
-      option_items: [
-        { group_name_snapshot: '모양', option_title_snapshot: '동그라미' },
-      ],
-    },
+    option_summary: [{ groupName: '모양', optionTitle: '동그라미' }],
     media: [MEDIA],
     ...o,
   };

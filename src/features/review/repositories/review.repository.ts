@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE } from '@/features/review/constants/review.constants';
 import { resolvePendingReports } from '@/features/review/repositories/review-lock.helper';
+import { snapshotReviewOrderItem } from '@/features/review/repositories/review-order-item-snapshot.helper';
 import type { ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
@@ -55,6 +56,8 @@ export class ReviewRepository {
   }) {
     return this.prisma.$transaction(async (tx) => {
       let reviewId: bigint;
+      // 작성 시점 주문 품목 스냅샷 — 복원(재작성)도 같은 품목이라 다시 찍는다
+      const snapshot = await snapshotReviewOrderItem(tx, args.orderItemId);
 
       if (args.existingDeletedReviewId) {
         // 같은 id가 새 내용으로 복원되므로, 옛 내용을 겨냥한 미처리 신고가 남아 있으면 닫는다
@@ -76,6 +79,7 @@ export class ReviewRepository {
             rating: args.rating,
             content: args.content,
             deleted_at: null,
+            ...snapshot,
           },
         });
         reviewId = restored.id;
@@ -93,6 +97,7 @@ export class ReviewRepository {
             product_id: args.productId,
             rating: args.rating,
             content: args.content,
+            ...snapshot,
           },
         });
         reviewId = review.id;

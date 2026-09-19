@@ -1,3 +1,4 @@
+import { snapshotReviewOrderItem } from '@/features/review/repositories/review-order-item-snapshot.helper';
 import { ReviewReadRepository } from '@/features/review/repositories/review-read.repository';
 import { ReviewListingService } from '@/features/review/services/review-listing.service';
 import type {
@@ -366,6 +367,11 @@ describe('ReviewListingService (real DB)', () => {
           group_name_snapshot: '모양',
           option_title_snapshot: '(기본) 동그라미',
         },
+      });
+      // 옵션은 작성 시점 스냅샷(07b) — 옵션을 만든 뒤 작성 경로와 같은 규칙으로 다시 찍는다
+      await prisma.review.update({
+        where: { id: review.id },
+        data: await snapshotReviewOrderItem(prisma, review.order_item_id),
       });
       const commenter = await createAccount(prisma, { account_type: 'USER' });
       await prisma.reviewComment.create({

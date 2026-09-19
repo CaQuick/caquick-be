@@ -2,12 +2,13 @@
  * 시드 리뷰. user1이 o4의 OrderItem에 작성한 1건.
  * IMAGE 1건 + VIDEO 1건 첨부.
  */
-import type { PrismaClient } from '@/generated/prisma/client';
-import { Prisma } from '@/generated/prisma/client';
 
 import type { SeededOrders } from './orders';
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
+
+import { Prisma } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 export async function seedReviews(
   prisma: PrismaClient,
@@ -25,6 +26,8 @@ export async function seedReviews(
       account_id: user1.id,
       store_id: storeA.id,
       product_id: p1.id,
+      // 작성 시점 주문 품목 스냅샷(07b) — 시드 주문 품목의 상품명·옵션과 같게
+      product_name_snapshot: p1.name,
       rating: new Prisma.Decimal('4.5'),
       content:
         '레터링이 정말 예쁘게 나왔어요. 케이크 맛도 좋고 다음에 또 주문할게요!',
