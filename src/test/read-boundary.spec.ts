@@ -189,6 +189,9 @@ describe('서비스 경계를 넘는 read', () => {
           '  async i() {',
           '    return this.prisma.review.count({ where: this.scoped({ order_item: { product: { is_active: true } } }) });',
           '  }',
+          '  async j() {',
+          '    return this.prisma.review.findMany({ include: { _count: true } });',
+          '  }',
           '  async g(args: any) {',
           '    return this.prisma.review.findMany(args);',
           '  }',
@@ -201,7 +204,7 @@ describe('서비스 경계를 넘는 read', () => {
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('상수·클래스 멤버·헬퍼 함수(파라미터 전달 포함)·import·??·map으로 만든 include/where와 raw JOIN을 잡고, 같은 서비스 안의 relation은 무시하며, 못 푸는 잎(??의 왼쪽·파라미터)은 opaque로 남긴다', () => {
+    it('상수·클래스 멤버·헬퍼 함수(파라미터 전달 포함)·import·??·map으로 만든 include/where·`_count: true`와 raw JOIN을 잡고, 같은 서비스 안의 relation은 무시하며, 못 푸는 잎(??의 왼쪽·파라미터)은 opaque로 남긴다', () => {
       expect(keysOf(dir)).toEqual([
         'review/probe.repository.ts|filter|Review.account->Account',
         'review/probe.repository.ts|filter|Review.account.user_profile->UserProfile',
@@ -212,6 +215,7 @@ describe('서비스 경계를 넘는 read', () => {
         'review/probe.repository.ts|filter|Review.product.store->Store',
         'review/probe.repository.ts|filter|Review.store->Store',
         'review/probe.repository.ts|filter|Review.store.region->Region',
+        'review/probe.repository.ts|nested|Review._count.notifications->Notification',
         'review/probe.repository.ts|nested|Review.account->Account',
         'review/probe.repository.ts|nested|Review.account.user_profile->UserProfile',
         'review/probe.repository.ts|nested|Review.order_item->OrderItem',

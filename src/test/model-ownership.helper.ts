@@ -21,6 +21,8 @@ const WRITE_METHODS = new Set([
   'deleteMany',
 ]);
 const NESTED_WRITE_KEYS = new Set([...WRITE_METHODS, 'connectOrCreate']);
+/** relation 재연결 — FK 컬럼을 상대 모델이 가지면(inverse 측) 상대 row를 고치는 write다. */
+const RELINK_KEYS = new Set(['connect', 'disconnect', 'set']);
 const RECEIVERS = new Set(['tx', 'prisma', 'db', 'client']);
 
 export interface SchemaInfo {
@@ -28,6 +30,11 @@ export interface SchemaInfo {
   tableOf: Record<string, string>;
   /** model → relation field → target model */
   relations: Record<string, Record<string, string>>;
+  /** model → relation field → { list: `[]` 관계, fkOwner: 이 모델이 FK 컬럼을 가짐(`@relation(fields: ...)`) } */
+  relationMeta: Record<
+    string,
+    Record<string, { list: boolean; fkOwner: boolean }>
+  >;
 }
 
 export function loadSchema(): SchemaInfo {
@@ -37,15 +44,22 @@ export function loadSchema(): SchemaInfo {
   const modelSet = new Set(models);
   const tableOf: Record<string, string> = {};
   const relations: Record<string, Record<string, string>> = {};
+  const relationMeta: SchemaInfo['relationMeta'] = {};
   for (const [, name, body] of blocks) {
     tableOf[name] = /@@map\("(\w+)"\)/.exec(body)?.[1] ?? name;
     relations[name] = {};
+    relationMeta[name] = {};
     for (const line of body.split('\n')) {
       const field = /^\s+(\w+)\s+(\w+)(\[\])?\??(\s|$)/.exec(line);
-      if (field && modelSet.has(field[2])) relations[name][field[1]] = field[2];
+      if (!field || !modelSet.has(field[2])) continue;
+      relations[name][field[1]] = field[2];
+      relationMeta[name][field[1]] = {
+        list: field[3] === '[]',
+        fkOwner: /@relation\([^)]*fields:/.test(line),
+      };
     }
   }
-  return { models, tableOf, relations };
+  return { models, tableOf, relations, relationMeta };
 }
 
 export function accessorToModel(accessor: string): string {
@@ -366,6 +380,12 @@ function constituents(
     return [...next(expr.whenTrue), ...next(expr.whenFalse)];
   if (ts.isBinaryExpression(expr) && NULLISH_OR.has(expr.operatorToken.kind))
     return [...next(expr.left), ...next(expr.right)];
+  // `flag && {...}` — 객체가 되는 쪽은 오른쪽뿐
+  if (
+    ts.isBinaryExpression(expr) &&
+    expr.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+  )
+    return next(expr.right);
   if (ts.isIdentifier(expr)) {
     const bound = ctx.bindings.get(expr.text);
     if (bound)
@@ -466,7 +486,18 @@ function collectNestedWrites(
       }
       for (const inner of propertiesOf(value)) {
         const innerName = propName(inner);
-        if (!innerName || !NESTED_WRITE_KEYS.has(innerName)) continue;
+        if (!innerName) continue;
+        if (RELINK_KEYS.has(innerName)) {
+          if (!schema.relationMeta[model]?.[name]?.fkOwner)
+            out.push({
+              model: target,
+              method: `nested ${innerName}`,
+              line: lineOf(inner),
+              nested: true,
+            });
+          continue;
+        }
+        if (!NESTED_WRITE_KEYS.has(innerName)) continue;
         out.push({
           model: target,
           method: `nested ${innerName}`,
@@ -582,6 +613,26 @@ function collectWhereReads(
   }
 }
 
+/** `_count: true`는 모든 list relation, `_count: { select: {...} }`는 고른 relation만 센다. */
+function countedRelations(
+  count: ts.ObjectLiteralElementLike,
+  model: string,
+  schema: SchemaInfo,
+): string[] {
+  const init = ts.isPropertyAssignment(count) ? count.initializer : undefined;
+  if (init?.kind === ts.SyntaxKind.TrueKeyword)
+    return Object.entries(schema.relationMeta[model] ?? {})
+      .filter(([, meta]) => meta.list)
+      .map(([rel]) => rel);
+  return objectValues(count)
+    .flatMap((countObj) =>
+      propertiesOf(countObj).filter((p) => propName(p) === 'select'),
+    )
+    .flatMap((sel) => objectValues(sel))
+    .flatMap((selObj) => propertiesOf(selObj).map(propName))
+    .filter((rel): rel is string => rel !== null);
+}
+
 /** 쿼리 객체를 relation을 따라 내려가며 다른 서비스 모델로 나가는 include/select/_count/orderBy(nested)와 where(filter)를 모은다. */
 function collectCrossReads(
   obj: ts.ObjectLiteralExpression,
@@ -611,21 +662,10 @@ function collectCrossReads(
           const rel = propName(inner);
           if (!rel) continue;
           if (rel === '_count') {
-            for (const countObj of objectValues(inner)) {
-              const sel = propertiesOf(countObj).find(
-                (p) => propName(p) === 'select',
-              );
-              for (const selObj of sel ? objectValues(sel) : []) {
-                for (const c of propertiesOf(selObj)) {
-                  const cRel = propName(c);
-                  const cTarget = cRel
-                    ? schema.relations[model]?.[cRel]
-                    : undefined;
-                  if (cTarget && serviceOfModel(cTarget) !== rootService) {
-                    out.add(`nested:${path}._count.${cRel}->${cTarget}`);
-                  }
-                }
-              }
+            for (const cRel of countedRelations(inner, model, schema)) {
+              const cTarget = schema.relations[model]?.[cRel];
+              if (cTarget && serviceOfModel(cTarget) !== rootService)
+                out.add(`nested:${path}._count.${cRel}->${cTarget}`);
             }
             continue;
           }

@@ -142,7 +142,7 @@ describe('모델 소유권 (단일 writer)', () => {
       dir = mkdtempSync(join(tmpdir(), 'ownership-'));
       mkdirSync(join(dir, 'product'), { recursive: true });
       mkdirSync(join(dir, 'review'), { recursive: true });
-      // 허용 밖 feature의 직접 write + relation 아래 nested create(객체·배열) + 상수/헬퍼(this 메서드·로컬 함수)로 넘긴 인자
+      // 허용 밖 feature의 직접 write + relation 아래 nested create(객체·배열·&& 스프레드)·inverse 측 connect + 상수/헬퍼(this 메서드·로컬 함수·파라미터 전달)로 넘긴 인자
       writeFileSync(
         join(dir, 'product', 'bad.repository.ts'),
         [
@@ -153,12 +153,14 @@ describe('모델 소유권 (단일 writer)', () => {
           'export class Bad {',
           '  constructor(private readonly prisma: any) {}',
           '  private buildArgs() { return { data: { media: { create: [] } } }; }',
-          '  f(tx: any, prisma: any) {',
+          '  f(tx: any, prisma: any, flag: boolean) {',
           '    tx.review.create({ data: payload });',
           '    tx.review.create(createArgs);',
           '    tx.review.create(this.buildArgs());',
           '    tx.review.create(payloadOf());',
           '    tx.review.create(wrap({ data: { media: { create: [] } } }));',
+          '    tx.orderItem.update({ where: { id: 1n }, data: { review: { connect: { id: 1n } } } });',
+          '    prisma.order.update({ where: { id: 1n }, data: { ...(flag && { status_histories: { create: {} } }) } });',
           '    prisma.order.update({ where: { id: 1n }, data: { status_histories: { create: {} } } });',
           '    prisma.order.update({ where: { id: 1n }, data: { items: { create: [{ review: { create: {} } }] } } });',
           '    this.prisma.product.update({ where: { id: 1n }, data: {} });',
@@ -168,24 +170,34 @@ describe('모델 소유권 (단일 writer)', () => {
       );
       writeFileSync(
         join(dir, 'review', 'ok.repository.ts'),
-        'export function g(tx: any) { tx.review.create({ data: { media: { create: [] } } }); }',
+        [
+          'export function g(tx: any) {',
+          '  tx.review.create({ data: { media: { create: [] } } });',
+          '  // FK(order_item_id)가 Review 쪽이라 connect는 Review 자신의 write — OrderItem write로 세지 않는다',
+          '  tx.review.update({ where: { id: 1n }, data: { order_item: { connect: { id: 1n } } } });',
+          '}',
+        ].join('\n'),
       );
     });
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-    it('허용 밖 feature의 직접·nested(객체·배열)·상수·헬퍼(파라미터 전달 포함) 인자 write를 모두 잡고, 소유 feature의 write는 통과시킨다', () => {
+    it('허용 밖 feature의 직접·nested(객체·배열·&&)·inverse 측 connect·상수·헬퍼(파라미터 전달 포함) 인자 write를 모두 잡고, 소유 feature의 write와 FK 보유 측 connect는 통과시킨다', () => {
       const found = groupViolations(collectWriteSites(schema, dir), dir);
       expect(found).toEqual([
-        ['product/bad.repository.ts', 'Order', 2],
-        ['product/bad.repository.ts', 'OrderItem', 1],
-        ['product/bad.repository.ts', 'OrderStatusHistory', 1],
-        ['product/bad.repository.ts', 'Review', 6],
+        ['product/bad.repository.ts', 'Order', 3],
+        ['product/bad.repository.ts', 'OrderItem', 2],
+        ['product/bad.repository.ts', 'OrderStatusHistory', 2],
+        ['product/bad.repository.ts', 'Review', 7],
         ['product/bad.repository.ts', 'ReviewMedia', 5],
       ]);
       const ok = collectWriteSites(schema, dir).filter(
         (s) => s.feature === 'review',
       );
-      expect(ok.map((s) => s.model).sort()).toEqual(['Review', 'ReviewMedia']);
+      expect(ok.map((s) => s.model).sort()).toEqual([
+        'Review',
+        'Review',
+        'ReviewMedia',
+      ]);
       expect(ok.every(isAllowedWriter)).toBe(true);
     });
   });
