@@ -1,7 +1,16 @@
 import { Module } from '@nestjs/common';
 
 import { AuditLogModule } from '@/features/audit-log';
+import { AuthModule } from '@/features/auth';
+import { ProductAdminRepository } from '@/features/product/repositories/product-admin.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { AdminContentMutationResolver } from '@/features/product/resolvers/product-admin-banner-mutation.resolver';
+import { AdminContentQueryResolver } from '@/features/product/resolvers/product-admin-banner-query.resolver';
+import { AdminProductMutationResolver } from '@/features/product/resolvers/product-admin-mutation.resolver';
+import { AdminProductQueryResolver } from '@/features/product/resolvers/product-admin-query.resolver';
+import { AdminTaxonomyMutationResolver } from '@/features/product/resolvers/product-admin-taxonomy-mutation.resolver';
+import { AdminTaxonomyQueryResolver } from '@/features/product/resolvers/product-admin-taxonomy-query.resolver';
+import { AdminUploadMutationResolver } from '@/features/product/resolvers/product-admin-upload-mutation.resolver';
 import { ProductCategoryQueryResolver } from '@/features/product/resolvers/product-category-query.resolver';
 import { ProductDetailQueryResolver } from '@/features/product/resolvers/product-detail-query.resolver';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
@@ -11,6 +20,10 @@ import { SellerProductMutationResolver } from '@/features/product/resolvers/prod
 import { SellerProductQueryResolver } from '@/features/product/resolvers/product-seller-query.resolver';
 import { SellerUploadMutationResolver } from '@/features/product/resolvers/product-seller-upload-mutation.resolver';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
+import { AdminBannerService } from '@/features/product/services/product-admin-banner.service';
+import { AdminTaxonomyService } from '@/features/product/services/product-admin-taxonomy.service';
+import { AdminUploadService } from '@/features/product/services/product-admin-upload.service';
+import { AdminProductService } from '@/features/product/services/product-admin.service';
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
@@ -30,7 +43,7 @@ import { ReviewModule } from '@/features/review';
 import { StoreModule } from '@/features/store';
 
 @Module({
-  imports: [ReviewModule, StoreModule, AuditLogModule],
+  imports: [ReviewModule, StoreModule, AuditLogModule, AuthModule],
   providers: [
     ProductRepository,
     ProductCardService,
@@ -58,6 +71,19 @@ import { StoreModule } from '@/features/store';
     SellerProductQueryResolver,
     SellerProductMutationResolver,
     SellerUploadMutationResolver,
+    // 관리자 상품 관리(상품 노출·카테고리·태그·배너·업로드 URL) — 상품 도메인이 소유한다
+    ProductAdminRepository,
+    AdminProductService,
+    AdminTaxonomyService,
+    AdminBannerService,
+    AdminUploadService,
+    AdminProductQueryResolver,
+    AdminProductMutationResolver,
+    AdminTaxonomyQueryResolver,
+    AdminTaxonomyMutationResolver,
+    AdminContentQueryResolver,
+    AdminContentMutationResolver,
+    AdminUploadMutationResolver,
   ],
   // ProductBestSellerService·ProductSearchService는 검색 화면(search feature)이 소비한다
   exports: [

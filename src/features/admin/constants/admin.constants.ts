@@ -1,34 +1,5 @@
 import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 
-// ── 배너 ──
-
-export const MAX_URL_LENGTH = 2048;
-export const MAX_BANNER_TITLE_LENGTH = 200;
-export const BANNER_PLACEMENTS = [
-  'HOME_MAIN',
-  'HOME_SUB',
-  'CATEGORY',
-  'STORE',
-  'SEARCH',
-] as const;
-export type BannerPlacementValue = (typeof BANNER_PLACEMENTS)[number];
-export const BANNER_LINK_TYPES = [
-  'NONE',
-  'URL',
-  'PRODUCT',
-  'STORE',
-  'CATEGORY',
-] as const;
-export type BannerLinkTypeValue = (typeof BANNER_LINK_TYPES)[number];
-
-// ── 카테고리·태그 마스터 ──
-
-export const CATEGORY_TYPES = ['EVENT', 'STYLE', 'OTHER'] as const;
-export type CategoryTypeValue = (typeof CATEGORY_TYPES)[number];
-export const MAX_CATEGORY_NAME_LENGTH = 100;
-export const MAX_CATEGORY_DESCRIPTION_LENGTH = 255;
-export const MAX_TAG_NAME_LENGTH = 80;
-
 // ── 리뷰 모더레이션 ──
 
 export const REVIEW_REPORT_STATUSES = [
@@ -75,13 +46,6 @@ export const MAX_NOTIFICATION_BODY_LENGTH = 2000;
 export const MAX_NOTIFICATION_ACCOUNT_IDS = 500;
 /** 전체 발송 fan-out 청크. 청크 단위 createMany이고 청크 사이 트랜잭션은 없다. */
 export const NOTIFICATION_FANOUT_BATCH_SIZE = 1000;
-
-// ── 지역 마스터 ──
-
-export const MAX_REGION_NAME_LENGTH = 80;
-export const MAX_REGION_SLUG_LENGTH = 120;
-/** 정책: 소문자·숫자·`-`만(기존 시드 slug 'sgg-11440' 형식과 호환). */
-export const REGION_SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 // ── 감사 로그 ──
 

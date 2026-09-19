@@ -454,47 +454,94 @@ export class ProductRepository {
     });
   }
 
+  /**
+   * 연결 교체는 soft-delete로 통일한다(관리자 카테고리 삭제 경로와 같은 방식) — 빠진 연결은 deleted_at을 찍고,
+   * 같은 (product, category)의 삭제 행이 있으면 복원한다(unique 인덱스가 삭제 행도 세므로 새로 만들 수 없다).
+   */
   async replaceProductCategories(args: {
     productId: bigint;
     categoryIds: bigint[];
   }): Promise<void> {
+    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.productCategory.deleteMany({
+      await tx.productCategory.updateMany({
         where: {
           product_id: args.productId,
+          category_id: { notIn: args.categoryIds },
+          ...activeWhere,
         },
+        data: { deleted_at: now },
       });
-
-      if (args.categoryIds.length > 0) {
+      if (args.categoryIds.length === 0) return;
+      await tx.productCategory.updateMany({
+        where: {
+          product_id: args.productId,
+          category_id: { in: args.categoryIds },
+          deleted_at: { not: null },
+        },
+        data: { deleted_at: null },
+      });
+      const existing = await tx.productCategory.findMany({
+        where: {
+          product_id: args.productId,
+          category_id: { in: args.categoryIds },
+          ...activeWhere,
+        },
+        select: { category_id: true },
+      });
+      const present = new Set(existing.map((row) => row.category_id));
+      const missing = args.categoryIds.filter((id) => !present.has(id));
+      if (missing.length > 0) {
         await tx.productCategory.createMany({
-          data: args.categoryIds.map((categoryId) => ({
+          data: missing.map((categoryId) => ({
             product_id: args.productId,
             category_id: categoryId,
           })),
-          skipDuplicates: true,
         });
       }
     });
   }
 
+  /** replaceProductCategories와 같은 soft-delete + 복원 방식. */
   async replaceProductTags(args: {
     productId: bigint;
     tagIds: bigint[];
   }): Promise<void> {
+    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await tx.productTag.deleteMany({
+      await tx.productTag.updateMany({
         where: {
           product_id: args.productId,
+          tag_id: { notIn: args.tagIds },
+          ...activeWhere,
         },
+        data: { deleted_at: now },
       });
-
-      if (args.tagIds.length > 0) {
+      if (args.tagIds.length === 0) return;
+      await tx.productTag.updateMany({
+        where: {
+          product_id: args.productId,
+          tag_id: { in: args.tagIds },
+          deleted_at: { not: null },
+        },
+        data: { deleted_at: null },
+      });
+      const existing = await tx.productTag.findMany({
+        where: {
+          product_id: args.productId,
+          tag_id: { in: args.tagIds },
+          ...activeWhere,
+        },
+        select: { tag_id: true },
+      });
+      const present = new Set(existing.map((row) => row.tag_id));
+      const missing = args.tagIds.filter((id) => !present.has(id));
+      if (missing.length > 0) {
         await tx.productTag.createMany({
-          data: args.tagIds.map((tagId) => ({
+          data: missing.map((tagId) => ({
             product_id: args.productId,
             tag_id: tagId,
           })),
-          skipDuplicates: true,
         });
       }
     });

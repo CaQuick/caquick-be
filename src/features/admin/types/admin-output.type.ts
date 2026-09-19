@@ -2,97 +2,15 @@ import type {
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order';
-import type { StoreOutput } from '@/features/store';
 import type {
   AccountStatus,
   AccountType,
   AuditActionType,
   AuditTargetType,
-  BannerLinkType,
-  BannerPlacement,
-  CategoryType,
   OrderStatus,
   ReviewReportReason,
   ReviewReportStatus,
 } from '@/generated/prisma/client';
-
-export interface AdminBannerOutput {
-  id: string;
-  placement: BannerPlacement;
-  title: string | null;
-  imageUrl: string;
-  linkType: BannerLinkType;
-  linkUrl: string | null;
-  linkProductId: string | null;
-  linkStoreId: string | null;
-  linkCategoryId: string | null;
-  startsAt: Date | null;
-  endsAt: Date | null;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export type AdminStoreOutput = StoreOutput;
-
-export interface AdminStoreDetailOutput {
-  store: AdminStoreOutput;
-  seller: {
-    accountId: string;
-    username: string | null;
-    email: string | null;
-    name: string | null;
-    status: AccountStatus;
-  };
-  productCount: number;
-  orderItemCount: number;
-}
-
-export interface AdminProductOutput {
-  id: string;
-  storeId: string;
-  storeName: string;
-  name: string;
-  regularPrice: number;
-  salePrice: number | null;
-  currency: string;
-  baseDesignImageUrl: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AdminProductDetailOutput {
-  product: AdminProductOutput;
-  storeIsActive: boolean;
-  description: string | null;
-  purchaseNotice: string | null;
-  preparationTimeMinutes: number;
-  imageUrls: string[];
-  reviewCount: number;
-  orderItemCount: number;
-}
-
-export interface AdminCategoryOutput {
-  id: string;
-  categoryType: CategoryType;
-  name: string;
-  description: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  productCount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AdminTagOutput {
-  id: string;
-  name: string;
-  productCount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export interface AdminReviewReportOutput {
   id: string;
@@ -190,22 +108,6 @@ export interface AdminOrderDetailOutput {
 export interface AdminSendNotificationResultOutput {
   sentCount: number;
   skippedAccountIds: string[];
-}
-
-export interface AdminRegionOutput {
-  id: string;
-  parentId: string | null;
-  level: number;
-  name: string;
-  slug: string;
-  sortOrder: number;
-  isActive: boolean;
-  centerLat: string | null;
-  centerLng: string | null;
-  storeCount: number;
-  childCount: number;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface AdminAuditLogOutput {
