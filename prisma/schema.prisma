@@ -1037,6 +1037,11 @@ model Notification {
   order_item_id BigInt? @db.UnsignedBigInt
   review_id     BigInt? @db.UnsignedBigInt
 
+  // 알림센터 표시값 스냅샷(생성 시점). 조회가 store·product·order를 조인하지 않게 한다 — 이름이 바뀌어도 알림 문맥은 그대로.
+  store_name   String? @db.VarChar(200)
+  product_name String? @db.VarChar(200)
+  order_number String? @db.VarChar(30)
+
   read_at DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
