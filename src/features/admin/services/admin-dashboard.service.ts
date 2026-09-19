@@ -7,7 +7,6 @@ import { MAX_DASHBOARD_RANGE_DAYS } from '@/features/admin/constants/admin.const
 import type { AdminDashboardSummaryInput } from '@/features/admin/dto/inputs/admin-dashboard-summary.input';
 import type { AdminSearchKeywordSnapshotInput } from '@/features/admin/dto/inputs/admin-search-keyword-snapshot.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import type {
   AdminDashboardSummaryOutput,
   AdminSearchKeywordSnapshotOutput,
@@ -16,18 +15,20 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import { SearchRepository } from '@/features/search';
 
 /** 요청 시 계산하며 스냅샷 테이블은 두지 않는다(운영 규모가 작고 기간 상한이 있다). 기간은 UTC created_at 기준 — KST 경계 환산은 클라이언트 몫. */
 @Injectable()
 export class AdminDashboardService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
     private readonly searchRepository: SearchRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminDashboardSummary(

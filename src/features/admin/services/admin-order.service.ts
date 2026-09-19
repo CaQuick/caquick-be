@@ -16,7 +16,6 @@ import {
 import type { AdminCancelOrderInput } from '@/features/admin/dto/inputs/admin-cancel-order.input';
 import type { AdminOrderListInput } from '@/features/admin/dto/inputs/admin-order-list.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import {
   toAdminOrderDetailOutput,
   toAdminOrderSummaryOutput,
@@ -29,6 +28,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import { OrderRepository, OrderStatusTransitionPolicy } from '@/features/order';
 import { OrderStatus } from '@/generated/prisma/client';
 
@@ -36,13 +36,14 @@ import { OrderStatus } from '@/generated/prisma/client';
 @Injectable()
 export class AdminOrderService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
     private readonly orderRepository: OrderRepository,
     private readonly statusPolicy: OrderStatusTransitionPolicy,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminOrders(

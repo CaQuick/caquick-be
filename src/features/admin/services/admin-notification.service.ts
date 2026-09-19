@@ -10,23 +10,24 @@ import {
 } from '@/features/admin/constants/admin.constants';
 import type { AdminSendNotificationInput } from '@/features/admin/dto/inputs/admin-send-notification.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import type { AdminSendNotificationResultOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /** ALL_USERS는 키셋으로 활성 USER를 훑어 청크 단위 createMany — 청크 사이 트랜잭션은 없다(부분 실패 시 sentCount까지 저장된 상태, 재실행은 중복). 멱등 키·배치 잡은 범위 밖. */
 @Injectable()
 export class AdminNotificationService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminSendNotification(

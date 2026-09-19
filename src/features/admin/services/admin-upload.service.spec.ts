@@ -3,6 +3,7 @@ import { AdminUploadMutationResolver } from '@/features/admin/resolvers/admin-up
 import { AdminUploadService } from '@/features/admin/services/admin-upload.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -27,6 +28,7 @@ describe('AdminUploadService (real DB)', () => {
         AdminUploadService,
         AdminUploadMutationResolver,
         AdminRepository,
+        AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });

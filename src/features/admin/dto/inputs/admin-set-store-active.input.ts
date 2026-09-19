@@ -1,6 +1,6 @@
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
-import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 
 export class AdminSetStoreActiveInput {
   @IsString()

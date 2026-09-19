@@ -6,6 +6,7 @@ import { AdminModerationQueryResolver } from '@/features/admin/resolvers/admin-m
 import { AdminModerationService } from '@/features/admin/services/admin-moderation.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -24,6 +25,7 @@ describe('Admin Moderation Resolvers (real DB)', () => {
         AdminModerationMutationResolver,
         AdminModerationService,
         AdminRepository,
+        AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });

@@ -24,7 +24,6 @@ import type { AdminTagListInput } from '@/features/admin/dto/inputs/admin-tag-li
 import type { AdminUpdateCategoryInput } from '@/features/admin/dto/inputs/admin-update-category.input';
 import type { AdminUpdateTagInput } from '@/features/admin/dto/inputs/admin-update-tag.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import {
   toAdminCategoryOutput,
   toAdminTagOutput,
@@ -37,6 +36,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import {
   AuditActionType,
   AuditTargetType,
@@ -47,11 +47,12 @@ import {
 @Injectable()
 export class AdminTaxonomyService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   // ── 카테고리 ──

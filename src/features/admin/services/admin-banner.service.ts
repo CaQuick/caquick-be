@@ -21,13 +21,13 @@ import type { AdminBannerListInput } from '@/features/admin/dto/inputs/admin-ban
 import type { AdminCreateBannerInput } from '@/features/admin/dto/inputs/admin-create-banner.input';
 import type { AdminUpdateBannerInput } from '@/features/admin/dto/inputs/admin-update-banner.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import { toAdminBannerOutput } from '@/features/admin/services/admin-content-mappers.helper';
 import type { AdminBannerOutput } from '@/features/admin/types/admin-output.type';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import {
   AuditActionType,
   AuditTargetType,
@@ -60,12 +60,13 @@ interface BannerExposure extends BannerLinkValues {
 @Injectable()
 export class AdminBannerService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
     private readonly s3: S3Service,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminBanners(

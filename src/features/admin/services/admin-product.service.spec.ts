@@ -2,6 +2,7 @@ import { AdminRepository } from '@/features/admin/repositories/admin.repository'
 import { AdminProductService } from '@/features/admin/services/admin-product.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -23,6 +24,7 @@ describe('AdminProductService (real DB)', () => {
       providers: [
         AdminProductService,
         AdminRepository,
+        AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });

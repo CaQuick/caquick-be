@@ -13,23 +13,12 @@ import {
 } from '@/test/model-ownership.helper';
 
 // 모델별 단일 writer(D1 서비스 경계)를 코드로 강제한다. 판정은 write 호출이 놓인 feature 파일 기준(P1-2).
-// 아래 예외 목록은 P1 진행 중 실측(시작 92 → 현재 55 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
+// 아래 예외 목록은 P1 진행 중 실측(시작 92 → 현재 45 사이트)이며, 항목이 옮겨질 때마다 줄을 지운다 — 늘어나면 실패한다.
 
 const schema = loadSchema();
 
 /** [파일, 모델, 사이트 수] — 소유 feature 밖에서 write하는 현재 코드. P1 종료 시 빈 표가 목표. */
 const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
-  ['src/features/admin/repositories/admin.repository.ts', 'Account', 3],
-  [
-    'src/features/admin/repositories/admin.repository.ts',
-    'AccountCredential',
-    3,
-  ],
-  [
-    'src/features/admin/repositories/admin.repository.ts',
-    'AuthRefreshSession',
-    2,
-  ],
   ['src/features/admin/repositories/admin.repository.ts', 'Banner', 3],
   ['src/features/admin/repositories/admin.repository.ts', 'Category', 4],
   ['src/features/admin/repositories/admin.repository.ts', 'Notification', 1],
@@ -41,8 +30,7 @@ const WRITE_EXCEPTIONS: Array<[file: string, model: string, sites: number]> = [
   ['src/features/admin/repositories/admin.repository.ts', 'ReviewComment', 2],
   ['src/features/admin/repositories/admin.repository.ts', 'ReviewMedia', 1],
   ['src/features/admin/repositories/admin.repository.ts', 'ReviewReport', 2],
-  ['src/features/admin/repositories/admin.repository.ts', 'SellerProfile', 1],
-  ['src/features/admin/repositories/admin.repository.ts', 'Store', 3],
+  ['src/features/admin/repositories/admin.repository.ts', 'Store', 2],
   ['src/features/admin/repositories/admin.repository.ts', 'Tag', 4],
   ['src/features/order/repositories/order.repository.ts', 'AuditLog', 2],
   ['src/features/order/repositories/order.repository.ts', 'Notification', 2],
@@ -98,7 +86,7 @@ describe('모델 소유권 (단일 writer)', () => {
   it('소유 feature 밖 write는 예외 목록과 정확히 일치한다', () => {
     const found = groupViolations(collectWriteSites(schema));
     expect(found).toEqual(WRITE_EXCEPTIONS);
-    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(55);
+    expect(found.reduce((sum, [, , n]) => sum + n, 0)).toBe(45);
   });
 
   describe('검사기 반증', () => {

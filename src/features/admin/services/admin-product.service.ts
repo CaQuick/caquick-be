@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -9,11 +10,9 @@ import {
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { MAX_REASON_LENGTH } from '@/features/admin/constants/admin.constants';
 import type { AdminProductListInput } from '@/features/admin/dto/inputs/admin-product-list.input';
 import type { AdminSetProductActiveInput } from '@/features/admin/dto/inputs/admin-set-product-active.input';
 import { AdminRepository } from '@/features/admin/repositories/admin.repository';
-import { AdminBaseService } from '@/features/admin/services/admin-base.service';
 import {
   toAdminProductDetailOutput,
   toAdminProductOutput,
@@ -26,17 +25,19 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /** 내용 수정은 판매자 몫이라 관리자에게 열지 않는다. */
 @Injectable()
 export class AdminProductService extends AdminBaseService {
   constructor(
-    repo: AdminRepository,
+    accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    protected readonly repo: AdminRepository,
   ) {
-    super(repo, auditLogs);
+    super(accounts, auditLogs);
   }
 
   async adminProducts(
