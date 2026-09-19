@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
 
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import {
   Prisma,
   type ReviewReport,
   type ReviewReportReason,
 } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
+
+/** PENDING 동안 unique를 거는 키 — 종결 시 NULL로 비운다. */
+function openKeyOf(target: ReportTarget): string {
+  return target.kind === 'review' ? `r:${target.id}` : `c:${target.id}`;
+}
 
 /** account_id는 본인 작성물 판정용, content는 스냅샷용. */
 export interface ReportTargetRow {
@@ -30,8 +36,9 @@ export class ReviewReportRepository {
    * 대상 확인 → 본인 판정 → 미처리 신고 조회 → 생성을 한 트랜잭션에서 한다.
    * - 대상 행을 FOR UPDATE로 잠가(가시성 조인 포함) 작성자 삭제와 직렬화한다 — 잠금 전에 확인만
    *   하면 그 사이 삭제된 대상에 PENDING이 남아 복원된 새 내용에 붙는다. 댓글은 부모 리뷰부터 잠근다
-   * - 신고자 계정 행도 잠가 같은 신고자의 동시 요청이 중복 PENDING을 만들지 못하게 한다.
-   *   unique 대신 잠금인 이유: 처리(RESOLVED/REJECTED) 뒤 같은 대상을 다시 신고할 수 있어야 한다
+   * - 같은 신고자·대상의 중복 PENDING은 `uk_review_report_open`(reporter, open_key) unique가 막는다(D7-c).
+   *   open_key는 종결 시 NULL이 되고 MySQL unique는 NULL을 중복으로 보지 않아, 처리 뒤 재신고는 그대로 허용된다.
+   *   동시 요청이 조회를 함께 통과하면 P2002를 받아 already-pending으로 돌려준다 — 신고자 계정 행 잠금은 필요 없다.
    */
   async submitReport(args: {
     reporterAccountId: bigint;
@@ -47,8 +54,6 @@ export class ReviewReportRepository {
         return { outcome: 'own-content' };
       }
 
-      await tx.$queryRaw`
-        SELECT id FROM account WHERE id = ${args.reporterAccountId} FOR UPDATE`;
       const targetWhere =
         args.target.kind === 'review'
           ? { review_id: args.target.id }
@@ -63,20 +68,38 @@ export class ReviewReportRepository {
       });
       if (pending) return { outcome: 'already-pending', report: pending };
 
-      const report = await tx.reviewReport.create({
-        data: {
-          reporter_account_id: args.reporterAccountId,
-          review_id: args.target.kind === 'review' ? args.target.id : null,
-          review_comment_id:
-            args.target.kind === 'review_comment' ? args.target.id : null,
-          reason: args.reason,
-          detail: args.detail,
-          // 작성자가 삭제·재작성하면 같은 id가 새 내용으로 복원되므로 신고 시점 본문을 남긴다
-          content_snapshot:
-            target.content?.slice(0, args.snapshotLength) ?? null,
-        },
-      });
-      return { outcome: 'created', report };
+      try {
+        const report = await tx.reviewReport.create({
+          data: {
+            reporter_account_id: args.reporterAccountId,
+            review_id: args.target.kind === 'review' ? args.target.id : null,
+            review_comment_id:
+              args.target.kind === 'review_comment' ? args.target.id : null,
+            reason: args.reason,
+            detail: args.detail,
+            open_key: openKeyOf(args.target),
+            // 작성자가 삭제·재작성하면 같은 id가 새 내용으로 복원되므로 신고 시점 본문을 남긴다
+            content_snapshot:
+              target.content?.slice(0, args.snapshotLength) ?? null,
+          },
+        });
+        return { outcome: 'created', report };
+      } catch (error) {
+        // 같은 신고자의 동시 요청이 조회를 함께 통과한 경우 — unique가 한쪽만 통과시킨다
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          uniqueConstraintName(error) === 'uk_review_report_open'
+        ) {
+          const raced = await tx.reviewReport.findFirstOrThrow({
+            where: {
+              reporter_account_id: args.reporterAccountId,
+              open_key: openKeyOf(args.target),
+            },
+          });
+          return { outcome: 'already-pending', report: raced };
+        }
+        throw error;
+      }
     });
   }
 

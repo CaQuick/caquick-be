@@ -52,6 +52,8 @@ export async function resolvePendingReports(
     where: { status: 'PENDING', ...args.where },
     data: {
       status: 'RESOLVED',
+      // 종결과 함께 unique 키를 비운다 — 같은 대상을 다시 신고할 수 있어야 한다(D7-c)
+      open_key: null,
       resolved_by_account_id: args.resolvedByAccountId,
       resolved_at: args.now,
       resolution_note: args.note,

@@ -47,19 +47,6 @@ export class ReviewRepository {
       const snapshot = await snapshotReviewOrderItem(tx, args.orderItemId);
 
       if (args.existingDeletedReviewId) {
-        // 같은 id가 새 내용으로 복원되므로, 옛 내용을 겨냥한 미처리 신고가 남아 있으면 닫는다
-        // (삭제 시점에 이미 닫혔어야 하지만 방어적으로 한 번 더)
-        await resolvePendingReports(tx, {
-          where: {
-            OR: [
-              { review_id: args.existingDeletedReviewId },
-              { review_comment: { review_id: args.existingDeletedReviewId } },
-            ],
-          },
-          now: new Date(),
-          resolvedByAccountId: null,
-          note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
-        });
         const restored = await tx.review.update({
           where: { id: args.existingDeletedReviewId },
           data: {
@@ -70,6 +57,21 @@ export class ReviewRepository {
           },
         });
         reviewId = restored.id;
+
+        // 같은 id가 새 내용으로 복원되므로, 옛 내용을 겨냥한 미처리 신고가 남아 있으면 닫는다
+        // (삭제 시점에 이미 닫혔어야 하지만 방어적으로 한 번 더).
+        // 리뷰를 먼저 잠근 뒤 신고를 닫는다 — 다른 경로와 같은 순서(리뷰 → 신고)여야 교착이 없다(D7-c)
+        await resolvePendingReports(tx, {
+          where: {
+            OR: [
+              { review_id: reviewId },
+              { review_comment: { review_id: reviewId } },
+            ],
+          },
+          now: new Date(),
+          resolvedByAccountId: null,
+          note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
+        });
 
         await tx.reviewMedia.updateMany({
           where: { review_id: reviewId },

@@ -197,6 +197,7 @@ export class ReviewAdminRepository {
           },
           data: {
             status: 'RESOLVED',
+            open_key: null,
             resolved_by_account_id: args.actorAccountId,
             resolved_at: now,
             resolution_note: args.note,
@@ -208,6 +209,7 @@ export class ReviewAdminRepository {
           where: { id: report.id },
           data: {
             status: 'REJECTED',
+            open_key: null,
             resolved_by_account_id: args.actorAccountId,
             resolved_at: now,
             resolution_note: args.note,

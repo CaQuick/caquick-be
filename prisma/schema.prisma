@@ -1358,6 +1358,9 @@ model ReviewReport {
   content_snapshot String? @db.VarChar(2000)
 
   status                 ReviewReportStatus @default(PENDING)
+  /// PENDING 동안에만 대상 식별자('r:<reviewId>'·'c:<commentId>')를 담고 종결되면 NULL.
+  /// unique는 NULL을 중복으로 보지 않아 "같은 신고자·대상의 PENDING 1건, 처리 뒤 재신고 허용"이 제약으로 표현된다(D7-c).
+  open_key               String?            @db.VarChar(40)
   resolved_by_account_id BigInt?            @db.UnsignedBigInt
   resolved_at            DateTime?          @db.DateTime(3)
   resolution_note        String?            @db.VarChar(500)
@@ -1371,6 +1374,7 @@ model ReviewReport {
   review_comment ReviewComment? @relation(fields: [review_comment_id], references: [id])
   resolved_by    Account?       @relation("ReviewReportResolver", fields: [resolved_by_account_id], references: [id])
 
+  @@unique([reporter_account_id, open_key], map: "uk_review_report_open")
   @@index([status, created_at], map: "idx_review_report_status_time")
   @@index([reporter_account_id, review_id], map: "idx_review_report_reporter_review")
   @@index([reporter_account_id, review_comment_id], map: "idx_review_report_reporter_comment")

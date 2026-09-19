@@ -87,7 +87,6 @@ const CROSS_READ_ALLOWLIST: string[] = [
   'src/features/review/repositories/review-read.repository.ts|raw|listShowcaseReviewIdsByLikes:product,review,review_like,review_media,store',
   'src/features/review/repositories/review-report.repository.ts|raw|lockReportableComment:product,review,review_comment,store',
   'src/features/review/repositories/review-report.repository.ts|raw|lockReportableTarget:product,review,store',
-  'src/features/review/repositories/review-report.repository.ts|raw|submitReport:account',
   'src/features/review/repositories/review.repository.ts|nested|OrderItem.review->Review',
   'src/features/review/repositories/review.repository.ts|nested|Review.order_item->OrderItem',
   'src/features/review/repositories/review.repository.ts|root|findOrderItemForReview:OrderItem.findFirst',

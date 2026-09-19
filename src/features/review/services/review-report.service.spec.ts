@@ -128,7 +128,7 @@ describe('UserReportService (real DB)', () => {
       expect(await prisma.reviewReport.count()).toBe(1);
     });
 
-    it('같은 신고자의 동시 요청도 PENDING 1건만 만든다(신고자 행 잠금)', async () => {
+    it('같은 신고자의 동시 요청도 PENDING 1건만 만든다(uk_review_report_open unique)', async () => {
       const { review } = await visibleReview();
       const reporter = await buyer();
 
@@ -148,6 +148,33 @@ describe('UserReportService (real DB)', () => {
       expect(await prisma.reviewReport.count()).toBe(1);
     });
 
+    it('접수하면 open_key에 대상 키가 들어가고, 작성자 삭제로 닫히면 비워진다', async () => {
+      const { review } = await visibleReview();
+      const reporter = await buyer();
+      const created = await service.reportReview(reporter, {
+        reviewId: review.id.toString(),
+        reason: 'SPAM',
+      });
+
+      const pending = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(created.reportId) },
+      });
+      expect(pending.open_key).toBe(`r:${review.id}`);
+
+      await reviewRepo.softDeleteReview({
+        reviewId: review.id,
+        accountId: review.account_id,
+        now: new Date(),
+      });
+
+      const closed = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(created.reportId) },
+      });
+      expect(closed.status).toBe('RESOLVED');
+      // 종결과 함께 키를 비워야 같은 대상을 다시 신고할 수 있다(unique는 NULL을 중복으로 보지 않는다)
+      expect(closed.open_key).toBeNull();
+    });
+
     it('처리된(RESOLVED/REJECTED) 신고가 있으면 다시 신고할 수 있다', async () => {
       const { review } = await visibleReview();
       const reporter = await buyer();
@@ -155,9 +182,11 @@ describe('UserReportService (real DB)', () => {
         reviewId: review.id.toString(),
         reason: 'SPAM',
       });
+      // 종결 경로는 상태와 함께 open_key를 비운다(resolvePendingReports·관리자 처리 2곳 모두) —
+      // 키가 남아 있으면 unique가 재신고를 막으므로 여기서도 같은 상태를 만든다
       await prisma.reviewReport.update({
         where: { id: BigInt(first.reportId) },
-        data: { status: 'REJECTED' },
+        data: { status: 'REJECTED', open_key: null },
       });
 
       const again = await service.reportReview(reporter, {
