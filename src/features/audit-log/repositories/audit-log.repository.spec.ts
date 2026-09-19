@@ -1,4 +1,5 @@
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { AuditEntry } from '@/features/audit-log/repositories/audit-log.repository.interface';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
@@ -30,11 +31,18 @@ describe('AuditLogRepository (real DB)', () => {
     await truncateAll();
   });
 
-  describe('createAuditLog', () => {
+  // recordAudit는 tx가 필수라(P1-12) 여기서도 트랜잭션을 열어 부른다.
+  async function record(entry: AuditEntry): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await repo.recordAudit(tx, entry);
+    });
+  }
+
+  describe('recordAudit', () => {
     it('감사 로그를 생성한다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.CHANGE_PASSWORD,
         targetId: account.id,
@@ -55,7 +63,7 @@ describe('AuditLogRepository (real DB)', () => {
     it('storeId/ipAddress/userAgent/beforeJson 모두 생략해도 기본 null 처리로 생성된다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.STORE,
         targetId: account.id,
@@ -77,7 +85,7 @@ describe('AuditLogRepository (real DB)', () => {
       const account = await createAccount(prisma);
       const storeId = BigInt(42);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         storeId,
         targetType: AuditTargetType.STORE,
@@ -97,7 +105,7 @@ describe('AuditLogRepository (real DB)', () => {
       await requestContext.run(
         { clientIp: '203.0.113.7', userAgent: 'ctx-agent' },
         async () => {
-          await repo.createAuditLog({
+          await record({
             actorAccountId: account.id,
             targetType: AuditTargetType.STORE,
             targetId: account.id,
@@ -119,7 +127,7 @@ describe('AuditLogRepository (real DB)', () => {
       await requestContext.run(
         { clientIp: '203.0.113.7', userAgent: 'ctx-agent' },
         async () => {
-          await repo.createAuditLog({
+          await record({
             actorAccountId: account.id,
             targetType: AuditTargetType.STORE,
             targetId: account.id,
@@ -140,7 +148,7 @@ describe('AuditLogRepository (real DB)', () => {
     it('요청 컨텍스트 밖에서는 ip/ua 가 null 로 저장된다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.STORE,
         targetId: account.id,
@@ -160,7 +168,7 @@ describe('AuditLogRepository (real DB)', () => {
       const overlong = `not-an-ip-${'x'.repeat(80)}`;
 
       await requestContext.run({ clientIp: overlong }, async () => {
-        await repo.createAuditLog({
+        await record({
           actorAccountId: account.id,
           targetType: AuditTargetType.STORE,
           targetId: account.id,
@@ -179,7 +187,7 @@ describe('AuditLogRepository (real DB)', () => {
       const account = await createAccount(prisma);
 
       await requestContext.run({ clientIp: '2001:db8::1' }, async () => {
-        await repo.createAuditLog({
+        await record({
           actorAccountId: account.id,
           targetType: AuditTargetType.STORE,
           targetId: account.id,
@@ -194,7 +202,7 @@ describe('AuditLogRepository (real DB)', () => {
     });
   });
 
-  describe('createAuditLog(tx)', () => {
+  describe('recordAudit(tx)', () => {
     const args = {
       actorAccountId: BigInt(1),
       targetType: 'ACCOUNT' as const,
@@ -205,14 +213,14 @@ describe('AuditLogRepository (real DB)', () => {
     it('트랜잭션 클라이언트를 넘기면 그 트랜잭션에서 기록되고, 롤백 시 함께 사라진다', async () => {
       await expect(
         prisma.$transaction(async (tx) => {
-          await repo.createAuditLog(args, tx);
+          await repo.recordAudit(tx, args);
           throw new Error('rollback');
         }),
       ).rejects.toThrow('rollback');
       expect(await prisma.auditLog.count()).toBe(0);
 
       await prisma.$transaction(async (tx) => {
-        await repo.createAuditLog(args, tx);
+        await repo.recordAudit(tx, args);
       });
       expect(await prisma.auditLog.count()).toBe(1);
     });

@@ -129,7 +129,7 @@ export class RegionAdminRepository {
               include: regionInclude,
             })
           : await tx.region.create({ data, include: regionInclude });
-        await this.auditLogs.createAuditLog(audit(row), tx);
+        await this.auditLogs.recordAudit(tx, audit(row));
         return row;
       });
     } catch (error) {
@@ -192,7 +192,7 @@ export class RegionAdminRepository {
           data: args.data,
           include: regionInclude,
         });
-        await this.auditLogs.createAuditLog(audit(before, after), tx);
+        await this.auditLogs.recordAudit(tx, audit(before, after));
         return after;
       });
     } catch (error) {
@@ -221,7 +221,7 @@ export class RegionAdminRepository {
         where: { id: regionId },
         data: { deleted_at: new Date() },
       });
-      await this.auditLogs.createAuditLog(audit(before), tx);
+      await this.auditLogs.recordAudit(tx, audit(before));
       return 'deleted';
     });
   }

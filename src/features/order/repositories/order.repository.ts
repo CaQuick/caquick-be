@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import {
+  AUDIT_LOG_REPOSITORY,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import { OutboxPublisher } from '@/features/outbox';
 import {
@@ -151,6 +155,8 @@ export class OrderRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxPublisher,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
   ) {}
 
   /** USER 여부·프로필 활성 판정은 서비스가 한다(requireActiveUser와 동일 의미론). */
@@ -770,23 +776,22 @@ export class OrderRepository {
         }),
       );
 
-      await tx.auditLog.create({
-        data: {
-          actor_account_id: args.actorAccountId,
-          store_id: args.storeId,
-          target_type: AuditTargetType.ORDER,
-          target_id: order.id,
-          action: AuditActionType.STATUS_CHANGE,
-          before_json: {
-            status: fromStatus,
-          },
-          after_json: {
-            status: args.toStatus,
-            note: args.note,
-          },
-          ip_address: args.ipAddress ?? null,
-          user_agent: args.userAgent ?? null,
+      // 감사 기록은 라이브러리(포트)를 통해서만 남긴다 — ip/ua는 넘긴 값이 없으면 요청 컨텍스트에서 보강된다(P1-12)
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId: args.actorAccountId,
+        storeId: args.storeId,
+        targetType: AuditTargetType.ORDER,
+        targetId: order.id,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: {
+          status: fromStatus,
         },
+        afterJson: {
+          status: args.toStatus,
+          note: args.note,
+        },
+        ...(args.ipAddress ? { ipAddress: args.ipAddress } : {}),
+        ...(args.userAgent ? { userAgent: args.userAgent } : {}),
       });
 
       return updatedOrder;
@@ -935,19 +940,17 @@ export class OrderRepository {
         }),
       );
 
-      await tx.auditLog.create({
-        data: {
-          actor_account_id: args.actorAccountId,
-          store_id: firstItem?.store_id ?? null,
-          target_type: AuditTargetType.ORDER,
-          target_id: current.id,
-          action: AuditActionType.STATUS_CHANGE,
-          before_json: { status: current.status },
-          after_json: {
-            status: OrderStatus.CANCELED,
-            note: args.note,
-            byAdmin: true,
-          },
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId: args.actorAccountId,
+        storeId: firstItem?.store_id ?? null,
+        targetType: AuditTargetType.ORDER,
+        targetId: current.id,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: { status: current.status },
+        afterJson: {
+          status: OrderStatus.CANCELED,
+          note: args.note,
+          byAdmin: true,
         },
       });
 

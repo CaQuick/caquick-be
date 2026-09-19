@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
@@ -21,6 +23,7 @@ describe('ConversationCenterService (real DB)', () => {
         ConversationCenterService,
         ConversationRepository,
         AccountUserRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(ConversationCenterService);

@@ -159,7 +159,7 @@ export class SellerOptionService extends SellerBaseService {
             : {}),
         },
       },
-      (created) => ({
+      () => ({
         actorAccountId: ctx.accountId,
         storeId: ctx.storeId,
         targetType: AuditTargetType.PRODUCT,
@@ -232,7 +232,7 @@ export class SellerOptionService extends SellerBaseService {
         productId,
         optionGroupIds,
       },
-      (created) => ({
+      () => ({
         actorAccountId: ctx.accountId,
         storeId: ctx.storeId,
         targetType: AuditTargetType.PRODUCT,
@@ -428,7 +428,7 @@ export class SellerOptionService extends SellerBaseService {
         optionGroupId,
         optionItemIds,
       },
-      (created) => ({
+      () => ({
         actorAccountId: ctx.accountId,
         storeId: ctx.storeId,
         targetType: AuditTargetType.PRODUCT,

@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import type {
   AccountCredentialWithAccount,
   IAccountCredentialRepository,
@@ -8,7 +13,11 @@ import { PrismaService } from '@/prisma';
 
 @Injectable()
 export class AccountCredentialRepository implements IAccountCredentialRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
 
   private readonly accountInclude = {
     account: {
@@ -49,19 +58,33 @@ export class AccountCredentialRepository implements IAccountCredentialRepository
     });
   }
 
-  async updatePasswordHash(args: {
-    accountId: bigint;
-    passwordHash: string;
-    now: Date;
-  }): Promise<void> {
-    await this.prisma.accountCredential.update({
-      where: { account_id: args.accountId },
-      data: {
-        password_hash: args.passwordHash,
-        password_updated_at: args.now,
-        must_change_password: false,
-        updated_at: args.now,
-      },
+  /**
+   * 비밀번호 교체·전 세션 무효화·감사 기록을 한 트랜잭션으로 한다(P1-12) — 셋 중 하나만 커밋되면
+   * "바꿨는데 옛 세션이 살아 있다"거나 "바꿨는데 기록이 없다"가 된다.
+   */
+  async changePassword(
+    args: {
+      accountId: bigint;
+      passwordHash: string;
+      now: Date;
+    },
+    audit: () => AuditEntry,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accountCredential.update({
+        where: { account_id: args.accountId },
+        data: {
+          password_hash: args.passwordHash,
+          password_updated_at: args.now,
+          must_change_password: false,
+          updated_at: args.now,
+        },
+      });
+      await tx.authRefreshSession.updateMany({
+        where: { account_id: args.accountId, revoked_at: null },
+        data: { revoked_at: args.now, updated_at: args.now },
+      });
+      await this.auditLogs.recordAudit(tx, audit());
     });
   }
 }

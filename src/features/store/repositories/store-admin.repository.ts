@@ -127,7 +127,7 @@ export class StoreAdminRepository {
         where: { id: args.storeId },
         data: args.data,
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });
   }
@@ -152,7 +152,7 @@ export class StoreAdminRepository {
         where: { id: args.storeId },
         data: { is_active: args.isActive },
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return { row: after, changed: true };
     });
   }

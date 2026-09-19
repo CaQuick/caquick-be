@@ -11,6 +11,7 @@ import {
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
+import type { AuditEntry } from '@/features/audit-log';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -32,6 +33,7 @@ import type {
   SellerStoreBusinessHourOutput,
   SellerStoreSpecialClosureOutput,
 } from '@/features/store/types/store-seller-output.type';
+import type { StoreSpecialClosure } from '@/generated/prisma/client';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 @Injectable()
@@ -104,26 +106,26 @@ export class SellerStoreHoursService extends SellerBaseService {
       throw new DomainException('CLOSE_BEFORE_OPEN');
     }
 
-    const row = await this.repo.upsertStoreBusinessHour({
-      storeId: ctx.storeId,
-      dayOfWeek: input.dayOfWeek,
-      isClosed: input.isClosed,
-      openTime,
-      closeTime,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        dayOfWeek: row.day_of_week,
-        isClosed: row.is_closed,
+    const row = await this.repo.upsertStoreBusinessHour(
+      {
+        storeId: ctx.storeId,
+        dayOfWeek: input.dayOfWeek,
+        isClosed: input.isClosed,
+        openTime,
+        closeTime,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          dayOfWeek: created.day_of_week,
+          isClosed: created.is_closed,
+        },
+      }),
+    );
     return toStoreBusinessHourOutput(row);
   }
 
@@ -148,29 +150,32 @@ export class SellerStoreHoursService extends SellerBaseService {
       MAX_SPECIAL_CLOSURE_REASON_LENGTH,
     );
 
-    const row = closureId
-      ? await this.repo.updateStoreSpecialClosure(closureId, {
-          closureDate,
-          reason,
-        })
-      : await this.repo.createStoreSpecialClosure({
-          storeId: ctx.storeId,
-          closureDate,
-          reason,
-        });
-
-    await this.auditLogs.createAuditLog({
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12) — 수정·신규 두 경로가 같은 항목을 쓴다
+    const auditClosure = (created: StoreSpecialClosure): AuditEntry => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
       targetId: ctx.storeId,
       action: closureId ? AuditActionType.UPDATE : AuditActionType.CREATE,
       afterJson: {
-        closureDate: row.closure_date.toISOString(),
-        reason: row.reason,
+        closureDate: created.closure_date.toISOString(),
+        reason: created.reason,
       },
     });
-
+    const row = closureId
+      ? await this.repo.updateStoreSpecialClosure(
+          closureId,
+          { closureDate, reason },
+          auditClosure,
+        )
+      : await this.repo.createStoreSpecialClosure(
+          {
+            storeId: ctx.storeId,
+            closureDate,
+            reason,
+          },
+          auditClosure,
+        );
     return toStoreSpecialClosureOutput(row);
   }
 
@@ -185,8 +190,7 @@ export class SellerStoreHoursService extends SellerBaseService {
     );
     if (!found) throw new DomainException('SPECIAL_CLOSURE_NOT_FOUND');
 
-    await this.repo.softDeleteStoreSpecialClosure(closureId);
-    await this.auditLogs.createAuditLog({
+    await this.repo.softDeleteStoreSpecialClosure(closureId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.STORE,
@@ -195,8 +199,7 @@ export class SellerStoreHoursService extends SellerBaseService {
       beforeJson: {
         closureDate: found.closure_date.toISOString(),
       },
-    });
-
+    }));
     return true;
   }
 }

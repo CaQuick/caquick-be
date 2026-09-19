@@ -174,17 +174,14 @@ export class AccountAdminRepository {
             must_change_password: true,
           },
         });
-        await this.auditLogs.createAuditLog(
-          {
-            actorAccountId: args.actorAccountId,
-            storeId: null,
-            targetType: AuditTargetType.ACCOUNT,
-            targetId: account.id,
-            action: AuditActionType.CREATE,
-            afterJson: { accountType: 'ADMIN', username: args.username },
-          },
-          tx,
-        );
+        await this.auditLogs.recordAudit(tx, {
+          actorAccountId: args.actorAccountId,
+          storeId: null,
+          targetType: AuditTargetType.ACCOUNT,
+          targetId: account.id,
+          action: AuditActionType.CREATE,
+          afterJson: { accountType: 'ADMIN', username: args.username },
+        });
         return tx.account.findFirstOrThrow({
           where: { id: account.id },
           include: adminAccountInclude,
@@ -304,21 +301,18 @@ export class AccountAdminRepository {
           data: { ...args.profile, account_id: account.id },
         });
         const store = await createStore(tx, account.id);
-        await this.auditLogs.createAuditLog(
-          {
-            actorAccountId: args.actorAccountId,
-            storeId: store.id,
-            targetType: AuditTargetType.ACCOUNT,
-            targetId: account.id,
-            action: AuditActionType.CREATE,
-            afterJson: {
-              accountType: 'SELLER',
-              username: args.username,
-              storeId: store.id.toString(),
-            },
+        await this.auditLogs.recordAudit(tx, {
+          actorAccountId: args.actorAccountId,
+          storeId: store.id,
+          targetType: AuditTargetType.ACCOUNT,
+          targetId: account.id,
+          action: AuditActionType.CREATE,
+          afterJson: {
+            accountType: 'SELLER',
+            username: args.username,
+            storeId: store.id.toString(),
           },
-          tx,
-        );
+        });
         return tx.account.findFirstOrThrow({
           where: { id: account.id },
           include: sellerAccountInclude,
@@ -355,7 +349,7 @@ export class AccountAdminRepository {
         where: { account_id: args.accountId, revoked_at: null },
         data: { revoked_at: now, updated_at: now },
       });
-      await this.auditLogs.createAuditLog(args.audit, tx);
+      await this.auditLogs.recordAudit(tx, args.audit);
     });
   }
 
@@ -465,7 +459,7 @@ export class AccountAdminRepository {
           data: { revoked_at: now, updated_at: now },
         });
       }
-      await this.auditLogs.createAuditLog(args.audit, tx);
+      await this.auditLogs.recordAudit(tx, args.audit);
       return { changed: true };
     });
   }

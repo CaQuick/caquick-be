@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { UserReviewMutationResolver } from '@/features/mypage/resolvers/mypage-review-mutation.resolver';
 import { UserReviewQueryResolver } from '@/features/mypage/resolvers/mypage-review-query.resolver';
 import { UserReviewService } from '@/features/mypage/services/mypage-review.service';
@@ -39,6 +41,7 @@ describe('User Review Resolvers (real DB)', () => {
         UserReviewService,
         ReviewRepository,
         OrderRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         { provide: S3Service, useValue: s3Service },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),

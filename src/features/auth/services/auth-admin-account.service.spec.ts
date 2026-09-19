@@ -232,7 +232,7 @@ describe('AdminAccountService (real DB)', () => {
       const actor = await makeAdmin();
       const auditLogs = service['auditLogs'];
       const spy = jest
-        .spyOn(auditLogs, 'createAuditLog')
+        .spyOn(auditLogs, 'recordAudit')
         .mockRejectedValueOnce(new Error('audit down'));
 
       await expect(service.adminCreateAdmin(actor, validInput)).rejects.toThrow(

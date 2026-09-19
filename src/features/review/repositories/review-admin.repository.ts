@@ -217,22 +217,19 @@ export class ReviewAdminRepository {
         });
       }
 
-      await this.auditLogs.createAuditLog(
-        {
-          actorAccountId: args.actorAccountId,
-          storeId: null,
-          targetType: AuditTargetType.REVIEW_REPORT,
-          targetId: report.id,
-          action: AuditActionType.STATUS_CHANGE,
-          beforeJson: { status: 'PENDING' },
-          afterJson: {
-            status: args.action === 'DELETE_TARGET' ? 'RESOLVED' : 'REJECTED',
-            action: args.action,
-            note: args.note,
-          },
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId: args.actorAccountId,
+        storeId: null,
+        targetType: AuditTargetType.REVIEW_REPORT,
+        targetId: report.id,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: { status: 'PENDING' },
+        afterJson: {
+          status: args.action === 'DELETE_TARGET' ? 'RESOLVED' : 'REJECTED',
+          action: args.action,
+          note: args.note,
         },
-        tx,
-      );
+      });
       return tx.reviewReport.findFirstOrThrow({ where: { id: report.id } });
     });
   }
@@ -327,20 +324,17 @@ export class ReviewAdminRepository {
         where: { review_id: target.id, ...activeWhere },
         data: { deleted_at: now },
       });
-      await this.auditLogs.createAuditLog(
-        {
-          actorAccountId,
-          storeId: review.store_id,
-          targetType: AuditTargetType.REVIEW,
-          targetId: target.id,
-          action: AuditActionType.DELETE,
-          afterJson: {
-            reportId: meta.reportId?.toString() ?? null,
-            reason: meta.note,
-          },
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId,
+        storeId: review.store_id,
+        targetType: AuditTargetType.REVIEW,
+        targetId: target.id,
+        action: AuditActionType.DELETE,
+        afterJson: {
+          reportId: meta.reportId?.toString() ?? null,
+          reason: meta.note,
         },
-        tx,
-      );
+      });
       return;
     }
     const comment = await tx.reviewComment.findFirst({
@@ -352,20 +346,17 @@ export class ReviewAdminRepository {
       where: { id: target.id },
       data: { deleted_at: now },
     });
-    await this.auditLogs.createAuditLog(
-      {
-        actorAccountId,
-        storeId: comment.review.store_id,
-        targetType: AuditTargetType.REVIEW_COMMENT,
-        targetId: target.id,
-        action: AuditActionType.DELETE,
-        afterJson: {
-          reportId: meta.reportId?.toString() ?? null,
-          reason: meta.note,
-        },
+    await this.auditLogs.recordAudit(tx, {
+      actorAccountId,
+      storeId: comment.review.store_id,
+      targetType: AuditTargetType.REVIEW_COMMENT,
+      targetId: target.id,
+      action: AuditActionType.DELETE,
+      afterJson: {
+        reportId: meta.reportId?.toString() ?? null,
+        reason: meta.note,
       },
-      tx,
-    );
+    });
   }
 
   // ── 리뷰·댓글 조회(관리자) ──

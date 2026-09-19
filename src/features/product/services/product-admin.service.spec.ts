@@ -251,7 +251,7 @@ describe('AdminProductService (real DB)', () => {
       const product = await createProduct(prisma, { is_active: true });
       const auditLogs = service['auditLogs'];
       const spy = jest
-        .spyOn(auditLogs, 'createAuditLog')
+        .spyOn(auditLogs, 'recordAudit')
         .mockRejectedValueOnce(new Error('audit down'));
 
       await expect(

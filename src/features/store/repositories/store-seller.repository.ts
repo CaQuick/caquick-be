@@ -1,12 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
-import { AccountType, Prisma } from '@/generated/prisma/client';
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
+import {
+  AccountType,
+  Prisma,
+  type Store,
+  type StoreBusinessHour,
+  type StoreFaqTopic,
+  type StoreSpecialClosure,
+} from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
 /** 판매자 관점의 매장 조작(내 매장·영업시간·휴무·일별 수량·FAQ)과 판매자 컨텍스트 조회. */
 @Injectable()
 export class StoreSellerRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
+
+  /**
+   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다(P1-12) — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
+   * 판매자 매장 조작이 모두 이 헬퍼를 거친다.
+   */
+  private async writeWithAudit<T>(
+    write: (tx: Prisma.TransactionClient) => Promise<T>,
+    audit: (result: T) => AuditEntry,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await write(tx);
+      await this.auditLogs.recordAudit(tx, audit(result));
+      return result;
+    });
+  }
 
   async findSellerAccountContext(accountId: bigint) {
     return this.prisma.account.findFirst({
@@ -30,11 +61,18 @@ export class StoreSellerRepository {
     });
   }
 
-  async updateStore(args: { storeId: bigint; data: Prisma.StoreUpdateInput }) {
-    return this.prisma.store.update({
-      where: { id: args.storeId },
-      data: args.data,
-    });
+  async updateStore(
+    args: { storeId: bigint; data: Prisma.StoreUpdateInput },
+    audit: (row: Store) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.store.update({
+          where: { id: args.storeId },
+          data: args.data,
+        }),
+      audit,
+    );
   }
 
   async listStoreBusinessHours(storeId: bigint) {
@@ -44,70 +82,89 @@ export class StoreSellerRepository {
     });
   }
 
-  async upsertStoreBusinessHour(args: {
-    storeId: bigint;
-    dayOfWeek: number;
-    isClosed: boolean;
-    openTime: Date | null;
-    closeTime: Date | null;
-  }) {
-    return this.prisma.storeBusinessHour.upsert({
-      where: {
-        store_id_day_of_week: {
-          store_id: args.storeId,
-          day_of_week: args.dayOfWeek,
-        },
-      },
-      create: {
-        store_id: args.storeId,
-        day_of_week: args.dayOfWeek,
-        is_closed: args.isClosed,
-        open_time: args.openTime,
-        close_time: args.closeTime,
-      },
-      update: {
-        is_closed: args.isClosed,
-        open_time: args.openTime,
-        close_time: args.closeTime,
-      },
-    });
+  async upsertStoreBusinessHour(
+    args: {
+      storeId: bigint;
+      dayOfWeek: number;
+      isClosed: boolean;
+      openTime: Date | null;
+      closeTime: Date | null;
+    },
+    audit: (row: StoreBusinessHour) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.storeBusinessHour.upsert({
+          where: {
+            store_id_day_of_week: {
+              store_id: args.storeId,
+              day_of_week: args.dayOfWeek,
+            },
+          },
+          create: {
+            store_id: args.storeId,
+            day_of_week: args.dayOfWeek,
+            is_closed: args.isClosed,
+            open_time: args.openTime,
+            close_time: args.closeTime,
+          },
+          update: {
+            is_closed: args.isClosed,
+            open_time: args.openTime,
+            close_time: args.closeTime,
+          },
+        }),
+      audit,
+    );
   }
 
   async updateStoreSpecialClosure(
     closureId: bigint,
     data: { closureDate: Date; reason: string | null },
+    audit: (row: StoreSpecialClosure) => AuditEntry,
   ) {
-    return this.prisma.storeSpecialClosure.update({
-      where: { id: closureId },
-      data: {
-        closure_date: data.closureDate,
-        reason: data.reason,
-      },
-    });
+    return this.writeWithAudit(
+      (tx) =>
+        tx.storeSpecialClosure.update({
+          where: { id: closureId },
+          data: {
+            closure_date: data.closureDate,
+            reason: data.reason,
+          },
+        }),
+      audit,
+    );
   }
 
-  async createStoreSpecialClosure(args: {
-    storeId: bigint;
-    closureDate: Date;
-    reason: string | null;
-  }) {
-    return this.prisma.storeSpecialClosure.upsert({
-      where: {
-        store_id_closure_date: {
-          store_id: args.storeId,
-          closure_date: args.closureDate,
-        },
-      },
-      create: {
-        store_id: args.storeId,
-        closure_date: args.closureDate,
-        reason: args.reason,
-      },
-      update: {
-        deleted_at: null,
-        reason: args.reason,
-      },
-    });
+  async createStoreSpecialClosure(
+    args: {
+      storeId: bigint;
+      closureDate: Date;
+      reason: string | null;
+    },
+    audit: (row: StoreSpecialClosure) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.storeSpecialClosure.upsert({
+          where: {
+            store_id_closure_date: {
+              store_id: args.storeId,
+              closure_date: args.closureDate,
+            },
+          },
+          create: {
+            store_id: args.storeId,
+            closure_date: args.closureDate,
+            reason: args.reason,
+          },
+          update: {
+            deleted_at: null,
+            reason: args.reason,
+          },
+        }),
+      audit,
+    );
   }
 
   async findStoreSpecialClosureById(closureId: bigint, storeId: bigint) {
@@ -119,11 +176,18 @@ export class StoreSellerRepository {
     });
   }
 
-  async softDeleteStoreSpecialClosure(closureId: bigint): Promise<void> {
-    await this.prisma.storeSpecialClosure.update({
-      where: { id: closureId },
-      data: { deleted_at: new Date() },
-    });
+  async softDeleteStoreSpecialClosure(
+    closureId: bigint,
+    audit: (row: { id: bigint }) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.storeSpecialClosure.update({
+          where: { id: closureId },
+          data: { deleted_at: new Date() },
+        }),
+      audit,
+    );
   }
 
   async listStoreSpecialClosures(args: {
@@ -211,22 +275,29 @@ export class StoreSellerRepository {
     });
   }
 
-  async createFaqTopic(args: {
-    storeId: bigint;
-    title: string;
-    answerHtml: string;
-    sortOrder: number;
-    isActive: boolean;
-  }) {
-    return this.prisma.storeFaqTopic.create({
-      data: {
-        store_id: args.storeId,
-        title: args.title,
-        answer_html: args.answerHtml,
-        sort_order: args.sortOrder,
-        is_active: args.isActive,
-      },
-    });
+  async createFaqTopic(
+    args: {
+      storeId: bigint;
+      title: string;
+      answerHtml: string;
+      sortOrder: number;
+      isActive: boolean;
+    },
+    audit: (row: StoreFaqTopic) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.storeFaqTopic.create({
+          data: {
+            store_id: args.storeId,
+            title: args.title,
+            answer_html: args.answerHtml,
+            sort_order: args.sortOrder,
+            is_active: args.isActive,
+          },
+        }),
+      audit,
+    );
   }
 
   async findFaqTopicById(args: { topicId: bigint; storeId: bigint }) {
@@ -238,23 +309,37 @@ export class StoreSellerRepository {
     });
   }
 
-  async updateFaqTopic(args: {
-    topicId: bigint;
-    data: Prisma.StoreFaqTopicUpdateInput;
-  }) {
-    return this.prisma.storeFaqTopic.update({
-      where: { id: args.topicId },
-      data: args.data,
-    });
+  async updateFaqTopic(
+    args: {
+      topicId: bigint;
+      data: Prisma.StoreFaqTopicUpdateInput;
+    },
+    audit: (row: StoreFaqTopic) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.storeFaqTopic.update({
+          where: { id: args.topicId },
+          data: args.data,
+        }),
+      audit,
+    );
   }
 
-  async softDeleteFaqTopic(topicId: bigint): Promise<void> {
-    await this.prisma.storeFaqTopic.update({
-      where: { id: topicId },
-      data: {
-        deleted_at: new Date(),
-      },
-    });
+  async softDeleteFaqTopic(
+    topicId: bigint,
+    audit: (row: { id: bigint }) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.storeFaqTopic.update({
+          where: { id: topicId },
+          data: {
+            deleted_at: new Date(),
+          },
+        }),
+      audit,
+    );
   }
 
   async findStoreOwnership(storeId: bigint) {

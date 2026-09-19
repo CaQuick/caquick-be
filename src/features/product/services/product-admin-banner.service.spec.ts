@@ -436,7 +436,7 @@ describe('AdminBannerService (real DB)', () => {
     it('감사 기록이 실패하면 배너 생성도 롤백된다(같은 트랜잭션)', async () => {
       const auditLogs = service['auditLogs'];
       const spy = jest
-        .spyOn(auditLogs, 'createAuditLog')
+        .spyOn(auditLogs, 'recordAudit')
         .mockRejectedValueOnce(new Error('audit down'));
 
       await expect(

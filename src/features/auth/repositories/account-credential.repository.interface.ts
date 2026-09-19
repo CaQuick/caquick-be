@@ -1,3 +1,4 @@
+import type { AuditEntry } from '@/features/audit-log';
 import type { Prisma } from '@/generated/prisma/client';
 
 export const ACCOUNT_CREDENTIAL_REPOSITORY = Symbol(
@@ -28,10 +29,16 @@ export interface IAccountCredentialRepository {
 
   updateLastLogin(accountId: bigint, now: Date): Promise<void>;
 
-  /** 본인이 바꾼 것이므로 must_change_password를 해제한다. */
-  updatePasswordHash(args: {
-    accountId: bigint;
-    passwordHash: string;
-    now: Date;
-  }): Promise<void>;
+  /**
+   * 비밀번호 교체 + 전 세션 무효화 + 감사 기록을 한 트랜잭션으로.
+   * 본인이 바꾼 것이므로 must_change_password를 해제한다.
+   */
+  changePassword(
+    args: {
+      accountId: bigint;
+      passwordHash: string;
+      now: Date;
+    },
+    audit: () => AuditEntry,
+  ): Promise<void>;
 }

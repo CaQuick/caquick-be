@@ -136,7 +136,7 @@ export class ProductRepository {
   ): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
       const result = await write(tx);
-      await this.auditLogs.createAuditLog(audit(result), tx);
+      await this.auditLogs.recordAudit(tx, audit(result));
       return result;
     });
   }

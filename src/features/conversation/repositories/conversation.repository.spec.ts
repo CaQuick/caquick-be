@@ -1,9 +1,21 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.CONVERSATION,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
 
 describe('ConversationRepository (real DB)', () => {
   let repo: ConversationRepository;
@@ -11,7 +23,10 @@ describe('ConversationRepository (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ConversationRepository],
+      providers: [
+        ConversationRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     repo = module.get(ConversationRepository);
     prisma = p;
@@ -195,13 +210,16 @@ describe('ConversationRepository (real DB)', () => {
       const { store, conversation } = await setupConversation();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
 
-      const message = await repo.createSellerConversationMessage({
-        conversationId: conversation.id,
-        sellerAccountId: seller.id,
-        bodyFormat: 'TEXT',
-        bodyText: '판매자 응답',
-        bodyHtml: null,
-      });
+      const message = await repo.createSellerConversationMessage(
+        {
+          conversationId: conversation.id,
+          sellerAccountId: seller.id,
+          bodyFormat: 'TEXT',
+          bodyText: '판매자 응답',
+          bodyHtml: null,
+        },
+        () => AUDIT_ENTRY,
+      );
 
       expect(message.sender_type).toBe('STORE');
       expect(message.sender_account_id).toBe(seller.id);
@@ -227,13 +245,16 @@ describe('ConversationRepository (real DB)', () => {
         data: { last_read_at: futureMarker, last_message_at: futureMarker },
       });
 
-      const message = await repo.createSellerConversationMessage({
-        conversationId: conversation.id,
-        sellerAccountId: seller.id,
-        bodyFormat: 'TEXT',
-        bodyText: '컷오버 이후 답장',
-        bodyHtml: null,
-      });
+      const message = await repo.createSellerConversationMessage(
+        {
+          conversationId: conversation.id,
+          sellerAccountId: seller.id,
+          bodyFormat: 'TEXT',
+          bodyText: '컷오버 이후 답장',
+          bodyHtml: null,
+        },
+        () => AUDIT_ENTRY,
+      );
 
       // created_at > last_read_at 이어야 안읽음 판정에서 누락되지 않는다
       expect(message.created_at.getTime()).toBeGreaterThan(

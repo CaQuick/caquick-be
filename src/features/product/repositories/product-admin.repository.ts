@@ -128,7 +128,7 @@ export class ProductAdminRepository {
   ): Promise<Banner> {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.banner.create({ data });
-      await this.auditLogs.createAuditLog(audit(row), tx);
+      await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
   }
@@ -146,7 +146,7 @@ export class ProductAdminRepository {
         where: { id: args.bannerId },
         data: args.data,
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });
   }
@@ -164,7 +164,7 @@ export class ProductAdminRepository {
         where: { id: bannerId },
         data: { deleted_at: new Date() },
       });
-      await this.auditLogs.createAuditLog(audit(before), tx);
+      await this.auditLogs.recordAudit(tx, audit(before));
       return true;
     });
   }
@@ -283,7 +283,7 @@ export class ProductAdminRepository {
         data: { is_active: args.isActive },
         include: productInclude,
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return { row: after, changed: true };
     });
   }
@@ -355,7 +355,7 @@ export class ProductAdminRepository {
             include: categoryInclude,
           })
         : await tx.category.create({ data, include: categoryInclude });
-      await this.auditLogs.createAuditLog(audit(row), tx);
+      await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
   }
@@ -377,7 +377,7 @@ export class ProductAdminRepository {
         data: args.data,
         include: categoryInclude,
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });
   }
@@ -401,7 +401,7 @@ export class ProductAdminRepository {
         where: { category_id: categoryId, ...activeWhere },
         data: { deleted_at: now },
       });
-      await this.auditLogs.createAuditLog(audit(before), tx);
+      await this.auditLogs.recordAudit(tx, audit(before));
       return true;
     });
   }
@@ -462,7 +462,7 @@ export class ProductAdminRepository {
             include: tagInclude,
           })
         : await tx.tag.create({ data: { name }, include: tagInclude });
-      await this.auditLogs.createAuditLog(audit(row), tx);
+      await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
   }
@@ -482,7 +482,7 @@ export class ProductAdminRepository {
         data: { name: args.name },
         include: tagInclude,
       });
-      await this.auditLogs.createAuditLog(audit(before, after), tx);
+      await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });
   }
@@ -503,7 +503,7 @@ export class ProductAdminRepository {
         where: { tag_id: tagId, ...activeWhere },
         data: { deleted_at: now },
       });
-      await this.auditLogs.createAuditLog(audit(before), tx);
+      await this.auditLogs.recordAudit(tx, audit(before));
       return true;
     });
   }

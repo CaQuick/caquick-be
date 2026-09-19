@@ -365,7 +365,7 @@ describe('AdminStoreService (real DB)', () => {
       const store = await createStore(prisma, { store_name: '원본' });
       const auditLogs = service['auditLogs'];
       const spy = jest
-        .spyOn(auditLogs, 'createAuditLog')
+        .spyOn(auditLogs, 'recordAudit')
         .mockRejectedValueOnce(new Error('audit down'));
 
       await expect(

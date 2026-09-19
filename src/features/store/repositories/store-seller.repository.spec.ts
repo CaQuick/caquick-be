@@ -1,7 +1,10 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import {
   isSellerAccount,
   StoreSellerRepository,
 } from '@/features/store/repositories/store-seller.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { AccountType, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -13,13 +16,25 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.STORE,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
+
 describe('StoreSellerRepository (real DB)', () => {
   let repo: StoreSellerRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreSellerRepository],
+      providers: [
+        StoreSellerRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     repo = module.get(StoreSellerRepository);
     prisma = p;
@@ -84,10 +99,13 @@ describe('StoreSellerRepository (real DB)', () => {
   describe('updateStore', () => {
     it('매장 정보를 갱신한다', async () => {
       const { store } = await setupSellerWithStore(prisma);
-      const updated = await repo.updateStore({
-        storeId: store.id,
-        data: { store_name: '새 이름' },
-      });
+      const updated = await repo.updateStore(
+        {
+          storeId: store.id,
+          data: { store_name: '새 이름' },
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.store_name).toBe('새 이름');
     });
   });
@@ -108,20 +126,26 @@ describe('StoreSellerRepository (real DB)', () => {
 
     it('upsert: 없으면 생성, 있으면 갱신 (같은 store+day 1 row 유지)', async () => {
       const { store } = await setupSellerWithStore(prisma);
-      const created = await repo.upsertStoreBusinessHour({
-        storeId: store.id,
-        dayOfWeek: 1,
-        isClosed: false,
-        openTime: new Date('1970-01-01T09:00:00Z'),
-        closeTime: new Date('1970-01-01T18:00:00Z'),
-      });
-      const updated = await repo.upsertStoreBusinessHour({
-        storeId: store.id,
-        dayOfWeek: 1,
-        isClosed: true,
-        openTime: null,
-        closeTime: null,
-      });
+      const created = await repo.upsertStoreBusinessHour(
+        {
+          storeId: store.id,
+          dayOfWeek: 1,
+          isClosed: false,
+          openTime: new Date('1970-01-01T09:00:00Z'),
+          closeTime: new Date('1970-01-01T18:00:00Z'),
+        },
+        () => AUDIT_ENTRY,
+      );
+      const updated = await repo.upsertStoreBusinessHour(
+        {
+          storeId: store.id,
+          dayOfWeek: 1,
+          isClosed: true,
+          openTime: null,
+          closeTime: null,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.id).toBe(created.id);
       expect(updated.is_closed).toBe(true);
       expect(updated.open_time).toBeNull();
@@ -136,11 +160,14 @@ describe('StoreSellerRepository (real DB)', () => {
   describe('storeSpecialClosure (create/update/findById/softDelete/list)', () => {
     it('create: 새 row 생성', async () => {
       const { store } = await setupSellerWithStore(prisma);
-      const row = await repo.createStoreSpecialClosure({
-        storeId: store.id,
-        closureDate: new Date('2026-05-01'),
-        reason: '정기 휴무',
-      });
+      const row = await repo.createStoreSpecialClosure(
+        {
+          storeId: store.id,
+          closureDate: new Date('2026-05-01'),
+          reason: '정기 휴무',
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(row.store_id).toBe(store.id);
       expect(row.reason).toBe('정기 휴무');
     });
@@ -156,11 +183,14 @@ describe('StoreSellerRepository (real DB)', () => {
         },
       });
 
-      const row = await repo.createStoreSpecialClosure({
-        storeId: store.id,
-        closureDate: new Date('2026-05-01'),
-        reason: '신',
-      });
+      const row = await repo.createStoreSpecialClosure(
+        {
+          storeId: store.id,
+          closureDate: new Date('2026-05-01'),
+          reason: '신',
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(row.id).toBe(seed.id);
       expect(row.deleted_at).toBeNull();
       expect(row.reason).toBe('신');
@@ -171,10 +201,14 @@ describe('StoreSellerRepository (real DB)', () => {
       const seed = await prisma.storeSpecialClosure.create({
         data: { store_id: store.id, closure_date: new Date('2026-05-01') },
       });
-      const updated = await repo.updateStoreSpecialClosure(seed.id, {
-        closureDate: new Date('2026-05-02'),
-        reason: '수정',
-      });
+      const updated = await repo.updateStoreSpecialClosure(
+        seed.id,
+        {
+          closureDate: new Date('2026-05-02'),
+          reason: '수정',
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.reason).toBe('수정');
     });
 
@@ -200,7 +234,7 @@ describe('StoreSellerRepository (real DB)', () => {
       const seed = await prisma.storeSpecialClosure.create({
         data: { store_id: store.id, closure_date: new Date('2026-05-01') },
       });
-      await repo.softDeleteStoreSpecialClosure(seed.id);
+      await repo.softDeleteStoreSpecialClosure(seed.id, () => AUDIT_ENTRY);
       const after = await prisma.storeSpecialClosure.findUnique({
         where: { id: seed.id },
       });
@@ -344,13 +378,16 @@ describe('StoreSellerRepository (real DB)', () => {
 
     it('create: 신규 FAQ topic 생성', async () => {
       const { store } = await setupSellerWithStore(prisma);
-      const row = await repo.createFaqTopic({
-        storeId: store.id,
-        title: 'Q',
-        answerHtml: '<p>A</p>',
-        sortOrder: 0,
-        isActive: true,
-      });
+      const row = await repo.createFaqTopic(
+        {
+          storeId: store.id,
+          title: 'Q',
+          answerHtml: '<p>A</p>',
+          sortOrder: 0,
+          isActive: true,
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(row.title).toBe('Q');
       expect(row.answer_html).toBe('<p>A</p>');
     });
@@ -374,13 +411,16 @@ describe('StoreSellerRepository (real DB)', () => {
         data: { store_id: store.id, title: 'old', answer_html: 'a' },
       });
 
-      const updated = await repo.updateFaqTopic({
-        topicId: seed.id,
-        data: { title: 'new' },
-      });
+      const updated = await repo.updateFaqTopic(
+        {
+          topicId: seed.id,
+          data: { title: 'new' },
+        },
+        () => AUDIT_ENTRY,
+      );
       expect(updated.title).toBe('new');
 
-      await repo.softDeleteFaqTopic(seed.id);
+      await repo.softDeleteFaqTopic(seed.id, () => AUDIT_ENTRY);
       const after = await prisma.storeFaqTopic.findUnique({
         where: { id: seed.id },
       });

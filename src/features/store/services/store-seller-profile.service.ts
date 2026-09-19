@@ -52,27 +52,27 @@ export class SellerStoreProfileService extends SellerBaseService {
         'INVALID_IMAGE_URL',
       );
     }
-    const updated = await this.repo.updateStore({
-      storeId: ctx.storeId,
-      data,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.STORE,
-      targetId: ctx.storeId,
-      action: AuditActionType.UPDATE,
-      beforeJson: {
-        storeName: current.store_name,
-        storePhone: current.store_phone,
+    const updated = await this.repo.updateStore(
+      {
+        storeId: ctx.storeId,
+        data,
       },
-      afterJson: {
-        storeName: updated.store_name,
-        storePhone: updated.store_phone,
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.STORE,
+        targetId: ctx.storeId,
+        action: AuditActionType.UPDATE,
+        beforeJson: {
+          storeName: current.store_name,
+          storePhone: current.store_phone,
+        },
+        afterJson: {
+          storeName: created.store_name,
+          storePhone: created.store_phone,
+        },
+      }),
+    );
     return toStoreOutput(updated);
   }
 }

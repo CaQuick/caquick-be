@@ -30,7 +30,8 @@ export class AuditLogRepository implements IAuditLogRepository {
     private readonly requestContext: RequestContextService,
   ) {}
 
-  async createAuditLog(
+  async recordAudit(
+    tx: Prisma.TransactionClient,
     args: {
       actorAccountId: bigint;
       storeId?: bigint | null;
@@ -42,11 +43,9 @@ export class AuditLogRepository implements IAuditLogRepository {
       ipAddress?: string;
       userAgent?: string;
     },
-    tx?: Prisma.TransactionClient,
   ): Promise<AuditLog> {
     const ctx = this.requestContext.get();
-    const db = tx ?? this.prisma;
-    return db.auditLog.create({
+    return tx.auditLog.create({
       data: {
         actor_account_id: args.actorAccountId,
         store_id: args.storeId ?? null,
