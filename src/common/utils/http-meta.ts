@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import type { Request } from 'express';
 import useragent from 'useragent';
 
@@ -28,4 +30,24 @@ export function userAgentOf(req: Request): string {
       : undefined;
   const parsed = useragent.parse(raw);
   return parsed ? parsed.toString() : 'Unknown User Agent';
+}
+
+const MAX_PERSISTED_USER_AGENT_LENGTH = 512;
+
+/**
+ * 저장용 ip 정규화(감사 로그·outbox 공용). trust proxy 환경에서 req.ip는 프록시가 넘긴 값이라 malformed·overlong 값이
+ * 그대로 오면 VarChar(64) 초과로 insert가 실패할 수 있다 — 유효한 IPv4/IPv6가 아니면 null.
+ */
+export function normalizeIpForPersistence(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  return isIP(value) !== 0 ? value : null;
+}
+
+export function normalizeUserAgentForPersistence(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  return value.slice(0, MAX_PERSISTED_USER_AGENT_LENGTH);
 }

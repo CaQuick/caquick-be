@@ -133,6 +133,12 @@ enum ReviewReportReason {
   OTHER
 }
 
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
 enum ReviewReportStatus {
   PENDING
   RESOLVED
@@ -1369,6 +1375,34 @@ model ReviewReport {
   @@index([resolved_by_account_id], map: "idx_review_report_resolved_by")
   @@index([deleted_at], map: "idx_review_report_deleted_at")
   @@map("review_report")
+}
+
+// 트랜잭셔널 outbox(P1-08a). 도메인 write와 같은 tx에 이벤트를 적재하고 디스패처가 소비자에게 전달한다.
+// cross-domain FK 금지 — aggregate_id·actor_account_id는 관계 없이 값만 둔다.
+model Outbox {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  event_id       String   @db.Char(36)
+  aggregate_type String   @db.VarChar(64)
+  aggregate_id   String   @db.VarChar(64)
+  event_type     String   @db.VarChar(64)
+  payload_json   Json
+  occurred_at    DateTime @db.DateTime(3)
+
+  actor_account_id BigInt? @db.UnsignedBigInt
+  client_ip        String? @db.VarChar(64)
+  user_agent       String? @db.VarChar(512)
+
+  status          OutboxStatus @default(PENDING)
+  attempts        Int          @default(0) @db.UnsignedSmallInt
+  next_attempt_at DateTime     @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([event_id], map: "uk_outbox_event")
+  @@index([status, next_attempt_at, id], map: "idx_outbox_dispatch")
+  @@index([aggregate_type, aggregate_id, id], map: "idx_outbox_partition")
+  @@map("outbox")
 }
 
 model AuditLog {
