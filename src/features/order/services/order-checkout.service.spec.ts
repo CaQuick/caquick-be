@@ -639,6 +639,35 @@ describe('OrderCheckoutService (real DB)', () => {
       ).resolves.toMatchObject({ status: 'SUBMITTED' });
     });
 
+    it('반증: 복제 지연 — catalog 기준으로는 이미 소진이어도 복제본이 없으면 받는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      // catalog 설정(capacity 1)만 있고 복제본은 없다. 기존 예약 2건이라 catalog 기준으로는 이미 소진 상태
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+        replicate: false,
+      });
+      const booked = await createOrderRow(prisma, {
+        status: 'CONFIRMED',
+        pickup_at: VALID_PICKUP_AT,
+      });
+      await createOrderItem(prisma, {
+        order_id: booked.id,
+        store_id: store.id,
+        quantity: 2,
+      });
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+    });
+
     it('반증: 설정 삭제가 아직 복제되지 않았으면 기존 제한이 유지된다', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });

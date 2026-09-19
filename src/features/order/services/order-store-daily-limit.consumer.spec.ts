@@ -71,7 +71,7 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
   }
 
   describe('발행 → 소비 통합', () => {
-    it('판매자 설정이 복제본에 반영되고, 삭제하면 복제본에서 사라진다', async () => {
+    it('판매자 설정이 복제본에 반영되고, 삭제하면 값이 비워진다(tombstone)', async () => {
       const store = await createStore(prisma);
       const row = await capacities.upsertStoreDailyCapacity({
         storeId: store.id,
@@ -95,7 +95,10 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
         actorAccountId: ACTOR,
       });
       await drainOutbox(dispatcher);
-      expect(await limits()).toEqual([]);
+      // 행은 남고 capacity만 비운다 — 기준점(source_updated_at)이 사라지면 오래된 설정이 되살아난다
+      expect(await limits()).toMatchObject([
+        { store_id: store.id, booking_date: DATE, capacity: null },
+      ]);
     });
 
     it('날짜 변경은 이전 날짜 복제본을 지우고 새 날짜로 옮긴다', async () => {
@@ -117,7 +120,9 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
       });
       await drainOutbox(dispatcher);
 
+      // 옛 날짜는 tombstone으로 남고 새 날짜에 설정이 생긴다
       expect(await limits()).toMatchObject([
+        { booking_date: DATE, capacity: null },
         { booking_date: moved, capacity: 40 },
       ]);
     });
@@ -156,6 +161,27 @@ describe('OrderStoreDailyLimitConsumer (real DB)', () => {
       );
 
       expect(await limits()).toMatchObject([{ capacity: 50 }]);
+    });
+
+    it('반증: 삭제 뒤 도착한 오래된 설정 이벤트는 tombstone에 막혀 제한을 되살리지 못한다', async () => {
+      await consumer.handle(
+        event({
+          storeId: '1',
+          capacityDate: '2026-06-01',
+          capacity: null,
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        }),
+      );
+      await consumer.handle(
+        event({
+          storeId: '1',
+          capacityDate: '2026-06-01',
+          capacity: 50,
+          updatedAt: '2026-06-01T09:00:00.000Z',
+        }),
+      );
+
+      expect(await limits()).toMatchObject([{ capacity: null }]);
     });
 
     it('반증: 오래된 삭제 이벤트는 최신 설정을 지우지 않는다', async () => {

@@ -1388,7 +1388,8 @@ model OrderStoreDailyLimit {
 
   store_id     BigInt   @db.UnsignedBigInt
   booking_date DateTime @db.Date
-  capacity     Int      @db.UnsignedSmallInt
+  /// NULL은 "설정 없음"(무제한) — 삭제도 행을 지우지 않고 값을 비운다(오래된 설정 이벤트가 되살리지 못하게)
+  capacity     Int?     @db.UnsignedSmallInt
   /// 원본 store_daily_capacity.updated_at — 뒤늦게 온 오래된 이벤트를 무시하는 기준
   source_updated_at DateTime @db.DateTime(3)
 

@@ -4,7 +4,8 @@ CREATE TABLE `order_store_daily_limit` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `store_id` BIGINT UNSIGNED NOT NULL,
     `booking_date` DATE NOT NULL,
-    `capacity` SMALLINT UNSIGNED NOT NULL,
+    -- NULL = 설정 없음(무제한). 삭제도 행을 지우지 않고 값을 비운다 — 뒤늦게 온 오래된 설정 이벤트가 되살리지 못하게.
+    `capacity` SMALLINT UNSIGNED NULL,
     `source_updated_at` DATETIME(3) NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,

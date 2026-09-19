@@ -145,7 +145,12 @@ export class StorePickupScheduleService {
     };
   }
 
-  /** 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합을 확인한다. 주문 수량까지 더한 capacity 잔여 검사는 order(복제본 기준)가 한다. 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임). */
+  /**
+   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합을 확인한다.
+   * **capacity는 보지 않는다** — 일일 수량 판정은 order가 자기 복제본으로만 한다(D7-a).
+   * 여기서 catalog 설정을 함께 보면 복제 지연 구간에 두 소스가 어긋나 "복제본 없으면 무제한"이 깨진다.
+   * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
+   */
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
@@ -172,6 +177,7 @@ export class StorePickupScheduleService {
       new Date(Date.UTC(year, month - 1, day + 1)),
       kstMidnightUtc(year, month, day),
       kstMidnightUtc(year, month, day + 1),
+      { withCapacity: false },
     );
 
     const input = this.pickupDayInput(store, ctx, now, year, month, day);
@@ -184,12 +190,14 @@ export class StorePickupScheduleService {
     );
   }
 
+  /** withCapacity=false면 capacity·예약 수량을 읽지 않는다(주문 생성 재검증 — 수량 판정은 order 몫). */
   private async loadScheduleContext(
     storeId: bigint,
     fromDateOnly: Date,
     toDateOnly: Date,
     rangeStartUtc: Date,
     rangeEndUtc: Date,
+    options: { withCapacity: boolean } = { withCapacity: true },
   ): Promise<ScheduleContext> {
     const [hours, closureDates, capacities, bookedByDate] = await Promise.all([
       this.repo.findBusinessHoursForStore(storeId),
@@ -198,8 +206,16 @@ export class StorePickupScheduleService {
         fromDateOnly,
         toDateOnly,
       ),
-      this.repo.findDailyCapacitiesInRange(storeId, fromDateOnly, toDateOnly),
-      this.booked.sumByKstDate(storeId, rangeStartUtc, rangeEndUtc),
+      options.withCapacity
+        ? this.repo.findDailyCapacitiesInRange(
+            storeId,
+            fromDateOnly,
+            toDateOnly,
+          )
+        : new Map<string, number>(),
+      options.withCapacity
+        ? this.booked.sumByKstDate(storeId, rangeStartUtc, rangeEndUtc)
+        : new Map<string, number>(),
     ]);
     return {
       hoursByWeekday: new Map(hours.map((h) => [h.day_of_week, h])),

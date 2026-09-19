@@ -213,7 +213,7 @@ export class OrderRepository {
 
   /**
    * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다(D7-a).
-   * 복제본이 없으면 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다(플랜 반증 케이스).
+   * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
    */
   private async capacityExceeded(
     db: Prisma.TransactionClient,
@@ -226,6 +226,7 @@ export class OrderRepository {
       FROM order_store_daily_limit
       WHERE store_id = ${guard.storeId}
         AND booking_date = ${guard.dateOnlyUtc}
+        AND capacity IS NOT NULL
       ${forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty}
     `);
     const capacity = capacityRows[0]?.capacity;
