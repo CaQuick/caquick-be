@@ -3,9 +3,9 @@ import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { parseId } from '@/common/utils/id-parser';
-import { AdminSellerListInput } from '@/features/auth/dto/inputs/admin-seller-list.input';
-import { AdminSellerService } from '@/features/auth/services/auth-admin-seller.service';
-import type { AdminSellerOutput } from '@/features/auth/types/auth-admin-output.type';
+import { AdminSellerListInput } from '@/features/store/dto/inputs/admin-seller-list.input';
+import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
+import type { AdminSellerOutput } from '@/features/store/types/store-admin-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

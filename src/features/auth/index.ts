@@ -2,3 +2,6 @@
 export { AuthModule } from '@/features/auth/auth.module';
 export { AdminBaseService } from '@/features/auth/services/auth-admin-base.service';
 export { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+// 관리자용 계정 row 타입(판매자 온보딩 화면은 store가 가진다)과 계정 입력 정책.
+export type { AdminSellerRow } from '@/features/auth/repositories/account-admin.repository';
+export * from '@/features/auth/constants/auth-admin.constants';

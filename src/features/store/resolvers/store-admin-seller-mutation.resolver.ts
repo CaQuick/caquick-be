@@ -1,10 +1,10 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { AdminCreateSellerInput } from '@/features/auth/dto/inputs/admin-create-seller.input';
-import { AdminResetSellerPasswordInput } from '@/features/auth/dto/inputs/admin-reset-seller-password.input';
-import { AdminSellerService } from '@/features/auth/services/auth-admin-seller.service';
-import type { AdminSellerOutput } from '@/features/auth/types/auth-admin-output.type';
+import { AdminCreateSellerInput } from '@/features/store/dto/inputs/admin-create-seller.input';
+import { AdminResetSellerPasswordInput } from '@/features/store/dto/inputs/admin-reset-seller-password.input';
+import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
+import type { AdminSellerOutput } from '@/features/store/types/store-admin-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

@@ -17,8 +17,8 @@ import {
   MAX_USERNAME_LENGTH,
   MIN_USERNAME_LENGTH,
   USERNAME_PATTERN,
-} from '@/features/auth/constants/auth-admin.constants';
-import { AdminCreateSellerStoreInput } from '@/features/auth/dto/inputs/admin-create-seller-store.input';
+} from '@/features/auth';
+import { AdminCreateSellerStoreInput } from '@/features/store/dto/inputs/admin-create-seller-store.input';
 
 export class AdminCreateSellerInput {
   @IsString()

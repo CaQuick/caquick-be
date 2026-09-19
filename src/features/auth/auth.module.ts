@@ -12,12 +12,9 @@ import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-s
 import { REFRESH_SESSION_REPOSITORY } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { AdminAccountMutationResolver } from '@/features/auth/resolvers/auth-admin-account-mutation.resolver';
 import { AdminAccountQueryResolver } from '@/features/auth/resolvers/auth-admin-account-query.resolver';
-import { AdminSellerMutationResolver } from '@/features/auth/resolvers/auth-admin-seller-mutation.resolver';
-import { AdminSellerQueryResolver } from '@/features/auth/resolvers/auth-admin-seller-query.resolver';
 import { AdminUserMutationResolver } from '@/features/auth/resolvers/auth-admin-user-mutation.resolver';
 import { AdminUserQueryResolver } from '@/features/auth/resolvers/auth-admin-user-query.resolver';
 import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
-import { AdminSellerService } from '@/features/auth/services/auth-admin-seller.service';
 import { AdminUserService } from '@/features/auth/services/auth-admin-user.service';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
@@ -48,15 +45,12 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
       useClass: RefreshSessionRepository,
     },
     JwtBearerStrategy,
-    // 관리자용 계정 관리(관리자·판매자·구매자 계정) — identity가 소유한다
+    // 관리자용 계정 관리(관리자·구매자 계정) — identity가 소유한다. 판매자 온보딩 화면은 store(매장 생성 tx 콜백)
     AccountAdminRepository,
     AdminAccountService,
-    AdminSellerService,
     AdminUserService,
     AdminAccountQueryResolver,
     AdminAccountMutationResolver,
-    AdminSellerQueryResolver,
-    AdminSellerMutationResolver,
     AdminUserQueryResolver,
     AdminUserMutationResolver,
   ],

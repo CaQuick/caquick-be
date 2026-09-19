@@ -6,7 +6,6 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { createStoreForSeller } from '@/features/store';
 import {
   AccountType,
   AuditActionType,
@@ -265,16 +264,24 @@ export class AccountAdminRepository {
     });
   }
 
-  /** username 충돌(P2002)은 도메인 예외로 좁힌다(createAdminAccount와 같은 이유). */
-  async createSellerAccount(args: {
-    actorAccountId: bigint;
-    username: string;
-    passwordHash: string;
-    email: string | null;
-    name: string | null;
-    profile: Omit<Prisma.SellerProfileUncheckedCreateInput, 'account_id'>;
-    store: Omit<Prisma.StoreUncheckedCreateInput, 'seller_account_id'>;
-  }): Promise<AdminSellerRow> {
+  /**
+   * username 충돌(P2002)은 도메인 예외로 좁힌다(createAdminAccount와 같은 이유).
+   * 매장 행은 같은 tx를 넘겨 호출자(catalog 코드)가 만든다 — identity는 store를 import하지 않고 tx만 조정한다(P1-7).
+   */
+  async createSellerAccount(
+    args: {
+      actorAccountId: bigint;
+      username: string;
+      passwordHash: string;
+      email: string | null;
+      name: string | null;
+      profile: Omit<Prisma.SellerProfileUncheckedCreateInput, 'account_id'>;
+    },
+    createStore: (
+      tx: Prisma.TransactionClient,
+      sellerAccountId: bigint,
+    ) => Promise<{ id: bigint }>,
+  ): Promise<AdminSellerRow> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const account = await tx.account.create({
@@ -296,11 +303,7 @@ export class AccountAdminRepository {
         await tx.sellerProfile.create({
           data: { ...args.profile, account_id: account.id },
         });
-        // 매장 행은 catalog 소유 — 같은 tx를 넘겨 store 배럴이 지역 잠금·생성을 맡는다(P1-7)
-        const store = await createStoreForSeller(tx, {
-          sellerAccountId: account.id,
-          store: args.store,
-        });
+        const store = await createStore(tx, account.id);
         await this.auditLogs.createAuditLog(
           {
             actorAccountId: args.actorAccountId,

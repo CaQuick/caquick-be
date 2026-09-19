@@ -34,10 +34,12 @@ import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { OrderModule } from '@/features/order';
 import { SearchModule } from '@/features/search';
+import { StoreModule } from '@/features/store';
 
 /** cross-feature로 쓰이지 않아 배럴이 없다. DI는 구체 클래스 주입(2번째 구현 예정 없음). */
 @Module({
-  imports: [AuditLogModule, AuthModule, OrderModule, SearchModule],
+  // StoreModule: 관리자 매장 수정의 지역 선택 확인(StoreSellerRepository)
+  imports: [AuditLogModule, AuthModule, OrderModule, SearchModule, StoreModule],
   providers: [
     AdminRepository,
     AdminBannerService,

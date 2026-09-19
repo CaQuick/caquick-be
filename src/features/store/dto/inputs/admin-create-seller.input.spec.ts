@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { AdminCreateSellerInput } from '@/features/auth/dto/inputs/admin-create-seller.input';
+import { AdminCreateSellerInput } from '@/features/store/dto/inputs/admin-create-seller.input';
 
 function build(plain: object): AdminCreateSellerInput {
   return plainToInstance(AdminCreateSellerInput, plain);

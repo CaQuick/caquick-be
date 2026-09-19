@@ -2,10 +2,10 @@ import argon2 from 'argon2';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
-import type { AdminCreateSellerInput } from '@/features/auth/dto/inputs/admin-create-seller.input';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
-import { AdminSellerService } from '@/features/auth/services/auth-admin-seller.service';
+import type { AdminCreateSellerInput } from '@/features/store/dto/inputs/admin-create-seller.input';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';

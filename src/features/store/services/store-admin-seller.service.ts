@@ -23,17 +23,12 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
+  AccountAdminRepository,
+  AdminBaseService,
   MAX_ACCOUNT_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_SELLER_WEBSITE_URL_LENGTH,
-} from '@/features/auth/constants/auth-admin.constants';
-import type { AdminCreateSellerInput } from '@/features/auth/dto/inputs/admin-create-seller.input';
-import type { AdminResetSellerPasswordInput } from '@/features/auth/dto/inputs/admin-reset-seller-password.input';
-import type { AdminSellerListInput } from '@/features/auth/dto/inputs/admin-seller-list.input';
-import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
-import { AdminBaseService } from '@/features/auth/services/auth-admin-base.service';
-import { toAdminSellerOutput } from '@/features/auth/services/auth-admin-mappers.helper';
-import type { AdminSellerOutput } from '@/features/auth/types/auth-admin-output.type';
+} from '@/features/auth';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -43,8 +38,14 @@ import {
   MAX_BUSINESS_PHONE_LENGTH,
   MAX_STORE_NAME_LENGTH,
   MAX_STORE_PHONE_LENGTH,
-  StoreSellerRepository,
-} from '@/features/store';
+} from '@/features/store/constants/store-field-limits';
+import type { AdminCreateSellerInput } from '@/features/store/dto/inputs/admin-create-seller.input';
+import type { AdminResetSellerPasswordInput } from '@/features/store/dto/inputs/admin-reset-seller-password.input';
+import type { AdminSellerListInput } from '@/features/store/dto/inputs/admin-seller-list.input';
+import { createStoreForSeller } from '@/features/store/repositories/store-seller-create.helper';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import { toAdminSellerOutput } from '@/features/store/services/store-admin-seller-mappers.helper';
+import type { AdminSellerOutput } from '@/features/store/types/store-admin-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /** 매장은 기본 정보만 만들고 영업시간·픽업 정책은 판매자가 seller* API로 직접 설정한다. */
@@ -116,57 +117,63 @@ export class AdminSellerService extends AdminBaseService {
     const passwordHash = await argon2.hash(input.password, {
       type: argon2.argon2id,
     });
-    const created = await this.accounts.createSellerAccount({
-      actorAccountId: ctx.accountId,
-      username: input.username,
-      passwordHash,
-      email: cleanNullableText(input.email, MAX_EMAIL_LENGTH),
-      name: cleanNullableText(input.name, MAX_ACCOUNT_NAME_LENGTH),
-      profile: {
-        business_name: cleanRequiredText(
-          input.businessName,
-          MAX_BUSINESS_NAME_LENGTH,
-        ),
-        business_phone: cleanRequiredText(
-          input.businessPhone,
-          MAX_BUSINESS_PHONE_LENGTH,
-        ),
-        website_url: cleanNullableText(
-          input.websiteUrl,
-          MAX_SELLER_WEBSITE_URL_LENGTH,
-        ),
+    const profile = {
+      business_name: cleanRequiredText(
+        input.businessName,
+        MAX_BUSINESS_NAME_LENGTH,
+      ),
+      business_phone: cleanRequiredText(
+        input.businessPhone,
+        MAX_BUSINESS_PHONE_LENGTH,
+      ),
+      website_url: cleanNullableText(
+        input.websiteUrl,
+        MAX_SELLER_WEBSITE_URL_LENGTH,
+      ),
+    };
+    const store = {
+      store_name: cleanRequiredText(
+        input.store.storeName,
+        MAX_STORE_NAME_LENGTH,
+      ),
+      store_phone: cleanRequiredText(
+        input.store.storePhone,
+        MAX_STORE_PHONE_LENGTH,
+      ),
+      address_full: cleanRequiredText(
+        input.store.addressFull,
+        MAX_ADDRESS_FULL_LENGTH,
+      ),
+      address_city: cleanNullableText(
+        input.store.addressCity,
+        MAX_ADDRESS_CITY_LENGTH,
+      ),
+      address_district: cleanNullableText(
+        input.store.addressDistrict,
+        MAX_ADDRESS_DISTRICT_LENGTH,
+      ),
+      address_neighborhood: cleanNullableText(
+        input.store.addressNeighborhood,
+        MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
+      ),
+      region_id: regionId,
+      latitude: parseDecimalOrNull(input.store.latitude, LATITUDE_RANGE),
+      longitude: parseDecimalOrNull(input.store.longitude, LONGITUDE_RANGE),
+      map_provider: input.store.mapProvider ?? 'NONE',
+    };
+    const created = await this.accounts.createSellerAccount(
+      {
+        actorAccountId: ctx.accountId,
+        username: input.username,
+        passwordHash,
+        email: cleanNullableText(input.email, MAX_EMAIL_LENGTH),
+        name: cleanNullableText(input.name, MAX_ACCOUNT_NAME_LENGTH),
+        profile,
       },
-      store: {
-        store_name: cleanRequiredText(
-          input.store.storeName,
-          MAX_STORE_NAME_LENGTH,
-        ),
-        store_phone: cleanRequiredText(
-          input.store.storePhone,
-          MAX_STORE_PHONE_LENGTH,
-        ),
-        address_full: cleanRequiredText(
-          input.store.addressFull,
-          MAX_ADDRESS_FULL_LENGTH,
-        ),
-        address_city: cleanNullableText(
-          input.store.addressCity,
-          MAX_ADDRESS_CITY_LENGTH,
-        ),
-        address_district: cleanNullableText(
-          input.store.addressDistrict,
-          MAX_ADDRESS_DISTRICT_LENGTH,
-        ),
-        address_neighborhood: cleanNullableText(
-          input.store.addressNeighborhood,
-          MAX_ADDRESS_NEIGHBORHOOD_LENGTH,
-        ),
-        region_id: regionId,
-        latitude: parseDecimalOrNull(input.store.latitude, LATITUDE_RANGE),
-        longitude: parseDecimalOrNull(input.store.longitude, LONGITUDE_RANGE),
-        map_provider: input.store.mapProvider ?? 'NONE',
-      },
-    });
+      // 매장 행은 catalog 코드가 같은 tx 안에서 만든다(P1-7)
+      (tx, sellerAccountId) =>
+        createStoreForSeller(tx, { sellerAccountId, store }),
+    );
 
     return toAdminSellerOutput(created);
   }
