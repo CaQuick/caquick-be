@@ -21,7 +21,6 @@ import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
 import redisConfig from '@/config/redis.config';
 import s3Config from '@/config/s3.config';
-import { AdminModule } from '@/features/admin/admin.module';
 import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
 import { DashboardModule } from '@/features/dashboard/dashboard.module';
@@ -107,7 +106,6 @@ import { PrismaModule } from '@/prisma';
     SearchModule,
     StoreModule,
     UserModule,
-    AdminModule,
     NotificationModule,
     DashboardModule,
   ],
