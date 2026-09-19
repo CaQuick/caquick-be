@@ -3,13 +3,12 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
+import { DEFAULT_PAGINATION_LIMIT } from '@/features/auth';
+import { AccountUserRepository, UserBaseService } from '@/features/auth';
 import { ProductCardService, ProductRepository } from '@/features/product';
 import { WishlistRepository } from '@/features/review';
-import { DEFAULT_PAGINATION_LIMIT } from '@/features/user/constants/user.constants';
 import type { MyWishlistStoreGroupsInput } from '@/features/user/dto/inputs/my-wishlist-store-groups.input';
 import type { MyWishlistInput } from '@/features/user/dto/inputs/my-wishlist.input';
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
 import type {
   MyWishlistConnection,
   MyWishlistStoreGroupsConnection,
@@ -18,12 +17,12 @@ import type {
 @Injectable()
 export class UserWishlistService extends UserBaseService {
   constructor(
-    repo: UserRepository,
+    accounts: AccountUserRepository,
     private readonly productRepository: ProductRepository,
     private readonly cards: ProductCardService,
     private readonly wishlists: WishlistRepository,
   ) {
-    super(repo);
+    super(accounts);
   }
 
   async addToWishlist(

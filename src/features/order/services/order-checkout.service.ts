@@ -6,12 +6,12 @@ import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
 import { uniqueConstraintName } from '@/common/utils/prisma-error';
+import { evaluateActiveUserAccount } from '@/features/auth';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
-import { evaluateActiveUserAccount } from '@/features/user';
 import { Prisma } from '@/generated/prisma/client';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.

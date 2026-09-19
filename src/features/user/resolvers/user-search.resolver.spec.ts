@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserSearchMutationResolver } from '@/features/user/resolvers/user-search-mutation.resolver';
 import { UserSearchQueryResolver } from '@/features/user/resolvers/user-search-query.resolver';
@@ -24,6 +25,7 @@ describe('User Search Resolvers (real DB)', () => {
         UserSearchMutationResolver,
         UserSearchService,
         UserRepository,
+        AccountUserRepository,
       ],
     });
     queryResolver = module.get(UserSearchQueryResolver);

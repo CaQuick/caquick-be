@@ -1,0 +1,35 @@
+"""
+계정 종류. JWT 발급 시 결정되며 접근 가능한 API 영역을 가른다.
+"""
+enum AccountType {
+  """
+  구매자. 주문·찜·리뷰 등 구매자 API를 쓴다.
+  """
+  USER
+  """
+  판매자. 매장 1곳을 보유하며 seller* API를 쓴다.
+  """
+  SELLER
+  """
+  운영자. admin* API를 쓴다.
+  """
+  ADMIN
+}
+
+"""
+계정 상태. ACTIVE가 아니면 로그인·API 접근이 거부된다.
+"""
+enum AccountStatus {
+  """
+  가입 대기. 현재 생성 경로가 없는 예약값이다.
+  """
+  PENDING
+  """
+  정상.
+  """
+  ACTIVE
+  """
+  운영자가 정지한 상태. 모든 API 접근이 FORBIDDEN이고 refresh 세션도 폐기된다.
+  """
+  SUSPENDED
+}

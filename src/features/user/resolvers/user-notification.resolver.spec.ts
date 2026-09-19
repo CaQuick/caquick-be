@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { UserRepository } from '@/features/user/repositories/user.repository';
 import { UserNotificationMutationResolver } from '@/features/user/resolvers/user-notification-mutation.resolver';
@@ -26,6 +27,7 @@ describe('User Notification Resolvers (real DB)', () => {
         UserNotificationMutationResolver,
         UserNotificationService,
         UserRepository,
+        AccountUserRepository,
       ],
     });
     queryResolver = module.get(UserNotificationQueryResolver);

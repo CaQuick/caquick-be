@@ -1,12 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
-import { CompleteOnboardingInput } from '@/features/user/dto/inputs/complete-onboarding.input';
-import { CreateProfileImageUploadUrlInput } from '@/features/user/dto/inputs/create-profile-image-upload-url.input';
-import { UpdateMyProfileImageInput } from '@/features/user/dto/inputs/update-my-profile-image.input';
-import { UpdateMyProfileInput } from '@/features/user/dto/inputs/update-my-profile.input';
-import { UserProfileService } from '@/features/user/services/user-profile.service';
-import type { MePayload } from '@/features/user/types/user-output.type';
+import { CompleteOnboardingInput } from '@/features/auth/dto/inputs/complete-onboarding.input';
+import { CreateProfileImageUploadUrlInput } from '@/features/auth/dto/inputs/create-profile-image-upload-url.input';
+import { UpdateMyProfileImageInput } from '@/features/auth/dto/inputs/update-my-profile-image.input';
+import { UpdateMyProfileInput } from '@/features/auth/dto/inputs/update-my-profile.input';
+import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
+import type { MePayload } from '@/features/auth/types/auth-user-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,

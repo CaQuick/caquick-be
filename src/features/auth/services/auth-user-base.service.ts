@@ -8,11 +8,13 @@ import {
   MIN_NICKNAME_LENGTH,
   PHONE_FORMAT_EXAMPLE,
   PHONE_REGEX,
-} from '@/features/user/constants/user.constants';
-import type { UserAccountWithProfile } from '@/features/user/repositories/user.repository';
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { evaluateActiveUserAccount } from '@/features/user/services/user-account-policy.helper';
-import type { MePayload } from '@/features/user/types/user-output.type';
+} from '@/features/auth/constants/auth-user.constants';
+import {
+  AccountUserRepository,
+  type UserAccountWithProfile,
+} from '@/features/auth/repositories/account-user.repository';
+import { evaluateActiveUserAccount } from '@/features/auth/services/auth-user-account-policy.helper';
+import type { MePayload } from '@/features/auth/types/auth-user-output.type';
 export type ActiveUserAccount = UserAccountWithProfile & {
   deleted_at: null;
   user_profile: NonNullable<UserAccountWithProfile['user_profile']> & {
@@ -21,12 +23,12 @@ export type ActiveUserAccount = UserAccountWithProfile & {
 };
 
 export abstract class UserBaseService {
-  protected constructor(protected readonly repo: UserRepository) {}
+  protected constructor(protected readonly accounts: AccountUserRepository) {}
 
   protected async requireActiveUser(
     accountId: bigint,
   ): Promise<ActiveUserAccount> {
-    const account = await this.repo.findAccountWithProfile(accountId, {
+    const account = await this.accounts.findAccountWithProfile(accountId, {
       withDeleted: true,
     });
     // 판정 분기는 공용 정책(user-account-policy.helper) 단일 소스 — 메시지 매핑만 여기서

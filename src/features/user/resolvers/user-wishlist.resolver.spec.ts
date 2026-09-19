@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
@@ -32,6 +33,7 @@ describe('User Wishlist Resolver (real DB)', () => {
         UserWishlistQueryResolver,
         UserWishlistService,
         UserRepository,
+        AccountUserRepository,
         ProductRepository,
       ],
     });

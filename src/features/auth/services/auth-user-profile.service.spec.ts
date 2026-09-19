@@ -1,5 +1,5 @@
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserProfileService } from '@/features/user/services/user-profile.service';
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -25,7 +25,7 @@ describe('UserProfileService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserProfileService,
-        UserRepository,
+        AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
       ],
     });

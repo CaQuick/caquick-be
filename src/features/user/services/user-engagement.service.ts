@@ -3,20 +3,19 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { AccountUserRepository, UserBaseService } from '@/features/auth';
 import { ReviewEngagementRepository } from '@/features/review';
 import { MAX_REVIEW_COMMENT_LENGTH } from '@/features/user/constants/user.constants';
 import type { WriteReviewCommentInput } from '@/features/user/dto/inputs/write-review-comment.input';
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { MyReviewComment } from '@/features/user/types/user-review-output.type';
 
 @Injectable()
 export class UserEngagementService extends UserBaseService {
   constructor(
-    repo: UserRepository,
+    accounts: AccountUserRepository,
     private readonly engagement: ReviewEngagementRepository,
   ) {
-    super(repo);
+    super(accounts);
   }
 
   async likeReview(accountId: bigint, reviewId: bigint): Promise<boolean> {

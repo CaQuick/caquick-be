@@ -2,15 +2,18 @@ import { Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { hasMoreByOffset } from '@/common/utils/pagination';
+import { AccountUserRepository, UserBaseService } from '@/features/auth';
 import type { MySearchHistoriesInput } from '@/features/user/dto/inputs/my-search-histories.input';
 import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
 import type { SearchHistoryConnection } from '@/features/user/types/user-output.type';
 
 @Injectable()
 export class UserSearchService extends UserBaseService {
-  constructor(repo: UserRepository) {
-    super(repo);
+  constructor(
+    accounts: AccountUserRepository,
+    protected readonly repo: UserRepository,
+  ) {
+    super(accounts);
   }
 
   async mySearchHistories(

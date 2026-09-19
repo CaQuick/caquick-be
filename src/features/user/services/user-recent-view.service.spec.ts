@@ -1,3 +1,4 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ReviewReadRepository } from '@/features/review';
@@ -32,6 +33,7 @@ describe('UserRecentViewService (real DB)', () => {
         RecentProductViewRepository,
         ProductRepository,
         UserRepository,
+        AccountUserRepository,
       ],
     });
 

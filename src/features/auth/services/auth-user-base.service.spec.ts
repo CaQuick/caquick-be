@@ -1,5 +1,5 @@
-import { UserRepository } from '@/features/user/repositories/user.repository';
-import { UserBaseService } from '@/features/user/services/user-base.service';
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { UserBaseService } from '@/features/auth/services/auth-user-base.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -8,8 +8,8 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 /** UserBaseService는 abstract이므로 테스트용 concrete 클래스를 만든다 */
 class TestableUserBaseService extends UserBaseService {
-  constructor(repo: UserRepository) {
-    super(repo);
+  constructor(accounts: AccountUserRepository) {
+    super(accounts);
   }
 
   public testRequireActiveUser(accountId: bigint) {
@@ -47,9 +47,9 @@ describe('UserBaseService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [UserRepository],
+      providers: [AccountUserRepository],
     });
-    const repo = module.get(UserRepository);
+    const repo = module.get(AccountUserRepository);
     service = new TestableUserBaseService(repo);
     prisma = p;
   });

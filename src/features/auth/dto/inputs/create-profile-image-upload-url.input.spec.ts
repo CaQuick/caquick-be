@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { CreateProfileImageUploadUrlInput } from '@/features/user/dto/inputs/create-profile-image-upload-url.input';
+import { CreateProfileImageUploadUrlInput } from '@/features/auth/dto/inputs/create-profile-image-upload-url.input';
 
 function build(plain: object): CreateProfileImageUploadUrlInput {
   return plainToInstance(CreateProfileImageUploadUrlInput, plain);
