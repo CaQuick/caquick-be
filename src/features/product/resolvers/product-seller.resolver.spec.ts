@@ -1,0 +1,412 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { SellerAddProductImageInput } from '@/features/product/dto/inputs/seller-add-product-image.input';
+import type { SellerCreateOptionGroupInput } from '@/features/product/dto/inputs/seller-create-option-group.input';
+import type { SellerCreateOptionItemInput } from '@/features/product/dto/inputs/seller-create-option-item.input';
+import type { SellerCreateProductInput } from '@/features/product/dto/inputs/seller-create-product.input';
+import type { SellerReorderOptionGroupsInput } from '@/features/product/dto/inputs/seller-reorder-option-groups.input';
+import type { SellerReorderOptionItemsInput } from '@/features/product/dto/inputs/seller-reorder-option-items.input';
+import type { SellerReorderProductCustomTextTokensInput } from '@/features/product/dto/inputs/seller-reorder-product-custom-text-tokens.input';
+import type { SellerReorderProductImagesInput } from '@/features/product/dto/inputs/seller-reorder-product-images.input';
+import type { SellerSetProductActiveInput } from '@/features/product/dto/inputs/seller-set-product-active.input';
+import type { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
+import type { SellerSetProductCustomTemplateActiveInput } from '@/features/product/dto/inputs/seller-set-product-custom-template-active.input';
+import type { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
+import type { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
+import type { SellerUpdateOptionItemInput } from '@/features/product/dto/inputs/seller-update-option-item.input';
+import type { SellerUpdateProductInput } from '@/features/product/dto/inputs/seller-update-product.input';
+import type { SellerUpsertProductCustomTemplateInput } from '@/features/product/dto/inputs/seller-upsert-product-custom-template.input';
+import type { SellerUpsertProductCustomTextTokenInput } from '@/features/product/dto/inputs/seller-upsert-product-custom-text-token.input';
+import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { SellerProductMutationResolver } from '@/features/product/resolvers/product-seller-mutation.resolver';
+import { SellerProductQueryResolver } from '@/features/product/resolvers/product-seller-query.resolver';
+import { SellerCustomTemplateService } from '@/features/product/services/product-seller-custom-template.service';
+import { SellerProductImageService } from '@/features/product/services/product-seller-image.service';
+import { SellerProductLifecycleService } from '@/features/product/services/product-seller-lifecycle.service';
+import { SellerOptionService } from '@/features/product/services/product-seller-option.service';
+import { SellerProductQueryService } from '@/features/product/services/product-seller-query.service';
+import { SellerProductTaxonomyService } from '@/features/product/services/product-seller-taxonomy.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import { createProduct, setupSellerWithStore } from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { ownedUploadUrl, s3TestProviders } from '@/test/storage/s3-test.helper';
+
+describe('Seller Product Resolvers (real DB)', () => {
+  let queryResolver: SellerProductQueryResolver;
+  let mutationResolver: SellerProductMutationResolver;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [
+        ...s3TestProviders(),
+        SellerProductQueryResolver,
+        SellerProductMutationResolver,
+        SellerProductQueryService,
+        SellerProductLifecycleService,
+        SellerProductImageService,
+        SellerProductTaxonomyService,
+        SellerOptionService,
+        SellerCustomTemplateService,
+        StoreSellerRepository,
+        ProductRepository,
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
+      ],
+    });
+    queryResolver = module.get(SellerProductQueryResolver);
+    mutationResolver = module.get(SellerProductMutationResolver);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it('Mutation.sellerCreateProduct + Query.sellerProducts: DB 왕복 반영', async () => {
+    const { account } = await setupSellerWithStore(prisma);
+
+    const createInput: SellerCreateProductInput = {
+      name: '신상',
+      regularPrice: 10000,
+      initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, 'a.png'),
+    };
+    const created = await mutationResolver.sellerCreateProduct(
+      { accountId: account.id.toString() },
+      createInput,
+    );
+    expect(created.name).toBe('신상');
+
+    const list = await queryResolver.sellerProducts({
+      accountId: account.id.toString(),
+    });
+    expect(list.items).toHaveLength(1);
+  });
+
+  it('Mutation.sellerDeleteProduct: 타 store 상품 접근은 404 전파', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const other = await setupSellerWithStore(prisma);
+    const othersProduct = await createProduct(prisma, {
+      store_id: other.store.id,
+    });
+
+    await expect(
+      mutationResolver.sellerDeleteProduct(
+        { accountId: me.account.id.toString() },
+        othersProduct.id.toString(),
+      ),
+    ).rejects.toThrowDomain(404);
+  });
+
+  it('Mutation.sellerCreateOptionGroup: option 서비스 예외(BadRequest) 전파', async () => {
+    const { account, store } = await setupSellerWithStore(prisma);
+    const product = await createProduct(prisma, { store_id: store.id });
+
+    const badInput: SellerCreateOptionGroupInput = {
+      productId: product.id.toString(),
+      name: 'X',
+      minSelect: 3,
+      maxSelect: 1,
+    };
+    await expect(
+      mutationResolver.sellerCreateOptionGroup(
+        { accountId: account.id.toString() },
+        badInput,
+      ),
+    ).rejects.toThrowDomain(400);
+  });
+
+  /** 상세 분기/예외는 service.spec에서 담당 — resolver → service → repository 배선만 확인한다. truncateAll이 beforeEach라 각 it은 자체 setup으로 시작한다. */
+  describe('전체 Mutation 메서드 배선 커버리지', () => {
+    async function setupProductForMutationWiring() {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const auth = { accountId: account.id.toString() };
+      const createInput: SellerCreateProductInput = {
+        name: '원본',
+        regularPrice: 10000,
+        initialImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          account.id,
+          'init.png',
+        ),
+      };
+      const created = await mutationResolver.sellerCreateProduct(
+        auth,
+        createInput,
+      );
+      return { account, store, auth, productId: created.id };
+    }
+
+    it('product CRUD + image + category + tag mutation 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      // update / setActive
+      const updateInput: SellerUpdateProductInput = {
+        productId,
+        name: '수정됨',
+      };
+      const updated = await mutationResolver.sellerUpdateProduct(
+        auth,
+        updateInput,
+      );
+      expect(updated.name).toBe('수정됨');
+
+      const setActiveInput: SellerSetProductActiveInput = {
+        productId,
+        isActive: false,
+      };
+      const toggled = await mutationResolver.sellerSetProductActive(
+        auth,
+        setActiveInput,
+      );
+      expect(toggled.isActive).toBe(false);
+
+      // image add / reorder / delete
+      const addImageInput: SellerAddProductImageInput = {
+        productId,
+        imageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          BigInt(auth.accountId),
+          'b.png',
+        ),
+      };
+      const addedImage = await mutationResolver.sellerAddProductImage(
+        auth,
+        addImageInput,
+      );
+      const initialImage = await prisma.productImage.findFirstOrThrow({
+        where: {
+          product_id: BigInt(productId),
+          id: { not: BigInt(addedImage.id) },
+        },
+      });
+      const reorderImagesInput: SellerReorderProductImagesInput = {
+        productId,
+        imageIds: [addedImage.id, initialImage.id.toString()],
+      };
+      const reordered = await mutationResolver.sellerReorderProductImages(
+        auth,
+        reorderImagesInput,
+      );
+      expect(reordered.map((r) => r.id)).toEqual([
+        addedImage.id,
+        initialImage.id.toString(),
+      ]);
+      expect(
+        await mutationResolver.sellerDeleteProductImage(auth, addedImage.id),
+      ).toBe(true);
+
+      // category / tag
+      const category = await prisma.category.create({
+        data: { name: '생일', category_type: 'EVENT' },
+      });
+      const setCategoriesInput: SellerSetProductCategoriesInput = {
+        productId,
+        categoryIds: [category.id.toString()],
+      };
+      const withCategory = await mutationResolver.sellerSetProductCategories(
+        auth,
+        setCategoriesInput,
+      );
+      expect(withCategory.categories.map((c) => c.name)).toContain('생일');
+
+      const tag = await prisma.tag.create({ data: { name: '레터링' } });
+      const setTagsInput: SellerSetProductTagsInput = {
+        productId,
+        tagIds: [tag.id.toString()],
+      };
+      const withTag = await mutationResolver.sellerSetProductTags(
+        auth,
+        setTagsInput,
+      );
+      expect(withTag.tags.map((t) => t.name)).toContain('레터링');
+
+      // 본인 product delete
+      expect(await mutationResolver.sellerDeleteProduct(auth, productId)).toBe(
+        true,
+      );
+    });
+
+    it('option group lifecycle(create/update/reorder/delete) 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      const createGroup1: SellerCreateOptionGroupInput = {
+        productId,
+        name: '사이즈',
+        minSelect: 1,
+        maxSelect: 1,
+      };
+      const group1 = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroup1,
+      );
+      const createGroup2: SellerCreateOptionGroupInput = {
+        productId,
+        name: '토핑',
+        minSelect: 0,
+        maxSelect: 3,
+      };
+      const group2 = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroup2,
+      );
+
+      const updateGroupInput: SellerUpdateOptionGroupInput = {
+        optionGroupId: group1.id,
+        name: '사이즈(수정)',
+      };
+      const groupUpdated = await mutationResolver.sellerUpdateOptionGroup(
+        auth,
+        updateGroupInput,
+      );
+      expect(groupUpdated.name).toBe('사이즈(수정)');
+
+      const reorderGroupsInput: SellerReorderOptionGroupsInput = {
+        productId,
+        optionGroupIds: [group2.id, group1.id],
+      };
+      const reorderedGroups = await mutationResolver.sellerReorderOptionGroups(
+        auth,
+        reorderGroupsInput,
+      );
+      expect(reorderedGroups.map((g) => g.id)).toEqual([group2.id, group1.id]);
+
+      expect(
+        await mutationResolver.sellerDeleteOptionGroup(auth, group2.id),
+      ).toBe(true);
+    });
+
+    it('option item lifecycle(create/update/reorder/delete) 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+      const createGroupInput: SellerCreateOptionGroupInput = {
+        productId,
+        name: '사이즈',
+        minSelect: 0,
+        maxSelect: 3,
+      };
+      const group = await mutationResolver.sellerCreateOptionGroup(
+        auth,
+        createGroupInput,
+      );
+
+      const createItem1: SellerCreateOptionItemInput = {
+        optionGroupId: group.id,
+        title: 'S',
+        priceDelta: 0,
+      };
+      const item1 = await mutationResolver.sellerCreateOptionItem(
+        auth,
+        createItem1,
+      );
+      const createItem2: SellerCreateOptionItemInput = {
+        optionGroupId: group.id,
+        title: 'M',
+        priceDelta: 1000,
+      };
+      const item2 = await mutationResolver.sellerCreateOptionItem(
+        auth,
+        createItem2,
+      );
+
+      const updateItemInput: SellerUpdateOptionItemInput = {
+        optionItemId: item1.id,
+        title: 'Small',
+      };
+      const itemUpdated = await mutationResolver.sellerUpdateOptionItem(
+        auth,
+        updateItemInput,
+      );
+      expect(itemUpdated.title).toBe('Small');
+
+      const reorderItemsInput: SellerReorderOptionItemsInput = {
+        optionGroupId: group.id,
+        optionItemIds: [item2.id, item1.id],
+      };
+      const reorderedItems = await mutationResolver.sellerReorderOptionItems(
+        auth,
+        reorderItemsInput,
+      );
+      expect(reorderedItems.map((i) => i.id)).toEqual([item2.id, item1.id]);
+
+      expect(
+        await mutationResolver.sellerDeleteOptionItem(auth, item2.id),
+      ).toBe(true);
+    });
+
+    it('custom template + text token lifecycle 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      const upsertTemplateInput: SellerUpsertProductCustomTemplateInput = {
+        productId,
+        baseImageUrl: ownedUploadUrl(
+          'PRODUCT_IMAGE',
+          BigInt(auth.accountId),
+          'tpl.png',
+        ),
+        isActive: true,
+      };
+      const template = await mutationResolver.sellerUpsertProductCustomTemplate(
+        auth,
+        upsertTemplateInput,
+      );
+      const setTemplateActiveInput: SellerSetProductCustomTemplateActiveInput =
+        {
+          templateId: template.id,
+          isActive: false,
+        };
+      const templateActive =
+        await mutationResolver.sellerSetProductCustomTemplateActive(
+          auth,
+          setTemplateActiveInput,
+        );
+      expect(templateActive.isActive).toBe(false);
+
+      const upsertToken1: SellerUpsertProductCustomTextTokenInput = {
+        templateId: template.id,
+        tokenKey: 'name',
+        defaultText: '기본',
+      };
+      const token1 = await mutationResolver.sellerUpsertProductCustomTextToken(
+        auth,
+        upsertToken1,
+      );
+      const upsertToken2: SellerUpsertProductCustomTextTokenInput = {
+        templateId: template.id,
+        tokenKey: 'age',
+        defaultText: '10',
+      };
+      const token2 = await mutationResolver.sellerUpsertProductCustomTextToken(
+        auth,
+        upsertToken2,
+      );
+
+      const reorderTokensInput: SellerReorderProductCustomTextTokensInput = {
+        templateId: template.id,
+        tokenIds: [token2.id, token1.id],
+      };
+      const reorderedTokens =
+        await mutationResolver.sellerReorderProductCustomTextTokens(
+          auth,
+          reorderTokensInput,
+        );
+      expect(reorderedTokens.map((t) => t.id)).toEqual([token2.id, token1.id]);
+
+      expect(
+        await mutationResolver.sellerDeleteProductCustomTextToken(
+          auth,
+          token1.id,
+        ),
+      ).toBe(true);
+    });
+  });
+});
