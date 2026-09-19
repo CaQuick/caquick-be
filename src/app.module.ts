@@ -26,7 +26,6 @@ import { AuthModule } from '@/features/auth/auth.module';
 import { ConversationModule } from '@/features/conversation';
 import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
-import { SellerModule } from '@/features/seller/seller.module';
 import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
 import { UserModule } from '@/features/user/user.module';
@@ -104,7 +103,6 @@ import { PrismaModule } from '@/prisma';
     SearchModule,
     StoreModule,
     UserModule,
-    SellerModule,
     AdminModule,
   ],
   controllers: [],

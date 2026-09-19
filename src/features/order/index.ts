@@ -6,12 +6,10 @@ export {
   type AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 export { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
-// 주문 품목·상태 이력 출력 1벌. 구매자(user)·판매자(seller)·관리자(admin) 주문 상세가 같은 매퍼를 쓴다.
+// 주문 품목·상태 이력 출력 1벌. 구매자(user)·관리자(admin) 주문 상세가 같은 매퍼를 쓴다(판매자는 order 안).
 export {
   toOrderItemDetail,
   toOrderStatusHistory,
-  type OrderItemDetailRow,
-  type OrderStatusHistoryRow,
 } from '@/features/order/services/order-output-mappers.helper';
 export type {
   OrderItemDetailOutput,
