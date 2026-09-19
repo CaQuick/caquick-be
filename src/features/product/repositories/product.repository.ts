@@ -85,6 +85,8 @@ export interface ProductDetailRow {
   sale_price: number | null;
   currency: string;
   preparation_time_minutes: number;
+  /** 주문 생성 시 매장명 스냅샷용 */
+  store: { store_name: string };
   images: { image_url: string }[];
   option_groups: {
     id: bigint;
@@ -1031,6 +1033,7 @@ export class ProductRepository {
         sale_price: true,
         currency: true,
         preparation_time_minutes: true,
+        store: { select: { store_name: true } },
         images: {
           where: activeWhere,
           orderBy: { sort_order: 'asc' },

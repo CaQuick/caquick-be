@@ -774,10 +774,11 @@ describe('UserReviewService (real DB)', () => {
 
     it('카드 필드(이미지·매장명·지역명·픽업시각·orderItemId)를 매핑한다', async () => {
       const setup = await setupReviewableOrderItem();
-      await prisma.productImage.create({
+      // 카드 이미지·매장명은 주문 시점 스냅샷 — 주문 뒤에 올린 이미지는 반영되지 않으므로 품목에 직접 둔다
+      await prisma.orderItem.update({
+        where: { id: setup.orderItemId },
         data: {
-          product_id: setup.productId,
-          image_url: 'https://img/review-target.png',
+          product_thumbnail_url_snapshot: 'https://img/review-target.png',
         },
       });
       await prisma.store.update({

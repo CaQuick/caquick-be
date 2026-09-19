@@ -825,6 +825,9 @@ model OrderItem {
   product_name_snapshot  String @db.VarChar(200)
   regular_price_snapshot Int    @db.UnsignedInt
   sale_price_snapshot    Int?   @db.UnsignedInt
+  // 주문 시점 표시 스냅샷(P1-16). 목록·상세·리뷰 가능 목록이 store·product_image를 조인하지 않게 한다.
+  store_name_snapshot            String  @db.VarChar(200)
+  product_thumbnail_url_snapshot String? @db.VarChar(2048)
 
   quantity            Int @default(1) @db.UnsignedSmallInt
   item_subtotal_price Int @default(0) @db.UnsignedInt

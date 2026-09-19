@@ -133,6 +133,9 @@ export class OrderCheckoutService {
         storeId: product.store_id,
         productId: product.id,
         productNameSnapshot: product.name,
+        // 주문 시점 표시값 — 이후 매장명·이미지가 바뀌어도 주문 화면은 이 값을 유지한다(P1-16)
+        storeNameSnapshot: product.store.store_name,
+        productThumbnailUrlSnapshot: product.images[0]?.image_url ?? null,
         regularPriceSnapshot: product.regular_price,
         salePriceSnapshot: product.sale_price,
         quantity,

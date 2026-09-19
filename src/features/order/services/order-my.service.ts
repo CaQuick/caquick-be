@@ -52,7 +52,6 @@ export class UserOrderService {
     return {
       items: sliced.map((order) => {
         const firstItem = order.items[0];
-        const firstImage = firstItem?.product?.images?.[0];
         const itemCount = order._count.items;
 
         return {
@@ -63,10 +62,11 @@ export class UserOrderService {
           pickupAt: order.pickup_at,
           representativeProductName:
             firstItem?.product_name_snapshot ?? '상품 정보 없음',
-          representativeProductImageUrl: firstImage?.image_url ?? null,
+          representativeProductImageUrl:
+            firstItem?.product_thumbnail_url_snapshot ?? null,
           additionalItemCount: Math.max(0, itemCount - 1),
           totalPrice: order.total_price,
-          storeName: firstItem?.store?.store_name ?? '매장 정보 없음',
+          storeName: firstItem?.store_name_snapshot ?? '매장 정보 없음',
           hasReviewableItem: reviewableOrderIds.has(order.id.toString()),
         };
       }),
@@ -108,7 +108,7 @@ export class UserOrderService {
       statusHistories: order.status_histories.map(toOrderStatusHistory),
       items: order.items.map((item) => ({
         item: toOrderItemDetail(item),
-        representativeImageUrl: item.product?.images?.[0]?.image_url ?? null,
+        representativeImageUrl: item.product_thumbnail_url_snapshot,
         hasMyReview: Boolean(item.review && !item.review.deleted_at),
         canWriteReview:
           isPickedUp && (!item.review || Boolean(item.review.deleted_at)),
@@ -116,7 +116,8 @@ export class UserOrderService {
       store: store
         ? {
             storeId: store.id.toString(),
-            storeName: store.store_name,
+            // 매장명은 주문 시점 스냅샷, 연락처·주소는 현재 매장 정보
+            storeName: firstItem.store_name_snapshot,
             storePhone: store.store_phone,
             addressFull: store.address_full,
             addressCity: store.address_city,

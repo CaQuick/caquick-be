@@ -33,10 +33,8 @@ interface ReviewRow {
   created_at: Date;
   order_item?: {
     product_name_snapshot: string;
-    store?: { store_name: string };
-    product?: {
-      images?: { image_url: string }[];
-    };
+    store_name_snapshot: string;
+    product_thumbnail_url_snapshot: string | null;
   } | null;
   media?: {
     media_type: ReviewMediaType;
@@ -74,8 +72,8 @@ export class UserReviewService {
         orderItemId: item.id.toString(),
         productId: item.product_id.toString(),
         productName: item.product_name_snapshot,
-        productImageUrl: item.product?.images?.[0]?.image_url ?? null,
-        storeName: item.store?.store_name ?? '매장 정보 없음',
+        productImageUrl: item.product_thumbnail_url_snapshot,
+        storeName: item.store_name_snapshot,
         regionLabel: item.store ? buildRegionLabel(item.store) : null,
         pickedUpAt: item.order?.picked_up_at ?? null,
       })),
@@ -282,8 +280,8 @@ export class UserReviewService {
       orderItemId: r.order_item_id.toString(),
       productId: r.product_id.toString(),
       productName: r.order_item?.product_name_snapshot ?? '',
-      productImageUrl: r.order_item?.product?.images?.[0]?.image_url ?? null,
-      storeName: r.order_item?.store?.store_name ?? '',
+      productImageUrl: r.order_item?.product_thumbnail_url_snapshot ?? null,
+      storeName: r.order_item?.store_name_snapshot ?? '',
       rating,
       content: r.content,
       media: (r.media ?? []).map(toReviewMedia),
