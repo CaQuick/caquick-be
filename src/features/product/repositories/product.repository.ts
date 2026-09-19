@@ -1,9 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import {
   type BannerLinkType,
   type CategoryType,
   Prisma,
+  type Product,
+  type ProductCustomTemplate,
+  type ProductCustomTextToken,
+  type ProductImage,
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
@@ -111,7 +120,26 @@ export interface ProductDetailRow {
 
 @Injectable()
 export class ProductRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
+
+  /**
+   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다(P1-12) — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
+   * 판매자 경로의 write 메서드가 모두 이 헬퍼를 거치므로 감사 누락이 구조적으로 생기지 않는다.
+   */
+  private async writeWithAudit<T>(
+    write: (tx: Prisma.TransactionClient) => Promise<T>,
+    audit: (result: T) => AuditEntry,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const result = await write(tx);
+      await this.auditLogs.createAuditLog(audit(result), tx);
+      return result;
+    });
+  }
   /** 목록과 카운트가 같은 조건을 보도록 한 곳에서 만든다(커서 제외). */
   private storeProductScopeWhere(args: {
     storeId: bigint;
@@ -336,36 +364,65 @@ export class ProductRepository {
     });
   }
 
-  async createProduct(args: {
-    storeId: bigint;
-    data: Omit<Prisma.ProductUncheckedCreateInput, 'store_id'>;
-  }) {
-    return this.prisma.product.create({
-      data: {
-        store_id: args.storeId,
-        ...args.data,
-      },
-    });
+  async createProduct(
+    args: {
+      storeId: bigint;
+      data: Omit<Prisma.ProductUncheckedCreateInput, 'store_id'>;
+      initialImageUrl: string;
+    },
+    audit: (row: Product) => AuditEntry,
+  ) {
+    // 대표 이미지까지 한 트랜잭션에서 만든다 — 상품만 남고 이미지가 빠지는 상태를 두지 않는다
+    return this.writeWithAudit(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          store_id: args.storeId,
+          ...args.data,
+        },
+      });
+      await tx.productImage.create({
+        data: {
+          product_id: product.id,
+          image_url: args.initialImageUrl,
+          sort_order: 0,
+        },
+      });
+      return product;
+    }, audit);
   }
 
-  async updateProduct(args: {
-    productId: bigint;
-    data: Prisma.ProductUpdateInput;
-  }) {
-    return this.prisma.product.update({
-      where: { id: args.productId },
-      data: args.data,
-    });
+  async updateProduct(
+    args: {
+      productId: bigint;
+      data: Prisma.ProductUpdateInput;
+    },
+    audit: (row: Product) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.product.update({
+          where: { id: args.productId },
+          data: args.data,
+        }),
+      audit,
+    );
   }
 
-  async softDeleteProduct(productId: bigint): Promise<void> {
-    await this.prisma.product.update({
-      where: { id: productId },
-      data: {
-        deleted_at: new Date(),
-        is_active: false,
-      },
-    });
+  async softDeleteProduct(
+    productId: bigint,
+    audit: (row: Product) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.product.update({
+          where: { id: productId },
+          data: {
+            deleted_at: new Date(),
+            is_active: false,
+          },
+        }),
+      audit,
+    );
   }
 
   async countProductImages(productId: bigint): Promise<number> {
@@ -374,18 +431,25 @@ export class ProductRepository {
     });
   }
 
-  async addProductImage(args: {
-    productId: bigint;
-    imageUrl: string;
-    sortOrder: number;
-  }) {
-    return this.prisma.productImage.create({
-      data: {
-        product_id: args.productId,
-        image_url: args.imageUrl,
-        sort_order: args.sortOrder,
-      },
-    });
+  async addProductImage(
+    args: {
+      productId: bigint;
+      imageUrl: string;
+      sortOrder: number;
+    },
+    audit: (row: ProductImage) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productImage.create({
+          data: {
+            product_id: args.productId,
+            image_url: args.imageUrl,
+            sort_order: args.sortOrder,
+          },
+        }),
+      audit,
+    );
   }
 
   async findProductImageById(imageId: bigint) {
@@ -411,15 +475,25 @@ export class ProductRepository {
     });
   }
 
-  async softDeleteProductImage(imageId: bigint): Promise<void> {
-    await this.prisma.productImage.update({
-      where: { id: imageId },
-      data: { deleted_at: new Date() },
-    });
+  async softDeleteProductImage(
+    imageId: bigint,
+    audit: (row: ProductImage) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.productImage.update({
+          where: { id: imageId },
+          data: { deleted_at: new Date() },
+        }),
+      audit,
+    );
   }
 
-  async reorderProductImages(args: { productId: bigint; imageIds: bigint[] }) {
-    return this.prisma.$transaction(async (tx) => {
+  async reorderProductImages(
+    args: { productId: bigint; imageIds: bigint[] },
+    audit: (rows: { id: bigint }[]) => AuditEntry,
+  ) {
+    return this.writeWithAudit(async (tx) => {
       await Promise.all(
         args.imageIds.map((id, index) =>
           tx.productImage.update({
@@ -435,7 +509,7 @@ export class ProductRepository {
         },
         orderBy: { sort_order: 'asc' },
       });
-    });
+    }, audit);
   }
 
   async findCategoryIds(ids: bigint[]) {
@@ -460,12 +534,15 @@ export class ProductRepository {
    * 연결 교체는 soft-delete로 통일한다(관리자 카테고리 삭제 경로와 같은 방식) — 빠진 연결은 deleted_at을 찍고,
    * 같은 (product, category)의 삭제 행이 있으면 복원한다(unique 인덱스가 삭제 행도 세므로 새로 만들 수 없다).
    */
-  async replaceProductCategories(args: {
-    productId: bigint;
-    categoryIds: bigint[];
-  }): Promise<void> {
+  async replaceProductCategories(
+    args: {
+      productId: bigint;
+      categoryIds: bigint[];
+    },
+    audit: () => AuditEntry,
+  ): Promise<void> {
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    await this.writeWithAudit(async (tx) => {
       await tx.productCategory.updateMany({
         where: {
           product_id: args.productId,
@@ -501,16 +578,19 @@ export class ProductRepository {
           })),
         });
       }
-    });
+    }, audit);
   }
 
   /** replaceProductCategories와 같은 soft-delete + 복원 방식. */
-  async replaceProductTags(args: {
-    productId: bigint;
-    tagIds: bigint[];
-  }): Promise<void> {
+  async replaceProductTags(
+    args: {
+      productId: bigint;
+      tagIds: bigint[];
+    },
+    audit: () => AuditEntry,
+  ): Promise<void> {
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    await this.writeWithAudit(async (tx) => {
       await tx.productTag.updateMany({
         where: {
           product_id: args.productId,
@@ -546,24 +626,31 @@ export class ProductRepository {
           })),
         });
       }
-    });
+    }, audit);
   }
 
-  async createOptionGroup(args: {
-    productId: bigint;
-    data: Omit<Prisma.ProductOptionGroupUncheckedCreateInput, 'product_id'>;
-  }) {
-    return this.prisma.productOptionGroup.create({
-      data: {
-        product_id: args.productId,
-        ...args.data,
-      },
-      include: {
-        option_items: {
-          orderBy: { sort_order: 'asc' },
-        },
-      },
-    });
+  async createOptionGroup(
+    args: {
+      productId: bigint;
+      data: Omit<Prisma.ProductOptionGroupUncheckedCreateInput, 'product_id'>;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productOptionGroup.create({
+          data: {
+            product_id: args.productId,
+            ...args.data,
+          },
+          include: {
+            option_items: {
+              orderBy: { sort_order: 'asc' },
+            },
+          },
+        }),
+      audit,
+    );
   }
 
   async findOptionGroupById(id: bigint) {
@@ -584,29 +671,43 @@ export class ProductRepository {
     });
   }
 
-  async updateOptionGroup(args: {
-    optionGroupId: bigint;
-    data: Prisma.ProductOptionGroupUpdateInput;
-  }) {
-    return this.prisma.productOptionGroup.update({
-      where: { id: args.optionGroupId },
-      data: args.data,
-      include: {
-        option_items: {
-          orderBy: { sort_order: 'asc' },
-        },
-      },
-    });
+  async updateOptionGroup(
+    args: {
+      optionGroupId: bigint;
+      data: Prisma.ProductOptionGroupUpdateInput;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productOptionGroup.update({
+          where: { id: args.optionGroupId },
+          data: args.data,
+          include: {
+            option_items: {
+              orderBy: { sort_order: 'asc' },
+            },
+          },
+        }),
+      audit,
+    );
   }
 
-  async softDeleteOptionGroup(optionGroupId: bigint): Promise<void> {
-    await this.prisma.productOptionGroup.update({
-      where: { id: optionGroupId },
-      data: {
-        deleted_at: new Date(),
-        is_active: false,
-      },
-    });
+  async softDeleteOptionGroup(
+    optionGroupId: bigint,
+    audit: (row: { id: bigint }) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.productOptionGroup.update({
+          where: { id: optionGroupId },
+          data: {
+            deleted_at: new Date(),
+            is_active: false,
+          },
+        }),
+      audit,
+    );
   }
 
   async listOptionGroupsByProduct(productId: bigint) {
@@ -622,11 +723,14 @@ export class ProductRepository {
     });
   }
 
-  async reorderOptionGroups(args: {
-    productId: bigint;
-    optionGroupIds: bigint[];
-  }) {
-    return this.prisma.$transaction(async (tx) => {
+  async reorderOptionGroups(
+    args: {
+      productId: bigint;
+      optionGroupIds: bigint[];
+    },
+    audit: (rows: { id: bigint }[]) => AuditEntry,
+  ) {
+    return this.writeWithAudit(async (tx) => {
       await Promise.all(
         args.optionGroupIds.map((id, index) =>
           tx.productOptionGroup.update({
@@ -645,19 +749,29 @@ export class ProductRepository {
           },
         },
       });
-    });
+    }, audit);
   }
 
-  async createOptionItem(args: {
-    optionGroupId: bigint;
-    data: Omit<Prisma.ProductOptionItemUncheckedCreateInput, 'option_group_id'>;
-  }) {
-    return this.prisma.productOptionItem.create({
-      data: {
-        option_group_id: args.optionGroupId,
-        ...args.data,
-      },
-    });
+  async createOptionItem(
+    args: {
+      optionGroupId: bigint;
+      data: Omit<
+        Prisma.ProductOptionItemUncheckedCreateInput,
+        'option_group_id'
+      >;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productOptionItem.create({
+          data: {
+            option_group_id: args.optionGroupId,
+            ...args.data,
+          },
+        }),
+      audit,
+    );
   }
 
   async findOptionItemById(id: bigint) {
@@ -678,24 +792,38 @@ export class ProductRepository {
     });
   }
 
-  async updateOptionItem(args: {
-    optionItemId: bigint;
-    data: Prisma.ProductOptionItemUpdateInput;
-  }) {
-    return this.prisma.productOptionItem.update({
-      where: { id: args.optionItemId },
-      data: args.data,
-    });
+  async updateOptionItem(
+    args: {
+      optionItemId: bigint;
+      data: Prisma.ProductOptionItemUpdateInput;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productOptionItem.update({
+          where: { id: args.optionItemId },
+          data: args.data,
+        }),
+      audit,
+    );
   }
 
-  async softDeleteOptionItem(optionItemId: bigint): Promise<void> {
-    await this.prisma.productOptionItem.update({
-      where: { id: optionItemId },
-      data: {
-        deleted_at: new Date(),
-        is_active: false,
-      },
-    });
+  async softDeleteOptionItem(
+    optionItemId: bigint,
+    audit: (row: { id: bigint }) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.productOptionItem.update({
+          where: { id: optionItemId },
+          data: {
+            deleted_at: new Date(),
+            is_active: false,
+          },
+        }),
+      audit,
+    );
   }
 
   async listOptionItemsByGroup(optionGroupId: bigint) {
@@ -705,11 +833,14 @@ export class ProductRepository {
     });
   }
 
-  async reorderOptionItems(args: {
-    optionGroupId: bigint;
-    optionItemIds: bigint[];
-  }) {
-    return this.prisma.$transaction(async (tx) => {
+  async reorderOptionItems(
+    args: {
+      optionGroupId: bigint;
+      optionItemIds: bigint[];
+    },
+    audit: (rows: { id: bigint }[]) => AuditEntry,
+  ) {
+    return this.writeWithAudit(async (tx) => {
       await Promise.all(
         args.optionItemIds.map((id, index) =>
           tx.productOptionItem.update({
@@ -723,33 +854,40 @@ export class ProductRepository {
         where: { option_group_id: args.optionGroupId },
         orderBy: { sort_order: 'asc' },
       });
-    });
+    }, audit);
   }
 
-  async upsertProductCustomTemplate(args: {
-    productId: bigint;
-    baseImageUrl: string;
-    isActive: boolean;
-  }) {
-    return this.prisma.productCustomTemplate.upsert({
-      where: {
-        product_id: args.productId,
-      },
-      create: {
-        product_id: args.productId,
-        base_image_url: args.baseImageUrl,
-        is_active: args.isActive,
-      },
-      update: {
-        base_image_url: args.baseImageUrl,
-        is_active: args.isActive,
-      },
-      include: {
-        text_tokens: {
-          orderBy: { sort_order: 'asc' },
-        },
-      },
-    });
+  async upsertProductCustomTemplate(
+    args: {
+      productId: bigint;
+      baseImageUrl: string;
+      isActive: boolean;
+    },
+    audit: (row: ProductCustomTemplate) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productCustomTemplate.upsert({
+          where: {
+            product_id: args.productId,
+          },
+          create: {
+            product_id: args.productId,
+            base_image_url: args.baseImageUrl,
+            is_active: args.isActive,
+          },
+          update: {
+            base_image_url: args.baseImageUrl,
+            is_active: args.isActive,
+          },
+          include: {
+            text_tokens: {
+              orderBy: { sort_order: 'asc' },
+            },
+          },
+        }),
+      audit,
+    );
   }
 
   async findCustomTemplateById(id: bigint) {
@@ -770,64 +908,65 @@ export class ProductRepository {
     });
   }
 
-  async setCustomTemplateActive(templateId: bigint, isActive: boolean) {
-    return this.prisma.productCustomTemplate.update({
-      where: { id: templateId },
-      data: {
-        is_active: isActive,
-      },
-      include: {
-        text_tokens: {
-          orderBy: { sort_order: 'asc' },
-        },
-      },
-    });
+  async setCustomTemplateActive(
+    templateId: bigint,
+    isActive: boolean,
+    audit: (row: ProductCustomTemplate) => AuditEntry,
+  ) {
+    return this.writeWithAudit(
+      (tx) =>
+        tx.productCustomTemplate.update({
+          where: { id: templateId },
+          data: {
+            is_active: isActive,
+          },
+          include: {
+            text_tokens: {
+              orderBy: { sort_order: 'asc' },
+            },
+          },
+        }),
+      audit,
+    );
   }
 
-  async upsertCustomTextToken(args: {
-    tokenId?: bigint;
-    templateId: bigint;
-    tokenKey: string;
-    defaultText: string;
-    maxLength: number;
-    sortOrder: number;
-    isRequired: boolean;
-    posX: number | null;
-    posY: number | null;
-    width: number | null;
-    height: number | null;
-  }) {
-    if (args.tokenId) {
-      return this.prisma.productCustomTextToken.update({
-        where: { id: args.tokenId },
-        data: {
-          token_key: args.tokenKey,
-          default_text: args.defaultText,
-          max_length: args.maxLength,
-          sort_order: args.sortOrder,
-          is_required: args.isRequired,
-          pos_x: args.posX,
-          pos_y: args.posY,
-          width: args.width,
-          height: args.height,
-        },
-      });
-    }
-
-    return this.prisma.productCustomTextToken.create({
-      data: {
-        template_id: args.templateId,
-        token_key: args.tokenKey,
-        default_text: args.defaultText,
-        max_length: args.maxLength,
-        sort_order: args.sortOrder,
-        is_required: args.isRequired,
-        pos_x: args.posX,
-        pos_y: args.posY,
-        width: args.width,
-        height: args.height,
-      },
-    });
+  async upsertCustomTextToken(
+    args: {
+      tokenId?: bigint;
+      templateId: bigint;
+      tokenKey: string;
+      defaultText: string;
+      maxLength: number;
+      sortOrder: number;
+      isRequired: boolean;
+      posX: number | null;
+      posY: number | null;
+      width: number | null;
+      height: number | null;
+    },
+    audit: (row: ProductCustomTextToken) => AuditEntry,
+  ) {
+    const data = {
+      token_key: args.tokenKey,
+      default_text: args.defaultText,
+      max_length: args.maxLength,
+      sort_order: args.sortOrder,
+      is_required: args.isRequired,
+      pos_x: args.posX,
+      pos_y: args.posY,
+      width: args.width,
+      height: args.height,
+    };
+    const tokenId = args.tokenId;
+    return this.writeWithAudit(
+      (tx) =>
+        tokenId
+          ? tx.productCustomTextToken.update({ where: { id: tokenId }, data })
+          : tx.productCustomTextToken.create({
+              data: { template_id: args.templateId, ...data },
+            }),
+      audit,
+    );
   }
 
   async findCustomTextTokenById(id: bigint) {
@@ -848,13 +987,20 @@ export class ProductRepository {
     });
   }
 
-  async softDeleteCustomTextToken(id: bigint): Promise<void> {
-    await this.prisma.productCustomTextToken.update({
-      where: { id },
-      data: {
-        deleted_at: new Date(),
-      },
-    });
+  async softDeleteCustomTextToken(
+    id: bigint,
+    audit: (row: { id: bigint }) => AuditEntry,
+  ): Promise<void> {
+    await this.writeWithAudit(
+      (tx) =>
+        tx.productCustomTextToken.update({
+          where: { id },
+          data: {
+            deleted_at: new Date(),
+          },
+        }),
+      audit,
+    );
   }
 
   async listCustomTextTokens(templateId: bigint) {
@@ -866,11 +1012,14 @@ export class ProductRepository {
     });
   }
 
-  async reorderCustomTextTokens(args: {
-    templateId: bigint;
-    tokenIds: bigint[];
-  }) {
-    return this.prisma.$transaction(async (tx) => {
+  async reorderCustomTextTokens(
+    args: {
+      templateId: bigint;
+      tokenIds: bigint[];
+    },
+    audit: (rows: { id: bigint }[]) => AuditEntry,
+  ) {
+    return this.writeWithAudit(async (tx) => {
       await Promise.all(
         args.tokenIds.map((id, index) =>
           tx.productCustomTextToken.update({
@@ -886,7 +1035,7 @@ export class ProductRepository {
         },
         orderBy: { sort_order: 'asc' },
       });
-    });
+    }, audit);
   }
 
   async findActiveProduct(productId: bigint): Promise<{ id: bigint } | null> {

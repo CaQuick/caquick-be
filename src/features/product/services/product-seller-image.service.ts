@@ -64,22 +64,24 @@ export class SellerProductImageService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    const row = await this.productRepository.addProductImage({
-      productId,
-      imageUrl,
-      sortOrder: input.sortOrder ?? count,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        imageId: row.id.toString(),
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12)
+    const row = await this.productRepository.addProductImage(
+      {
+        productId,
+        imageUrl,
+        sortOrder: input.sortOrder ?? count,
       },
-    });
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          imageId: created.id.toString(),
+        },
+      }),
+    );
 
     return toProductImageOutput(row);
   }
@@ -101,8 +103,7 @@ export class SellerProductImageService extends SellerBaseService {
       throw new DomainException('PRODUCT_IMAGE_MIN_REQUIRED');
     }
 
-    await this.productRepository.softDeleteProductImage(imageId);
-    await this.auditLogs.createAuditLog({
+    await this.productRepository.softDeleteProductImage(imageId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -111,7 +112,7 @@ export class SellerProductImageService extends SellerBaseService {
       beforeJson: {
         imageId: image.id.toString(),
       },
-    });
+    }));
 
     return true;
   }
@@ -143,21 +144,22 @@ export class SellerProductImageService extends SellerBaseService {
       }
     }
 
-    const rows = await this.productRepository.reorderProductImages({
-      productId,
-      imageIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        imageIds: imageIds.map((id) => id.toString()),
+    const rows = await this.productRepository.reorderProductImages(
+      {
+        productId,
+        imageIds,
       },
-    });
+      () => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          imageIds: imageIds.map((id) => id.toString()),
+        },
+      }),
+    );
 
     return rows.map((row) => toProductImageOutput(row));
   }

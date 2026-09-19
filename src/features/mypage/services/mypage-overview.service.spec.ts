@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserMypageService } from '@/features/mypage/services/mypage-overview.service';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -36,6 +38,7 @@ describe('UserMypageService (real DB)', () => {
         ProductCardService,
         ReviewReadRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         UserMypageService,
         AccountUserRepository,
         OrderRepository,

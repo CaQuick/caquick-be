@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import {
   ProductCardService,
@@ -27,6 +29,7 @@ describe('ProductCardService (real DB)', () => {
         WishlistRepository,
         ProductCardService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ReviewReadRepository,
       ],
     });

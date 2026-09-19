@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserWishlistService } from '@/features/mypage/services/mypage-wishlist.service';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -29,6 +31,7 @@ describe('UserWishlistService (real DB)', () => {
         UserWishlistService,
         AccountUserRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ReviewReadRepository,
       ],
     });

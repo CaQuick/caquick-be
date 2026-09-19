@@ -62,23 +62,23 @@ export class SellerCustomTemplateService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    const row = await this.productRepository.upsertProductCustomTemplate({
-      productId,
-      baseImageUrl,
-      isActive: input.isActive ?? true,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        templateId: row.id.toString(),
+    const row = await this.productRepository.upsertProductCustomTemplate(
+      {
+        productId,
+        baseImageUrl,
+        isActive: input.isActive ?? true,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          templateId: created.id.toString(),
+        },
+      }),
+    );
     return this.toCustomTemplateOutput(row);
   }
 
@@ -98,20 +98,18 @@ export class SellerCustomTemplateService extends SellerBaseService {
     const row = await this.productRepository.setCustomTemplateActive(
       templateId,
       input.isActive,
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: template.product_id,
+        action: AuditActionType.STATUS_CHANGE,
+        afterJson: {
+          templateId: created.id.toString(),
+          isActive: created.is_active,
+        },
+      }),
     );
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: template.product_id,
-      action: AuditActionType.STATUS_CHANGE,
-      afterJson: {
-        templateId: row.id.toString(),
-        isActive: row.is_active,
-      },
-    });
-
     return this.toCustomTemplateOutput(row);
   }
 
@@ -141,35 +139,35 @@ export class SellerCustomTemplateService extends SellerBaseService {
       }
     }
 
-    const row = await this.productRepository.upsertCustomTextToken({
-      tokenId,
-      templateId,
-      tokenKey: cleanRequiredText(input.tokenKey, MAX_TOKEN_KEY_LENGTH),
-      defaultText: cleanRequiredText(
-        input.defaultText,
-        MAX_TOKEN_DEFAULT_TEXT_LENGTH,
-      ),
-      maxLength: input.maxLength ?? DEFAULT_TOKEN_MAX_LENGTH,
-      sortOrder: input.sortOrder ?? 0,
-      isRequired: input.isRequired ?? true,
-      posX: input.posX ?? null,
-      posY: input.posY ?? null,
-      width: input.width ?? null,
-      height: input.height ?? null,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: template.product_id,
-      action: tokenId ? AuditActionType.UPDATE : AuditActionType.CREATE,
-      afterJson: {
-        tokenId: row.id.toString(),
-        tokenKey: row.token_key,
+    const row = await this.productRepository.upsertCustomTextToken(
+      {
+        tokenId,
+        templateId,
+        tokenKey: cleanRequiredText(input.tokenKey, MAX_TOKEN_KEY_LENGTH),
+        defaultText: cleanRequiredText(
+          input.defaultText,
+          MAX_TOKEN_DEFAULT_TEXT_LENGTH,
+        ),
+        maxLength: input.maxLength ?? DEFAULT_TOKEN_MAX_LENGTH,
+        sortOrder: input.sortOrder ?? 0,
+        isRequired: input.isRequired ?? true,
+        posX: input.posX ?? null,
+        posY: input.posY ?? null,
+        width: input.width ?? null,
+        height: input.height ?? null,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: template.product_id,
+        action: tokenId ? AuditActionType.UPDATE : AuditActionType.CREATE,
+        afterJson: {
+          tokenId: created.id.toString(),
+          tokenKey: created.token_key,
+        },
+      }),
+    );
     return this.toCustomTextTokenOutput(row);
   }
 
@@ -183,8 +181,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
       throw new DomainException('CUSTOM_TEXT_TOKEN_NOT_FOUND');
     }
 
-    await this.productRepository.softDeleteCustomTextToken(tokenId);
-    await this.auditLogs.createAuditLog({
+    await this.productRepository.softDeleteCustomTextToken(tokenId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -194,8 +191,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
         tokenId: token.id.toString(),
         tokenKey: token.token_key,
       },
-    });
-
+    }));
     return true;
   }
 
@@ -226,22 +222,22 @@ export class SellerCustomTemplateService extends SellerBaseService {
       }
     }
 
-    const rows = await this.productRepository.reorderCustomTextTokens({
-      templateId,
-      tokenIds,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: template.product_id,
-      action: AuditActionType.UPDATE,
-      afterJson: {
-        tokenIds: tokenIds.map((id) => id.toString()),
+    const rows = await this.productRepository.reorderCustomTextTokens(
+      {
+        templateId,
+        tokenIds,
       },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: template.product_id,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          tokenIds: tokenIds.map((id) => id.toString()),
+        },
+      }),
+    );
     return rows.map((row) => this.toCustomTextTokenOutput(row));
   }
 

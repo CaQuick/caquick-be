@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserMypageQueryResolver } from '@/features/mypage/resolvers/mypage-overview-query.resolver';
 import { UserMypageService } from '@/features/mypage/services/mypage-overview.service';
@@ -34,6 +36,7 @@ describe('User Mypage Resolver (real DB)', () => {
         ProductCardService,
         ReviewReadRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         UserMypageQueryResolver,
         UserMypageService,
         AccountUserRepository,

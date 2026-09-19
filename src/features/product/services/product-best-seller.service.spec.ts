@@ -1,4 +1,6 @@
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
 import { ProductCardService } from '@/features/product/services/product-card.service';
@@ -37,6 +39,7 @@ describe('ProductBestSellerService (real DB)', () => {
         ProductCardService,
         ProductBestSellerService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ReviewReadRepository,
         StoreStatsRepository,
         ClockService,

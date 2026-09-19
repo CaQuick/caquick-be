@@ -78,45 +78,42 @@ export class SellerProductLifecycleService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    const created = await this.productRepository.createProduct({
-      storeId: ctx.storeId,
-      data: {
-        name: cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH),
-        description: cleanNullableText(
-          input.description,
-          MAX_PRODUCT_DESCRIPTION_LENGTH,
-        ),
-        purchase_notice: cleanNullableText(
-          input.purchaseNotice,
-          MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
-        ),
-        regular_price: input.regularPrice,
-        sale_price: input.salePrice ?? null,
-        currency: this.cleanCurrency(input.currency),
-        base_design_image_url: baseDesignImageUrl,
-        preparation_time_minutes:
-          input.preparationTimeMinutes ?? DEFAULT_PREPARATION_TIME_MINUTES,
-        is_active: input.isActive ?? true,
+    // 상품·대표 이미지·감사 기록을 한 트랜잭션에서 남긴다(P1-12)
+    const created = await this.productRepository.createProduct(
+      {
+        storeId: ctx.storeId,
+        initialImageUrl,
+        data: {
+          name: cleanRequiredText(input.name, MAX_PRODUCT_NAME_LENGTH),
+          description: cleanNullableText(
+            input.description,
+            MAX_PRODUCT_DESCRIPTION_LENGTH,
+          ),
+          purchase_notice: cleanNullableText(
+            input.purchaseNotice,
+            MAX_PRODUCT_PURCHASE_NOTICE_LENGTH,
+          ),
+          regular_price: input.regularPrice,
+          sale_price: input.salePrice ?? null,
+          currency: this.cleanCurrency(input.currency),
+          base_design_image_url: baseDesignImageUrl,
+          preparation_time_minutes:
+            input.preparationTimeMinutes ?? DEFAULT_PREPARATION_TIME_MINUTES,
+          is_active: input.isActive ?? true,
+        },
       },
-    });
-
-    await this.productRepository.addProductImage({
-      productId: created.id,
-      imageUrl: initialImageUrl,
-      sortOrder: 0,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: created.id,
-      action: AuditActionType.CREATE,
-      afterJson: {
-        name: created.name,
-        regularPrice: created.regular_price,
-      },
-    });
+      (product) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: product.id,
+        action: AuditActionType.CREATE,
+        afterJson: {
+          name: product.name,
+          regularPrice: product.regular_price,
+        },
+      }),
+    );
 
     const detail =
       await this.productRepository.findProductByIdIncludingInactive({
@@ -156,25 +153,25 @@ export class SellerProductLifecycleService extends SellerBaseService {
       input.salePrice !== undefined ? input.salePrice : current.sale_price;
     this.validateProductPrices(nextRegularPrice, nextSalePrice);
 
-    const updated = await this.productRepository.updateProduct({
-      productId,
-      data,
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.UPDATE,
-      beforeJson: {
-        name: current.name,
+    const updated = await this.productRepository.updateProduct(
+      {
+        productId,
+        data,
       },
-      afterJson: {
-        name: updated.name,
-      },
-    });
-
+      (created) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        beforeJson: {
+          name: current.name,
+        },
+        afterJson: {
+          name: created.name,
+        },
+      }),
+    );
     const detail =
       await this.productRepository.findProductByIdIncludingInactive({
         productId,
@@ -197,8 +194,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
       });
     if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
-    await this.productRepository.softDeleteProduct(productId);
-    await this.auditLogs.createAuditLog({
+    await this.productRepository.softDeleteProduct(productId, () => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,
       targetType: AuditTargetType.PRODUCT,
@@ -207,7 +203,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
       beforeJson: {
         name: current.name,
       },
-    });
+    }));
     return true;
   }
 
@@ -225,27 +221,27 @@ export class SellerProductLifecycleService extends SellerBaseService {
       });
     if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
-    await this.productRepository.updateProduct({
-      productId,
-      data: {
-        is_active: input.isActive,
+    await this.productRepository.updateProduct(
+      {
+        productId,
+        data: {
+          is_active: input.isActive,
+        },
       },
-    });
-
-    await this.auditLogs.createAuditLog({
-      actorAccountId: ctx.accountId,
-      storeId: ctx.storeId,
-      targetType: AuditTargetType.PRODUCT,
-      targetId: productId,
-      action: AuditActionType.STATUS_CHANGE,
-      beforeJson: {
-        isActive: current.is_active,
-      },
-      afterJson: {
-        isActive: input.isActive,
-      },
-    });
-
+      () => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: {
+          isActive: current.is_active,
+        },
+        afterJson: {
+          isActive: input.isActive,
+        },
+      }),
+    );
     const detail =
       await this.productRepository.findProductByIdIncludingInactive({
         productId,

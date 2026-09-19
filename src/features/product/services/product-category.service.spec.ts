@@ -1,3 +1,5 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -12,7 +14,11 @@ describe('ProductCategoryService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductCategoryService, ProductRepository],
+      providers: [
+        ProductCategoryService,
+        ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     service = module.get(ProductCategoryService);
     prisma = p;

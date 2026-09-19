@@ -1,4 +1,6 @@
 import { RandomService } from '@/common/providers/random.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductCardService } from '@/features/product/services/product-card.service';
@@ -32,6 +34,7 @@ describe('ProductHome Query Resolver (real DB)', () => {
         ProductHomeQueryResolver,
         ProductHomeService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ReviewReadRepository,
         RandomService,
       ],

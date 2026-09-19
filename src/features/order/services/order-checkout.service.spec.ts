@@ -1,5 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
@@ -45,6 +47,7 @@ describe('OrderCheckoutService (real DB)', () => {
         OrderCheckoutService,
         OrderRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
