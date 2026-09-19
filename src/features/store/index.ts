@@ -24,8 +24,5 @@ export type { StoreOutput } from '@/features/store/types/store-record-output.typ
 // 영업시간 표기(주문 상세의 매장 정보). 매장 도메인 규칙이라 store가 소유한다.
 export { formatBusinessHours } from '@/features/store/services/business-hours-formatter';
 // 판매자 컨텍스트(계정→매장)와 공통 검증 베이스. seller 파생 서비스(상품·주문·대화·감사)가 상속한다 — P1-6(DB 재조회 유지).
-export {
-  SellerBaseService,
-  type SellerContext,
-} from '@/features/store/services/store-seller-base.service';
+export { SellerBaseService } from '@/features/store/services/store-seller-base.service';
 export { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
