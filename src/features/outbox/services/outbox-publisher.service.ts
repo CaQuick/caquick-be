@@ -44,8 +44,9 @@ export class OutboxPublisher {
       clientIp: normalizeIpForPersistence(ctx?.clientIp),
       userAgent: normalizeUserAgentForPersistence(ctx?.userAgent),
     });
-    // 요청 컨텍스트(requestId) 안에서 eventId를 최상위 필드로 남긴다 — worker 소비 로그(eventId)와 이어 보는 조인 키(P2 E8)
-    this.logger.log('outbox 발행', {
+    // 요청 컨텍스트(requestId) 안에서 eventId를 최상위 필드로 남긴다 — worker 소비 로그(eventId)와 이어 보는 조인 키(P2 E8).
+    // 아직 호출자 tx 안이다 — 뒤에서 tx가 실패하면 이 행은 사라진다. 그래서 '발행'이 아니라 '적재'로 남긴다.
+    this.logger.log('outbox 적재(tx 커밋 전)', {
       eventId: row.event_id,
       eventType: event.eventType,
       aggregate: `${event.aggregateType}#${String(event.aggregateId)}`,
