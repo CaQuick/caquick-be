@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -46,8 +45,7 @@ function buildStrategy(deps: {
     blacklist: TokenBlacklistService;
     alerts: AlertService;
   };
-  // prototype에서 만들면 필드 초기화(logger)가 안 돌아 직접 넣는다
-  Object.assign(instance, deps, { logger: new Logger(JwtBearerStrategy.name) });
+  Object.assign(instance, deps);
   return instance;
 }
 

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -19,8 +19,6 @@ import {
 
 @Injectable()
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
-  private readonly logger = new Logger(JwtBearerStrategy.name);
-
   constructor(
     config: ConfigService,
     @Inject(ACCOUNT_REPOSITORY)
@@ -73,7 +71,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
     if (!lookup.ready) {
       // Redis가 비었다(초기화·flush). worker 재구축이 표식을 다시 세울 때까지 DB가 정본이다.
-      this.logger.warn('블랙리스트 재구축 표식 없음 — 계정 재조회로 폴백');
+      // 요청마다 타는 분기라 직접 로그는 두지 않는다 — 경보가 억제 창(5분)으로 1회만 남긴다.
       void this.alerts.notify({
         level: 'warn',
         title: 'Redis 블랙리스트 미구축 — 계정 재조회로 폴백',

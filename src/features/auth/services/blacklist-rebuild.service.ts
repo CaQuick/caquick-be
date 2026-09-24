@@ -62,19 +62,31 @@ export class BlacklistRebuildService
       this.blacklist.blockedStatusAccountIds(),
     ]);
     // 쓰기는 전부 "버전이 더 새로울 때만"이라 훅과 겹쳐도 최근 변경이 이긴다
+    const results: boolean[] = [];
     for (const { accountId, changedAt } of suspended) {
-      await this.blacklist.blockStatus(accountId, 'SUSPENDED', changedAt);
+      results.push(
+        await this.blacklist.blockStatus(accountId, 'SUSPENDED', changedAt),
+      );
     }
     for (const { accountId, changedAt } of deleted) {
-      await this.blacklist.blockStatus(accountId, 'DELETED', changedAt);
+      results.push(
+        await this.blacklist.blockStatus(accountId, 'DELETED', changedAt),
+      );
     }
     for (const { accountId, changedAt } of credentials) {
-      await this.blacklist.blockCredentials(accountId, changedAt);
+      results.push(await this.blacklist.blockCredentials(accountId, changedAt));
     }
     // 조정: 복구 쓰기가 실패해 정지로 남은 계정을 DB 기준으로 되돌린다(TTL까지 잘못 막히지 않게)
     const reinstated = await this.repo.activeAmong(blocked);
     for (const { accountId, changedAt } of reinstated) {
-      await this.blacklist.clearStatus(accountId, changedAt);
+      results.push(await this.blacklist.clearStatus(accountId, changedAt));
+    }
+    // 하나라도 못 적었으면 목록이 불완전하다 — 표식을 세우면 전략이 빠진 키를 "활성"으로 믿는다
+    const failed = results.filter((ok) => !ok).length;
+    if (failed > 0) {
+      throw new Error(
+        `블랙리스트 쓰기 ${failed}건 실패 — 표식을 세우지 않는다(DB 폴백 유지)`,
+      );
     }
     await this.blacklist.markReady();
     return {

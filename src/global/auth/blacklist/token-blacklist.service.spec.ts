@@ -53,7 +53,9 @@ describe('TokenBlacklistService (real Redis)', () => {
   // 쓰기는 전부 "버전(변경 시각)이 더 새로울 때만" — 훅·재구축·조정이 어떤 순서로 겹쳐도 최근 변경이 이긴다
   describe('상태 키(정지·탈퇴·복구)', () => {
     it('blockStatus하면 사유가 조회되고 더 새 버전의 clearStatus로 풀린다', async () => {
-      await service.blockStatus(BigInt(7), 'SUSPENDED', T1);
+      await expect(
+        service.blockStatus(BigInt(7), 'SUSPENDED', T1),
+      ).resolves.toBe(true);
 
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
@@ -165,27 +167,60 @@ describe('TokenBlacklistService (real Redis)', () => {
     }
   });
 
-  it('반증: 쓰기가 실패해도 던지지 않고 경보만 남긴다(도메인 커밋은 끝난 뒤라) — 읽기는 던진다', async () => {
+  // 쓰기 실패는 던지지 않는다(도메인 커밋은 끝난 뒤) — 대신 경보 + 표식 제거로 전략을 DB 폴백으로 보내고 false
+  describe('쓰기 실패', () => {
     const down = () => Promise.reject(new Error('down'));
-    const dead = { eval: down, mget: down, scan: down } as unknown as Redis;
-    const broken = new TokenBlacklistService(
-      dead,
-      { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
-      alerts as unknown as AlertService,
-    );
 
-    await expect(
-      broken.blockStatus(BigInt(1), 'SUSPENDED', T1),
-    ).resolves.toBeUndefined();
-    await expect(broken.clearStatus(BigInt(1), T2)).resolves.toBeUndefined();
-    await expect(
-      broken.blockCredentials(BigInt(1), T1),
-    ).resolves.toBeUndefined();
-    expect(alerts.notify).toHaveBeenCalledTimes(3);
-    expect(alerts.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'auth-blacklist-write' }),
-    );
-    await expect(broken.lookup(BigInt(1))).rejects.toThrow('down');
-    await expect(broken.blockedStatusAccountIds()).rejects.toThrow('down');
+    it('반증: 쓰기 3종 전부 false + 경보, 표식이 지워져 ready=false가 된다 — 빠진 키를 활성으로 믿지 않게', async () => {
+      // EVAL만 죽고 나머지는 실제 Redis — 표식 제거가 실제로 일어나는지 본다
+      const flaky = {
+        eval: down,
+        del: (key: string) => redis.del(key),
+        mget: (...keys: string[]) => redis.mget(...keys),
+      } as unknown as Redis;
+      const broken = new TokenBlacklistService(
+        flaky,
+        { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+        alerts as unknown as AlertService,
+      );
+      await expect(service.lookup(BigInt(1))).resolves.toMatchObject({
+        ready: true,
+      });
+
+      await expect(
+        broken.blockStatus(BigInt(1), 'SUSPENDED', T1),
+      ).resolves.toBe(false);
+      await expect(broken.clearStatus(BigInt(1), T2)).resolves.toBe(false);
+      await expect(broken.blockCredentials(BigInt(1), T1)).resolves.toBe(false);
+
+      expect(alerts.notify).toHaveBeenCalledTimes(3);
+      expect(alerts.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'auth-blacklist-write' }),
+      );
+      await expect(broken.lookup(BigInt(1))).resolves.toMatchObject({
+        ready: false,
+      });
+    });
+
+    it('반증: Redis가 통째로 죽으면 쓰기는 false·경보, 읽기는 던진다(전략이 폴백)', async () => {
+      const dead = {
+        eval: down,
+        mget: down,
+        scan: down,
+        del: down,
+      } as unknown as Redis;
+      const broken = new TokenBlacklistService(
+        dead,
+        { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+        alerts as unknown as AlertService,
+      );
+
+      await expect(
+        broken.blockStatus(BigInt(1), 'SUSPENDED', T1),
+      ).resolves.toBe(false);
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+      await expect(broken.lookup(BigInt(1))).rejects.toThrow('down');
+      await expect(broken.blockedStatusAccountIds()).rejects.toThrow('down');
+    });
   });
 });

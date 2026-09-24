@@ -48,7 +48,8 @@ return 1`;
 /**
  * 정지·탈퇴·비밀번호 변경 뒤 아직 만료 전인 액세스 토큰을 막는다(P2 E2). 키는 액세스 TTL만큼만 산다 —
  * 그 뒤엔 토큰 자체가 만료라 볼 필요가 없다. 조회 실패는 던진다(전략이 DB 재조회로 폴백).
- * 쓰기는 도메인 트랜잭션이 커밋된 뒤라 실패해도 던지지 않고 경보만 — worker 재구축·조정이 한 주기 안에 메운다.
+ * 쓰기는 도메인 트랜잭션이 커밋된 뒤라 실패해도 던지지 않는다 — 대신 경보 + 완전성 표식을 지워 전략이 DB로 폴백하게
+ * 하고 false를 돌려준다. worker 재구축·조정이 한 주기 안에 다시 채우고 표식을 세운다.
  */
 @Injectable()
 export class TokenBlacklistService {
@@ -60,24 +61,24 @@ export class TokenBlacklistService {
     private readonly alerts: AlertService,
   ) {}
 
-  /** 정지·탈퇴. changedAt = DB에 기록한 상태 변경 시각. 도메인 트랜잭션이 커밋된 뒤에 부른다. */
+  /** 정지·탈퇴. changedAt = DB에 기록한 상태 변경 시각. 도메인 트랜잭션이 커밋된 뒤에 부른다. false = 쓰기 실패. */
   async blockStatus(
     accountId: bigint,
     reason: StatusBlockReason,
     changedAt: Date,
-  ): Promise<void> {
-    await this.writeStatus(accountId, reason, changedAt);
+  ): Promise<boolean> {
+    return this.writeStatus(accountId, reason, changedAt);
   }
 
-  /** 복구. 상태 키를 ACTIVE(버전 포함)로 바꾼다 — 자격증명 cutoff는 그대로. */
-  async clearStatus(accountId: bigint, changedAt: Date): Promise<void> {
-    await this.writeStatus(accountId, 'ACTIVE', changedAt);
+  /** 복구. 상태 키를 ACTIVE(버전 포함)로 바꾼다 — 자격증명 cutoff는 그대로. false = 쓰기 실패. */
+  async clearStatus(accountId: bigint, changedAt: Date): Promise<boolean> {
+    return this.writeStatus(accountId, 'ACTIVE', changedAt);
   }
 
-  /** 비밀번호 변경·초기화. cutoff 전에 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과. */
-  async blockCredentials(accountId: bigint, changedAt: Date): Promise<void> {
+  /** 비밀번호 변경·초기화. cutoff 전에 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과. false = 쓰기 실패. */
+  async blockCredentials(accountId: bigint, changedAt: Date): Promise<boolean> {
     const cutoff = credentialCutoffSec(changedAt);
-    await this.write('credentials', (ttl) =>
+    return this.write('credentials', (ttl) =>
       this.redis.eval(
         SET_IF_NEWER,
         1,
@@ -140,9 +141,9 @@ export class TokenBlacklistService {
     accountId: bigint,
     value: AccountStatusValue,
     changedAt: Date,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const version = changedAt.getTime();
-    await this.write(`status ${value}`, (ttl) =>
+    return this.write(`status ${value}`, (ttl) =>
       this.redis.eval(
         SET_IF_NEWER,
         1,
@@ -157,20 +158,24 @@ export class TokenBlacklistService {
   private async write(
     what: string,
     command: (ttlSeconds: number) => Promise<unknown>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await command(this.accessTtlSeconds());
+      return true;
     } catch (error) {
       const detail = errorMessage(error);
       this.logger.warn(
-        `블랙리스트 등록 실패(${what}) — 재구축이 메운다: ${detail}`,
+        `블랙리스트 등록 실패(${what}) — 표식을 지워 DB 폴백, 재구축이 메운다: ${detail}`,
       );
       void this.alerts.notify({
         level: 'warn',
-        title: 'Redis 블랙리스트 등록 실패',
+        title: 'Redis 블랙리스트 등록 실패 — 계정 재조회로 폴백',
         key: 'auth-blacklist-write',
         detail: `${what}: ${detail}`,
       });
+      // 빠진 키를 "활성"으로 믿지 않게 표식을 지운다. 이것마저 실패하면 Redis가 통째로 죽은 것 — 조회도 실패해 어차피 폴백
+      await this.redis.del(BLACKLIST_READY_KEY).catch(() => undefined);
+      return false;
     }
   }
 }

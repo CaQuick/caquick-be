@@ -13,9 +13,9 @@ export function redisTestProviders(client: Redis): Provider[] {
 export const NOOP_BLACKLIST_PROVIDER: Provider = {
   provide: TokenBlacklistService,
   useValue: {
-    blockStatus: () => Promise.resolve(),
-    clearStatus: () => Promise.resolve(),
-    blockCredentials: () => Promise.resolve(),
+    blockStatus: () => Promise.resolve(true),
+    clearStatus: () => Promise.resolve(true),
+    blockCredentials: () => Promise.resolve(true),
     blockedStatusAccountIds: () => Promise.resolve([]),
     lookup: () =>
       Promise.resolve({ ready: true, status: null, credentialCutoffSec: null }),

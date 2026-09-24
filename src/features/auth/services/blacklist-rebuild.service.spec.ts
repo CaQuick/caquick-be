@@ -160,6 +160,25 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     expect(await statusOf(account)).toBe('SUSPENDED');
   });
 
+  it('반증: 쓰기가 하나라도 실패하면 표식을 세우지 않고 던진다 — 빠진 키를 활성으로 믿지 않게', async () => {
+    await accountAt('SUSPENDED', IN_WINDOW);
+    await accountAt('SUSPENDED', IN_WINDOW);
+    const write = jest
+      .spyOn(blacklist, 'blockStatus')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const ready = jest.spyOn(blacklist, 'markReady');
+
+    await expect(service.rebuild()).rejects.toThrow('쓰기 1건 실패');
+
+    expect(ready).not.toHaveBeenCalled();
+    await expect(blacklist.lookup(BigInt(1))).resolves.toMatchObject({
+      ready: false,
+    });
+    write.mockRestore();
+    ready.mockRestore();
+  });
+
   it('반증: 아무것도 없어도 표식은 세운다(빈 목록도 완전한 목록이다)', async () => {
     await expect(service.rebuild()).resolves.toEqual(NONE);
     await expect(blacklist.lookup(BigInt(1))).resolves.toEqual({
