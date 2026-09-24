@@ -57,4 +57,7 @@ for i in {1..10}; do
   sleep 3
 done
 
-echo ">> Health check failed"; exit 1
+# api가 끝내 준비되지 않으면 새 worker도 내린다 — application_start가 옛 worker를 살려 뒀으므로 둘이 같이 돌면 안 된다
+echo ">> Health check failed — stopping $NEW_WORKER, keeping $OLD_WORKER"
+$PM2 stop "$NEW_WORKER" || true
+exit 1

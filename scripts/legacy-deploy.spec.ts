@@ -23,6 +23,12 @@ describe('레거시 배포 자산', () => {
     expect(stopNewOnFail).toBeGreaterThan(workerProbe);
     expect(switchApi).toBeGreaterThan(stopNewOnFail);
     expect(stopOld).toBeGreaterThan(switchApi);
+    // api 검증이 끝내 실패한 경로에서도 새 worker를 내린다(옛 worker와 둘이 돌지 않게)
+    const apiFail = script.indexOf('Health check failed');
+    expect(apiFail).toBeGreaterThan(stopOld);
+    expect(script.indexOf('$PM2 stop "$NEW_WORKER"', apiFail)).toBeGreaterThan(
+      apiFail,
+    );
   });
 
   it('PM2 ecosystem에 profile별 worker 엔트리가 있고 APP_ROLE=worker를 준다', () => {
