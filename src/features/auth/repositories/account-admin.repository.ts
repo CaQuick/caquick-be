@@ -440,7 +440,7 @@ export class AccountAdminRepository {
     audit: AuditEntry;
     /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 메시지 */
     invalidTransitionCode: ErrorCode;
-  }): Promise<{ changed: boolean }> {
+  }): Promise<{ changed: boolean; changedAt: Date }> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.account.updateMany({
@@ -452,7 +452,9 @@ export class AccountAdminRepository {
           where: { id: args.accountId },
           select: { status: true },
         });
-        if (current?.status === args.to) return { changed: false };
+        if (current?.status === args.to) {
+          return { changed: false, changedAt: now };
+        }
         throw new DomainException(args.invalidTransitionCode);
       }
       if (args.revokeSessions) {
@@ -462,7 +464,7 @@ export class AccountAdminRepository {
         });
       }
       await this.auditLogs.recordAudit(tx, args.audit);
-      return { changed: true };
+      return { changed: true, changedAt: now };
     });
   }
 

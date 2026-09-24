@@ -20,6 +20,9 @@ import { redisTestProviders } from '@/test/redis';
 
 const NOW = new Date('2026-09-25T12:00:00.000Z');
 const TTL_MS = TEST_AUTH_CONFIG.jwtAccessExpiresSeconds * 1000;
+const IN_WINDOW = new Date(NOW.getTime() - TTL_MS / 2);
+const OUT_OF_WINDOW = new Date(NOW.getTime() - TTL_MS * 2);
+const NONE = { suspended: 0, deleted: 0, credentials: 0, reconciled: 0 };
 
 // Redis가 비어도(재시작·flush) worker가 DB에서 창 안의 차단을 다시 채우고 표식을 세운다 — 전략이 DB 폴백에서 벗어나는 조건.
 describe('BlacklistRebuildService (real DB + real Redis)', () => {
@@ -59,13 +62,13 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
   });
 
   // 팩토리는 갱신 시각을 받지 않는다 — 만든 뒤 시각만 되돌린다(@updatedAt은 명시한 값을 존중한다)
-  async function suspendedAt(updatedAt: Date) {
-    const account = await createAccount(prisma, { status: 'SUSPENDED' });
+  async function accountAt(status: 'SUSPENDED' | 'ACTIVE', updatedAt: Date) {
+    const account = await createAccount(prisma, { status });
     await prisma.account.update({
       where: { id: account.id },
       data: { updated_at: updatedAt },
     });
-    return account;
+    return account.id;
   }
   async function passwordChangedAt(changedAt: Date) {
     const credential = await createAccountCredential(prisma, {
@@ -77,63 +80,88 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     });
     return credential.account_id;
   }
+  const statusOf = async (id: bigint) => (await blacklist.lookup(id)).status;
 
   it('TTL 창 안의 정지·탈퇴·비밀번호 변경을 다시 등록하고 표식을 세운다 — 창 밖은 건드리지 않는다', async () => {
-    const inWindow = new Date(NOW.getTime() - TTL_MS / 2);
-    const outOfWindow = new Date(NOW.getTime() - TTL_MS * 2);
-    const suspended = await suspendedAt(inWindow);
-    const oldSuspended = await suspendedAt(outOfWindow);
-    const deleted = await createAccount(prisma, { deleted_at: inWindow });
-    const changed = await passwordChangedAt(inWindow);
-    const oldChanged = await passwordChangedAt(outOfWindow);
+    const suspended = await accountAt('SUSPENDED', IN_WINDOW);
+    const oldSuspended = await accountAt('SUSPENDED', OUT_OF_WINDOW);
+    const deleted = await createAccount(prisma, { deleted_at: IN_WINDOW });
+    const changed = await passwordChangedAt(IN_WINDOW);
+    const oldChanged = await passwordChangedAt(OUT_OF_WINDOW);
 
-    await expect(blacklist.lookup(suspended.id)).resolves.toMatchObject({
+    await expect(blacklist.lookup(suspended)).resolves.toMatchObject({
       ready: false,
     });
 
-    const result = await service.rebuild();
+    await expect(service.rebuild()).resolves.toEqual({
+      ...NONE,
+      suspended: 1,
+      deleted: 1,
+      credentials: 1,
+    });
 
-    expect(result).toEqual({ suspended: 1, deleted: 1, credentials: 1 });
-    await expect(blacklist.lookup(suspended.id)).resolves.toEqual({
+    await expect(blacklist.lookup(suspended)).resolves.toEqual({
       ready: true,
       status: 'SUSPENDED',
       credentialCutoffSec: null,
     });
-    await expect(blacklist.lookup(deleted.id)).resolves.toMatchObject({
-      status: 'DELETED',
-    });
+    expect(await statusOf(deleted.id)).toBe('DELETED');
     await expect(blacklist.lookup(changed)).resolves.toMatchObject({
       status: null,
-      credentialCutoffSec: credentialCutoffSec(inWindow),
+      credentialCutoffSec: credentialCutoffSec(IN_WINDOW),
     });
-    await expect(blacklist.lookup(oldSuspended.id)).resolves.toMatchObject({
-      status: null,
-    });
+    expect(await statusOf(oldSuspended)).toBeNull();
     await expect(blacklist.lookup(oldChanged)).resolves.toMatchObject({
       credentialCutoffSec: null,
     });
   });
 
-  it('반증: 복구 직후 표식이 있는 계정은 옛 스냅샷으로 정지를 되살리지 않는다', async () => {
-    // 재구축이 DB를 읽은 뒤 복구가 커밋된 상황을 흉내 낸다 — DB는 아직 SUSPENDED, Redis엔 복구 표식
-    const reinstated = await suspendedAt(NOW);
-    await blacklist.clearStatus(reinstated.id);
+  it('반증: 재구축이 DB를 읽은 뒤 복구가 끼어들어도 옛 스냅샷으로 정지를 되살리지 않는다', async () => {
+    // DB는 아직 SUSPENDED(IN_WINDOW)이지만 Redis엔 그보다 새 버전의 복구가 먼저 적혔다
+    const reinstated = await accountAt('SUSPENDED', IN_WINDOW);
+    await blacklist.clearStatus(
+      reinstated,
+      new Date(IN_WINDOW.getTime() + 1_000),
+    );
 
     await service.rebuild();
 
-    await expect(blacklist.lookup(reinstated.id)).resolves.toEqual({
-      ready: true,
-      status: null,
-      credentialCutoffSec: null,
+    expect(await statusOf(reinstated)).toBeNull();
+  });
+
+  it('조정: 복구 쓰기가 실패해 Redis에 정지로 남은 계정을 DB 기준(활성)으로 되돌린다', async () => {
+    const reinstated = await accountAt('ACTIVE', IN_WINDOW);
+    await blacklist.blockStatus(
+      reinstated,
+      'SUSPENDED',
+      new Date(IN_WINDOW.getTime() - 60_000),
+    );
+    expect(await statusOf(reinstated)).toBe('SUSPENDED');
+
+    await expect(service.rebuild()).resolves.toEqual({
+      ...NONE,
+      reconciled: 1,
     });
+
+    expect(await statusOf(reinstated)).toBeNull();
+  });
+
+  it('반증: 조정이 DB를 읽은 뒤 끼어든 더 새 정지는 덮지 않는다', async () => {
+    // DB는 ACTIVE(IN_WINDOW)로 읽혔지만 Redis엔 그보다 새 버전의 정지가 있다(훅이 방금 적었다)
+    const account = await accountAt('ACTIVE', IN_WINDOW);
+    await blacklist.blockStatus(
+      account,
+      'SUSPENDED',
+      new Date(IN_WINDOW.getTime() + 1_000),
+    );
+
+    await expect(service.rebuild()).resolves.toMatchObject({ reconciled: 1 });
+
+    expect(await statusOf(account)).toBe('SUSPENDED');
   });
 
   it('반증: 아무것도 없어도 표식은 세운다(빈 목록도 완전한 목록이다)', async () => {
-    await expect(service.rebuild()).resolves.toEqual({
-      suspended: 0,
-      deleted: 0,
-      credentials: 0,
-    });
+    await expect(service.rebuild()).resolves.toEqual(NONE);
     await expect(blacklist.lookup(BigInt(1))).resolves.toEqual({
       ready: true,
       status: null,

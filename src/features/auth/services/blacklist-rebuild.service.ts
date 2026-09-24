@@ -15,7 +15,8 @@ export const BLACKLIST_REBUILD_INTERVAL_MS = 60_000;
 
 /**
  * Redis가 비거나(재시작·flush) 커밋 뒤 등록이 실패했을 때를 위해, worker가 DB에서 블랙리스트를 다시 채운다(P2 03).
- * TTL 창 안의 정지·탈퇴·비밀번호 변경을 다시 등록한 뒤 "완전함" 표식을 세운다 — 표식이 없는 동안 전략은 DB로 폴백한다.
+ * TTL 창 안의 정지·탈퇴·비밀번호 변경을 다시 등록하고, Redis에 정지·탈퇴로 남았지만 DB에선 활성인 계정(복구 쓰기가
+ * 실패한 경우)을 복구로 덮은 뒤 "완전함" 표식을 세운다 — 표식이 없는 동안 전략은 DB로 폴백한다.
  */
 @Injectable()
 export class BlacklistRebuildService
@@ -45,32 +46,42 @@ export class BlacklistRebuildService
     this.timer = undefined;
   }
 
-  /** 한 번 재구축. 테스트가 직접 부른다. 등록 건수를 돌려준다. */
+  /** 한 번 재구축. 테스트가 직접 부른다. 등록·조정 건수를 돌려준다. */
   async rebuild(): Promise<{
     suspended: number;
     deleted: number;
     credentials: number;
+    reconciled: number;
   }> {
     const ttl = this.blacklist.accessTtlSeconds();
     const since = new Date(this.clock.now().getTime() - ttl * 1000);
-    const [suspended, deleted, credentials] = await Promise.all([
+    const [suspended, deleted, credentials, blocked] = await Promise.all([
       this.repo.suspendedSince(since),
       this.repo.deletedSince(since),
       this.repo.credentialsChangedSince(since),
+      this.blacklist.blockedStatusAccountIds(),
     ]);
-    // 복구 직후 표식이 있으면 옛 스냅샷으로 정지를 되살리지 않는다(재구축 경쟁)
-    for (const id of suspended) {
-      await this.blacklist.blockStatusUnlessReinstated(id, 'SUSPENDED');
+    // 쓰기는 전부 "버전이 더 새로울 때만"이라 훅과 겹쳐도 최근 변경이 이긴다
+    for (const { accountId, changedAt } of suspended) {
+      await this.blacklist.blockStatus(accountId, 'SUSPENDED', changedAt);
     }
-    for (const id of deleted) await this.blacklist.blockStatus(id, 'DELETED');
+    for (const { accountId, changedAt } of deleted) {
+      await this.blacklist.blockStatus(accountId, 'DELETED', changedAt);
+    }
     for (const { accountId, changedAt } of credentials) {
       await this.blacklist.blockCredentials(accountId, changedAt);
+    }
+    // 조정: 복구 쓰기가 실패해 정지로 남은 계정을 DB 기준으로 되돌린다(TTL까지 잘못 막히지 않게)
+    const reinstated = await this.repo.activeAmong(blocked);
+    for (const { accountId, changedAt } of reinstated) {
+      await this.blacklist.clearStatus(accountId, changedAt);
     }
     await this.blacklist.markReady();
     return {
       suspended: suspended.length,
       deleted: deleted.length,
       credentials: credentials.length,
+      reconciled: reinstated.length,
     };
   }
 
@@ -78,7 +89,7 @@ export class BlacklistRebuildService
     try {
       const result = await this.rebuild();
       this.logger.log(
-        `블랙리스트 재구축 — 정지 ${result.suspended}·탈퇴 ${result.deleted}·자격증명 ${result.credentials}`,
+        `블랙리스트 재구축 — 정지 ${result.suspended}·탈퇴 ${result.deleted}·자격증명 ${result.credentials}·조정 ${result.reconciled}`,
       );
     } catch (error) {
       // 실패하면 표식이 안 세워져 전략이 DB로 폴백한다 — 안전한 쪽

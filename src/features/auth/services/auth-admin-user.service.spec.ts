@@ -242,7 +242,12 @@ describe('AdminUserService (real DB)', () => {
       });
       expect(await statusOf(user.id)).toBe('SUSPENDED');
       // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
-      expect(blacklist.blockStatus).toHaveBeenCalledWith(user.id, 'SUSPENDED');
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        user.id,
+        'SUSPENDED',
+        (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
+          .updated_at,
+      );
       const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
         where: { id: session.id },
       });
@@ -394,7 +399,11 @@ describe('AdminUserService (real DB)', () => {
       expect(result.status).toBe('ACTIVE');
       expect(await statusOf(user.id)).toBe('ACTIVE');
       // 상태 키만 — 자격증명 cutoff는 남는다
-      expect(blacklist.clearStatus).toHaveBeenCalledWith(user.id);
+      expect(blacklist.clearStatus).toHaveBeenCalledWith(
+        user.id,
+        (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
+          .updated_at,
+      );
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { target_type: 'ACCOUNT', target_id: user.id },
       });

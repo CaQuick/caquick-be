@@ -6,14 +6,15 @@ import { AlertService } from '@/global/alerting';
 import {
   BLACKLIST_READY_KEY,
   credentialCutoffSec,
-  REINSTATED_TTL_SECONDS,
   TokenBlacklistService,
 } from '@/global/auth/blacklist/token-blacklist.service';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 import { connectTestRedis } from '@/test/db/redis-test-client';
 import { redisTestProviders } from '@/test/redis';
 
-const CHANGED_AT = new Date('2026-09-25T12:00:00.500Z');
+const T1 = new Date('2026-09-25T12:00:00.500Z');
+const T2 = new Date(T1.getTime() + 30_000);
+const T3 = new Date(T2.getTime() + 30_000);
 const TTL = TEST_AUTH_CONFIG.jwtAccessExpiresSeconds;
 
 describe('TokenBlacklistService (real Redis)', () => {
@@ -46,12 +47,13 @@ describe('TokenBlacklistService (real Redis)', () => {
   });
 
   it('credentialCutoffSec는 초 단위 내림 — iat와 같은 정밀도로 비교하기 위해', () => {
-    expect(credentialCutoffSec(CHANGED_AT)).toBe(1_790_337_600);
+    expect(credentialCutoffSec(T1)).toBe(1_790_337_600);
   });
 
-  describe('상태 키(정지·탈퇴)', () => {
-    it('blockStatus하면 사유가 조회되고 clearStatus하면 사라진다', async () => {
-      await service.blockStatus(BigInt(7), 'SUSPENDED');
+  // 쓰기는 전부 "버전(변경 시각)이 더 새로울 때만" — 훅·재구축·조정이 어떤 순서로 겹쳐도 최근 변경이 이긴다
+  describe('상태 키(정지·탈퇴·복구)', () => {
+    it('blockStatus하면 사유가 조회되고 더 새 버전의 clearStatus로 풀린다', async () => {
+      await service.blockStatus(BigInt(7), 'SUSPENDED', T1);
 
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
@@ -62,83 +64,91 @@ describe('TokenBlacklistService (real Redis)', () => {
         status: null,
       });
 
-      await service.clearStatus(BigInt(7));
+      await service.clearStatus(BigInt(7), T2);
       await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
         status: null,
+      });
+      expect(await redis.get('auth:blk:st:7')).toBe(`ACTIVE:${T2.getTime()}`);
+    });
+
+    it('반증: 복구 뒤 도착한 옛 버전의 정지(재구축 스냅샷)는 무시된다', async () => {
+      await service.clearStatus(BigInt(7), T2);
+      await service.blockStatus(BigInt(7), 'SUSPENDED', T1);
+
+      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
+        status: null,
+      });
+    });
+
+    it('반증: 옛 버전의 복구(조정 스냅샷)는 더 새 정지를 덮지 못한다', async () => {
+      await service.blockStatus(BigInt(7), 'SUSPENDED', T3);
+      await service.clearStatus(BigInt(7), T2);
+
+      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
+        status: 'SUSPENDED',
+      });
+    });
+
+    it('복구 뒤 더 새 버전으로 다시 정지하면 막힌다', async () => {
+      await service.clearStatus(BigInt(7), T1);
+      await service.blockStatus(BigInt(7), 'DELETED', T2);
+
+      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
+        status: 'DELETED',
       });
     });
 
     it('반증: 복구는 자격증명 cutoff를 지우지 않는다 — 옛 비밀번호로 받은 토큰은 계속 막혀야 한다', async () => {
-      await service.blockCredentials(BigInt(7), CHANGED_AT);
-      await service.blockStatus(BigInt(7), 'SUSPENDED');
-      await service.clearStatus(BigInt(7));
+      await service.blockCredentials(BigInt(7), T1);
+      await service.blockStatus(BigInt(7), 'SUSPENDED', T2);
+      await service.clearStatus(BigInt(7), T3);
 
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
         status: null,
-        credentialCutoffSec: credentialCutoffSec(CHANGED_AT),
+        credentialCutoffSec: credentialCutoffSec(T1),
       });
     });
 
-    it('복구 표식은 재구축 주기의 2배만 산다 — 그 안의 재구축이 옛 스냅샷으로 정지를 되살리지 않게', async () => {
-      await service.clearStatus(BigInt(7));
+    it('blockedStatusAccountIds는 지금 막고 있는 계정만 돌려준다(복구 기록·cutoff만 있는 계정 제외)', async () => {
+      await service.blockStatus(BigInt(7), 'SUSPENDED', T1);
+      await service.blockStatus(BigInt(8), 'DELETED', T1);
+      await service.clearStatus(BigInt(9), T1);
+      await service.blockCredentials(BigInt(10), T1);
 
-      expect(
-        await service.blockStatusUnlessReinstated(BigInt(7), 'SUSPENDED'),
-      ).toBe(false);
-      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        status: null,
-      });
-      const ttl = await redis.ttl('auth:blk:ok:7');
-      expect(ttl).toBeGreaterThan(REINSTATED_TTL_SECONDS - 5);
-      expect(ttl).toBeLessThanOrEqual(REINSTATED_TTL_SECONDS);
-    });
-
-    it('반증: 표식이 없으면 재구축이 등록한다 / 다시 정지하면 표식을 걷는다', async () => {
-      expect(
-        await service.blockStatusUnlessReinstated(BigInt(7), 'SUSPENDED'),
-      ).toBe(true);
-      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        status: 'SUSPENDED',
-      });
-
-      await service.clearStatus(BigInt(7));
-      await service.blockStatus(BigInt(7), 'SUSPENDED');
-      expect(await redis.exists('auth:blk:ok:7')).toBe(0);
+      const ids = await service.blockedStatusAccountIds();
+      expect(ids.map(String).sort()).toEqual(['7', '8']);
     });
   });
 
   describe('자격증명 cutoff', () => {
     it('변경 시각을 초 단위 cutoff로 저장한다', async () => {
-      await service.blockCredentials(BigInt(7), CHANGED_AT);
+      await service.blockCredentials(BigInt(7), T1);
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
         status: null,
-        credentialCutoffSec: credentialCutoffSec(CHANGED_AT),
+        credentialCutoffSec: credentialCutoffSec(T1),
       });
     });
 
     it('반증: cutoff는 낮아지지 않는다 — 재구축의 옛 스냅샷이 최신 변경을 덮지 않게', async () => {
-      const later = new Date(CHANGED_AT.getTime() + 30_000);
-      await service.blockCredentials(BigInt(7), later);
-      await service.blockCredentials(BigInt(7), CHANGED_AT);
+      await service.blockCredentials(BigInt(7), T2);
+      await service.blockCredentials(BigInt(7), T1);
 
       await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        credentialCutoffSec: credentialCutoffSec(later),
+        credentialCutoffSec: credentialCutoffSec(T2),
       });
 
-      // 더 늦은 변경은 올린다
-      const latest = new Date(later.getTime() + 30_000);
-      await service.blockCredentials(BigInt(7), latest);
+      await service.blockCredentials(BigInt(7), T3);
       await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        credentialCutoffSec: credentialCutoffSec(latest),
+        credentialCutoffSec: credentialCutoffSec(T3),
       });
     });
   });
 
   it('반증: 재구축 표식이 없으면 ready=false — 목록이 불완전하다는 뜻', async () => {
     await redis.del(BLACKLIST_READY_KEY);
-    await service.blockStatus(BigInt(7), 'DELETED');
+    await service.blockStatus(BigInt(7), 'DELETED', T1);
     await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
       ready: false,
       status: 'DELETED',
@@ -146,8 +156,8 @@ describe('TokenBlacklistService (real Redis)', () => {
   });
 
   it('두 키 다 액세스 토큰 수명만큼 산다 — 그 뒤엔 토큰 자체가 만료라 볼 필요가 없다', async () => {
-    await service.blockStatus(BigInt(7), 'DELETED');
-    await service.blockCredentials(BigInt(7), CHANGED_AT);
+    await service.blockStatus(BigInt(7), 'DELETED', T1);
+    await service.blockCredentials(BigInt(7), T1);
     for (const key of ['auth:blk:st:7', 'auth:blk:cr:7']) {
       const ttl = await redis.ttl(key);
       expect(ttl).toBeGreaterThan(TTL - 5);
@@ -155,14 +165,9 @@ describe('TokenBlacklistService (real Redis)', () => {
     }
   });
 
-  it('반증: 등록·해제가 실패해도 던지지 않고 경보만 남긴다(도메인 커밋은 끝난 뒤라) — lookup은 던진다', async () => {
+  it('반증: 쓰기가 실패해도 던지지 않고 경보만 남긴다(도메인 커밋은 끝난 뒤라) — 읽기는 던진다', async () => {
     const down = () => Promise.reject(new Error('down'));
-    const dead = {
-      multi: () => ({ set: () => ({ del: () => ({ exec: down }) }) }),
-      eval: down,
-      exists: down,
-      mget: down,
-    } as unknown as Redis;
+    const dead = { eval: down, mget: down, scan: down } as unknown as Redis;
     const broken = new TokenBlacklistService(
       dead,
       { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
@@ -170,15 +175,17 @@ describe('TokenBlacklistService (real Redis)', () => {
     );
 
     await expect(
-      broken.blockStatus(BigInt(1), 'SUSPENDED'),
+      broken.blockStatus(BigInt(1), 'SUSPENDED', T1),
     ).resolves.toBeUndefined();
+    await expect(broken.clearStatus(BigInt(1), T2)).resolves.toBeUndefined();
     await expect(
-      broken.blockCredentials(BigInt(1), CHANGED_AT),
+      broken.blockCredentials(BigInt(1), T1),
     ).resolves.toBeUndefined();
-    expect(alerts.notify).toHaveBeenCalledTimes(2);
+    expect(alerts.notify).toHaveBeenCalledTimes(3);
     expect(alerts.notify).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'auth-blacklist-write' }),
     );
     await expect(broken.lookup(BigInt(1))).rejects.toThrow('down');
+    await expect(broken.blockedStatusAccountIds()).rejects.toThrow('down');
   });
 });

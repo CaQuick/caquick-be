@@ -141,11 +141,14 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
 
   // 상태(정지·탈퇴)는 계정 오류, 자격증명 변경은 토큰 무효(FE가 refresh를 시도하게)
   describe('블랙리스트', () => {
+    const AT = new Date(NOW * 1000);
+    const LATER = new Date(NOW * 1000 + 1_000);
+
     it.each([
       ['SUSPENDED', 'ACCOUNT_NOT_ACTIVE'],
       ['DELETED', 'ACCOUNT_NOT_ACTIVE'],
     ] as const)('%s → %s', async (reason, code) => {
-      await blacklist.blockStatus(BigInt(42), reason);
+      await blacklist.blockStatus(BigInt(42), reason, AT);
 
       await expect(strategy.validate(payload('42'))).rejects.toThrowDomain(
         code,
@@ -153,8 +156,8 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
 
     it('복구(clearStatus) 뒤에는 통과한다', async () => {
-      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
-      await blacklist.clearStatus(BigInt(42));
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED', AT);
+      await blacklist.clearStatus(BigInt(42), LATER);
 
       await expect(strategy.validate(payload('42'))).resolves.toMatchObject({
         accountId: '42',
@@ -177,9 +180,9 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
 
     it('반증: 정지 → 복구를 거쳐도 자격증명 cutoff는 살아 옛 토큰을 계속 막는다', async () => {
-      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000));
-      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
-      await blacklist.clearStatus(BigInt(42));
+      await blacklist.blockCredentials(BigInt(42), AT);
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED', AT);
+      await blacklist.clearStatus(BigInt(42), LATER);
 
       await expect(
         strategy.validate(payload('42', { iat: NOW - 60 })),
@@ -190,8 +193,8 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
 
     it('정지와 자격증명 변경이 겹치면 상태 오류가 우선한다', async () => {
-      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000));
-      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
+      await blacklist.blockCredentials(BigInt(42), AT);
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED', AT);
 
       await expect(
         strategy.validate(payload('42', { iat: NOW - 60 })),
@@ -214,8 +217,8 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
 
     it('다른 계정의 블랙리스트는 영향이 없다', async () => {
-      await blacklist.blockStatus(BigInt(1), 'DELETED');
-      await blacklist.blockCredentials(BigInt(1), new Date(NOW * 1000));
+      await blacklist.blockStatus(BigInt(1), 'DELETED', AT);
+      await blacklist.blockCredentials(BigInt(1), AT);
 
       await expect(strategy.validate(payload('42'))).resolves.toMatchObject({
         accountId: '42',
