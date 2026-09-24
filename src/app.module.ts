@@ -44,6 +44,7 @@ import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
+import { WorkerRouteMiddleware } from '@/global/middlewares/worker-route.middleware';
 import { PubSubModule } from '@/global/pubsub';
 import {
   RequestContextMiddleware,
@@ -144,7 +145,13 @@ export class AppModule implements NestModule {
       .apply(RequestContextMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
 
-    if (!servesHttpApi(this.config.getOrThrow<AppConfig>('app').role)) return;
+    if (!servesHttpApi(this.config.getOrThrow<AppConfig>('app').role)) {
+      // worker: 요청 컨텍스트 다음, 어떤 컨트롤러보다 먼저 — 허용 목록 밖은 여기서 끝난다
+      consumer
+        .apply(WorkerRouteMiddleware)
+        .forRoutes({ path: '*path', method: RequestMethod.ALL });
+      return;
+    }
     consumer
       .apply(DocsAccessMiddleware)
       .forRoutes(

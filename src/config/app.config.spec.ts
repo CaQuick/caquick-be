@@ -1,4 +1,5 @@
 import {
+  isWorkerRouteAllowed,
   parseAppRole,
   resolveAppRole,
   runsBackgroundJobs,
@@ -36,5 +37,20 @@ describe('appConfig', () => {
   ] as const)('%s: http=%s, background=%s', (role, http, background) => {
     expect(servesHttpApi(role)).toBe(http);
     expect(runsBackgroundJobs(role)).toBe(background);
+  });
+
+  // worker 허용 경로 표 — 접두 일치만 허용하고 비슷한 이름(/healthz)·다른 컨트롤러는 막는다.
+  it.each([
+    ['/health', true],
+    ['/health/ready', true],
+    ['/metrics', true],
+    ['/healthz', false],
+    ['/health-check', false],
+    ['/auth/oidc/google/start', false],
+    ['/.well-known/jwks.json', false],
+    ['/graphql', false],
+    ['/', false],
+  ])('worker 라우트 %s → %s', (path, allowed) => {
+    expect(isWorkerRouteAllowed(path)).toBe(allowed);
   });
 });

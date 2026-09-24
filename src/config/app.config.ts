@@ -31,4 +31,16 @@ export function runsBackgroundJobs(role: AppRole): boolean {
   return role === 'worker';
 }
 
+/**
+ * worker 리스너가 여는 경로. 컨트롤러는 feature 모듈에 묶여 있어 역할로 모듈을 빼는 대신 리스너 단에서 막는다 —
+ * 새 컨트롤러가 생겨도 worker에는 자동으로 닫힌다. `/metrics`는 05에서 쓴다.
+ */
+export const WORKER_ROUTE_PREFIXES: readonly string[] = ['/health', '/metrics'];
+
+export function isWorkerRouteAllowed(path: string): boolean {
+  return WORKER_ROUTE_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
 export default registerAs('app', (): AppConfig => ({ role: resolveAppRole() }));
