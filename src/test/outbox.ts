@@ -9,6 +9,7 @@ import type { DispatchSummary } from '@/features/outbox';
 import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
 import { OutboxDispatcherService } from '@/features/outbox/services/outbox-dispatcher.service';
 import { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.service';
+import { AlertService } from '@/global/alerting';
 
 export const OUTBOX_TEST_CONFIG: OutboxConfig = {
   dispatchEnabled: false,
@@ -35,14 +36,26 @@ export function outboxPublisherProviders(
   ];
 }
 
+/** 디스패처가 FAILED에 경보를 쏘므로 spec에는 아무 데도 안 보내는 대역을 넣는다. 경보 자체는 alert.service.spec이 본다. */
+export const NOOP_ALERT_PROVIDER: Provider = {
+  provide: AlertService,
+  useValue: { notify: () => Promise.resolve('skipped' as const) },
+};
+
 /** ClockService·IdGenerator·ConfigService를 spec이 따로 넣으면 그쪽을 빼고(중복 provider 방지) 실제 구현 대신 그 값을 쓴다. */
 export function outboxTestProviders(
-  omit: { clock?: boolean; ids?: boolean; config?: boolean } = {},
+  omit: {
+    clock?: boolean;
+    ids?: boolean;
+    config?: boolean;
+    alerts?: boolean;
+  } = {},
 ): Provider[] {
   return [
     OutboxRepository,
     OutboxPublisher,
     OutboxDispatcherService,
+    ...(omit.alerts ? [] : [NOOP_ALERT_PROVIDER]),
     ...(omit.clock ? [] : [ClockService]),
     ...(omit.ids ? [] : [IdGenerator]),
     ...(omit.config

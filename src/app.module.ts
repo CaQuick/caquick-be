@@ -16,6 +16,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 
 import { CommonModule } from '@/common/common.module';
+import alertingConfig from '@/config/alerting.config';
 import appConfig, {
   type AppConfig,
   type AppRole,
@@ -39,6 +40,7 @@ import { RegionModule } from '@/features/region';
 import { SearchModule } from '@/features/search/search.module';
 import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
+import { AlertingModule } from '@/global/alerting';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
@@ -104,6 +106,7 @@ export class AppModule implements NestModule {
           isGlobal: true,
           cache: true,
           load: [
+            alertingConfig,
             appConfig,
             authConfig,
             databaseConfig,
@@ -118,6 +121,7 @@ export class AppModule implements NestModule {
         PrismaModule,
         RequestContextModule,
         LoggerModule,
+        AlertingModule,
         AuthGlobalModule,
         GraphqlGlobalModule,
         PubSubModule,

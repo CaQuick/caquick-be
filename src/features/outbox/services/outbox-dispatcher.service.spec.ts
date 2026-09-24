@@ -14,6 +14,7 @@ import type {
   OutboxEvent,
 } from '@/features/outbox/types/outbox-event.type';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { AlertService } from '@/global/alerting';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -46,6 +47,7 @@ describe('OutboxDispatcherService (real DB)', () => {
   let publisher: OutboxPublisher;
   let consumer: RecordingConsumer;
   let prisma: PrismaClient;
+  const alerts = { notify: jest.fn().mockResolvedValue('sent') };
   let now = START;
   const cfg: OutboxConfig = {
     dispatchEnabled: true,
@@ -66,6 +68,7 @@ describe('OutboxDispatcherService (real DB)', () => {
         OutboxRepository,
         RecordingConsumer,
         IdGenerator,
+        { provide: AlertService, useValue: alerts },
         { provide: ClockService, useValue: { now: () => now } },
         {
           provide: ConfigService,
@@ -91,6 +94,7 @@ describe('OutboxDispatcherService (real DB)', () => {
     consumer.calls = [];
     consumer.failuresLeft.clear();
     consumer.block = null;
+    alerts.notify.mockClear();
     Object.assign(cfg, { batchSize: 100, maxAttempts: 5 });
   });
 
@@ -114,6 +118,28 @@ describe('OutboxDispatcherService (real DB)', () => {
       next: row.next_attempt_at,
     };
   }
+
+  describe('경보', () => {
+    it('maxAttempts를 채워 FAILED가 되면 event_type 키로 경보를 1건 보낸다(재시도 단계에서는 보내지 않는다)', async () => {
+      Object.assign(cfg, { maxAttempts: 2 });
+      await enqueue('A', 1);
+      consumer.failuresLeft.set('A:1', 5);
+
+      await drainOutbox(dispatcher);
+      expect(alerts.notify).not.toHaveBeenCalled();
+      now = new Date(now.getTime() + 60_000);
+      await drainOutbox(dispatcher);
+
+      expect((await statusOf('A', 1)).status).toBe('FAILED');
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+      expect(alerts.notify).toHaveBeenCalledWith({
+        level: 'error',
+        title: 'outbox FAILED',
+        key: 'outbox-failed:test.a',
+        detail: expect.stringMatching(/^test\.a#.+ 2회 실패$/) as string,
+      });
+    });
+  });
 
   describe('dispatchOnce', () => {
     it('파티션 안은 id 순으로, 파티션 간은 서로 섞여도 전부 전달하고 PUBLISHED로 남긴다', async () => {
@@ -291,6 +317,7 @@ describe('OutboxDispatcherService (real DB)', () => {
           OutboxDispatcherService,
           OutboxRepository,
           Broken,
+          { provide: AlertService, useValue: alerts },
           { provide: ClockService, useValue: { now: () => now } },
           { provide: ConfigService, useValue: { getOrThrow: () => cfg } },
         ],
