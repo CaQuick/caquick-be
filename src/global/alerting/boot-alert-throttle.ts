@@ -3,6 +3,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -62,18 +63,34 @@ function acquireLock(lockPath: string, nowMs: number): boolean {
       return true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return true; // 잠금 자체를 못 쓰는 환경
-      try {
-        if (nowMs - statSync(lockPath).mtimeMs > STALE_LOCK_MS) {
-          unlinkSync(lockPath);
-          continue;
-        }
-      } catch {
-        continue; // 그새 풀렸다 — 다시 시도
-      }
-      return false;
+      if (!reclaimStaleLock(lockPath, nowMs)) return false;
     }
   }
   return false;
+}
+
+/**
+ * 오래된 잠금은 unlink가 아니라 **rename으로 가져간다** — rename은 원자적이라 여럿이 동시에 발견해도 한 프로세스만
+ * 성공하고, 그 사이 다른 프로세스가 새로 만든 잠금을 지우는 일이 없다. 성공한 쪽만 다시 잠금을 시도한다.
+ */
+function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
+  try {
+    if (nowMs - statSync(lockPath).mtimeMs <= STALE_LOCK_MS) return false;
+  } catch {
+    return true; // 그새 풀렸다 — 다시 시도
+  }
+  const taken = `${lockPath}.stale.${process.pid}`;
+  try {
+    renameSync(lockPath, taken);
+  } catch {
+    return false; // 다른 프로세스가 먼저 가져갔다
+  }
+  try {
+    unlinkSync(taken);
+  } catch {
+    // 남아도 무해
+  }
+  return true;
 }
 
 function readLastSentAt(statePath: string): number {

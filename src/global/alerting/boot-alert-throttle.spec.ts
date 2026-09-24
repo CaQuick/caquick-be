@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -22,30 +23,11 @@ describe('shouldSendBootAlert', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('마지막 전송 기준 롤링 창 — 창 안 재호출은 억제하고 창이 지나면 보낸다', () => {
-    expect(shouldSendBootAlert(10_000, 5_000, dir)).toBe(true);
-    expect(shouldSendBootAlert(14_999, 5_000, dir)).toBe(false);
-    expect(shouldSendBootAlert(15_000, 5_000, dir)).toBe(true);
-    // 반증(고정 버킷의 구멍): 15,000에 보냈으면 15,001은 억제돼야 한다
-    expect(shouldSendBootAlert(15_001, 5_000, dir)).toBe(false);
-    expect(shouldSendBootAlert(19_999, 5_000, dir)).toBe(false);
-    expect(shouldSendBootAlert(20_000, 5_000, dir)).toBe(true);
-  });
-
-  it('죽은 프로세스가 남긴 오래된 잠금은 치우고 결정한다', () => {
-    writeFileSync(join(dir, 'lock'), '', 'utf8');
-    const old = new Date(Date.now() - 60_000);
-    utimesSync(join(dir, 'lock'), old, old);
-    expect(shouldSendBootAlert(Date.now(), 5_000, dir)).toBe(true);
-  });
-
-  it('반증: 방금 잡힌 잠금이면 이번 프로세스는 보내지 않는다(다른 프로세스가 결정 중)', () => {
-    writeFileSync(join(dir, 'lock'), '', 'utf8');
-    expect(shouldSendBootAlert(Date.now(), 5_000, dir)).toBe(false);
-  });
-
-  it('반증: 별도 프로세스 4개가 동시에 부르면 정확히 1개만 보낸다', async () => {
-    // 같은 함수를 별도 프로세스에서 돌린다 — 이 파일을 CJS로 옮겨 자식이 require한다
+  /** 같은 함수를 별도 프로세스 n개에서 동시에 돌린다 — 이 파일을 CJS로 옮겨 자식이 require한다. */
+  async function runInProcesses(
+    n: number,
+    stateDir: string,
+  ): Promise<string[]> {
     const source = readFileSync(
       join(__dirname, 'boot-alert-throttle.ts'),
       'utf8',
@@ -58,13 +40,11 @@ describe('shouldSendBootAlert', () => {
     }).outputText;
     const modulePath = join(dir, 'throttle.js');
     writeFileSync(modulePath, js, 'utf8');
-    const stateDir = join(dir, 'state');
     const child = `const t = require(${JSON.stringify(modulePath)});
       process.stdout.write(t.shouldSendBootAlert(Date.now(), 5000, ${JSON.stringify(stateDir)}) ? 'sent' : 'suppressed');`;
-
-    const results = await Promise.all(
+    return Promise.all(
       Array.from(
-        { length: 4 },
+        { length: n },
         () =>
           new Promise<string>((resolve) => {
             const proc = spawn(process.execPath, ['-e', child]);
@@ -77,6 +57,45 @@ describe('shouldSendBootAlert', () => {
           }),
       ),
     );
+  }
+
+  it('마지막 전송 기준 롤링 창 — 창 안 재호출은 억제하고 창이 지나면 보낸다', () => {
+    expect(shouldSendBootAlert(10_000, 5_000, dir)).toBe(true);
+    expect(shouldSendBootAlert(14_999, 5_000, dir)).toBe(false);
+    expect(shouldSendBootAlert(15_000, 5_000, dir)).toBe(true);
+    // 반증(고정 버킷의 구멍): 15,000에 보냈으면 15,001은 억제돼야 한다
+    expect(shouldSendBootAlert(15_001, 5_000, dir)).toBe(false);
+    expect(shouldSendBootAlert(19_999, 5_000, dir)).toBe(false);
+    expect(shouldSendBootAlert(20_000, 5_000, dir)).toBe(true);
+  });
+
+  it('죽은 프로세스가 남긴 오래된 잠금은 가져가고 결정한다', () => {
+    writeFileSync(join(dir, 'lock'), '', 'utf8');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(join(dir, 'lock'), old, old);
+    expect(shouldSendBootAlert(Date.now(), 5_000, dir)).toBe(true);
+  });
+
+  it('반증: 방금 잡힌 잠금이면 이번 프로세스는 보내지 않는다(다른 프로세스가 결정 중)', () => {
+    writeFileSync(join(dir, 'lock'), '', 'utf8');
+    expect(shouldSendBootAlert(Date.now(), 5_000, dir)).toBe(false);
+  });
+
+  it('반증: 별도 프로세스 4개가 동시에 부르면 정확히 1개만 보낸다', async () => {
+    const results = await runInProcesses(4, join(dir, 'state'));
+
+    expect(results.filter((r) => r === 'sent')).toHaveLength(1);
+    expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
+  });
+
+  it('반증: 오래된 잠금을 프로세스 4개가 동시에 발견해도 정확히 1개만 보낸다(rename 회수)', async () => {
+    const stateDir = join(dir, 'state');
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(join(stateDir, 'lock'), '', 'utf8');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(join(stateDir, 'lock'), old, old);
+
+    const results = await runInProcesses(4, stateDir);
 
     expect(results.filter((r) => r === 'sent')).toHaveLength(1);
     expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
