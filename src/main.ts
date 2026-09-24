@@ -21,7 +21,7 @@ import { AppModule } from '@/app.module';
 import { readAlertingConfig } from '@/config/alerting.config';
 import { resolveAppRole, servesHttpApi } from '@/config/app.config';
 import type { AuthConfig } from '@/config/auth.config';
-import { postDiscordAlert } from '@/global/alerting';
+import { postDiscordAlert, shouldSendBootAlert } from '@/global/alerting';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import {
@@ -149,12 +149,13 @@ function setupSwagger(app: INestApplication, version?: string): void {
   });
 }
 
-// 부팅 실패는 DI가 없을 수 있어(모듈 compile 전) 전송 함수를 직접 부른다. compose는 재시작하겠지만 사람이 알아야 한다.
+// 부팅 실패는 DI가 없을 수 있어(모듈 compile 전) 전송 함수를 직접 부른다. 감독자가 자동 재시작하므로
+// 같은 호스트에서 창 안에는 한 번만 보낸다(파일 억제). stderr는 파이프일 수 있어 flush를 기다린 뒤 종료한다.
 bootstrap().catch(async (error: unknown) => {
   const { discordWebhookUrl } = readAlertingConfig();
   const detail =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
-  if (discordWebhookUrl) {
+  if (discordWebhookUrl && shouldSendBootAlert(Date.now())) {
     await postDiscordAlert(
       discordWebhookUrl,
       { level: 'error', title: '부팅 실패', detail },
@@ -164,6 +165,8 @@ bootstrap().catch(async (error: unknown) => {
       },
     );
   }
-  process.stderr.write(`caquick-be 부팅 실패\n${detail}\n`);
+  await new Promise<void>((resolve) => {
+    process.stderr.write(`caquick-be 부팅 실패\n${detail}\n`, () => resolve());
+  });
   process.exit(1);
 });
