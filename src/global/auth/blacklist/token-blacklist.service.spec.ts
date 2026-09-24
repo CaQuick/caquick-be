@@ -309,6 +309,31 @@ describe('TokenBlacklistService (real Redis)', () => {
       expect(await service.generation()).toBe('3'); // 실패마다 세대가 오른다
     });
 
+    it('반증: 세대를 올린 뒤 표식을 지운다 — 반대 순서면 그 사이 옛 세대의 markReady가 표식을 되살린다', async () => {
+      const generation = await service.generation();
+      const order: string[] = [];
+      const broken = stubbed({
+        eval: down,
+        incr: (key: string) => {
+          order.push('incr');
+          return redis.incr(key);
+        },
+        del: async (key: string) => {
+          // INCR과 DEL 사이에 옛 세대의 재구축이 표식을 세우려 한다 — 세대가 이미 올라 실패해야 한다
+          expect(await service.markReady(generation)).toBe(false);
+          order.push('del');
+          return redis.del(key);
+        },
+      });
+
+      await expect(
+        broken.blockStatus(BigInt(1), 'SUSPENDED', T1),
+      ).resolves.toBe(false);
+
+      expect(order).toEqual(['incr', 'del']);
+      expect(await redis.exists(BLACKLIST_READY_KEY)).toBe(0);
+    });
+
     it('반증: 쓰기만 거부되는 상태(OOM+noeviction·READONLY)에서도 단독 DEL로 표식은 지워진다', async () => {
       const oom = () => Promise.reject(new Error('OOM command not allowed'));
       const broken = stubbed({ eval: oom, incr: oom });

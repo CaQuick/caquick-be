@@ -224,6 +224,13 @@ export class TokenBlacklistService {
         key: 'auth-blacklist-write',
         detail: `${what}: ${detail}`,
       });
+      // 순서가 중요하다: ① 세대를 먼저 올려 진행 중인 재구축이 스냅샷 전 세대로 표식을 세우지 못하게 하고, ② 그 다음 표식을 지운다.
+      // 반대로 하면 DEL과 INCR 사이에 옛 세대의 markReady가 표식을 되살린다. INCR 실패는 삼킨다 — 쓰기가 막힌 동안은 markReady도 실패한다.
+      try {
+        await this.redis.incr(DIRTY_KEY);
+      } catch {
+        // 위와 같은 이유로 삼킨다
+      }
       // 빠진 키를 "활성"으로 믿지 않게 표식을 지운다. 단독 DEL이어야 한다 — 쓰기만 거부되는 상태(OOM+noeviction·READONLY·
       // MISCONF)에서 DEL은 통과하지만 MULTI로 묶으면 EXECABORT로 같이 버려진다. 그마저 실패하면 이 프로세스는 임대 시간 동안 스스로 폴백.
       const cleared = await this.clearReady();
@@ -234,12 +241,6 @@ export class TokenBlacklistService {
       this.logger.warn(
         `블랙리스트 등록 실패(${what}) — 표식 ${cleared ? '제거' : '제거 실패, 이 프로세스는 DB 폴백'}, 재구축이 메운다: ${detail}`,
       );
-      // 세대를 올려 진행 중인 재구축이 스냅샷 전 세대로 표식을 세우지 못하게. 실패해도 무방 — 쓰기가 막힌 동안은 markReady도 실패한다
-      try {
-        await this.redis.incr(DIRTY_KEY);
-      } catch {
-        // 위와 같은 이유로 삼킨다
-      }
       return false;
     }
   }
