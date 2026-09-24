@@ -49,6 +49,8 @@ export class RabbitConsumerHostService
   private readonly returned = new Set<string>();
   private stopped = false;
   private startFailures = 0;
+  /** 재연결 백오프 sleep — 종료 시 깨워서 프로세스가 타이머에 붙잡히지 않게 */
+  private wakeRetry: (() => void) | null = null;
   /** spec이 줄여 쓴다 */
   moveConfirmTimeoutMs = MOVE_CONFIRM_TIMEOUT_MS;
 
@@ -71,6 +73,7 @@ export class RabbitConsumerHostService
   /** 소비 중단 → 진행 중 handle 완료 → 채널 close. 순서가 바뀌면 in-flight의 ack가 닫힌 채널에 던진다. */
   async onModuleDestroy(): Promise<void> {
     this.stopped = true;
+    this.wakeRetry?.();
     const channel = this.channel;
     this.channel = null;
     if (channel) {
@@ -171,10 +174,26 @@ export class RabbitConsumerHostService
             detail,
           });
         }
-        await new Promise((r) => setTimeout(r, delay));
+        await this.sleep(delay);
         delay = Math.min(delay * 2, 30_000);
       }
     }
+  }
+
+  /** 취소 가능한 sleep — onModuleDestroy가 깨운다. 타이머는 unref라 종료를 붙잡지 않는다. */
+  private sleep(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.wakeRetry = null;
+        resolve();
+      }, ms);
+      timer.unref();
+      this.wakeRetry = () => {
+        clearTimeout(timer);
+        this.wakeRetry = null;
+        resolve();
+      };
+    });
   }
 
   private async handle(
@@ -190,13 +209,14 @@ export class RabbitConsumerHostService
     } catch (error) {
       // 깨진 본문은 재시도해도 고쳐지지 않는다 — 바로 DLQ
       const detail = error instanceof Error ? error.message : String(error);
-      await this.moveThenAck(
+      const moved = await this.moveThenAck(
         channel,
         message,
         DLQ_EXCHANGE,
         consumer.queues.dlq,
         attempts,
       );
+      if (!moved) return; // 옮기지 못했다 — 원본이 requeue/재전달되므로 DLQ라고 알리지 않는다
       this.logger.error(`${consumer.name} 본문 파싱 실패 — DLQ`, { detail });
       void this.alerts.notify({
         level: 'error',
@@ -216,13 +236,14 @@ export class RabbitConsumerHostService
       const detail = error instanceof Error ? error.message : String(error);
       const next = attempts + 1;
       if (next >= cfg.maxAttempts) {
-        await this.moveThenAck(
+        const moved = await this.moveThenAck(
           channel,
           message,
           DLQ_EXCHANGE,
           consumer.queues.dlq,
           next,
         );
+        if (!moved) return;
         this.logger.error(`${label} 소비 ${next}회 실패 — DLQ`, {
           eventId: parsed.eventId,
           attempts: next,
@@ -237,7 +258,7 @@ export class RabbitConsumerHostService
         return;
       }
       const delay = retryBackoffMs(next);
-      await this.moveThenAck(
+      const moved = await this.moveThenAck(
         channel,
         message,
         '',
@@ -245,6 +266,7 @@ export class RabbitConsumerHostService
         next,
         delay,
       );
+      if (!moved) return;
       this.logger.warn(`${label} 소비 ${next}회 실패 — ${delay}ms 뒤 재시도`, {
         eventId: parsed.eventId,
         attempts: next,
@@ -263,7 +285,8 @@ export class RabbitConsumerHostService
 
   /**
    * 본문·속성을 유지한 채 다른 큐로 옮긴 **뒤** 원본을 ack한다. 옮기는 발행은 confirm과 mandatory로 확인한다 —
-   * 확인 없이 ack하면 사본이 사라졌을 때 원본도 이미 없다. 실패하면 nack(requeue)해 브로커 재전달에 맡긴다.
+   * 확인 없이 ack하면 사본이 사라졌을 때 원본도 이미 없다. 실패하면 nack(requeue)해 브로커 재전달에 맡기고 false —
+   * 호출자는 그때 "옮겼다"고 기록·경보하지 않는다.
    */
   private async moveThenAck(
     channel: ConfirmChannel,
@@ -272,8 +295,8 @@ export class RabbitConsumerHostService
     routingKey: string,
     attempts: number,
     expirationMs?: number,
-  ): Promise<void> {
-    if (this.channel !== channel) return;
+  ): Promise<boolean> {
+    if (this.channel !== channel) return false;
     const rawId: unknown = message.properties.messageId;
     const messageId = typeof rawId === 'string' ? rawId : undefined;
     if (messageId) this.returned.delete(messageId);
@@ -305,6 +328,7 @@ export class RabbitConsumerHostService
         throw new Error(`${routingKey} 큐가 없다(unroutable)`);
       }
       channel.ack(message);
+      return true;
     } catch (error) {
       this.logger.warn(
         `${routingKey}로 옮기지 못했다 — 원본을 requeue: ${error instanceof Error ? error.message : String(error)}`,
@@ -313,9 +337,10 @@ export class RabbitConsumerHostService
         // confirm이 안 오는 채널은 믿을 수 없다 — 닫아서 unack를 브로커가 재전달하게 하고 재시작한다
         if (this.channel === channel) this.channel = null;
         await channel.close().catch(() => undefined);
-        return;
+        return false;
       }
       if (this.channel === channel) channel.nack(message, false, true);
+      return false;
     }
   }
 }

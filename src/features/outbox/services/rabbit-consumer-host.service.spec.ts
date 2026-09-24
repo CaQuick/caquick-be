@@ -298,7 +298,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     await setup.close();
 
     await expect(other.start()).rejects.toMatchObject({ code: 406 });
-    expect(rabbit.isConnected).toBe(true);
+    expect(rabbit.isConnected('consumer')).toBe(true);
     await expect(publisher.checkQueue(queues.main)).resolves.toBeDefined(); // 다른 채널은 멀쩡
 
     outboxCfg.dispatchEnabled = true;

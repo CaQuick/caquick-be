@@ -239,7 +239,8 @@ export class OutboxRelayService
 
   private async getChannel(): Promise<ConfirmChannel> {
     if (this.channel) return this.channel;
-    const channel = await this.rabbit.createConfirmChannel();
+    // 발행 전용 커넥션 — 브로커 알람이 이 소켓을 막아도 소비(ack)는 다른 소켓이라 계속 간다
+    const channel = await this.rabbit.createConfirmChannel('publisher');
     // 소비자 호스트와 같은 토폴로지를 선언한다 — 릴레이가 먼저 붙어도 큐 없는 exchange에 싣지 않게
     await assertTopology(channel, this.consumers.resolve());
     channel.on('return', (message: { properties: { messageId?: string } }) => {

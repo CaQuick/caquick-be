@@ -88,6 +88,7 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     partitionConcurrency: 4,
   };
   const alerts = { notify: jest.fn().mockResolvedValue('sent') };
+  beforeEach(() => alerts.notify.mockClear());
 
   function build(
     channel: ReturnType<typeof fakeChannel>,
@@ -149,6 +150,26 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     expect(channel.ack).not.toHaveBeenCalled();
     expect(channel.nack).not.toHaveBeenCalled();
     expect(host.isConsuming).toBe(false);
+    // 옮기지 못했으므로 "retry/DLQ로 보냈다"는 경보를 내지 않는다
+    expect(alerts.notify).not.toHaveBeenCalled();
     await host.onModuleDestroy(); // in-flight가 끝나 있어 즉시 돌아온다
+  });
+
+  it('반증: 브로커가 없을 때 종료하면 재연결 sleep(최대 30초)을 깨워 바로 돌아온다', async () => {
+    const host = build(
+      {
+        ...fakeChannel({}),
+        assertExchange: jest.fn().mockRejectedValue(new Error('broker down')),
+      },
+      () => Promise.resolve(),
+    );
+    cfg.dispatchEnabled = true;
+    host.onApplicationBootstrap();
+    cfg.dispatchEnabled = false;
+    await flush();
+
+    const started = Date.now();
+    await host.onModuleDestroy();
+    expect(Date.now() - started).toBeLessThan(500);
   });
 });
