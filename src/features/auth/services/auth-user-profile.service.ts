@@ -202,7 +202,7 @@ export class UserProfileService extends UserBaseService {
       now,
     });
     // 커밋 뒤 — 세션은 tx에서 끊겼고, 만료 전 액세스 토큰은 여기서 막는다
-    await this.blacklist.block(accountId, 'DELETED');
+    await this.blacklist.blockStatus(accountId, 'DELETED');
 
     return true;
   }

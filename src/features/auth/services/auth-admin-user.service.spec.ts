@@ -20,13 +20,12 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('AdminUserService (real DB)', () => {
   const blacklist = {
-    block: jest.fn().mockResolvedValue(undefined),
-    unblock: jest.fn().mockResolvedValue(undefined),
-    blockedReason: jest.fn().mockResolvedValue(null),
+    blockStatus: jest.fn().mockResolvedValue(undefined),
+    clearStatus: jest.fn().mockResolvedValue(undefined),
   };
   afterEach(() => {
-    blacklist.block.mockClear();
-    blacklist.unblock.mockClear();
+    blacklist.blockStatus.mockClear();
+    blacklist.clearStatus.mockClear();
   });
   let service: AdminUserService;
   let prisma: PrismaClient;
@@ -243,7 +242,7 @@ describe('AdminUserService (real DB)', () => {
       });
       expect(await statusOf(user.id)).toBe('SUSPENDED');
       // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
-      expect(blacklist.block).toHaveBeenCalledWith(user.id, 'SUSPENDED');
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(user.id, 'SUSPENDED');
       const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
         where: { id: session.id },
       });
@@ -286,7 +285,7 @@ describe('AdminUserService (real DB)', () => {
       expect(
         await prisma.auditLog.count({ where: { target_id: user.id } }),
       ).toBe(0);
-      expect(blacklist.block).not.toHaveBeenCalled();
+      expect(blacklist.blockStatus).not.toHaveBeenCalled();
     });
 
     // 대상 불가 전수: 본인·다른 ADMIN → FORBIDDEN, 탈퇴·미존재 → NOT_FOUND
@@ -394,7 +393,8 @@ describe('AdminUserService (real DB)', () => {
 
       expect(result.status).toBe('ACTIVE');
       expect(await statusOf(user.id)).toBe('ACTIVE');
-      expect(blacklist.unblock).toHaveBeenCalledWith(user.id);
+      // 상태 키만 — 자격증명 cutoff는 남는다
+      expect(blacklist.clearStatus).toHaveBeenCalledWith(user.id);
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { target_type: 'ACCOUNT', target_id: user.id },
       });
@@ -412,7 +412,7 @@ describe('AdminUserService (real DB)', () => {
       expect(
         await prisma.auditLog.count({ where: { target_id: user.id } }),
       ).toBe(0);
-      expect(blacklist.unblock).not.toHaveBeenCalled();
+      expect(blacklist.clearStatus).not.toHaveBeenCalled();
     });
 
     it('PENDING 계정은 복구할 수 없다(400)', async () => {

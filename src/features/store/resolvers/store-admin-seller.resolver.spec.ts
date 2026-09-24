@@ -12,6 +12,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { NOOP_BLACKLIST_PROVIDER } from '@/test/redis';
 
 describe('Admin Seller Resolvers (real DB)', () => {
   let queryResolver: AdminSellerQueryResolver;
@@ -27,6 +28,7 @@ describe('Admin Seller Resolvers (real DB)', () => {
         AdminSellerService,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        NOOP_BLACKLIST_PROVIDER,
       ],
     });
     queryResolver = module.get(AdminSellerQueryResolver);

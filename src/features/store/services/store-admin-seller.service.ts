@@ -47,6 +47,7 @@ import { StoreSellerRepository } from '@/features/store/repositories/store-selle
 import { toAdminSellerOutput } from '@/features/store/services/store-admin-seller-mappers.helper';
 import type { AdminSellerOutput } from '@/features/store/types/store-admin-seller-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth/blacklist';
 
 /** 매장은 기본 정보만 만들고 영업시간·픽업 정책은 판매자가 seller* API로 직접 설정한다. */
 @Injectable()
@@ -56,6 +57,7 @@ export class AdminSellerService extends AdminBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly stores: StoreSellerRepository,
+    private readonly blacklist: TokenBlacklistService,
   ) {
     super(accounts, auditLogs);
   }
@@ -194,7 +196,7 @@ export class AdminSellerService extends AdminBaseService {
     const passwordHash = await argon2.hash(input.newPassword, {
       type: argon2.argon2id,
     });
-    await this.accounts.resetCredentialPassword({
+    const changedAt = await this.accounts.resetCredentialPassword({
       accountId: target.id,
       passwordHash,
       audit: {
@@ -206,6 +208,8 @@ export class AdminSellerService extends AdminBaseService {
         afterJson: { passwordReset: true, mustChangePassword: true },
       },
     });
+    // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다(P2 03)
+    await this.blacklist.blockCredentials(target.id, changedAt);
     return true;
   }
 }

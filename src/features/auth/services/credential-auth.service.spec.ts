@@ -65,13 +65,10 @@ function auditEntryOf(mock: unknown) {
 
 describe('CredentialAuthService', () => {
   const blacklist = {
-    block: jest.fn().mockResolvedValue(undefined),
-    unblock: jest.fn().mockResolvedValue(undefined),
-    blockedReason: jest.fn().mockResolvedValue(null),
+    blockCredentials: jest.fn().mockResolvedValue(undefined),
   };
   afterEach(() => {
-    blacklist.block.mockClear();
-    blacklist.unblock.mockClear();
+    blacklist.blockCredentials.mockClear();
   });
   let service: CredentialAuthService;
   let credentials: jest.Mocked<IAccountCredentialRepository>;
@@ -424,11 +421,10 @@ describe('CredentialAuthService', () => {
         expect.any(Function),
       );
       expect(refreshSessions.revokeAllRefreshSessions).not.toHaveBeenCalled();
-      // 커밋 뒤 만료 전 액세스 토큰을 막는다(P2 03) — 사유는 토큰 무효(재로그인 유도)
-      expect(blacklist.block).toHaveBeenCalledWith(
+      // 커밋 뒤 — 변경 시각이 cutoff가 되어 그 전에 발급된 액세스 토큰을 막는다(P2 03)
+      expect(blacklist.blockCredentials).toHaveBeenCalledWith(
         BigInt(10),
-        'CREDENTIAL_CHANGED',
-        { issuedBeforeMs: expect.any(Number) as number },
+        credentials.changePassword.mock.calls[0]?.[0].now,
       );
       expect(auditEntryOf(credentials.changePassword)).toMatchObject({
         actorAccountId: BigInt(10),
@@ -482,7 +478,7 @@ describe('CredentialAuthService', () => {
         change({ currentPassword: 'Wrong!123' }),
       ).rejects.toThrowDomain('CURRENT_PASSWORD_INVALID');
       expect(credentials.changePassword).not.toHaveBeenCalled();
-      expect(blacklist.block).not.toHaveBeenCalled();
+      expect(blacklist.blockCredentials).not.toHaveBeenCalled();
     });
 
     it('새 비밀번호가 현재와 같으면 PASSWORD_UNCHANGED', async () => {

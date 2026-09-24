@@ -13,6 +13,7 @@ import { AlertService } from '@/global/alerting';
 import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 import {
   type BlacklistLookup,
+  credentialCutoffSec,
   TokenBlacklistService,
 } from '@/global/auth/blacklist';
 
@@ -68,7 +69,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
         key: 'auth-blacklist-fallback',
         detail: error instanceof Error ? error.message : String(error),
       });
-      return this.validateAgainstDb(accountId);
+      return this.validateAgainstDb(accountId, payload.iat);
     }
     if (!lookup.ready) {
       // Redis가 비었다(초기화·flush). worker 재구축이 표식을 다시 세울 때까지 DB가 정본이다.
@@ -78,16 +79,18 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
         title: 'Redis 블랙리스트 미구축 — 계정 재조회로 폴백',
         key: 'auth-blacklist-not-ready',
       });
-      return this.validateAgainstDb(accountId);
+      return this.validateAgainstDb(accountId, payload.iat);
     }
 
-    const entry = lookup.entry;
-    if (entry !== null && payload.iat * 1000 < entry.issuedBeforeMs) {
-      throw new DomainException(
-        entry.reason === 'CREDENTIAL_CHANGED'
-          ? 'INVALID_ACCESS_TOKEN'
-          : 'ACCOUNT_NOT_ACTIVE',
-      );
+    if (lookup.status !== null) {
+      throw new DomainException('ACCOUNT_NOT_ACTIVE');
+    }
+    // iat와 cutoff 둘 다 초 단위 — 변경 전에 발급된 토큰만 무효
+    if (
+      lookup.credentialCutoffSec !== null &&
+      payload.iat < lookup.credentialCutoffSec
+    ) {
+      throw new DomainException('INVALID_ACCESS_TOKEN');
     }
 
     return {
@@ -97,8 +100,11 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     };
   }
 
-  /** 폴백 경로 — 블랙리스트 도입 전과 같은 판정(존재·ACTIVE·must_change_password). */
-  private async validateAgainstDb(accountId: bigint): Promise<JwtUser> {
+  /** 폴백 경로 — 블랙리스트 도입 전 판정(존재·ACTIVE·must_change_password)에 자격증명 변경 시각 비교를 더한다. */
+  private async validateAgainstDb(
+    accountId: bigint,
+    issuedAtSec: number,
+  ): Promise<JwtUser> {
     const account = await this.accounts.findAccountForJwt(accountId);
 
     if (!account) {
@@ -107,6 +113,11 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (account.status !== 'ACTIVE') {
       throw new DomainException('ACCOUNT_NOT_ACTIVE');
+    }
+
+    const changedAt = account.credential?.password_updated_at;
+    if (changedAt && issuedAtSec < credentialCutoffSec(changedAt)) {
+      throw new DomainException('INVALID_ACCESS_TOKEN');
     }
 
     return {

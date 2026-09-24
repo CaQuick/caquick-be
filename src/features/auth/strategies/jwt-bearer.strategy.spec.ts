@@ -139,41 +139,63 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
   });
 
-  // 블랙리스트 사유 전수 — 정지·탈퇴는 상태 오류, 자격증명 변경은 토큰 무효(FE가 refresh를 시도하게)
+  // 상태(정지·탈퇴)는 계정 오류, 자격증명 변경은 토큰 무효(FE가 refresh를 시도하게)
   describe('블랙리스트', () => {
     it.each([
       ['SUSPENDED', 'ACCOUNT_NOT_ACTIVE'],
       ['DELETED', 'ACCOUNT_NOT_ACTIVE'],
-      ['CREDENTIAL_CHANGED', 'INVALID_ACCESS_TOKEN'],
     ] as const)('%s → %s', async (reason, code) => {
-      await blacklist.block(BigInt(42), reason);
+      await blacklist.blockStatus(BigInt(42), reason);
 
       await expect(strategy.validate(payload('42'))).rejects.toThrowDomain(
         code,
       );
     });
 
-    it('unblock 뒤에는 통과한다(복구)', async () => {
-      await blacklist.block(BigInt(42), 'SUSPENDED');
-      await blacklist.unblock(BigInt(42));
+    it('복구(clearStatus) 뒤에는 통과한다', async () => {
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
+      await blacklist.clearStatus(BigInt(42));
 
       await expect(strategy.validate(payload('42'))).resolves.toMatchObject({
         accountId: '42',
       });
     });
 
-    it('자격증명 변경은 cutoff 전에 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과', async () => {
-      const changedAt = NOW * 1000;
-      await blacklist.block(BigInt(42), 'CREDENTIAL_CHANGED', {
-        issuedBeforeMs: changedAt,
-      });
+    it('자격증명 변경은 cutoff 전에 발급된 토큰만 막는다 — 같은 초·그 뒤에 받은 새 토큰은 통과', async () => {
+      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000 + 999));
+
+      await expect(
+        strategy.validate(payload('42', { iat: NOW - 1 })),
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
+      // 변경과 같은 초에 발급된 토큰 — iat가 초 단위라 ms 비교로 밀어내면 새 토큰까지 막는다
+      await expect(
+        strategy.validate(payload('42', { iat: NOW })),
+      ).resolves.toMatchObject({ accountId: '42' });
+      await expect(
+        strategy.validate(payload('42', { iat: NOW + 1 })),
+      ).resolves.toMatchObject({ accountId: '42' });
+    });
+
+    it('반증: 정지 → 복구를 거쳐도 자격증명 cutoff는 살아 옛 토큰을 계속 막는다', async () => {
+      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000));
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
+      await blacklist.clearStatus(BigInt(42));
 
       await expect(
         strategy.validate(payload('42', { iat: NOW - 60 })),
       ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
       await expect(
-        strategy.validate(payload('42', { iat: NOW + 1 })),
+        strategy.validate(payload('42', { iat: NOW })),
       ).resolves.toMatchObject({ accountId: '42' });
+    });
+
+    it('정지와 자격증명 변경이 겹치면 상태 오류가 우선한다', async () => {
+      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000));
+      await blacklist.blockStatus(BigInt(42), 'SUSPENDED');
+
+      await expect(
+        strategy.validate(payload('42', { iat: NOW - 60 })),
+      ).rejects.toThrowDomain('ACCOUNT_NOT_ACTIVE');
     });
 
     it('반증: 재구축 표식이 없으면(Redis 초기화) 항목이 없어도 클레임을 믿지 않고 DB로 판정한다', async () => {
@@ -192,7 +214,8 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
 
     it('다른 계정의 블랙리스트는 영향이 없다', async () => {
-      await blacklist.block(BigInt(1), 'DELETED');
+      await blacklist.blockStatus(BigInt(1), 'DELETED');
+      await blacklist.blockCredentials(BigInt(1), new Date(NOW * 1000));
 
       await expect(strategy.validate(payload('42'))).resolves.toMatchObject({
         accountId: '42',
@@ -252,6 +275,24 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
           key: 'auth-blacklist-fallback',
         }),
       );
+    });
+
+    it('반증: 비밀번호 변경 전에 발급된 토큰은 DB의 password_updated_at으로도 막힌다 — Redis 없이도 자격증명 변경이 새지 않는다', async () => {
+      const credential = await createAccountCredential(prisma, {
+        account_type: 'SELLER',
+      });
+      await prisma.accountCredential.update({
+        where: { account_id: credential.account_id },
+        data: { password_updated_at: new Date(NOW * 1000) },
+      });
+      const sub = credential.account_id.toString();
+
+      await expect(
+        fallbackStrategy.validate(payload(sub, { iat: NOW - 60 })),
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
+      await expect(
+        fallbackStrategy.validate(payload(sub, { iat: NOW })),
+      ).resolves.toMatchObject({ accountId: sub });
     });
 
     it('정지 계정은 DB 값으로 막힌다', async () => {

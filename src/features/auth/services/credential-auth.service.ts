@@ -186,9 +186,7 @@ export class CredentialAuthService {
       }),
     );
     // 커밋 뒤 — 세션은 tx에서 끊겼고, 변경 전에 발급된 액세스 토큰만 막는다(새 비밀번호로 받은 새 토큰은 통과)
-    await this.blacklist.block(args.accountId, 'CREDENTIAL_CHANGED', {
-      issuedBeforeMs: now.getTime(),
-    });
+    await this.blacklist.blockCredentials(args.accountId, now);
   }
 
   private async requireSessionCredential(

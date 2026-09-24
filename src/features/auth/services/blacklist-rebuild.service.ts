@@ -58,12 +58,13 @@ export class BlacklistRebuildService
       this.repo.deletedSince(since),
       this.repo.credentialsChangedSince(since),
     ]);
-    for (const id of suspended) await this.blacklist.block(id, 'SUSPENDED');
-    for (const id of deleted) await this.blacklist.block(id, 'DELETED');
+    // 복구 직후 표식이 있으면 옛 스냅샷으로 정지를 되살리지 않는다(재구축 경쟁)
+    for (const id of suspended) {
+      await this.blacklist.blockStatusUnlessReinstated(id, 'SUSPENDED');
+    }
+    for (const id of deleted) await this.blacklist.blockStatus(id, 'DELETED');
     for (const { accountId, changedAt } of credentials) {
-      await this.blacklist.block(accountId, 'CREDENTIAL_CHANGED', {
-        issuedBeforeMs: changedAt.getTime(),
-      });
+      await this.blacklist.blockCredentials(accountId, changedAt);
     }
     await this.blacklist.markReady();
     return {

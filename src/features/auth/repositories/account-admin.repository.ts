@@ -329,11 +329,12 @@ export class AccountAdminRepository {
     }
   }
 
+  /** 기록한 변경 시각을 돌려준다 — 호출자가 커밋 뒤 같은 시각으로 블랙리스트 cutoff를 등록한다. */
   async resetCredentialPassword(args: {
     accountId: bigint;
     passwordHash: string;
     audit: AuditEntry;
-  }): Promise<void> {
+  }): Promise<Date> {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.accountCredential.update({
@@ -351,6 +352,7 @@ export class AccountAdminRepository {
       });
       await this.auditLogs.recordAudit(tx, args.audit);
     });
+    return now;
   }
 
   // ── 구매자 계정 ──

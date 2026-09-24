@@ -14,13 +14,10 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('UserProfileService (real DB)', () => {
   const blacklist = {
-    block: jest.fn().mockResolvedValue(undefined),
-    unblock: jest.fn().mockResolvedValue(undefined),
-    blockedReason: jest.fn().mockResolvedValue(null),
+    blockStatus: jest.fn().mockResolvedValue(undefined),
   };
   afterEach(() => {
-    blacklist.block.mockClear();
-    blacklist.unblock.mockClear();
+    blacklist.blockStatus.mockClear();
   });
   let service: UserProfileService;
   let prisma: PrismaClient;
@@ -553,7 +550,7 @@ describe('UserProfileService (real DB)', () => {
 
       expect(result).toBe(true);
       // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
-      expect(blacklist.block).toHaveBeenCalledWith(account.id, 'DELETED');
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(account.id, 'DELETED');
 
       const deletedAccount = await prisma.account.findUniqueOrThrow({
         where: { id: account.id },

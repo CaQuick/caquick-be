@@ -101,7 +101,7 @@ describe('TokenService', () => {
         id: BigInt(7),
         status: 'ACTIVE',
         account_type: 'SELLER',
-        credential: { must_change_password: true },
+        credential: { must_change_password: true, password_updated_at: null },
         store: { id: BigInt(3) },
       });
 
