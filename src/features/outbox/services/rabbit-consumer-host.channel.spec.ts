@@ -11,6 +11,7 @@ import {
   RabbitConsumerHostService,
 } from '@/features/outbox/services/rabbit-consumer-host.service';
 import type { AlertService } from '@/global/alerting';
+import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 
 type ConsumeCb = (message: ConsumeMessage | null) => void;
@@ -150,6 +151,7 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
       } as unknown as OutboxConsumerRegistry,
       alerts as unknown as AlertService,
       new RequestContextService(),
+      new MetricsService(),
     );
     return host;
   }

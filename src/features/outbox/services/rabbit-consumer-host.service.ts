@@ -253,6 +253,13 @@ export class RabbitConsumerHostService
   ): Promise<void> {
     const attempts = readAttempts(message.properties.headers);
     const cfg = this.config.getOrThrow<OutboxConfig>('outbox');
+    // 관측은 파싱 전에 시작 — 깨진 본문의 DLQ 이동도 result=dlq로 세야 대시보드가 DLQ 사건을 놓치지 않는다
+    const startedAt = performance.now();
+    const observe = (result: 'ok' | 'retry' | 'dlq') =>
+      this.metrics.outboxConsumeDuration.observe(
+        { consumer: consumer.name, result },
+        (performance.now() - startedAt) / 1000,
+      );
     let parsed;
     try {
       parsed = parseMessage(message.content);
@@ -267,6 +274,7 @@ export class RabbitConsumerHostService
         attempts,
       );
       if (!moved) return; // 옮기지 못했다 — 원본이 requeue/재전달되므로 DLQ라고 알리지 않는다
+      observe('dlq');
       this.logger.error(`${consumer.name} 본문 파싱 실패 — DLQ`, { detail });
       void this.alerts.notify({
         level: 'error',
@@ -285,12 +293,6 @@ export class RabbitConsumerHostService
       this.ack(channel, message);
       return;
     }
-    const startedAt = performance.now();
-    const observe = (result: 'ok' | 'retry' | 'dlq') =>
-      this.metrics.outboxConsumeDuration.observe(
-        { consumer: consumer.name, result },
-        (performance.now() - startedAt) / 1000,
-      );
     try {
       // 소비 중 모든 로그 줄에 eventId — 발행 로그(requestId+eventId)와 이어 보는 열쇠(P2 E8)
       await this.requestContext.run({ eventId: parsed.eventId }, () =>

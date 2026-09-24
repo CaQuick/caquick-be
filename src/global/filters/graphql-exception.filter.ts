@@ -54,15 +54,19 @@ export class GraphQLExceptionFilter {
       processingTimeInMs: duration,
       context: LogContext.GRAPHQL,
     });
-    // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 여기서, outcome은 유한한 분류(4xx·5xx 구분)
-    this.metrics.graphqlRootFieldDuration.observe(
-      {
-        type: info.parentType.toString(),
-        field: info.fieldName,
-        outcome: classifyStatus(status),
-      },
-      fieldDurationSeconds(info),
-    );
+    // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 여기서, outcome은 유한한 분류(4xx·5xx 구분).
+    // 인터셉터와 같은 범위(Query·Mutation 루트)만 — 구독은 성공을 세지 않으므로 실패만 세면 오류율이 왜곡된다
+    const parentType = info.parentType.toString();
+    if (parentType === 'Query' || parentType === 'Mutation') {
+      this.metrics.graphqlRootFieldDuration.observe(
+        {
+          type: parentType,
+          field: info.fieldName,
+          outcome: classifyStatus(status),
+        },
+        fieldDurationSeconds(info),
+      );
+    }
 
     return new GraphQLError(message, {
       extensions: {

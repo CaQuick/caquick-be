@@ -174,6 +174,13 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
   async function count(queue: string): Promise<number> {
     return (await publisher.checkQueue(queue)).messageCount;
   }
+  async function dlqObservations(): Promise<number> {
+    const match =
+      /caquick_outbox_consume_duration_seconds_count\{consumer="RecordingConsumer",result="dlq"\} (\d+)/.exec(
+        await metrics.text(),
+      );
+    return match ? Number(match[1]) : 0;
+  }
 
   it('event_type으로 바인딩된 큐에서 받아 OutboxEvent로 넘기고 ack한다 — handle은 ALS eventId 안에서 돈다', async () => {
     await publish(JSON.stringify(message('e-1')));
@@ -242,12 +249,14 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     expect(dead && dead.properties.headers?.[ATTEMPTS_HEADER]).toBe(2);
   });
 
-  it('반증: 깨진 본문은 재시도 없이 바로 DLQ + 경보', async () => {
+  it('반증: 깨진 본문은 재시도 없이 바로 DLQ + 경보 — 소비 지표에도 result=dlq로 센다', async () => {
+    const before = await dlqObservations();
     await publish('not json');
 
     await until(() => alerts.notify.mock.calls.length === 1);
     expect(await count(queues.dlq)).toBe(1);
     expect(consumer.received).toHaveLength(0);
+    expect(await dlqObservations()).toBe(before + 1);
   });
 
   it('반증: 처리 중 채널이 닫혀도 소비가 재시작되고 브로커가 재전달한다(거부 격리는 channel.spec의 ack 예외 케이스)', async () => {
