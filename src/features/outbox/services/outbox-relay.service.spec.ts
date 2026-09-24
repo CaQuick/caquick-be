@@ -7,7 +7,12 @@ import { IdGenerator } from '@/common/providers/id-generator.service';
 import type { OutboxConfig } from '@/config/outbox.config';
 import { OutboxConsumerRegistry } from '@/features/outbox/rabbitmq/outbox-consumer-registry.service';
 import { RabbitConnectionService } from '@/features/outbox/rabbitmq/rabbit-connection.service';
-import { EVENTS_EXCHANGE } from '@/features/outbox/rabbitmq/topology';
+import {
+  DLQ_EXCHANGE,
+  EVENTS_EXCHANGE,
+  queuesFor,
+  RETRY_EXCHANGE,
+} from '@/features/outbox/rabbitmq/topology';
 import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
 import { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.service';
 import { OutboxRelayService } from '@/features/outbox/services/outbox-relay.service';
@@ -47,6 +52,8 @@ function fakeChannel() {
     throwNext,
     returnNext,
     assertExchange: jest.fn().mockResolvedValue(undefined),
+    assertQueue: jest.fn().mockResolvedValue(undefined),
+    bindQueue: jest.fn().mockResolvedValue(undefined),
     close: jest.fn().mockResolvedValue(undefined),
     on: (event: string, fn: Listener) => {
       listeners.set(event, [...(listeners.get(event) ?? []), fn]);
@@ -96,6 +103,17 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
     maxAttempts: 3,
     partitionConcurrency: 4,
   };
+  /** 소비자 호스트와 같은 목록 — 릴레이도 이 큐를 선언해야 소비자가 아직 없을 때 발행한 메시지가 버려지지 않는다 */
+  const registry = {
+    resolve: () => [
+      {
+        name: 'X',
+        eventTypes: ['test.a'],
+        instance: {},
+        queues: queuesFor('X'),
+      },
+    ],
+  };
 
   beforeAll(async () => {
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -109,7 +127,7 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
         { provide: AlertService, useValue: alerts },
         { provide: ClockService, useValue: { now: () => now } },
         { provide: ConfigService, useValue: { getOrThrow: () => cfg } },
-        { provide: OutboxConsumerRegistry, useValue: { resolve: () => [] } },
+        { provide: OutboxConsumerRegistry, useValue: registry },
         {
           provide: RabbitConnectionService,
           useValue: {
@@ -150,6 +168,33 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
   async function rowOf(eventId: string) {
     return prisma.outbox.findUniqueOrThrow({ where: { event_id: eventId } });
   }
+
+  it('채널을 열 때 소비자 호스트와 같은 토폴로지(exchange 3개 + 소비자 큐·바인딩)를 선언한다', async () => {
+    await enqueue('A', 1);
+    await relay.relayOnce();
+
+    expect(channel.assertExchange).toHaveBeenCalledWith(
+      EVENTS_EXCHANGE,
+      'topic',
+      { durable: true },
+    );
+    expect(channel.assertQueue).toHaveBeenCalledWith('q.X', { durable: true });
+    expect(channel.assertQueue).toHaveBeenCalledWith('q.X.retry', {
+      durable: true,
+      deadLetterExchange: RETRY_EXCHANGE,
+      deadLetterRoutingKey: 'q.X',
+    });
+    expect(channel.bindQueue).toHaveBeenCalledWith(
+      'q.X',
+      EVENTS_EXCHANGE,
+      'test.a',
+    );
+    expect(channel.bindQueue).toHaveBeenCalledWith(
+      'q.X.dlq',
+      DLQ_EXCHANGE,
+      'q.X.dlq',
+    );
+  });
 
   it('기한이 된 PENDING을 exchange에 event_type 라우팅 키로 싣고 PUBLISHED로 표시한다', async () => {
     const { eventId } = await enqueue('A', 1, 'order.status_changed');

@@ -112,6 +112,19 @@ describe('OutboxRepository (real DB)', () => {
       await expect(
         repo.requeue({ eventType: 'test.a' }, NOW, { republish: true }),
       ).rejects.toThrow('--event-id');
+      // 반증: 같은 타입의 다른 PUBLISHED 행은 건드리지 않는다 — 소비자 멱등에 기대는 재발행은 1건씩만
+      const other = await failed('test.a');
+      await prisma.outbox.update({
+        where: { id: other },
+        data: { status: 'PUBLISHED' },
+      });
+      await expect(
+        repo.requeue({ eventId: event_id }, NOW, { republish: true }),
+      ).resolves.toBe(0); // 이미 PENDING이라 0
+      expect(
+        (await prisma.outbox.findUniqueOrThrow({ where: { id: other } }))
+          .status,
+      ).toBe('PUBLISHED');
     });
   });
 });

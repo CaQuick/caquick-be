@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 
@@ -19,11 +20,20 @@ function fakeChannel(opts: {
   deliverOnConsume?: string[];
   failConsumeFor?: string[];
   confirm?: boolean;
+  /** 재발행이 라우팅될 큐를 못 찾는다('return' 뒤 confirm) */
+  unroutable?: boolean;
+  /** 재발행 confirm이 nack으로 온다 */
+  nack?: boolean;
+  /** ack가 던진다(닫힌 채널에 보낸 것처럼) */
+  ackThrows?: boolean;
 }) {
   const consumers = new Map<string, ConsumeCb>();
   const listeners = new Map<string, Array<(payload?: unknown) => void>>();
   const channel = {
-    ack: jest.fn(),
+    ack: jest.fn(() => {
+      if (opts.ackThrows)
+        throw new Error('IllegalOperationError: Channel closed');
+    }),
     nack: jest.fn(),
     // 실제 amqplib처럼 close()는 'close' 리스너를 부른다 — 호스트의 재시작 경로가 여기 걸려 있다
     close: jest.fn(() => {
@@ -42,9 +52,18 @@ function fakeChannel(opts: {
       _ex: string,
       _rk: string,
       _content: Buffer,
-      _opts: unknown,
+      options: { messageId?: string },
       cb: (error: unknown) => void,
     ) => {
+      if (opts.unroutable) {
+        for (const fn of listeners.get('return') ?? []) {
+          fn({ properties: { messageId: options.messageId } });
+        }
+      }
+      if (opts.nack) {
+        cb(new Error('basic.nack'));
+        return true;
+      }
       if (opts.confirm !== false) cb(null);
       return true;
     },
@@ -181,6 +200,53 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     await host.onModuleDestroy();
     expect(Date.now() - started).toBeLessThan(1_000);
     expect(DESTROY_TIMEOUT_MS).toBe(10_000);
+  });
+
+  // 옮기기 실패 경로 전수 — confirm 뒤에만 ack, 실패면 백오프 뒤 nack(requeue), '보냈다'는 경보 없음
+  it.each([
+    ['라우팅될 큐가 없어 return이 온다', { unroutable: true }],
+    ['confirm이 nack으로 온다', { nack: true }],
+  ])(
+    '반증: retry 재발행이 실패(%s)하면 원본을 ack하지 않고 백오프 뒤 nack(requeue)한다',
+    async (_, extra) => {
+      const channel = fakeChannel(extra);
+      const host = build(channel, () =>
+        Promise.reject(new Error('handle 실패')),
+      );
+
+      await host.start();
+      channel.deliver('q.A', message('e-1'));
+      await new Promise((r) => setTimeout(r, 30));
+      expect(channel.nack).not.toHaveBeenCalled(); // 백오프(1초) 전에는 되돌리지 않는다 — prefetch 1 핫루프 방지
+      await new Promise((r) => setTimeout(r, 1_100));
+
+      expect(channel.ack).not.toHaveBeenCalled();
+      expect(channel.nack).toHaveBeenCalledWith(expect.anything(), false, true);
+      expect(alerts.notify).not.toHaveBeenCalled();
+      expect(host.isConsuming).toBe(true);
+      await host.onModuleDestroy();
+    },
+  );
+
+  it('반증: ack가 던져도(닫힌 채널) 거부가 새어 나가지 않고 경고로 끝난다', async () => {
+    const channel = fakeChannel({ ackThrows: true });
+    const host = build(channel, () => Promise.resolve());
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    await host.start();
+    channel.deliver('q.A', message('e-1'));
+    const settled = await Promise.allSettled([
+      ...(host as unknown as { inFlight: Set<Promise<void>> }).inFlight,
+    ]);
+
+    expect(settled.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('소비 처리 중단'),
+    );
+    warn.mockRestore();
+    await host.onModuleDestroy();
   });
 
   it('반증: 브로커가 없을 때 종료하면 재연결 sleep(최대 30초)을 깨워 바로 돌아온다', async () => {

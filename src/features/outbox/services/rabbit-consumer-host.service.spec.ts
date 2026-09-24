@@ -101,13 +101,10 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
   const config = {
     getOrThrow: (key: string) => (key === 'rabbitmq' ? { url: '' } : outboxCfg),
   };
-  const unhandled: unknown[] = [];
-  const onUnhandled = (reason: unknown) => unhandled.push(reason);
 
   beforeAll(async () => {
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
-    process.on('unhandledRejection', onUnhandled);
     container = await new GenericContainer('rabbitmq:4-alpine')
       .withExposedPorts(5672)
       .withWaitStrategy(Wait.forLogMessage('Server startup complete'))
@@ -144,7 +141,6 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     await host.onModuleDestroy();
     await rabbit.onApplicationShutdown();
     await container.stop({ timeout: 5_000 });
-    process.off('unhandledRejection', onUnhandled);
     jest.restoreAllMocks();
   });
 
@@ -155,7 +151,6 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     consumer.failuresLeft.clear();
     consumer.block = null;
     alerts.notify.mockClear();
-    unhandled.length = 0;
     for (const q of [queues.main, queues.retry, queues.dlq]) {
       await publisher.purgeQueue(q);
     }
@@ -251,7 +246,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     expect(consumer.received).toHaveLength(0);
   });
 
-  it('반증: 처리 중 채널이 닫혀도 프로세스가 죽지 않고(unhandled rejection 0) 브로커가 재전달한다', async () => {
+  it('반증: 처리 중 채널이 닫혀도 소비가 재시작되고 브로커가 재전달한다(거부 격리는 channel.spec의 ack 예외 케이스)', async () => {
     let release: () => void = () => undefined;
     consumer.block = new Promise<void>((r) => {
       release = r;
@@ -267,7 +262,6 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     // unack 상태였던 메시지는 새 소비 채널로 다시 온다
     await until(() => consumer.received.length === 2, 10_000);
     await new Promise((r) => setTimeout(r, 100));
-    expect(unhandled).toEqual([]);
     expect(host.isConsuming).toBe(true);
   });
 
@@ -316,10 +310,16 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     await cleanup.close();
   });
 
-  it('헬스 지표는 왕복 RPC로 확인한다 — 커넥션이 없으면 실패', async () => {
+  it('헬스 지표는 왕복 RPC(checkExchange)로 확인한다 — 커넥션이 없으면 실패', async () => {
+    const probe = await rabbit.createConfirmChannel();
+    const rpc = jest.spyOn(probe, 'checkExchange');
     await expect(
-      new RabbitHealthIndicator(rabbit).check(),
+      new RabbitHealthIndicator({
+        createConfirmChannel: () => Promise.resolve(probe),
+      } as unknown as RabbitConnectionService).check(),
     ).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith(EVENTS_EXCHANGE);
+    await probe.close();
     const dead = {
       createConfirmChannel: () => Promise.reject(new Error('down')),
     } as unknown as RabbitConnectionService;
