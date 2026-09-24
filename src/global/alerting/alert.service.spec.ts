@@ -120,6 +120,30 @@ describe('AlertService', () => {
     }
   });
 
+  it('반증: 재전송 전에 같은 키로 더 새 시도가 있었으면 묵은 경보는 재전송하지 않는다(억제 창 < 재전송 간격)', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        { dedupeWindowMs: 1_000 },
+        jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      );
+      await expect(
+        service.notify({ level: 'error', title: 't', detail: '옛' }),
+      ).resolves.toBe('failed');
+
+      nowMs += 2_000; // 억제 창이 지나 새 시도가 성공한다
+      await expect(
+        service.notify({ level: 'error', title: 't', detail: '새' }),
+      ).resolves.toBe('sent');
+      expect(transport).toHaveBeenCalledTimes(2);
+
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(2); // 옛 경보의 재전송은 건너뛴다
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('반증: 재전송도 실패하면 경고 로그만 남기고 끝난다(억제 창이 지난 다음 발생 때 다시)', async () => {
     jest.useFakeTimers();
     try {

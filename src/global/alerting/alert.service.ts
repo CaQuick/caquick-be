@@ -58,7 +58,7 @@ export class AlertService {
           detail: message.detail,
         },
       );
-      this.scheduleRetry(discordWebhookUrl, message, origin, line);
+      this.scheduleRetry(discordWebhookUrl, message, origin, line, key, now);
       return 'failed';
     }
     return 'sent';
@@ -73,8 +73,12 @@ export class AlertService {
     message: AlertMessage,
     origin: Parameters<AlertTransport>[2],
     line: string,
+    key: string,
+    attemptedAt: number,
   ): void {
     const timer = setTimeout(() => {
+      // 그 사이 같은 키로 더 새 시도가 있었으면(억제 창이 재전송 간격보다 짧을 때) 묵은 경보는 보내지 않는다
+      if (this.lastSentAt.get(key) !== attemptedAt) return;
       void this.transport(url, message, origin).then((ok) => {
         if (!ok) {
           this.logger.warn(`${line} — 재전송도 실패`, {
