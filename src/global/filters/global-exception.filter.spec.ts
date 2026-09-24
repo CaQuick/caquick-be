@@ -6,6 +6,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { MetricsService } from '@/global/metrics/metrics.service';
 
 jest.mock('@/global/logger/logger', () => ({
   customLogger: {
@@ -62,7 +63,7 @@ describe('HttpExceptionFilter', () => {
   beforeEach(() => {
     logger = new CustomLoggerService();
     logger.txError = jest.fn();
-    gqlFilter = new GraphQLExceptionFilter(logger);
+    gqlFilter = new GraphQLExceptionFilter(logger, new MetricsService());
     gqlFilter.format = jest
       .fn()
       .mockReturnValue(new Error('mock graphql error'));

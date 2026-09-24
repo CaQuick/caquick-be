@@ -12,6 +12,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { classifyStatus } from '@/common/utils/error';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { MetricsService } from '@/global/metrics/metrics.service';
 
 jest.mock('@/global/logger/logger', () => ({
   customLogger: {
@@ -55,10 +56,27 @@ describe('GraphQLExceptionFilter', () => {
   let filter: GraphQLExceptionFilter;
   let logger: CustomLoggerService;
 
+  let metrics: MetricsService;
+
   beforeEach(() => {
     logger = new CustomLoggerService();
     logger.txError = jest.fn();
-    filter = new GraphQLExceptionFilter(logger);
+    metrics = new MetricsService();
+    filter = new GraphQLExceptionFilter(logger, metrics);
+  });
+
+  // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 필터가, outcome은 유한한 분류
+  it('실패를 type·field·outcome(분류) 라벨로 관측한다', async () => {
+    filter.format(new ForbiddenException(), mockHost('sellerMyStore'));
+    filter.format(new Error('boom'), mockHost('sellerMyStore'));
+
+    const text = await metrics.text();
+    expect(text).toContain(
+      'caquick_graphql_root_field_duration_seconds_count{type="Query",field="sellerMyStore",outcome="FORBIDDEN"} 1',
+    );
+    expect(text).toContain(
+      'caquick_graphql_root_field_duration_seconds_count{type="Query",field="sellerMyStore",outcome="INTERNAL_SERVER_ERROR"} 1',
+    );
   });
 
   describe('classifyStatus', () => {

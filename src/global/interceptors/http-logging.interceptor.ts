@@ -45,7 +45,6 @@ export class HttpLoggingInterceptor implements NestInterceptor {
       tap({
         next: () => {
           const duration = calculateDuration(startTime);
-
           const statusCode = res.statusCode || HttpStatus.OK;
           if (probe && statusCode < 400) {
             setResponseTimeHeader(res, duration);

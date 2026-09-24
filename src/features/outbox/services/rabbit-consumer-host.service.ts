@@ -26,6 +26,7 @@ import {
   toEvent,
 } from '@/features/outbox/rabbitmq/topology';
 import { AlertService } from '@/global/alerting';
+import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 
 /** 시작 실패가 이만큼 이어지면 경보 — 브로커 부재가 아니라 설정 문제일 수 있다. */
@@ -71,6 +72,7 @@ export class RabbitConsumerHostService
     private readonly consumers: OutboxConsumerRegistry,
     private readonly alerts: AlertService,
     private readonly requestContext: RequestContextService,
+    private readonly metrics: MetricsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -283,6 +285,12 @@ export class RabbitConsumerHostService
       this.ack(channel, message);
       return;
     }
+    const startedAt = performance.now();
+    const observe = (result: 'ok' | 'retry' | 'dlq') =>
+      this.metrics.outboxConsumeDuration.observe(
+        { consumer: consumer.name, result },
+        (performance.now() - startedAt) / 1000,
+      );
     try {
       // 소비 중 모든 로그 줄에 eventId — 발행 로그(requestId+eventId)와 이어 보는 열쇠(P2 E8)
       await this.requestContext.run({ eventId: parsed.eventId }, () =>
@@ -300,6 +308,7 @@ export class RabbitConsumerHostService
           next,
         );
         if (!moved) return;
+        observe('dlq');
         this.logger.error(`${label} 소비 ${next}회 실패 — DLQ`, {
           eventId: parsed.eventId,
           attempts: next,
@@ -323,6 +332,7 @@ export class RabbitConsumerHostService
         delay,
       );
       if (!moved) return;
+      observe('retry');
       this.logger.warn(`${label} 소비 ${next}회 실패 — ${delay}ms 뒤 재시도`, {
         eventId: parsed.eventId,
         attempts: next,
@@ -331,6 +341,7 @@ export class RabbitConsumerHostService
       return;
     }
     this.ack(channel, message);
+    observe('ok');
   }
 
   /** 채널이 이미 닫혔으면 ack는 던진다 — 브로커가 unack 메시지를 재전달하므로 조용히 물러난다. */

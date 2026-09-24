@@ -16,6 +16,8 @@ import {
   resolveUserId,
 } from '@/common/utils/request-context';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { fieldDurationSeconds } from '@/global/metrics/graphql-field-timing';
+import { MetricsService } from '@/global/metrics/metrics.service';
 import { LogContext } from '@/global/types/log.type';
 
 /**
@@ -24,7 +26,10 @@ import { LogContext } from '@/global/types/log.type';
  */
 @Injectable()
 export class GraphQLExceptionFilter {
-  constructor(private readonly logger: CustomLoggerService) {}
+  constructor(
+    private readonly logger: CustomLoggerService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   format(exception: unknown, host: ArgumentsHost): GraphQLError {
     const gqlHost = GqlArgumentsHost.create(host);
@@ -49,6 +54,15 @@ export class GraphQLExceptionFilter {
       processingTimeInMs: duration,
       context: LogContext.GRAPHQL,
     });
+    // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 여기서, outcome은 유한한 분류(4xx·5xx 구분)
+    this.metrics.graphqlRootFieldDuration.observe(
+      {
+        type: info.parentType.toString(),
+        field: info.fieldName,
+        outcome: classifyStatus(status),
+      },
+      fieldDurationSeconds(info),
+    );
 
     return new GraphQLError(message, {
       extensions: {

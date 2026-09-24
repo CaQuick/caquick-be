@@ -127,4 +127,48 @@ describe('OutboxRepository (real DB)', () => {
       ).toBe('PUBLISHED');
     });
   });
+
+  describe('메트릭 집계', () => {
+    it('countByStatus는 없는 상태를 0으로, oldestDuePendingOccurredAt은 기한이 된 PENDING 중 가장 오래된 것을 돌려준다', async () => {
+      await expect(repo.countByStatus()).resolves.toEqual({
+        PENDING: 0,
+        PUBLISHED: 0,
+        FAILED: 0,
+      });
+      await expect(repo.oldestDuePendingOccurredAt(NOW)).resolves.toBeNull();
+
+      await failed('test.a');
+      for (const [aggregateId, occurredAt] of [
+        ['B', '2026-09-24T10:00:00.000Z'],
+        ['C', '2026-09-24T11:00:00.000Z'],
+      ]) {
+        await prisma.$transaction((tx) =>
+          publisher.publish(tx, {
+            aggregateType: 'test',
+            aggregateId,
+            eventType: 'test.a',
+            payload: {},
+            occurredAt: new Date(occurredAt),
+          }),
+        );
+      }
+
+      await expect(repo.countByStatus()).resolves.toEqual({
+        PENDING: 2,
+        PUBLISHED: 0,
+        FAILED: 1,
+      });
+      await expect(repo.oldestDuePendingOccurredAt(NOW)).resolves.toEqual(
+        new Date('2026-09-24T10:00:00.000Z'),
+      );
+      // 반증: 백오프 대기(next_attempt_at 미래) 행은 릴레이 지연이 아니다 — 세지 않는다
+      await prisma.outbox.updateMany({
+        where: { aggregate_id: 'B' },
+        data: { next_attempt_at: new Date(NOW.getTime() + 60_000) },
+      });
+      await expect(repo.oldestDuePendingOccurredAt(NOW)).resolves.toEqual(
+        new Date('2026-09-24T11:00:00.000Z'),
+      );
+    });
+  });
 });

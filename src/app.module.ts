@@ -27,6 +27,7 @@ import appConfig, {
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
+import metricsConfig from '@/config/metrics.config';
 import oidcConfig from '@/config/oidc.config';
 import outboxConfig from '@/config/outbox.config';
 import rabbitmqConfig from '@/config/rabbitmq.config';
@@ -48,6 +49,11 @@ import { BlacklistModule } from '@/global/auth/blacklist';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
+import {
+  HttpMetricsMiddleware,
+  MetricsAccessMiddleware,
+  MetricsModule,
+} from '@/global/metrics';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
 import { WorkerRouteMiddleware } from '@/global/middlewares/worker-route.middleware';
 import { PubSubModule } from '@/global/pubsub';
@@ -115,6 +121,7 @@ export class AppModule implements NestModule {
             authConfig,
             databaseConfig,
             docsConfig,
+            metricsConfig,
             oidcConfig,
             outboxConfig,
             rabbitmqConfig,
@@ -126,6 +133,7 @@ export class AppModule implements NestModule {
         PrismaModule,
         RequestContextModule,
         LoggerModule,
+        MetricsModule,
         AlertingModule,
         AuthGlobalModule,
         GraphqlGlobalModule,
@@ -157,6 +165,14 @@ export class AppModule implements NestModule {
     consumer
       .apply(RequestContextMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
+    // 요청 히스토그램은 Express 'finish'에서 — 가드 거절·404·필터 결과가 실제 상태 코드로 잡힌다
+    consumer
+      .apply(HttpMetricsMiddleware)
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+    // /metrics는 운영 정보 — Bearer 토큰(운영 필수). worker 리스너도 이 경로를 열므로 역할과 무관하게 건다
+    consumer
+      .apply(MetricsAccessMiddleware)
+      .forRoutes({ path: 'metrics', method: RequestMethod.ALL });
 
     if (!servesHttpApi(this.role)) {
       // worker: 요청 컨텍스트 다음, 어떤 컨트롤러보다 먼저 — 허용 목록 밖은 여기서 끝난다

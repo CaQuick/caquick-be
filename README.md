@@ -259,7 +259,7 @@ yarn prisma:seed
 yarn start:dev
 ```
 
-기본 GraphQL endpoint: `http://localhost:4000/graphql` (`PORT` 환경변수로 변경 가능). 헬스체크: `GET /health/live`(프로세스) · `GET /health/ready`(MySQL·Redis까지, 하나라도 죽으면 503)
+기본 GraphQL endpoint: `http://localhost:4000/graphql` (`PORT` 환경변수로 변경 가능). 헬스체크: `GET /health/live`(프로세스) · `GET /health/ready`(MySQL·Redis, worker는 RabbitMQ까지 — 하나라도 죽으면 503) · 메트릭: `GET /metrics`(Prometheus)
 
 ### 필요 환경 변수
 
@@ -277,6 +277,7 @@ yarn start:dev
 | **OIDC (공통)** | `OIDC_TEMP_COOKIE_MAX_AGE_MS` |
 | **AWS S3** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS` |
 | **Docs (선택)** | `DOCS_ACCESS_TOKEN` |
+| **메트릭** | `METRICS_ACCESS_TOKEN` — `GET /metrics`의 Bearer 토큰. 운영 필수(api가 공개 인터넷에 있어 무인증 노출 금지), 미설정이면 로컬·CI는 열림. Prometheus가 같은 값을 보낸다 |
 | **경보 (선택)** | `DISCORD_ALERT_WEBHOOK_URL` — outbox FAILED·부팅 실패 등 운영 경보를 보낼 Discord 웹훅. 미설정이면 로그로만 남긴다. `ALERT_DEDUPE_WINDOW_MS`(기본 300000) — 같은 경보 억제 창 |
 | **Outbox (선택)** | `OUTBOX_DISPATCH_ENABLED` — 역할이 정한다(`APP_ROLE=worker`만 켜짐). `false`로 끄기만 가능(테스트·일회성 스크립트), api에서 `true`를 줘도 켜지지 않는다(worker와 이중 전달 방지). 로컬에서 소비까지 보려면 `APP_ROLE=worker PORT=4001 yarn start:dev`를 병행. `OUTBOX_POLL_INTERVAL_MS`(1000), `OUTBOX_BATCH_SIZE`(100), `OUTBOX_MAX_ATTEMPTS`(5), `OUTBOX_PARTITION_CONCURRENCY`(4) |
 | **시드 (선택)** | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD` — 있으면 `yarn prisma:seed`가 관리자 계정 1개를 만든다. `SELLER_SEED_PASSWORD` — 시드 판매자 2곳의 로그인 비밀번호(없으면 자격증명 생략) |
