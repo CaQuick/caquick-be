@@ -32,13 +32,17 @@ export class BlacklistRebuildRepository {
   ): Promise<Array<{ accountId: bigint; changedAt: Date }>> {
     const rows = await this.prisma.account.findMany({
       where: { deleted_at: { gte: since } },
-      select: { id: true, deleted_at: true },
+      select: { id: true, deleted_at: true, status_changed_at: true },
     });
+    // 버전은 탈퇴가 기록한 status_changed_at(단조). 컬럼 도입 전 탈퇴는 deleted_at
     return rows
       .filter(
         (r): r is typeof r & { deleted_at: Date } => r.deleted_at !== null,
       )
-      .map((r) => ({ accountId: r.id, changedAt: r.deleted_at }));
+      .map((r) => ({
+        accountId: r.id,
+        changedAt: r.status_changed_at ?? r.deleted_at,
+      }));
   }
 
   async credentialsChangedSince(

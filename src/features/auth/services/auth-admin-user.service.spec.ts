@@ -223,6 +223,31 @@ describe('AdminUserService (real DB)', () => {
   });
 
   describe('adminSuspendAccount', () => {
+    it('반증: 상태 변경 시각은 이전 값보다 항상 크다 — 같은 ms의 재정지·복제본 시계 편차에서도 버전이 뒤집히지 않게', async () => {
+      const actor = await admin();
+      const user = await makeUser();
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await prisma.account.update({
+        where: { id: user.id },
+        data: { status_changed_at: future },
+      });
+
+      await service.adminSuspendAccount(actor, {
+        accountId: user.id.toString(),
+        reason: '재정지',
+      });
+
+      const after = await prisma.account.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.status_changed_at?.getTime()).toBe(future.getTime() + 1);
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        user.id,
+        'SUSPENDED',
+        after.status_changed_at,
+      );
+    });
+
     it('USER를 정지하고 세션을 폐기하며 audit(ACCOUNT/STATUS_CHANGE, reason)을 남긴다', async () => {
       const actor = await admin();
       const user = await makeUser();

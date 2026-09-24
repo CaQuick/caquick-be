@@ -222,6 +222,11 @@ describe('TokenBlacklistService (real Redis)', () => {
       expect(await redis.exists(BLACKLIST_READY_KEY)).toBe(0);
     });
 
+    it('invalidateReady는 표식을 지운다 — 목록을 믿을 수 없다고 판단한 쪽이 부른다', async () => {
+      await expect(service.invalidateReady()).resolves.toBe(true);
+      expect(await redis.exists(BLACKLIST_READY_KEY)).toBe(0);
+    });
+
     it('테스트 컨테이너(기본 설정)는 축출 위험이 없다', async () => {
       await expect(service.evictionRisk()).resolves.toBeNull();
     });

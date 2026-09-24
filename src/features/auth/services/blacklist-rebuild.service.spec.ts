@@ -116,6 +116,10 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     const suspended = await accountAt('SUSPENDED', IN_WINDOW);
     const oldSuspended = await accountAt('SUSPENDED', OUT_OF_WINDOW);
     const deleted = await createAccount(prisma, { deleted_at: IN_WINDOW });
+    await prisma.account.update({
+      where: { id: deleted.id },
+      data: { status_changed_at: new Date(IN_WINDOW.getTime() + 1) },
+    });
     const changed = await passwordChangedAt(IN_WINDOW);
     const oldChanged = await passwordChangedAt(OUT_OF_WINDOW);
 
@@ -135,7 +139,10 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
       status: 'SUSPENDED',
       credentialCutoffSec: null,
     });
-    expect(await statusOf(deleted.id)).toBe('DELETED');
+    // 탈퇴 버전도 status_changed_at(단조) — deleted_at이 아니다
+    expect(await statusValue(deleted.id)).toBe(
+      `DELETED:${IN_WINDOW.getTime() + 1}`,
+    );
     await expect(blacklist.lookup(changed)).resolves.toMatchObject({
       status: null,
       credentialCutoffSec: credentialCutoffSec(IN_WINDOW),
@@ -189,6 +196,16 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
 
       expect(await statusValue(reinstated)).toBe(
         `ACTIVE:${IN_WINDOW.getTime()}`,
+      );
+    });
+
+    it('상태 변경 기록이 없는 탈퇴 계정(컬럼 도입 전)은 deleted_at으로 등록한다', async () => {
+      const legacy = await createAccount(prisma, { deleted_at: IN_WINDOW });
+
+      await service.rebuild();
+
+      expect(await statusValue(legacy.id)).toBe(
+        `DELETED:${IN_WINDOW.getTime()}`,
       );
     });
 
@@ -293,7 +310,8 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     snapshot.mockRestore();
   });
 
-  it('반증: 축출 정책이 위험하면 표식을 세우지 않고 던지며 경보를 남긴다', async () => {
+  it('반증: 축출 정책이 위험하면 이전 임대까지 지우고 표식을 세우지 않고 던지며 경보를 남긴다', async () => {
+    await blacklist.markReady(await blacklist.generation()); // 이전 재구축이 세운 임대
     const risk = jest
       .spyOn(blacklist, 'evictionRisk')
       .mockResolvedValueOnce('maxmemory=1 maxmemory-policy=volatile-lru');

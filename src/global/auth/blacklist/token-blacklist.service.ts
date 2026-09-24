@@ -157,6 +157,11 @@ export class TokenBlacklistService {
     return ids;
   }
 
+  /** 표식을 지운다 — 목록을 믿을 수 없다고 판단한 쪽(축출 정책 위험 등)이 부른다. false = 삭제 실패. */
+  async invalidateReady(): Promise<boolean> {
+    return this.clearReady();
+  }
+
   /** 재구축이 DB 스냅샷을 뜨기 전에 읽는 쓰기 실패 세대. 키를 만들어 둔다 — 빈 Redis(재시작)의 "없음"과 세대 0을 구분하기 위해. 실패는 던진다. */
   async generation(): Promise<string> {
     await this.redis.set(DIRTY_KEY, '0', 'NX');

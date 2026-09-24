@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { nextStatusChangedAt } from '@/common/utils/status-version';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import {
   type AccountType,
@@ -146,12 +147,13 @@ export class AccountUserRepository {
     });
   }
 
+  /** @returns changedAt — 블랙리스트 버전(status_changed_at). 호출자가 커밋 뒤 같은 값으로 등록한다. */
   async softDeleteAccount(args: {
     accountId: bigint;
     deletedNickname: string;
     now: Date;
-  }): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  }): Promise<{ changedAt: Date }> {
+    return this.prisma.$transaction(async (tx) => {
       await tx.userProfile.update({
         where: { account_id: args.accountId },
         data: {
@@ -167,6 +169,19 @@ export class AccountUserRepository {
           email: null,
         },
       });
+      // 잠긴 행의 이전 버전보다 항상 크게(블랙리스트 버전) — 갱신으로 행을 잠근 뒤 읽는다
+      const locked = await tx.account.findFirst({
+        where: { id: args.accountId, deleted_at: { not: null } },
+        select: { status_changed_at: true },
+      });
+      const changedAt = nextStatusChangedAt(
+        args.now,
+        locked?.status_changed_at,
+      );
+      await tx.account.update({
+        where: { id: args.accountId },
+        data: { status_changed_at: changedAt },
+      });
 
       await this.retireAccountIdentities(tx, args.accountId, args.now);
 
@@ -181,6 +196,7 @@ export class AccountUserRepository {
           deleted_at: args.now,
         },
       });
+      return { changedAt };
     });
   }
 

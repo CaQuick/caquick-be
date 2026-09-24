@@ -60,6 +60,8 @@ export class BlacklistRebuildService
     // TTL 키만 축출되고 표식은 남는 설정이면 표식 자체를 믿을 수 없다 — 세우지 않고 크게 알린다
     const risk = await this.blacklist.evictionRisk();
     if (risk !== null) {
+      // 이전 재구축이 세운 임대가 남아 있으면 항목만 축출된 채 최대 180초 신뢰된다 — 먼저 지운다
+      await this.blacklist.invalidateReady();
       void this.alerts.notify({
         level: 'error',
         title:
