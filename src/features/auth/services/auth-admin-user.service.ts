@@ -29,6 +29,7 @@ import {
   AuditActionType,
   AuditTargetType,
 } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 
 /** 정지는 JwtBearerStrategy가 ACTIVE만 통과시키므로 즉시 모든 API가 막히고, refresh 세션도 폐기한다. */
 @Injectable()
@@ -37,6 +38,7 @@ export class AdminUserService extends AdminBaseService {
     accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly blacklist: TokenBlacklistService,
   ) {
     super(accounts, auditLogs);
   }
@@ -138,7 +140,7 @@ export class AdminUserService extends AdminBaseService {
     }
     {
       // 사전 검사와 갱신 사이의 경쟁은 repository의 조건부 갱신이 닫는다
-      await this.accounts.updateAccountStatus({
+      const result = await this.accounts.updateAccountStatus({
         accountId: target.id,
         from,
         to: change.to,
@@ -155,6 +157,19 @@ export class AdminUserService extends AdminBaseService {
           afterJson: { status: change.to, reason: change.reason },
         },
       });
+      // 커밋 뒤에 블랙리스트 — 정지는 만료 전 토큰까지 막고, 복구는 풀어 준다(세션은 이미 끊겨 재로그인이 필요)
+      if (result.changed) {
+        if (change.to === AccountStatus.SUSPENDED) {
+          await this.blacklist.blockStatus(
+            target.id,
+            'SUSPENDED',
+            result.changedAt,
+          );
+        } else {
+          // 상태 키만 — 자격증명 cutoff는 그대로 살아 옛 토큰을 계속 막는다
+          await this.blacklist.clearStatus(target.id, result.changedAt);
+        }
+      }
     }
 
     return {

@@ -3,6 +3,7 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { AdminUserService } from '@/features/auth/services/auth-admin-user.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -18,6 +19,14 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('AdminUserService (real DB)', () => {
+  const blacklist = {
+    blockStatus: jest.fn().mockResolvedValue(undefined),
+    clearStatus: jest.fn().mockResolvedValue(undefined),
+  };
+  afterEach(() => {
+    blacklist.blockStatus.mockClear();
+    blacklist.clearStatus.mockClear();
+  });
   let service: AdminUserService;
   let prisma: PrismaClient;
 
@@ -25,6 +34,7 @@ describe('AdminUserService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         AdminUserService,
+        { provide: TokenBlacklistService, useValue: blacklist },
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
@@ -213,6 +223,31 @@ describe('AdminUserService (real DB)', () => {
   });
 
   describe('adminSuspendAccount', () => {
+    it('반증: 상태 변경 시각은 이전 값보다 항상 크다 — 같은 ms의 재정지·복제본 시계 편차에서도 버전이 뒤집히지 않게', async () => {
+      const actor = await admin();
+      const user = await makeUser();
+      const future = new Date(Date.now() + 60 * 60 * 1000);
+      await prisma.account.update({
+        where: { id: user.id },
+        data: { status_changed_at: future },
+      });
+
+      await service.adminSuspendAccount(actor, {
+        accountId: user.id.toString(),
+        reason: '재정지',
+      });
+
+      const after = await prisma.account.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.status_changed_at?.getTime()).toBe(future.getTime() + 1);
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        user.id,
+        'SUSPENDED',
+        after.status_changed_at,
+      );
+    });
+
     it('USER를 정지하고 세션을 폐기하며 audit(ACCOUNT/STATUS_CHANGE, reason)을 남긴다', async () => {
       const actor = await admin();
       const user = await makeUser();
@@ -231,6 +266,13 @@ describe('AdminUserService (real DB)', () => {
         status: 'SUSPENDED',
       });
       expect(await statusOf(user.id)).toBe('SUSPENDED');
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        user.id,
+        'SUSPENDED',
+        (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
+          .status_changed_at,
+      );
       const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
         where: { id: session.id },
       });
@@ -273,6 +315,7 @@ describe('AdminUserService (real DB)', () => {
       expect(
         await prisma.auditLog.count({ where: { target_id: user.id } }),
       ).toBe(0);
+      expect(blacklist.blockStatus).not.toHaveBeenCalled();
     });
 
     // 대상 불가 전수: 본인·다른 ADMIN → FORBIDDEN, 탈퇴·미존재 → NOT_FOUND
@@ -380,6 +423,12 @@ describe('AdminUserService (real DB)', () => {
 
       expect(result.status).toBe('ACTIVE');
       expect(await statusOf(user.id)).toBe('ACTIVE');
+      // 상태 키만 — 자격증명 cutoff는 남는다
+      expect(blacklist.clearStatus).toHaveBeenCalledWith(
+        user.id,
+        (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
+          .status_changed_at,
+      );
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { target_type: 'ACCOUNT', target_id: user.id },
       });
@@ -397,6 +446,7 @@ describe('AdminUserService (real DB)', () => {
       expect(
         await prisma.auditLog.count({ where: { target_id: user.id } }),
       ).toBe(0);
+      expect(blacklist.clearStatus).not.toHaveBeenCalled();
     });
 
     it('PENDING 계정은 복구할 수 없다(400)', async () => {

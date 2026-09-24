@@ -42,12 +42,14 @@ import { StoreModule } from '@/features/store';
 import { SystemModule } from '@/features/system/system.module';
 import { AlertingModule } from '@/global/alerting';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
+import { BlacklistModule } from '@/global/auth/blacklist';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
 import { DocsAccessMiddleware } from '@/global/middlewares/docs-access.middleware';
 import { WorkerRouteMiddleware } from '@/global/middlewares/worker-route.middleware';
 import { PubSubModule } from '@/global/pubsub';
+import { RedisModule } from '@/global/redis';
 import {
   RequestContextMiddleware,
   RequestContextModule,
@@ -124,6 +126,8 @@ export class AppModule implements NestModule {
         AlertingModule,
         AuthGlobalModule,
         GraphqlGlobalModule,
+        RedisModule,
+        BlacklistModule,
         PubSubModule,
         StorageModule,
         // 크론(SearchModule)은 worker만 — api가 같이 돌리면 같은 스냅샷을 두 번 만든다

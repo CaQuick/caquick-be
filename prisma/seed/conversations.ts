@@ -7,10 +7,11 @@
  *   user1 대화 = 인사말 → 유저 자유 텍스트 → 판매자 답장 3건(안읽음 배지 재현,
  *   last_read_at은 유저 메시지 시점까지만).
  */
-import type { PrismaClient } from '@/generated/prisma/client';
 
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
+
+import type { PrismaClient } from '@/generated/prisma/client';
 
 export async function seedConversations(
   prisma: PrismaClient,

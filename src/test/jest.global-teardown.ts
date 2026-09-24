@@ -7,11 +7,18 @@ const TMP_DIR = join(process.cwd(), '.tmp');
 const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
 
 export default async function globalTeardown(): Promise<void> {
-  const container = (
-    globalThis as unknown as { __TESTCONTAINER__?: StartedTestContainer }
-  ).__TESTCONTAINER__;
+  const globals = globalThis as unknown as {
+    __TESTCONTAINER__?: StartedTestContainer;
+    __REDIS_TESTCONTAINER__?: StartedTestContainer;
+  };
+  const container = globals.__TESTCONTAINER__;
+  const redis = globals.__REDIS_TESTCONTAINER__;
 
   try {
+    if (redis) {
+      console.log('[test] stopping Redis container...');
+      await redis.stop({ timeout: 5000 });
+    }
     if (container) {
       console.log('[test] stopping MySQL container...');
       await container.stop({ timeout: 5000 });

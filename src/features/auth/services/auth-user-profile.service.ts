@@ -14,6 +14,7 @@ import type {
   MePayload,
   NicknameAvailability,
 } from '@/features/auth/types/auth-user-output.type';
+import { TokenBlacklistService } from '@/global/auth';
 import { S3Service } from '@/global/storage/s3.service';
 import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
@@ -22,6 +23,7 @@ export class UserProfileService extends UserBaseService {
   constructor(
     accounts: AccountUserRepository,
     private readonly s3Service: S3Service,
+    private readonly blacklist: TokenBlacklistService,
   ) {
     super(accounts);
   }
@@ -194,11 +196,13 @@ export class UserProfileService extends UserBaseService {
     const now = new Date();
     const deletedNickname = `deleted_${accountId.toString()}`;
 
-    await this.accounts.softDeleteAccount({
+    const { changedAt } = await this.accounts.softDeleteAccount({
       accountId,
       deletedNickname,
       now,
     });
+    // 커밋 뒤 — 세션은 tx에서 끊겼고, 만료 전 액세스 토큰은 여기서 막는다. 버전 = DB에 적은 status_changed_at
+    await this.blacklist.blockStatus(accountId, 'DELETED', changedAt);
 
     return true;
   }

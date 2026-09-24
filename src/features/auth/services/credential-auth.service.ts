@@ -24,7 +24,7 @@ import {
   AuditActionType,
   AuditTargetType,
 } from '@/generated/prisma/client';
-import type { AccountRole } from '@/global/auth';
+import { type AccountRole, TokenBlacklistService } from '@/global/auth';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 export type CredentialRole = Exclude<AccountRole, 'USER'>;
@@ -55,6 +55,7 @@ export class CredentialAuthService {
     @Inject(AUDIT_LOG_REPOSITORY)
     private readonly auditLogs: IAuditLogRepository,
     private readonly clock: ClockService,
+    private readonly blacklist: TokenBlacklistService,
   ) {}
 
   async login(args: {
@@ -159,10 +160,11 @@ export class CredentialAuthService {
       throw new DomainException('PASSWORD_UNCHANGED');
     }
 
-    const now = this.clock.now();
     const newHash = await argon2.hash(newPassword, {
       type: argon2.argon2id,
     });
+    // cutoff는 커밋 직전 시각 — 해시(수십~수백 ms) 동안 refresh로 발급된 토큰까지 막는다
+    const now = this.clock.now();
 
     // 교체·세션 무효화·감사를 한 트랜잭션에서(P1-12)
     await this.credentials.changePassword(
@@ -184,6 +186,8 @@ export class CredentialAuthService {
         userAgent: tryUserAgent(args.req),
       }),
     );
+    // 커밋 뒤 — 세션은 tx에서 끊겼고, 변경 전에 발급된 액세스 토큰만 막는다(새 비밀번호로 받은 새 토큰은 통과)
+    await this.blacklist.blockCredentials(args.accountId, now);
   }
 
   private async requireSessionCredential(

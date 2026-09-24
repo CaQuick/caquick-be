@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
+import { nextStatusChangedAt } from '@/common/utils/status-version';
 import {
   AUDIT_LOG_REPOSITORY,
   type AuditEntry,
@@ -329,11 +330,12 @@ export class AccountAdminRepository {
     }
   }
 
+  /** 기록한 변경 시각을 돌려준다 — 호출자가 커밋 뒤 같은 시각으로 블랙리스트 cutoff를 등록한다. */
   async resetCredentialPassword(args: {
     accountId: bigint;
     passwordHash: string;
     audit: AuditEntry;
-  }): Promise<void> {
+  }): Promise<Date> {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.accountCredential.update({
@@ -351,6 +353,7 @@ export class AccountAdminRepository {
       });
       await this.auditLogs.recordAudit(tx, args.audit);
     });
+    return now;
   }
 
   // ── 구매자 계정 ──
@@ -438,29 +441,42 @@ export class AccountAdminRepository {
     audit: AuditEntry;
     /** from도 to도 아닌 상태로 바뀌어 있을 때 던질 메시지 */
     invalidTransitionCode: ErrorCode;
-  }): Promise<{ changed: boolean }> {
+  }): Promise<{ changed: boolean; changedAt: Date }> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
+      // 전이를 먼저 선점한다(행 잠금). 읽기를 앞에 두면 REPEATABLE READ 스냅샷이 먼저 잡혀 동시 갱신 뒤의 재확인이 옛 값을 본다
       const updated = await tx.account.updateMany({
         where: { id: args.accountId, status: args.from, ...activeWhere },
-        data: { status: args.to, updated_at: now },
+        data: { status: args.to },
       });
       if (updated.count === 0) {
         const current = await tx.account.findFirst({
           where: { id: args.accountId },
           select: { status: true },
         });
-        if (current?.status === args.to) return { changed: false };
+        if (current?.status === args.to) {
+          return { changed: false, changedAt: now };
+        }
         throw new DomainException(args.invalidTransitionCode);
       }
+      // 잠긴 행의 이전 버전보다 항상 크게 — 같은 ms의 연속 변경·복제본 시계 편차에서도 뒤 변경이 이긴다
+      const locked = await tx.account.findFirst({
+        where: { id: args.accountId },
+        select: { status_changed_at: true },
+      });
+      const changedAt = nextStatusChangedAt(now, locked?.status_changed_at);
+      await tx.account.update({
+        where: { id: args.accountId },
+        data: { status_changed_at: changedAt, updated_at: changedAt },
+      });
       if (args.revokeSessions) {
         await tx.authRefreshSession.updateMany({
           where: { account_id: args.accountId, revoked_at: null },
-          data: { revoked_at: now, updated_at: now },
+          data: { revoked_at: changedAt, updated_at: changedAt },
         });
       }
       await this.auditLogs.recordAudit(tx, args.audit);
-      return { changed: true };
+      return { changed: true, changedAt };
     });
   }
 

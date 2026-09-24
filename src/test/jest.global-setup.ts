@@ -60,12 +60,25 @@ export default async function globalSetup(): Promise<void> {
   const rootUser = 'root';
   const rootPassword = 'test';
 
+  // 인증 블랙리스트(P2 03)는 실제 Redis로 검증한다 — DB와 같은 이유로 mock하지 않는다.
+  console.log('[test] starting Redis container...');
+  const redis: StartedTestContainer = await new GenericContainer(
+    'redis:7-alpine',
+  )
+    .withExposedPorts(6379)
+    .withWaitStrategy(Wait.forLogMessage('Ready to accept connections'))
+    .withStartupTimeout(60_000)
+    .start();
+  const redisUrl = `redis://${redis.getHost()}:${redis.getMappedPort(6379)}`;
+
   const state = {
     containerId: container.getId(),
     host,
     port,
     rootUser,
     rootPassword,
+    redisContainerId: redis.getId(),
+    redisUrl,
   };
 
   mkdirSync(dirname(STATE_FILE), { recursive: true });
@@ -75,10 +88,18 @@ export default async function globalSetup(): Promise<void> {
   process.env.TEST_DB_PORT = String(port);
   process.env.TEST_DB_ROOT_USER = rootUser;
   process.env.TEST_DB_ROOT_PASSWORD = rootPassword;
+  process.env.TEST_REDIS_URL = redisUrl;
 
   (
-    globalThis as unknown as { __TESTCONTAINER__?: StartedTestContainer }
+    globalThis as unknown as {
+      __TESTCONTAINER__?: StartedTestContainer;
+      __REDIS_TESTCONTAINER__?: StartedTestContainer;
+    }
   ).__TESTCONTAINER__ = container;
+  (
+    globalThis as unknown as { __REDIS_TESTCONTAINER__?: StartedTestContainer }
+  ).__REDIS_TESTCONTAINER__ = redis;
 
   console.log(`[test] MySQL container ready at ${host}:${port}`);
+  console.log(`[test] Redis container ready at ${redisUrl}`);
 }

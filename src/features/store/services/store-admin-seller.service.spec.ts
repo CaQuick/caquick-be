@@ -7,6 +7,7 @@ import type { AdminCreateSellerInput } from '@/features/store/dto/inputs/admin-c
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth/blacklist';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -23,6 +24,9 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 describe('AdminSellerService (real DB)', () => {
   let service: AdminSellerService;
   let prisma: PrismaClient;
+  const blacklist = {
+    blockCredentials: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -31,6 +35,7 @@ describe('AdminSellerService (real DB)', () => {
         AdminSellerService,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        { provide: TokenBlacklistService, useValue: blacklist },
       ],
     });
     service = module.get(AdminSellerService);
@@ -378,6 +383,11 @@ describe('AdminSellerService (real DB)', () => {
       );
       expect(credential.must_change_password).toBe(true);
       expect(credential.password_updated_at).not.toBeNull();
+      // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다(P2 03). cutoff = DB에 기록한 시각
+      expect(blacklist.blockCredentials).toHaveBeenCalledWith(
+        account.id,
+        credential.password_updated_at,
+      );
       const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
         where: { id: session.id },
       });

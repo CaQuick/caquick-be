@@ -1,6 +1,7 @@
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -12,6 +13,12 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('UserProfileService (real DB)', () => {
+  const blacklist = {
+    blockStatus: jest.fn().mockResolvedValue(undefined),
+  };
+  afterEach(() => {
+    blacklist.blockStatus.mockClear();
+  });
   let service: UserProfileService;
   let prisma: PrismaClient;
   let s3Service: jest.Mocked<S3Service>;
@@ -25,6 +32,7 @@ describe('UserProfileService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserProfileService,
+        { provide: TokenBlacklistService, useValue: blacklist },
         AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
       ],
@@ -546,6 +554,15 @@ describe('UserProfileService (real DB)', () => {
         where: { id: account.id },
       });
       expect(deletedAccount.deleted_at).toBeInstanceOf(Date);
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03). 버전 = DB에 기록한 status_changed_at(탈퇴도 같은 축)
+      expect(deletedAccount.status_changed_at).toEqual(
+        deletedAccount.deleted_at,
+      );
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        account.id,
+        'DELETED',
+        deletedAccount.status_changed_at,
+      );
       expect(deletedAccount.email).toBeNull();
 
       const deletedProfile = await prisma.userProfile.findUniqueOrThrow({

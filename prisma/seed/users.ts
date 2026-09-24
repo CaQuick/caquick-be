@@ -4,9 +4,9 @@
  * - user1: 온보딩 완료 — 마이페이지 API 전반 검증의 메인 계정
  * - user2: 온보딩 미완료 — me.needsProfile=true 검증용
  */
-import type { Account, PrismaClient } from '@/generated/prisma/client';
-
 import { SEED_USER_EMAIL_PREFIX } from './idempotent';
+
+import type { Account, PrismaClient } from '@/generated/prisma/client';
 
 export interface SeededUser extends Account {
   profileId: bigint;

@@ -11,7 +11,9 @@ export type AccountForJwt = Prisma.AccountGetPayload<{
     id: true;
     status: true;
     account_type: true;
-    credential: { select: { must_change_password: true } };
+    credential: {
+      select: { must_change_password: true; password_updated_at: true };
+    };
     store: { select: { id: true } };
   };
 }>;

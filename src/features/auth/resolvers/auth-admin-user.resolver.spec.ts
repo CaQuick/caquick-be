@@ -11,6 +11,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createUserProfile } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { NOOP_BLACKLIST_PROVIDER } from '@/test/redis';
 
 describe('Admin User Resolvers (real DB)', () => {
   let queryResolver: AdminUserQueryResolver;
@@ -23,6 +24,7 @@ describe('Admin User Resolvers (real DB)', () => {
         AdminUserQueryResolver,
         AdminUserMutationResolver,
         AdminUserService,
+        NOOP_BLACKLIST_PROVIDER,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
