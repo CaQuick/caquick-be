@@ -152,10 +152,10 @@ function setupSwagger(app: INestApplication, version?: string): void {
 // 부팅 실패는 DI가 없을 수 있어(모듈 compile 전) 전송 함수를 직접 부른다. 감독자가 자동 재시작하므로
 // 같은 호스트에서 창 안에는 한 번만 보낸다(파일 억제). stderr는 파이프일 수 있어 flush를 기다린 뒤 종료한다.
 bootstrap().catch(async (error: unknown) => {
-  const { discordWebhookUrl } = readAlertingConfig();
+  const { discordWebhookUrl, dedupeWindowMs } = readAlertingConfig();
   const detail =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
-  if (discordWebhookUrl && shouldSendBootAlert(Date.now())) {
+  if (discordWebhookUrl && shouldSendBootAlert(Date.now(), dedupeWindowMs)) {
     await postDiscordAlert(
       discordWebhookUrl,
       { level: 'error', title: '부팅 실패', detail },
