@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
 
+import { TimeoutError, withTimeout } from '@/common/utils/with-timeout';
 import type { OutboxConfig } from '@/config/outbox.config';
 import { retryBackoffMs } from '@/features/outbox/constants/outbox.constants';
 import {
@@ -27,6 +28,8 @@ import { RequestContextService } from '@/global/request-context';
 
 /** 시작 실패가 이만큼 이어지면 경보 — 브로커 부재가 아니라 설정 문제일 수 있다. */
 const START_FAILURES_BEFORE_ALERT = 5;
+/** retry/DLQ 재발행 confirm 대기 상한. 브로커가 blocked면 confirm이 안 와 prefetch 1 소비자가 영영 멈춘다 — 채널을 버려 재시작한다. */
+export const MOVE_CONFIRM_TIMEOUT_MS = 30_000;
 
 /**
  * RabbitMQ 소비자 호스트(worker 전용, P2 E4). `@SubscribeOutbox` provider마다 durable 큐 1개를 만들어
@@ -46,6 +49,8 @@ export class RabbitConsumerHostService
   private readonly returned = new Set<string>();
   private stopped = false;
   private startFailures = 0;
+  /** spec이 줄여 쓴다 */
+  moveConfirmTimeoutMs = MOVE_CONFIRM_TIMEOUT_MS;
 
   constructor(
     private readonly config: ConfigService,
@@ -99,34 +104,42 @@ export class RabbitConsumerHostService
     });
     await assertTopology(channel, consumers);
     await channel.prefetch(1);
-    const tags: string[] = [];
-    for (const consumer of consumers) {
-      const { consumerTag } = await channel.consume(
-        consumer.queues.main,
-        (message) => {
-          if (!message) {
-            // 큐 삭제(consumer cancel) — 브로커가 소비를 끊었다. 채널을 닫아 재시작 경로를 태운다
-            this.logger.warn(
-              `${consumer.name} 큐 ${consumer.queues.main}의 소비가 브로커에서 취소됐다 — 재시작`,
-            );
-            void channel.close().catch(() => undefined);
-            return;
-          }
-          const task = this.handle(channel, consumer, message).catch(
-            (error: unknown) => {
-              // 채널이 닫힌 뒤의 ack·재발행 실패 등 — 던지면 unhandled rejection으로 프로세스가 죽는다
-              this.logger.warn(
-                `${consumer.name} 소비 처리 중단(브로커가 재전달한다): ${error instanceof Error ? error.message : String(error)}`,
-              );
-            },
-          );
-          this.inFlight.add(task);
-          void task.finally(() => this.inFlight.delete(task));
-        },
-      );
-      tags.push(consumerTag);
-    }
+    // consume을 거는 순간부터 밀린 메시지가 올 수 있다 — 채널을 먼저 활성으로 둬야 그 ack가 "닫힌 채널"로 오인되지 않는다
     this.channel = channel;
+    const tags: string[] = [];
+    try {
+      for (const consumer of consumers) {
+        const { consumerTag } = await channel.consume(
+          consumer.queues.main,
+          (message) => {
+            if (!message) {
+              // 큐 삭제(consumer cancel) — 브로커가 소비를 끊었다. 채널을 닫아 재시작 경로를 태운다
+              this.logger.warn(
+                `${consumer.name} 큐 ${consumer.queues.main}의 소비가 브로커에서 취소됐다 — 재시작`,
+              );
+              void channel.close().catch(() => undefined);
+              return;
+            }
+            const task = this.handle(channel, consumer, message).catch(
+              (error: unknown) => {
+                // 채널이 닫힌 뒤의 ack·재발행 실패 등 — 던지면 unhandled rejection으로 프로세스가 죽는다
+                this.logger.warn(
+                  `${consumer.name} 소비 처리 중단(브로커가 재전달한다): ${error instanceof Error ? error.message : String(error)}`,
+                );
+              },
+            );
+            this.inFlight.add(task);
+            void task.finally(() => this.inFlight.delete(task));
+          },
+        );
+        tags.push(consumerTag);
+      }
+    } catch (error) {
+      // 뒤쪽 큐의 consume이 실패하면 앞쪽은 이미 소비 중 — 채널을 닫아 전부 되돌리고 재시도로 넘긴다
+      if (this.channel === channel) this.channel = null;
+      await channel.close().catch(() => undefined);
+      throw error;
+    }
     this.consumerTags = tags;
     this.startFailures = 0;
     this.logger.log(
@@ -265,24 +278,28 @@ export class RabbitConsumerHostService
     const messageId = typeof rawId === 'string' ? rawId : undefined;
     if (messageId) this.returned.delete(messageId);
     try {
-      await withConfirm((cb) =>
-        channel.publish(
-          exchange,
-          routingKey,
-          message.content,
-          {
-            ...message.properties,
-            mandatory: true,
-            headers: {
-              ...message.properties.headers,
-              [ATTEMPTS_HEADER]: attempts,
+      await withTimeout(
+        withConfirm((cb) =>
+          channel.publish(
+            exchange,
+            routingKey,
+            message.content,
+            {
+              ...message.properties,
+              mandatory: true,
+              headers: {
+                ...message.properties.headers,
+                [ATTEMPTS_HEADER]: attempts,
+              },
+              ...(expirationMs === undefined
+                ? {}
+                : { expiration: String(expirationMs) }),
             },
-            ...(expirationMs === undefined
-              ? {}
-              : { expiration: String(expirationMs) }),
-          },
-          cb,
+            cb,
+          ),
         ),
+        this.moveConfirmTimeoutMs,
+        `${routingKey} 재발행 confirm`,
       );
       if (messageId && this.returned.delete(messageId)) {
         throw new Error(`${routingKey} 큐가 없다(unroutable)`);
@@ -292,6 +309,12 @@ export class RabbitConsumerHostService
       this.logger.warn(
         `${routingKey}로 옮기지 못했다 — 원본을 requeue: ${error instanceof Error ? error.message : String(error)}`,
       );
+      if (error instanceof TimeoutError) {
+        // confirm이 안 오는 채널은 믿을 수 없다 — 닫아서 unack를 브로커가 재전달하게 하고 재시작한다
+        if (this.channel === channel) this.channel = null;
+        await channel.close().catch(() => undefined);
+        return;
+      }
       if (this.channel === channel) channel.nack(message, false, true);
     }
   }
