@@ -13,6 +13,18 @@ describe('레거시 배포 자산', () => {
     expect(script).not.toMatch(/\/health"\s*\|\|/);
   });
 
+  it('ValidateService는 새 worker의 ready를 확인한 뒤에만 옛 worker를 멈추고, 실패면 새 worker를 내린다', () => {
+    const script = read('scripts/validate_service.sh');
+    const workerProbe = script.indexOf('${NEW_WORKER_PORT}/health/ready');
+    const stopNewOnFail = script.indexOf('$PM2 stop "$NEW_WORKER"');
+    const switchApi = script.indexOf('switch_backend "$IDLE_PORT"');
+    const stopOld = script.indexOf('$PM2 stop "$OLD_WORKER"');
+    expect(workerProbe).toBeGreaterThan(-1);
+    expect(stopNewOnFail).toBeGreaterThan(workerProbe);
+    expect(switchApi).toBeGreaterThan(stopNewOnFail);
+    expect(stopOld).toBeGreaterThan(switchApi);
+  });
+
   it('PM2 ecosystem에 profile별 worker 엔트리가 있고 APP_ROLE=worker를 준다', () => {
     const ecosystem = read('ecosystem.config.js');
     for (const profile of ['blue', 'green']) {
@@ -25,11 +37,9 @@ describe('레거시 배포 자산', () => {
     expect(ecosystem.match(/APP_ROLE: 'worker'/g)).toHaveLength(2);
   });
 
-  it('ApplicationStart는 반대편 worker를 멈춘 뒤 새 profile의 worker를 띄운다(한 번에 하나)', () => {
+  it('ApplicationStart는 새 profile의 worker를 띄우되 옛 worker를 멈추지 않는다(멈춤은 validate가 ready 확인 뒤)', () => {
     const script = read('scripts/application_start.sh');
-    const stop = script.indexOf('$PM2 stop "worker-${OTHER_PROFILE}"');
-    const start = script.indexOf('--only "worker-${IDLE_PROFILE}"');
-    expect(stop).toBeGreaterThan(-1);
-    expect(start).toBeGreaterThan(stop);
+    expect(script).toContain('--only "worker-${IDLE_PROFILE}"');
+    expect(script).not.toMatch(/\$PM2 stop "worker-/);
   });
 });

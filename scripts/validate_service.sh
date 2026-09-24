@@ -11,6 +11,23 @@ source "${ABSDIR}/function/get_pm2.sh"
 
 IDLE_PORT=$(find_idle_port)
 PM2=$(get_pm2_executable)
+# api 4000/4001 ↔ worker 4002/4003 (ecosystem.config.js)
+if [ "$IDLE_PORT" = "4000" ]; then
+  NEW_WORKER="worker-blue"; NEW_WORKER_PORT=4002; OLD_WORKER="worker-green"; OTHER_API="backend-green"
+else
+  NEW_WORKER="worker-green"; NEW_WORKER_PORT=4003; OLD_WORKER="worker-blue"; OTHER_API="backend-blue"
+fi
+
+# 새 worker가 준비되기 전에는 옛 worker를 살려 둔다. 준비 실패면 새 worker를 내리고 옛 것을 그대로 둔다.
+wait_worker_ready() {
+  for j in {1..10}; do
+    WCODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${NEW_WORKER_PORT}/health/ready" || true)
+    if [ "$WCODE" = "200" ]; then return 0; fi
+    echo "worker retry $j... (code=$WCODE)"
+    sleep 3
+  done
+  return 1
+}
 
 echo ">> Health check on :$IDLE_PORT"
 /bin/sleep 1
@@ -20,12 +37,19 @@ for i in {1..10}; do
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${IDLE_PORT}/health/ready" || true)
 
   if [ "$CODE" = "200" ]; then
+    echo ">> API ready on :$IDLE_PORT. checking $NEW_WORKER on :$NEW_WORKER_PORT"
+    if ! wait_worker_ready; then
+      echo ">> $NEW_WORKER not ready — keeping $OLD_WORKER, stopping $NEW_WORKER"
+      $PM2 stop "$NEW_WORKER" || true
+      exit 1
+    fi
+
     echo ">> OK. switch to $IDLE_PORT"
     switch_backend "$IDLE_PORT"
 
-    # 반대편 중지
-    OTHER=$([ "$IDLE_PORT" = "4000" ] && echo "backend-green" || echo "backend-blue")
-    $PM2 stop "$OTHER" || true
+    # 반대편 api·worker 중지 — worker는 새 것이 ready를 통과한 뒤에만
+    $PM2 stop "$OTHER_API" || true
+    $PM2 stop "$OLD_WORKER" || true
     $PM2 save
     exit 0
   fi
