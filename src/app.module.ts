@@ -4,6 +4,7 @@ import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/dis
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import {
+  type DynamicModule,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -15,6 +16,12 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 
 import { CommonModule } from '@/common/common.module';
+import appConfig, {
+  type AppConfig,
+  type AppRole,
+  runsBackgroundJobs,
+  servesHttpApi,
+} from '@/config/app.config';
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
@@ -45,35 +52,13 @@ import {
 import { StorageModule } from '@/global/storage/storage.module';
 import { PrismaModule } from '@/prisma';
 
-@Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      cache: true,
-      load: [
-        authConfig,
-        databaseConfig,
-        docsConfig,
-        oidcConfig,
-        outboxConfig,
-        redisConfig,
-        s3Config,
-      ],
-    }),
+/** GraphQL·정적 문서는 요청을 받는 역할(api·ws)만 싣는다. worker는 /health·(05) /metrics만 연다. */
+function httpModules(): NonNullable<DynamicModule['imports']> {
+  return [
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public'),
       serveRoot: '/gql-docs',
     }),
-    CommonModule,
-    PrismaModule,
-    RequestContextModule,
-    LoggerModule,
-    AuthGlobalModule,
-    GraphqlGlobalModule,
-    PubSubModule,
-    StorageModule,
-    // 인기 검색어 스냅샷 크론(SearchModule) 활성화
-    ScheduleModule.forRoot(),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       inject: [ConfigService],
@@ -102,27 +87,64 @@ import { PrismaModule } from '@/prisma';
         } as Omit<ApolloDriverConfig, 'driver'>;
       },
     }),
-    SystemModule,
-    AuthModule,
-    ConversationModule,
-    RegionModule,
-    SearchModule,
-    StoreModule,
-    NotificationModule,
-    OutboxModule,
-    DashboardModule,
-    MypageModule,
-  ],
-  controllers: [],
-  providers: [],
-})
+  ];
+}
+
+@Module({})
 export class AppModule implements NestModule {
+  constructor(private readonly config: ConfigService) {}
+
+  /** 같은 이미지가 역할 플래그로 갈린다(P2 E1). main.ts가 env를 읽어 넘기고, 테스트는 역할별로 compile해 배선을 본다. */
+  static forRole(role: AppRole): DynamicModule {
+    return {
+      module: AppModule,
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          cache: true,
+          load: [
+            appConfig,
+            authConfig,
+            databaseConfig,
+            docsConfig,
+            oidcConfig,
+            outboxConfig,
+            redisConfig,
+            s3Config,
+          ],
+        }),
+        CommonModule,
+        PrismaModule,
+        RequestContextModule,
+        LoggerModule,
+        AuthGlobalModule,
+        GraphqlGlobalModule,
+        PubSubModule,
+        StorageModule,
+        // 크론(SearchModule)은 worker만 — api가 같이 돌리면 같은 스냅샷을 두 번 만든다
+        ...(runsBackgroundJobs(role) ? [ScheduleModule.forRoot()] : []),
+        ...(servesHttpApi(role) ? httpModules() : []),
+        SystemModule,
+        AuthModule,
+        ConversationModule,
+        RegionModule,
+        SearchModule,
+        StoreModule,
+        NotificationModule,
+        OutboxModule,
+        DashboardModule,
+        MypageModule,
+      ],
+    };
+  }
+
   configure(consumer: MiddlewareConsumer): void {
-    // 모든 요청(REST·GraphQL)에 대해 요청 컨텍스트(client IP/UA)를 가장 먼저 연다.
+    // 모든 요청(REST·GraphQL)에 대해 요청 컨텍스트(client IP/UA/requestId)를 가장 먼저 연다.
     consumer
       .apply(RequestContextMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
 
+    if (!servesHttpApi(this.config.getOrThrow<AppConfig>('app').role)) return;
     consumer
       .apply(DocsAccessMiddleware)
       .forRoutes(

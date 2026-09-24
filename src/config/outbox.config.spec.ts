@@ -1,6 +1,7 @@
 import outboxConfig from '@/config/outbox.config';
 
 const KEYS = [
+  'APP_ROLE',
   'OUTBOX_DISPATCH_ENABLED',
   'OUTBOX_POLL_INTERVAL_MS',
   'OUTBOX_BATCH_SIZE',
@@ -23,9 +24,9 @@ describe('outboxConfig', () => {
     }
   });
 
-  it('미설정이면 기본값(가동·1s·100·5·4)', () => {
+  it('미설정이면 기본값(api 역할이라 비가동·1s·100·5·4)', () => {
     expect(outboxConfig()).toEqual({
-      dispatchEnabled: true,
+      dispatchEnabled: false,
       pollIntervalMs: 1_000,
       batchSize: 100,
       maxAttempts: 5,
@@ -48,6 +49,20 @@ describe('outboxConfig', () => {
     });
     process.env.OUTBOX_DISPATCH_ENABLED = 'no';
     expect(outboxConfig().dispatchEnabled).toBe(true);
+  });
+
+  // 역할 × env 전수 — env가 없을 때만 역할이 정하고, env가 있으면 역할과 무관하다.
+  it.each([
+    ['api', undefined, false],
+    ['ws', undefined, false],
+    ['worker', undefined, true],
+    ['api', 'true', true],
+    ['worker', 'false', false],
+  ])('APP_ROLE=%s, OUTBOX_DISPATCH_ENABLED=%p → %s', (role, env, expected) => {
+    process.env.APP_ROLE = role;
+    if (env === undefined) delete process.env.OUTBOX_DISPATCH_ENABLED;
+    else process.env.OUTBOX_DISPATCH_ENABLED = env;
+    expect(outboxConfig().dispatchEnabled).toBe(expected);
   });
 
   it.each([

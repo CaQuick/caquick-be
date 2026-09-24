@@ -6,6 +6,14 @@ import type { SearchKeywordRankService } from '@/features/search/services/search
 
 describe('SearchKeywordRankScheduler', () => {
   const now = new Date('2026-08-31T13:00:00.000Z');
+  const savedRole = process.env.APP_ROLE;
+  beforeEach(() => {
+    process.env.APP_ROLE = 'worker';
+  });
+  afterEach(() => {
+    if (savedRole === undefined) delete process.env.APP_ROLE;
+    else process.env.APP_ROLE = savedRole;
+  });
 
   function build(captureSnapshot: jest.Mock) {
     const clock = new ClockService();
@@ -23,7 +31,19 @@ describe('SearchKeywordRankScheduler', () => {
     jest.restoreAllMocks();
   });
 
-  it('부팅 시 현재 시각으로 스냅샷 생성을 시도한다', async () => {
+  it.each(['api', 'ws'] as const)(
+    '반증: %s 역할에서는 부팅 스냅샷을 만들지 않는다(worker와 두 번 실행 방지)',
+    async (role) => {
+      process.env.APP_ROLE = role;
+      const capture = jest.fn().mockResolvedValue(true);
+
+      await build(capture).onApplicationBootstrap();
+
+      expect(capture).not.toHaveBeenCalled();
+    },
+  );
+
+  it('worker 역할은 부팅 시 현재 시각으로 스냅샷 생성을 시도한다', async () => {
     const capture = jest.fn().mockResolvedValue(true);
     const scheduler = build(capture);
 

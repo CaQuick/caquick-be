@@ -6,6 +6,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { resolveAppRole, runsBackgroundJobs } from '@/config/app.config';
 import { SearchKeywordRankService } from '@/features/search/services/search-keyword-rank.service';
 
 /**
@@ -21,7 +22,9 @@ export class SearchKeywordRankScheduler implements OnApplicationBootstrap {
     private readonly clock: ClockService,
   ) {}
 
+  /** 크론(ScheduleModule)은 worker에만 실리지만 이 훅은 모든 역할에서 돌므로 여기서도 역할을 본다. */
   async onApplicationBootstrap(): Promise<void> {
+    if (!runsBackgroundJobs(resolveAppRole())) return;
     await this.captureSafely();
   }
 

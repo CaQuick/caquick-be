@@ -6,12 +6,18 @@ import { Injectable } from '@nestjs/common';
 export interface RequestContextStore {
   clientIp?: string;
   userAgent?: string;
+  /** 응답 헤더·tx 로그와 같은 값. 로거 포맷이 ALS에서 읽어 모든 줄에 싣는다(P2 E8). */
+  requestId?: string;
 }
+
+/** 로거 포맷(DI 밖)도 읽어야 해서 저장소는 모듈 싱글턴이다. 서비스는 이 위의 얇은 껍데기. */
+export const requestContextStorage =
+  new AsyncLocalStorage<RequestContextStore>();
 
 /** RequestContextMiddleware가 요청 진입 시 run()으로 컨텍스트를 연다. run() 밖에서 get()은 undefined. */
 @Injectable()
 export class RequestContextService {
-  private readonly storage = new AsyncLocalStorage<RequestContextStore>();
+  private readonly storage = requestContextStorage;
 
   run<T>(store: RequestContextStore, callback: () => T): T {
     return this.storage.run(store, callback);

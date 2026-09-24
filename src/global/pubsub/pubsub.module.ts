@@ -5,6 +5,7 @@ import Redis, { type RedisOptions } from 'ioredis';
 
 import type { RedisConfig } from '@/config/redis.config';
 import { PUB_SUB } from '@/global/pubsub/pubsub.constants';
+import { RedisHealthIndicator } from '@/global/pubsub/redis-health.indicator';
 
 /**
  * 수평 확장(다중 인스턴스) 시에도 이벤트가 모든 인스턴스에 전파되도록 처음부터 Redis 백엔드를 쓴다.
@@ -32,8 +33,9 @@ import { PUB_SUB } from '@/global/pubsub/pubsub.constants';
         });
       },
     },
+    RedisHealthIndicator,
   ],
-  exports: [PUB_SUB],
+  exports: [PUB_SUB, RedisHealthIndicator],
 })
 export class PubSubModule implements OnModuleDestroy {
   constructor(@Inject(PUB_SUB) private readonly pubSub: RedisPubSub) {}
