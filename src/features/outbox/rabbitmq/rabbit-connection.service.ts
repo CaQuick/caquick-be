@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import amqplib, { type ChannelModel, type ConfirmChannel } from 'amqplib';
 
@@ -24,13 +24,15 @@ interface ConnectionSlot {
  * 끊기면 다음 사용 때 백오프로 다시 연결한다. 채널은 호출자가 연다.
  */
 @Injectable()
-export class RabbitConnectionService implements OnModuleDestroy {
+export class RabbitConnectionService implements OnApplicationShutdown {
   private readonly logger = new Logger(RabbitConnectionService.name);
   private readonly slots: Record<RabbitConnectionKind, ConnectionSlot> = {
     publisher: { connection: null, connecting: null, failures: 0 },
     consumer: { connection: null, connecting: null, failures: 0 },
   };
   private closed = false;
+  /** 재연결 백오프 sleep — 종료 시 깨워서 타이머가 프로세스를 붙잡거나 종료 뒤 연결을 시도하지 않게 */
+  private readonly wakeBackoff = new Set<() => void>();
 
   constructor(
     private readonly config: ConfigService,
@@ -72,25 +74,43 @@ export class RabbitConnectionService implements OnModuleDestroy {
     return channel;
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** 모듈 destroy(소비자 호스트의 cancel·in-flight 드레인) 뒤 단계에서 닫는다 — 같은 단계면 커넥션이 먼저 끊겨 마지막 ack가 무효가 된다 */
+  async onApplicationShutdown(): Promise<void> {
     this.closed = true;
-    for (const slot of Object.values(this.slots)) {
-      const connection = slot.connection;
-      slot.connection = null;
-      await connection?.close().catch(() => undefined);
+    for (const wake of this.wakeBackoff) wake();
+    for (const kind of Object.keys(this.slots) as RabbitConnectionKind[]) {
+      await this.retire(kind);
     }
+  }
+
+  /**
+   * 커넥션을 버린다(다음 사용 때 새로 연다). 정상 close를 시도하되 기다리지 않는다 — 브로커가 blocked면 close 핸드셰이크도
+   * 같은 소켓에서 매달린다. 잠깐 뒤 소켓을 강제로 끊어 리스너('close')가 돌게 한다.
+   */
+  async retire(kind: RabbitConnectionKind): Promise<void> {
+    const slot = this.slots[kind];
+    const connection = slot.connection;
+    slot.connection = null;
+    if (!connection) return;
+    const closed = connection.close().then(
+      () => true,
+      () => false,
+    );
+    const settled = await Promise.race([
+      closed,
+      new Promise<false>((r) => setTimeout(() => r(false), 1_000).unref()),
+    ]);
+    if (!settled) destroySocket(connection);
   }
 
   private async connect(kind: RabbitConnectionKind): Promise<ChannelModel> {
     const slot = this.slots[kind];
     const { url } = this.config.getOrThrow<RabbitmqConfig>('rabbitmq');
     if (slot.failures > 0) {
-      await new Promise((r) =>
-        setTimeout(
-          r,
-          Math.min(500 * 2 ** (slot.failures - 1), RECONNECT_MAX_MS),
-        ),
+      await this.backoff(
+        Math.min(500 * 2 ** (slot.failures - 1), RECONNECT_MAX_MS),
       );
+      if (this.closed) throw new Error('RabbitMQ 커넥션이 종료 중이다');
     }
     try {
       const connection = await amqplib.connect(withHeartbeat(url), {
@@ -136,6 +156,33 @@ export class RabbitConnectionService implements OnModuleDestroy {
       throw error;
     }
   }
+
+  /** 취소 가능한 백오프 — onApplicationShutdown이 깨운다. 타이머는 unref라 종료를 붙잡지 않는다. */
+  private backoff(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.wakeBackoff.delete(wake);
+        resolve();
+      }, ms);
+      timer.unref();
+      const wake = (): void => {
+        clearTimeout(timer);
+        this.wakeBackoff.delete(wake);
+        resolve();
+      };
+      this.wakeBackoff.add(wake);
+    });
+  }
+}
+
+/** amqplib ChannelModel 아래 저수준 커넥션의 소켓을 끊는다 — 공개 API가 없어 best-effort. */
+function destroySocket(connection: ChannelModel): void {
+  const stream = (
+    connection as unknown as {
+      connection?: { stream?: { destroy?: () => void } };
+    }
+  ).connection?.stream;
+  stream?.destroy?.();
 }
 
 /** amqp URL에 heartbeat가 없으면 기본값을 붙인다. */

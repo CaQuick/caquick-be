@@ -105,10 +105,6 @@ export class OutboxRepository {
   }
 
   /**
-   * FAILED(DLQ 상태)를 다시 PENDING으로 — 사람이 원인을 고친 뒤 부른다(E6, `yarn outbox:requeue`).
-   * attempts를 0으로 되돌려 백오프를 처음부터 다시 밟는다. 필터가 없으면 FAILED 전부.
-   */
-  /**
    * 사람이 되돌리는 재처리(E6). 기본은 FAILED(발행 실패)만. `republish`는 소비 DLQ에 빠진 이벤트를 위해 PUBLISHED
    * 행도 PENDING으로 되돌린다 — event_id 1건 지정에서만(소비자 멱등 계약에 기대므로 범위 실행은 막는다).
    */

@@ -5,7 +5,10 @@ import type { OutboxConfig } from '@/config/outbox.config';
 import type { OutboxConsumerRegistry } from '@/features/outbox/rabbitmq/outbox-consumer-registry.service';
 import type { RabbitConnectionService } from '@/features/outbox/rabbitmq/rabbit-connection.service';
 import { queuesFor } from '@/features/outbox/rabbitmq/topology';
-import { RabbitConsumerHostService } from '@/features/outbox/services/rabbit-consumer-host.service';
+import {
+  DESTROY_TIMEOUT_MS,
+  RabbitConsumerHostService,
+} from '@/features/outbox/services/rabbit-consumer-host.service';
 import type { AlertService } from '@/global/alerting';
 import { RequestContextService } from '@/global/request-context';
 
@@ -101,12 +104,15 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     channel: ReturnType<typeof fakeChannel>,
     handle: () => Promise<void>,
     names = ['A'],
+    rabbit: Partial<RabbitConnectionService> = {},
   ) {
     const host = new RabbitConsumerHostService(
       { getOrThrow: () => cfg } as unknown as ConfigService,
       {
         createConfirmChannel: () =>
           Promise.resolve(channel as unknown as ConfirmChannel),
+        retire: () => Promise.resolve(),
+        ...rabbit,
       } as unknown as RabbitConnectionService,
       {
         resolve: () =>
@@ -144,25 +150,37 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     expect(host.isConsuming).toBe(false);
   });
 
-  it('반증: retry/DLQ 재발행 confirm이 상한 안에 오지 않으면 채널을 닫는다(브로커가 unack를 재전달·재시작) — 영영 기다리지 않는다', async () => {
+  it('반증: retry/DLQ 재발행 confirm이 상한 안에 오지 않으면 채널 close를 기다리지 않고 커넥션을 버린 뒤 재시작한다 — blocked 소켓에서 close도 매달린다', async () => {
     const channel = fakeChannel({ confirm: false });
-    const host = build(channel, () => Promise.reject(new Error('handle 실패')));
+    channel.close = jest.fn(() => new Promise<void>(() => undefined)); // blocked — 영영 안 돌아온다
+    const retire = jest.fn().mockResolvedValue(undefined);
+    const host = build(
+      channel,
+      () => Promise.reject(new Error('handle 실패')),
+      ['A'],
+      { retire },
+    );
     host.moveConfirmTimeoutMs = 20;
 
     await host.start();
     channel.deliver('q.A', message('e-1'));
     await new Promise((r) => setTimeout(r, 80));
 
-    expect(channel.close).toHaveBeenCalled();
+    expect(retire).toHaveBeenCalledWith('consumer');
     expect(channel.ack).not.toHaveBeenCalled();
     expect(channel.nack).not.toHaveBeenCalled();
     // 옮기지 못했으므로 "retry/DLQ로 보냈다"는 경보를 내지 않는다
     expect(alerts.notify).not.toHaveBeenCalled();
-    // 닫힌 채널의 'close' 리스너가 재시작을 걸어 소비가 이어진다 — 타임아웃 한 번에 소비가 영영 멈추면 안 된다
+    // 재시작이 걸려 소비가 이어진다 — 타임아웃 한 번에 소비가 영영 멈추면 안 된다
     await flush();
-    expect(channel.prefetch).toHaveBeenCalledTimes(2); // start()가 한 번 더 돌았다
+    expect(channel.prefetch).toHaveBeenCalledTimes(2);
     expect(host.isConsuming).toBe(true);
+    // 종료도 매달린 close에 붙잡히지 않는다(상한)
+    host.destroyTimeoutMs = 200;
+    const started = Date.now();
     await host.onModuleDestroy();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(DESTROY_TIMEOUT_MS).toBe(10_000);
   });
 
   it('반증: 브로커가 없을 때 종료하면 재연결 sleep(최대 30초)을 깨워 바로 돌아온다', async () => {

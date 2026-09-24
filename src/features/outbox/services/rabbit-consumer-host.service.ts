@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   Injectable,
   Logger,
@@ -28,6 +30,10 @@ import { RequestContextService } from '@/global/request-context';
 
 /** 시작 실패가 이만큼 이어지면 경보 — 브로커 부재가 아니라 설정 문제일 수 있다. */
 const START_FAILURES_BEFORE_ALERT = 5;
+/** 종료 시 cancel·in-flight·close를 기다리는 상한 — 그 뒤엔 브로커 재전달에 맡기고 내려간다. */
+export const DESTROY_TIMEOUT_MS = 10_000;
+/** 옮기기 실패 뒤 nack(requeue) 전 대기 상한 — 종료 대기(10초)보다 짧게. */
+const NACK_BACKOFF_MAX_MS = 5_000;
 /** retry/DLQ 재발행 confirm 대기 상한. 브로커가 blocked면 confirm이 안 와 prefetch 1 소비자가 영영 멈춘다 — 채널을 버려 재시작한다. */
 export const MOVE_CONFIRM_TIMEOUT_MS = 30_000;
 
@@ -49,10 +55,15 @@ export class RabbitConsumerHostService
   private readonly returned = new Set<string>();
   private stopped = false;
   private startFailures = 0;
+  /** start()가 도는 동안 — 이때 채널이 닫히면 start()의 throw가 재시도 루프로 이어지므로 close 리스너는 재시작하지 않는다 */
+  private starting = false;
+  /** 재시작 루프는 한 번에 하나만 — close 리스너·타임아웃 경로가 겹쳐도 소비 채널이 둘이 되지 않게 */
+  private restartLoop: Promise<void> | null = null;
   /** 재연결 백오프 sleep — 종료 시 깨워서 프로세스가 타이머에 붙잡히지 않게 */
   private wakeRetry: (() => void) | null = null;
   /** spec이 줄여 쓴다 */
   moveConfirmTimeoutMs = MOVE_CONFIRM_TIMEOUT_MS;
+  destroyTimeoutMs = DESTROY_TIMEOUT_MS;
 
   constructor(
     private readonly config: ConfigService,
@@ -70,20 +81,32 @@ export class RabbitConsumerHostService
     void this.startWithRetry();
   }
 
-  /** 소비 중단 → 진행 중 handle 완료 → 채널 close. 순서가 바뀌면 in-flight의 ack가 닫힌 채널에 던진다. */
+  /**
+   * 소비 중단 → 진행 중 handle 완료 → 채널 close. 순서가 바뀌면 in-flight의 ack가 닫힌 채널에 던진다.
+   * 브로커가 blocked면 cancel·close가 매달리므로 전체에 상한을 둔다 — 종료 유예를 다 쓰지 않게.
+   */
   async onModuleDestroy(): Promise<void> {
     this.stopped = true;
     this.wakeRetry?.();
     const channel = this.channel;
-    this.channel = null;
-    if (channel) {
-      for (const tag of this.consumerTags) {
-        await channel.cancel(tag).catch(() => undefined);
+    const graceful = async (): Promise<void> => {
+      if (channel) {
+        for (const tag of this.consumerTags) {
+          await channel.cancel(tag).catch(() => undefined);
+        }
       }
-    }
-    this.consumerTags = [];
-    await Promise.allSettled([...this.inFlight]);
-    await channel?.close().catch(() => undefined);
+      this.consumerTags = [];
+      // 진행 중 handle의 ack가 나가야 하므로 this.channel은 드레인이 끝난 뒤에 비운다 — 먼저 비우면 가드가 ack를 막아 재시작마다 중복 전달
+      await Promise.allSettled([...this.inFlight]);
+      if (this.channel === channel) this.channel = null;
+      await channel?.close().catch(() => undefined);
+    };
+    await withTimeout(graceful(), this.destroyTimeoutMs, '소비자 종료').catch(
+      (error: unknown) =>
+        this.logger.warn(
+          `소비자 정상 종료를 기다리지 않는다: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+    );
   }
 
   get isConsuming(): boolean {
@@ -92,6 +115,15 @@ export class RabbitConsumerHostService
 
   /** 테스트·재연결이 직접 부른다. 큐·바인딩을 만들고 소비를 시작한다. */
   async start(): Promise<void> {
+    this.starting = true;
+    try {
+      await this.startChannel();
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  private async startChannel(): Promise<void> {
     const consumers = this.consumers.resolve();
     const channel = await this.rabbit.createConfirmChannel();
     // 리스너를 RPC보다 먼저 — assertTopology가 406으로 거절되면 리스너 없는 채널은 커넥션까지 끊는다
@@ -99,7 +131,8 @@ export class RabbitConsumerHostService
       if (this.channel !== channel) return;
       this.channel = null;
       this.consumerTags = [];
-      if (!this.stopped) void this.startWithRetry();
+      // start() 도중이면 start()가 던져 재시도 루프가 잇는다 — 여기서도 재시작하면 소비 채널이 둘이 된다
+      if (!this.stopped && !this.starting) void this.startWithRetry();
     });
     channel.on('return', (message: { properties: { messageId?: string } }) => {
       const id = message.properties.messageId;
@@ -143,6 +176,12 @@ export class RabbitConsumerHostService
       await channel.close().catch(() => undefined);
       throw error;
     }
+    if (this.stopped) {
+      // 종료가 start() 도중에 시작됐다 — 방금 건 소비를 걷어 종료 뒤 채널이 남지 않게
+      if (this.channel === channel) this.channel = null;
+      await channel.close().catch(() => undefined);
+      return;
+    }
     this.consumerTags = tags;
     this.startFailures = 0;
     this.logger.log(
@@ -150,7 +189,16 @@ export class RabbitConsumerHostService
     );
   }
 
-  private async startWithRetry(): Promise<void> {
+  private startWithRetry(): Promise<void> {
+    if (!this.restartLoop) {
+      this.restartLoop = this.retryLoop().finally(() => {
+        this.restartLoop = null;
+      });
+    }
+    return this.restartLoop;
+  }
+
+  private async retryLoop(): Promise<void> {
     let delay = 1_000;
     while (!this.stopped) {
       try {
@@ -297,9 +345,10 @@ export class RabbitConsumerHostService
     expirationMs?: number,
   ): Promise<boolean> {
     if (this.channel !== channel) return false;
+    // return을 messageId로 식별한다 — 없는 메시지는 부여해서라도 unroutable을 놓치지 않는다
     const rawId: unknown = message.properties.messageId;
-    const messageId = typeof rawId === 'string' ? rawId : undefined;
-    if (messageId) this.returned.delete(messageId);
+    const messageId = typeof rawId === 'string' ? rawId : randomUUID();
+    this.returned.delete(messageId);
     try {
       await withTimeout(
         withConfirm((cb) =>
@@ -309,6 +358,7 @@ export class RabbitConsumerHostService
             message.content,
             {
               ...message.properties,
+              messageId,
               mandatory: true,
               headers: {
                 ...message.properties.headers,
@@ -324,7 +374,7 @@ export class RabbitConsumerHostService
         this.moveConfirmTimeoutMs,
         `${routingKey} 재발행 confirm`,
       );
-      if (messageId && this.returned.delete(messageId)) {
+      if (this.returned.delete(messageId)) {
         throw new Error(`${routingKey} 큐가 없다(unroutable)`);
       }
       channel.ack(message);
@@ -334,10 +384,19 @@ export class RabbitConsumerHostService
         `${routingKey}로 옮기지 못했다 — 원본을 requeue: ${error instanceof Error ? error.message : String(error)}`,
       );
       if (error instanceof TimeoutError) {
-        // confirm이 안 오는 채널은 믿을 수 없다 — 닫는다. this.channel은 그대로 둬야 'close' 리스너가 재시작한다
-        await channel.close().catch(() => undefined);
+        // confirm이 안 오면 커넥션이 blocked일 수 있다 — close 핸드셰이크도 같은 소켓에서 매달리므로 기다리지 않는다.
+        // 채널을 즉시 죽은 것으로 보고 커넥션째 버린 뒤 재시작한다(unack는 브로커가 재전달). 'close' 리스너는 identity가 달라 중복 재시작하지 않는다
+        if (this.channel === channel) {
+          this.channel = null;
+          this.consumerTags = [];
+          void this.rabbit.retire('consumer').then(() => {
+            if (!this.stopped) void this.startWithRetry();
+          });
+        }
         return false;
       }
+      // prefetch 1에서 바로 nack하면 같은 메시지가 즉시 다시 와 핫 루프가 된다 — 재시도 백오프만큼 쉬고 되돌린다
+      await this.sleep(Math.min(retryBackoffMs(attempts), NACK_BACKOFF_MAX_MS));
       if (this.channel === channel) channel.nack(message, false, true);
       return false;
     }

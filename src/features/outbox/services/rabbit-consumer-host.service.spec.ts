@@ -142,7 +142,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
 
   afterAll(async () => {
     await host.onModuleDestroy();
-    await rabbit.onModuleDestroy();
+    await rabbit.onApplicationShutdown();
     await container.stop({ timeout: 5_000 });
     process.off('unhandledRejection', onUnhandled);
     jest.restoreAllMocks();

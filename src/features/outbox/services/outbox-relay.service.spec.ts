@@ -265,7 +265,7 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
       const label = `${String(body.aggregateId)}:${String((body.payload as { n: number }).n)}`;
       order.push(label);
       channel.published.push({ exchange, routingKey, body, options });
-      if (String(body.aggregateId) === 'A' && order.length === 1) {
+      if (label === 'A:1') {
         // A:1의 confirm을 잡아 둔다 — B는 기다리지 않고 나가야 한다
         gate.set(label, () => cb(null));
         return true;
@@ -279,12 +279,19 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
     await enqueue('B', 2);
 
     const relaying = relay.relayOnce();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(order).toEqual(['A:1', 'B:1', 'B:2']); // A:2는 A:1 confirm 뒤에만
+    // B 파티션이 A:1의 confirm을 기다리지 않고 끝까지 나간다 — A:2는 A:1 confirm 뒤에만
+    const deadline = Date.now() + 5_000;
+    while (order.length < 3 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(new Set(order)).toEqual(new Set(['A:1', 'B:1', 'B:2'])); // 파티션 시작 순서는 무관
+    expect(order).not.toContain('A:2');
     gate.get('A:1')?.();
     const summary = await relaying;
 
-    expect(order).toEqual(['A:1', 'B:1', 'B:2', 'A:2']);
+    expect(order).toHaveLength(4);
+    expect(order[3]).toBe('A:2');
+    expect(order.indexOf('B:1')).toBeLessThan(order.indexOf('B:2'));
     expect(summary).toMatchObject({ published: 4, deferred: 0 });
     Object.assign(cfg, { partitionConcurrency: 4 });
   });

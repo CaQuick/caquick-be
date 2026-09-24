@@ -315,8 +315,6 @@ describe('OutboxDispatcherService (real DB)', () => {
     });
   });
 
-  describe('폴링 수명주기', () => {});
-
   describe('반증: 배선 오류', () => {
     it('@SubscribeOutbox가 붙었지만 handle이 없는 provider는 첫 전달에서 즉시 던진다', async () => {
       @Injectable()
