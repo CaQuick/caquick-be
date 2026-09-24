@@ -25,10 +25,9 @@ function positiveInt(name: string, fallback: number): number {
   return value;
 }
 
-/** env가 있으면 "false"만 끈다(기존 의미). 없으면 역할 — api가 디스패처를 돌리면 worker와 같은 이벤트를 두 번 전달한다. */
+/** 역할이 정한다(worker만). env는 "false"로 끄기만 할 수 있다(테스트·일회성 스크립트) — env로 api에서 켜면 worker와 같은 이벤트를 두 번 전달한다. */
 function dispatchEnabled(raw: string | undefined): boolean {
-  const value = raw?.trim().toLowerCase();
-  if (value) return value !== 'false';
+  if (raw?.trim().toLowerCase() === 'false') return false;
   return runsBackgroundJobs(resolveAppRole());
 }
 

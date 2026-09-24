@@ -277,7 +277,7 @@ yarn start:dev
 | **AWS S3** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS` |
 | **Docs (선택)** | `DOCS_ACCESS_TOKEN` |
 | **경보 (선택)** | `DISCORD_ALERT_WEBHOOK_URL` — outbox FAILED·부팅 실패 등 운영 경보를 보낼 Discord 웹훅. 미설정이면 로그로만 남긴다. `ALERT_DEDUPE_WINDOW_MS`(기본 300000) — 같은 경보 억제 창 |
-| **Outbox (선택)** | `OUTBOX_DISPATCH_ENABLED`(기본: `APP_ROLE=worker`면 true, 그 외 false. 명시하면 그 값), `OUTBOX_POLL_INTERVAL_MS`(1000), `OUTBOX_BATCH_SIZE`(100), `OUTBOX_MAX_ATTEMPTS`(5), `OUTBOX_PARTITION_CONCURRENCY`(4) |
+| **Outbox (선택)** | `OUTBOX_DISPATCH_ENABLED` — 역할이 정한다(`APP_ROLE=worker`만 켜짐). `false`로 끄기만 가능(테스트·일회성 스크립트), api에서 `true`를 줘도 켜지지 않는다(worker와 이중 전달 방지). 로컬에서 소비까지 보려면 `APP_ROLE=worker PORT=4001 yarn start:dev`를 병행. `OUTBOX_POLL_INTERVAL_MS`(1000), `OUTBOX_BATCH_SIZE`(100), `OUTBOX_MAX_ATTEMPTS`(5), `OUTBOX_PARTITION_CONCURRENCY`(4) |
 | **시드 (선택)** | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD` — 있으면 `yarn prisma:seed`가 관리자 계정 1개를 만든다. `SELLER_SEED_PASSWORD` — 시드 판매자 2곳의 로그인 비밀번호(없으면 자격증명 생략) |
 
 ### 자주 쓰는 스크립트

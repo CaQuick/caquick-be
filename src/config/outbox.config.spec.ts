@@ -35,6 +35,7 @@ describe('outboxConfig', () => {
   });
 
   it('env 값을 읽고, dispatchEnabled는 "false"(대소문자·공백 무시)만 끈다', () => {
+    process.env.APP_ROLE = 'worker';
     process.env.OUTBOX_DISPATCH_ENABLED = ' FALSE ';
     process.env.OUTBOX_POLL_INTERVAL_MS = '250';
     process.env.OUTBOX_BATCH_SIZE = '10';
@@ -47,16 +48,19 @@ describe('outboxConfig', () => {
       maxAttempts: 3,
       partitionConcurrency: 2,
     });
+    // "false"가 아닌 값은 끄지 않는다 — 역할(worker)이 정한다
     process.env.OUTBOX_DISPATCH_ENABLED = 'no';
     expect(outboxConfig().dispatchEnabled).toBe(true);
   });
 
-  // 역할 × env 전수 — env가 없을 때만 역할이 정하고, env가 있으면 역할과 무관하다.
+  // 역할 × env 전수 — 역할이 정하고 env는 끄기만 한다. api에서 env로 켜면 worker와 같은 이벤트를 두 번 전달하므로 켜지지 않는다.
   it.each([
     ['api', undefined, false],
     ['ws', undefined, false],
     ['worker', undefined, true],
-    ['api', 'true', true],
+    ['api', 'true', false],
+    ['ws', 'true', false],
+    ['worker', 'true', true],
     ['worker', 'false', false],
   ])('APP_ROLE=%s, OUTBOX_DISPATCH_ENABLED=%p → %s', (role, env, expected) => {
     process.env.APP_ROLE = role;

@@ -1,7 +1,7 @@
 import type { TransformableInfo } from 'logform';
 import { createLogger, format, transports, type Logger } from 'winston';
 
-import { resolveAppRole } from '@/config/app.config';
+import { appRoleLabel } from '@/config/app.config';
 import { requestContextStorage } from '@/global/request-context/request-context.service';
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -33,23 +33,31 @@ function safeJsonStringify(value: unknown): string {
 
 const devFormat = format.printf(formatDevLogLine);
 
-/** 요청 안에서 찍힌 줄에 requestId를 싣는다 — api↔worker 로그를 이어 보는 열쇠(P2 E8). 명시된 값이 있으면 그대로 둔다. */
-const withRequestId = format((info) => {
-  const requestId = requestContextStorage.getStore()?.requestId;
-  if (requestId && info.requestId === undefined) info.requestId = requestId;
+/**
+ * 요청·이벤트 처리 안에서 찍힌 줄에 requestId·eventId를 싣는다 — api(요청)↔worker(이벤트 소비) 로그를 이어 보는 열쇠(P2 E8).
+ * 발행 시점 로그가 requestId와 eventId를 함께 가지므로 둘이 조인 키가 된다. 명시된 값이 있으면 그대로 둔다.
+ */
+const withRequestContext = format((info) => {
+  const store = requestContextStorage.getStore();
+  if (store?.requestId && info.requestId === undefined) {
+    info.requestId = store.requestId;
+  }
+  if (store?.eventId && info.eventId === undefined) {
+    info.eventId = store.eventId;
+  }
   return info;
 });
 
 const consoleTransport = new transports.Console({
   format: isProduction
     ? format.combine(
-        withRequestId(),
+        withRequestContext(),
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss Z' }),
         format.errors({ stack: false }),
         format.json(),
       )
     : format.combine(
-        withRequestId(),
+        withRequestContext(),
         format.colorize({
           all: true,
           colors: {
@@ -68,6 +76,7 @@ const consoleTransport = new transports.Console({
 export const customLogger: Logger = createLogger({
   level: isProduction ? 'info' : 'debug',
   // 운영은 한 줄 JSON(Alloy·Loki가 줄 단위로 읽는다) + 역할 라벨. 개발 출력은 사람이 보므로 붙이지 않는다.
-  ...(isProduction ? { defaultMeta: { role: resolveAppRole() } } : {}),
+  // 라벨은 검증 없이 원값 — import 시점에 던지면 부팅 경보 경로(bootstrap 안)에 닿지 못한다.
+  ...(isProduction ? { defaultMeta: { role: appRoleLabel() } } : {}),
   transports: [consoleTransport],
 });

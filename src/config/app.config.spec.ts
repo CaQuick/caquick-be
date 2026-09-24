@@ -1,4 +1,5 @@
 import {
+  appRoleLabel,
   isWorkerRouteAllowed,
   parseAppRole,
   resolveAppRole,
@@ -23,6 +24,13 @@ describe('appConfig', () => {
     expect(parseAppRole(raw)).toBe(expected);
   });
 
+  it('appRoleLabel은 검증 없이 원값(소문자)을 돌려준다 — import 시점(로거)에 던지지 않게', () => {
+    process.env.APP_ROLE = ' Bogus ';
+    expect(appRoleLabel()).toBe('bogus');
+    delete process.env.APP_ROLE;
+    expect(appRoleLabel()).toBe('api');
+  });
+
   it('반증: 모르는 역할은 기본값으로 숨기지 않고 던진다', () => {
     expect(() => parseAppRole('cron')).toThrow('APP_ROLE');
     process.env.APP_ROLE = 'batch';
@@ -44,6 +52,8 @@ describe('appConfig', () => {
     ['/health', true],
     ['/health/ready', true],
     ['/metrics', true],
+    ['/Health/', true],
+    ['/METRICS', true],
     ['/healthz', false],
     ['/health-check', false],
     ['/auth/oidc/google/start', false],

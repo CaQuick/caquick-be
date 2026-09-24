@@ -15,6 +15,7 @@ import type {
 } from '@/features/outbox/types/outbox-event.type';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { AlertService } from '@/global/alerting';
+import { requestContextStorage } from '@/global/request-context/request-context.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -42,10 +43,23 @@ class RecordingConsumer implements OutboxConsumer {
   }
 }
 
+/** 소비 중 요청 컨텍스트(ALS)의 eventId — 로거 포맷이 모든 줄에 싣는 조인 키(P2 E8) */
+@Injectable()
+@SubscribeOutbox('test.ctx')
+class ContextRecordingConsumer implements OutboxConsumer {
+  seen: Array<string | undefined> = [];
+
+  handle(): Promise<void> {
+    this.seen.push(requestContextStorage.getStore()?.eventId);
+    return Promise.resolve();
+  }
+}
+
 describe('OutboxDispatcherService (real DB)', () => {
   let dispatcher: OutboxDispatcherService;
   let publisher: OutboxPublisher;
   let consumer: RecordingConsumer;
+  let ctxConsumer: ContextRecordingConsumer;
   let prisma: PrismaClient;
   const alerts = { notify: jest.fn().mockResolvedValue('sent') };
   let now = START;
@@ -67,6 +81,7 @@ describe('OutboxDispatcherService (real DB)', () => {
         OutboxPublisher,
         OutboxRepository,
         RecordingConsumer,
+        ContextRecordingConsumer,
         IdGenerator,
         { provide: AlertService, useValue: alerts },
         { provide: ClockService, useValue: { now: () => now } },
@@ -81,6 +96,7 @@ describe('OutboxDispatcherService (real DB)', () => {
     dispatcher = module.get(OutboxDispatcherService);
     publisher = module.get(OutboxPublisher);
     consumer = module.get(RecordingConsumer);
+    ctxConsumer = module.get(ContextRecordingConsumer);
     prisma = p;
   });
   afterAll(async () => {
@@ -118,6 +134,25 @@ describe('OutboxDispatcherService (real DB)', () => {
       next: row.next_attempt_at,
     };
   }
+
+  describe('요청 컨텍스트(E8 조인 키)', () => {
+    it('소비자 handle은 ALS eventId 안에서 돌고, 성공 시 eventId를 실은 소비 로그 1줄을 남긴다', async () => {
+      const log = jest
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const { eventId } = await enqueue('C', 1, 'test.ctx');
+
+      await drainOutbox(dispatcher);
+
+      expect(ctxConsumer.seen).toEqual([eventId]);
+      expect(log).toHaveBeenCalledWith('outbox 소비', {
+        eventId,
+        eventType: 'test.ctx',
+        consumers: 1,
+      });
+      log.mockRestore();
+    });
+  });
 
   describe('경보', () => {
     it('maxAttempts를 채워 FAILED가 되면 event_type 키로 경보를 1건 보낸다(재시도 단계에서는 보내지 않는다)', async () => {

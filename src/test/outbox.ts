@@ -10,6 +10,7 @@ import { OutboxRepository } from '@/features/outbox/repositories/outbox.reposito
 import { OutboxDispatcherService } from '@/features/outbox/services/outbox-dispatcher.service';
 import { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.service';
 import { AlertService } from '@/global/alerting';
+import { RequestContextService } from '@/global/request-context';
 
 export const OUTBOX_TEST_CONFIG: OutboxConfig = {
   dispatchEnabled: false,
@@ -55,6 +56,7 @@ export function outboxTestProviders(
     OutboxRepository,
     OutboxPublisher,
     OutboxDispatcherService,
+    RequestContextService,
     ...(omit.alerts ? [] : [NOOP_ALERT_PROVIDER]),
     ...(omit.clock ? [] : [ClockService]),
     ...(omit.ids ? [] : [IdGenerator]),

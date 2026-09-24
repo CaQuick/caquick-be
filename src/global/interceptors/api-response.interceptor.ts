@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
 import type { Request } from 'express';
 import { Observable, map } from 'rxjs';
 
+import { normalizeRoutePath } from '@/common/utils/route-path';
 import { ApiResponseTemplate } from '@/global/types/response';
 
 const DEFAULT_EXCLUDE_PATHS = new Set<string>();
@@ -30,7 +31,8 @@ export class ApiResponseInterceptor implements NestInterceptor {
     }
 
     const req = context.switchToHttp().getRequest<Request>();
-    const path = req.path;
+    // Express 기본 라우팅은 /HEALTH/READY/도 같은 핸들러로 보내므로 제외 목록 비교도 대소문자·끝 슬래시를 무시한다
+    const path = normalizeRoutePath(req.path);
 
     return next.handle().pipe(
       map((data: unknown) => {

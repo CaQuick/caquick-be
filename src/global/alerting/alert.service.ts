@@ -13,6 +13,9 @@ import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 export type AlertOutcome = 'sent' | 'suppressed' | 'skipped' | 'failed';
 
+/** 전송 실패 뒤 1회 재전송까지의 간격. 호출자를 막지 않으려 타이머로 뒤에 보낸다. */
+export const ALERT_RETRY_DELAY_MS = 5_000;
+
 /**
  * 운영 경보의 단일 출구. 절대 던지지 않고 결과만 돌려준다 — 경보 때문에 본 작업이 실패하면 안 된다.
  * 웹훅이 없으면 로그로만 남기고, 같은 key는 억제 창 안에서 한 번만 보낸다.
@@ -43,16 +46,43 @@ export class AlertService {
       this.logger.warn(line, { detail: message.detail, delivered: false });
       return 'skipped';
     }
-    const ok = await this.transport(discordWebhookUrl, message, {
+    const origin = {
       role: resolveAppRole(),
       env: process.env.NODE_ENV ?? 'development',
-    });
+    };
+    const ok = await this.transport(discordWebhookUrl, message, origin);
     if (!ok) {
-      this.logger.warn(`${line} — Discord 전송 실패`, {
-        detail: message.detail,
-      });
+      this.logger.warn(
+        `${line} — Discord 전송 실패, ${ALERT_RETRY_DELAY_MS}ms 뒤 1회 재전송`,
+        {
+          detail: message.detail,
+        },
+      );
+      this.scheduleRetry(discordWebhookUrl, message, origin, line);
       return 'failed';
     }
     return 'sent';
+  }
+
+  /**
+   * 일회성 사건(outbox FAILED 1건 등)의 유일한 경보가 잠깐의 웹훅 장애로 사라지지 않게 1회만 뒤늦게 다시 보낸다.
+   * 억제 창은 첫 시도가 열었으므로 재전송은 창과 무관하다. 그래도 실패하면 창이 지난 다음 발생 때 다시.
+   */
+  private scheduleRetry(
+    url: string,
+    message: AlertMessage,
+    origin: Parameters<AlertTransport>[2],
+    line: string,
+  ): void {
+    const timer = setTimeout(() => {
+      void this.transport(url, message, origin).then((ok) => {
+        if (!ok) {
+          this.logger.warn(`${line} — 재전송도 실패`, {
+            detail: message.detail,
+          });
+        }
+      });
+    }, ALERT_RETRY_DELAY_MS);
+    timer.unref();
   }
 }

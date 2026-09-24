@@ -4,11 +4,12 @@ import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/dis
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import {
-  type DynamicModule,
+  Inject,
   MiddlewareConsumer,
   Module,
   NestModule,
   RequestMethod,
+  type DynamicModule,
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
@@ -18,7 +19,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { CommonModule } from '@/common/common.module';
 import alertingConfig from '@/config/alerting.config';
 import appConfig, {
-  type AppConfig,
+  APP_ROLE_TOKEN,
   type AppRole,
   runsBackgroundJobs,
   servesHttpApi,
@@ -97,7 +98,7 @@ function httpModules(): NonNullable<DynamicModule['imports']> {
 
 @Module({})
 export class AppModule implements NestModule {
-  constructor(private readonly config: ConfigService) {}
+  constructor(@Inject(APP_ROLE_TOKEN) private readonly role: AppRole) {}
 
   /** 같은 이미지가 역할 플래그로 갈린다(P2 E1). main.ts가 env를 읽어 넘기고, 테스트는 역할별로 compile해 배선을 본다. */
   static forRole(role: AppRole): DynamicModule {
@@ -144,6 +145,8 @@ export class AppModule implements NestModule {
         DashboardModule,
         MypageModule,
       ],
+      // configure()가 env를 다시 읽지 않고 이 역할을 쓴다 — imports 배선과 미들웨어 게이트가 한 값에서 나온다
+      providers: [{ provide: APP_ROLE_TOKEN, useValue: role }],
     };
   }
 
@@ -153,7 +156,7 @@ export class AppModule implements NestModule {
       .apply(RequestContextMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
 
-    if (!servesHttpApi(this.config.getOrThrow<AppConfig>('app').role)) {
+    if (!servesHttpApi(this.role)) {
       // worker: 요청 컨텍스트 다음, 어떤 컨트롤러보다 먼저 — 허용 목록 밖은 여기서 끝난다
       consumer
         .apply(WorkerRouteMiddleware)

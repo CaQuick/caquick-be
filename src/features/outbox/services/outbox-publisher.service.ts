@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { IdGenerator } from '@/common/providers/id-generator.service';
@@ -18,6 +18,8 @@ import { RequestContextService } from '@/global/request-context';
  */
 @Injectable()
 export class OutboxPublisher {
+  private readonly logger = new Logger(OutboxPublisher.name);
+
   constructor(
     private readonly repo: OutboxRepository,
     private readonly clock: ClockService,
@@ -41,6 +43,12 @@ export class OutboxPublisher {
       actorAccountId: event.actorAccountId ?? null,
       clientIp: normalizeIpForPersistence(ctx?.clientIp),
       userAgent: normalizeUserAgentForPersistence(ctx?.userAgent),
+    });
+    // 요청 컨텍스트(requestId) 안에서 eventId를 최상위 필드로 남긴다 — worker 소비 로그(eventId)와 이어 보는 조인 키(P2 E8)
+    this.logger.log('outbox 발행', {
+      eventId: row.event_id,
+      eventType: event.eventType,
+      aggregate: `${event.aggregateType}#${String(event.aggregateId)}`,
     });
     return { eventId: row.event_id };
   }

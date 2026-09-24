@@ -52,6 +52,25 @@ describe('request-context', () => {
       expect(requestId).toBe('existing-id');
     });
 
+    // 클라이언트 값은 로그·응답 헤더에 그대로 실린다 — 형식 밖이면 버리고 새로 만든다
+    it.each([
+      ['a'.repeat(129), '길이 128 초과'],
+      ['abc def', '공백'],
+      ['id\nX-Injected: 1', '개행(로그·헤더 주입)'],
+      ['한글', '비ASCII'],
+    ])('반증: x-request-id "%s"(%s)는 무시하고 UUID를 만든다', (incoming) => {
+      const req = mockReq({ headers: { [REQUEST_ID_HEADER]: incoming } });
+      const { requestId } = ensureRequestTracking(req);
+      expect(requestId).not.toBe(incoming);
+      expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('형식 안의 x-request-id(영숫자·._-, 128자 이내)는 그대로 쓴다', () => {
+      const incoming = 'trace-1.2_3';
+      const req = mockReq({ headers: { [REQUEST_ID_HEADER]: incoming } });
+      expect(ensureRequestTracking(req).requestId).toBe(incoming);
+    });
+
     it('응답 헤더에 requestId를 설정한다', () => {
       const req = mockReq();
       const res = mockRes();
@@ -103,6 +122,19 @@ describe('request-context', () => {
       expect(meta.method).toBe('GET');
       expect(meta.path).toBe('/test');
       expect(meta.clientIp).toBe('127.0.0.1');
+    });
+
+    it('OIDC 콜백의 code·state 같은 민감 쿼리 값은 가리고 키는 남긴다', () => {
+      const req = mockReq({
+        originalUrl:
+          '/auth/oidc/google/callback?code=abc&state=xyz&next=%2Fhome',
+        query: { code: 'abc', state: 'xyz', next: '/home' },
+      });
+      const meta = buildHttpRequestMeta(req);
+      expect(meta.path).toBe('/auth/oidc/google/callback');
+      expect(meta.query).toBe(
+        'code=%5Bredacted%5D&state=%5Bredacted%5D&next=%2Fhome',
+      );
     });
 
     it('defaultVersion 옵션을 적용한다', () => {
