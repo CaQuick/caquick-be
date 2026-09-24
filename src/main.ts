@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+// .env를 가장 먼저 — 아래 import들(역할 선택·로거)이 env를 읽는다
+import '@/config/preload-env';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -31,4 +31,13 @@ else
   $PM2 start "$ECOSYS" --only "backend-${IDLE_PROFILE}"
 fi
 
+# worker는 한 번에 하나만(outbox 디스패처·크론이 겹치면 같은 작업이 두 번 돈다) — 반대편을 먼저 멈추고 새 코드로 띄운다
+OTHER_PROFILE=$([ "$IDLE_PROFILE" = "blue" ] && echo "green" || echo "blue")
+$PM2 stop "worker-${OTHER_PROFILE}" || true
+if $PM2 list | grep -q "worker-${IDLE_PROFILE}"; then
+  $PM2 reload "worker-${IDLE_PROFILE}" --update-env
+else
+  $PM2 start "$ECOSYS" --only "worker-${IDLE_PROFILE}"
+fi
+
 $PM2 save

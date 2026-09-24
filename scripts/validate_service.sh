@@ -16,11 +16,8 @@ echo ">> Health check on :$IDLE_PORT"
 /bin/sleep 1
 
 for i in {1..10}; do
-  # 우선 /health/profiles, 실패 시 /health
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${IDLE_PORT}/health/profiles" || true)
-  if [ "$CODE" != "200" ]; then
-    CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${IDLE_PORT}/health" || true)
-  fi
+  # 의존성(MySQL·Redis)까지 살아 있어야 트래픽을 넘긴다 — 프로세스만 보는 경로(live·profiles)로는 판정하지 않는다
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${IDLE_PORT}/health/ready" || true)
 
   if [ "$CODE" = "200" ]; then
     echo ">> OK. switch to $IDLE_PORT"
