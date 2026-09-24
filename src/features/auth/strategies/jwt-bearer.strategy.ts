@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -12,12 +12,14 @@ import {
 import { AlertService } from '@/global/alerting';
 import type { AccessTokenPayload, JwtUser } from '@/global/auth';
 import {
-  type BlockReason,
+  type BlacklistLookup,
   TokenBlacklistService,
 } from '@/global/auth/blacklist';
 
 @Injectable()
 export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
+  private readonly logger = new Logger(JwtBearerStrategy.name);
+
   constructor(
     config: ConfigService,
     @Inject(ACCOUNT_REPOSITORY)
@@ -41,8 +43,8 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   /**
    * 정상 경로는 DB를 읽지 않는다(P2 E2): 서명이 유효한 토큰의 클레임(role·mustChangePassword)을 신뢰하고,
-   * 정지·탈퇴·비밀번호 변경은 Redis 블랙리스트가 막는다. Redis 조회가 실패하면 예전 방식(계정 재조회)으로
-   * 폴백하고 경보를 남긴다 — 모놀리스는 DB가 바로 옆이라 열어 둘 이유가 없다.
+   * 정지·탈퇴·비밀번호 변경은 Redis 블랙리스트가 막는다. 블랙리스트가 불완전하거나(재구축 표식 없음 — Redis 초기화)
+   * 조회가 실패하면 예전 방식(계정 재조회)으로 폴백한다 — 모놀리스는 DB가 바로 옆이라 열어 둘 이유가 없다.
    */
   async validate(payload: AccessTokenPayload): Promise<JwtUser> {
     if (!payload?.sub || payload.typ !== 'access') {
@@ -56,9 +58,9 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new DomainException('INVALID_ACCESS_TOKEN');
     }
 
-    let reason: BlockReason | null;
+    let lookup: BlacklistLookup;
     try {
-      reason = await this.blacklist.blockedReason(accountId);
+      lookup = await this.blacklist.lookup(accountId);
     } catch (error) {
       void this.alerts.notify({
         level: 'warn',
@@ -68,12 +70,24 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
       });
       return this.validateAgainstDb(accountId);
     }
-
-    if (reason === 'CREDENTIAL_CHANGED') {
-      throw new DomainException('INVALID_ACCESS_TOKEN');
+    if (!lookup.ready) {
+      // Redis가 비었다(초기화·flush). worker 재구축이 표식을 다시 세울 때까지 DB가 정본이다.
+      this.logger.warn('블랙리스트 재구축 표식 없음 — 계정 재조회로 폴백');
+      void this.alerts.notify({
+        level: 'warn',
+        title: 'Redis 블랙리스트 미구축 — 계정 재조회로 폴백',
+        key: 'auth-blacklist-not-ready',
+      });
+      return this.validateAgainstDb(accountId);
     }
-    if (reason !== null) {
-      throw new DomainException('ACCOUNT_NOT_ACTIVE');
+
+    const entry = lookup.entry;
+    if (entry !== null && payload.iat * 1000 < entry.issuedBeforeMs) {
+      throw new DomainException(
+        entry.reason === 'CREDENTIAL_CHANGED'
+          ? 'INVALID_ACCESS_TOKEN'
+          : 'ACCOUNT_NOT_ACTIVE',
+      );
     }
 
     return {

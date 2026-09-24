@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -6,7 +7,7 @@ import { AccountRepository } from '@/features/auth/repositories/account.reposito
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import { JwtBearerStrategy } from '@/features/auth/strategies/jwt-bearer.strategy';
 import type { PrismaClient } from '@/generated/prisma/client';
-import type { AlertService } from '@/global/alerting';
+import { AlertService } from '@/global/alerting';
 import { TokenBlacklistService } from '@/global/auth/blacklist';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -45,7 +46,8 @@ function buildStrategy(deps: {
     blacklist: TokenBlacklistService;
     alerts: AlertService;
   };
-  Object.assign(instance, deps);
+  // prototype에서 만들면 필드 초기화(logger)가 안 돌아 직접 넣는다
+  Object.assign(instance, deps, { logger: new Logger(JwtBearerStrategy.name) });
   return instance;
 }
 
@@ -64,6 +66,7 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
         ClockService,
         { provide: ACCOUNT_REPOSITORY, useClass: AccountRepository },
         TokenBlacklistService,
+        { provide: AlertService, useValue: alerts },
         ...redisTestProviders(redis),
         {
           provide: ConfigService,
@@ -90,6 +93,8 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
   beforeEach(async () => {
     await truncateAll();
     await redis.flushdb();
+    // 정상 상태 = worker 재구축이 끝나 표식이 있는 상태
+    await blacklist.markReady();
     alerts.notify.mockClear();
   });
 
@@ -157,6 +162,35 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
       });
     });
 
+    it('자격증명 변경은 cutoff 전에 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과', async () => {
+      const changedAt = NOW * 1000;
+      await blacklist.block(BigInt(42), 'CREDENTIAL_CHANGED', {
+        issuedBeforeMs: changedAt,
+      });
+
+      await expect(
+        strategy.validate(payload('42', { iat: NOW - 60 })),
+      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
+      await expect(
+        strategy.validate(payload('42', { iat: NOW + 1 })),
+      ).resolves.toMatchObject({ accountId: '42' });
+    });
+
+    it('반증: 재구축 표식이 없으면(Redis 초기화) 항목이 없어도 클레임을 믿지 않고 DB로 판정한다', async () => {
+      await redis.flushdb(); // 표식까지 사라진 상태
+      const suspended = await createAccount(prisma, {
+        account_type: 'USER',
+        status: 'SUSPENDED',
+      });
+
+      await expect(
+        strategy.validate(payload(suspended.id.toString())),
+      ).rejects.toThrowDomain('ACCOUNT_NOT_ACTIVE');
+      expect(alerts.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'auth-blacklist-not-ready' }),
+      );
+    });
+
     it('다른 계정의 블랙리스트는 영향이 없다', async () => {
       await blacklist.block(BigInt(1), 'DELETED');
 
@@ -180,9 +214,11 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
         retryStrategy: () => null,
       });
       deadRedis.on('error', () => undefined);
-      const deadBlacklist = new TokenBlacklistService(deadRedis, {
-        getOrThrow: () => TEST_AUTH_CONFIG,
-      } as unknown as ConfigService);
+      const deadBlacklist = new TokenBlacklistService(
+        deadRedis,
+        { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+        alerts as unknown as AlertService,
+      );
       fallbackStrategy = buildStrategy({
         accounts,
         blacklist: deadBlacklist,

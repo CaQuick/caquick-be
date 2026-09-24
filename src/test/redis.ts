@@ -15,6 +15,8 @@ export const NOOP_BLACKLIST_PROVIDER: Provider = {
   useValue: {
     block: () => Promise.resolve(),
     unblock: () => Promise.resolve(),
-    blockedReason: () => Promise.resolve(null),
+    lookup: () => Promise.resolve({ ready: true, entry: null }),
+    markReady: () => Promise.resolve(),
+    accessTtlSeconds: () => 900,
   },
 };

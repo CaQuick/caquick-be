@@ -1,4 +1,5 @@
 export {
+  type BlacklistLookup,
   type BlockReason,
   TokenBlacklistService,
 } from '@/global/auth/blacklist/token-blacklist.service';

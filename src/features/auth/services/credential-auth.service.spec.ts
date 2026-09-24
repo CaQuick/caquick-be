@@ -428,6 +428,7 @@ describe('CredentialAuthService', () => {
       expect(blacklist.block).toHaveBeenCalledWith(
         BigInt(10),
         'CREDENTIAL_CHANGED',
+        { issuedBeforeMs: expect.any(Number) as number },
       );
       expect(auditEntryOf(credentials.changePassword)).toMatchObject({
         actorAccountId: BigInt(10),

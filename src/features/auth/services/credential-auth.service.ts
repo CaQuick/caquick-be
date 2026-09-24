@@ -185,8 +185,10 @@ export class CredentialAuthService {
         userAgent: tryUserAgent(args.req),
       }),
     );
-    // 커밋 뒤 — 세션은 tx에서 끊겼고, 만료 전 액세스 토큰은 여기서 막는다(재로그인 강제)
-    await this.blacklist.block(args.accountId, 'CREDENTIAL_CHANGED');
+    // 커밋 뒤 — 세션은 tx에서 끊겼고, 변경 전에 발급된 액세스 토큰만 막는다(새 비밀번호로 받은 새 토큰은 통과)
+    await this.blacklist.block(args.accountId, 'CREDENTIAL_CHANGED', {
+      issuedBeforeMs: now.getTime(),
+    });
   }
 
   private async requireSessionCredential(
