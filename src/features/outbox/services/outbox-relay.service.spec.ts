@@ -209,11 +209,13 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
   });
 
   it('반증: 채널이 죽으면(publish 예외) 그 행만 재시도로 남기고 나머지는 미룬다 — 죽은 채널로 attempts를 올리지 않는다', async () => {
+    Object.assign(cfg, { partitionConcurrency: 1 }); // 순차로 돌려 B가 A의 채널 죽음 뒤에 오게 고정
     const a = await enqueue('A', 1);
     const b = await enqueue('B', 1);
     channel.throwNext.add(a.eventId);
 
     const summary = await relay.relayOnce();
+    Object.assign(cfg, { partitionConcurrency: 4 });
 
     expect(summary).toEqual({
       published: 0,
@@ -243,6 +245,48 @@ describe('OutboxRelayService (real DB, fake channel)', () => {
     expect(row.next_attempt_at.getTime()).toBe(START.getTime() + 1_000);
     expect(alerts.notify).not.toHaveBeenCalled();
     expect(channel.close).not.toHaveBeenCalled();
+  });
+
+  it('파티션끼리는 partitionConcurrency만큼 병렬로 나가고, 파티션 안은 순차다', async () => {
+    Object.assign(cfg, { partitionConcurrency: 2 });
+    const order: string[] = [];
+    const gate = new Map<string, () => void>();
+    channel.publish = (
+      exchange: string,
+      routingKey: string,
+      content: Buffer,
+      options: Record<string, unknown>,
+      cb: PublishCb,
+    ) => {
+      const body = JSON.parse(content.toString('utf8')) as Record<
+        string,
+        unknown
+      >;
+      const label = `${String(body.aggregateId)}:${String((body.payload as { n: number }).n)}`;
+      order.push(label);
+      channel.published.push({ exchange, routingKey, body, options });
+      if (String(body.aggregateId) === 'A' && order.length === 1) {
+        // A:1의 confirm을 잡아 둔다 — B는 기다리지 않고 나가야 한다
+        gate.set(label, () => cb(null));
+        return true;
+      }
+      cb(null);
+      return true;
+    };
+    await enqueue('A', 1);
+    await enqueue('A', 2);
+    await enqueue('B', 1);
+    await enqueue('B', 2);
+
+    const relaying = relay.relayOnce();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(order).toEqual(['A:1', 'B:1', 'B:2']); // A:2는 A:1 confirm 뒤에만
+    gate.get('A:1')?.();
+    const summary = await relaying;
+
+    expect(order).toEqual(['A:1', 'B:1', 'B:2', 'A:2']);
+    expect(summary).toMatchObject({ published: 4, deferred: 0 });
+    Object.assign(cfg, { partitionConcurrency: 4 });
   });
 
   it('같은 파티션의 앞선 이벤트가 실패하면 뒤는 미룬다(FIFO), 다른 파티션은 나간다', async () => {

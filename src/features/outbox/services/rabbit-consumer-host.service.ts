@@ -334,8 +334,7 @@ export class RabbitConsumerHostService
         `${routingKey}로 옮기지 못했다 — 원본을 requeue: ${error instanceof Error ? error.message : String(error)}`,
       );
       if (error instanceof TimeoutError) {
-        // confirm이 안 오는 채널은 믿을 수 없다 — 닫아서 unack를 브로커가 재전달하게 하고 재시작한다
-        if (this.channel === channel) this.channel = null;
+        // confirm이 안 오는 채널은 믿을 수 없다 — 닫는다. this.channel은 그대로 둬야 'close' 리스너가 재시작한다
         await channel.close().catch(() => undefined);
         return false;
       }

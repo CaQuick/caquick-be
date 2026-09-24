@@ -102,13 +102,37 @@ export class OutboxRelayService
     if (due.length === 0) return summary;
 
     const channel = await this.getChannel();
-    // 파티션(aggregate) 안은 id 순으로만 나간다 — 앞선 이벤트가 백오프 중이면 뒤는 미룬다
-    const blocked = new Set<string>();
+    // 파티션(aggregate) 안은 id 순으로만(앞선 이벤트가 백오프 중이면 뒤는 미룸), 파티션끼리는 partitionConcurrency만큼 병렬 —
+    // 한 aggregate의 느린 confirm이 다른 aggregate를 붙잡지 않게
+    const groups = new Map<string, OutboxRow[]>();
     for (const row of due) {
       const key = `${row.aggregate_type} ${row.aggregate_id}`;
-      if (blocked.has(key)) {
-        summary.deferred += 1;
-        continue;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    const queue = [...groups.values()];
+    const worker = async (): Promise<void> => {
+      for (let group = queue.shift(); group; group = queue.shift()) {
+        await this.relayPartition(channel, group, cfg, summary);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.max(1, cfg.partitionConcurrency) }, worker),
+    );
+    return summary;
+  }
+
+  private async relayPartition(
+    channel: ConfirmChannel,
+    rows: OutboxRow[],
+    cfg: OutboxConfig,
+    summary: DispatchSummary,
+  ): Promise<void> {
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      // 채널이 죽었으면 나머지 행을 죽은 채널로 밀어 attempts만 올리지 않는다 — 다음 틱이 새 채널로 잇는다
+      if (this.channel !== channel) {
+        summary.deferred += rows.length - index;
+        return;
       }
       if (
         await this.repo.hasOlderPending({
@@ -117,20 +141,16 @@ export class OutboxRelayService
           beforeId: row.id,
         })
       ) {
-        blocked.add(key);
-        summary.deferred += 1;
-        continue;
+        summary.deferred += rows.length - index;
+        return;
       }
       const result = await this.publish(channel, row, cfg);
       summary[result] += 1;
-      if (result === 'retried') blocked.add(key);
-      // 채널이 죽었으면 나머지 행을 죽은 채널로 밀어 attempts만 올리지 않는다 — 다음 틱이 새 채널로 잇는다
-      if (this.channel !== channel) {
-        summary.deferred += due.length - due.indexOf(row) - 1;
-        break;
+      if (result === 'retried') {
+        summary.deferred += rows.length - index - 1;
+        return;
       }
     }
-    return summary;
   }
 
   private async publish(

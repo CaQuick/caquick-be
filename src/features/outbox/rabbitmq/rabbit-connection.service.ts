@@ -96,6 +96,11 @@ export class RabbitConnectionService implements OnModuleDestroy {
       const connection = await amqplib.connect(withHeartbeat(url), {
         clientProperties: { connection_name: `caquick-${kind}` },
       });
+      if (this.closed) {
+        // 종료가 먼저 시작됐다 — 늦게 열린 소켓이 프로세스를 붙잡거나 종료 뒤 채널을 열지 않게
+        await connection.close().catch(() => undefined);
+        throw new Error('RabbitMQ 커넥션이 종료 중이다');
+      }
       connection.on('close', () => {
         if (!this.closed)
           this.logger.warn(

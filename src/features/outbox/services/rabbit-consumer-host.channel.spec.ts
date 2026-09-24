@@ -18,16 +18,23 @@ function fakeChannel(opts: {
   confirm?: boolean;
 }) {
   const consumers = new Map<string, ConsumeCb>();
+  const listeners = new Map<string, Array<(payload?: unknown) => void>>();
   const channel = {
     ack: jest.fn(),
     nack: jest.fn(),
-    close: jest.fn().mockResolvedValue(undefined),
+    // 실제 amqplib처럼 close()는 'close' 리스너를 부른다 — 호스트의 재시작 경로가 여기 걸려 있다
+    close: jest.fn(() => {
+      for (const fn of listeners.get('close') ?? []) fn();
+      return Promise.resolve();
+    }),
     cancel: jest.fn().mockResolvedValue(undefined),
     prefetch: jest.fn().mockResolvedValue(undefined),
     assertExchange: jest.fn().mockResolvedValue(undefined),
     assertQueue: jest.fn().mockResolvedValue(undefined),
     bindQueue: jest.fn().mockResolvedValue(undefined),
-    on: jest.fn(),
+    on: (event: string, fn: (payload?: unknown) => void) => {
+      listeners.set(event, [...(listeners.get(event) ?? []), fn]);
+    },
     publish: (
       _ex: string,
       _rk: string,
@@ -149,10 +156,13 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     expect(channel.close).toHaveBeenCalled();
     expect(channel.ack).not.toHaveBeenCalled();
     expect(channel.nack).not.toHaveBeenCalled();
-    expect(host.isConsuming).toBe(false);
     // 옮기지 못했으므로 "retry/DLQ로 보냈다"는 경보를 내지 않는다
     expect(alerts.notify).not.toHaveBeenCalled();
-    await host.onModuleDestroy(); // in-flight가 끝나 있어 즉시 돌아온다
+    // 닫힌 채널의 'close' 리스너가 재시작을 걸어 소비가 이어진다 — 타임아웃 한 번에 소비가 영영 멈추면 안 된다
+    await flush();
+    expect(channel.prefetch).toHaveBeenCalledTimes(2); // start()가 한 번 더 돌았다
+    expect(host.isConsuming).toBe(true);
+    await host.onModuleDestroy();
   });
 
   it('반증: 브로커가 없을 때 종료하면 재연결 sleep(최대 30초)을 깨워 바로 돌아온다', async () => {
