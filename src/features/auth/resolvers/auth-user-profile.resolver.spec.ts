@@ -12,6 +12,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { NOOP_BLACKLIST_PROVIDER } from '@/test/redis';
 
 // 상세 분기/예외는 *.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 배선만 1-2 케이스로 본다.
 describe('User Profile Resolvers (real DB)', () => {
@@ -30,6 +31,7 @@ describe('User Profile Resolvers (real DB)', () => {
         UserProfileQueryResolver,
         UserProfileMutationResolver,
         UserProfileService,
+        NOOP_BLACKLIST_PROVIDER,
         AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
       ],

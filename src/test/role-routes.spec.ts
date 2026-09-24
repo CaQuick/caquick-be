@@ -12,6 +12,8 @@ import { PrismaService } from '@/prisma';
 // module-wiring.spec은 compile만 보므로 HTTP 노출은 실제 앱을 띄워 본다(DB·Redis는 대역, 디스패처·크론은 env로 끔).
 const ENV_DEFAULTS: Record<string, string> = {
   DATABASE_URL: 'mysql://wiring:wiring@localhost:3306/wiring',
+  // Redis는 필수 설정(P2 03) — 테스트 컨테이너 주소가 있으면 그것, 없으면 로컬 기본
+  REDIS_URL: process.env.TEST_REDIS_URL ?? 'redis://localhost:6379',
   OIDC_GOOGLE_ISSUER_URL: 'https://accounts.google.com',
   OIDC_GOOGLE_CLIENT_ID: 'wiring',
   OIDC_GOOGLE_CLIENT_SECRET: 'wiring',

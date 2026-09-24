@@ -12,6 +12,8 @@ import { PrismaService } from '@/prisma';
 // AppModule을 compile만 해서(리스닝·스키마 빌드 없음) 모든 provider가 실제 모듈 경계 안에서 resolve되는지 본다.
 const ENV_DEFAULTS: Record<string, string> = {
   DATABASE_URL: 'mysql://wiring:wiring@localhost:3306/wiring',
+  // Redis는 필수 설정(P2 03) — 테스트 컨테이너 주소가 있으면 그것, 없으면 로컬 기본
+  REDIS_URL: process.env.TEST_REDIS_URL ?? 'redis://localhost:6379',
   OIDC_GOOGLE_ISSUER_URL: 'https://accounts.google.com',
   OIDC_GOOGLE_CLIENT_ID: 'wiring',
   OIDC_GOOGLE_CLIENT_SECRET: 'wiring',

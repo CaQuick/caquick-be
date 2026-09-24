@@ -1,6 +1,7 @@
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -12,6 +13,15 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('UserProfileService (real DB)', () => {
+  const blacklist = {
+    block: jest.fn().mockResolvedValue(undefined),
+    unblock: jest.fn().mockResolvedValue(undefined),
+    blockedReason: jest.fn().mockResolvedValue(null),
+  };
+  afterEach(() => {
+    blacklist.block.mockClear();
+    blacklist.unblock.mockClear();
+  });
   let service: UserProfileService;
   let prisma: PrismaClient;
   let s3Service: jest.Mocked<S3Service>;
@@ -25,6 +35,7 @@ describe('UserProfileService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         UserProfileService,
+        { provide: TokenBlacklistService, useValue: blacklist },
         AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
       ],
@@ -541,6 +552,8 @@ describe('UserProfileService (real DB)', () => {
       const result = await service.deleteMyAccount(account.id);
 
       expect(result).toBe(true);
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
+      expect(blacklist.block).toHaveBeenCalledWith(account.id, 'DELETED');
 
       const deletedAccount = await prisma.account.findUniqueOrThrow({
         where: { id: account.id },

@@ -25,6 +25,7 @@ import {
 } from '@/features/auth/services/credential-auth.service';
 import { TokenService } from '@/features/auth/services/token.service';
 import { AccountType } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
@@ -63,6 +64,15 @@ function auditEntryOf(mock: unknown) {
 }
 
 describe('CredentialAuthService', () => {
+  const blacklist = {
+    block: jest.fn().mockResolvedValue(undefined),
+    unblock: jest.fn().mockResolvedValue(undefined),
+    blockedReason: jest.fn().mockResolvedValue(null),
+  };
+  afterEach(() => {
+    blacklist.block.mockClear();
+    blacklist.unblock.mockClear();
+  });
   let service: CredentialAuthService;
   let credentials: jest.Mocked<IAccountCredentialRepository>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
@@ -113,6 +123,7 @@ describe('CredentialAuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CredentialAuthService,
+        { provide: TokenBlacklistService, useValue: blacklist },
         { provide: ConfigService, useValue: mockConfig },
         {
           provide: JwtService,
@@ -413,6 +424,11 @@ describe('CredentialAuthService', () => {
         expect.any(Function),
       );
       expect(refreshSessions.revokeAllRefreshSessions).not.toHaveBeenCalled();
+      // 커밋 뒤 만료 전 액세스 토큰을 막는다(P2 03) — 사유는 토큰 무효(재로그인 유도)
+      expect(blacklist.block).toHaveBeenCalledWith(
+        BigInt(10),
+        'CREDENTIAL_CHANGED',
+      );
       expect(auditEntryOf(credentials.changePassword)).toMatchObject({
         actorAccountId: BigInt(10),
         storeId: BigInt(5),
@@ -465,6 +481,7 @@ describe('CredentialAuthService', () => {
         change({ currentPassword: 'Wrong!123' }),
       ).rejects.toThrowDomain('CURRENT_PASSWORD_INVALID');
       expect(credentials.changePassword).not.toHaveBeenCalled();
+      expect(blacklist.block).not.toHaveBeenCalled();
     });
 
     it('새 비밀번호가 현재와 같으면 PASSWORD_UNCHANGED', async () => {

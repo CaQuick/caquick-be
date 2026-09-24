@@ -24,7 +24,7 @@ import {
   AuditActionType,
   AuditTargetType,
 } from '@/generated/prisma/client';
-import type { AccountRole } from '@/global/auth';
+import { type AccountRole, TokenBlacklistService } from '@/global/auth';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 export type CredentialRole = Exclude<AccountRole, 'USER'>;
@@ -55,6 +55,7 @@ export class CredentialAuthService {
     @Inject(AUDIT_LOG_REPOSITORY)
     private readonly auditLogs: IAuditLogRepository,
     private readonly clock: ClockService,
+    private readonly blacklist: TokenBlacklistService,
   ) {}
 
   async login(args: {
@@ -184,6 +185,8 @@ export class CredentialAuthService {
         userAgent: tryUserAgent(args.req),
       }),
     );
+    // 커밋 뒤 — 세션은 tx에서 끊겼고, 만료 전 액세스 토큰은 여기서 막는다(재로그인 강제)
+    await this.blacklist.block(args.accountId, 'CREDENTIAL_CHANGED');
   }
 
   private async requireSessionCredential(
