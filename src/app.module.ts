@@ -29,6 +29,7 @@ import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
 import oidcConfig from '@/config/oidc.config';
 import outboxConfig from '@/config/outbox.config';
+import rabbitmqConfig from '@/config/rabbitmq.config';
 import redisConfig from '@/config/redis.config';
 import s3Config from '@/config/s3.config';
 import { AuthModule } from '@/features/auth/auth.module';
@@ -116,6 +117,7 @@ export class AppModule implements NestModule {
             docsConfig,
             oidcConfig,
             outboxConfig,
+            rabbitmqConfig,
             redisConfig,
             s3Config,
           ],

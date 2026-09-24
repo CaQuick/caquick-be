@@ -1,3 +1,6 @@
+import type { ConfigService } from '@nestjs/config';
+
+import type { RabbitHealthIndicator } from '@/features/outbox';
 import type { HealthRepository } from '@/features/system/repositories/health.repository';
 import { HealthService } from '@/features/system/services/health.service';
 import type { RedisHealthIndicator } from '@/global/pubsub';
@@ -12,10 +15,17 @@ function indicator(name: string, ok: boolean) {
 }
 
 describe('HealthService', () => {
-  function build(mysqlUp: boolean, redisUp: boolean): HealthService {
+  function build(
+    mysqlUp: boolean,
+    redisUp: boolean,
+    role: 'api' | 'worker' = 'api',
+    rabbitUp = true,
+  ): HealthService {
     return new HealthService(
+      { getOrThrow: () => ({ role }) } as unknown as ConfigService,
       indicator('mysql', mysqlUp) as unknown as HealthRepository,
       indicator('redis', redisUp) as unknown as RedisHealthIndicator,
+      indicator('rabbitmq', rabbitUp) as unknown as RabbitHealthIndicator,
     );
   }
 
@@ -35,6 +45,21 @@ describe('HealthService', () => {
     await expect(build(mysqlUp, redisUp).ready()).resolves.toEqual({
       ok: false,
       checks,
+    });
+  });
+
+  // 브로커는 worker만 쓴다 — api의 ready는 브로커를 보지 않고, worker는 본다
+  it('api 역할은 rabbitmq를 보지 않는다', async () => {
+    await expect(build(true, true, 'api', false).ready()).resolves.toEqual({
+      ok: true,
+      checks: { mysql: 'up', redis: 'up' },
+    });
+  });
+
+  it('worker 역할은 rabbitmq까지 본다', async () => {
+    await expect(build(true, true, 'worker', false).ready()).resolves.toEqual({
+      ok: false,
+      checks: { mysql: 'up', redis: 'up', rabbitmq: 'down' },
     });
   });
 });

@@ -49,6 +49,7 @@ describe('AppController (e2e)', () => {
 
   beforeAll(async () => {
     process.env.REDIS_URL ??= 'redis://localhost:6379';
+    process.env.RABBITMQ_URL ??= 'amqp://guest:guest@localhost:5672';
     // 서명 키는 authConfig가 만든다(RS256, 미설정이면 임시 키) — 시크릿 env는 더 이상 쓰이지 않는다
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule.forRole('api')],

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import type { HealthIndicator } from '@/common/ports/health-indicator.port';
+import { type AppConfig, runsBackgroundJobs } from '@/config/app.config';
+import { RabbitHealthIndicator } from '@/features/outbox';
 import { HealthRepository } from '@/features/system/repositories/health.repository';
 import { RedisHealthIndicator } from '@/global/pubsub';
 
@@ -16,8 +19,17 @@ export interface ReadinessResult {
 export class HealthService {
   private readonly indicators: HealthIndicator[];
 
-  constructor(mysql: HealthRepository, redis: RedisHealthIndicator) {
-    this.indicators = [mysql, redis];
+  constructor(
+    config: ConfigService,
+    mysql: HealthRepository,
+    redis: RedisHealthIndicator,
+    rabbit: RabbitHealthIndicator,
+  ) {
+    // 브로커는 worker만 쓴다(api는 outbox 테이블에만 쓴다) — api의 ready가 브로커 장애로 내려가면 요청까지 잃는다
+    const role = config.getOrThrow<AppConfig>('app').role;
+    this.indicators = runsBackgroundJobs(role)
+      ? [mysql, redis, rabbit]
+      : [mysql, redis];
   }
 
   async ready(): Promise<ReadinessResult> {

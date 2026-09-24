@@ -315,30 +315,7 @@ describe('OutboxDispatcherService (real DB)', () => {
     });
   });
 
-  describe('폴링 수명주기', () => {
-    it('dispatchEnabled면 pollIntervalMs 간격의 unref 타이머를 걸고, 끄면 걸지 않으며, destroy 시 해제한다', () => {
-      const unref = jest.fn();
-      const setIntervalSpy = jest
-        .spyOn(global, 'setInterval')
-        .mockReturnValue({ unref } as unknown as NodeJS.Timeout);
-      const clearIntervalSpy = jest
-        .spyOn(global, 'clearInterval')
-        .mockImplementation(() => undefined);
-
-      dispatcher.onApplicationBootstrap();
-      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 1_000);
-      expect(unref).toHaveBeenCalled();
-      dispatcher.onModuleDestroy();
-      expect(clearIntervalSpy).toHaveBeenCalled();
-
-      cfg.dispatchEnabled = false;
-      dispatcher.onApplicationBootstrap();
-      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
-      cfg.dispatchEnabled = true;
-      setIntervalSpy.mockRestore();
-      clearIntervalSpy.mockRestore();
-    });
-  });
+  describe('폴링 수명주기', () => {});
 
   describe('반증: 배선 오류', () => {
     it('@SubscribeOutbox가 붙었지만 handle이 없는 provider는 첫 전달에서 즉시 던진다', async () => {

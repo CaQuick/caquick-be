@@ -104,7 +104,9 @@ function main(): void {
     const actual = percentOf(stat);
     const threshold = percentOf({ ...baseline, missing: [] });
     const label = CATEGORY_LABELS[category].padEnd(22, ' ');
-    const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(9);
+    const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(
+      9,
+    );
     console.log(
       `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  ` +
         `(기준 ${String(baseline.documented)}/${String(baseline.total)} = ${threshold.toFixed(1)}%, ` +

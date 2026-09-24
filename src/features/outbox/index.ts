@@ -4,6 +4,7 @@ export { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.ser
 // 테스트 헬퍼(drainOutbox)가 폴링 없이 소비를 돌리기 위해 노출한다.
 export { OutboxDispatcherService } from '@/features/outbox/services/outbox-dispatcher.service';
 export { SubscribeOutbox } from '@/features/outbox/decorators/subscribe-outbox.decorator';
+export { RabbitHealthIndicator } from '@/features/outbox/rabbitmq/rabbit-health.indicator';
 export type {
   DispatchSummary,
   OutboxConsumer,
