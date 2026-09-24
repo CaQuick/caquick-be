@@ -31,4 +31,13 @@ else
   $PM2 start "$ECOSYS" --only "backend-${IDLE_PROFILE}"
 fi
 
+# 새 worker를 띄우되 기존 worker는 아직 멈추지 않는다 — 새 worker의 /health/ready가 통과한 뒤 validate_service가
+# 반대편을 멈춘다(그전에 멈추면 새 worker 기동 실패 시 디스패처·크론이 비게 된다). 짧은 겹침은 디스패처의
+# 파티션 순차 처리·소비자 멱등으로 흡수한다.
+if $PM2 list | grep -q "worker-${IDLE_PROFILE}"; then
+  $PM2 reload "worker-${IDLE_PROFILE}" --update-env
+else
+  $PM2 start "$ECOSYS" --only "worker-${IDLE_PROFILE}"
+fi
+
 $PM2 save

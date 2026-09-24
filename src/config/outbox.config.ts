@@ -1,7 +1,9 @@
 import { registerAs } from '@nestjs/config';
 
+import { resolveAppRole, runsBackgroundJobs } from '@/config/app.config';
+
 export interface OutboxConfig {
-  /** 폴링 디스패처 가동 여부. 테스트·일회성 스크립트는 끄고 drainOutbox()로 소비한다. */
+  /** 폴링 디스패처 가동 여부. 기본은 역할에서 유도(worker만 켠다). 테스트·일회성 스크립트는 env로 끄고 drainOutbox()로 소비한다. */
   dispatchEnabled: boolean;
   pollIntervalMs: number;
   /** 한 틱에 읽는 기한 도래 이벤트 수 */
@@ -23,9 +25,15 @@ function positiveInt(name: string, fallback: number): number {
   return value;
 }
 
+/** env가 있으면 "false"만 끈다(기존 의미). 없으면 역할 — api가 디스패처를 돌리면 worker와 같은 이벤트를 두 번 전달한다. */
+function dispatchEnabled(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase();
+  if (value) return value !== 'false';
+  return runsBackgroundJobs(resolveAppRole());
+}
+
 export default registerAs('outbox', (): OutboxConfig => ({
-  dispatchEnabled:
-    process.env.OUTBOX_DISPATCH_ENABLED?.trim().toLowerCase() !== 'false',
+  dispatchEnabled: dispatchEnabled(process.env.OUTBOX_DISPATCH_ENABLED),
   pollIntervalMs: positiveInt('OUTBOX_POLL_INTERVAL_MS', 1_000),
   batchSize: positiveInt('OUTBOX_BATCH_SIZE', 100),
   maxAttempts: positiveInt('OUTBOX_MAX_ATTEMPTS', 5),

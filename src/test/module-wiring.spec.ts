@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { GraphQLModule } from '@nestjs/graphql';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { PubSub } from 'graphql-subscriptions';
 
@@ -34,17 +36,42 @@ describe('모듈 배선 (AppModule compile)', () => {
     }
   });
 
-  it('모든 feature 모듈의 provider가 resolve된다', async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] })
-      // 외부 연결은 배선 검사와 무관 — DB·Redis 없이 compile만 한다
-      .overrideProvider(PrismaService)
-      .useValue({ $connect: jest.fn(), $disconnect: jest.fn() })
-      .overrideProvider(PUB_SUB)
-      .useValue(Object.assign(new PubSub(), { close: () => Promise.resolve() }))
-      .compile();
-    expect(module).toBeDefined();
-    await module.close();
-  });
+  async function compileRole(role: 'api' | 'ws' | 'worker') {
+    return (
+      Test.createTestingModule({ imports: [AppModule.forRole(role)] })
+        // 외부 연결은 배선 검사와 무관 — DB·Redis 없이 compile만 한다
+        .overrideProvider(PrismaService)
+        .useValue({ $connect: jest.fn(), $disconnect: jest.fn() })
+        .overrideProvider(PUB_SUB)
+        .useValue(
+          Object.assign(new PubSub(), { close: () => Promise.resolve() }),
+        )
+        .compile()
+    );
+  }
+
+  // 역할 전수 — 어느 역할이든 모든 provider가 resolve되고, 역할에 없는 책임(GraphQL·크론)은 실리지 않는다.
+  it.each([
+    ['api', true, false],
+    ['ws', true, false],
+    ['worker', false, true],
+  ] as const)(
+    '%s 역할: provider 전부 resolve, graphql=%s, schedule=%s',
+    async (role, graphql, schedule) => {
+      const module = await compileRole(role);
+      const has = (token: unknown) => {
+        try {
+          module.get(token as never, { strict: false });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      expect(has(GraphQLModule)).toBe(graphql);
+      expect(has(SchedulerRegistry)).toBe(schedule);
+      await module.close();
+    },
+  );
 
   it('반증: import하지 않은 모듈의 provider에 의존하면 compile이 실패한다', async () => {
     @Injectable()

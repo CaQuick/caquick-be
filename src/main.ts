@@ -1,9 +1,15 @@
 import 'reflect-metadata';
+// .env를 가장 먼저 — 아래 import들(역할 선택·로거)이 env를 읽는다
+import '@/config/preload-env';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  type INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -12,6 +18,7 @@ import cookieParser from 'cookie-parser';
 import type { Application as ExpressApplication } from 'express';
 
 import { AppModule } from '@/app.module';
+import { resolveAppRole, servesHttpApi } from '@/config/app.config';
 import type { AuthConfig } from '@/config/auth.config';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
@@ -24,7 +31,10 @@ import { HttpLoggingInterceptor } from '@/global/interceptors/http-logging.inter
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const role = resolveAppRole();
+  const app = await NestFactory.create(AppModule.forRole(role), {
+    bufferLogs: true,
+  });
   app.enableShutdownHooks();
 
   const pkg = JSON.parse(
@@ -68,8 +78,8 @@ async function bootstrap(): Promise<void> {
   const logger = app.get(CustomLoggerService);
   const httpAdapterHost = app.get(HttpAdapterHost);
 
-  // 커스텀 로거 설정
-  // app.useLogger(logger);
+  // Nest 내부 로그도 Winston을 지나야 컨테이너 로그가 한 형식(JSON)·한 라벨(role)이 된다(P2 E8)
+  app.useLogger(logger);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -103,12 +113,23 @@ async function bootstrap(): Promise<void> {
     ),
   );
 
-  // 임시 해제
-  // if (!isProd) {
+  if (servesHttpApi(role)) setupSwagger(app, pkg.version);
+
+  const portFromEnv = configService.get<string>('PORT');
+  const port = Number.isFinite(Number(portFromEnv))
+    ? Number(portFromEnv)
+    : 4000;
+
+  await app.listen(port);
+  logger.log(`caquick-be 기동 — role=${role} port=${port}`);
+}
+
+/** REST 문서는 요청을 받는 역할에만 — worker는 문서를 낼 라우트가 없다. */
+function setupSwagger(app: INestApplication, version?: string): void {
   const documentConfig = new DocumentBuilder()
     .setTitle('CaQuick REST API')
     .setDescription('CaQuick REST API 문서')
-    .setVersion(pkg.version ?? '0.0.0')
+    .setVersion(version ?? '0.0.0')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'access-token',
@@ -124,14 +145,6 @@ async function bootstrap(): Promise<void> {
   SwaggerModule.setup('rest-docs', app, document, {
     swaggerOptions: { persistAuthorization: true },
   });
-  // }
-
-  const portFromEnv = configService.get<string>('PORT');
-  const port = Number.isFinite(Number(portFromEnv))
-    ? Number(portFromEnv)
-    : 4000;
-
-  await app.listen(port);
 }
 
 bootstrap();

@@ -13,6 +13,8 @@ const DEFAULT_EXCLUDE_PATHS = new Set<string>();
  */
 export const RAW_RESPONSE_PATHS: ReadonlySet<string> = new Set([
   '/health',
+  '/health/live',
+  '/health/ready',
   '/health/profiles',
   '/.well-known/jwks.json',
 ]);
