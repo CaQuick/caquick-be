@@ -39,8 +39,11 @@ describe('역할별 HTTP 노출 (real app)', () => {
     }
   });
 
-  async function boot(role: 'api' | 'worker'): Promise<INestApplication<App>> {
-    process.env.APP_ROLE = role;
+  async function boot(
+    role: 'api' | 'worker',
+    envRole: 'api' | 'worker' = role,
+  ): Promise<INestApplication<App>> {
+    process.env.APP_ROLE = envRole;
     const module = await Test.createTestingModule({
       imports: [AppModule.forRole(role)],
     })
@@ -88,6 +91,35 @@ describe('역할별 HTTP 노출 (real app)', () => {
       expect((res.body as { errorCode?: string }).errorCode).toBe(
         'ROUTE_NOT_FOUND',
       );
+    });
+  });
+
+  // configure()의 미들웨어 게이트가 env를 다시 읽으면 imports 배선(forRole 인자)과 어긋난다 — 인자가 한 값으로 둘 다 정한다
+  describe('forRole 인자와 env가 다르면 인자가 이긴다', () => {
+    it('forRole(worker)·env api: feature 라우트는 404, 헬스는 200', async () => {
+      const app = await boot('worker', 'api');
+      try {
+        await request(app.getHttpServer()).get('/health/live').expect(200);
+        const res = await request(app.getHttpServer())
+          .get('/auth/oidc/google/start')
+          .expect(404);
+        expect((res.body as { errorCode?: string }).errorCode).toBe(
+          'ROUTE_NOT_FOUND',
+        );
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('forRole(api)·env worker: JWKS가 열린다', async () => {
+      const app = await boot('api', 'worker');
+      try {
+        await request(app.getHttpServer())
+          .get('/.well-known/jwks.json')
+          .expect(200);
+      } finally {
+        await app.close();
+      }
     });
   });
 

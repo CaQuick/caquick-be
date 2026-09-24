@@ -16,6 +16,7 @@ import {
   resolveUserId,
   setResponseTimeHeader,
 } from '@/common/utils/request-context';
+import { normalizeRoutePath } from '@/common/utils/route-path';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { LogContext } from '@/global/types/log.type';
 
@@ -36,17 +37,25 @@ export class HttpLoggingInterceptor implements NestInterceptor {
     const { requestId, startTime } = ensureRequestTracking(req, res);
     const userId = resolveUserId(req);
     const requestMeta = buildHttpRequestMeta(req);
+    // compose·Prometheus가 몇 초마다 두드리는 경로 — 정상 응답은 줄마다 Loki에 실리면 상시 소음이라 tx 로그를 생략(헤더는 유지).
+    // 실패(4xx·5xx, 예: ready 503)는 남긴다 — 무엇이 죽었는지 로그로 봐야 한다.
+    const probe = isProbePath(req.path);
 
     return next.handle().pipe(
       tap({
         next: () => {
           const duration = calculateDuration(startTime);
 
+          const statusCode = res.statusCode || HttpStatus.OK;
+          if (probe && statusCode < 400) {
+            setResponseTimeHeader(res, duration);
+            return;
+          }
           this.logger.tx({
             userId,
             requestId,
             request: requestMeta,
-            response: { statusCode: res.statusCode || HttpStatus.OK },
+            response: { statusCode },
             processingTimeInMs: duration,
             context: LogContext.REST,
           });
@@ -56,4 +65,14 @@ export class HttpLoggingInterceptor implements NestInterceptor {
       }),
     );
   }
+}
+
+/** /health*·/metrics — 프로브 전용 경로(대소문자·끝 슬래시 무시 — 라우팅과 같은 기준) */
+export function isProbePath(path: string): boolean {
+  const normalized = normalizeRoutePath(path);
+  return (
+    normalized === '/health' ||
+    normalized.startsWith('/health/') ||
+    normalized === '/metrics'
+  );
 }

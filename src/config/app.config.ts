@@ -1,5 +1,7 @@
 import { registerAs } from '@nestjs/config';
 
+import { normalizeRoutePath } from '@/common/utils/route-path';
+
 export const APP_ROLES = ['api', 'ws', 'worker'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
@@ -21,6 +23,14 @@ export function resolveAppRole(): AppRole {
   return parseAppRole(process.env.APP_ROLE);
 }
 
+/** 라벨 전용(로거 defaultMeta 등) — 검증하지 않는다. 잘못된 값은 main.ts의 resolveAppRole()이 bootstrap 안에서 던져 부팅 경보를 탄다. */
+export function appRoleLabel(): string {
+  return process.env.APP_ROLE?.trim().toLowerCase() || 'api';
+}
+
+/** AppModule.forRole(role)이 받은 역할을 모듈 안에 봉인하는 토큰 — configure()가 env를 다시 읽어 imports 배선과 어긋나지 않게. */
+export const APP_ROLE_TOKEN = Symbol('APP_ROLE');
+
 /** api·ws: HTTP·GraphQL(subscription 포함)·문서. ws는 지금 api와 같은 구성이고 분리는 라우팅으로 한다. */
 export function servesHttpApi(role: AppRole): boolean {
   return role !== 'worker';
@@ -38,8 +48,9 @@ export function runsBackgroundJobs(role: AppRole): boolean {
 export const WORKER_ROUTE_PREFIXES: readonly string[] = ['/health', '/metrics'];
 
 export function isWorkerRouteAllowed(path: string): boolean {
+  const normalized = normalizeRoutePath(path);
   return WORKER_ROUTE_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   );
 }
 

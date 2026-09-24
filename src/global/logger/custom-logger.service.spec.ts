@@ -60,6 +60,100 @@ describe('CustomLoggerService', () => {
     });
   });
 
+  // useLogger 뒤 Nest Logger.log(msg, 'Ctx') / error(msg, stack, 'Ctx')의 꼬리 인자 — 전부 optionalParams로 밀리면 출처(context)를 잃는다
+  describe('Nest 꼬리 인자(context·stack)', () => {
+    it('마지막 문자열 인자는 context로 싣는다', () => {
+      service.log('hello', 'RoutesResolver');
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        context: 'RoutesResolver',
+        message: 'hello',
+        optionalParams: [],
+      });
+    });
+
+    it('error(message, stack, context)는 stack과 context를 각각 싣는다', () => {
+      service.error('fail', 'Error: fail\n    at x (a.ts:1:1)', 'Ctx');
+      expect(mockLogger.error).toHaveBeenCalledWith({
+        context: 'Ctx',
+        message: 'fail',
+        stack: 'Error: fail\n    at x (a.ts:1:1)',
+        optionalParams: [],
+      });
+    });
+
+    it('error(message, stack)처럼 문자열이 하나뿐이고 스택 모양이면 context가 아니라 stack이다', () => {
+      service.error('fail', 'Error: fail\n    at x (a.ts:1:1)');
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: LogContext.APP,
+          stack: 'Error: fail\n    at x (a.ts:1:1)',
+        }),
+      );
+    });
+
+    // 조인 키(eventId 등)가 message 아래·optionalParams[0] 아래로 흩어지지 않게 — plain object 하나는 최상위 필드
+    it('꼬리 plain object 하나는 최상위 필드로 펼친다', () => {
+      service.warn('slow', { ms: 120, eventId: 'e1' }, 'Ctx');
+      expect(mockLogger.warn).toHaveBeenCalledWith({
+        context: 'Ctx',
+        message: 'slow',
+        ms: 120,
+        eventId: 'e1',
+        optionalParams: [],
+      });
+    });
+
+    it('반증: 문자열 인자가 없으면 context는 App이고 객체는 그대로 펼친다', () => {
+      service.log('hello', { a: 1 });
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        context: LogContext.APP,
+        message: 'hello',
+        a: 1,
+        optionalParams: [],
+      });
+    });
+
+    it('반증: 골격 키(message·level·context…)는 덮지 않고 optionalParams에 남긴다', () => {
+      service.log('hello', { message: 'x', level: 'error', a: 1 });
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        context: LogContext.APP,
+        message: 'hello',
+        a: 1,
+        optionalParams: [{ message: 'x', level: 'error' }],
+      });
+    });
+
+    it('반증: 객체가 둘 이상·배열·Error면 펼치지 않는다', () => {
+      const err = new Error('boom');
+      service.log('hello', { a: 1 }, { b: 2 });
+      service.log('hello', [1, 2]);
+      service.log('hello', err);
+      expect(mockLogger.info).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ optionalParams: [{ a: 1 }, { b: 2 }] }),
+      );
+      expect(mockLogger.info).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ optionalParams: [[1, 2]] }),
+      );
+      expect(mockLogger.info).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({
+          optionalParams: [{ message: 'boom', stack: err.stack }],
+        }),
+      );
+    });
+
+    it('error(message, undefined, context) — Nest가 남기는 빈 stack 자리는 버린다', () => {
+      service.error('fail', undefined, 'Ctx');
+      expect(mockLogger.error).toHaveBeenCalledWith({
+        context: 'Ctx',
+        message: 'fail',
+        optionalParams: [],
+      });
+    });
+  });
+
   describe('메시지 정규화', () => {
     it('Error 객체를 message + stack으로 변환한다', () => {
       const err = new Error('oops');

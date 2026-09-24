@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import { ClockService } from '@/common/providers/clock.service';
 import { IdGenerator } from '@/common/providers/id-generator.service';
 import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
@@ -49,12 +51,22 @@ describe('OutboxPublisher (real DB)', () => {
   };
 
   it('본 조작 tx 안에 PENDING 이벤트를 적재하고 ip/ua는 요청 컨텍스트(ALS)에서 채운다', async () => {
+    const log = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
     const { eventId } = await requestContext.run(
       { clientIp: '10.0.0.1', userAgent: 'jest-ua' },
       () => prisma.$transaction((tx) => publisher.publish(tx, input)),
     );
 
     expect(eventId).toBe(uuidAt(1));
+    // 조인 키 — 요청 로그(requestId)와 worker 소비 로그(eventId)를 잇는 발행 줄(P2 E8)
+    expect(log).toHaveBeenCalledWith('outbox 적재(tx 커밋 전)', {
+      eventId: uuidAt(1),
+      eventType: 'order.status_changed',
+      aggregate: 'order#42',
+    });
+    log.mockRestore();
     const row = await prisma.outbox.findUniqueOrThrow({
       where: { event_id: uuidAt(1) },
     });

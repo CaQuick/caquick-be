@@ -34,8 +34,10 @@ import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 async function bootstrap(): Promise<void> {
   const role = resolveAppRole();
+  // abortOnError:false — 기본값이면 DI·config 단계 실패를 Nest가 process.exit(1)로 끝내 아래 catch(부팅 경보·stderr 봉투)에 닿지 않는다
   const app = await NestFactory.create(AppModule.forRole(role), {
     bufferLogs: true,
+    abortOnError: false,
   });
   app.enableShutdownHooks();
 

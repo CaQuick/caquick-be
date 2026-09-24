@@ -2,7 +2,10 @@ import { ConfigService } from '@nestjs/config';
 
 import { ClockService } from '@/common/providers/clock.service';
 import type { AlertingConfig } from '@/config/alerting.config';
-import { AlertService } from '@/global/alerting/alert.service';
+import {
+  ALERT_RETRY_DELAY_MS,
+  AlertService,
+} from '@/global/alerting/alert.service';
 import type { CustomLoggerService } from '@/global/logger/custom-logger.service';
 
 describe('AlertService', () => {
@@ -88,18 +91,75 @@ describe('AlertService', () => {
     });
   });
 
-  it('반증: 전송 실패는 failed로 돌려줄 뿐 던지지 않고, 실패도 억제 창을 연다', async () => {
-    const { service, transport } = build(
-      {},
-      jest.fn().mockResolvedValue(false),
-    );
+  it('반증: 전송 실패는 failed로 돌려줄 뿐 던지지 않고, 실패도 억제 창을 열되 1회는 뒤늦게 재전송한다', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        {},
+        jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
+      );
 
-    await expect(service.notify({ level: 'error', title: 't' })).resolves.toBe(
-      'failed',
-    );
-    await expect(service.notify({ level: 'error', title: 't' })).resolves.toBe(
-      'suppressed',
-    );
-    expect(transport).toHaveBeenCalledTimes(1);
+      await expect(
+        service.notify({ level: 'error', title: 't' }),
+      ).resolves.toBe('failed');
+      await expect(
+        service.notify({ level: 'error', title: 't' }),
+      ).resolves.toBe('suppressed');
+      expect(transport).toHaveBeenCalledTimes(1);
+
+      // 일회성 사건의 유일한 경보가 잠깐의 웹훅 장애로 사라지지 않게 — 호출자는 기다리지 않는다
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(2);
+      expect(transport).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ title: 't' }),
+        expect.any(Object),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('반증: 재전송 전에 같은 키로 더 새 시도가 있었으면 묵은 경보는 재전송하지 않는다(억제 창 < 재전송 간격)', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        { dedupeWindowMs: 1_000 },
+        jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      );
+      await expect(
+        service.notify({ level: 'error', title: 't', detail: '옛' }),
+      ).resolves.toBe('failed');
+
+      nowMs += 2_000; // 억제 창이 지나 새 시도가 성공한다
+      await expect(
+        service.notify({ level: 'error', title: 't', detail: '새' }),
+      ).resolves.toBe('sent');
+      expect(transport).toHaveBeenCalledTimes(2);
+
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(2); // 옛 경보의 재전송은 건너뛴다
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('반증: 재전송도 실패하면 경고 로그만 남기고 끝난다(억제 창이 지난 다음 발생 때 다시)', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        {},
+        jest.fn().mockResolvedValue(false),
+      );
+      await service.notify({ level: 'error', title: 't' });
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(2);
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[alert:error] t — 재전송도 실패',
+        expect.any(Object),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
