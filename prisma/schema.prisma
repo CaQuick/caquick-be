@@ -155,6 +155,9 @@ model Account {
   id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
   account_type AccountType
   status       AccountStatus @default(ACTIVE)
+  // 정지·복구가 기록하는 상태 변경 시각. 블랙리스트 버전으로 쓴다 — updated_at은 프로필 수정·OIDC 로그인 같은
+  // 무관한 쓰기로도 올라가 정지·복구의 선후를 뒤집을 수 있다(P2 03).
+  status_changed_at DateTime? @db.DateTime(3)
 
   // 이메일은 계정 식별자가 아니다. 계정 식별은 (provider, provider_subject) 로만 하고
   // provider 간 계정 통합을 하지 않기로 했으므로, 같은 사람이 구글/카카오를 모두 쓰면

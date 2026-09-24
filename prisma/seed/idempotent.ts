@@ -42,7 +42,14 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { reporter_account_id: { in: userIds } },
-          { review: { OR: [{ account_id: { in: userIds } }, { store_id: { in: storeIds } }] } },
+          {
+            review: {
+              OR: [
+                { account_id: { in: userIds } },
+                { store_id: { in: storeIds } },
+              ],
+            },
+          },
           { review_comment: { account_id: { in: userIds } } },
         ],
       },

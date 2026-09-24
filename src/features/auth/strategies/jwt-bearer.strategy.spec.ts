@@ -49,6 +49,8 @@ function buildStrategy(deps: {
   return instance;
 }
 
+const clock = new ClockService();
+
 describe('JwtBearerStrategy (real DB + real Redis)', () => {
   let strategy: JwtBearerStrategy;
   let blacklist: TokenBlacklistService;
@@ -137,14 +139,14 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     });
   });
 
-  // 상태(정지·탈퇴)는 계정 오류, 자격증명 변경은 토큰 무효(FE가 refresh를 시도하게)
+  // 정지는 계정 오류(403), 탈퇴는 DB 경로와 같은 "없음"(401), 자격증명 변경은 토큰 무효(401 — FE가 refresh를 시도하게)
   describe('블랙리스트', () => {
     const AT = new Date(NOW * 1000);
     const LATER = new Date(NOW * 1000 + 1_000);
 
     it.each([
       ['SUSPENDED', 'ACCOUNT_NOT_ACTIVE'],
-      ['DELETED', 'ACCOUNT_NOT_ACTIVE'],
+      ['DELETED', 'SESSION_ACCOUNT_MISSING'],
     ] as const)('%s → %s', async (reason, code) => {
       await blacklist.blockStatus(BigInt(42), reason, AT);
 
@@ -242,6 +244,7 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
         deadRedis,
         { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
         alerts as unknown as AlertService,
+        clock,
       );
       fallbackStrategy = buildStrategy({
         accounts,
@@ -296,15 +299,45 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
       ).resolves.toMatchObject({ accountId: sub });
     });
 
-    it('정지 계정은 DB 값으로 막힌다', async () => {
-      const account = await createAccount(prisma, {
-        account_type: 'USER',
-        status: 'SUSPENDED',
+    // Redis 경로와 같은 입력 표 — 어느 경로를 타든 응답 코드가 같아야 한다
+    it.each([
+      ['정지', { status: 'SUSPENDED' as const }, 'ACCOUNT_NOT_ACTIVE'],
+      ['탈퇴', { deleted_at: new Date(NOW * 1000) }, 'SESSION_ACCOUNT_MISSING'],
+    ] as const)(
+      '%s 계정은 DB 값으로 막힌다 → %s',
+      async (_, overrides, code) => {
+        const account = await createAccount(prisma, {
+          account_type: 'USER',
+          ...overrides,
+        });
+
+        await expect(
+          fallbackStrategy.validate(payload(account.id.toString())),
+        ).rejects.toThrowDomain(code);
+      },
+    );
+
+    it('연결이 ready가 아니면(재접속 중) 조회를 기다리지 않고 바로 DB로 간다', async () => {
+      const mget = jest.fn();
+      const reconnecting = buildStrategy({
+        accounts,
+        blacklist: new TokenBlacklistService(
+          { status: 'reconnecting', mget } as unknown as Redis,
+          { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+          alerts as unknown as AlertService,
+          clock,
+        ),
+        alerts: alerts as unknown as AlertService,
       });
+      const account = await createAccount(prisma, { account_type: 'USER' });
 
       await expect(
-        fallbackStrategy.validate(payload(account.id.toString())),
-      ).rejects.toThrowDomain('ACCOUNT_NOT_ACTIVE');
+        reconnecting.validate(payload(account.id.toString())),
+      ).resolves.toMatchObject({ accountId: account.id.toString() });
+      expect(mget).not.toHaveBeenCalled();
+      expect(alerts.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'auth-blacklist-fallback' }),
+      );
     });
 
     it('없는 계정은 SESSION_ACCOUNT_MISSING', async () => {

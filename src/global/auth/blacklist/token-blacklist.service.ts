@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type Redis from 'ioredis';
 
+import { ClockService } from '@/common/providers/clock.service';
 import type { AuthConfig } from '@/config/auth.config';
 import { AlertService } from '@/global/alerting';
 import { REDIS_CLIENT } from '@/global/redis';
@@ -12,7 +13,7 @@ export type StatusBlockReason = 'SUSPENDED' | 'DELETED';
 type AccountStatusValue = StatusBlockReason | 'ACTIVE';
 
 export interface BlacklistLookup {
-  /** 재구축 표식이 있는가. 없으면(Redis 초기화·flush) 목록이 불완전하므로 호출자는 DB로 폴백해야 한다. */
+  /** 재구축 표식이 있는가. 없으면(Redis 초기화·flush·쓰기 실패 직후) 목록이 불완전하므로 호출자는 DB로 폴백해야 한다. */
   ready: boolean;
   status: StatusBlockReason | null;
   /** 이 시각(초, JWT iat와 같은 정밀도) 전에 발급된 토큰은 무효. 없으면 null. */
@@ -23,6 +24,8 @@ export interface BlacklistLookup {
 const STATUS_PREFIX = 'auth:blk:st:';
 const CREDENTIAL_PREFIX = 'auth:blk:cr:';
 export const STATUS_KEY_PATTERN = `${STATUS_PREFIX}*`;
+/** SCAN 한 페이지 크기(힌트). spec이 이보다 많은 키로 커서 순회를 고정한다. */
+export const STATUS_SCAN_PAGE = 100;
 /** 목록이 완전하다는 표식. worker의 재구축이 임대처럼 갱신한다 — worker가 죽거나 Redis가 비면 만료돼 전략이 DB로 폴백한다. */
 export const BLACKLIST_READY_KEY = 'auth:blk:ready';
 /** 표식 임대 시간. 재구축 주기(60초)의 3배 — 재구축을 연속으로 놓쳐야 폴백으로 돌아간다(주기와의 관계는 재구축 spec이 고정). */
@@ -49,10 +52,10 @@ end
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
 return 1`;
 
-/** 세대가 스냅샷 때와 같을 때만 표식을 세운다(원자적) — 그 사이 실패한 훅이 있었으면 빠진 키를 활성으로 믿게 되므로. */
+/** 세대 키가 없거나(빈 Redis — 재시작이 끼었다) 스냅샷 때와 다르면 세우지 않는다(원자적). */
 const MARK_READY_IF_GENERATION = `
-local gen = redis.call('GET', KEYS[2]) or '0'
-if gen ~= ARGV[1] then return 0 end
+local gen = redis.call('GET', KEYS[2])
+if not gen or gen ~= ARGV[1] then return 0 end
 redis.call('SET', KEYS[1], '1', 'EX', ARGV[2])
 return 1`;
 
@@ -65,11 +68,14 @@ return 1`;
 @Injectable()
 export class TokenBlacklistService {
   private readonly logger = new Logger(TokenBlacklistService.name);
+  /** 표식 제거까지 실패한 뒤 이 시각까지 이 프로세스의 조회는 ready=false(DB 폴백). 다른 프로세스는 표식 임대 만료로 수렴한다. */
+  private degradedUntilMs = 0;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService,
     private readonly alerts: AlertService,
+    private readonly clock: ClockService,
   ) {}
 
   /** 정지·탈퇴. changedAt = DB에 기록한 상태 변경 시각. 도메인 트랜잭션이 커밋된 뒤에 부른다. false = 쓰기 실패. */
@@ -103,6 +109,18 @@ export class TokenBlacklistService {
 
   /** 표식·상태·cutoff를 한 번에 읽는다(MGET). 실패는 그대로 던진다. */
   async lookup(accountId: bigint): Promise<BlacklistLookup> {
+    // 연결 전·재접속 중이면 오프라인 큐에서 commandTimeout(1초)까지 기다린다 — 인증 경로라 기다리지 않고 바로 폴백
+    if (this.redis.status !== 'ready') {
+      throw new Error(`Redis 연결 상태 ${this.redis.status} — 즉시 폴백`);
+    }
+    if (this.clock.nowMs() < this.degradedUntilMs) {
+      // 표식 제거를 다시 시도해 성공하면 열화를 풀고, 아니면 이 프로세스는 계속 DB로
+      if (await this.clearReady()) {
+        this.degradedUntilMs = 0;
+      } else {
+        return { ready: false, status: null, credentialCutoffSec: null };
+      }
+    }
     const [ready, status, cutoff] = await this.redis.mget(
       BLACKLIST_READY_KEY,
       `${STATUS_PREFIX}${accountId}`,
@@ -125,7 +143,7 @@ export class TokenBlacklistService {
         'MATCH',
         STATUS_KEY_PATTERN,
         'COUNT',
-        200,
+        STATUS_SCAN_PAGE,
       );
       cursor = next;
       if (keys.length === 0) continue;
@@ -139,12 +157,13 @@ export class TokenBlacklistService {
     return ids;
   }
 
-  /** 재구축이 DB 스냅샷을 뜨기 전에 읽는 쓰기 실패 세대. 실패는 던진다. */
+  /** 재구축이 DB 스냅샷을 뜨기 전에 읽는 쓰기 실패 세대. 키를 만들어 둔다 — 빈 Redis(재시작)의 "없음"과 세대 0을 구분하기 위해. 실패는 던진다. */
   async generation(): Promise<string> {
+    await this.redis.set(DIRTY_KEY, '0', 'NX');
     return (await this.redis.get(DIRTY_KEY)) ?? '0';
   }
 
-  /** 재구축이 끝난 뒤. 스냅샷 이후 쓰기 실패가 끼어들었으면(세대 변화) 세우지 않고 false. 임대라 주기마다 갱신해야 한다. */
+  /** 재구축이 끝난 뒤. 스냅샷 이후 쓰기 실패가 끼어들었거나(세대 변화) Redis가 비었으면 세우지 않고 false. 임대라 주기마다 갱신해야 한다. */
   async markReady(generation: string): Promise<boolean> {
     const result = await this.redis.eval(
       MARK_READY_IF_GENERATION,
@@ -199,25 +218,37 @@ export class TokenBlacklistService {
       return true;
     } catch (error) {
       const detail = errorMessage(error);
-      this.logger.warn(
-        `블랙리스트 등록 실패(${what}) — 표식을 지워 DB 폴백, 재구축이 메운다: ${detail}`,
-      );
       void this.alerts.notify({
         level: 'warn',
         title: 'Redis 블랙리스트 등록 실패 — 계정 재조회로 폴백',
         key: 'auth-blacklist-write',
         detail: `${what}: ${detail}`,
       });
-      // 빠진 키를 "활성"으로 믿지 않게: 세대를 올리고(진행 중인 재구축이 표식을 못 세우게) 표식을 지운다(즉시 폴백).
-      try {
-        await this.redis
-          .multi()
-          .incr(DIRTY_KEY)
-          .del(BLACKLIST_READY_KEY)
-          .exec();
-      } catch {
-        // Redis가 통째로 죽은 것 — 조회도 실패해 어차피 폴백
+      // 빠진 키를 "활성"으로 믿지 않게 표식을 지운다. 단독 DEL이어야 한다 — 쓰기만 거부되는 상태(OOM+noeviction·READONLY·
+      // MISCONF)에서 DEL은 통과하지만 MULTI로 묶으면 EXECABORT로 같이 버려진다. 그마저 실패하면 이 프로세스는 임대 시간 동안 스스로 폴백.
+      const cleared = await this.clearReady();
+      if (!cleared) {
+        this.degradedUntilMs =
+          this.clock.nowMs() + BLACKLIST_READY_TTL_SECONDS * 1000;
       }
+      this.logger.warn(
+        `블랙리스트 등록 실패(${what}) — 표식 ${cleared ? '제거' : '제거 실패, 이 프로세스는 DB 폴백'}, 재구축이 메운다: ${detail}`,
+      );
+      // 세대를 올려 진행 중인 재구축이 스냅샷 전 세대로 표식을 세우지 못하게. 실패해도 무방 — 쓰기가 막힌 동안은 markReady도 실패한다
+      try {
+        await this.redis.incr(DIRTY_KEY);
+      } catch {
+        // 위와 같은 이유로 삼킨다
+      }
+      return false;
+    }
+  }
+
+  private async clearReady(): Promise<boolean> {
+    try {
+      await this.redis.del(BLACKLIST_READY_KEY);
+      return true;
+    } catch {
       return false;
     }
   }

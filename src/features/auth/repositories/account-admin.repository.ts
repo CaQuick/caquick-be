@@ -445,7 +445,7 @@ export class AccountAdminRepository {
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.account.updateMany({
         where: { id: args.accountId, status: args.from, ...activeWhere },
-        data: { status: args.to, updated_at: now },
+        data: { status: args.to, status_changed_at: now, updated_at: now },
       });
       if (updated.count === 0) {
         const current = await tx.account.findFirst({

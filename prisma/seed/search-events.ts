@@ -6,9 +6,9 @@
  *   기존 스냅샷은 시드 데이터가 아니므로 보존한다(릴리즈 리뷰 반영).
  *   순위 변동 UP/DOWN/SAME/NEW가 모두 보이도록 구성.
  */
-import type { PrismaClient } from '@/generated/prisma/client';
-
 import type { SeededUser } from './users';
+
+import type { PrismaClient } from '@/generated/prisma/client';
 
 const HOUR_MS = 60 * 60 * 1000;
 

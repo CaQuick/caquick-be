@@ -549,17 +549,17 @@ describe('UserProfileService (real DB)', () => {
       const result = await service.deleteMyAccount(account.id);
 
       expect(result).toBe(true);
-      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
-      expect(blacklist.blockStatus).toHaveBeenCalledWith(
-        account.id,
-        'DELETED',
-        expect.any(Date),
-      );
 
       const deletedAccount = await prisma.account.findUniqueOrThrow({
         where: { id: account.id },
       });
       expect(deletedAccount.deleted_at).toBeInstanceOf(Date);
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03). 버전 = DB에 기록한 탈퇴 시각
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        account.id,
+        'DELETED',
+        deletedAccount.deleted_at,
+      );
       expect(deletedAccount.email).toBeNull();
 
       const deletedProfile = await prisma.userProfile.findUniqueOrThrow({

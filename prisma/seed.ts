@@ -9,8 +9,6 @@
  * 발급된 테스트 accountId가 콘솔에 출력되며, GraphQL Playground에서 dev 토큰
  * 발급 헬퍼(POST /auth/dev/issue-token)와 함께 사용한다.
  */
-import { PrismaClient } from '@/generated/prisma/client';
-import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
 
 import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
@@ -27,6 +25,9 @@ import { seedSearchHistory } from './seed/search-history';
 import { seedStores } from './seed/stores';
 import { seedUsers } from './seed/users';
 import { seedWishlist } from './seed/wishlist';
+
+import { PrismaClient } from '@/generated/prisma/client';
+import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
 
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {

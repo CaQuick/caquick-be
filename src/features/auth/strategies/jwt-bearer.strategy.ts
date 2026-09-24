@@ -81,7 +81,12 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     if (lookup.status !== null) {
-      throw new DomainException('ACCOUNT_NOT_ACTIVE');
+      // 탈퇴는 DB 경로(soft-delete 필터에 걸려 "없음")와 같은 코드 — Redis를 타든 안 타든 응답이 같아야 한다
+      throw new DomainException(
+        lookup.status === 'DELETED'
+          ? 'SESSION_ACCOUNT_MISSING'
+          : 'ACCOUNT_NOT_ACTIVE',
+      );
     }
     // iat와 cutoff 둘 다 초 단위 — 변경 전에 발급된 토큰만 무효
     if (

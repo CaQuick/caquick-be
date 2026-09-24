@@ -25,6 +25,8 @@ export class BlacklistRebuildService
 {
   private readonly logger = new Logger(BlacklistRebuildService.name);
   private timer: NodeJS.Timeout | undefined;
+  /** Redis·DB가 느릴 때 주기 실행이 겹쳐 쌓이지 않게 — 앞 실행이 끝나기 전의 틱은 건너뛴다. */
+  private running = false;
 
   constructor(
     private readonly repo: BlacklistRebuildRepository,
@@ -118,17 +120,28 @@ export class BlacklistRebuildService
   }
 
   private async rebuildSafely(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
     try {
       const result = await this.rebuild();
       this.logger.log(
         `블랙리스트 재구축 — 정지 ${result.suspended}·탈퇴 ${result.deleted}·자격증명 ${result.credentials}·조정 ${result.reconciled}`,
       );
     } catch (error) {
-      // 실패하면 표식이 안 세워져 전략이 DB로 폴백한다 — 안전한 쪽
+      // 실패하면 표식이 안 세워져 전략이 DB로 폴백한다 — 안전한 쪽. 원인은 여기서만 보이므로 경보(억제 창 1회)도 남긴다
+      const detail = error instanceof Error ? error.message : String(error);
       this.logger.error(
         '블랙리스트 재구축 실패',
         error instanceof Error ? error.stack : String(error),
       );
+      void this.alerts.notify({
+        level: 'error',
+        title: 'Redis 블랙리스트 재구축 실패 — 표식을 세우지 못했다',
+        key: 'auth-blacklist-rebuild',
+        detail,
+      });
+    } finally {
+      this.running = false;
     }
   }
 }

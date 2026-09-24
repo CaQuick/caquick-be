@@ -246,7 +246,7 @@ describe('AdminUserService (real DB)', () => {
         user.id,
         'SUSPENDED',
         (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
-          .updated_at,
+          .status_changed_at,
       );
       const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
         where: { id: session.id },
@@ -402,7 +402,7 @@ describe('AdminUserService (real DB)', () => {
       expect(blacklist.clearStatus).toHaveBeenCalledWith(
         user.id,
         (await prisma.account.findUniqueOrThrow({ where: { id: user.id } }))
-          .updated_at,
+          .status_changed_at,
       );
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { target_type: 'ACCOUNT', target_id: user.id },
