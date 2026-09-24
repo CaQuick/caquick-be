@@ -269,7 +269,7 @@ yarn start:dev
 | --- | --- |
 | **서버** | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL`, `APP_ROLE`(`api`·`ws`·`worker`, 기본 `api` — worker만 outbox 디스패처·크론을 돌리고 GraphQL·문서는 싣지 않는다) |
 | **DB** | `DATABASE_URL` |
-| **Redis (필수)** | `REDIS_URL` — 인증 블랙리스트(정지·탈퇴·비밀번호 변경 즉시 차단) + GraphQL subscription PubSub. 미설정이면 부팅 실패(로컬은 `redis://localhost:6379`, docker-compose) |
+| **Redis (필수)** | `REDIS_URL` — 인증 블랙리스트(정지·탈퇴·비밀번호 변경 즉시 차단) + GraphQL subscription PubSub. 미설정이면 부팅 실패(로컬은 `redis://localhost:6379`, docker-compose). `maxmemory`를 두면 `maxmemory-policy noeviction`이어야 한다 — worker 재구축이 점검해 아니면 블랙리스트 표식을 세우지 않고 경보(인증은 DB 폴백) |
 | **JWT / Auth** | `JWT_PRIVATE_KEY_PEM_B64`(또는 `JWT_PRIVATE_KEY_PATH`) — RS256 서명키. 운영 필수, 그 외에는 미설정 시 임시 키 생성(재시작하면 토큰 무효). `JWT_PUBLIC_KEY_PEM_B64`/`JWT_PUBLIC_KEY_PATH`는 생략 시 개인키에서 유도. `JWT_ISSUER`(기본 `caquick-identity`), `JWT_AUDIENCE`(기본 `caquick-api`), `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE` |
 | **OIDC (Google)** | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL` |
 | **OIDC (Kakao)** | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL` |

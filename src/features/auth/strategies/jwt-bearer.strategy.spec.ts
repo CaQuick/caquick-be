@@ -92,7 +92,7 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
     await truncateAll();
     await redis.flushdb();
     // 정상 상태 = worker 재구축이 끝나 표식이 있는 상태
-    await blacklist.markReady();
+    await blacklist.markReady(await blacklist.generation());
     alerts.notify.mockClear();
   });
 

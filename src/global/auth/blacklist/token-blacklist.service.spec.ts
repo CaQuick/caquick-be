@@ -5,6 +5,7 @@ import type Redis from 'ioredis';
 import { AlertService } from '@/global/alerting';
 import {
   BLACKLIST_READY_KEY,
+  BLACKLIST_READY_TTL_SECONDS,
   credentialCutoffSec,
   TokenBlacklistService,
 } from '@/global/auth/blacklist/token-blacklist.service';
@@ -42,7 +43,7 @@ describe('TokenBlacklistService (real Redis)', () => {
   });
   beforeEach(async () => {
     await redis.flushdb();
-    await service.markReady();
+    await service.markReady(await service.generation());
     alerts.notify.mockClear();
   });
 
@@ -148,6 +149,85 @@ describe('TokenBlacklistService (real Redis)', () => {
     });
   });
 
+  // 표식은 임대다 — 재구축이 주기마다 갱신하고, 스냅샷 뒤 쓰기 실패가 끼어들었으면(세대 변화) 세우지 않는다
+  describe('완전성 표식', () => {
+    it('markReady는 세대가 스냅샷 때와 같을 때만 세우고 임대 TTL을 건다', async () => {
+      await redis.del(BLACKLIST_READY_KEY);
+      const generation = await service.generation();
+
+      await expect(service.markReady(generation)).resolves.toBe(true);
+
+      const ttl = await redis.ttl(BLACKLIST_READY_KEY);
+      expect(ttl).toBeGreaterThan(BLACKLIST_READY_TTL_SECONDS - 5);
+      expect(ttl).toBeLessThanOrEqual(BLACKLIST_READY_TTL_SECONDS);
+    });
+
+    it('반증: 스냅샷 뒤 다른 프로세스의 쓰기 실패가 끼어들면 세대가 달라져 세우지 않는다', async () => {
+      const generation = await service.generation();
+      const flaky = new TokenBlacklistService(
+        {
+          eval: () => Promise.reject(new Error('down')),
+          multi: () => redis.multi(),
+        } as unknown as Redis,
+        { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+        alerts as unknown as AlertService,
+      );
+      await flaky.blockStatus(BigInt(1), 'SUSPENDED', T1); // 실패한 훅
+
+      await expect(service.markReady(generation)).resolves.toBe(false);
+      await expect(service.lookup(BigInt(1))).resolves.toMatchObject({
+        ready: false,
+      });
+      expect(await service.generation()).not.toBe(generation);
+    });
+
+    it('테스트 컨테이너(기본 설정)는 축출 위험이 없다', async () => {
+      await expect(service.evictionRisk()).resolves.toBeNull();
+    });
+
+    // 축출 정책 전수 — maxmemory가 있으면 noeviction만 안전
+    it.each([
+      ['0', 'allkeys-lru', null],
+      ['0', 'volatile-ttl', null],
+      ['104857600', 'noeviction', null],
+      [
+        '104857600',
+        'volatile-lru',
+        'maxmemory=104857600 maxmemory-policy=volatile-lru — noeviction이어야 한다',
+      ],
+      [
+        '104857600',
+        'allkeys-random',
+        'maxmemory=104857600 maxmemory-policy=allkeys-random — noeviction이어야 한다',
+      ],
+    ])(
+      'evictionRisk: maxmemory=%s policy=%s → %s',
+      async (maxmemory, policy, expected) => {
+        const stub = new TokenBlacklistService(
+          {
+            config: (_: string, name: string) =>
+              Promise.resolve([
+                name,
+                name === 'maxmemory' ? maxmemory : policy,
+              ]),
+          } as unknown as Redis,
+          { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+          alerts as unknown as AlertService,
+        );
+        await expect(stub.evictionRisk()).resolves.toBe(expected);
+      },
+    );
+
+    it('반증: CONFIG GET 응답을 해석할 수 없으면 던진다(안전한 쪽 — 재구축 실패)', async () => {
+      const stub = new TokenBlacklistService(
+        { config: () => Promise.resolve('OK') } as unknown as Redis,
+        { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+        alerts as unknown as AlertService,
+      );
+      await expect(stub.evictionRisk()).rejects.toThrow('CONFIG GET maxmemory');
+    });
+  });
+
   it('반증: 재구축 표식이 없으면 ready=false — 목록이 불완전하다는 뜻', async () => {
     await redis.del(BLACKLIST_READY_KEY);
     await service.blockStatus(BigInt(7), 'DELETED', T1);
@@ -175,8 +255,9 @@ describe('TokenBlacklistService (real Redis)', () => {
       // EVAL만 죽고 나머지는 실제 Redis — 표식 제거가 실제로 일어나는지 본다
       const flaky = {
         eval: down,
-        del: (key: string) => redis.del(key),
+        multi: () => redis.multi(),
         mget: (...keys: string[]) => redis.mget(...keys),
+        get: (key: string) => redis.get(key),
       } as unknown as Redis;
       const broken = new TokenBlacklistService(
         flaky,
@@ -200,6 +281,7 @@ describe('TokenBlacklistService (real Redis)', () => {
       await expect(broken.lookup(BigInt(1))).resolves.toMatchObject({
         ready: false,
       });
+      expect(await broken.generation()).toBe('3'); // 실패마다 세대가 오른다
     });
 
     it('반증: Redis가 통째로 죽으면 쓰기는 false·경보, 읽기는 던진다(전략이 폴백)', async () => {
@@ -207,7 +289,8 @@ describe('TokenBlacklistService (real Redis)', () => {
         eval: down,
         mget: down,
         scan: down,
-        del: down,
+        get: down,
+        multi: () => ({ incr: () => ({ del: () => ({ exec: down }) }) }),
       } as unknown as Redis;
       const broken = new TokenBlacklistService(
         dead,
@@ -221,6 +304,8 @@ describe('TokenBlacklistService (real Redis)', () => {
       expect(alerts.notify).toHaveBeenCalledTimes(1);
       await expect(broken.lookup(BigInt(1))).rejects.toThrow('down');
       await expect(broken.blockedStatusAccountIds()).rejects.toThrow('down');
+      await expect(broken.generation()).rejects.toThrow('down');
+      await expect(broken.markReady('0')).rejects.toThrow('down');
     });
   });
 });

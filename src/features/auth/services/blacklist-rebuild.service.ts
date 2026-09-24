@@ -8,6 +8,7 @@ import {
 import { ClockService } from '@/common/providers/clock.service';
 import { resolveAppRole, runsBackgroundJobs } from '@/config/app.config';
 import { BlacklistRebuildRepository } from '@/features/auth/repositories/blacklist-rebuild.repository';
+import { AlertService } from '@/global/alerting';
 import { TokenBlacklistService } from '@/global/auth/blacklist';
 
 /** 재구축 주기. Redis가 비었을 때 api가 DB 폴백으로 버티는 최대 시간이기도 하다. */
@@ -29,6 +30,7 @@ export class BlacklistRebuildService
     private readonly repo: BlacklistRebuildRepository,
     private readonly blacklist: TokenBlacklistService,
     private readonly clock: ClockService,
+    private readonly alerts: AlertService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -53,6 +55,20 @@ export class BlacklistRebuildService
     credentials: number;
     reconciled: number;
   }> {
+    // TTL 키만 축출되고 표식은 남는 설정이면 표식 자체를 믿을 수 없다 — 세우지 않고 크게 알린다
+    const risk = await this.blacklist.evictionRisk();
+    if (risk !== null) {
+      void this.alerts.notify({
+        level: 'error',
+        title:
+          'Redis 축출 정책이 블랙리스트에 안전하지 않다 — 표식을 세우지 않는다',
+        key: 'auth-blacklist-eviction-policy',
+        detail: risk,
+      });
+      throw new Error(`Redis 축출 정책 위험(${risk}) — DB 폴백 유지`);
+    }
+    // 스냅샷 전에 세대를 읽는다 — 그 뒤 실패한 훅이 끼어들면 세대가 달라져 표식을 세우지 못한다
+    const generation = await this.blacklist.generation();
     const ttl = this.blacklist.accessTtlSeconds();
     const since = new Date(this.clock.now().getTime() - ttl * 1000);
     const [suspended, deleted, credentials, blocked] = await Promise.all([
@@ -88,7 +104,11 @@ export class BlacklistRebuildService
         `블랙리스트 쓰기 ${failed}건 실패 — 표식을 세우지 않는다(DB 폴백 유지)`,
       );
     }
-    await this.blacklist.markReady();
+    if (!(await this.blacklist.markReady(generation))) {
+      throw new Error(
+        '재구축 중 쓰기 실패가 끼어들었다(세대 변화) — 표식을 세우지 않는다, 다음 주기에 다시',
+      );
+    }
     return {
       suspended: suspended.length,
       deleted: deleted.length,

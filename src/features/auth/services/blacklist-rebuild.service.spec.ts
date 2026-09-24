@@ -3,10 +3,14 @@ import type Redis from 'ioredis';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { BlacklistRebuildRepository } from '@/features/auth/repositories/blacklist-rebuild.repository';
-import { BlacklistRebuildService } from '@/features/auth/services/blacklist-rebuild.service';
+import {
+  BLACKLIST_REBUILD_INTERVAL_MS,
+  BlacklistRebuildService,
+} from '@/features/auth/services/blacklist-rebuild.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { AlertService } from '@/global/alerting';
 import {
+  BLACKLIST_READY_TTL_SECONDS,
   credentialCutoffSec,
   TokenBlacklistService,
 } from '@/global/auth/blacklist';
@@ -28,8 +32,10 @@ const NONE = { suspended: 0, deleted: 0, credentials: 0, reconciled: 0 };
 describe('BlacklistRebuildService (real DB + real Redis)', () => {
   let service: BlacklistRebuildService;
   let blacklist: TokenBlacklistService;
+  let repo: BlacklistRebuildRepository;
   let prisma: PrismaClient;
   let redis: Redis;
+  const alerts = { notify: jest.fn().mockResolvedValue('sent') };
 
   beforeAll(async () => {
     redis = await connectTestRedis();
@@ -39,7 +45,7 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
         BlacklistRebuildRepository,
         TokenBlacklistService,
         ...redisTestProviders(redis),
-        { provide: AlertService, useValue: { notify: jest.fn() } },
+        { provide: AlertService, useValue: alerts },
         { provide: ClockService, useValue: { now: () => NOW } },
         {
           provide: ConfigService,
@@ -49,6 +55,7 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     });
     service = module.get(BlacklistRebuildService);
     blacklist = module.get(TokenBlacklistService);
+    repo = module.get(BlacklistRebuildRepository);
     prisma = p;
   });
   afterAll(async () => {
@@ -59,6 +66,13 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
   beforeEach(async () => {
     await truncateAll();
     await redis.flushdb();
+    alerts.notify.mockClear();
+  });
+
+  it('표식 임대는 재구축 주기의 2배 이상이다 — 한 주기를 놓쳤다고 폴백으로 튀지 않게', () => {
+    expect(BLACKLIST_READY_TTL_SECONDS * 1000).toBeGreaterThanOrEqual(
+      2 * BLACKLIST_REBUILD_INTERVAL_MS,
+    );
   });
 
   // 팩토리는 갱신 시각을 받지 않는다 — 만든 뒤 시각만 되돌린다(@updatedAt은 명시한 값을 존중한다)
@@ -177,6 +191,51 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     });
     write.mockRestore();
     ready.mockRestore();
+  });
+
+  it('반증: DB 스냅샷 뒤 다른 프로세스의 훅 쓰기가 실패하면 표식을 세우지 않고 던진다', async () => {
+    const flaky = new TokenBlacklistService(
+      {
+        eval: () => Promise.reject(new Error('down')),
+        multi: () => redis.multi(),
+      } as unknown as Redis,
+      { getOrThrow: () => TEST_AUTH_CONFIG } as unknown as ConfigService,
+      alerts as unknown as AlertService,
+    );
+    const real = repo.suspendedSince.bind(repo);
+    const snapshot = jest
+      .spyOn(repo, 'suspendedSince')
+      .mockImplementationOnce(async (since) => {
+        // 스냅샷을 뜨는 사이 api 프로세스의 정지 훅이 실패했다
+        await flaky.blockStatus(BigInt(99), 'SUSPENDED', NOW);
+        return real(since);
+      });
+
+    await expect(service.rebuild()).rejects.toThrow('세대 변화');
+
+    await expect(blacklist.lookup(BigInt(99))).resolves.toMatchObject({
+      ready: false,
+    });
+    snapshot.mockRestore();
+  });
+
+  it('반증: 축출 정책이 위험하면 표식을 세우지 않고 던지며 경보를 남긴다', async () => {
+    const risk = jest
+      .spyOn(blacklist, 'evictionRisk')
+      .mockResolvedValueOnce('maxmemory=1 maxmemory-policy=volatile-lru');
+
+    await expect(service.rebuild()).rejects.toThrow('축출 정책 위험');
+
+    expect(alerts.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'error',
+        key: 'auth-blacklist-eviction-policy',
+      }),
+    );
+    await expect(blacklist.lookup(BigInt(1))).resolves.toMatchObject({
+      ready: false,
+    });
+    risk.mockRestore();
   });
 
   it('반증: 아무것도 없어도 표식은 세운다(빈 목록도 완전한 목록이다)', async () => {

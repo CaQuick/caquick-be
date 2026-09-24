@@ -23,8 +23,12 @@ export interface BlacklistLookup {
 const STATUS_PREFIX = 'auth:blk:st:';
 const CREDENTIAL_PREFIX = 'auth:blk:cr:';
 export const STATUS_KEY_PATTERN = `${STATUS_PREFIX}*`;
-/** 목록이 완전하다는 표식(TTL 없음). worker의 재구축이 세우고, Redis가 비면 같이 사라진다. */
+/** 목록이 완전하다는 표식. worker의 재구축이 임대처럼 갱신한다 — worker가 죽거나 Redis가 비면 만료돼 전략이 DB로 폴백한다. */
 export const BLACKLIST_READY_KEY = 'auth:blk:ready';
+/** 표식 임대 시간. 재구축 주기(60초)의 3배 — 재구축을 연속으로 놓쳐야 폴백으로 돌아간다(주기와의 관계는 재구축 spec이 고정). */
+export const BLACKLIST_READY_TTL_SECONDS = 180;
+/** 쓰기 실패 세대. 실패마다 올라가고, 재구축은 스냅샷 시점의 세대가 그대로일 때만 표식을 세운다(스냅샷 뒤 실패한 훅과의 경쟁). */
+const DIRTY_KEY = 'auth:blk:dirty';
 
 /** JWT iat는 초 단위다. 내림 + `iat < cutoff` 비교라 변경과 같은 초에 새로 받은 토큰은 통과한다(같은 초의 옛 토큰도 — 1초 창). */
 export function credentialCutoffSec(changedAt: Date): number {
@@ -43,6 +47,13 @@ if cur then
   if ver and ver >= tonumber(ARGV[2]) then return 0 end
 end
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+return 1`;
+
+/** 세대가 스냅샷 때와 같을 때만 표식을 세운다(원자적) — 그 사이 실패한 훅이 있었으면 빠진 키를 활성으로 믿게 되므로. */
+const MARK_READY_IF_GENERATION = `
+local gen = redis.call('GET', KEYS[2]) or '0'
+if gen ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], '1', 'EX', ARGV[2])
 return 1`;
 
 /**
@@ -128,9 +139,33 @@ export class TokenBlacklistService {
     return ids;
   }
 
-  /** 재구축이 끝난 뒤 세운다. 다음 flush까지 남는다. */
-  async markReady(): Promise<void> {
-    await this.redis.set(BLACKLIST_READY_KEY, '1');
+  /** 재구축이 DB 스냅샷을 뜨기 전에 읽는 쓰기 실패 세대. 실패는 던진다. */
+  async generation(): Promise<string> {
+    return (await this.redis.get(DIRTY_KEY)) ?? '0';
+  }
+
+  /** 재구축이 끝난 뒤. 스냅샷 이후 쓰기 실패가 끼어들었으면(세대 변화) 세우지 않고 false. 임대라 주기마다 갱신해야 한다. */
+  async markReady(generation: string): Promise<boolean> {
+    const result = await this.redis.eval(
+      MARK_READY_IF_GENERATION,
+      2,
+      BLACKLIST_READY_KEY,
+      DIRTY_KEY,
+      generation,
+      BLACKLIST_READY_TTL_SECONDS,
+    );
+    return result === 1;
+  }
+
+  /**
+   * 축출 정책 점검. maxmemory가 있는데 noeviction이 아니면 TTL 키(상태·cutoff)가 축출돼도 표식은 남을 수 있다 —
+   * `volatile-*`는 TTL 키만 고르고, `allkeys-*`도 표식이 살아남을 수 있다. 위험하면 사유, 안전하면 null. 실패는 던진다.
+   */
+  async evictionRisk(): Promise<string | null> {
+    const maxmemory = await this.configValue('maxmemory');
+    const policy = await this.configValue('maxmemory-policy');
+    if (maxmemory === '0' || policy === 'noeviction') return null;
+    return `maxmemory=${maxmemory} maxmemory-policy=${policy} — noeviction이어야 한다`;
   }
 
   accessTtlSeconds(): number {
@@ -173,10 +208,26 @@ export class TokenBlacklistService {
         key: 'auth-blacklist-write',
         detail: `${what}: ${detail}`,
       });
-      // 빠진 키를 "활성"으로 믿지 않게 표식을 지운다. 이것마저 실패하면 Redis가 통째로 죽은 것 — 조회도 실패해 어차피 폴백
-      await this.redis.del(BLACKLIST_READY_KEY).catch(() => undefined);
+      // 빠진 키를 "활성"으로 믿지 않게: 세대를 올리고(진행 중인 재구축이 표식을 못 세우게) 표식을 지운다(즉시 폴백).
+      try {
+        await this.redis
+          .multi()
+          .incr(DIRTY_KEY)
+          .del(BLACKLIST_READY_KEY)
+          .exec();
+      } catch {
+        // Redis가 통째로 죽은 것 — 조회도 실패해 어차피 폴백
+      }
       return false;
     }
+  }
+
+  private async configValue(name: string): Promise<string> {
+    const reply: unknown = await this.redis.config('GET', name);
+    if (!Array.isArray(reply) || typeof reply[1] !== 'string') {
+      throw new Error(`CONFIG GET ${name} 응답을 해석할 수 없다`);
+    }
+    return reply[1];
   }
 }
 

@@ -19,7 +19,9 @@ export const NOOP_BLACKLIST_PROVIDER: Provider = {
     blockedStatusAccountIds: () => Promise.resolve([]),
     lookup: () =>
       Promise.resolve({ ready: true, status: null, credentialCutoffSec: null }),
-    markReady: () => Promise.resolve(),
+    generation: () => Promise.resolve('0'),
+    markReady: () => Promise.resolve(true),
+    evictionRisk: () => Promise.resolve(null),
     accessTtlSeconds: () => 900,
   },
 };
