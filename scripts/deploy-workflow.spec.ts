@@ -8,6 +8,7 @@ const ROOT = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
 interface Step {
+  id?: string;
   name?: string;
   uses?: string;
   if?: string;
@@ -123,6 +124,33 @@ describe('deploy.yml', () => {
   it('액션은 커밋 SHA로 고정', () => {
     for (const u of usesOf(wf)) expect(u).toMatch(PINNED);
   });
+
+  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다 — 입력·출력은 env를 거쳐 따옴표 친 변수로. image_tag은 sha·main 형식만', () => {
+    for (const [name, job] of Object.entries(wf.jobs)) {
+      for (const step of job.steps) {
+        expect({
+          name,
+          step: step.name,
+          run: step.run ?? '',
+        }).not.toMatchObject({
+          run: expect.stringContaining('${{'),
+        });
+      }
+    }
+    const tag = job.steps.find((s) => s.id === 'tag');
+    expect(tag?.env?.INPUT_TAG).toBe('${{ inputs.image_tag }}');
+    expect(tag?.run).toContain('main|[0-9a-f]');
+    expect(tag?.run).toContain('exit 1');
+  });
+});
+
+describe('build-image.yml run 블록', () => {
+  const wf = workflow('.github/workflows/build-image.yml');
+  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다', () => {
+    for (const job of Object.values(wf.jobs)) {
+      for (const step of job.steps) expect(step.run ?? '').not.toContain('${{');
+    }
+  });
 });
 
 describe('infra/deploy.sh', () => {
@@ -132,9 +160,9 @@ describe('infra/deploy.sh', () => {
     const marks = [
       '--profile migrate pull',
       'run --rm migrate',
-      'up -d --no-deps worker',
+      'up -d worker',
       'wait_healthy worker',
-      'up -d --no-deps api',
+      'up -d api',
       'wait_healthy api',
       '--profile edge --profile observability up -d',
       'wait_healthy cloudflared',
@@ -143,6 +171,10 @@ describe('infra/deploy.sh', () => {
       expect({ m, found: at > -1 }).toEqual({ m, found: true });
     const positions = marks.map((x) => x.at);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it('반증: worker·api를 --no-deps로 올리지 않는다 — 새 호스트에서 redis·rabbitmq가 없으면 ready가 영영 안 온다', () => {
+    expect(script).not.toContain('--no-deps');
   });
 
   it('반증: ready 대기가 실패하면 set -e로 멈춘다 — worker가 안 뜨면 api를 교체하지 않는다', () => {

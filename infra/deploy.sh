@@ -24,11 +24,12 @@ echo "== pull"
 docker compose --profile edge --profile observability --profile migrate pull --quiet
 echo "== migrate"
 docker compose --profile migrate run --rm migrate
+# 의존을 건너뛰지 않는다 — 새 호스트에서는 redis·rabbitmq가 아직 없다. compose가 의존(healthy)을 먼저 올린다
 echo "== worker"
-docker compose up -d --no-deps worker
+docker compose up -d worker
 wait_healthy worker
 echo "== api"
-docker compose up -d --no-deps api
+docker compose up -d api
 wait_healthy api
 echo "== rest"
 docker compose --profile edge --profile observability up -d --remove-orphans

@@ -42,16 +42,28 @@ jobs:
           sparse-checkout: infra
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
+      # 식(${{ }})은 셸에 직접 넣지 않는다 — env를 거쳐 따옴표 친 변수로만. 입력은 sha 또는 main 형식만 받는다
       - name: Resolve image tag
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.image_tag }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.image_tag }}" ]; then
-            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=main" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            tag=$INPUT_TAG
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag=main
           else
-            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            tag=$RUN_SHA
           fi
+          case "$tag" in
+            main|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+            *) echo "image_tag은 커밋 sha(7~40 hex) 또는 main만: $tag" >&2; exit 1 ;;
+          esac
+          [ "$tag" = main ] || [ "${#tag}" -le 40 ] || { echo "sha가 너무 길다" >&2; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -66,6 +78,7 @@ jobs:
         env:
           DOTENV: ${{ secrets.DOTENV }}
           APP_ENV: ${{ secrets.APP_ENV }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
           [ -n "$DOTENV" ] && [ -n "$APP_ENV" ] || { echo "Environment secrets DOTENV·APP_ENV가 비어 있다" >&2; exit 1; }
@@ -73,7 +86,7 @@ jobs:
           rsync -a --delete --exclude '.env' --exclude 'app.env' infra/ "$DEPLOY_DIR/"
           umask 077
           printf '%s\n' "$DOTENV" > "$DEPLOY_DIR/.env"
-          printf 'IMAGE=%s\nIMAGE_TAG=%s\n' "$IMAGE" "${{ steps.tag.outputs.tag }}" >> "$DEPLOY_DIR/.env"
+          printf 'IMAGE=%s\nIMAGE_TAG=%s\n' "$IMAGE" "$IMAGE_TAG" >> "$DEPLOY_DIR/.env"
           printf '%s\n' "$APP_ENV" > "$DEPLOY_DIR/app.env"
           # compose가 인프라 컨테이너(Prometheus 스크레이프·백업 경보)에 넘기는 앱 값 — app.env에서 복사해 secret을 두 번 관리하지 않는다
           grep -E '^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=' "$DEPLOY_DIR/app.env" >> "$DEPLOY_DIR/.env" || true
