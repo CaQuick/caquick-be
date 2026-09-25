@@ -5,7 +5,7 @@
 # 인바운드 포트는 열지 않는다(Cloudflare Tunnel이 api로 붙는다). 진단용 바인딩은 전부 127.0.0.1.
 # 프로필: (없음) = 앱·데이터 저장소·백업 · edge = cloudflared · observability = alloy·loki·prometheus·grafana·exporter 2개 · migrate = 마이그레이션 일회성
 # cgroup_parent: cAdvisor(alloy)가 cgroup 경로에서 서비스명을 읽는다 — OrbStack의 overlayfs 드라이버에선 docker 핸들러(이름 조회)가 안 돼 raw cgroup만 쓴다
-# mem_limit은 로드맵 v2 §1 초안 — 10에서 실측으로 확정한다(합계 ≤ 6 GB).
+# mem_limit은 2026-09-25 홈서버 실측(유휴·부하)으로 확정 — 표는 runbook.md §관측. 합계 ≤ 6 GB(spec이 고정).
 name: caquick
 
 x-logging: &logging
@@ -15,7 +15,8 @@ x-logging: &logging
     max-file: '5'
 
 x-app: &app
-  image: ${IMAGE:?ghcr.io/caquick/caquick-be}:${IMAGE_TAG:-main}
+  # IMAGE_TAG는 필수 — GHCR에는 커밋 sha 태그만 있어 기본값(:main 등)은 존재하지 않는 이미지를 가리킨다. 배포 잡이 채운다
+  image: ${IMAGE:?ghcr.io/caquick/caquick-be}:${IMAGE_TAG:?commit sha}
   env_file:
     - path: app.env
       required: false
@@ -293,7 +294,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    mem_limit: 192m
+    mem_limit: 256m
 
   grafana:
     cgroup_parent: /caquick/grafana
@@ -352,7 +353,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - out=$(wget -qO- http://127.0.0.1:9104/metrics) && case "$out" in *"mysql_up 1"*) exit 0;; *) exit 1;; esac
+        - out=$(wget -qO- http://127.0.0.1:9104/metrics) && case "$$out" in *"mysql_up 1"*) exit 0;; *) exit 1;; esac
       interval: 30s
       timeout: 5s
       retries: 3
@@ -374,7 +375,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - out=$(wget -qO- http://127.0.0.1:9121/metrics) && case "$out" in *"redis_up 1"*) exit 0;; *) exit 1;; esac
+        - out=$(wget -qO- http://127.0.0.1:9121/metrics) && case "$$out" in *"redis_up 1"*) exit 0;; *) exit 1;; esac
       interval: 30s
       timeout: 5s
       retries: 3
