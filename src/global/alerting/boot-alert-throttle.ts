@@ -107,7 +107,7 @@ function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
     if (!st.isDirectory()) return false;
     const uid = process.getuid?.();
     if (uid !== undefined && st.uid !== uid) return false;
-    if ((st.mode & 0o077) === 0) return true;
+    if (!isWritableByOthers(st.mode)) return true;
     return repairLooseDir(stateDir, nowMs);
   } catch {
     return false;
@@ -121,9 +121,13 @@ function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
  */
 function repairLooseDir(stateDir: string, nowMs: number): boolean {
   const repairLock = `${stateDir}.repair-lock`;
-  if (!acquireLock(repairLock, nowMs)) return false;
+  if (!acquireLock(repairLock, nowMs)) {
+    // 다른 프로세스가 고치는 중 — 끝나기를 잠깐 기다렸다가 고쳐졌으면 그 결과를 쓴다. 잠금을 못 잡았다고 "보낸다"로
+    // 기울면 동시 재시작 때 수리한 쪽과 둘 다 보낸다.
+    return waitUntil(() => !isWritableByOthers(statSync(stateDir).mode));
+  }
   try {
-    if ((statSync(stateDir).mode & 0o077) !== 0) {
+    if (isWritableByOthers(statSync(stateDir).mode)) {
       chmodSync(stateDir, 0o700);
       for (const name of ['lock', 'last-sent']) {
         try {
@@ -141,6 +145,26 @@ function repairLooseDir(stateDir: string, nowMs: number): boolean {
       // 이미 없으면 그만
     }
   }
+}
+
+/** 위협은 다른 사용자의 **쓰기**다(lock·last-sent 교체). 읽기 비트는 문제가 아니라 기본 755 디렉터리를 수리 대상으로 보지 않는다. */
+function isWritableByOthers(mode: number): boolean {
+  return (mode & 0o022) !== 0;
+}
+
+/** 동기 대기 — 부팅 실패 경로라 이벤트 루프를 막아도 되고, 상한(2초) 안에 안 되면 false. */
+function waitUntil(done: () => boolean, deadlineMs = 2_000): boolean {
+  const cell = new Int32Array(new SharedArrayBuffer(4));
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    try {
+      if (done()) return true;
+    } catch {
+      return false;
+    }
+    Atomics.wait(cell, 0, 0, 10);
+  }
+  return false;
 }
 
 /** 심볼릭 링크면 열기가 실패한다 — 링크 대상 파일을 덮어쓰지 않는다. */
