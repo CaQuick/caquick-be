@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -126,6 +127,19 @@ describe('shouldSendBootAlert', () => {
       if (prev === undefined) delete process.env.BOOT_ALERT_STATE_DIR;
       else process.env.BOOT_ALERT_STATE_DIR = prev;
     }
+  });
+
+  it('반증: 이미 있던 느슨한 권한(777)의 상태 디렉터리는 700으로 바로잡는다 — mkdir mode는 기존 디렉터리에 안 먹는다', () => {
+    const stateDir = join(dir, 'loose');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777); // mkdir mode는 umask에 깎인다 — 명시적으로 느슨하게
+    expect(statSync(stateDir).mode & 0o777).toBe(0o777);
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+    // 권한이 고쳐진 뒤에는 억제가 정상 동작한다
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
   });
 
   it('반증: 상태 디렉터리는 700으로 만들고, 심겨 있는 심볼릭 링크는 따라가지 않는다(대상 파일 불변, 경보는 보낸다)', () => {

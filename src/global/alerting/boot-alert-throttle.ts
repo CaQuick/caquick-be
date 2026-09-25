@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   closeSync,
   constants,
   mkdirSync,
@@ -35,11 +36,7 @@ export function shouldSendBootAlert(
   windowMs: number,
   stateDir: string = defaultBootAlertStateDir(),
 ): boolean {
-  try {
-    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-  } catch {
-    return true;
-  }
+  if (!ensurePrivateDir(stateDir)) return true;
   const lockPath = join(stateDir, 'lock');
   if (!acquireLock(lockPath, nowMs)) return false;
   try {
@@ -96,6 +93,24 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
     // 남아도 무해
   }
   return true;
+}
+
+/**
+ * 디렉터리를 만들고 700을 **강제**한다 — 이미 있던(미리 만들어 둔·bind mount) 디렉터리는 mkdir의 mode가 손대지 않으므로
+ * 다른 사용자가 쓸 수 있는 채로 남는다. 내 소유가 아니거나 권한을 못 고치면 억제 파일을 믿지 않는다(호출자가 보낸다).
+ */
+function ensurePrivateDir(stateDir: string): boolean {
+  try {
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    const st = statSync(stateDir);
+    if (!st.isDirectory()) return false;
+    const uid = process.getuid?.();
+    if (uid !== undefined && st.uid !== uid) return false;
+    if ((st.mode & 0o077) !== 0) chmodSync(stateDir, 0o700);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** 심볼릭 링크면 열기가 실패한다 — 링크 대상 파일을 덮어쓰지 않는다. */
