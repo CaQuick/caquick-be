@@ -184,6 +184,7 @@ services:
       AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:-}
       AWS_DEFAULT_REGION: ${BACKUP_AWS_REGION:-ap-northeast-2}
+      DISCORD_ALERT_WEBHOOK_URL: ${DISCORD_ALERT_WEBHOOK_URL:-}
     volumes:
       - backup-data:/backup
     depends_on:

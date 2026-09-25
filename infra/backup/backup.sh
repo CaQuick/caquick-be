@@ -23,6 +23,20 @@ prune_local() {
 pending_upload=""
 pending_day=""
 
+# 실패 경보 — 웹훅이 없으면 로그만. 같은 장애로 매분 쏘지 않게 1시간에 1번(성공하면 다시 보낼 수 있다)
+alert() {
+  local msg=$1 now
+  now=$(date -u +%s)
+  echo "backup: $msg" >&2
+  [ -n "${DISCORD_ALERT_WEBHOOK_URL:-}" ] || return 0
+  if [ $((now - ${last_alert:-0})) -lt 3600 ]; then return 0; fi
+  last_alert=$now
+  msg=${msg//\"/\'}
+  curl -fsS -m 10 -H 'content-type: application/json' \
+    -d "$(printf '{"embeds":[{"title":"[error] DB 백업 실패","description":"%s","color":15158332,"footer":{"text":"backup · %s"}}]}' "$msg" "$(hostname)")" \
+    "$DISCORD_ALERT_WEBHOOK_URL" > /dev/null || echo "backup: Discord 전송 실패" >&2
+}
+
 run_backup() {
   local file today
   today=$(date -u +%F)
@@ -59,15 +73,21 @@ run_backup() {
 }
 
 if [ "${BACKUP_RUN_ONCE:-0}" = "1" ]; then
-  run_backup
-  exit $?
+  if run_backup; then exit 0; fi
+  alert "run-once 백업 실패"
+  exit 1
 fi
 
 last_day=""
 while :; do
   touch "$ALIVE_FILE"
   if [ "$(date -u +%H)" = "$BACKUP_HOUR" ] && [ "$last_day" != "$(date -u +%F)" ]; then
-    if run_backup; then last_day=$(date -u +%F); else echo "backup: 실패 — 1분 뒤 재시도" >&2; fi
+    if run_backup; then
+      last_day=$(date -u +%F)
+      last_alert=0
+    else
+      alert "$(date -u +%F) 백업 실패 — 1분 뒤 재시도"
+    fi
   fi
   sleep 60
 done

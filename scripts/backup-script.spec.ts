@@ -38,7 +38,7 @@ function runLoopOnce(
   fakeBin(
     bin,
     'date',
-    `case "$*" in *%H) echo ${dateHour};; *%F) echo 2026-09-25;; *) echo 20260925T${dateHour}0000Z;; esac`,
+    `case "$*" in *%H) echo ${dateHour};; *%F) echo 2026-09-25;; *%s) echo 1790000000;; *) echo 20260925T${dateHour}0000Z;; esac`,
   );
   // N바퀴 뒤 sleep에서 부모(루프)를 TERM으로 끝낸다 — 그냥 exit 0이면 루프가 공회전한다
   const counter = join(root, 'loops');
@@ -89,6 +89,7 @@ function runOnce(opts: {
   dumpFails?: boolean;
   s3Fails?: boolean;
   bucket?: string;
+  webhook?: string;
 }) {
   const root = mkdtempSync(join(tmpdir(), 'caquick-backup-'));
   const bin = join(root, 'bin');
@@ -106,6 +107,8 @@ function runOnce(opts: {
     'aws',
     opts.s3Fails ? 'echo "upload failed" >&2; exit 1' : 'exit 0',
   );
+  // 경보 전송 기록 — 마지막 인자(URL)와 -d 본문
+  fakeBin(bin, 'curl', `printf '%s\\n' "$@" >> "${join(root, 'curl.log')}"`);
   try {
     const stdout = execFileSync('bash', [SCRIPT], {
       encoding: 'utf8',
@@ -115,11 +118,12 @@ function runOnce(opts: {
         BACKUP_RUN_ONCE: '1',
         BACKUP_DIR: out,
         BACKUP_S3_BUCKET: opts.bucket ?? '',
+        DISCORD_ALERT_WEBHOOK_URL: opts.webhook ?? '',
         MYSQL_USER: 'u',
         MYSQL_PASSWORD: 'p',
       },
     });
-    return { status: 0, stdout, files: readdirSync(out) };
+    return { status: 0, stdout, files: readdirSync(out), curl: curlLog(root) };
   } catch (error) {
     const e = error as { status: number; stdout: string; stderr: string };
     return {
@@ -127,8 +131,14 @@ function runOnce(opts: {
       stdout: e.stdout,
       stderr: e.stderr,
       files: readdirSync(out),
+      curl: curlLog(root),
     };
   }
+}
+
+function curlLog(root: string): string {
+  const p = join(root, 'curl.log');
+  return existsSync(p) ? readFileSync(p, 'utf8') : '';
 }
 
 describe('infra/backup/backup.sh (BACKUP_RUN_ONCE)', () => {
@@ -190,6 +200,15 @@ describe('infra/backup/backup.sh (BACKUP_RUN_ONCE)', () => {
         env: { PATH: process.env.PATH ?? '', BACKUP_RUN_ONCE: '1' },
       }),
     ).toThrow();
+  });
+
+  it('반증: 실패하면 Discord 웹훅으로 경보를 보내고, 웹훅이 없으면 보내지 않는다 — 성공 때는 보내지 않는다', () => {
+    const failed = runOnce({ dumpFails: true, webhook: 'https://hook.test/x' });
+    expect(failed.status).not.toBe(0);
+    expect(failed.curl).toContain('https://hook.test/x');
+    expect(failed.curl).toContain('DB 백업 실패');
+    expect(runOnce({ dumpFails: true }).curl).toBe('');
+    expect(runOnce({ webhook: 'https://hook.test/x' }).curl).toBe('');
   });
 
   it('S3 업로드 성공 → uploaded 로그, 종료 0', () => {
