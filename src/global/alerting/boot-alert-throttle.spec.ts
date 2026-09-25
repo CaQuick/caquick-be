@@ -4,15 +4,20 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import ts from 'typescript';
 
-import { shouldSendBootAlert } from '@/global/alerting/boot-alert-throttle';
+import {
+  defaultBootAlertStateDir,
+  shouldSendBootAlert,
+} from '@/global/alerting/boot-alert-throttle';
 
 describe('shouldSendBootAlert', () => {
   let dir: string;
@@ -105,5 +110,34 @@ describe('shouldSendBootAlert', () => {
     const notADir = join(dir, 'file');
     writeFileSync(notADir, 'x', 'utf8');
     expect(shouldSendBootAlert(10_000, 5_000, join(notADir, 'sub'))).toBe(true);
+  });
+
+  it('기본 상태 디렉터리는 공유 tmp가 아니라 실행 사용자 홈 아래이고, env로 바꿀 수 있다', () => {
+    const prev = process.env.BOOT_ALERT_STATE_DIR;
+    delete process.env.BOOT_ALERT_STATE_DIR;
+    try {
+      expect(defaultBootAlertStateDir()).toBe(
+        join(homedir(), '.caquick', 'boot-alert'),
+      );
+      expect(defaultBootAlertStateDir().startsWith(tmpdir())).toBe(false);
+      process.env.BOOT_ALERT_STATE_DIR = join(dir, 'custom');
+      expect(defaultBootAlertStateDir()).toBe(join(dir, 'custom'));
+    } finally {
+      if (prev === undefined) delete process.env.BOOT_ALERT_STATE_DIR;
+      else process.env.BOOT_ALERT_STATE_DIR = prev;
+    }
+  });
+
+  it('반증: 상태 디렉터리는 700으로 만들고, 심겨 있는 심볼릭 링크는 따라가지 않는다(대상 파일 불변, 경보는 보낸다)', () => {
+    const stateDir = join(dir, 'state');
+    const victim = join(dir, 'victim');
+    writeFileSync(victim, 'untouched', 'utf8');
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    symlinkSync(victim, join(stateDir, 'last-sent'));
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+
+    expect(readFileSync(victim, 'utf8')).toBe('untouched');
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 });
