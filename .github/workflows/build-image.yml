@@ -12,9 +12,10 @@ permissions:
   contents: read
   packages: write
 
+# main 빌드는 그룹 하나 — 앞선 빌드를 취소해 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게(취소된 run은 배포가 건너뛴다)
 concurrency:
-  group: build-image-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.event_name == 'push' && 'build-image-main' || format('build-image-pr-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: true
 
 jobs:
   build:

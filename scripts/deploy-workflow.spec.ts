@@ -63,6 +63,11 @@ describe('build-image.yml', () => {
     expect(login?.if).toBe("github.event_name == 'push'");
   });
 
+  it('반증: main 빌드는 concurrency 그룹 하나에서 앞선 실행을 취소한다 — 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게', () => {
+    expect(wf.concurrency?.group).toContain("'build-image-main'");
+    expect(wf.concurrency?.['cancel-in-progress']).toBe(true);
+  });
+
   it('반증: 셀프호스트 러너를 쓰지 않는다 — 공개 레포의 PR 코드가 홈서버에서 돌면 안 된다', () => {
     expect(JSON.stringify(build['runs-on'])).not.toContain('self-hosted');
   });
@@ -139,8 +144,23 @@ describe('deploy.yml', () => {
     }
     const tag = job.steps.find((s) => s.id === 'tag');
     expect(tag?.env?.INPUT_TAG).toBe('${{ inputs.image_tag }}');
-    expect(tag?.run).toContain('main|[0-9a-f]');
+    // build-image가 푸시하는 태그(전체 sha·main)만 — 짧은 sha·hex 아닌 접미사는 거절
+    expect(tag?.run).toContain('^([0-9a-f]{40}|main)$');
     expect(tag?.run).toContain('exit 1');
+  });
+
+  it('반증: workflow_run의 head_sha가 지금 main 끝이 아니면 배포 단계를 전부 건너뛴다', () => {
+    const skip = job.steps.find((s) => s.name?.startsWith('Skip if not'));
+    expect(skip?.if).toBe("github.event_name == 'workflow_run'");
+    expect(skip?.env?.MAIN_SHA).toBe('${{ github.sha }}');
+    expect(skip?.run).toContain('SKIP_DEPLOY=1');
+    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy (E9)']) {
+      const step = job.steps.find((s) => s.name?.startsWith(name));
+      expect({ name, if: step?.if }).toEqual({
+        name,
+        if: expect.stringContaining("env.SKIP_DEPLOY != '1'"),
+      });
+    }
   });
 });
 

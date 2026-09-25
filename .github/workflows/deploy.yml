@@ -58,14 +58,24 @@ jobs:
           else
             tag=$RUN_SHA
           fi
-          case "$tag" in
-            main|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
-            *) echo "image_tag은 커밋 sha(7~40 hex) 또는 main만: $tag" >&2; exit 1 ;;
-          esac
-          [ "$tag" = main ] || [ "${#tag}" -le 40 ] || { echo "sha가 너무 길다" >&2; exit 1; }
+          # build-image는 전체 sha(40 hex)와 main만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
+          [[ "$tag" =~ ^([0-9a-f]{40}|main)$ ]] || { echo "image_tag은 전체 커밋 sha(40 hex) 또는 main만: $tag" >&2; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # 빌드 완료 순서는 커밋 순서와 다를 수 있다 — 지금 main 끝이 아닌 커밋의 빌드는 배포하지 않는다(수동 실행은 그대로)
+      - name: Skip if not the current main head
+        if: github.event_name == 'workflow_run'
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          if [ "$RUN_SHA" != "$MAIN_SHA" ]; then
+            echo "main 끝($MAIN_SHA)이 아닌 빌드($RUN_SHA) — 배포 건너뜀"
+            echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
+          fi
+
       - name: Login to GHCR
+        if: env.SKIP_DEPLOY != '1'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -75,6 +85,7 @@ jobs:
       # .env(compose 보간·저장소·터널 비밀)와 app.env(앱 값)는 Environment secret 2개를 그대로 쓴다(키 목록: infra/*.example).
       # 서버에 있는 두 파일과 토큰 파일은 rsync가 지우지 않는다 — 배포 사이에도 compose가 읽는다
       - name: Sync infra/ + write .env·app.env (600)
+        if: env.SKIP_DEPLOY != '1'
         env:
           DOTENV: ${{ secrets.DOTENV }}
           APP_ENV: ${{ secrets.APP_ENV }}
@@ -93,11 +104,12 @@ jobs:
           grep -q '^METRICS_ACCESS_TOKEN=.' "$DEPLOY_DIR/app.env" || { echo "app.env에 METRICS_ACCESS_TOKEN이 없다" >&2; exit 1; }
 
       - name: Deploy (E9)
+        if: env.SKIP_DEPLOY != '1'
         run: bash "$DEPLOY_DIR/deploy.sh"
         working-directory: ${{ env.DEPLOY_DIR }}
 
       - name: Discord
-        if: always()
+        if: always() && env.SKIP_DEPLOY != '1'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           STATUS: ${{ job.status }}
