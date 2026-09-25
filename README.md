@@ -219,7 +219,7 @@ flowchart LR
 - **모델 소유권**: 모든 모델에는 소유 feature가 하나씩 있습니다.
   - write는 소유 feature에서만 허용합니다(`model-ownership.spec`이 검사).
   - 다른 feature의 데이터를 읽어야 하는 경우는 허용 목록으로 관리합니다.
-  - 매장명이나 상품 썸네일처럼 다른 도메인의 표시값은 조인하지 않고 **생성 시점에 스냅샷 컬럼으로 복사**해 둡니다.
+  - 이력이 남아야 하는 표시값(주문 품목의 매장명·상품 썸네일, 리뷰가 참조하는 주문 품목, 알림 본문)은 조인하지 않고 **생성 시점에 스냅샷 컬럼으로 복사**해 둡니다. 찜 목록·리뷰 상세처럼 현재 값을 보여 줘야 하는 조회는 아직 다른 도메인을 조인하며, 그 목록은 `read-boundary.spec`의 허용 목록이 추적합니다.
 - **Schema-First GraphQL**: SDL 파일이 단일 소스이며 `yarn graphql:codegen`으로 타입을 동기화합니다. 모든 `input`에는 DTO 클래스가 있어야 하고 모든 필드에는 description이 있어야 하며, 둘 다 게이트가 검사합니다.
 - **에러 카탈로그**: 도메인 오류는 `DomainException('CODE')` 하나로 던지고, 코드와 HTTP status와 메시지는 카탈로그가 정본으로 관리합니다. 클라이언트는 응답의 `extensions.code`로 분기합니다.
 - **인증 경로에서 DB 조회 0회**: 서명이 유효한 토큰의 클레임을 신뢰합니다.
@@ -315,18 +315,18 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 
 ### 자주 쓰는 스크립트
 
-| 명령                      | 용도                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `yarn validate`           | lint, tsc, dto:check, docs:check, arch:check, test:scripts, test:cov를 차례로 실행합니다(pre-push와 동일) |
-| `yarn test [경로]`        | Jest 실 DB 통합 테스트를 실행합니다(Docker 필요)                                                          |
-| `yarn test:scripts`       | 인프라와 워크플로 spec(`scripts/*.spec.ts`)을 실행합니다                                                  |
-| `yarn graphql:codegen`    | SDL에서 TypeScript 타입을 생성합니다                                                                      |
-| `yarn dto:check`          | SDL input과 DTO class의 동기화를 검사합니다                                                               |
-| `yarn docs:check`         | SDL description 커버리지를 검사합니다                                                                     |
-| `yarn arch:check`         | dependency-cruiser로 레이어 방향과 순환 의존을 검사합니다                                                 |
-| `yarn prisma:migrate:dev` | 마이그레이션을 생성·적용하고 클라이언트를 다시 생성합니다                                                 |
-| `yarn graphql:docs`       | SpectaQL HTML 문서를 `public/`에 빌드합니다                                                               |
-| `yarn outbox:requeue`     | 운영에서 FAILED 상태의 outbox 이벤트를 재처리합니다(`--id`, `--event-type`, `--all`, `--republish`)       |
+| 명령                      | 용도                                                                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn validate`           | lint, tsc, dto:check, docs:check, arch:check, test:scripts, test:cov를 차례로 실행합니다(pre-push와 동일)                                                                           |
+| `yarn test [경로]`        | Jest 실 DB 통합 테스트를 실행합니다(Docker 필요)                                                                                                                                    |
+| `yarn test:scripts`       | 인프라와 워크플로 spec(`scripts/*.spec.ts`)을 실행합니다                                                                                                                            |
+| `yarn graphql:codegen`    | SDL에서 TypeScript 타입을 생성합니다                                                                                                                                                |
+| `yarn dto:check`          | SDL input과 DTO class의 동기화를 검사합니다                                                                                                                                         |
+| `yarn docs:check`         | SDL description 커버리지를 검사합니다                                                                                                                                               |
+| `yarn arch:check`         | dependency-cruiser로 레이어 방향과 순환 의존을 검사합니다                                                                                                                           |
+| `yarn prisma:migrate:dev` | 마이그레이션을 생성·적용하고 클라이언트를 다시 생성합니다                                                                                                                           |
+| `yarn graphql:docs`       | SpectaQL HTML 문서를 `public/`에 빌드합니다                                                                                                                                         |
+| `yarn outbox:requeue`     | 운영에서 FAILED 상태의 outbox 이벤트를 PENDING으로 되돌립니다(`--id=<n>`, `--event-type=<type>`, `--all`). 소비 DLQ에 빠진 이벤트는 `--event-id=<uuid> --republish`로 다시 싣습니다 |
 
 ## 🧬 GraphQL
 

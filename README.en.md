@@ -219,7 +219,7 @@ flowchart LR
 - **Model ownership**: every model has exactly one owning feature.
   - Writes are allowed only from the owning feature (checked by `model-ownership.spec`).
   - Reads that cross a feature boundary are managed through an allowlist.
-  - Display values from other domains, such as store names or product thumbnails, are not joined at read time; they are **copied into snapshot columns at creation time**.
+  - Display values that must stay historically stable (store name and product thumbnail on order items, the order item a review refers to, notification bodies) are not joined at read time; they are **copied into snapshot columns at creation time**. Reads that must show current values, such as the wishlist and review detail, still join other domains; that list is tracked by the allowlist in `read-boundary.spec`.
 - **Schema-first GraphQL**: SDL files are the single source of truth and `yarn graphql:codegen` keeps the types in sync. Every `input` needs a DTO class and every field needs a description; both are gated.
 - **Error catalog**: domain errors are thrown as a single `DomainException('CODE')`, and the catalog is the source of truth for code, HTTP status, and message. Clients branch on `extensions.code` in the response.
 - **Zero database reads on the auth path**: claims of a validly signed token are trusted.
@@ -315,18 +315,18 @@ Operational endpoints
 
 ### Common Scripts
 
-| Command                   | Purpose                                                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `yarn validate`           | runs lint, tsc, dto:check, docs:check, arch:check, test:scripts, and test:cov in sequence (same as pre-push) |
-| `yarn test [path]`        | Jest integration tests against a real database (Docker required)                                             |
-| `yarn test:scripts`       | infrastructure and workflow specs (`scripts/*.spec.ts`)                                                      |
-| `yarn graphql:codegen`    | generates TypeScript types from the SDL                                                                      |
-| `yarn dto:check`          | verifies SDL inputs and DTO classes are in sync                                                              |
-| `yarn docs:check`         | verifies SDL description coverage                                                                            |
-| `yarn arch:check`         | checks layer direction and cycles with dependency-cruiser                                                    |
-| `yarn prisma:migrate:dev` | creates and applies a migration, then regenerates the client                                                 |
-| `yarn graphql:docs`       | builds the SpectaQL HTML docs into `public/`                                                                 |
-| `yarn outbox:requeue`     | reprocesses FAILED outbox events in production (`--id`, `--event-type`, `--all`, `--republish`)              |
+| Command                   | Purpose                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn validate`           | runs lint, tsc, dto:check, docs:check, arch:check, test:scripts, and test:cov in sequence (same as pre-push)                                                                           |
+| `yarn test [path]`        | Jest integration tests against a real database (Docker required)                                                                                                                       |
+| `yarn test:scripts`       | infrastructure and workflow specs (`scripts/*.spec.ts`)                                                                                                                                |
+| `yarn graphql:codegen`    | generates TypeScript types from the SDL                                                                                                                                                |
+| `yarn dto:check`          | verifies SDL inputs and DTO classes are in sync                                                                                                                                        |
+| `yarn docs:check`         | verifies SDL description coverage                                                                                                                                                      |
+| `yarn arch:check`         | checks layer direction and cycles with dependency-cruiser                                                                                                                              |
+| `yarn prisma:migrate:dev` | creates and applies a migration, then regenerates the client                                                                                                                           |
+| `yarn graphql:docs`       | builds the SpectaQL HTML docs into `public/`                                                                                                                                           |
+| `yarn outbox:requeue`     | resets FAILED outbox events to PENDING in production (`--id=<n>`, `--event-type=<type>`, `--all`); events stuck in a consumer DLQ are republished with `--event-id=<uuid> --republish` |
 
 ## 🧬 GraphQL
 
