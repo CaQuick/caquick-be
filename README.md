@@ -121,7 +121,8 @@
 
 - **홈서버(맥미니)**: 운영 compose([`infra/`](./infra/)) — api·worker·MySQL·Redis·RabbitMQ·백업 + 관측 스택. 외부 노출은 Cloudflare Tunnel만(인바운드 포트 없음)
 - **AWS**: S3 + Presigned URL (미디어) · S3 (DB 백업)
-- **Docker** — 로컬 개발 compose(MySQL·Redis·RabbitMQ) + testcontainers + 운영 이미지 1개(`Dockerfile`, api·worker 공용) + 운영 compose(`infra/compose.yml`: 앱·MySQL·Redis·RabbitMQ·cloudflared·백업, 프로필로 Alloy·Loki·Prometheus·Grafana)
+- **Docker** — 로컬 개발 compose(MySQL·Redis·RabbitMQ) + testcontainers + 운영 이미지 1개(`Dockerfile`, api·worker 공용) + 운영 compose(`infra/compose.yml`: 앱·MySQL·Redis·RabbitMQ·cloudflared·백업, 프로필로 Alloy·Loki·Prometheus·Grafana·exporter)
+- **관측** — Prometheus(앱 `/metrics`·RabbitMQ·mysqld·redis exporter·cAdvisor) + Loki(docker logs, `requestId`/`eventId`로 api↔worker 조인) + Grafana 대시보드 2개·통합 경보 → Discord
 - **Terraform**으로 GitHub repository / branch protection + AWS(S3 미디어·백업 버킷, 앱 IAM 사용자) 관리 (IaC)
 - **GitHub Actions** — pr-check · build-image(GHCR) · deploy(셀프호스트 러너) · CodeQL · Dependabot
 - **Discord webhook** — PR · push · issue 이벤트 알림

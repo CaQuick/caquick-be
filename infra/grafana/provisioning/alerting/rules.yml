@@ -1,0 +1,346 @@
+# 로드맵 v2 09 경보(플랜 4 + 자체 리뷰로 더한 4): 스크레이프 실패 3분(전 잡) · exporter 대상 다운 · cAdvisor 시계열 부재 · 큐 적체 > 500 5분 · 컨테이너 메모리 > 90% 10분 ·
+# Redis maxmemory 90% · outbox FAILED > 0 · DLQ 비어 있지 않음. `x == 0` 필터는 값 0을 남기므로 개수(count)·1-x로 센다.
+# Prometheus 데이터소스(uid prometheus)에 질의하고 Grafana가 평가한다 — Alertmanager 없음. 알림 경로는 policies.yml → contactpoints.yml(Discord).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: caquick
+    folder: caquick
+    interval: 1m
+    rules:
+      - uid: caquick-scrape-down
+        title: ScrapeDown
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: count by (job, role) (up == 0)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: error
+        annotations:
+          summary: '{{ $labels.job }} {{ $labels.role }} 스크레이프가 3분 넘게 실패 — 컨테이너·ready 확인: docker compose ps'
+      - uid: caquick-exporter-backend-down
+        title: ExporterBackendDown
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(1 - mysql_up) + sum(1 - redis_up)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: error
+        annotations:
+          summary: mysqld/redis exporter가 대상에 못 붙는다(mysql_up/redis_up 0) — exporter 사용자·비밀번호(runbook §관측) 확인
+      - uid: caquick-container-metrics-missing
+        title: ContainerMetricsMissing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: absent(container_memory_working_set_bytes{job="cadvisor"})
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: cAdvisor 시계열이 5분 넘게 없다 — alloy 로그·/sys 마운트·cgroup_parent 확인(메모리 경보가 못 본다)
+      - uid: caquick-queue-backlog
+        title: RabbitQueueBacklog
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum by (queue) (rabbitmq_queue_messages_ready{queue!~".*\\.(retry|dlq)$"}) > 500
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: error
+        annotations:
+          summary: 큐 {{ $labels.queue }} 대기 메시지 {{ $values.A }}건이 5분 넘게 500 초과 — worker 소비 지연
+      - uid: caquick-container-memory
+        title: ContainerMemoryHigh
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max by (service) (container_memory_working_set_bytes{job="cadvisor"} / (container_spec_memory_limit_bytes{job="cadvisor"} > 0)) > 0.9
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: error
+        annotations:
+          summary: '{{ $labels.service }} 메모리가 mem_limit의 90%를 10분 넘게 초과 — OOM 전에 상한 조정'
+      - uid: caquick-redis-memory
+        title: RedisMemoryHigh
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: redis_memory_used_bytes / (redis_memory_max_bytes > 0) > 0.9
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: error
+        annotations:
+          summary: 'Redis 사용량이 maxmemory의 90%를 넘었다(noeviction: 곧 쓰기 거부 → 블랙리스트 표식 실패) — maxmemory·mem_limit 조정'
+      - uid: caquick-outbox-failed
+        title: OutboxFailed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max(caquick_outbox_events{status="FAILED"}) > 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: error
+        annotations:
+          summary: outbox FAILED {{ $values.A }}건 — 사람이 requeue해야 풀린다(runbook §outbox 재처리)
+      - uid: caquick-dlq
+        title: RabbitDlqNotEmpty
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum by (queue) (rabbitmq_queue_messages{queue=~".*\\.dlq$"}) > 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+                  type: query
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: DLQ {{ $labels.queue }}에 {{ $values.A }}건 — 원인 해소 뒤 outbox:requeue --event-id --republish

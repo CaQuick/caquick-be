@@ -1,4 +1,5 @@
-# 09에서 경보 규칙·exporter(mysqld·redis)를 더한다. 앱 /metrics는 Bearer 토큰 — compose secret(.env의 METRICS_ACCESS_TOKEN)이 /run/secrets/metrics_token으로 들어온다.
+# 스크레이프 대상: 앱(api·worker, Bearer 토큰 = compose secret), RabbitMQ 내장 플러그인, mysqld·redis exporter, 자기 자신.
+# 컨테이너 자원(cAdvisor)은 alloy가 모아 remote write로 넣는다(job=cadvisor, service 라벨). 경보 규칙은 Grafana 통합 경보(grafana/provisioning/alerting).
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -18,6 +19,23 @@ scrape_configs:
   - job_name: rabbitmq
     static_configs:
       - targets: ['rabbitmq:15692']
+
+  - job_name: mysqld
+    static_configs:
+      - targets: ['mysqld-exporter:9104']
+
+  - job_name: redis
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # 관측 스택 자신 — alloy가 죽으면 cAdvisor 시계열이 조용히 끊긴다(up으로 잡는다)
+  - job_name: alloy
+    static_configs:
+      - targets: ['alloy:12345']
+
+  - job_name: loki
+    static_configs:
+      - targets: ['loki:3100']
 
   - job_name: prometheus
     static_configs:

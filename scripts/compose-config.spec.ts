@@ -12,6 +12,7 @@ const PROFILES = ['edge', 'observability', 'migrate'];
 interface Service {
   image?: string;
   build?: unknown;
+  cgroup_parent?: string;
   secrets?: Array<{ source: string } | string>;
   volumes?: Array<{ source?: string; target?: string }>;
   depends_on?: Record<string, { condition?: string }>;
@@ -101,9 +102,11 @@ describe('infra/compose.yml', () => {
         'loki',
         'migrate',
         'mysql',
+        'mysqld-exporter',
         'prometheus',
         'rabbitmq',
         'redis',
+        'redis-exporter',
         'worker',
       ].sort(),
     );
@@ -170,8 +173,12 @@ describe('infra/compose.yml', () => {
       rendered.services.grafana.environment?.GF_SECURITY_ADMIN_PASSWORD,
     ).toBe('');
     // config 출력은 리터럴 $를 $$로 다시 이스케이프한다
+    // admin 비밀번호와 secret_key 둘 다 검사한다(둘 중 하나가 비면 기본 admin/admin·공개 기본 키로 뜬다)
     expect(rendered.services.grafana.entrypoint?.join(' ')).toMatch(
-      /\[ -n "\$+GF_SECURITY_ADMIN_PASSWORD" \] \|\|/,
+      /\[ -n "\$+GF_SECURITY_ADMIN_PASSWORD" \] && \[ -n "\$+GF_SECURITY_SECRET_KEY" \] \|\|/,
+    );
+    expect(rendered.services.grafana.environment?.GF_SECURITY_SECRET_KEY).toBe(
+      '',
     );
     expect(rendered.services.grafana.entrypoint?.join(' ')).toContain(
       'exec /run.sh',
@@ -204,6 +211,28 @@ describe('infra/compose.yml', () => {
     expect(
       readFileSync(join(infraDir, 'prometheus', 'prometheus.yml'), 'utf8'),
     ).toContain('credentials_file: /run/secrets/metrics_token');
+  });
+
+  it('모든 서비스가 cgroup_parent /caquick/<service>를 가진다 — cAdvisor(raw cgroup)가 경로에서 service 라벨을 만든다(OrbStack에선 docker 핸들러 불가)', () => {
+    for (const [name, service] of Object.entries(rendered.services)) {
+      expect({ name, parent: service.cgroup_parent }).toEqual({
+        name,
+        parent: `/caquick/${name}`,
+      });
+    }
+  });
+
+  it('관측 배선: alloy는 /sys를 읽어 Prometheus remote write로 보내고, Grafana는 프로비저닝·대시보드 디렉터리를 읽는다', () => {
+    const sources = (name: string) =>
+      (rendered.services[name].volumes ?? []).map((v) => v.source);
+    expect(sources('alloy')).toEqual(expect.arrayContaining(['/sys']));
+    expect(rendered.services.prometheus.command).toEqual(
+      expect.arrayContaining(['--web.enable-remote-write-receiver']),
+    );
+    expect(
+      sources('grafana').some((s) => s?.endsWith('/grafana/dashboards')),
+    ).toBe(true);
+    expect(sources('mysql').some((s) => s?.endsWith('/mysql/init'))).toBe(true);
   });
 
   it('반증: 인바운드 포트는 열지 않는다 — 저장소·worker는 포트 없음, 나머지 진단 포트는 전부 127.0.0.1', () => {

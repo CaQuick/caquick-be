@@ -144,6 +144,11 @@ describe('deploy.yml', () => {
       'grep -E \'^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=\' "$tmp_app" >> "$tmp_env"',
     );
     expect(env?.run).toContain("grep -q '^METRICS_ACCESS_TOKEN=.'");
+    // 관측이 조용히 죽는 값 누락(웹훅 자리표시자·Grafana 비밀·exporter 비밀번호)은 배포에서 막는다
+    expect(env?.run).toContain("grep -q '^DISCORD_ALERT_WEBHOOK_URL=.'");
+    expect(env?.run).toContain(
+      'for key in GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY MYSQL_EXPORTER_PASSWORD',
+    );
     // 비어 있는 secret으로 빈 파일을 만들어 배포하지 않는다
     expect(env?.run).toContain('[ -n "$DOTENV" ] && [ -n "$APP_ENV" ]');
     const deploy = job.steps.find((s) => s.name?.startsWith('Deploy'));
@@ -216,6 +221,7 @@ describe('infra/deploy.sh', () => {
       'wait_healthy api',
       '--profile edge --profile observability up -d --build',
       'wait_healthy cloudflared',
+      'for s in grafana alloy mysqld-exporter redis-exporter; do wait_healthy "$s"; done',
     ].map((m) => ({ m, at: script.indexOf(m) }));
     for (const { m, at } of marks)
       expect({ m, found: at > -1 }).toEqual({ m, found: true });
