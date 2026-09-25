@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,8 +19,12 @@ function fakeBin(dir: string, name: string, body: string): void {
   writeFileSync(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 }
 
-/** 루프 모드를 한 바퀴만 — 가짜 date(고정 시각)·가짜 sleep(종료)으로 */
-function runLoopOnce(hour: string, dateHour: string) {
+/** 루프 모드를 N바퀴만 — 가짜 date(고정 시각)·가짜 sleep(N번째에 종료)으로 */
+function runLoopOnce(
+  hour: string,
+  dateHour: string,
+  opts: { loops?: number; s3Fails?: boolean; bucket?: string } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'caquick-backup-loop-'));
   const bin = join(root, 'bin');
   const out = join(root, 'out');
@@ -27,11 +32,21 @@ function runLoopOnce(hour: string, dateHour: string) {
   fakeBin(bin, 'mysqldump', 'echo "-- MySQL dump"');
   fakeBin(
     bin,
+    'aws',
+    `echo "$*" >> "${join(root, 'aws.log')}"; ${opts.s3Fails ? 'exit 1' : 'exit 0'}`,
+  );
+  fakeBin(
+    bin,
     'date',
     `case "$*" in *%H) echo ${dateHour};; *%F) echo 2026-09-25;; *) echo 20260925T${dateHour}0000Z;; esac`,
   );
-  // 한 바퀴 뒤 sleep에서 부모(루프)를 TERM으로 끝낸다 — 그냥 exit 0이면 루프가 공회전한다
-  fakeBin(bin, 'sleep', 'kill -s TERM $PPID; exit 0');
+  // N바퀴 뒤 sleep에서 부모(루프)를 TERM으로 끝낸다 — 그냥 exit 0이면 루프가 공회전한다
+  const counter = join(root, 'loops');
+  fakeBin(
+    bin,
+    'sleep',
+    `n=$(cat "${counter}" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${counter}"; [ "$n" -ge ${opts.loops ?? 1} ] && kill -s TERM $PPID; exit 0`,
+  );
   try {
     execFileSync('bash', [SCRIPT], {
       encoding: 'utf8',
@@ -41,12 +56,13 @@ function runLoopOnce(hour: string, dateHour: string) {
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         BACKUP_DIR: out,
         BACKUP_HOUR: hour,
+        BACKUP_S3_BUCKET: opts.bucket ?? '',
         ALIVE_FILE: join(root, 'alive'),
         MYSQL_USER: 'u',
         MYSQL_PASSWORD: 'p',
       },
     });
-    return { ended: 'exit 0', files: readdirSync(out) };
+    return { ended: 'exit 0', files: readdirSync(out), uploads: uploads(root) };
   } catch (error) {
     const e = error as {
       status: number | null;
@@ -57,8 +73,16 @@ function runLoopOnce(hour: string, dateHour: string) {
       ended: e.signal === 'SIGTERM' ? 'loop' : `exit ${e.status ?? e.signal}`,
       stderr: e.stderr,
       files: existsSync(out) ? readdirSync(out) : [],
+      uploads: uploads(root),
     };
   }
+}
+
+function uploads(root: string): string[] {
+  const p = join(root, 'aws.log');
+  return existsSync(p)
+    ? readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
+    : [];
 }
 
 function runOnce(opts: {
@@ -149,6 +173,14 @@ describe('infra/backup/backup.sh (BACKUP_RUN_ONCE)', () => {
       expect({ hour, ended: r.ended }).toEqual({ hour, ended: 'exit 1' });
       expect(r.files).toEqual([]);
     }
+  });
+
+  it('반증: S3가 죽어 있으면 매분 재시도해도 새 덤프를 만들지 않고 같은 파일을 다시 올린다 — 하루에 덤프 60개로 디스크를 채우지 않는다', () => {
+    const r = runLoopOnce('4', '04', { loops: 3, s3Fails: true, bucket: 'b' });
+    expect(r.ended).toBe('loop');
+    expect(r.files).toHaveLength(1);
+    expect(r.uploads).toHaveLength(3);
+    expect(new Set(r.uploads).size).toBe(1);
   });
 
   it('반증: MYSQL_USER·MYSQL_PASSWORD가 없으면 시작 시 죽는다', () => {

@@ -14,31 +14,47 @@ if ! [[ "$BACKUP_HOUR" =~ ^[0-9]{1,2}$ ]] || [ "$((10#$BACKUP_HOUR))" -gt 23 ]; 
 fi
 BACKUP_HOUR=$(printf '%02d' "$((10#$BACKUP_HOUR))")
 
+# 로컬 사본은 최근 3개만(정리 실패는 백업 실패가 아니다). 덤프 직후에 돈다 — 업로드가 실패해도 디스크는 유한하게
+prune_local() {
+  ls -1t "$BACKUP_DIR"/*.sql.gz 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null || true
+}
+
+# 업로드만 실패한 덤프는 같은 날 안에서 다시 올린다 — 매분 재시도마다 새 전체 덤프를 만들지 않는다
+pending_upload=""
+pending_day=""
+
 run_backup() {
-  local stamp file
-  stamp=$(date -u +%Y%m%dT%H%M%SZ)
-  file="$BACKUP_DIR/${MYSQL_DATABASE}-${stamp}.sql.gz"
-  mkdir -p "$BACKUP_DIR"
-  # pipefail이라 mysqldump 실패도 파이프 상태로 온다 — 부분 파일은 남기지 않는다
-  if ! MYSQL_PWD="$MYSQL_PASSWORD" mysqldump -h "$MYSQL_HOST" -u "$MYSQL_USER" \
-    --single-transaction --routines --triggers --set-gtid-purged=OFF --no-tablespaces "$MYSQL_DATABASE" \
-    | gzip > "$file"; then
-    rm -f "$file"
-    echo "backup: mysqldump 실패" >&2
-    return 1
+  local file today
+  today=$(date -u +%F)
+  if [ -n "$pending_upload" ] && [ -f "$pending_upload" ] && [ "$pending_day" = "$today" ]; then
+    file=$pending_upload
+    echo "backup: 지난 시도의 덤프를 다시 올린다 — $file"
+  else
+    file="$BACKUP_DIR/${MYSQL_DATABASE}-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+    mkdir -p "$BACKUP_DIR"
+    # pipefail이라 mysqldump 실패도 파이프 상태로 온다 — 부분 파일은 남기지 않는다
+    if ! MYSQL_PWD="$MYSQL_PASSWORD" mysqldump -h "$MYSQL_HOST" -u "$MYSQL_USER" \
+      --single-transaction --routines --triggers --set-gtid-purged=OFF --no-tablespaces "$MYSQL_DATABASE" \
+      | gzip > "$file"; then
+      rm -f "$file"
+      echo "backup: mysqldump 실패" >&2
+      return 1
+    fi
+    echo "backup: $file ($(wc -c < "$file" | tr -d ' ') bytes)"
+    prune_local
   fi
-  echo "backup: $file ($(wc -c < "$file" | tr -d ' ') bytes)"
   if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
     if ! aws s3 cp "$file" "s3://$BACKUP_S3_BUCKET/mysql/$(basename "$file")" --only-show-errors; then
-      echo "backup: S3 업로드 실패 — 로컬 파일은 남김" >&2
+      pending_upload=$file
+      pending_day=$today
+      echo "backup: S3 업로드 실패 — 로컬 파일은 남기고 다음 시도에 다시 올린다" >&2
       return 1
     fi
     echo "backup: uploaded s3://$BACKUP_S3_BUCKET/mysql/$(basename "$file")"
   else
     echo "backup: BACKUP_S3_BUCKET 미설정 — 로컬 파일만"
   fi
-  # 로컬 사본은 최근 3개만(정리 실패는 백업 실패가 아니다)
-  ls -1t "$BACKUP_DIR"/*.sql.gz 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null || true
+  pending_upload=""
   return 0
 }
 
