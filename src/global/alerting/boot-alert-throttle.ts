@@ -2,6 +2,7 @@ import {
   chmodSync,
   closeSync,
   constants,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -41,7 +42,7 @@ export function shouldSendBootAlert(
   if (!acquireLock(lockPath, nowMs)) return false;
   try {
     const statePath = join(stateDir, 'last-sent');
-    const lastSentAt = readLastSentAt(statePath);
+    const lastSentAt = readLastSentAt(statePath, nowMs);
     if (nowMs - lastSentAt < windowMs) return false;
     try {
       writeStateNoFollow(statePath, String(nowMs));
@@ -106,7 +107,17 @@ function ensurePrivateDir(stateDir: string): boolean {
     if (!st.isDirectory()) return false;
     const uid = process.getuid?.();
     if (uid !== undefined && st.uid !== uid) return false;
-    if ((st.mode & 0o077) !== 0) chmodSync(stateDir, 0o700);
+    if ((st.mode & 0o077) !== 0) {
+      chmodSync(stateDir, 0o700);
+      // 느슨했던 동안 남이 심어 둔 상태(먼 미래의 last-sent·잠금)는 믿지 않는다 — 비우고 새로 시작
+      for (const name of ['lock', 'last-sent']) {
+        try {
+          unlinkSync(join(stateDir, name));
+        } catch {
+          // 없으면 그만
+        }
+      }
+    }
     return true;
   } catch {
     return false;
@@ -128,10 +139,20 @@ function writeStateNoFollow(statePath: string, value: string): void {
   }
 }
 
-function readLastSentAt(statePath: string): number {
+/** 내 소유의 일반 파일만 읽는다(링크·남의 파일은 0). 미래 값은 억제를 영구화하므로 무시한다. */
+function readLastSentAt(statePath: string, nowMs: number): number {
   try {
-    const value = Number(readFileSync(statePath, 'utf8'));
-    return Number.isFinite(value) ? value : 0;
+    const { O_RDONLY, O_NOFOLLOW } = constants;
+    const fd = openSync(statePath, O_RDONLY | O_NOFOLLOW);
+    try {
+      const st = fstatSync(fd);
+      const uid = process.getuid?.();
+      if (!st.isFile() || (uid !== undefined && st.uid !== uid)) return 0;
+      const value = Number(readFileSync(fd, 'utf8'));
+      return Number.isFinite(value) && value <= nowMs ? value : 0;
+    } finally {
+      closeSync(fd);
+    }
   } catch {
     return 0;
   }

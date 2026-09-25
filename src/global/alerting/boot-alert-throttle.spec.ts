@@ -142,6 +142,28 @@ describe('shouldSendBootAlert', () => {
     expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
   });
 
+  it('반증: 느슨했던 디렉터리에 심어 둔 먼 미래의 last-sent는 버린다 — 영구 억제가 되지 않는다', () => {
+    const stateDir = join(dir, 'planted');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777);
+    writeFileSync(
+      join(stateDir, 'last-sent'),
+      String(10_000 + 10 ** 12),
+      'utf8',
+    );
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    // 이제 내 기록이 기준이다
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+  });
+
+  it('반증: 700 디렉터리라도 last-sent가 미래 값이면 무시한다', () => {
+    const stateDir = join(dir, 'future');
+    mkdirSync(stateDir, { mode: 0o700 });
+    writeFileSync(join(stateDir, 'last-sent'), String(10 ** 13), 'utf8');
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+  });
+
   it('반증: 상태 디렉터리는 700으로 만들고, 심겨 있는 심볼릭 링크는 따라가지 않는다(대상 파일 불변, 경보는 보낸다)', () => {
     const stateDir = join(dir, 'state');
     const victim = join(dir, 'victim');
