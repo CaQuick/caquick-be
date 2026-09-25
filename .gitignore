@@ -93,3 +93,7 @@ prisma/seed/data/*.csv
 
 # Prisma 7 생성 클라이언트 (postinstall이 생성)
 src/generated/
+
+# 운영 compose(infra/) — 예시 파일만 커밋. 실제 값과 배포 잡이 만드는 시크릿 파일은 제외
+!infra/.env.example
+infra/prometheus/secrets/
