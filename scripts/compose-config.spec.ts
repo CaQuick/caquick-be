@@ -34,6 +34,7 @@ interface Rendered {
 /** base 스택(프로필 없음)이 요구하는 값 — 프로필 서비스의 비밀은 여기 없어야 한다(아래 반증) */
 const REQUIRED_KEYS = [
   'IMAGE',
+  'IMAGE_TAG',
   'MYSQL_ROOT_PASSWORD',
   'MYSQL_PASSWORD',
   'RABBITMQ_USER',
@@ -114,7 +115,7 @@ describe('infra/compose.yml', () => {
 
   it('api·worker·migrate는 같은 이미지에 역할만 다르고, 앱·저장소는 ready/ping 헬스체크·재시작 정책·mem_limit을 가진다', () => {
     const { api, worker, migrate } = rendered.services;
-    expect(api.image).toBe('x:main');
+    expect(api.image).toBe('x:x');
     expect(worker.image).toBe(api.image);
     expect(migrate.image).toBe(api.image);
     expect(api.environment?.APP_ROLE).toBe('api');
@@ -140,6 +141,21 @@ describe('infra/compose.yml', () => {
         name === 'migrate' ? 'no' : 'unless-stopped',
       );
       expect(bytes(service.mem_limit)).toBeGreaterThan(0);
+    }
+  });
+
+  it('반증: 헬스체크 안의 셸 변수는 compose 보간에 먹히지 않는다 — $out이 빈 문자열이 되면 exporter가 영원히 unhealthy다', () => {
+    for (const name of ['mysqld-exporter', 'redis-exporter']) {
+      const test = rendered.services[name].healthcheck?.test?.join(' ') ?? '';
+      // 렌더링 출력은 리터럴 $를 $$로 다시 이스케이프하므로 $$out이 남아 있어야 한다
+      expect({ name, test }).toEqual({
+        name,
+        test: expect.stringMatching(/case "\$+out" in/),
+      });
+      expect({ name, test }).not.toEqual({
+        name,
+        test: expect.stringContaining('case "" in'),
+      });
     }
   });
 

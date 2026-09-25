@@ -45,7 +45,25 @@
   ```bash
   docker compose exec mysql bash /docker-entrypoint-initdb.d/01-exporter-user.sh
   ```
-- 컨테이너 메모리 경보(`ContainerMemoryHigh`): `docker stats --no-stream`으로 확인하고 `compose.yml`의 `mem_limit`을 올린다(합계 ≤ 6 GB, `scripts/compose-config.spec.ts`가 고정).
+- 컨테이너 메모리 경보(`ContainerMemoryHigh`): `docker stats --no-stream`으로 확인하고 `compose.yml`의 `mem_limit`을 올린다(합계 ≤ 6 GB, `scripts/compose-config.spec.ts`가 고정). 실측(2026-09-25, 맥미니 M-시리즈 16 GB, `ab -n 4000 -c 40` GraphQL 부하 — DB 경로 없는 최소 쿼리라 api·mysql은 상한 여유가 크다):
+
+  | 서비스          |      유휴 | 부하 최대 |                                       `mem_limit` |
+  | --------------- | --------: | --------: | ------------------------------------------------: |
+  | api             |       163 |       214 |                                               768 |
+  | worker          |       141 |       140 |                                               512 |
+  | mysql           |       461 |       476 |                                              1024 |
+  | redis           |        12 |        13 |                                               128 |
+  | rabbitmq        |        82 |        89 |                                               384 |
+  | backup          |         1 |         5 |                                               256 |
+  | cloudflared     |        28 |        24 |                                                64 |
+  | prometheus      |        71 |        95 |                                               256 |
+  | loki            |       112 |       120 |                                               256 |
+  | alloy           |    72~137 |       177 | 256 (초안 192는 부하 중 92% — 경보 임계 90% 초과) |
+  | grafana         |       113 |       229 |                                               640 |
+  | mysqld-exporter |        10 |        19 |                                                64 |
+  | redis-exporter  |        10 |        18 |                                                64 |
+  | **합계(MiB)**   | **1,276** | **1,619** |                  **4,672** (+migrate 512, 일회성) |
+
 - 경보 채널 시험: Grafana → Alerting → Contact points → discord → Test. 규칙은 Alerting → Alert rules(폴더 caquick).
 
 ## 롤백(배포)

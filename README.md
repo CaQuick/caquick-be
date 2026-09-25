@@ -307,7 +307,7 @@ yarn start:dev
 docker build -t caquick-be:local .
 
 # 운영 compose — 값은 infra/.env(저장소·터널)와 infra/app.env(앱) (키 목록: *.example)
-# 방금 빌드한 이미지를 쓰려면 infra/.env에 IMAGE=caquick-be IMAGE_TAG=local (기본값은 GHCR :main)
+# 방금 빌드한 이미지를 쓰려면 infra/.env에 IMAGE=caquick-be IMAGE_TAG=local (IMAGE_TAG 필수 — GHCR에는 커밋 sha 태그만 있다)
 cd infra
 docker compose --profile migrate run --rm migrate        # prisma migrate deploy
 docker compose up -d                                     # api·worker·mysql·redis·rabbitmq·backup
