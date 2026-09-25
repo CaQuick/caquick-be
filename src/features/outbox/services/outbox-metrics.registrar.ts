@@ -18,7 +18,8 @@ export class OutboxMetricsRegistrar implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    return;
+    if (!runsBackgroundJobs(resolveAppRole())) return;
+    this.register();
   }
 
   /** 테스트가 역할과 무관하게 직접 부른다 */

@@ -31,7 +31,7 @@ export class MetricsService {
   /** 관측은 Express 'finish'에서(HttpMetricsMiddleware) — 가드 거절·필터가 정한 최종 상태·404까지 실제 상태 코드로 잡힌다. */
   readonly httpRequestDuration = new Histogram({
     name: 'caquick_http_request_duration_seconds',
-    help: 'HTTP 요청 처리 시간(초). route는 라우트 패턴, 매칭 전은 <unmatched>.',
+    help: 'HTTP 요청 처리 시간(초). route는 컨트롤러 패턴 또는 마운트 경로(/graphql), 없으면 <unmatched>. status는 상태 코드, 클라이언트가 끊으면 aborted.',
     labelNames: ['method', 'route', 'status'] as const,
     buckets: SECONDS_BUCKETS,
     registers: [this.registry],
@@ -48,7 +48,7 @@ export class MetricsService {
 
   readonly outboxConsumeDuration = new Histogram({
     name: 'caquick_outbox_consume_duration_seconds',
-    help: 'outbox 소비자 handle 처리 시간(초). result = ok|retry|dlq.',
+    help: 'outbox 소비자 handle 처리 시간(초). result = ok|retry|dlq|dropped(구독 밖 event_type).',
     labelNames: ['consumer', 'result'] as const,
     buckets: SECONDS_BUCKETS,
     registers: [this.registry],

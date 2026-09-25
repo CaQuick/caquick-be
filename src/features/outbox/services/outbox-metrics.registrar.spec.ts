@@ -15,6 +15,7 @@ const NOW = new Date('2026-09-25T12:00:00.000Z');
 describe('OutboxMetricsRegistrar (real DB)', () => {
   let registrar: OutboxMetricsRegistrar;
   let metrics: MetricsService;
+  let repo: OutboxRepository;
   let publisher: OutboxPublisher;
   let prisma: PrismaClient;
   const originalRole = process.env.APP_ROLE;
@@ -33,6 +34,7 @@ describe('OutboxMetricsRegistrar (real DB)', () => {
     });
     registrar = module.get(OutboxMetricsRegistrar);
     metrics = module.get(MetricsService);
+    repo = module.get(OutboxRepository);
     publisher = module.get(OutboxPublisher);
     prisma = p;
   });
@@ -62,6 +64,17 @@ describe('OutboxMetricsRegistrar (real DB)', () => {
     process.env.APP_ROLE = 'api';
     registrar.onModuleInit();
     expect(await metrics.text()).not.toContain('caquick_outbox_events');
+  });
+
+  it('worker 역할에서는 onModuleInit이 등록한다 — no-op이면 게이지가 영영 안 나온다', async () => {
+    process.env.APP_ROLE = 'worker';
+    const own = new MetricsService();
+    new OutboxMetricsRegistrar(own, repo, {
+      now: () => NOW,
+    } as ClockService).onModuleInit();
+    expect(await own.text()).toContain(
+      'caquick_outbox_events{status="PENDING"} 0',
+    );
   });
 
   it('상태별 건수(없는 상태 0)와 기한이 된 PENDING의 나이(초)를 스크레이프 때 계산한다 — 백오프 대기 행은 제외', async () => {

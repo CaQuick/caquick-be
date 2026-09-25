@@ -255,7 +255,7 @@ export class RabbitConsumerHostService
     const cfg = this.config.getOrThrow<OutboxConfig>('outbox');
     // 관측은 파싱 전에 시작 — 깨진 본문의 DLQ 이동도 result=dlq로 세야 대시보드가 DLQ 사건을 놓치지 않는다
     const startedAt = performance.now();
-    const observe = (result: 'ok' | 'retry' | 'dlq') =>
+    const observe = (result: 'ok' | 'retry' | 'dlq' | 'dropped') =>
       this.metrics.outboxConsumeDuration.observe(
         { consumer: consumer.name, result },
         (performance.now() - startedAt) / 1000,
@@ -291,6 +291,7 @@ export class RabbitConsumerHostService
         eventId: parsed.eventId,
       });
       this.ack(channel, message);
+      observe('dropped');
       return;
     }
     try {
