@@ -4,6 +4,15 @@
 
 ## 관리 범위
 
+### AWS (`aws.tf`)
+
+- 미디어 버킷 `caquick-media-dev`·`caquick-media-prod`(이미 있던 것 — `import` 블록으로 연결, 공개 읽기 정책·PUT/GET CORS·ACL 차단·BucketOwnerEnforced)
+- 백업 버킷 `caquick-db-backup`(비공개, `mysql/` 14일 만료, 버전 없음)
+- IAM 사용자 2개 — `caquick-app` + `CaQuickApp`(미디어 put/get만), `caquick-backup` + `CaQuickBackup`(백업 버킷 put/get/list만). 앱 키가 새도 덤프에는 닿지 않는다. **액세스 키는 Terraform이 만들지 않는다**(secret이 state에 남는다): `aws iam create-access-key --user-name caquick-app` → `APP_ENV`의 `AWS_*`·로컬 `.env`, `aws iam create-access-key --user-name caquick-backup` → `DOTENV`의 `BACKUP_AWS_*`
+- 관리 밖: 사람 전용 `cw7`(AdministratorAccess — Terraform·CLI에만 쓴다), CodeDeploy 시절 `caquick-deploy` 사용자·`CaQuickDeploy` 정책·CodeDeploy 앱·중지된 EC2(정리는 별도 판단)
+
+### GitHub (`main.tf`)
+
 - 레포 머지 옵션 (`delete_branch_on_merge`, `allow_auto_merge` 등)
 - `main` 브랜치 Ruleset (삭제/force push 차단, PR 필수, CI 통과 필수)
 - `develop` 브랜치 Ruleset (동일 수준)
@@ -19,6 +28,9 @@ brew install terraform
 
 # 2. GitHub 인증 (gh CLI 토큰 재사용 — classic PAT를 새로 만들 필요 없음)
 export GITHUB_TOKEN=$(gh auth token)
+
+# 3. AWS 인증 — 사람 전용 키(cw7). 앱 키(caquick-app)로는 IAM·버킷 생성 권한이 없어 apply가 실패한다(의도)
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
 ```
 
 필요 스코프: `repo` (classic) 또는 `Administration: Read and write` (fine-grained).
@@ -43,6 +55,8 @@ terraform import github_repository_ruleset.develop_msa_protection caquick-be:<ru
 # import 후 plan 돌려서 drift 없는지 확인
 terraform plan
 ```
+
+AWS 리소스(미디어 버킷 2개·백업 버킷·IAM 사용자·정책·연결)는 전부 `aws.tf`의 `import` 블록이 apply 때 자동으로 연결한다(이미 state에 있으면 no-op) — 별도 import 명령이 없다. state를 잃었을 때 빈 state로 plan하면 AWS 쪽은 전부 `to import`(add 0)로 잡힌다 — `to add`로 남는 4개(레포·Ruleset 3)는 위 GitHub import 명령으로 먼저 연결한다(실측 2026-09-25: `16 to import, 4 to add`).
 
 > owner는 provider 인증(`GITHUB_TOKEN`)에서 자동 결정되므로 import 시 별도 지정 불필요.
 

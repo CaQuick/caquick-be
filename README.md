@@ -122,7 +122,7 @@
 - **홈서버(맥미니)**: 운영 compose([`infra/`](./infra/)) — api·worker·MySQL·Redis·RabbitMQ·백업 + 관측 스택. 외부 노출은 Cloudflare Tunnel만(인바운드 포트 없음)
 - **AWS**: S3 + Presigned URL (미디어) · S3 (DB 백업)
 - **Docker** — 로컬 개발 compose(MySQL·Redis·RabbitMQ) + testcontainers + 운영 이미지 1개(`Dockerfile`, api·worker 공용) + 운영 compose(`infra/compose.yml`: 앱·MySQL·Redis·RabbitMQ·cloudflared·백업, 프로필로 Alloy·Loki·Prometheus·Grafana)
-- **Terraform**으로 GitHub repository / branch protection 관리 (IaC)
+- **Terraform**으로 GitHub repository / branch protection + AWS(S3 미디어·백업 버킷, 앱 IAM 사용자) 관리 (IaC)
 - **GitHub Actions** — pr-check · build-image(GHCR) · deploy(셀프호스트 러너) · CodeQL · Dependabot
 - **Discord webhook** — PR · push · issue 이벤트 알림
 - **Winston** 구조화 로그 + `x-request-id` 상관관계 추적
@@ -273,7 +273,7 @@ yarn start:dev
 | **OIDC (Google)**   | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL`                                                                                                                                                                                                                                                                                                                                               |
 | **OIDC (Kakao)**    | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL`                                                                                                                                                                                                                                                                                                                                                  |
 | **OIDC (공통)**     | `OIDC_TEMP_COOKIE_MAX_AGE_MS`                                                                                                                                                                                                                                                                                                                                                                                                |
-| **AWS S3**          | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS`                                                                                                                                                                                                                                                                                                                    |
+| **AWS S3**          | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`(IAM 사용자 `caquick-app` — Terraform이 만든 최소 권한: 미디어 put/get만. 백업은 별도 `caquick-backup`), `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS`                                                                                                                                                                                                             |
 | **Docs**            | `DOCS_ACCESS_TOKEN` — `/gql-docs`·`/rest-docs` 접근 토큰. 운영 필수(미설정이면 production 부팅 실패), 그 외는 선택                                                                                                                                                                                                                                                                                                           |
 | **메트릭**          | `METRICS_ACCESS_TOKEN` — `GET /metrics`의 Bearer 토큰. 운영 필수(api가 공개 인터넷에 있어 무인증 노출 금지), 미설정이면 로컬·CI는 열림. Prometheus가 같은 값을 보낸다                                                                                                                                                                                                                                                        |
 | **경보 (선택)**     | `DISCORD_ALERT_WEBHOOK_URL` — outbox FAILED·부팅 실패 등 운영 경보를 보낼 Discord 웹훅. 미설정이면 로그로만 남긴다. `ALERT_DEDUPE_WINDOW_MS`(기본 300000) — 같은 경보 억제 창                                                                                                                                                                                                                                                |
@@ -306,6 +306,7 @@ yarn start:dev
 docker build -t caquick-be:local .
 
 # 운영 compose — 값은 infra/.env(저장소·터널)와 infra/app.env(앱) (키 목록: *.example)
+# 방금 빌드한 이미지를 쓰려면 infra/.env에 IMAGE=caquick-be IMAGE_TAG=local (기본값은 GHCR :main)
 cd infra
 docker compose --profile migrate run --rm migrate        # prisma migrate deploy
 docker compose up -d                                     # api·worker·mysql·redis·rabbitmq·backup
