@@ -47,20 +47,37 @@ describe('build-image.yml', () => {
   const wf = workflow('.github/workflows/build-image.yml');
   const build = wf.jobs.build;
 
-  it('main push에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
-    expect(wf.on.push?.branches).toEqual(['main']);
+  it('main은 CI(pr-check) 성공(workflow_run, 같은 sha, 이 레포 push)에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
+    expect(wf.on.push).toBeUndefined();
+    expect(wf.on.workflow_run?.workflows).toEqual(['CI']);
+    expect(wf.on.workflow_run?.branches).toEqual(['main']);
     expect(wf.on.pull_request?.branches).toEqual(
       expect.arrayContaining(['main', 'develop-msa']),
     );
+    // 이미지 빌드는 lint·테스트를 돌리지 않는다 — CI가 같은 커밋에서 성공한 뒤에만
+    expect(build.if).toContain("conclusion == 'success'");
+    expect(build.if).toContain("workflow_run.event == 'push'");
+    expect(build.if).toContain(
+      'head_repository.full_name == github.repository',
+    );
+    expect(build.if).toContain('head_sha == github.sha');
     const push = build.steps.find((s) =>
       s.uses?.startsWith('docker/build-push-action'),
     );
-    expect(push?.with?.push).toBe("${{ github.event_name == 'push' }}");
+    expect(push?.with?.push).toBe("${{ github.event_name == 'workflow_run' }}");
     expect(push?.with?.platforms).toBe('linux/arm64');
+    const meta = build.steps.find((s) =>
+      s.uses?.startsWith('docker/metadata-action'),
+    );
+    expect(String(meta?.with?.tags)).toContain('workflow_run.head_sha');
     const login = build.steps.find((s) =>
       s.uses?.startsWith('docker/login-action'),
     );
-    expect(login?.if).toBe("github.event_name == 'push'");
+    expect(login?.if).toBe("github.event_name == 'workflow_run'");
+    const checkout = build.steps.find((s) =>
+      s.uses?.startsWith('actions/checkout'),
+    );
+    expect(String(checkout?.with?.ref)).toContain('workflow_run.head_sha');
   });
 
   it('반증: main 빌드는 concurrency 그룹 하나에서 앞선 실행을 취소한다 — 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게', () => {
@@ -190,7 +207,7 @@ describe('infra/deploy.sh', () => {
       'wait_healthy worker',
       'up -d api',
       'wait_healthy api',
-      '--profile edge --profile observability up -d',
+      '--profile edge --profile observability up -d --build',
       'wait_healthy cloudflared',
     ].map((m) => ({ m, at: script.indexOf(m) }));
     for (const { m, at } of marks)

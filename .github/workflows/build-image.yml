@@ -1,9 +1,13 @@
 name: Build Image
 
-# 앱 이미지(P2-07, M5). main push → arm64 빌드 → GHCR(:<sha>·:main). PR은 빌드만(푸시 없음) — Dockerfile 게이트.
+# 앱 이미지(P2-07, M5). main은 **CI(pr-check)가 같은 커밋에서 성공한 뒤** arm64 빌드 → GHCR(:<sha>·:main) → Deploy.
+# 이미지 빌드는 lint·테스트를 돌리지 않으므로 push 직후가 아니라 CI 성공(workflow_run)에 건다 — 두 PR이 각각 통과해도 합친 main이
+# 깨질 수 있어서(strict_required_status_checks_policy=false). PR은 빌드만(푸시 없음) — Dockerfile 게이트.
 # 홈서버(맥미니, arm64)에 맞춰 arm64만 만든다. 공개 레포라 GitHub 호스트 arm64 러너를 쓴다(QEMU 없이 네이티브).
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   pull_request:
     branches: [main, develop, develop-msa]
@@ -14,23 +18,33 @@ permissions:
 
 # main 빌드는 그룹 하나 — 앞선 빌드를 취소해 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게(취소된 run은 배포가 건너뛴다)
 concurrency:
-  group: ${{ github.event_name == 'push' && 'build-image-main' || format('build-image-pr-{0}', github.event.pull_request.number) }}
+  group: ${{ github.event_name == 'workflow_run' && 'build-image-main' || format('build-image-pr-{0}', github.event.pull_request.number) }}
   cancel-in-progress: true
 
 jobs:
   build:
+    # main: 이 레포 main에 대한 push의 CI가 성공했고, 그 커밋이 아직 main 끝일 때만(옛 커밋의 늦은 CI는 건너뜀)
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_sha == github.sha)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Login to GHCR (main push만)
-        if: github.event_name == 'push'
+      - name: Login to GHCR (main만)
+        if: github.event_name == 'workflow_run'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -43,15 +57,15 @@ jobs:
         with:
           images: ghcr.io/caquick/caquick-be
           tags: |
-            type=sha,format=long,prefix=
-            type=raw,value=main,enable={{is_default_branch}}
+            type=raw,value=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=main,enable=${{ github.event_name == 'workflow_run' }}
 
       - name: Build (main이면 push)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/arm64
-          push: ${{ github.event_name == 'push' }}
+          push: ${{ github.event_name == 'workflow_run' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
