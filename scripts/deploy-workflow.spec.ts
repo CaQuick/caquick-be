@@ -80,9 +80,12 @@ describe('build-image.yml', () => {
     expect(String(checkout?.with?.ref)).toContain('workflow_run.head_sha');
   });
 
-  it('반증: main 빌드는 concurrency 그룹 하나에서 앞선 실행을 취소한다 — 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게', () => {
-    expect(wf.concurrency?.group).toContain("'build-image-main'");
+  it('반증: main 빌드의 concurrency 그룹은 sha별 — 옛 커밋의 늦은 CI 완료가 지금 main 끝의 빌드를 취소하지 않는다(순서는 head_sha == github.sha 검사가 맡는다)', () => {
+    expect(String(wf.concurrency?.group)).toContain(
+      "format('build-image-main-{0}', github.event.workflow_run.head_sha)",
+    );
     expect(wf.concurrency?.['cancel-in-progress']).toBe(true);
+    expect(build.if).toContain('head_sha == github.sha');
   });
 
   it('반증: 셀프호스트 러너를 쓰지 않는다 — 공개 레포의 PR 코드가 홈서버에서 돌면 안 된다', () => {
@@ -111,8 +114,8 @@ describe('deploy.yml', () => {
     // workflow_run은 실패한 빌드·다른 브랜치에서도 온다 — if로 한 번 더 거른다
     expect(job.if).toContain("conclusion == 'success'");
     expect(job.if).toContain("head_branch == 'main'");
-    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — push 이벤트 + 이 레포의 빌드만
-    expect(job.if).toContain("workflow_run.event == 'push'");
+    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — CI 체인(workflow_run) 이벤트 + 이 레포의 빌드만
+    expect(job.if).toContain("workflow_run.event == 'workflow_run'");
     expect(job.if).toContain('head_repository.full_name == github.repository');
   });
 

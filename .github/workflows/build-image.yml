@@ -16,9 +16,10 @@ permissions:
   contents: read
   packages: write
 
-# main 빌드는 그룹 하나 — 앞선 빌드를 취소해 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게(취소된 run은 배포가 건너뛴다)
+# 그룹은 커밋(sha)별 — 옛 커밋의 늦은 CI 완료가 지금 main 끝의 빌드를 취소하지 않게. 순서 보호는 아래 job의
+# head_sha == github.sha(빌드)와 Deploy의 같은 검사가 맡는다(옛 커밋은 빌드도 배포도 건너뛴다)
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && 'build-image-main' || format('build-image-pr-{0}', github.event.pull_request.number) }}
+  group: ${{ github.event_name == 'workflow_run' && format('build-image-main-{0}', github.event.workflow_run.head_sha) || format('build-image-pr-{0}', github.event.pull_request.number) }}
   cancel-in-progress: true
 
 jobs:

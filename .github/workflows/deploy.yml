@@ -25,11 +25,12 @@ concurrency:
 
 jobs:
   deploy:
-    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다 — 이 레포 main에 대한 push 이벤트의 빌드만 배포한다
+    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다. Build Image가 GHCR에 푸시하는 유일한 경로는
+    # CI 성공(workflow_run) 트리거이고 그 빌드는 이 레포 main push의 CI에서만 시작되므로, 여기서는 그 체인 이벤트만 받는다
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.event == 'workflow_run' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: [self-hosted, macmini]
