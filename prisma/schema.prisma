@@ -156,7 +156,7 @@ model Account {
   account_type AccountType
   status       AccountStatus @default(ACTIVE)
   // 정지·복구가 기록하는 상태 변경 시각. 블랙리스트 버전으로 쓴다 — updated_at은 프로필 수정·OIDC 로그인 같은
-  // 무관한 쓰기로도 올라가 정지·복구의 선후를 뒤집을 수 있다(P2 03).
+  // 무관한 쓰기로도 올라가 정지·복구의 선후를 뒤집을 수 있다.
   status_changed_at DateTime? @db.DateTime(3)
 
   // 이메일은 계정 식별자가 아니다. 계정 식별은 (provider, provider_subject) 로만 하고
@@ -834,7 +834,7 @@ model OrderItem {
   product_name_snapshot  String @db.VarChar(200)
   regular_price_snapshot Int    @db.UnsignedInt
   sale_price_snapshot    Int?   @db.UnsignedInt
-  // 주문 시점 표시 스냅샷(P1-16). 목록·상세·리뷰 가능 목록이 store·product_image를 조인하지 않게 한다.
+  // 주문 시점 표시 스냅샷. 목록·상세·리뷰 가능 목록이 store·product_image를 조인하지 않게 한다.
   store_name_snapshot            String  @db.VarChar(200)
   product_thumbnail_url_snapshot String? @db.VarChar(2048)
 
@@ -962,7 +962,7 @@ model Review {
   rating  Decimal @db.Decimal(2, 1)
   content String? @db.Text
 
-  // 작성 시점 주문 품목 스냅샷(P1-07b). 목록·상세·쇼케이스가 order_item을 조인하지 않게 한다.
+  // 작성 시점 주문 품목 스냅샷. 목록·상세·쇼케이스가 order_item을 조인하지 않게 한다.
   product_name_snapshot String  @db.VarChar(200)
   /// [{ groupName, optionTitle }] — 주문 시 선택 옵션(활성, id 순). 없으면 null.
   option_summary        Json?
@@ -1362,7 +1362,7 @@ model ReviewReport {
 
   status                 ReviewReportStatus @default(PENDING)
   /// PENDING 동안에만 대상 식별자('r:<reviewId>'·'c:<commentId>')를 담고 종결되면 NULL.
-  /// unique는 NULL을 중복으로 보지 않아 "같은 신고자·대상의 PENDING 1건, 처리 뒤 재신고 허용"이 제약으로 표현된다(D7-c).
+  /// unique는 NULL을 중복으로 보지 않아 "같은 신고자·대상의 PENDING 1건, 처리 뒤 재신고 허용"이 제약으로 표현된다.
   open_key               String?            @db.VarChar(40)
   resolved_by_account_id BigInt?            @db.UnsignedBigInt
   resolved_at            DateTime?          @db.DateTime(3)
@@ -1388,7 +1388,7 @@ model ReviewReport {
   @@map("review_report")
 }
 
-// order 소유 일일 capacity 복제본(D7-a). catalog의 store_daily_capacity 변경 이벤트로 갱신되며 FK 없음.
+// order 소유 일일 capacity 복제본. catalog의 store_daily_capacity 변경 이벤트로 갱신되며 FK 없음.
 // 주문 생성은 이 테이블만 잠근다.
 model OrderStoreDailyLimit {
   id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
@@ -1407,7 +1407,7 @@ model OrderStoreDailyLimit {
   @@map("order_store_daily_limit")
 }
 
-// 트랜잭셔널 outbox(P1-08a). 도메인 write와 같은 tx에 이벤트를 적재하고 디스패처가 소비자에게 전달한다.
+// 트랜잭셔널 outbox. 도메인 write와 같은 tx에 이벤트를 적재하고 디스패처가 소비자에게 전달한다.
 // cross-domain FK 금지 — aggregate_id·actor_account_id는 관계 없이 값만 둔다.
 model Outbox {
   id BigInt @id @default(autoincrement()) @db.UnsignedBigInt

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// 운영 compose(infra/compose.yml)가 렌더링되는지와, 운영에서 어겨서는 안 되는 형태를 고정한다(P2-06).
+// 운영 compose(infra/compose.yml)가 렌더링되는지와, 운영에서 어겨서는 안 되는 형태를 고정한다.
 // docker compose config로 실제 파서를 태운다 — 손으로 YAML을 읽는 검사는 anchor·프로필·보간을 못 본다.
 const ROOT = join(__dirname, '..');
 const COMPOSE = join(ROOT, 'infra', 'compose.yml');
@@ -92,7 +92,7 @@ describe('infra/compose.yml', () => {
     rendered = render(envFile());
   });
 
-  it('서비스 목록이 로드맵 v2 §1 컨테이너 표와 같다(+ migrate 일회성)', () => {
+  it('서비스 목록이 운영 컨테이너 표와 같다(+ migrate 일회성)', () => {
     expect(Object.keys(rendered.services).sort()).toEqual(
       [
         'alloy',
@@ -159,7 +159,7 @@ describe('infra/compose.yml', () => {
     }
   });
 
-  it('mem_limit 합계는 6 GB 이하(로드맵 v2 §5)', () => {
+  it('mem_limit 합계는 6 GB 이하', () => {
     const total = Object.values(rendered.services).reduce(
       (sum, s) => sum + bytes(s.mem_limit),
       0,

@@ -34,7 +34,7 @@ function safeJsonStringify(value: unknown): string {
 const devFormat = format.printf(formatDevLogLine);
 
 /**
- * 요청·이벤트 처리 안에서 찍힌 줄에 requestId·eventId를 싣는다 — api(요청)↔worker(이벤트 소비) 로그를 이어 보는 열쇠(P2 E8).
+ * 요청·이벤트 처리 안에서 찍힌 줄에 requestId·eventId를 싣는다 — api(요청)↔worker(이벤트 소비) 로그를 이어 보는 열쇠.
  * 발행 시점 로그가 requestId와 eventId를 함께 가지므로 둘이 조인 키가 된다. 명시된 값이 있으면 그대로 둔다.
  */
 const withRequestContext = format((info) => {

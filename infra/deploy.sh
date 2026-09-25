@@ -1,5 +1,5 @@
 #!/bin/bash
-# 홈서버 배포 절차(E9). 배포 잡이 .env(IMAGE·IMAGE_TAG 포함)를 만든 뒤 이 디렉터리에서 부른다.
+# 홈서버 배포 절차. 배포 잡이 .env(IMAGE·IMAGE_TAG 포함)를 만든 뒤 이 디렉터리에서 부른다.
 # 순서: pull → migrate(일회성) → worker 교체 → api 교체 → ready 대기 → 나머지(edge·observability·backup) 정합.
 # 롤백: IMAGE_TAG를 이전 sha로 바꿔 다시 실행(workflow_dispatch) — 마이그레이션은 앞으로만 간다.
 set -euo pipefail

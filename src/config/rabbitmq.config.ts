@@ -6,7 +6,7 @@ export interface RabbitmqConfig {
   url: string;
 }
 
-/** 이벤트 백본(P2 E4). 미설정이면 어느 환경에서든 부팅에서 드러낸다 — 워커가 조용히 이벤트를 안 나르는 상태를 막는다. */
+/** 이벤트 백본. 미설정이면 어느 환경에서든 부팅에서 드러낸다 — 워커가 조용히 이벤트를 안 나르는 상태를 막는다. */
 export function readRabbitmqConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): RabbitmqConfig {

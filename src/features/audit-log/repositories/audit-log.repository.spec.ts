@@ -31,7 +31,7 @@ describe('AuditLogRepository (real DB)', () => {
     await truncateAll();
   });
 
-  // recordAudit는 tx가 필수라(P1-12) 여기서도 트랜잭션을 열어 부른다.
+  // recordAudit는 tx가 필수라 여기서도 트랜잭션을 열어 부른다.
   async function record(entry: AuditEntry): Promise<void> {
     await prisma.$transaction(async (tx) => {
       await repo.recordAudit(tx, entry);

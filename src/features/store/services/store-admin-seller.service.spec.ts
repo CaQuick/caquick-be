@@ -383,7 +383,7 @@ describe('AdminSellerService (real DB)', () => {
       );
       expect(credential.must_change_password).toBe(true);
       expect(credential.password_updated_at).not.toBeNull();
-      // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다(P2 03). cutoff = DB에 기록한 시각
+      // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다. cutoff = DB에 기록한 시각
       expect(blacklist.blockCredentials).toHaveBeenCalledWith(
         account.id,
         credential.password_updated_at,

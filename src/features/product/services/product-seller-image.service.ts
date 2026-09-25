@@ -64,7 +64,7 @@ export class SellerProductImageService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12)
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다
     const row = await this.productRepository.addProductImage(
       {
         productId,

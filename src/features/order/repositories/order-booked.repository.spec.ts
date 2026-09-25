@@ -5,7 +5,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createOrder, createOrderItem, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-// catalog 픽업 판정이 포트로 읽는 예약 수량. SUM 기준·제외 규칙(CANCELED·soft-delete)은 order가 단일 소스다(D7-a).
+// catalog 픽업 판정이 포트로 읽는 예약 수량. SUM 기준·제외 규칙(CANCELED·soft-delete)은 order가 단일 소스다.
 describe('OrderBookedRepository (real DB)', () => {
   let repo: OrderBookedRepository;
   let prisma: PrismaClient;

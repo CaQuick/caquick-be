@@ -150,7 +150,7 @@ export class SellerStoreHoursService extends SellerBaseService {
       MAX_SPECIAL_CLOSURE_REASON_LENGTH,
     );
 
-    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12) — 수정·신규 두 경로가 같은 항목을 쓴다
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다 — 수정·신규 두 경로가 같은 항목을 쓴다
     const auditClosure = (created: StoreSpecialClosure): AuditEntry => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,

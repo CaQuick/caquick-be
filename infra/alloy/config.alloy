@@ -1,5 +1,5 @@
 // 1) docker 컨테이너 로그 → Loki (이 compose 프로젝트만). 앱(api·worker)의 JSON 한 줄 로그는 level·role을 라벨로 올린다 —
-//    requestId·eventId는 카디널리티가 커서 라벨이 아니라 본문 필드로 남기고 LogQL `| json`으로 찾는다(E8: api↔worker 조인 키).
+//    requestId·eventId는 카디널리티가 커서 라벨이 아니라 본문 필드로 남기고 LogQL `| json`으로 찾는다(api↔worker 조인 키).
 // 2) 컨테이너 자원(cAdvisor) → Prometheus remote write. OrbStack의 overlayfs 드라이버에선 docker 핸들러(이름 조회)가 실패하므로
 //    raw cgroup만 읽고, compose의 cgroup_parent(/caquick/<service>)에서 service 라벨을 만든다.
 

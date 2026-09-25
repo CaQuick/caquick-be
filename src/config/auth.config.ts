@@ -14,7 +14,7 @@ import {
 } from '@/config/jwt-key';
 
 export interface AuthConfig {
-  /** RS256 서명/검증 키 + JWKS 공개용 JWK(P1-13). kid는 RFC 7638 썸프린트다. */
+  /** RS256 서명/검증 키 + JWKS 공개용 JWK. kid는 RFC 7638 썸프린트다. */
   jwtKeys: JwtKeyMaterial;
   jwtIssuer: string;
   jwtAudience: string;

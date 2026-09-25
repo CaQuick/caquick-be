@@ -48,7 +48,7 @@ async function bootstrap(): Promise<void> {
 
   const configService = app.get(ConfigService);
   const isProd = configService.get<string>('NODE_ENV') === 'production';
-  // 허용 오리진 목록도 authConfig가 단일 소스(P1-11a)
+  // 허용 오리진 목록도 authConfig가 단일 소스
   const frontendFromEnv =
     configService.getOrThrow<AuthConfig>('auth').frontendOrigins;
   const allowedOrigins: string[] = isProd
@@ -61,10 +61,8 @@ async function bootstrap(): Promise<void> {
       ? frontendFromEnv
       : ['http://localhost:3000'];
 
-  // Trust proxy (env-based) — reverse proxy 뒤에서 X-Forwarded-For 처리.
-  // TRUST_PROXY_HOPS = proxy hop 수 (ex. ELB 1대 → 1, CloudFront+ELB → 2).
-  // 미설정 / 0 이면 비활성 (default Express 동작). 잘못 설정 시 IP spoofing 위험이므로
-  // 운영 인프라 (ELB/CloudFront/Nginx) hop 수를 정확히 맞춰야 한다.
+  // TRUST_PROXY_HOPS = 앞단 프록시 hop 수(운영은 Cloudflare Tunnel 1). 미설정·0이면 X-Forwarded-For를 믿지 않는다.
+  // 실제보다 크게 잡으면 클라이언트가 헤더로 IP를 속일 수 있으므로 인프라와 정확히 맞춘다.
   const trustProxyHops =
     Number(configService.get<string>('TRUST_PROXY_HOPS')) || 0;
   if (trustProxyHops > 0) {
@@ -83,7 +81,7 @@ async function bootstrap(): Promise<void> {
   const logger = app.get(CustomLoggerService);
   const httpAdapterHost = app.get(HttpAdapterHost);
 
-  // Nest 내부 로그도 Winston을 지나야 컨테이너 로그가 한 형식(JSON)·한 라벨(role)이 된다(P2 E8)
+  // Nest 내부 로그도 Winston을 지나야 컨테이너 로그가 한 형식(JSON)·한 라벨(role)이 된다
   app.useLogger(logger);
 
   app.useGlobalPipes(

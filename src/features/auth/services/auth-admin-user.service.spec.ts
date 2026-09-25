@@ -266,7 +266,7 @@ describe('AdminUserService (real DB)', () => {
         status: 'SUSPENDED',
       });
       expect(await statusOf(user.id)).toBe('SUSPENDED');
-      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03)
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다
       expect(blacklist.blockStatus).toHaveBeenCalledWith(
         user.id,
         'SUSPENDED',

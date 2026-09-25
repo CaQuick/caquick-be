@@ -39,7 +39,7 @@ function event(
   };
 }
 
-// catalog 설정 변경 → order 복제본(order_store_daily_limit). 복제본이 주문 생성의 유일한 capacity 소스다(D7-a).
+// catalog 설정 변경 → order 복제본(order_store_daily_limit). 복제본이 주문 생성의 유일한 capacity 소스다.
 /** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
 const AUDIT_ENTRY = {
   actorAccountId: 1n,

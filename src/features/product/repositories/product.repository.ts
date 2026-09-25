@@ -127,7 +127,7 @@ export class ProductRepository {
   ) {}
 
   /**
-   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다(P1-12) — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
+   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다 — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
    * 판매자 경로의 write 메서드가 모두 이 헬퍼를 거치므로 감사 누락이 구조적으로 생기지 않는다.
    */
   private async writeWithAudit<T>(

@@ -5,7 +5,7 @@ import type {
 } from '@/generated/prisma/client';
 
 /**
- * conversation feature가 catalog 서비스에 묻는 읽기 포트(P1-07d).
+ * conversation feature가 catalog 서비스에 묻는 읽기 포트.
  * 문의 화면 컨텍스트·FAQ는 매장 도메인 데이터라 store가 구현하고, P4에서 서비스 클라이언트로 교체된다.
  */
 export const CATALOG_QUERY = Symbol('CATALOG_QUERY');

@@ -2,7 +2,7 @@ import type { OutboxEventInput } from '@/features/outbox';
 import type { Prisma } from '@/generated/prisma/client';
 
 /**
- * 매장 일일 capacity 설정 변경(D7-a). order가 소유 복제본 `order_store_daily_limit`을 갱신한다.
+ * 매장 일일 capacity 설정 변경. order가 소유 복제본 `order_store_daily_limit`을 갱신한다.
  * capacity null = 설정 삭제. updatedAt은 원본 row의 updated_at — 소비자가 뒤늦게 온 오래된 이벤트를 무시하는 기준.
  */
 export const STORE_DAILY_CAPACITY_CHANGED = 'store.daily_capacity_changed';

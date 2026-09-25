@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type ReviewMediaType } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** 상품 리뷰는 상품·매장 가시성, 매장 리뷰는 매장 가시성만 가드한다(D34: 현행 유지). */
+/** 상품 리뷰는 상품·매장 가시성, 매장 리뷰는 매장 가시성만 가드한다. */
 export type ReviewScope =
   { kind: 'product'; productId: bigint } | { kind: 'store'; storeId: bigint };
 

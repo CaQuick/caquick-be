@@ -12,9 +12,9 @@ import { PrismaService } from '@/prisma';
 // module-wiring.spec은 compile만 보므로 HTTP 노출은 실제 앱을 띄워 본다(DB·Redis는 대역, 디스패처·크론은 env로 끔).
 const ENV_DEFAULTS: Record<string, string> = {
   DATABASE_URL: 'mysql://wiring:wiring@localhost:3306/wiring',
-  // Redis는 필수 설정(P2 03) — 테스트 컨테이너 주소가 있으면 그것, 없으면 로컬 기본
+  // Redis는 필수 설정 — 테스트 컨테이너 주소가 있으면 그것, 없으면 로컬 기본
   REDIS_URL: process.env.TEST_REDIS_URL ?? 'redis://localhost:6379',
-  // 브로커도 필수 설정(P2 04) — compile·부팅만 보므로 연결은 하지 않는다(lazy)
+  // 브로커도 필수 설정 — compile·부팅만 보므로 연결은 하지 않는다(lazy)
   RABBITMQ_URL: 'amqp://guest:guest@localhost:5672',
   OIDC_GOOGLE_ISSUER_URL: 'https://accounts.google.com',
   OIDC_GOOGLE_CLIENT_ID: 'wiring',
@@ -23,7 +23,7 @@ const ENV_DEFAULTS: Record<string, string> = {
   OIDC_KAKAO_CLIENT_ID: 'wiring',
   OIDC_KAKAO_CLIENT_SECRET: 'wiring',
   OUTBOX_DISPATCH_ENABLED: 'false',
-  // /metrics는 Bearer 토큰(P2 05) — 없으면 401, 있으면 Prometheus 텍스트
+  // /metrics는 Bearer 토큰 — 없으면 401, 있으면 Prometheus 텍스트
   METRICS_ACCESS_TOKEN: 'wiring-metrics-token',
 };
 

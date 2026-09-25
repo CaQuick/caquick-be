@@ -31,7 +31,7 @@ describe('TokenService', () => {
   beforeEach(async () => {
     config = {
       get: jest.fn(),
-      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
       getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 

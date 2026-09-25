@@ -60,7 +60,7 @@ export default async function globalSetup(): Promise<void> {
   const rootUser = 'root';
   const rootPassword = 'test';
 
-  // 인증 블랙리스트(P2 03)는 실제 Redis로 검증한다 — DB와 같은 이유로 mock하지 않는다.
+  // 인증 블랙리스트는 실제 Redis로 검증한다 — DB와 같은 이유로 mock하지 않는다.
   console.log('[test] starting Redis container...');
   const redis: StartedTestContainer = await new GenericContainer(
     'redis:7-alpine',

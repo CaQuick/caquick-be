@@ -1,6 +1,6 @@
 name: Deploy
 
-# 홈서버 자동 배포(P2-07, M6·E9). Build Image가 main에서 성공하면 셀프호스트 러너(맥미니)가
+# 홈서버 자동 배포. Build Image가 main에서 성공하면 셀프호스트 러너(맥미니)가
 # .env(600) 생성 → compose pull → migrate → worker → api → ready 대기 → Discord 순서로 교체한다.
 # 롤백 = workflow_dispatch에 이전 sha를 넣어 같은 잡을 돌린다. main 밖의 실행은 environment 규칙과 if로 막는다.
 on:
@@ -120,7 +120,7 @@ jobs:
           mv -f "$tmp_env" "$DEPLOY_DIR/.env"
           mv -f "$tmp_app" "$DEPLOY_DIR/app.env"
 
-      - name: Deploy (E9)
+      - name: Deploy
         if: env.SKIP_DEPLOY != '1'
         run: bash "$DEPLOY_DIR/deploy.sh"
         working-directory: ${{ env.DEPLOY_DIR }}

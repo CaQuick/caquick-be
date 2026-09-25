@@ -166,7 +166,7 @@ export class CredentialAuthService {
     // cutoff는 커밋 직전 시각 — 해시(수십~수백 ms) 동안 refresh로 발급된 토큰까지 막는다
     const now = this.clock.now();
 
-    // 교체·세션 무효화·감사를 한 트랜잭션에서(P1-12)
+    // 교체·세션 무효화·감사를 한 트랜잭션에서
     await this.credentials.changePassword(
       {
         accountId: args.accountId,

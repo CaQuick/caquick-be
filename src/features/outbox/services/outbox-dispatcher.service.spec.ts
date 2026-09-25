@@ -43,7 +43,7 @@ class RecordingConsumer implements OutboxConsumer {
   }
 }
 
-/** 소비 중 요청 컨텍스트(ALS)의 eventId — 로거 포맷이 모든 줄에 싣는 조인 키(P2 E8) */
+/** 소비 중 요청 컨텍스트(ALS)의 eventId — 로거 포맷이 모든 줄에 싣는 조인 키 */
 @Injectable()
 @SubscribeOutbox('test.ctx')
 class ContextRecordingConsumer implements OutboxConsumer {
@@ -135,7 +135,7 @@ describe('OutboxDispatcherService (real DB)', () => {
     };
   }
 
-  describe('요청 컨텍스트(E8 조인 키)', () => {
+  describe('요청 컨텍스트(조인 키)', () => {
     it('소비자 handle은 ALS eventId 안에서 돌고, 성공 시 eventId를 실은 소비 로그 1줄을 남긴다', async () => {
       const log = jest
         .spyOn(Logger.prototype, 'log')

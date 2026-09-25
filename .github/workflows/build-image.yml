@@ -1,6 +1,6 @@
 name: Build Image
 
-# 앱 이미지(P2-07, M5). main은 **CI(pr-check)가 같은 커밋에서 성공한 뒤** arm64 빌드 → GHCR(:<sha>만 — 가변 태그 :main은 늦게 끝난 옛 빌드가
+# 앱 이미지. main은 **CI(pr-check)가 같은 커밋에서 성공한 뒤** arm64 빌드 → GHCR(:<sha>만 — 가변 태그 :main은 늦게 끝난 옛 빌드가
 # 덮어쓸 수 있어 두지 않는다. 배포·롤백은 항상 sha) → Deploy.
 # 이미지 빌드는 lint·테스트를 돌리지 않으므로 push 직후가 아니라 CI 성공(workflow_run)에 건다 — 두 PR이 각각 통과해도 합친 main이
 # 깨질 수 있어서(strict_required_status_checks_policy=false). PR은 빌드만(푸시 없음) — Dockerfile 게이트.

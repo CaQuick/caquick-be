@@ -28,7 +28,7 @@ describe('OidcLoginService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
-      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
       getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
@@ -42,7 +42,7 @@ describe('OidcLoginService', () => {
       findIdentityByProviderSubject: jest.fn(),
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다(P1-11b) — 기본값을 깔아 둔다
+      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다 — 기본값을 깔아 둔다
       findAccountForJwt: jest.fn().mockResolvedValue({
         id: BigInt(1),
         status: 'ACTIVE',

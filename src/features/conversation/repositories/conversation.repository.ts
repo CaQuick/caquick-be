@@ -582,7 +582,7 @@ export class ConversationRepository {
         },
       });
 
-      // 판매자 답장은 감사 대상이다 — 메시지 저장과 같은 트랜잭션에 남긴다(P1-12)
+      // 판매자 답장은 감사 대상이다 — 메시지 저장과 같은 트랜잭션에 남긴다
       await this.auditLogs.recordAudit(tx, audit(message));
 
       return message;

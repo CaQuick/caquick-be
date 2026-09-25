@@ -14,7 +14,7 @@ const ENV_KEYS = [
 
 const KEYS = generateEphemeralKeyMaterial();
 
-// JwtModule이 authConfig의 RS256 키·iss·aud·kid로 서명하는지 본다(P1-13).
+// JwtModule이 authConfig의 RS256 키·iss·aud·kid로 서명하는지 본다.
 describe('AuthGlobalModule', () => {
   const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> =
     {};

@@ -113,7 +113,7 @@ describe('CredentialAuthService', () => {
 
     mockConfig = {
       get: jest.fn(),
-      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다(P1-11a)
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
       getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
@@ -411,7 +411,7 @@ describe('CredentialAuthService', () => {
 
       await change();
 
-      // 교체·세션 무효화·감사는 repository가 한 트랜잭션에서 한다(P1-12) — 서비스는 항목만 넘긴다
+      // 교체·세션 무효화·감사는 repository가 한 트랜잭션에서 한다 — 서비스는 항목만 넘긴다
       expect(credentials.changePassword).toHaveBeenCalledWith(
         {
           accountId: BigInt(10),
@@ -421,7 +421,7 @@ describe('CredentialAuthService', () => {
         expect.any(Function),
       );
       expect(refreshSessions.revokeAllRefreshSessions).not.toHaveBeenCalled();
-      // 커밋 뒤 — 변경 시각이 cutoff가 되어 그 전에 발급된 액세스 토큰을 막는다(P2 03)
+      // 커밋 뒤 — 변경 시각이 cutoff가 되어 그 전에 발급된 액세스 토큰을 막는다
       expect(blacklist.blockCredentials).toHaveBeenCalledWith(
         BigInt(10),
         credentials.changePassword.mock.calls[0]?.[0].now,

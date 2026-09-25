@@ -1,5 +1,5 @@
 /**
- * outbox 이벤트를 다시 PENDING으로 돌린다(P2 E6). 원인을 고친 뒤 사람이 돌린다.
+ * outbox 이벤트를 다시 PENDING으로 돌린다. 원인을 고친 뒤 사람이 돌린다.
  *   yarn outbox:requeue --event-type=order.status_changed      # 발행 FAILED
  *   yarn outbox:requeue --id=123
  *   yarn outbox:requeue --all

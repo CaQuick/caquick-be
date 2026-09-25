@@ -78,7 +78,7 @@ export class SellerProductLifecycleService extends SellerBaseService {
       'INVALID_IMAGE_URL',
     );
 
-    // 상품·대표 이미지·감사 기록을 한 트랜잭션에서 남긴다(P1-12)
+    // 상품·대표 이미지·감사 기록을 한 트랜잭션에서 남긴다
     const created = await this.productRepository.createProduct(
       {
         storeId: ctx.storeId,

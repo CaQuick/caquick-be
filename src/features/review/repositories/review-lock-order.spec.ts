@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * 리뷰 도메인에서 행 잠금을 잡는 모든 경로의 전수 표(D7-c).
+ * 리뷰 도메인에서 행 잠금을 잡는 모든 경로의 전수 표.
  *
  * 불변식은 **부모 리뷰를 가장 먼저 잠근다**이다. 모든 경로가 리뷰 행부터 잠그면, 경쟁 트랜잭션은
  * 리뷰 잠금을 먼저 얻어야 하므로 댓글·신고 행을 사이에 두고 서로를 기다리는 교착이 생기지 않는다.
@@ -112,7 +112,7 @@ const LOCK_SITES: {
     sequence: ['review', 'review_comment', 'review_report'],
   },
   {
-    // 재작성(복원)은 예전에 신고를 먼저 닫아 리뷰보다 앞섰다 — 순서를 뒤집어 리뷰부터 잠근다(D7-c)
+    // 재작성(복원)은 예전에 신고를 먼저 닫아 리뷰보다 앞섰다 — 순서를 뒤집어 리뷰부터 잠근다
     file: 'review.repository.ts',
     method: 'createOrRestoreReviewWithMedia',
     sequence: ['review', 'review_report'],

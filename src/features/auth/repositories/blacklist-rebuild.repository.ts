@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma';
 
 /**
- * 블랙리스트 재구축용 읽기(P2 03). "최근 TTL 창 안에서 정지·탈퇴·비밀번호 변경이 있었던 계정"만 — 그보다 오래된 건
+ * 블랙리스트 재구축용 읽기. "최근 TTL 창 안에서 정지·탈퇴·비밀번호 변경이 있었던 계정"만 — 그보다 오래된 건
  * 토큰이 이미 만료라 막을 필요가 없다. deleted_at 조건을 명시하면 soft-delete 확장이 `deleted_at: null`을 덮지 않는다.
  * 시각을 함께 돌려주는 이유: Redis 쓰기가 "버전이 더 새로울 때만"이라 훅과 겹쳐도 최근 변경이 이긴다. 정지·복구의 버전은
  * status_changed_at — updated_at은 무관한 쓰기(프로필·OIDC 로그인)로도 올라가 선후를 뒤집는다.

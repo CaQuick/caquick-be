@@ -46,7 +46,7 @@ export class SellerProductTaxonomyService extends SellerBaseService {
       throw new DomainException('INVALID_IDS', { field: 'categoryIds' });
     }
 
-    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다(P1-12)
+    // 감사 기록은 repository가 같은 트랜잭션에서 남긴다
     await this.productRepository.replaceProductCategories(
       {
         productId,

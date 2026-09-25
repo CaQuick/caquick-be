@@ -9,7 +9,7 @@ import { createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
 
-// 일일 capacity write는 변경 이벤트(StoreDailyCapacityChanged)를 같은 tx에 적재해야 order 복제본이 따라온다(D7-a).
+// 일일 capacity write는 변경 이벤트(StoreDailyCapacityChanged)를 같은 tx에 적재해야 order 복제본이 따라온다.
 /** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
 const AUDIT_ENTRY = {
   actorAccountId: 1n,
