@@ -1,0 +1,22 @@
+# 이미지 컨텍스트에서 뺀다 — 생성물·시크릿·문서·인프라는 빌드 단계가 만들거나 필요 없다
+.git
+.github
+.husky
+.vscode
+.idea
+.claude
+.figma
+node_modules
+dist
+coverage
+docs
+terraform
+infra
+public
+.env
+.env.*
+*.log
+.DS_Store
+src/generated
+src/graphql/graphql.types.ts
+**/*.spec.ts

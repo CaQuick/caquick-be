@@ -40,11 +40,11 @@
 
 케이크 디자인 주문은 본질적으로 **맞춤형 상품**이지만, 기존 플랫폼들은 이에 최적화되어 있지 않습니다.
 
-| 채널 | 한계 |
-| --- | --- |
-| **인스타그램** | 디자인 영감은 풍부하지만 통합된 예약·주문·결제 흐름이 없음 |
-| **네이버** | 가게 검색·예약 기능은 있지만 디자인 카탈로그·탐색 UX가 약함 |
-| **카톡·DM** | 이미지 첨부는 가능하지만 정형 디자인 명세 양식이 없어 매번 캡처·설명·확인을 비정형으로 주고받아야 함 |
+| 채널           | 한계                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| **인스타그램** | 디자인 영감은 풍부하지만 통합된 예약·주문·결제 흐름이 없음                                           |
+| **네이버**     | 가게 검색·예약 기능은 있지만 디자인 카탈로그·탐색 UX가 약함                                          |
+| **카톡·DM**    | 이미지 첨부는 가능하지만 정형 디자인 명세 양식이 없어 매번 캡처·설명·확인을 비정형으로 주고받아야 함 |
 
 사용자는 결국 **여러 플랫폼을 옮겨 다니며 캡처 + 편집 + 설명을 조합**하는 비효율을 감내해야 합니다.
 
@@ -123,7 +123,7 @@
 ![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)
 
 - **AWS**: EC2 (서버) · RDS MySQL (DB) · S3 + Presigned URL (미디어) · CodeDeploy (배포 자동화)
-- **Docker** (compose) — 로컬 개발 + testcontainers
+- **Docker** — 로컬 개발 compose(MySQL·Redis·RabbitMQ) + testcontainers + 운영 이미지 1개(`Dockerfile`, api·worker 공용) + 운영 compose(`infra/compose.yml`: 앱·MySQL·Redis·RabbitMQ·cloudflared·백업, 프로필로 Alloy·Loki·Prometheus·Grafana)
 - **Terraform**으로 GitHub repository / branch protection 관리 (IaC)
 - **GitHub Actions** — pr-check · deploy · CodeQL · Dependabot
 - **PM2** — EC2 프로세스 매니저
@@ -232,12 +232,12 @@ caquick-be/
 
 ### Prerequisites
 
-| 항목 | 버전 | 비고 |
-| --- | --- | --- |
-| Node.js | **24.x** | `nvm install 24` 권장 |
-| Yarn | **4.x** (Corepack) | `corepack enable` 한 번 실행 |
-| MySQL | **8.x** | 로컬 또는 Docker (`docker-compose.yml` 제공) |
-| Docker | latest | 통합 테스트에서 testcontainers가 MySQL 컨테이너를 띄움 |
+| 항목    | 버전               | 비고                                                   |
+| ------- | ------------------ | ------------------------------------------------------ |
+| Node.js | **24.x**           | `nvm install 24` 권장                                  |
+| Yarn    | **4.x** (Corepack) | `corepack enable` 한 번 실행                           |
+| MySQL   | **8.x**            | 로컬 또는 Docker (`docker-compose.yml` 제공)           |
+| Docker  | latest             | 통합 테스트에서 testcontainers가 MySQL 컨테이너를 띄움 |
 
 ### 설치 & 실행
 
@@ -265,39 +265,57 @@ yarn start:dev
 
 > `.env.example`은 보안상 레포에 포함되지 않습니다. 아래 키를 참고해 `.env`를 직접 작성해 주세요. 정확한 검증 스키마는 [`src/config/`](./src/config/) 참고.
 
-| 카테고리 | 키 |
-| --- | --- |
-| **서버** | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL`, `APP_ROLE`(`api`·`ws`·`worker`, 기본 `api` — worker만 outbox 디스패처·크론을 돌리고 GraphQL·문서는 싣지 않는다) |
-| **DB** | `DATABASE_URL` |
-| **Redis (필수)** | `REDIS_URL` — 인증 블랙리스트(정지·탈퇴·비밀번호 변경 즉시 차단) + GraphQL subscription PubSub. 미설정이면 부팅 실패(로컬은 `redis://localhost:6379`, docker-compose). `maxmemory`를 두면 `maxmemory-policy noeviction`이어야 한다 — worker 재구축이 점검해 아니면 블랙리스트 표식을 세우지 않고 경보(인증은 DB 폴백) |
-| **RabbitMQ (필수)** | `RABBITMQ_URL` — outbox 릴레이 → 소비자(worker) 이벤트 백본. 미설정이면 부팅 실패(로컬은 `amqp://guest:guest@localhost:5672`, docker-compose) |
-| **JWT / Auth** | `JWT_PRIVATE_KEY_PEM_B64`(또는 `JWT_PRIVATE_KEY_PATH`) — RS256 서명키. 운영 필수, 그 외에는 미설정 시 임시 키 생성(재시작하면 토큰 무효). `JWT_PUBLIC_KEY_PEM_B64`/`JWT_PUBLIC_KEY_PATH`는 생략 시 개인키에서 유도. `JWT_ISSUER`(기본 `caquick-identity`), `JWT_AUDIENCE`(기본 `caquick-api`), `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE` |
-| **OIDC (Google)** | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL` |
-| **OIDC (Kakao)** | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL` |
-| **OIDC (공통)** | `OIDC_TEMP_COOKIE_MAX_AGE_MS` |
-| **AWS S3** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS` |
-| **Docs (선택)** | `DOCS_ACCESS_TOKEN` |
-| **메트릭** | `METRICS_ACCESS_TOKEN` — `GET /metrics`의 Bearer 토큰. 운영 필수(api가 공개 인터넷에 있어 무인증 노출 금지), 미설정이면 로컬·CI는 열림. Prometheus가 같은 값을 보낸다 |
-| **경보 (선택)** | `DISCORD_ALERT_WEBHOOK_URL` — outbox FAILED·부팅 실패 등 운영 경보를 보낼 Discord 웹훅. 미설정이면 로그로만 남긴다. `ALERT_DEDUPE_WINDOW_MS`(기본 300000) — 같은 경보 억제 창 |
-| **Outbox (선택)** | `OUTBOX_DISPATCH_ENABLED` — 역할이 정한다(`APP_ROLE=worker`만 켜짐). `false`로 끄기만 가능(테스트·일회성 스크립트), api에서 `true`를 줘도 켜지지 않는다(worker와 이중 전달 방지). 로컬에서 소비까지 보려면 `APP_ROLE=worker PORT=4001 yarn start:dev`를 병행. `OUTBOX_POLL_INTERVAL_MS`(1000), `OUTBOX_BATCH_SIZE`(100), `OUTBOX_MAX_ATTEMPTS`(5), `OUTBOX_PARTITION_CONCURRENCY`(4) |
-| **시드 (선택)** | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD` — 있으면 `yarn prisma:seed`가 관리자 계정 1개를 만든다. `SELLER_SEED_PASSWORD` — 시드 판매자 2곳의 로그인 비밀번호(없으면 자격증명 생략) |
+| 카테고리            | 키                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **서버**            | `NODE_ENV`, `PORT`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL`, `APP_ROLE`(`api`·`ws`·`worker`, 기본 `api` — worker만 outbox 디스패처·크론을 돌리고 GraphQL·문서는 싣지 않는다)                                                                                                                                                                                                                                                 |
+| **DB**              | `DATABASE_URL`                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Redis (필수)**    | `REDIS_URL` — 인증 블랙리스트(정지·탈퇴·비밀번호 변경 즉시 차단) + GraphQL subscription PubSub. 미설정이면 부팅 실패(로컬은 `redis://localhost:6379`, docker-compose). `maxmemory`를 두면 `maxmemory-policy noeviction`이어야 한다 — worker 재구축이 점검해 아니면 블랙리스트 표식을 세우지 않고 경보(인증은 DB 폴백)                                                                                                        |
+| **RabbitMQ (필수)** | `RABBITMQ_URL` — outbox 릴레이 → 소비자(worker) 이벤트 백본. 미설정이면 부팅 실패(로컬은 `amqp://guest:guest@localhost:5672`, docker-compose)                                                                                                                                                                                                                                                                                |
+| **JWT / Auth**      | `JWT_PRIVATE_KEY_PEM_B64`(또는 `JWT_PRIVATE_KEY_PATH`) — RS256 서명키. 운영 필수, 그 외에는 미설정 시 임시 키 생성(재시작하면 토큰 무효). `JWT_PUBLIC_KEY_PEM_B64`/`JWT_PUBLIC_KEY_PATH`는 생략 시 개인키에서 유도. `JWT_ISSUER`(기본 `caquick-identity`), `JWT_AUDIENCE`(기본 `caquick-api`), `JWT_ACCESS_EXPIRES_SECONDS`, `AUTH_REFRESH_EXPIRES_DAYS`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE` |
+| **OIDC (Google)**   | `OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, `OIDC_GOOGLE_ISSUER_URL`                                                                                                                                                                                                                                                                                                                                               |
+| **OIDC (Kakao)**    | `OIDC_KAKAO_CLIENT_ID`, `OIDC_KAKAO_CLIENT_SECRET`, `OIDC_KAKAO_ISSUER_URL`                                                                                                                                                                                                                                                                                                                                                  |
+| **OIDC (공통)**     | `OIDC_TEMP_COOKIE_MAX_AGE_MS`                                                                                                                                                                                                                                                                                                                                                                                                |
+| **AWS S3**          | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET`, `S3_PRESIGN_EXPIRES_SECONDS`                                                                                                                                                                                                                                                                                                                    |
+| **Docs**            | `DOCS_ACCESS_TOKEN` — `/gql-docs`·`/rest-docs` 접근 토큰. 운영 필수(미설정이면 production 부팅 실패), 그 외는 선택                                                                                                                                                                                                                                                                                                           |
+| **메트릭**          | `METRICS_ACCESS_TOKEN` — `GET /metrics`의 Bearer 토큰. 운영 필수(api가 공개 인터넷에 있어 무인증 노출 금지), 미설정이면 로컬·CI는 열림. Prometheus가 같은 값을 보낸다                                                                                                                                                                                                                                                        |
+| **경보 (선택)**     | `DISCORD_ALERT_WEBHOOK_URL` — outbox FAILED·부팅 실패 등 운영 경보를 보낼 Discord 웹훅. 미설정이면 로그로만 남긴다. `ALERT_DEDUPE_WINDOW_MS`(기본 300000) — 같은 경보 억제 창                                                                                                                                                                                                                                                |
+| **Outbox (선택)**   | `OUTBOX_DISPATCH_ENABLED` — 역할이 정한다(`APP_ROLE=worker`만 켜짐). `false`로 끄기만 가능(테스트·일회성 스크립트), api에서 `true`를 줘도 켜지지 않는다(worker와 이중 전달 방지). 로컬에서 소비까지 보려면 `APP_ROLE=worker PORT=4001 yarn start:dev`를 병행. `OUTBOX_POLL_INTERVAL_MS`(1000), `OUTBOX_BATCH_SIZE`(100), `OUTBOX_MAX_ATTEMPTS`(5), `OUTBOX_PARTITION_CONCURRENCY`(4)                                         |
+| **시드 (선택)**     | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD` — 있으면 `yarn prisma:seed`가 관리자 계정 1개를 만든다. `SELLER_SEED_PASSWORD` — 시드 판매자 2곳의 로그인 비밀번호(없으면 자격증명 생략)                                                                                                                                                                                                                                        |
 
 ### 자주 쓰는 스크립트
 
-| 명령 | 용도 |
-| --- | --- |
-| `yarn start:dev` | NestJS watch 모드 |
-| `yarn build` | 프로덕션 빌드 (`dist/`) |
-| `yarn lint` | ESLint --fix |
-| `yarn test` | Jest (실 DB 통합 테스트 포함) |
-| `yarn test:cov` | 커버리지 측정 (임계 미달 시 비-0 종료) |
-| `yarn dto:check` | SDL ↔ DTO 동기화 검사 (마이그레이션 중 warning 모드) |
-| `yarn validate` | lint + tsc + dto:check + test:cov 일괄. push 전 권장 |
-| `yarn prisma:migrate:dev` | DB 마이그레이션 생성/적용 + 클라이언트 재생성 |
-| `yarn prisma:generate` | Prisma 클라이언트 생성 (`src/generated/prisma`, 스키마 변경 후) |
-| `yarn prisma:studio` | Prisma Studio (GUI DB 브라우저) |
-| `yarn graphql:codegen` | SDL → TypeScript 타입 생성 |
-| `yarn graphql:docs` | SpectaQL HTML 문서 빌드 (`public/`) |
+| 명령                      | 용도                                                            |
+| ------------------------- | --------------------------------------------------------------- |
+| `yarn start:dev`          | NestJS watch 모드                                               |
+| `yarn build`              | 프로덕션 빌드 (`dist/`)                                         |
+| `yarn lint`               | ESLint --fix                                                    |
+| `yarn test`               | Jest (실 DB 통합 테스트 포함)                                   |
+| `yarn test:cov`           | 커버리지 측정 (임계 미달 시 비-0 종료)                          |
+| `yarn dto:check`          | SDL ↔ DTO 동기화 검사 (마이그레이션 중 warning 모드)            |
+| `yarn validate`           | lint + tsc + dto:check + test:cov 일괄. push 전 권장            |
+| `yarn prisma:migrate:dev` | DB 마이그레이션 생성/적용 + 클라이언트 재생성                   |
+| `yarn prisma:generate`    | Prisma 클라이언트 생성 (`src/generated/prisma`, 스키마 변경 후) |
+| `yarn prisma:studio`      | Prisma Studio (GUI DB 브라우저)                                 |
+| `yarn graphql:codegen`    | SDL → TypeScript 타입 생성                                      |
+| `yarn graphql:docs`       | SpectaQL HTML 문서 빌드 (`public/`)                             |
+
+### 컨테이너로 실행 (운영 compose)
+
+홈서버는 앱 이미지 1개를 역할(`APP_ROLE`)만 달리해 `api`·`worker`로 띄운다. 파일과 절차는 [`infra/`](./infra/)에.
+
+```bash
+# 이미지 빌드 (멀티스테이지: deps → build → runtime, non-root)
+docker build -t caquick-be:local .
+
+# 운영 compose — 값은 infra/.env(저장소·터널)와 infra/app.env(앱) (키 목록: *.example)
+cd infra
+docker compose --profile migrate run --rm migrate        # prisma migrate deploy
+docker compose up -d                                     # api·worker·mysql·redis·rabbitmq·backup
+docker compose --profile observability up -d             # + alloy·loki·prometheus·grafana(127.0.0.1:3001)
+docker compose --profile edge up -d cloudflared          # Cloudflare Tunnel(TUNNEL_TOKEN)
+```
+
+`docker compose config`가 렌더링되는지와 운영 형태(포트 미노출·noeviction·헬스체크·`mem_limit` 합계)는 `scripts/compose-config.spec.ts`가 고정한다(`yarn test:scripts`).
 
 ## 🧬 GraphQL
 
@@ -306,7 +324,9 @@ yarn start:dev
 ```graphql
 # src/features/user/user-profile.graphql
 extend type Query {
-  """현재 로그인한 유저 정보 조회"""
+  """
+  현재 로그인한 유저 정보 조회
+  """
   me: MePayload!
 }
 
@@ -315,7 +335,9 @@ type MePayload {
   email: String
   accountType: AccountType!
   profile: UserProfile!
-  """연동된 소셜 로그인 식별자 목록(soft-deleted 제외, 최근 로그인 순)"""
+  """
+  연동된 소셜 로그인 식별자 목록(soft-deleted 제외, 최근 로그인 순)
+  """
   linkedIdentities: [LinkedIdentity!]!
 }
 ```
@@ -341,11 +363,11 @@ yarn graphql:codegen
 
 ### 테스트 레이어
 
-| 레이어 | 목적 |
-| --- | --- |
-| `*.service.spec.ts` | 단위 + 실 DB. 분기/예외/도메인 로직 |
-| `*.resolver.spec.ts` | Resolver ↔ Service ↔ Repository ↔ DB 전체 경로 통합 (1~2 happy/error 케이스) |
-| `*.repository.spec.ts` | Repository 단위에서만 도달 가능한 API contract |
+| 레이어                 | 목적                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `*.service.spec.ts`    | 단위 + 실 DB. 분기/예외/도메인 로직                                          |
+| `*.resolver.spec.ts`   | Resolver ↔ Service ↔ Repository ↔ DB 전체 경로 통합 (1~2 happy/error 케이스) |
+| `*.repository.spec.ts` | Repository 단위에서만 도달 가능한 API contract                               |
 
 ```bash
 # 전체 실행 (testcontainers가 MySQL 컨테이너를 띄움 — Docker 필요)
@@ -364,12 +386,12 @@ CI에서도 동일하게 testcontainers로 격리된 MySQL을 띄우므로 로�
 
 ### 워크플로우
 
-| Workflow | Trigger | 역할 |
-| --- | --- | --- |
-| `pr-check.yml` | PR (develop/main) | lint · typecheck · 통합 테스트 · 커버리지 |
-| `codeql.yml` | PR · push · 주간 | GitHub CodeQL SAST |
-| `discord-notify.yml` | PR · push · issue | Discord 알림 |
-| `deploy.yml` | **수동** (`workflow_dispatch`) | EC2 + RDS 인프라 비활성 기간 동안 자동 배포 중단 |
+| Workflow             | Trigger                        | 역할                                             |
+| -------------------- | ------------------------------ | ------------------------------------------------ |
+| `pr-check.yml`       | PR (develop/main)              | lint · typecheck · 통합 테스트 · 커버리지        |
+| `codeql.yml`         | PR · push · 주간               | GitHub CodeQL SAST                               |
+| `discord-notify.yml` | PR · push · issue              | Discord 알림                                     |
+| `deploy.yml`         | **수동** (`workflow_dispatch`) | EC2 + RDS 인프라 비활성 기간 동안 자동 배포 중단 |
 
 ### 흐름
 
@@ -424,12 +446,12 @@ flowchart LR
 
 Copyright © 2026 CaQuick. All rights reserved.
 
-
 <!-- ─────────────────────────────────────────────────────────
      AWS service badge 정의 (base64-embedded SVG icons, SVGO 최적화 적용)
      SVG 출처: gilbarbara/logos (MIT) — .github/assets/aws/
      GitHub camo proxy URL 길이 ~4KB 한도 준수를 위해 SVGO multipass 처리
      ───────────────────────────────────────────────────────── -->
+
 [aws-ec2]: https://img.shields.io/badge/AWS%20EC2-FF9900?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgRWxhc3RpYyBDb21wdXRlIENsb3VkIChFQzIpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNjODUxMWIiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNmOTAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJNODYuNCAxNjkuNmg4MHYtODBoLTgwem04Ni40LTgwaDEyLjhWOTZoLTEyLjh2MTIuOGgxMi44djYuNGgtMTIuOHY5LjZoMTIuOHY2LjRoLTEyLjhWMTQ0aDEyLjh2Ni40aC0xMi44djEyLjhoMTIuOHY2LjRoLTEyLjh2LjQzNWE1Ljk3IDUuOTcgMCAwIDEtNS45NjUgNS45NjVoLS40MzV2MTIuOEgxNjBWMTc2aC0xMi44djEyLjhoLTYuNFYxNzZoLTkuNnYxMi44aC02LjRWMTc2SDExMnYxMi44aC02LjRWMTc2SDkyLjh2MTIuOGgtNi40VjE3NmgtLjQzNUE1Ljk3IDUuOTcgMCAwIDEgODAgMTcwLjAzNXYtLjQzNWgtOS42di02LjRIODB2LTEyLjhoLTkuNlYxNDRIODB2LTEyLjhoLTkuNnYtNi40SDgwdi05LjZoLTkuNnYtNi40SDgwVjk2aC05LjZ2LTYuNEg4MHYtLjQzNWE1Ljk3IDUuOTcgMCAwIDEgNS45NjUtNS45NjVoLjQzNVY3MC40aDYuNHYxMi44aDEyLjhWNzAuNGg2LjR2MTIuOGgxMi44VjcwLjRoNi40djEyLjhoOS42VjcwLjRoNi40djEyLjhIMTYwVjcwLjRoNi40djEyLjhoLjQzNWE1Ljk3IDUuOTcgMCAwIDEgNS45NjUgNS45NjV6bS00MS42IDEyMS4yMDNhLjQuNCAwIDAgMS0uMzk3LjM5N0g0NS4xOTdhLjQuNCAwIDAgMS0uMzk3LS4zOTd2LTg1LjYwNmEuNC40IDAgMCAxIC4zOTctLjM5N0g2NHYtNi40SDQ1LjE5N2E2LjgwNSA2LjgwNSAwIDAgMC02Ljc5NyA2Ljc5N3Y4NS42MDZhNi44MDUgNi44MDUgMCAwIDAgNi43OTcgNi43OTdoODUuNjA2YTYuODA1IDYuODA1IDAgMCAwIDYuNzk3LTYuNzk3VjE5NS4yaC02LjR6bTg2LjQtMTY1LjYwNnY4NS42MDZhNi44MDUgNi44MDUgMCAwIDEtNi43OTcgNi43OTdIMTkydi02LjRoMTguODAzYS40LjQgMCAwIDAgLjM5Ny0uMzk3VjQ1LjE5N2EuNC40IDAgMCAwLS4zOTctLjM5N2gtODUuNjA2YS40LjQgMCAwIDAtLjM5Ny4zOTdWNjRoLTYuNFY0NS4xOTdhNi44MDUgNi44MDUgMCAwIDEgNi43OTctNi43OTdoODUuNjA2YTYuODA1IDYuODA1IDAgMCAxIDYuNzk3IDYuNzk3Ii8+PC9zdmc+
 [aws-rds]: https://img.shields.io/badge/AWS%20RDS-3B48CC?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgUmVsYXRpb25hbCBEYXRhYmFzZSBTZXJ2aWNlIChSRFMpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyZTI3YWQiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM1MjdmZmYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJtNDkuMzI1IDQ0LjggMjkuNzM3IDI5LjczOC00LjUyNCA0LjUyNEw0NC44IDQ5LjMyNVY3My42aC02LjR2LTMyYTMuMiAzLjIgMCAwIDEgMy4yLTMuMmgzMnY2LjR6TTIxNy42IDQxLjZ2MzJoLTYuNFY0OS4zMjVsLTI5LjczOCAyOS43MzctNC41MjQtNC41MjRMMjA2LjY3NSA0NC44SDE4Mi40di02LjRoMzJhMy4yIDMuMiAwIDAgMSAzLjIgMy4ybS02LjQgMTQwLjhoNi40djMyYTMuMiAzLjIgMCAwIDEtMy4yIDMuMmgtMzJ2LTYuNGgyNC4yNzVsLTI5LjczNy0yOS43MzggNC41MjQtNC41MjQgMjkuNzM4IDI5LjczN3ptLTEuNi01Ni45MThjMC0xMC42MjEtMTIuMjYyLTIxLjExNC0zMi44LTI4LjA2OGwyLjA1MS02LjA2QzIwMi40NTggOTkuMzQ0IDIxNiAxMTEuNzgyIDIxNiAxMjUuNDgyYzAgMTMuNzAyLTEzLjU0MiAyNi4xNDQtMzcuMTUyIDM0LjEzbC0yLjA1MS02LjA2M2MyMC41NC02Ljk1IDMyLjgwMy0xNy40NCAzMi44MDMtMjguMDY3bS0xNjMuMDIgMGMwIDEwLjE3NiAxMS40NzggMjAuMzkgMzAuNzA2IDI3LjMyOGwtMi4xNzIgNi4wMTljLTIyLjIwMi04LjAxLTM0LjkzNS0yMC4xNjMtMzQuOTM1LTMzLjM0NyAwLTEzLjE4MSAxMi43MzMtMjUuMzM1IDM0LjkzNS0zMy4zNDhsMi4xNzIgNi4wMmMtMTkuMjI4IDYuOTQtMzAuNzA3IDE3LjE1NS0zMC43MDcgMjcuMzI4bTMyLjQ4MiA1NS45OEw0OS4zMjUgMjExLjJINzMuNnY2LjRoLTMyYTMuMiAzLjIgMCAwIDEtMy4yLTMuMnYtMzJoNi40djI0LjI3NWwyOS43MzgtMjkuNzM3ek0xMjggMTAwLjExNWMtMjIuODY3IDAtMzUuMi01LjkwNy0zNS4yLTguMzIgMC0yLjQxNiAxMi4zMzMtOC4zMiAzNS4yLTguMzIgMjIuODY0IDAgMzUuMiA1LjkwNCAzNS4yIDguMzIgMCAyLjQxMy0xMi4zMzYgOC4zMi0zNS4yIDguMzJtLjA5MyAyNC43ODRjLTIxLjg5NSAwLTM1LjI5My01Ljk4LTM1LjI5My05LjIzNXYtMTUuNTU1YzcuODgyIDQuMzQ5IDIxLjg2MiA2LjQwNiAzNS4yIDYuNDA2czI3LjMxOC0yLjA1NyAzNS4yLTYuNDA2djE1LjU1NWMwIDMuMjU4LTEzLjMyOCA5LjIzNS0zNS4xMDcgOS4yMzVtMCAyNC40MzVjLTIxLjg5NSAwLTM1LjI5My01Ljk4LTM1LjI5My05LjIzNXYtMTUuNzRjNy43OCA0LjU3MiAyMS41NzQgNi45NCAzNS4yOTMgNi45NCAxMy42NDEgMCAyNy4zNTctMi4zNjUgMzUuMTA3LTYuOTI1VjE0MC4xYzAgMy4yNTgtMTMuMzI4IDkuMjM1LTM1LjEwNyA5LjIzNU0xMjggMTcxLjI1OGMtMjIuNzc0IDAtMzUuMi02LjEyMi0zNS4yLTkuMjY4di0xMy4xOTZjNy43OCA0LjU3MiAyMS41NzQgNi45NCAzNS4yOTMgNi45NCAxMy42NDEgMCAyNy4zNTctMi4zNjEgMzUuMTA3LTYuOTI0djEzLjE4YzAgMy4xNDYtMTIuNDI2IDkuMjY4LTM1LjIgOS4yNjhtMC05NC4xODNjLTIwLjAzNSAwLTQxLjYgNC42MDUtNDEuNiAxNC43MnY3MC4xOTVjMCAxMC4yODUgMjAuOTI4IDE1LjY2OCA0MS42IDE1LjY2OHM0MS42LTUuMzgzIDQxLjYtMTUuNjY4VjkxLjc5NWMwLTEwLjExNS0yMS41NjUtMTQuNzItNDEuNi0xNC43MiIvPjwvc3ZnPg==
 [aws-s3]: https://img.shields.io/badge/AWS%20S3-569A31?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgU2ltcGxlIFN0b3JhZ2UgU2VydmljZSAoUzMpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxYjY2MGYiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM2Y2FlM2UiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMTk0LjY3NSAxMzcuMjU2IDEuMjI5LTguNjUyYzExLjMzIDYuNzg3IDExLjQ3OCA5LjU5IDExLjQ3NSA5LjY2Ny0uMDIuMDE2LTEuOTUyIDEuNjI5LTEyLjcwNC0xLjAxNW0tNi4yMTgtMS43MjhjLTE5LjU4NC01LjkyNi00Ni44NTctMTguNDM4LTU3Ljg5NC0yMy42NTQgMC0uMDQ1LjAxMy0uMDg2LjAxMy0uMTMxIDAtNC4yNC0zLjQ1LTcuNjktNy42OTMtNy42OS00LjIzNyAwLTcuNjg3IDMuNDUtNy42ODcgNy42OXMzLjQ1IDcuNjkgNy42ODcgNy42OWMxLjg2MiAwIDMuNTUyLS42OTUgNC44ODYtMS44IDEyLjk4NiA2LjE0OCA0MC4wNDggMTguNDc4IDU5Ljc3NiAyNC4zMDJsLTcuODAxIDU1LjA1OXEtLjAzMy4yMjUtLjAzMi40NTFjMCA0Ljg0OC0yMS40NjMgMTMuNzU0LTU2LjUzMiAxMy43NTQtMzUuNDQgMC01Ny4xMy04LjkwNi01Ny4xMy0xMy43NTRxMC0uMjItLjAyOC0uNDM1bC0xNi4zLTExOS4wNjJjMTQuMTA4IDkuNzEyIDQ0LjQ1NCAxNC44NSA3My40NzggMTQuODUgMjguOTc5IDAgNTkuMjczLTUuMTIgNzMuNDEtMTQuODAyek00OCA2NS41MjhjLjIzLTQuMjEgMjQuNDI4LTIwLjczIDc1LjItMjAuNzMgNTAuNzY0IDAgNzQuOTY2IDE2LjUxNiA3NS4yIDIwLjczdjEuNDM3Yy0yLjc4NCA5LjQ0My0zNC4xNDQgMTkuNDM0LTc1LjIgMTkuNDM0LTQxLjEyNyAwLTcyLjUwMy0xMC4wMjMtNzUuMi0xOS40Nzl6bTE1Ni44LjA3YzAtMTEuMDg3LTMxLjc5LTI3LjItODEuNi0yNy4yLTQ5LjgxMiAwLTgxLjYgMTYuMTEzLTgxLjYgMjcuMmwuMyAyLjQxNCAxNy43NTQgMTI5LjY3NmMuNDI2IDE0LjUwMyAzOS4xIDE5LjkxIDYzLjUyNiAxOS45MSAzMC4zMSAwIDYyLjUxMi02Ljk2OSA2Mi45MjgtMTkuOWw3LjY2OC01NC4wN2M0LjI2NSAxLjAyIDcuNzc2IDEuNTQyIDEwLjU5NSAxLjU0MiAzLjc4NSAwIDYuMzQ1LS45MjUgNy44OTctMi43NzQgMS4yNzQtMS41MTcgMS43Ni0zLjM1NCAxLjM5Ni01LjMxLS44My00LjQyOC02LjA4Ny05LjIwMi0xNi43OTQtMTUuMzExbDcuNjAzLTUzLjYzOXoiLz48L3N2Zz4=

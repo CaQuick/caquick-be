@@ -1,0 +1,311 @@
+# 운영 compose(홈서버, 로드맵 v2 06). 로컬 개발은 루트 docker-compose.yml(MySQL·Redis·RabbitMQ만)을 쓴다.
+# 값은 이 디렉터리의 두 파일 — 배포 잡(07)이 GitHub Environment secrets로 만든다(600). 키 목록은 *.example.
+#   .env     compose 보간 + 저장소·터널·Grafana 비밀 — 컨테이너에 통째로 주입하지 않는다
+#   app.env  앱(api·worker·migrate)이 읽는 값만 — 공개 인터페이스를 가진 api가 root 비밀번호·터널 토큰을 들고 있지 않게
+# 인바운드 포트는 열지 않는다(Cloudflare Tunnel이 api로 붙는다). 진단용 바인딩은 전부 127.0.0.1.
+# 프로필: (없음) = 앱·데이터 저장소·백업 · edge = cloudflared · observability = alloy·loki·prometheus·grafana · migrate = 마이그레이션 일회성
+# mem_limit은 로드맵 v2 §1 초안 — 10에서 실측으로 확정한다(합계 ≤ 6 GB).
+name: caquick
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '20m'
+    max-file: '5'
+
+x-app: &app
+  image: ${IMAGE:?ghcr.io/caquick/caquick-be}:${IMAGE_TAG:-main}
+  env_file:
+    - path: app.env
+      required: false
+  restart: unless-stopped
+  logging: *logging
+  # api의 ready와 같은 범위(MySQL·Redis) — api는 outbox 테이블만 쓰므로 브로커 장애 중에도 떠야 한다. RabbitMQ는 worker만 기다린다
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  # ready = MySQL·Redis(·worker는 RabbitMQ) 왕복. 이미지에 curl이 없어 node fetch로 찍는다
+  healthcheck:
+    test:
+      - CMD
+      - node
+      - -e
+      - "fetch('http://127.0.0.1:4000/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+
+services:
+  api:
+    <<: *app
+    environment:
+      APP_ROLE: api
+      PORT: '4000'
+    mem_limit: 768m
+    # 터널 없이 점검할 때만 — 외부 노출은 cloudflared가 내부 네트워크로 붙는다
+    ports:
+      - '127.0.0.1:${API_HOST_PORT:-4000}:4000'
+
+  worker:
+    <<: *app
+    environment:
+      APP_ROLE: worker
+      PORT: '4000'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    mem_limit: 512m
+
+  # 배포 절차(E9): compose run --rm migrate → worker → api. 서비스로 두는 이유는 같은 이미지·env를 쓰기 위해서다
+  migrate:
+    <<: *app
+    profiles: [migrate]
+    restart: 'no'
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    command: ['yarn', 'prisma:migrate:deploy']
+    mem_limit: 512m
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    logging: *logging
+    # native_password: mariadb 드라이버(Prisma 어댑터)가 비TLS 콜드 연결에서 caching_sha2의 RSA 키 조회를 막는다(로컬 compose와 동일)
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=512M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-CaQuick}
+      MYSQL_USER: ${MYSQL_USER:-caquick}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '--silent']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    # noeviction: 블랙리스트 표식이 밀려나면 차단이 풀린다 — worker 재구축이 정책을 점검해 아니면 경보(P2-03). 영속화 불필요(재구축 60초)
+    command:
+      - redis-server
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 128m
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    # 노드 이름이 호스트명에서 나온다 — 바뀌면 데이터 디렉터리가 달라져 durable 큐를 잃는다
+    hostname: rabbitmq
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    ports:
+      - '127.0.0.1:${RABBITMQ_MGMT_HOST_PORT:-15672}:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    mem_limit: 384m
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.8.1
+    profiles: [edge]
+    restart: unless-stopped
+    logging: *logging
+    command: ['tunnel', '--no-autoupdate', '--metrics', '127.0.0.1:2000', 'run']
+    # 프로필이 꺼진 채 base만 올릴 때도 compose는 파일 전체를 보간한다 — `:?`를 쓰면 토큰 없는 base 기동이 막힌다.
+    # 빈 토큰이면 cloudflared가 바로 죽어 unhealthy로 남고, 배포 잡이 edge healthy를 기다린다
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    # /ready는 엣지 연결이 하나도 없으면 503 — 터널이 끊긴 채 "running"으로 남지 않게
+    healthcheck:
+      test:
+        ['CMD', 'cloudflared', 'tunnel', '--metrics', '127.0.0.1:2000', 'ready']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    mem_limit: 64m
+
+  backup:
+    build: ./backup
+    image: caquick-backup:local
+    restart: unless-stopped
+    logging: *logging
+    # 필요한 값만 — S3 키는 08에서 최소 권한 IAM 사용자로 발급
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-CaQuick}
+      MYSQL_USER: ${MYSQL_USER:-caquick}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+      BACKUP_HOUR: ${BACKUP_HOUR:-19}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${BACKUP_AWS_REGION:-ap-northeast-2}
+    volumes:
+      - backup-data:/backup
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # 루프가 매분 /tmp/alive를 갱신한다 — 5분 넘게 멈추면 unhealthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test $(( $(date +%s) - $(stat -c %Y /tmp/alive 2>/dev/null || echo 0) )) -lt 300
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 256m
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    # 앱 /metrics Bearer 토큰 — 별도 파일을 미리 만들 필요 없이 .env의 값이 /run/secrets/metrics_token으로 들어간다
+    secrets:
+      - metrics_token
+    ports:
+      - '127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9090/-/ready']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 256m
+
+  loki:
+    image: grafana/loki:3.5.3
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    command: ['-config.file=/etc/loki/loki.yml']
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3100/ready']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 256m
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    command:
+      ['run', '/etc/alloy/config.alloy', '--storage.path=/var/lib/alloy/data']
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    # 이미지에 wget·curl이 없다(Ubuntu, bash만) — bash의 /dev/tcp로 /-/ready를 찍는다
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\r\n\r\n' >&3 && head -n 1 <&3 | grep -q '200 OK'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 192m
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: [observability]
+    restart: unless-stopped
+    logging: *logging
+    # 위 cloudflared와 같은 이유로 `:?` 대신 시작 시 검사 — 비어 있으면 기본 admin/admin으로 뜨지 않게 exit 1
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "GRAFANA_ADMIN_PASSWORD 없음" >&2; exit 1; }; exec /run.sh'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - '127.0.0.1:${GRAFANA_HOST_PORT:-3001}:3000'
+    depends_on:
+      - prometheus
+      - loki
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    mem_limit: 640m
+
+secrets:
+  metrics_token:
+    environment: METRICS_ACCESS_TOKEN
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  backup-data:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:

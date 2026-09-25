@@ -1,0 +1,36 @@
+// docker 컨테이너 로그 → Loki. 라벨은 compose 서비스명(container)·역할(app 로그의 role은 JSON 필드로 Loki에서 파싱).
+// 09에서 앱·rabbitmq·exporter 스크레이프와 role 라벨 승격을 더한다.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // 이 compose 프로젝트(caquick)만 — 같은 호스트의 다른 컨테이너(개발 DB·testcontainers) 로그를 섞지 않는다
+  rule {
+    action        = "keep"
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "caquick"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
