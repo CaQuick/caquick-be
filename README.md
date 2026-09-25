@@ -344,7 +344,10 @@ extend type Query {
 
 - 도메인마다 `extend type Query`와 `extend type Mutation`으로 스키마를 확장하며, 루트 정의는 `src/features/core/root.graphql`에 있습니다.
 - 모든 `input`에는 대응하는 DTO 클래스가 있어야 하고(`dto:check`가 검사), 모든 필드에는 description이 있어야 합니다(`docs:check`가 검사, 현재 커버리지 100%).
-- 목록 조회는 키셋 커서 방식으로 `{ items, totalCount, hasMore, nextCursor }` 형태를 반환하고, 에러는 `extensions.code`(카탈로그 코드)와 `extensions.classification`(HTTP 분류)으로 전달합니다.
+- 목록 조회는 두 방식을 씁니다.
+  - 키셋 커서(기본): `{ items, totalCount, hasMore, nextCursor }`를 반환합니다. 커서는 불투명 토큰입니다.
+  - offset/limit: 마이페이지(찜·리뷰·최근 본 상품), 내 주문, 검색처럼 페이지 번호가 자연스러운 구매자 목록은 `offset`·`limit` 입력을 받고 `{ items, totalCount }`를 반환합니다.
+- 에러는 `extensions.code`(카탈로그 코드)와 `extensions.classification`(HTTP 분류)으로 전달합니다. 도메인별 분기는 `code`로, 인증 만료·권한 같은 공통 처리는 `classification`으로 합니다.
 - 생성된 타입 파일(`src/graphql/graphql.types.ts`)은 자동 생성물이므로 직접 수정하지 않습니다. 운영 환경에서는 Playground와 introspection을 끕니다.
 
 ## 🧪 테스트
@@ -396,14 +399,14 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### 워크플로우
 
-| Workflow                         | Trigger                                     | 역할                                                                                                                                                     |
-| -------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                    | codegen, tsc, lint, dto/docs/arch 게이트, 인프라 spec, 통합 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다                                      |
-| `codeql.yml`                     | PR · push · 주간                            | CodeQL 정적 보안 분석을 실행합니다                                                                                                                       |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                          | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                      |
-| `build-image.yml`                | PR(빌드만) · main **CI 성공 뒤**(GHCR 푸시) | arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                                         |
-| `deploy.yml`                     | `build-image` 성공(main) · 수동(롤백 sha)   | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다 |
-| `discord-notify.yml`             | PR · push · issue                           | Discord에 알림을 보냅니다                                                                                                                                |
+| Workflow                         | Trigger                                     | 역할                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                    | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 통합 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
+| `codeql.yml`                     | PR · push · 주간                            | CodeQL 정적 보안 분석을 실행합니다                                                                                                                          |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                          | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                         |
+| `build-image.yml`                | PR(빌드만) · main **CI 성공 뒤**(GHCR 푸시) | arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                                            |
+| `deploy.yml`                     | `build-image` 성공(main) · 수동(롤백 sha)   | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다    |
+| `discord-notify.yml`             | PR · push · issue                           | Discord에 알림을 보냅니다                                                                                                                                   |
 
 ### 흐름
 

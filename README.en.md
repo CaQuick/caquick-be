@@ -344,7 +344,10 @@ extend type Query {
 
 - Each domain extends the schema with `extend type Query` and `extend type Mutation`; the root definitions live in `src/features/core/root.graphql`.
 - Every `input` must have a matching DTO class (checked by `dto:check`) and every field must have a description (checked by `docs:check`; currently 100%).
-- List queries use keyset cursors and return `{ items, totalCount, hasMore, nextCursor }`. Errors are reported through `extensions.code` (catalog code) and `extensions.classification` (HTTP class).
+- List queries use one of two pagination schemes.
+  - Keyset cursor (default): returns `{ items, totalCount, hasMore, nextCursor }`; the cursor is an opaque token.
+  - offset/limit: buyer-facing lists where page numbers are natural (my page wishlist/reviews/recently viewed, my orders, search) take `offset` and `limit` and return `{ items, totalCount }`.
+- Errors are reported through `extensions.code` (catalog code) and `extensions.classification` (HTTP class). Branch on `code` for domain-specific handling and on `classification` for shared handling such as expired auth or permission errors.
 - The generated type file (`src/graphql/graphql.types.ts`) is never edited by hand. Playground and introspection are disabled in production.
 
 ## 🧪 Testing
@@ -396,14 +399,14 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### Workflows
 
-| Workflow                         | Trigger                                              | Role                                                                                                                                                                             |
-| -------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                             | codegen, tsc, lint, dto/docs/arch gates, infrastructure specs, integration tests, coverage, and two consecutive builds (cache regression check)                                  |
-| `codeql.yml`                     | PR · push · weekly                                   | CodeQL static security analysis                                                                                                                                                  |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                                   | comments with unused-code and NestJS health reports (advisory)                                                                                                                   |
-| `build-image.yml`                | PR (build only) · main **after CI succeeds** (push)  | builds an arm64 image and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                                            |
-| `deploy.yml`                     | `build-image` success (main) · manual (rollback sha) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord |
-| `discord-notify.yml`             | PR · push · issue                                    | Discord notifications                                                                                                                                                            |
+| Workflow                         | Trigger                                              | Role                                                                                                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                             | codegen, tsc, lint, docs/arch gates, dto:check (warning only; the hard gate is the pre-push hook), infrastructure specs, integration tests, coverage, and two consecutive builds (cache regression check) |
+| `codeql.yml`                     | PR · push · weekly                                   | CodeQL static security analysis                                                                                                                                                                           |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                                   | comments with unused-code and NestJS health reports (advisory)                                                                                                                                            |
+| `build-image.yml`                | PR (build only) · main **after CI succeeds** (push)  | builds an arm64 image and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                                                                     |
+| `deploy.yml`                     | `build-image` success (main) · manual (rollback sha) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord                          |
+| `discord-notify.yml`             | PR · push · issue                                    | Discord notifications                                                                                                                                                                                     |
 
 ### Flow
 

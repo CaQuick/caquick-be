@@ -64,7 +64,7 @@
 
 **규칙.** 도메인 오류는 `throw new DomainException('CODE')` 하나로 던진다. 코드·HTTP status·메시지(한국어, 파라미터가 있으면 함수형)는 `src/common/errors/error-catalog.ts`가 정본이고 **코드 1개 = status 1개**다. Nest 예외를 직접 생성하는 것은 ESLint가 막는다(예외: ValidationPipe의 `VALIDATION_FAILED` 매핑 1곳). 응답은 GraphQL `extensions.code`(카탈로그 코드)·`extensions.classification`(HTTP 분류), REST 봉투 `errorCode`. spec은 `toThrowDomain(status | 'CODE')`.
 
-**왜.** FE는 메시지가 아니라 코드로 분기한다(`extensions.classification` 기준). 코드가 status를 결정하므로 같은 상황이 화면마다 다른 status로 나가는 일이 없다.
+**왜.** FE는 메시지가 아니라 값으로 분기한다 — 도메인별 처리는 `extensions.code`(카탈로그 코드, `PASSWORD_CHANGE_REQUIRED` 같은 구체 값)로, 인증 만료·권한 같은 공통 처리는 `extensions.classification`으로. 코드가 status를 결정하므로 같은 상황이 화면마다 다른 status로 나가는 일이 없다.
 
 ---
 
@@ -127,7 +127,7 @@
 
 **반증이 본체.** 검사기·게이트·가드는 "막아야 할 것을 실제로 막는지"가 테스트다 — 현재 코드에서 통과하는 것은 오탐이 없다는 뜻일 뿐이다. 입력 공간이 열거 가능하면(SDL 자리, 상태 전이, 에러 종류) `it.each` 전수 표로 고정한다. 일회성 검증 스크립트도 "0건"을 믿기 전에 대상 수를 찍고 일부러 걸리는 항목을 넣어 본다. 로그·API 응답은 필터 전 원본을 먼저 본다.
 
-**정합성 도구.** `yarn validate` = lint → tsc → `dto:check`(SDL input ↔ DTO) → `docs:check`(SDL description 커버리지, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:cov`(statements 96 / branches 86 / functions 92 / lines 96). Husky pre-push와 CI `check`가 같은 것을 돈다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
+**정합성 도구.** `yarn validate` = lint → tsc → `dto:check`(SDL input ↔ DTO) → `docs:check`(SDL description 커버리지, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:cov`(statements 96 / branches 86 / functions 92 / lines 96). Husky pre-push가 이 전체를 돌리는 **하드 게이트**다. CI `check` 잡은 같은 단계를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
 
 ---
 
