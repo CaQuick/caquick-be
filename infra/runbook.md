@@ -7,16 +7,16 @@
 - 실패: 컨테이너 로그 + Discord 경보(`DISCORD_ALERT_WEBHOOK_URL`, 1시간에 1번). 1분 뒤 재시도.
 - 있는지 보기(호스트에 aws cli가 없어도 된다 — backup 이미지의 aws와 `BACKUP_AWS_*` 키를 쓴다):
   ```bash
-  docker compose run --rm --entrypoint aws backup s3 ls s3://caquick-db-backup/mysql/
+  docker compose run --rm --no-deps --entrypoint aws backup s3 ls s3://caquick-db-backup/mysql/
   ```
 - 지금 바로 한 번: `docker compose run --rm -e BACKUP_RUN_ONCE=1 backup`
 
 ## 복구
 
-1. 덤프 고르기·받기 — backup 컨테이너의 aws(키 포함)로 `backup-data` 볼륨(`/backup`)에 받는다. 호스트 도구 불필요
+1. 덤프 고르기·받기 — backup 컨테이너의 aws(`BACKUP_AWS_*`, IAM `caquick-backup`)로 `backup-data` 볼륨(`/backup`)에 받는다. 호스트 도구 불필요. `--no-deps`: MySQL이 죽어 있을 때(복구가 필요한 바로 그 상황) mysql healthy를 기다리지 않는다
    ```bash
-   docker compose run --rm --entrypoint aws backup s3 ls s3://caquick-db-backup/mysql/
-   docker compose run --rm --entrypoint aws backup s3 cp s3://caquick-db-backup/mysql/CaQuick-<stamp>.sql.gz /backup/restore.sql.gz
+   docker compose run --rm --no-deps --entrypoint aws backup s3 ls s3://caquick-db-backup/mysql/
+   docker compose run --rm --no-deps --entrypoint aws backup s3 cp s3://caquick-db-backup/mysql/CaQuick-<stamp>.sql.gz /backup/restore.sql.gz
    ```
 2. 먼저 **별도 DB로** 복구해 내용을 확인한다(운영 DB는 아직 건드리지 않는다)
    ```bash

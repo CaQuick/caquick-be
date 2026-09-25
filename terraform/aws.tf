@@ -154,10 +154,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
 }
 
 ############################################
-# 앱 IAM 사용자 — 홈서버·로컬 앱이 쓰는 키의 주인. 최소 권한: 미디어 presign(put/get) + 백업 put/get/list
+# IAM 사용자 2개 — 키가 새거나 api·worker가 뚫려도 덤프(DB 전체)에는 닿지 못하게 앱과 백업을 가른다
+#   caquick-app    홈서버·로컬 앱: 미디어 버킷 presign(put/get)만
+#   caquick-backup backup 컨테이너: 백업 버킷 mysql/ put/get + list만
 ############################################
 # 액세스 키는 Terraform으로 만들지 않는다 — secret이 state에 남는다. 콘솔/CLI로 발급해 GitHub secret·.env에 넣는다:
-#   aws iam create-access-key --user-name caquick-app
+#   aws iam create-access-key --user-name caquick-app      → APP_ENV의 AWS_*, 로컬 .env
+#   aws iam create-access-key --user-name caquick-backup   → DOTENV의 BACKUP_AWS_*
 import {
   to = aws_iam_user.app
   id = var.app_iam_user
@@ -182,7 +185,37 @@ data "aws_iam_policy_document" "app" {
     actions   = ["s3:PutObject", "s3:GetObject"]
     resources = [for b in aws_s3_bucket.media : "${b.arn}/*"]
   }
+}
 
+resource "aws_iam_policy" "app" {
+  name        = "CaQuickApp"
+  description = "caquick app (home server + local dev): media presign put/get"
+  policy      = data.aws_iam_policy_document.app.json
+}
+
+resource "aws_iam_user_policy_attachment" "app" {
+  user       = aws_iam_user.app.name
+  policy_arn = aws_iam_policy.app.arn
+}
+
+import {
+  to = aws_iam_user.backup
+  id = var.backup_iam_user
+}
+import {
+  to = aws_iam_policy.backup
+  id = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/CaQuickBackup"
+}
+import {
+  to = aws_iam_user_policy_attachment.backup
+  id = "${var.backup_iam_user}/arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/CaQuickBackup"
+}
+
+resource "aws_iam_user" "backup" {
+  name = var.backup_iam_user
+}
+
+data "aws_iam_policy_document" "backup" {
   statement {
     sid       = "BackupObjects"
     effect    = "Allow"
@@ -198,15 +231,15 @@ data "aws_iam_policy_document" "app" {
   }
 }
 
-resource "aws_iam_policy" "app" {
-  name        = "CaQuickApp"
-  description = "caquick app (home server + local dev): media presign put/get, DB backup put/get/list"
-  policy      = data.aws_iam_policy_document.app.json
+resource "aws_iam_policy" "backup" {
+  name        = "CaQuickBackup"
+  description = "caquick backup container: DB dump put/get/list on the backup bucket only"
+  policy      = data.aws_iam_policy_document.backup.json
 }
 
-resource "aws_iam_user_policy_attachment" "app" {
-  user       = aws_iam_user.app.name
-  policy_arn = aws_iam_policy.app.arn
+resource "aws_iam_user_policy_attachment" "backup" {
+  user       = aws_iam_user.backup.name
+  policy_arn = aws_iam_policy.backup.arn
 }
 
 output "backup_bucket" {
@@ -215,4 +248,8 @@ output "backup_bucket" {
 
 output "app_iam_user" {
   value = aws_iam_user.app.name
+}
+
+output "backup_iam_user" {
+  value = aws_iam_user.backup.name
 }

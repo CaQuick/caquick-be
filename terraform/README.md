@@ -8,7 +8,7 @@
 
 - 미디어 버킷 `caquick-media-dev`·`caquick-media-prod`(이미 있던 것 — `import` 블록으로 연결, 공개 읽기 정책·PUT/GET CORS·ACL 차단·BucketOwnerEnforced)
 - 백업 버킷 `caquick-db-backup`(비공개, `mysql/` 14일 만료, 버전 없음)
-- 앱 IAM 사용자 `caquick-app` + 정책 `CaQuickApp`(미디어 put/get, 백업 put/get/list). **액세스 키는 Terraform이 만들지 않는다**(secret이 state에 남는다): `aws iam create-access-key --user-name caquick-app` → GitHub Environment secret(`APP_ENV`의 `AWS_*`, `DOTENV`의 `BACKUP_AWS_*`)·로컬 `.env`
+- IAM 사용자 2개 — `caquick-app` + `CaQuickApp`(미디어 put/get만), `caquick-backup` + `CaQuickBackup`(백업 버킷 put/get/list만). 앱 키가 새도 덤프에는 닿지 않는다. **액세스 키는 Terraform이 만들지 않는다**(secret이 state에 남는다): `aws iam create-access-key --user-name caquick-app` → `APP_ENV`의 `AWS_*`·로컬 `.env`, `aws iam create-access-key --user-name caquick-backup` → `DOTENV`의 `BACKUP_AWS_*`
 - 관리 밖: 사람 전용 `cw7`(AdministratorAccess — Terraform·CLI에만 쓴다), CodeDeploy 시절 `caquick-deploy` 사용자·`CaQuickDeploy` 정책·CodeDeploy 앱·중지된 EC2(정리는 별도 판단)
 
 ### GitHub (`main.tf`)

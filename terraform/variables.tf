@@ -32,7 +32,13 @@ variable "backup_bucket" {
 }
 
 variable "app_iam_user" {
-  description = "IAM user for the app (home server + local dev): media presign + backup put/get."
+  description = "IAM user for the app (home server + local dev): media presign only."
   type        = string
   default     = "caquick-app"
+}
+
+variable "backup_iam_user" {
+  description = "IAM user for the backup container only: backup bucket put/get/list."
+  type        = string
+  default     = "caquick-backup"
 }
