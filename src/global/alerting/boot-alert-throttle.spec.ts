@@ -147,6 +147,41 @@ describe('shouldSendBootAlert', () => {
     expect(shouldSendBootAlert(Date.now(), 5_000, stateDir)).toBe(true);
   });
 
+  it('다른 프로세스가 수리 중이면(수리 잠금 존재) 700이 될 때까지 기다렸다가 그 결과를 쓴다', () => {
+    const stateDir = join(dir, 'repair-in-progress');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777);
+    writeFileSync(join(stateDir, 'last-sent'), String(10 ** 13), 'utf8');
+    writeFileSync(`${stateDir}.repair-lock`, '', 'utf8'); // 방금 잡힌 수리 잠금
+    // 수리자 역할: 잠깐 뒤 심어 둔 상태를 지우고 700으로 잠근 뒤 수리 잠금을 푼다
+    const repairer = spawn(process.execPath, [
+      '-e',
+      `const fs=require('fs');setTimeout(()=>{fs.rmSync(${JSON.stringify(join(stateDir, 'last-sent'))},{force:true});fs.chmodSync(${JSON.stringify(stateDir)},0o700);fs.unlinkSync(${JSON.stringify(`${stateDir}.repair-lock`)})},200)`,
+    ]);
+    try {
+      expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+      expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+      expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+    } finally {
+      repairer.kill();
+    }
+  });
+
+  it('반증: 수리 잠금이 잡힌 채 아무도 끝내지 않으면 상한(2초) 뒤 억제 파일을 믿지 않고 보낸다 — 아무것도 지우지 않는다', () => {
+    const stateDir = join(dir, 'repair-stuck');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777);
+    writeFileSync(join(stateDir, 'last-sent'), '1', 'utf8');
+    writeFileSync(`${stateDir}.repair-lock`, '', 'utf8');
+
+    const started = Date.now();
+    expect(shouldSendBootAlert(Date.now(), 5_000, stateDir)).toBe(true);
+
+    expect(Date.now() - started).toBeGreaterThanOrEqual(1_900);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o777);
+    expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
+  });
+
   it('반증: 수리 잠금을 만들 수 없는 곳(부모가 쓰기 불가)이면 아무것도 지우지 않고 보낸다', () => {
     const parent = join(dir, 'ro-parent');
     const stateDir = join(parent, 'state');
