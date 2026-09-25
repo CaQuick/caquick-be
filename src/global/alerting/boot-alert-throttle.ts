@@ -7,6 +7,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   unlinkSync,
@@ -112,9 +113,8 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
 function ensurePrivateDir(stateDir: string): boolean {
   try {
     // 부모가 없으면(새 설치의 ~/.caquick) 700으로 만들어 쓴다. 있으면 만들기 전에 검사한다 — 남의 디렉터리 아래에 흔적을 남기지 않게
-    const parent = lstatParentOrCreate(stateDir);
-    if (isWritableByOthers(parent.mode) && (parent.mode & 0o1000) === 0)
-      return false;
+    lstatParentOrCreate(stateDir);
+    if (!isTrustedAncestorChain(dirname(stateDir))) return false;
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
     const st = lstatSync(stateDir);
     if (!st.isDirectory()) return false;
@@ -125,6 +125,36 @@ function ensurePrivateDir(stateDir: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 경로 위의 모든 조상을 본다 — 어느 하나라도 남이 rename할 수 있으면 검사 뒤 하위 트리를 통째로 바꿔치기할 수 있다.
+ * 디렉터리는 내 것 또는 root 소유이면서 남이 쓸 수 없거나, sticky(/tmp 식 — 남의 항목을 rename·삭제할 수 없다)여야 한다.
+ * 링크(/var → /private/var 같은)는 소유자가 나 또는 root일 때만 지나가고, 링크를 푼 실제 경로의 조상도 같은 기준으로 본다.
+ */
+function isTrustedAncestorChain(start: string): boolean {
+  const uid = process.getuid?.();
+  const ownedByMeOrRoot = (st: Stats) =>
+    uid === undefined || st.uid === uid || st.uid === 0;
+  const trustedDir = (st: Stats) =>
+    (st.mode & 0o1000) !== 0 ||
+    (ownedByMeOrRoot(st) && !isWritableByOthers(st.mode));
+  const chains = [start, realpathSync(start)];
+  for (const chainStart of chains) {
+    let dir = chainStart;
+    for (;;) {
+      const st = lstatSync(dir);
+      if (st.isSymbolicLink()) {
+        if (!ownedByMeOrRoot(st)) return false;
+      } else if (!st.isDirectory() || !trustedDir(st)) {
+        return false;
+      }
+      const up = dirname(dir);
+      if (up === dir) break;
+      dir = up;
+    }
+  }
+  return true;
 }
 
 function lstatParentOrCreate(stateDir: string): Stats {

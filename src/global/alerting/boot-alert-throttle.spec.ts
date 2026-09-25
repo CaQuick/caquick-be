@@ -176,6 +176,19 @@ describe('shouldSendBootAlert', () => {
     expect(existsSync(stateDir)).toBe(false);
   });
 
+  it('반증: 바로 위 부모가 안전해도 그 위 조상이 남이 쓸 수 있는 비-sticky면 믿지 않는다 — 하위 트리째 바꿔치기할 수 있다', () => {
+    const grand = join(dir, 'shared-grand');
+    mkdirSync(grand);
+    chmodSync(grand, 0o777);
+    const parent = join(grand, 'mine');
+    mkdirSync(parent, { mode: 0o700 });
+    const stateDir = join(parent, 'state');
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(true);
+    expect(existsSync(stateDir)).toBe(false);
+  });
+
   it('sticky 부모(/tmp 식 1777)는 남이 내 디렉터리를 바꿔치기할 수 없으므로 허용한다', () => {
     const parent = join(dir, 'sticky-parent');
     mkdirSync(parent);
