@@ -121,6 +121,43 @@ describe('MetricsService', () => {
     expect(COLLECT_TIMEOUT_MS).toBe(2_000);
   });
 
+  it('반증: 상한을 넘긴 collect가 아직 도는 동안 다음 스크레이프는 새 collect를 시작하지 않고 그 결과를 기다린다 — 느린 DB에 쿼리가 쌓이지 않는다', async () => {
+    const metrics = new MetricsService();
+    metrics.collectTimeoutMs = 20;
+    let slow = true;
+    let calls = 0;
+    let finish: () => void = () => undefined;
+    metrics.registerGauge({
+      name: 'caquick_test_inflight',
+      help: 't',
+      collect: (gauge) => {
+        calls += 1;
+        if (!slow) {
+          gauge.set(calls);
+          return;
+        }
+        return new Promise<void>((resolve) => {
+          finish = () => {
+            gauge.set(calls);
+            resolve();
+          };
+        });
+      },
+    });
+
+    await metrics.text();
+    const text = await metrics.text();
+    expect(calls).toBe(1);
+    expect(text).toContain('caquick_test_inflight Nan');
+
+    finish();
+    await new Promise((r) => setImmediate(r));
+    slow = false;
+    // 끝난 뒤의 스크레이프는 다시 collect한다
+    expect(await metrics.text()).toContain('caquick_test_inflight 2');
+    expect(calls).toBe(2);
+  });
+
   it('히스토그램 관측이 라벨과 함께 노출된다(_count·_sum)', async () => {
     const metrics = new MetricsService();
     metrics.httpRequestDuration.observe(

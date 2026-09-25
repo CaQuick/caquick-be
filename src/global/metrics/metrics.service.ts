@@ -77,6 +77,8 @@ export class MetricsService {
     collect: (gauge: Gauge<L>) => Promise<void> | void;
   }): Gauge<L> {
     const labelNames = args.labelNames ?? [];
+    // 게이지마다 collect는 한 번에 하나만 — 상한을 넘긴 쿼리는 취소되지 않으므로 느린 DB에 스크레이프마다 새 쿼리를 쌓으면 풀이 마른다
+    let inFlight: Promise<void> | null = null;
     const gauge: Gauge<L> = new Gauge<L>({
       name: args.name,
       help: args.help,
@@ -84,8 +86,11 @@ export class MetricsService {
       registers: [this.registry],
       collect: async () => {
         try {
+          inFlight ??= Promise.resolve(args.collect(gauge)).finally(() => {
+            inFlight = null;
+          });
           await withTimeout(
-            Promise.resolve(args.collect(gauge)),
+            inFlight,
             this.collectTimeoutMs,
             `${args.name} collect`,
           );
