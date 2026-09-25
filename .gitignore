@@ -98,4 +98,3 @@ src/generated/
 !infra/.env.example
 !infra/app.env.example
 infra/app.env
-infra/prometheus/secrets/

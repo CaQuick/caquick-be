@@ -1,5 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +16,49 @@ const SCRIPT = join(__dirname, '..', 'infra', 'backup', 'backup.sh');
 function fakeBin(dir: string, name: string, body: string): void {
   const path = join(dir, name);
   writeFileSync(path, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+}
+
+/** 루프 모드를 한 바퀴만 — 가짜 date(고정 시각)·가짜 sleep(종료)으로 */
+function runLoopOnce(hour: string, dateHour: string) {
+  const root = mkdtempSync(join(tmpdir(), 'caquick-backup-loop-'));
+  const bin = join(root, 'bin');
+  const out = join(root, 'out');
+  mkdirSync(bin);
+  fakeBin(bin, 'mysqldump', 'echo "-- MySQL dump"');
+  fakeBin(
+    bin,
+    'date',
+    `case "$*" in *%H) echo ${dateHour};; *%F) echo 2026-09-25;; *) echo 20260925T${dateHour}0000Z;; esac`,
+  );
+  // 한 바퀴 뒤 sleep에서 부모(루프)를 TERM으로 끝낸다 — 그냥 exit 0이면 루프가 공회전한다
+  fakeBin(bin, 'sleep', 'kill -s TERM $PPID; exit 0');
+  try {
+    execFileSync('bash', [SCRIPT], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 20_000,
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        BACKUP_DIR: out,
+        BACKUP_HOUR: hour,
+        ALIVE_FILE: join(root, 'alive'),
+        MYSQL_USER: 'u',
+        MYSQL_PASSWORD: 'p',
+      },
+    });
+    return { ended: 'exit 0', files: readdirSync(out) };
+  } catch (error) {
+    const e = error as {
+      status: number | null;
+      signal: string | null;
+      stderr: string;
+    };
+    return {
+      ended: e.signal === 'SIGTERM' ? 'loop' : `exit ${e.status ?? e.signal}`,
+      stderr: e.stderr,
+      files: existsSync(out) ? readdirSync(out) : [],
+    };
+  }
 }
 
 function runOnce(opts: {
@@ -79,6 +128,36 @@ describe('infra/backup/backup.sh (BACKUP_RUN_ONCE)', () => {
     expect(r.status).not.toBe(0);
     expect(r.files).toHaveLength(1);
     expect(r.stderr).toContain('S3 업로드 실패');
+  });
+
+  it.each([
+    ['4', '04'],
+    ['04', '04'],
+    ['19', '19'],
+  ])(
+    '반증: BACKUP_HOUR=%s 는 date +%%H=%s 와 맞는다 — 한 자리 시각도 백업이 돈다',
+    (hour, dateHour) => {
+      const r = runLoopOnce(hour, dateHour);
+      expect(r.ended).toBe('loop');
+      expect(r.files).toHaveLength(1);
+    },
+  );
+
+  it('반증: 시각이 아니면(24·abc) 시작하지 않고 죽는다 — 조용히 백업 없는 healthy가 되지 않게', () => {
+    for (const hour of ['24', 'abc', '4x']) {
+      const r = runLoopOnce(hour, '04');
+      expect({ hour, ended: r.ended }).toEqual({ hour, ended: 'exit 1' });
+      expect(r.files).toEqual([]);
+    }
+  });
+
+  it('반증: MYSQL_USER·MYSQL_PASSWORD가 없으면 시작 시 죽는다', () => {
+    expect(() =>
+      execFileSync('bash', [SCRIPT], {
+        stdio: 'pipe',
+        env: { PATH: process.env.PATH ?? '', BACKUP_RUN_ONCE: '1' },
+      }),
+    ).toThrow();
   });
 
   it('S3 업로드 성공 → uploaded 로그, 종료 0', () => {

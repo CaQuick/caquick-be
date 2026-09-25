@@ -2,14 +2,14 @@
 
 로드맵 v2(모듈러 모놀리스 + 이벤트 백본)의 운영 형태. 앱 이미지 1개(`../Dockerfile`)를 `api`·`worker`로 띄우고, MySQL·Redis·RabbitMQ·백업이 같이 돈다. 인바운드 포트는 열지 않는다 — 외부는 Cloudflare Tunnel(`cloudflared`)만.
 
-| 파일                                         | 역할                                                                                                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compose.yml`                                | 서비스 정의. 프로필 `edge`(cloudflared) · `observability`(alloy·loki·prometheus·grafana) · `migrate`(마이그레이션 일회성)                               |
-| `.env.example`                               | `.env` 키 목록(값 없음) — compose 보간 + 저장소·터널·Grafana 비밀. 컨테이너에 주입하지 않는다                                                           |
-| `app.env.example`                            | `app.env` 키 목록 — 앱(api·worker·migrate)이 읽는 값만. 두 파일 다 배포 잡이 GitHub Environment secrets(`DOTENV`·`APP_ENV`)로 만든다(600)               |
-| `backup/`                                    | mysqldump → gzip → S3(하루 1회, `BACKUP_HOUR` UTC). `BACKUP_RUN_ONCE=1`이면 한 번만                                                                     |
-| `rabbitmq/enabled_plugins`                   | management + prometheus 플러그인                                                                                                                        |
-| `prometheus/`, `loki/`, `alloy/`, `grafana/` | 관측 스택 최소 설정(09에서 경보 규칙·대시보드·exporter 추가). `prometheus/secrets/metrics.token`(gitignore)은 배포 잡이 `METRICS_ACCESS_TOKEN`으로 쓴다 |
+| 파일                                         | 역할                                                                                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compose.yml`                                | 서비스 정의. 프로필 `edge`(cloudflared) · `observability`(alloy·loki·prometheus·grafana) · `migrate`(마이그레이션 일회성)                                     |
+| `.env.example`                               | `.env` 키 목록(값 없음) — compose 보간 + 저장소·터널·Grafana 비밀. 컨테이너에 주입하지 않는다                                                                 |
+| `app.env.example`                            | `app.env` 키 목록 — 앱(api·worker·migrate)이 읽는 값만. 두 파일 다 배포 잡이 GitHub Environment secrets(`DOTENV`·`APP_ENV`)로 만든다(600)                     |
+| `backup/`                                    | mysqldump → gzip → S3(하루 1회, `BACKUP_HOUR` UTC). `BACKUP_RUN_ONCE=1`이면 한 번만                                                                           |
+| `rabbitmq/enabled_plugins`                   | management + prometheus 플러그인                                                                                                                              |
+| `prometheus/`, `loki/`, `alloy/`, `grafana/` | 관측 스택 최소 설정(09에서 경보 규칙·대시보드·exporter 추가). 앱 `/metrics` 토큰은 `.env`의 `METRICS_ACCESS_TOKEN`이 compose secret으로 Prometheus에 들어간다 |
 
 ## 절차
 

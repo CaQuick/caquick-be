@@ -1,4 +1,4 @@
-# 09에서 경보 규칙·exporter(mysqld·redis)를 더한다. 앱 /metrics는 Bearer 토큰 — 배포 잡이 secrets/metrics.token(gitignore)에 쓴다.
+# 09에서 경보 규칙·exporter(mysqld·redis)를 더한다. 앱 /metrics는 Bearer 토큰 — compose secret(.env의 METRICS_ACCESS_TOKEN)이 /run/secrets/metrics_token으로 들어온다.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -8,7 +8,7 @@ scrape_configs:
     metrics_path: /metrics
     authorization:
       type: Bearer
-      credentials_file: /etc/prometheus/secrets/metrics.token
+      credentials_file: /run/secrets/metrics_token
     static_configs:
       - targets: ['api:4000']
         labels: { role: api }

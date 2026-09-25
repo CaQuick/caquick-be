@@ -210,8 +210,10 @@ services:
       - --storage.tsdb.retention.time=15d
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/secrets:/etc/prometheus/secrets:ro
       - prometheus-data:/prometheus
+    # 앱 /metrics Bearer 토큰 — 별도 파일을 미리 만들 필요 없이 .env의 값이 /run/secrets/metrics_token으로 들어간다
+    secrets:
+      - metrics_token
     ports:
       - '127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090'
     healthcheck:
@@ -294,6 +296,10 @@ services:
       retries: 3
       start_period: 60s
     mem_limit: 640m
+
+secrets:
+  metrics_token:
+    environment: METRICS_ACCESS_TOKEN
 
 volumes:
   mysql-data:

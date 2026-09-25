@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,6 +12,8 @@ const PROFILES = ['edge', 'observability', 'migrate'];
 interface Service {
   image?: string;
   build?: unknown;
+  secrets?: Array<{ source: string } | string>;
+  volumes?: Array<{ source?: string; target?: string }>;
   depends_on?: Record<string, { condition?: string }>;
   entrypoint?: string[];
   restart?: string;
@@ -25,6 +27,7 @@ interface Service {
 interface Rendered {
   services: Record<string, Service>;
   volumes?: Record<string, unknown>;
+  secrets?: Record<string, { environment?: string }>;
 }
 
 /** base 스택(프로필 없음)이 요구하는 값 — 프로필 서비스의 비밀은 여기 없어야 한다(아래 반증) */
@@ -173,6 +176,34 @@ describe('infra/compose.yml', () => {
     expect(rendered.services.grafana.entrypoint?.join(' ')).toContain(
       'exec /run.sh',
     );
+  });
+
+  it('반증: 컨테이너가 시작 전에 요구하는 호스트 파일은 전부 커밋돼 있다 — Prometheus 토큰은 파일이 아니라 .env → compose secret으로 들어간다', () => {
+    const infraDir = join(ROOT, 'infra');
+    for (const [name, service] of Object.entries(rendered.services)) {
+      for (const v of service.volumes ?? []) {
+        if (!v.source?.startsWith(infraDir)) continue;
+        expect({
+          name,
+          source: v.source,
+          exists: existsSync(v.source),
+        }).toEqual({
+          name,
+          source: v.source,
+          exists: true,
+        });
+      }
+    }
+    expect(rendered.secrets?.metrics_token?.environment).toBe(
+      'METRICS_ACCESS_TOKEN',
+    );
+    const sources = (rendered.services.prometheus.secrets ?? []).map((s) =>
+      typeof s === 'string' ? s : s.source,
+    );
+    expect(sources).toEqual(['metrics_token']);
+    expect(
+      readFileSync(join(infraDir, 'prometheus', 'prometheus.yml'), 'utf8'),
+    ).toContain('credentials_file: /run/secrets/metrics_token');
   });
 
   it('반증: 인바운드 포트는 열지 않는다 — 저장소·worker는 포트 없음, 나머지 진단 포트는 전부 127.0.0.1', () => {
