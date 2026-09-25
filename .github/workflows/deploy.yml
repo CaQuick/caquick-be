@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: '배포할 이미지 태그(sha). 비우면 main'
+        description: '배포할 이미지 태그(전체 sha). 비우면 지금 main 끝 커밋'
         required: false
         default: ''
 
@@ -25,11 +25,12 @@ concurrency:
 
 jobs:
   deploy:
-    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다 — 이 레포 main에 대한 push 이벤트의 빌드만 배포한다
+    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다. Build Image가 GHCR에 푸시하는 유일한 경로는
+    # CI 성공(workflow_run) 트리거이고 그 빌드는 이 레포 main push의 CI에서만 시작되므로, 여기서는 그 체인 이벤트만 받는다
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.event == 'workflow_run' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: [self-hosted, macmini]
@@ -53,17 +54,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.image_tag }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          MAIN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # 가변 태그(main)는 쓰지 않는다 — 수동 실행의 기본값은 지금 main 끝 커밋의 sha
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
             tag=$INPUT_TAG
           elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            tag=main
+            tag=$MAIN_SHA
           else
             tag=$RUN_SHA
           fi
-          # build-image는 전체 sha(40 hex)와 main만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
-          [[ "$tag" =~ ^([0-9a-f]{40}|main)$ ]] || { echo "image_tag은 전체 커밋 sha(40 hex) 또는 main만: $tag" >&2; exit 1; }
+          # build-image는 전체 sha(40 hex)만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
+          [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag은 전체 커밋 sha(40 hex)만: $tag" >&2; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # 빌드 완료 순서는 커밋 순서와 다를 수 있다 — 지금 main 끝이 아닌 커밋의 빌드는 배포하지 않는다(수동 실행은 그대로)

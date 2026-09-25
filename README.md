@@ -390,7 +390,7 @@ CI에서도 동일하게 testcontainers로 격리된 MySQL을 띄우므로 로�
 | `pr-check.yml`       | PR (develop/main)                                     | lint · typecheck · 통합 테스트 · 커버리지                                                                   |
 | `codeql.yml`         | PR · push · 주간                                      | GitHub CodeQL SAST                                                                                          |
 | `discord-notify.yml` | PR · push · issue                                     | Discord 알림                                                                                                |
-| `build-image.yml`    | PR(빌드만) · main push(GHCR 푸시)                     | 앱 이미지 arm64 빌드 → `ghcr.io/caquick/caquick-be:<sha>`·`:main`                                           |
+| `build-image.yml`    | PR(빌드만) · main CI 성공 뒤(GHCR 푸시)               | 앱 이미지 arm64 빌드 → `ghcr.io/caquick/caquick-be:<sha>`(가변 태그 없음)                                   |
 | `deploy.yml`         | `build-image` 성공(main) · 수동(롤백은 이전 sha 입력) | 셀프호스트 러너(맥미니)가 `.env`·`app.env`(600) 생성 → pull → migrate → worker → api → ready 대기 → Discord |
 
 ### 흐름

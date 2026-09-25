@@ -47,25 +47,47 @@ describe('build-image.yml', () => {
   const wf = workflow('.github/workflows/build-image.yml');
   const build = wf.jobs.build;
 
-  it('main push에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
-    expect(wf.on.push?.branches).toEqual(['main']);
+  it('main은 CI(pr-check) 성공(workflow_run, 같은 sha, 이 레포 push)에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
+    expect(wf.on.push).toBeUndefined();
+    expect(wf.on.workflow_run?.workflows).toEqual(['CI']);
+    expect(wf.on.workflow_run?.branches).toEqual(['main']);
     expect(wf.on.pull_request?.branches).toEqual(
       expect.arrayContaining(['main', 'develop-msa']),
     );
+    // 이미지 빌드는 lint·테스트를 돌리지 않는다 — CI가 같은 커밋에서 성공한 뒤에만
+    expect(build.if).toContain("conclusion == 'success'");
+    expect(build.if).toContain("workflow_run.event == 'push'");
+    expect(build.if).toContain(
+      'head_repository.full_name == github.repository',
+    );
+    expect(build.if).toContain('head_sha == github.sha');
     const push = build.steps.find((s) =>
       s.uses?.startsWith('docker/build-push-action'),
     );
-    expect(push?.with?.push).toBe("${{ github.event_name == 'push' }}");
+    expect(push?.with?.push).toBe("${{ github.event_name == 'workflow_run' }}");
     expect(push?.with?.platforms).toBe('linux/arm64');
+    const meta = build.steps.find((s) =>
+      s.uses?.startsWith('docker/metadata-action'),
+    );
+    expect(String(meta?.with?.tags)).toContain('workflow_run.head_sha');
+    // 가변 태그(main)는 늦게 끝난 옛 빌드가 덮어쓸 수 있다 — sha 태그만
+    expect(String(meta?.with?.tags)).not.toContain('value=main');
     const login = build.steps.find((s) =>
       s.uses?.startsWith('docker/login-action'),
     );
-    expect(login?.if).toBe("github.event_name == 'push'");
+    expect(login?.if).toBe("github.event_name == 'workflow_run'");
+    const checkout = build.steps.find((s) =>
+      s.uses?.startsWith('actions/checkout'),
+    );
+    expect(String(checkout?.with?.ref)).toContain('workflow_run.head_sha');
   });
 
-  it('반증: main 빌드는 concurrency 그룹 하나에서 앞선 실행을 취소한다 — 늦게 끝난 옛 커밋이 새 커밋 뒤에 배포되지 않게', () => {
-    expect(wf.concurrency?.group).toContain("'build-image-main'");
+  it('반증: main 빌드의 concurrency 그룹은 sha별 — 옛 커밋의 늦은 CI 완료가 지금 main 끝의 빌드를 취소하지 않는다(순서는 head_sha == github.sha 검사가 맡는다)', () => {
+    expect(String(wf.concurrency?.group)).toContain(
+      "format('build-image-main-{0}', github.event.workflow_run.head_sha)",
+    );
     expect(wf.concurrency?.['cancel-in-progress']).toBe(true);
+    expect(build.if).toContain('head_sha == github.sha');
   });
 
   it('반증: 셀프호스트 러너를 쓰지 않는다 — 공개 레포의 PR 코드가 홈서버에서 돌면 안 된다', () => {
@@ -94,8 +116,8 @@ describe('deploy.yml', () => {
     // workflow_run은 실패한 빌드·다른 브랜치에서도 온다 — if로 한 번 더 거른다
     expect(job.if).toContain("conclusion == 'success'");
     expect(job.if).toContain("head_branch == 'main'");
-    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — push 이벤트 + 이 레포의 빌드만
-    expect(job.if).toContain("workflow_run.event == 'push'");
+    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — CI 체인(workflow_run) 이벤트 + 이 레포의 빌드만
+    expect(job.if).toContain("workflow_run.event == 'workflow_run'");
     expect(job.if).toContain('head_repository.full_name == github.repository');
   });
 
@@ -136,7 +158,7 @@ describe('deploy.yml', () => {
     for (const u of usesOf(wf)) expect(u).toMatch(PINNED);
   });
 
-  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다 — 입력·출력은 env를 거쳐 따옴표 친 변수로. image_tag은 sha·main 형식만', () => {
+  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다 — 입력·출력은 env를 거쳐 따옴표 친 변수로. image_tag은 전체 sha만(수동 기본값은 main 끝 sha)', () => {
     for (const [name, job] of Object.entries(wf.jobs)) {
       for (const step of job.steps) {
         expect({
@@ -151,7 +173,9 @@ describe('deploy.yml', () => {
     const tag = job.steps.find((s) => s.id === 'tag');
     expect(tag?.env?.INPUT_TAG).toBe('${{ inputs.image_tag }}');
     // build-image가 푸시하는 태그(전체 sha·main)만 — 짧은 sha·hex 아닌 접미사는 거절
-    expect(tag?.run).toContain('^([0-9a-f]{40}|main)$');
+    expect(tag?.run).toContain('^[0-9a-f]{40}$');
+    expect(tag?.run).toContain('tag=$MAIN_SHA');
+    expect(tag?.env?.MAIN_SHA).toBe('${{ github.sha }}');
     expect(tag?.run).toContain('exit 1');
   });
 
@@ -190,7 +214,7 @@ describe('infra/deploy.sh', () => {
       'wait_healthy worker',
       'up -d api',
       'wait_healthy api',
-      '--profile edge --profile observability up -d',
+      '--profile edge --profile observability up -d --build',
       'wait_healthy cloudflared',
     ].map((m) => ({ m, at: script.indexOf(m) }));
     for (const { m, at } of marks)

@@ -32,7 +32,8 @@ echo "== api"
 docker compose up -d api
 wait_healthy api
 echo "== rest"
-docker compose --profile edge --profile observability up -d --remove-orphans
+# --build: backup 이미지는 GHCR이 아니라 여기서 빌드한다 — infra/backup 변경이 반영되게
+docker compose --profile edge --profile observability up -d --build --remove-orphans
 # 터널이 곧 운영 진입점 — 토큰이 비었거나 엣지에 못 붙으면 배포를 실패로 끝낸다
 wait_healthy cloudflared
 docker image prune -f > /dev/null
