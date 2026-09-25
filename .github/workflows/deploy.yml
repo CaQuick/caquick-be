@@ -25,9 +25,13 @@ concurrency:
 
 jobs:
   deploy:
+    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다 — 이 레포 main에 대한 push 이벤트의 빌드만 배포한다
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: [self-hosted, macmini]
     environment: production
     timeout-minutes: 30

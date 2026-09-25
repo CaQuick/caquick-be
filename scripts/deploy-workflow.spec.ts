@@ -94,6 +94,9 @@ describe('deploy.yml', () => {
     // workflow_run은 실패한 빌드·다른 브랜치에서도 온다 — if로 한 번 더 거른다
     expect(job.if).toContain("conclusion == 'success'");
     expect(job.if).toContain("head_branch == 'main'");
+    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — push 이벤트 + 이 레포의 빌드만
+    expect(job.if).toContain("workflow_run.event == 'push'");
+    expect(job.if).toContain('head_repository.full_name == github.repository');
   });
 
   it('반증: 배포는 한 번에 하나, 진행 중인 배포를 취소하지 않는다 — 끊긴 배포가 절반만 교체된 채 남지 않게', () => {
