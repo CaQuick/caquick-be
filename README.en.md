@@ -72,7 +72,7 @@ Customers end up hopping between platforms, combining screenshots, edits, and ex
 
 - A single **NestJS 11** application runs as multiple processes that differ only by role (`APP_ROLE=api|ws|worker`): a modular monolith.
 - **GraphQL** (schema-first SDL) + **Apollo Server 5** + `@nestjs/graphql`
-  - Every field carries a description; coverage is kept at 100%.
+  - Every field except self-evident ones (`id`, `createdAt`-style timestamps, `*Id`/`*Ids`) carries a description; coverage is kept at 100%.
   - Real-time notifications are delivered over Subscriptions backed by Redis PubSub.
 - Generated docs and types
   - **GraphQL Code Generator**: SDL → TypeScript types
@@ -220,7 +220,7 @@ flowchart LR
   - Writes are allowed only from the owning feature (checked by `model-ownership.spec`).
   - Reads that cross a feature boundary are managed through an allowlist.
   - Display values that must stay historically stable (store name and product thumbnail on order items, the order item a review refers to, notification bodies) are not joined at read time; they are **copied into snapshot columns at creation time**. Reads that must show current values, such as the wishlist and review detail, still join other domains; that list is tracked by the allowlist in `read-boundary.spec`.
-- **Schema-first GraphQL**: SDL files are the single source of truth and `yarn graphql:codegen` keeps the types in sync. Every `input` needs a DTO class and every field needs a description; both are gated.
+- **Schema-first GraphQL**: SDL files are the single source of truth and `yarn graphql:codegen` keeps the types in sync. Field parity between `input` types and DTO classes and SDL description coverage are gated (scope in the [GraphQL](#-graphql) section).
 - **Error catalog**: domain errors are thrown as a single `DomainException('CODE')`, and the catalog is the source of truth for code, HTTP status, and message. Clients branch on `extensions.code` in the response.
 - **Zero database reads on the auth path**: claims of a validly signed token are trusted.
   - Suspension, deletion, and password changes are blocked immediately by the Redis blacklist.
@@ -343,7 +343,8 @@ extend type Query {
 ```
 
 - Each domain extends the schema with `extend type Query` and `extend type Mutation`; the root definitions live in `src/features/core/root.graphql`.
-- Every `input` must have a matching DTO class (checked by `dto:check`) and every field must have a description (checked by `docs:check`; currently 100%).
+- `dto:check` verifies field parity between `input` types and DTO classes. An `input` without any DTO is only reported in the default (lenient) mode and fails under `--strict`.
+- `docs:check` verifies SDL description coverage. Self-evident fields (`id`, `createdAt`-style timestamps, `*Id`/`*Ids`) are excluded from the denominator; on that basis coverage is currently 100%.
 - List queries use one of two pagination schemes.
   - Keyset cursor (default): returns `{ items, totalCount, hasMore, nextCursor }`; the cursor is an opaque token.
   - offset/limit: buyer-facing lists where page numbers are natural (my page wishlist/reviews/recently viewed, my orders, search) take `offset` and `limit` and return `{ items, totalCount }`.

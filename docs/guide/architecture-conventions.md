@@ -127,7 +127,7 @@
 
 **반증이 본체.** 검사기·게이트·가드는 "막아야 할 것을 실제로 막는지"가 테스트다 — 현재 코드에서 통과하는 것은 오탐이 없다는 뜻일 뿐이다. 입력 공간이 열거 가능하면(SDL 자리, 상태 전이, 에러 종류) `it.each` 전수 표로 고정한다. 일회성 검증 스크립트도 "0건"을 믿기 전에 대상 수를 찍고 일부러 걸리는 항목을 넣어 본다. 로그·API 응답은 필터 전 원본을 먼저 본다.
 
-**정합성 도구.** `yarn validate` = lint → tsc → `dto:check`(SDL input ↔ DTO) → `docs:check`(SDL description 커버리지, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:cov`(statements 96 / branches 86 / functions 92 / lines 96). Husky pre-push가 이 전체를 돌리는 **하드 게이트**다. CI `check` 잡은 같은 단계를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
+**정합성 도구.** `yarn validate` = lint → tsc → `dto:check`(SDL input ↔ DTO 필드 일치. DTO 없는 input은 기본 lenient 모드에서 정보만, `--strict`에서 오류) → `docs:check`(SDL description 커버리지 — 자명한 필드 `id`·`createdAt`류·`*Id`/`*Ids`는 제외, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:cov`(statements 96 / branches 86 / functions 92 / lines 96). Husky pre-push가 이 전체를 돌리는 **하드 게이트**다. CI `check` 잡은 같은 단계를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
 
 ---
 

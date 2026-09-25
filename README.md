@@ -72,7 +72,7 @@
 
 - **NestJS 11** 앱 하나를 역할(`APP_ROLE=api|ws|worker`)만 달리해 여러 프로세스로 띄우는 모듈러 모놀리스입니다.
 - **GraphQL**(schema-first SDL) + **Apollo Server 5** + `@nestjs/graphql`
-  - 모든 필드에 description을 작성해 커버리지 100%를 유지합니다.
+  - 자명한 필드(`id`, `createdAt`류, `*Id`/`*Ids`)를 뺀 모든 필드에 description을 작성해 커버리지 100%를 유지합니다.
   - 실시간 알림은 Redis PubSub 기반 Subscription으로 전달합니다.
 - 문서와 타입 자동 생성
   - **GraphQL Code Generator**: SDL → TypeScript 타입
@@ -220,7 +220,7 @@ flowchart LR
   - write는 소유 feature에서만 허용합니다(`model-ownership.spec`이 검사).
   - 다른 feature의 데이터를 읽어야 하는 경우는 허용 목록으로 관리합니다.
   - 이력이 남아야 하는 표시값(주문 품목의 매장명·상품 썸네일, 리뷰가 참조하는 주문 품목, 알림 본문)은 조인하지 않고 **생성 시점에 스냅샷 컬럼으로 복사**해 둡니다. 찜 목록·리뷰 상세처럼 현재 값을 보여 줘야 하는 조회는 아직 다른 도메인을 조인하며, 그 목록은 `read-boundary.spec`의 허용 목록이 추적합니다.
-- **Schema-First GraphQL**: SDL 파일이 단일 소스이며 `yarn graphql:codegen`으로 타입을 동기화합니다. 모든 `input`에는 DTO 클래스가 있어야 하고 모든 필드에는 description이 있어야 하며, 둘 다 게이트가 검사합니다.
+- **Schema-First GraphQL**: SDL 파일이 단일 소스이며 `yarn graphql:codegen`으로 타입을 동기화합니다. `input`과 DTO 클래스의 필드 일치와 SDL description 커버리지는 게이트가 검사합니다(범위는 [GraphQL](#-graphql) 절).
 - **에러 카탈로그**: 도메인 오류는 `DomainException('CODE')` 하나로 던지고, 코드와 HTTP status와 메시지는 카탈로그가 정본으로 관리합니다. 클라이언트는 응답의 `extensions.code`로 분기합니다.
 - **인증 경로에서 DB 조회 0회**: 서명이 유효한 토큰의 클레임을 신뢰합니다.
   - 정지·탈퇴·비밀번호 변경은 Redis 블랙리스트가 즉시 차단합니다.
@@ -343,7 +343,8 @@ extend type Query {
 ```
 
 - 도메인마다 `extend type Query`와 `extend type Mutation`으로 스키마를 확장하며, 루트 정의는 `src/features/core/root.graphql`에 있습니다.
-- 모든 `input`에는 대응하는 DTO 클래스가 있어야 하고(`dto:check`가 검사), 모든 필드에는 description이 있어야 합니다(`docs:check`가 검사, 현재 커버리지 100%).
+- `dto:check`는 `input`과 DTO 클래스의 필드 일치를 검사합니다. DTO가 없는 `input`은 기본(lenient) 모드에서 정보로만 알리고 `--strict`에서 오류입니다.
+- `docs:check`는 SDL description 커버리지를 검사합니다. 자명한 필드(`id`, `createdAt`류, `*Id`/`*Ids`)는 분모에서 빼며, 그 기준으로 현재 100%입니다.
 - 목록 조회는 두 방식을 씁니다.
   - 키셋 커서(기본): `{ items, totalCount, hasMore, nextCursor }`를 반환합니다. 커서는 불투명 토큰입니다.
   - offset/limit: 마이페이지(찜·리뷰·최근 본 상품), 내 주문, 검색처럼 페이지 번호가 자연스러운 구매자 목록은 `offset`·`limit` 입력을 받고 `{ items, totalCount }`를 반환합니다.
