@@ -124,6 +124,22 @@ describe('shouldSendBootAlert', () => {
     expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 
+  it('반증: 수리 잠금을 만들 수 없는 곳(부모가 쓰기 불가)이면 아무것도 지우지 않고 보낸다', () => {
+    const parent = join(dir, 'ro-parent');
+    const stateDir = join(parent, 'state');
+    mkdirSync(stateDir, { recursive: true });
+    chmodSync(stateDir, 0o777);
+    writeFileSync(join(stateDir, 'last-sent'), '1', 'utf8');
+    chmodSync(parent, 0o555);
+    try {
+      expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+      expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
+      expect(statSync(stateDir).mode & 0o777).toBe(0o777);
+    } finally {
+      chmodSync(parent, 0o755);
+    }
+  });
+
   it('반증: 상태 디렉터리를 만들 수 없으면 보내는 쪽으로 기운다', () => {
     const notADir = join(dir, 'file');
     writeFileSync(notADir, 'x', 'utf8');

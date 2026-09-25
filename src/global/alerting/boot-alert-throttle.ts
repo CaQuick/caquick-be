@@ -60,16 +60,25 @@ export function shouldSendBootAlert(
 }
 
 function acquireLock(lockPath: string, nowMs: number): boolean {
+  return acquireExclusive(lockPath, nowMs) !== 'busy'; // 잠금 자체를 못 쓰는 환경이면 보내는 쪽으로
+}
+
+/** O_EXCL 생성. busy = 다른 프로세스가 들고 있다, unavailable = 이 경로엔 잠금을 만들 수 없다(권한 등). */
+function acquireExclusive(
+  lockPath: string,
+  nowMs: number,
+): 'acquired' | 'busy' | 'unavailable' {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       closeSync(openSync(lockPath, 'wx'));
-      return true;
+      return 'acquired';
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return true; // 잠금 자체를 못 쓰는 환경
-      if (!reclaimStaleLock(lockPath, nowMs)) return false;
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST')
+        return 'unavailable';
+      if (!reclaimStaleLock(lockPath, nowMs)) return 'busy';
     }
   }
-  return false;
+  return 'busy';
 }
 
 /**
@@ -121,14 +130,15 @@ function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
  */
 function repairLooseDir(stateDir: string, nowMs: number): boolean {
   const repairLock = `${stateDir}.repair-lock`;
-  if (!acquireLock(repairLock, nowMs)) {
-    // 다른 프로세스가 고치는 중 — 끝나기를 잠깐 기다렸다가 고쳐졌으면 그 결과를 쓴다. 잠금을 못 잡았다고 "보낸다"로
-    // 기울면 동시 재시작 때 수리한 쪽과 둘 다 보낸다.
+  const got = acquireExclusive(repairLock, nowMs);
+  // 잠금을 만들 수 없는 곳(부모 디렉터리가 남의 것)이면 수리(삭제)를 하지 않는다 — 잠금 없이 지우면 서로의 상태를 지운다
+  if (got === 'unavailable') return false;
+  // 다른 프로세스가 고치는 중 — 700이 되기를 잠깐 기다린다. 700은 수리의 **마지막** 단계라 그때는 삭제도 끝나 있다.
+  // 잠금을 못 잡았다고 "보낸다"로 기울면 동시 재시작 때 수리한 쪽과 둘 다 보낸다.
+  if (got === 'busy')
     return waitUntil(() => !isWritableByOthers(statSync(stateDir).mode));
-  }
   try {
     if (isWritableByOthers(statSync(stateDir).mode)) {
-      chmodSync(stateDir, 0o700);
       for (const name of ['lock', 'last-sent']) {
         try {
           unlinkSync(join(stateDir, name));
@@ -136,6 +146,7 @@ function repairLooseDir(stateDir: string, nowMs: number): boolean {
           // 없으면 그만
         }
       }
+      chmodSync(stateDir, 0o700);
     }
     return true;
   } finally {
