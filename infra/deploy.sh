@@ -21,7 +21,8 @@ wait_healthy() {
 }
 
 echo "== pull"
-docker compose --profile edge --profile observability --profile migrate pull --quiet
+# --ignore-buildable: backup 이미지는 레지스트리가 아니라 ./backup에서 빌드한다 — 새 호스트에서는 pull이 실패해 set -e로 멈춘다
+docker compose --profile edge --profile observability --profile migrate pull --quiet --ignore-buildable
 echo "== migrate"
 docker compose --profile migrate run --rm migrate
 # 의존을 건너뛰지 않는다 — 새 호스트에서는 redis·rabbitmq가 아직 없다. compose가 의존(healthy)을 먼저 올린다
