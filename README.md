@@ -111,22 +111,19 @@
 
 ### DevOps & Infrastructure
 
-![AWS EC2][aws-ec2]
-![AWS RDS][aws-rds]
 ![AWS S3][aws-s3]
-![AWS CodeDeploy][aws-codedeploy]
 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
-![PM2](https://img.shields.io/badge/PM2-2B037A?style=flat&logo=pm2&logoColor=white)
+![Cloudflare](https://img.shields.io/badge/Cloudflare%20Tunnel-F38020?style=flat&logo=cloudflare&logoColor=white)
 ![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)
 
-- **AWS**: EC2 (서버) · RDS MySQL (DB) · S3 + Presigned URL (미디어) · CodeDeploy (배포 자동화)
+- **홈서버(맥미니)**: 운영 compose([`infra/`](./infra/)) — api·worker·MySQL·Redis·RabbitMQ·백업 + 관측 스택. 외부 노출은 Cloudflare Tunnel만(인바운드 포트 없음)
+- **AWS**: S3 + Presigned URL (미디어) · S3 (DB 백업)
 - **Docker** — 로컬 개발 compose(MySQL·Redis·RabbitMQ) + testcontainers + 운영 이미지 1개(`Dockerfile`, api·worker 공용) + 운영 compose(`infra/compose.yml`: 앱·MySQL·Redis·RabbitMQ·cloudflared·백업, 프로필로 Alloy·Loki·Prometheus·Grafana)
 - **Terraform**으로 GitHub repository / branch protection 관리 (IaC)
-- **GitHub Actions** — pr-check · deploy · CodeQL · Dependabot
-- **PM2** — EC2 프로세스 매니저
+- **GitHub Actions** — pr-check · build-image(GHCR) · deploy(셀프호스트 러너) · CodeQL · Dependabot
 - **Discord webhook** — PR · push · issue 이벤트 알림
 - **Winston** 구조화 로그 + `x-request-id` 상관관계 추적
 
@@ -219,12 +216,13 @@ caquick-be/
 │   ├── schema.prisma            # DB 스키마 단일 소스
 │   ├── migrations/              # 마이그레이션 히스토리
 │   └── seed.ts                  # 시드 스크립트
+├── infra/                       # 홈서버 운영 compose · 배포 스크립트(deploy.sh)
 ├── terraform/                   # GitHub repo 설정 IaC
 ├── .github/
 │   ├── workflows/               # GitHub Actions
 │   ├── dependabot.yml           # 의존성 자동 업데이트
 │   └── assets/                  # README 등 GitHub 노출용 자산
-├── scripts/                     # CodeDeploy lifecycle hooks
+├── scripts/                     # 검사·운영 스크립트(dto:check · docs:check · outbox:requeue) + spec
 └── public/                      # SpectaQL HTML 문서 출력
 ```
 
@@ -386,12 +384,13 @@ CI에서도 동일하게 testcontainers로 격리된 MySQL을 띄우므로 로�
 
 ### 워크플로우
 
-| Workflow             | Trigger                        | 역할                                             |
-| -------------------- | ------------------------------ | ------------------------------------------------ |
-| `pr-check.yml`       | PR (develop/main)              | lint · typecheck · 통합 테스트 · 커버리지        |
-| `codeql.yml`         | PR · push · 주간               | GitHub CodeQL SAST                               |
-| `discord-notify.yml` | PR · push · issue              | Discord 알림                                     |
-| `deploy.yml`         | **수동** (`workflow_dispatch`) | EC2 + RDS 인프라 비활성 기간 동안 자동 배포 중단 |
+| Workflow             | Trigger                                               | 역할                                                                                                        |
+| -------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`       | PR (develop/main)                                     | lint · typecheck · 통합 테스트 · 커버리지                                                                   |
+| `codeql.yml`         | PR · push · 주간                                      | GitHub CodeQL SAST                                                                                          |
+| `discord-notify.yml` | PR · push · issue                                     | Discord 알림                                                                                                |
+| `build-image.yml`    | PR(빌드만) · main push(GHCR 푸시)                     | 앱 이미지 arm64 빌드 → `ghcr.io/caquick/caquick-be:<sha>`·`:main`                                           |
+| `deploy.yml`         | `build-image` 성공(main) · 수동(롤백은 이전 sha 입력) | 셀프호스트 러너(맥미니)가 `.env`·`app.env`(600) 생성 → pull → migrate → worker → api → ready 대기 → Discord |
 
 ### 흐름
 
@@ -403,13 +402,13 @@ flowchart LR
     Develop[🌿 develop]
     Release[🔀 Release PR<br/>develop → main]
     Main[🌲 main]
-    Deploy[🚀 Deploy<br/>workflow_dispatch]
-    AWS[☁️ AWS CodeDeploy → EC2]
+    Image[📦 build-image → GHCR]
+    Deploy[🚀 deploy<br/>self-hosted macmini]
 
     Dev --> PR --> Checks
     Checks -->|✅ pass| Develop
     Develop --> Release --> Main
-    Main -.수동 실행.-> Deploy --> AWS
+    Main --> Image --> Deploy
 ```
 
 ### 브랜치 보호
@@ -417,6 +416,7 @@ flowchart LR
 - **main**: PR + CI 통과 필수. 직접 push 금지
 - **develop**: PR + CI 통과 권장. Repository Admin은 release sync 목적으로 fast-forward 직접 push 가능
 - 필수 status check: `check`, `pr-title`, `coverage-report`, `Analyze (javascript-typescript)`
+- **production Environment**: `main` 한정, `deploy.yml`만 사용. 셀프호스트 러너 라벨(`macmini`)도 `deploy.yml`만 쓴다 — 공개 레포의 PR 코드가 홈서버에서 돌지 않게
 - 브랜치 보호 / 레포 설정은 [`terraform/`](./terraform/)에서 IaC로 관리
 
 ## 👤 팀
@@ -452,7 +452,4 @@ Copyright © 2026 CaQuick. All rights reserved.
      GitHub camo proxy URL 길이 ~4KB 한도 준수를 위해 SVGO multipass 처리
      ───────────────────────────────────────────────────────── -->
 
-[aws-ec2]: https://img.shields.io/badge/AWS%20EC2-FF9900?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgRWxhc3RpYyBDb21wdXRlIENsb3VkIChFQzIpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNjODUxMWIiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNmOTAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJNODYuNCAxNjkuNmg4MHYtODBoLTgwem04Ni40LTgwaDEyLjhWOTZoLTEyLjh2MTIuOGgxMi44djYuNGgtMTIuOHY5LjZoMTIuOHY2LjRoLTEyLjhWMTQ0aDEyLjh2Ni40aC0xMi44djEyLjhoMTIuOHY2LjRoLTEyLjh2LjQzNWE1Ljk3IDUuOTcgMCAwIDEtNS45NjUgNS45NjVoLS40MzV2MTIuOEgxNjBWMTc2aC0xMi44djEyLjhoLTYuNFYxNzZoLTkuNnYxMi44aC02LjRWMTc2SDExMnYxMi44aC02LjRWMTc2SDkyLjh2MTIuOGgtNi40VjE3NmgtLjQzNUE1Ljk3IDUuOTcgMCAwIDEgODAgMTcwLjAzNXYtLjQzNWgtOS42di02LjRIODB2LTEyLjhoLTkuNlYxNDRIODB2LTEyLjhoLTkuNnYtNi40SDgwdi05LjZoLTkuNnYtNi40SDgwVjk2aC05LjZ2LTYuNEg4MHYtLjQzNWE1Ljk3IDUuOTcgMCAwIDEgNS45NjUtNS45NjVoLjQzNVY3MC40aDYuNHYxMi44aDEyLjhWNzAuNGg2LjR2MTIuOGgxMi44VjcwLjRoNi40djEyLjhoOS42VjcwLjRoNi40djEyLjhIMTYwVjcwLjRoNi40djEyLjhoLjQzNWE1Ljk3IDUuOTcgMCAwIDEgNS45NjUgNS45NjV6bS00MS42IDEyMS4yMDNhLjQuNCAwIDAgMS0uMzk3LjM5N0g0NS4xOTdhLjQuNCAwIDAgMS0uMzk3LS4zOTd2LTg1LjYwNmEuNC40IDAgMCAxIC4zOTctLjM5N0g2NHYtNi40SDQ1LjE5N2E2LjgwNSA2LjgwNSAwIDAgMC02Ljc5NyA2Ljc5N3Y4NS42MDZhNi44MDUgNi44MDUgMCAwIDAgNi43OTcgNi43OTdoODUuNjA2YTYuODA1IDYuODA1IDAgMCAwIDYuNzk3LTYuNzk3VjE5NS4yaC02LjR6bTg2LjQtMTY1LjYwNnY4NS42MDZhNi44MDUgNi44MDUgMCAwIDEtNi43OTcgNi43OTdIMTkydi02LjRoMTguODAzYS40LjQgMCAwIDAgLjM5Ny0uMzk3VjQ1LjE5N2EuNC40IDAgMCAwLS4zOTctLjM5N2gtODUuNjA2YS40LjQgMCAwIDAtLjM5Ny4zOTdWNjRoLTYuNFY0NS4xOTdhNi44MDUgNi44MDUgMCAwIDEgNi43OTctNi43OTdoODUuNjA2YTYuODA1IDYuODA1IDAgMCAxIDYuNzk3IDYuNzk3Ii8+PC9zdmc+
-[aws-rds]: https://img.shields.io/badge/AWS%20RDS-3B48CC?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgUmVsYXRpb25hbCBEYXRhYmFzZSBTZXJ2aWNlIChSRFMpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyZTI3YWQiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM1MjdmZmYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJtNDkuMzI1IDQ0LjggMjkuNzM3IDI5LjczOC00LjUyNCA0LjUyNEw0NC44IDQ5LjMyNVY3My42aC02LjR2LTMyYTMuMiAzLjIgMCAwIDEgMy4yLTMuMmgzMnY2LjR6TTIxNy42IDQxLjZ2MzJoLTYuNFY0OS4zMjVsLTI5LjczOCAyOS43MzctNC41MjQtNC41MjRMMjA2LjY3NSA0NC44SDE4Mi40di02LjRoMzJhMy4yIDMuMiAwIDAgMSAzLjIgMy4ybS02LjQgMTQwLjhoNi40djMyYTMuMiAzLjIgMCAwIDEtMy4yIDMuMmgtMzJ2LTYuNGgyNC4yNzVsLTI5LjczNy0yOS43MzggNC41MjQtNC41MjQgMjkuNzM4IDI5LjczN3ptLTEuNi01Ni45MThjMC0xMC42MjEtMTIuMjYyLTIxLjExNC0zMi44LTI4LjA2OGwyLjA1MS02LjA2QzIwMi40NTggOTkuMzQ0IDIxNiAxMTEuNzgyIDIxNiAxMjUuNDgyYzAgMTMuNzAyLTEzLjU0MiAyNi4xNDQtMzcuMTUyIDM0LjEzbC0yLjA1MS02LjA2M2MyMC41NC02Ljk1IDMyLjgwMy0xNy40NCAzMi44MDMtMjguMDY3bS0xNjMuMDIgMGMwIDEwLjE3NiAxMS40NzggMjAuMzkgMzAuNzA2IDI3LjMyOGwtMi4xNzIgNi4wMTljLTIyLjIwMi04LjAxLTM0LjkzNS0yMC4xNjMtMzQuOTM1LTMzLjM0NyAwLTEzLjE4MSAxMi43MzMtMjUuMzM1IDM0LjkzNS0zMy4zNDhsMi4xNzIgNi4wMmMtMTkuMjI4IDYuOTQtMzAuNzA3IDE3LjE1NS0zMC43MDcgMjcuMzI4bTMyLjQ4MiA1NS45OEw0OS4zMjUgMjExLjJINzMuNnY2LjRoLTMyYTMuMiAzLjIgMCAwIDEtMy4yLTMuMnYtMzJoNi40djI0LjI3NWwyOS43MzgtMjkuNzM3ek0xMjggMTAwLjExNWMtMjIuODY3IDAtMzUuMi01LjkwNy0zNS4yLTguMzIgMC0yLjQxNiAxMi4zMzMtOC4zMiAzNS4yLTguMzIgMjIuODY0IDAgMzUuMiA1LjkwNCAzNS4yIDguMzIgMCAyLjQxMy0xMi4zMzYgOC4zMi0zNS4yIDguMzJtLjA5MyAyNC43ODRjLTIxLjg5NSAwLTM1LjI5My01Ljk4LTM1LjI5My05LjIzNXYtMTUuNTU1YzcuODgyIDQuMzQ5IDIxLjg2MiA2LjQwNiAzNS4yIDYuNDA2czI3LjMxOC0yLjA1NyAzNS4yLTYuNDA2djE1LjU1NWMwIDMuMjU4LTEzLjMyOCA5LjIzNS0zNS4xMDcgOS4yMzVtMCAyNC40MzVjLTIxLjg5NSAwLTM1LjI5My01Ljk4LTM1LjI5My05LjIzNXYtMTUuNzRjNy43OCA0LjU3MiAyMS41NzQgNi45NCAzNS4yOTMgNi45NCAxMy42NDEgMCAyNy4zNTctMi4zNjUgMzUuMTA3LTYuOTI1VjE0MC4xYzAgMy4yNTgtMTMuMzI4IDkuMjM1LTM1LjEwNyA5LjIzNU0xMjggMTcxLjI1OGMtMjIuNzc0IDAtMzUuMi02LjEyMi0zNS4yLTkuMjY4di0xMy4xOTZjNy43OCA0LjU3MiAyMS41NzQgNi45NCAzNS4yOTMgNi45NCAxMy42NDEgMCAyNy4zNTctMi4zNjEgMzUuMTA3LTYuOTI0djEzLjE4YzAgMy4xNDYtMTIuNDI2IDkuMjY4LTM1LjIgOS4yNjhtMC05NC4xODNjLTIwLjAzNSAwLTQxLjYgNC42MDUtNDEuNiAxNC43MnY3MC4xOTVjMCAxMC4yODUgMjAuOTI4IDE1LjY2OCA0MS42IDE1LjY2OHM0MS42LTUuMzgzIDQxLjYtMTUuNjY4VjkxLjc5NWMwLTEwLjExNS0yMS41NjUtMTQuNzItNDEuNi0xNC43MiIvPjwvc3ZnPg==
 [aws-s3]: https://img.shields.io/badge/AWS%20S3-569A31?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgU2ltcGxlIFN0b3JhZ2UgU2VydmljZSAoUzMpPC90aXRsZT48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeDI9IjEwMCUiIHkxPSIxMDAlIiB5Mj0iMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxYjY2MGYiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM2Y2FlM2UiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cGF0aCBmaWxsPSJ1cmwoI2EpIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMTk0LjY3NSAxMzcuMjU2IDEuMjI5LTguNjUyYzExLjMzIDYuNzg3IDExLjQ3OCA5LjU5IDExLjQ3NSA5LjY2Ny0uMDIuMDE2LTEuOTUyIDEuNjI5LTEyLjcwNC0xLjAxNW0tNi4yMTgtMS43MjhjLTE5LjU4NC01LjkyNi00Ni44NTctMTguNDM4LTU3Ljg5NC0yMy42NTQgMC0uMDQ1LjAxMy0uMDg2LjAxMy0uMTMxIDAtNC4yNC0zLjQ1LTcuNjktNy42OTMtNy42OS00LjIzNyAwLTcuNjg3IDMuNDUtNy42ODcgNy42OXMzLjQ1IDcuNjkgNy42ODcgNy42OWMxLjg2MiAwIDMuNTUyLS42OTUgNC44ODYtMS44IDEyLjk4NiA2LjE0OCA0MC4wNDggMTguNDc4IDU5Ljc3NiAyNC4zMDJsLTcuODAxIDU1LjA1OXEtLjAzMy4yMjUtLjAzMi40NTFjMCA0Ljg0OC0yMS40NjMgMTMuNzU0LTU2LjUzMiAxMy43NTQtMzUuNDQgMC01Ny4xMy04LjkwNi01Ny4xMy0xMy43NTRxMC0uMjItLjAyOC0uNDM1bC0xNi4zLTExOS4wNjJjMTQuMTA4IDkuNzEyIDQ0LjQ1NCAxNC44NSA3My40NzggMTQuODUgMjguOTc5IDAgNTkuMjczLTUuMTIgNzMuNDEtMTQuODAyek00OCA2NS41MjhjLjIzLTQuMjEgMjQuNDI4LTIwLjczIDc1LjItMjAuNzMgNTAuNzY0IDAgNzQuOTY2IDE2LjUxNiA3NS4yIDIwLjczdjEuNDM3Yy0yLjc4NCA5LjQ0My0zNC4xNDQgMTkuNDM0LTc1LjIgMTkuNDM0LTQxLjEyNyAwLTcyLjUwMy0xMC4wMjMtNzUuMi0xOS40Nzl6bTE1Ni44LjA3YzAtMTEuMDg3LTMxLjc5LTI3LjItODEuNi0yNy4yLTQ5LjgxMiAwLTgxLjYgMTYuMTEzLTgxLjYgMjcuMmwuMyAyLjQxNCAxNy43NTQgMTI5LjY3NmMuNDI2IDE0LjUwMyAzOS4xIDE5LjkxIDYzLjUyNiAxOS45MSAzMC4zMSAwIDYyLjUxMi02Ljk2OSA2Mi45MjgtMTkuOWw3LjY2OC01NC4wN2M0LjI2NSAxLjAyIDcuNzc2IDEuNTQyIDEwLjU5NSAxLjU0MiAzLjc4NSAwIDYuMzQ1LS45MjUgNy44OTctMi43NzQgMS4yNzQtMS41MTcgMS43Ni0zLjM1NCAxLjM5Ni01LjMxLS44My00LjQyOC02LjA4Ny05LjIwMi0xNi43OTQtMTUuMzExbDcuNjAzLTUzLjYzOXoiLz48L3N2Zz4=
-[aws-codedeploy]: https://img.shields.io/badge/AWS%20CodeDeploy-4D27AA?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJ4TWlkWU1pZCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjx0aXRsZT5BV1MgQ29kZURlcGxveTwvdGl0bGU+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJhIiB4MT0iMCUiIHgyPSIxMDAlIiB5MT0iMTAwJSIgeTI9IjAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMmUyN2FkIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNTI3ZmZmIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZmlsbD0idXJsKCNhKSIgZD0iTTAgMGgyNTZ2MjU2SDB6Ii8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTg5LjYwMSAyMTQuMzQzaDgzLjIwM3YtNTQuODgxSDg5LjYwMXptODYuNDA0LTYxLjMzOEg4Ni40Yy0xLjc3IDAtMy4yIDEuNDQ3LTMuMiAzLjIyOXY2MS4zMzhjMCAxLjc4MiAxLjQzIDMuMjI4IDMuMiAzLjIyOGg4OS42MDRjMS43NyAwIDMuMi0xLjQ0NiAzLjItMy4yMjh2LTYxLjMzOGMwLTEuNzgyLTEuNDMtMy4yMjktMy4yLTMuMjI5bS01Ny4yOTkgNTUuNjMgMTkuMzgtNDQuMzg5IDUuODU2IDIuNjA2LTE5LjM4IDQ0LjM4OXptMzYuNjEzLTIxLjQtMTAuOS0xMC43MDIgNC40NjEtNC42MyAxMy41ODggMTMuMzRhMy4yNTMgMy4yNTMgMCAwIDEtLjMxNyA0LjlsLTE1LjE5IDExLjQ1OC0zLjgzMS01LjE2OHptLTU0Ljg3LTEuMTI3YTMuMjQgMy4yNCAwIDAgMS0uOTYzLTIuNTIgMy4yNCAzLjI0IDAgMCAxIDEuMjc3LTIuMzc3bDE1LjE5MS0xMS40NTcgMy44MzQgNS4xNjgtMTIuMTkzIDkuMTk1IDEwLjkwMyAxMC43MDUtNC40NiA0LjYzem0xMTAuODkxLTczLjk0N2MtNi4xNC01Ljk5Mi0xNC4zMS05LjI5MS0yMy4wMDUtOS4yOTEtMTEuMzM1IDAtMjAuNTkzIDQuMDM1LTI2LjMzMSAxMC43NTMtMS40MDgtMzAuOTM3LTguNDgtNTUuODI3LTE4LjU5My02Ny42ODIgMzYuMTk0IDUuNDcgNjMuNjY0IDMyLjIxIDY5Ljc0IDY4LjAwNWExODkgMTg5IDAgMCAwLTEuODEtMS43ODVtLTU3LjUyOCAxLjExLTEuMTQ2LTEuMTFjLTYuMTQxLTUuOTkyLTE0LjMyNy05LjI5MS0yMy4wNDQtOS4yOTEtMTEuMDg5IDAtMjAuMTEzIDMuNzMxLTI1Ljg1NCAxMC4wODggMi4xMTItNDAuNjc0IDE0LjU3Ny02OC4wNzkgMjUuODgzLTY4LjEwMS4wMTkgMCAuMDMyLjAwMy4wNTQuMDAzIDExLjQ5Mi4wNjggMjQuMTc0IDI4LjQyNSAyNS45NSA3MC4yMzVhMTI3IDEyNyAwIDAgMC0xLjg0My0xLjgyNG0tNTYuNTcyIDIuMTU3YTEyMCAxMjAgMCAwIDAtMi43MDQtMi43MDZsLS41OC0uNTYxYy02LjE0LTUuOTkyLTE0LjMyMy05LjI5MS0yMy4wNDQtOS4yOTEtOS44OTggMC0xOC4yNDQgMi45OTktMjQuMDE3IDguMjM1IDcuNjA3LTM0LjI5MSAzNC40OTQtNTkuNzYgNjkuMDA1LTY1LjE0OC0xMC4yOTggMTIuMDktMTcuNDQ3IDM3LjcwNy0xOC42NiA2OS40N00xMjkuNjg2IDM4LjRjLTUwLjE0NiAwLTg5LjM2IDM4LjIxNC05MS4yODQgODguODk4LS4wNDUgMS4yMDguNjM0IDIuMzAyIDEuNjIzIDIuOTA5TDcyLjggMTUxLjc1NmwzLjQ5NS01LjQxLTMxLjAwMy0yMC4zNTVjMS42MzQtNi45MDcgNi42NzktMTIuMTEgMTMuOTMtMTQuNzQzIDMuNDQzLTEuMjUgNy4zODItMS45MjIgMTEuNjktMS45MjIgNy4wNSAwIDEzLjY1NSAyLjY1NCAxOC41OTYgNy40NzdsLjU4LjU2NWM0LjQxMiA0LjMgNy4wMjcgMTIuMTU1IDcuMDI3IDEyLjE4NC4wMjIuMTk3IDQuMzggMTYuNDk2IDQuMzggMTYuNDk2bDYuMTc0LTEuNjg4LTQuMTU0LTE1LjQ3Ny4wMjYtLjM5NGMxLjU0OS0xNC4xMyAxNC40ODctMTkuMTYzIDI2LjA4LTE5LjE2MyA3LjA1IDAgMTMuNjUzIDIuNjU0IDE4LjU5NCA3LjQ3NyAwIDAgNi45NzYgNS4zNTkgNy40ODggMTEuNjdsLjAyOS40My00LjE5NiAxNS40NDcgNi4xNzcgMS43MDggNC4zNjUtMTYuMDk2Yy4wMjUtLjEyLjAzNS0uMjU5LjA1LS4zOTguODY4LTEyLjMzMiAxMS4xNDQtMjAuMjM4IDI2LjIwNy0yMC4yMzggNy4wMjQgMCAxMy42MTMgMi42NTQgMTguNTU0IDcuNDc3IDMuODQgMy43NDUgNi41NDcgNi41OCA3LjMgOS4zNjVsLTI3LjY0NiAxOS40MTkgMy42NTcgNS4zIDI5LjIzNC0yMC41MzhjLjc5Ni0uNjMgMS4zNy0yLjg5NiAxLjM2Ni0zLjAxOS0uODk2LTUwLjY5Ny00MC4wMDgtODguODk0LTkxLjExNC04OC45MyIvPjwvc3ZnPg==

@@ -8111,6 +8111,7 @@ __metadata:
     typescript-eslint: "npm:^8.67.0"
     useragent: "npm:^2.3.0"
     winston: "npm:^3.19.0"
+    yaml: "npm:^2.9.0"
   languageName: unknown
   linkType: soft
 

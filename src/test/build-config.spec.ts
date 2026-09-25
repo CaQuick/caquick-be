@@ -89,8 +89,8 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
       false,
     );
 
-    // ecosystem.config.js(script: dist/main.js)와 start:prod(node dist/main)가 이 경로에 묶여 있다.
-    // rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로 올라가 dist/src/main.js로 밀리고 PM2 부팅이 깨진다.
+    // Dockerfile CMD(node dist/main)와 start:prod가 이 경로에 묶여 있다.
+    // rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로 올라가 dist/src/main.js로 밀리고 컨테이너 부팅이 깨진다.
     expect(path.relative(REPO_ROOT, jsOutput)).toBe(
       path.join('dist', 'main.js'),
     );
