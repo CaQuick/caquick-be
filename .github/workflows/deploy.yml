@@ -111,6 +111,11 @@ jobs:
           # compose가 인프라 컨테이너(Prometheus 스크레이프·백업 경보)에 넘기는 앱 값 — app.env에서 복사해 secret을 두 번 관리하지 않는다
           grep -E '^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=' "$tmp_app" >> "$tmp_env" || true
           grep -q '^METRICS_ACCESS_TOKEN=.' "$tmp_app" || { echo "app.env에 METRICS_ACCESS_TOKEN이 없다" >&2; exit 1; }
+          # 경보 채널·Grafana 비밀이 비면 관측이 조용히 죽는다(웹훅은 닿지 않는 자리표시자, Grafana는 crash loop) — 배포에서 막는다
+          grep -q '^DISCORD_ALERT_WEBHOOK_URL=.' "$tmp_app" || { echo "app.env에 DISCORD_ALERT_WEBHOOK_URL이 없다" >&2; exit 1; }
+          for key in GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY MYSQL_EXPORTER_PASSWORD; do
+            grep -q "^${key}=." "$tmp_env" || { echo ".env에 ${key}가 없다" >&2; exit 1; }
+          done
           chmod 600 "$tmp_env" "$tmp_app"
           mv -f "$tmp_env" "$DEPLOY_DIR/.env"
           mv -f "$tmp_app" "$DEPLOY_DIR/app.env"

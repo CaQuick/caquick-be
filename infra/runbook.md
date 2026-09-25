@@ -38,6 +38,16 @@
 
 리허설: `scripts/backup-restore.spec.ts`가 실제 mysqldump → 새 DB 복구 → 행·루틴 일치를 CI마다 돈다.
 
+## 관측
+
+- Grafana `http://127.0.0.1:3001`(admin / `GRAFANA_ADMIN_PASSWORD`), Prometheus `:9090`. 로그는 Grafana Explore → Loki: `{container=~"api|worker"} | json | eventId="…"`(api↔worker는 같은 `eventId`, 요청 안은 `requestId`).
+- 이미 초기화된 MySQL 볼륨에 exporter 사용자가 없으면(`mysqld-exporter` unhealthy) init 스크립트를 다시 돌린다(비밀번호는 컨테이너 env에서 읽고 argv에 남지 않는다):
+  ```bash
+  docker compose exec mysql bash /docker-entrypoint-initdb.d/01-exporter-user.sh
+  ```
+- 컨테이너 메모리 경보(`ContainerMemoryHigh`): `docker stats --no-stream`으로 확인하고 `compose.yml`의 `mem_limit`을 올린다(합계 ≤ 6 GB, `scripts/compose-config.spec.ts`가 고정).
+- 경보 채널 시험: Grafana → Alerting → Contact points → discord → Test. 규칙은 Alerting → Alert rules(폴더 caquick).
+
 ## 롤백(배포)
 
 Actions → `Deploy` → Run workflow → `image_tag`에 이전 sha. 마이그레이션은 앞으로만 간다(되돌리려면 위 복구).

@@ -1,0 +1,16 @@
+# Alertmanager 없이 Grafana 통합 경보 → Discord. 웹훅은 compose가 .env의 DISCORD_ALERT_WEBHOOK_URL로 넘긴다(비어 있으면 화면에만).
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: discord
+    receivers:
+      - uid: discord-ops
+        type: discord
+        settings:
+          url: ${DISCORD_ALERT_WEBHOOK_URL}
+          use_discord_username: true
+          title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+          message: |
+            {{ range .Alerts }}{{ .Annotations.summary }}
+            {{ end }}
+        disableResolveMessage: false
