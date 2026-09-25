@@ -107,6 +107,23 @@ describe('shouldSendBootAlert', () => {
     expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
   });
 
+  it('반증: 느슨한 디렉터리(심어 둔 상태 포함)를 프로세스 4개가 동시에 수리해도 정확히 1개만 보낸다', async () => {
+    const stateDir = join(dir, 'loose-race');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777);
+    writeFileSync(
+      join(stateDir, 'last-sent'),
+      String(Date.now() + 10 ** 12),
+      'utf8',
+    );
+
+    const results = await runInProcesses(4, stateDir);
+
+    expect(results.filter((r) => r === 'sent')).toHaveLength(1);
+    expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+  });
+
   it('반증: 상태 디렉터리를 만들 수 없으면 보내는 쪽으로 기운다', () => {
     const notADir = join(dir, 'file');
     writeFileSync(notADir, 'x', 'utf8');

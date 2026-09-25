@@ -37,7 +37,7 @@ export function shouldSendBootAlert(
   windowMs: number,
   stateDir: string = defaultBootAlertStateDir(),
 ): boolean {
-  if (!ensurePrivateDir(stateDir)) return true;
+  if (!ensurePrivateDir(stateDir, nowMs)) return true;
   const lockPath = join(stateDir, 'lock');
   if (!acquireLock(lockPath, nowMs)) return false;
   try {
@@ -100,16 +100,31 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
  * 디렉터리를 만들고 700을 **강제**한다 — 이미 있던(미리 만들어 둔·bind mount) 디렉터리는 mkdir의 mode가 손대지 않으므로
  * 다른 사용자가 쓸 수 있는 채로 남는다. 내 소유가 아니거나 권한을 못 고치면 억제 파일을 믿지 않는다(호출자가 보낸다).
  */
-function ensurePrivateDir(stateDir: string): boolean {
+function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
   try {
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
     const st = statSync(stateDir);
     if (!st.isDirectory()) return false;
     const uid = process.getuid?.();
     if (uid !== undefined && st.uid !== uid) return false;
-    if ((st.mode & 0o077) !== 0) {
+    if ((st.mode & 0o077) === 0) return true;
+    return repairLooseDir(stateDir, nowMs);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 느슨한 디렉터리의 수리(700 + 남이 심어 둔 상태 삭제)는 **수리 잠금** 아래에서 한 프로세스만 한다. 잠금은 상태 디렉터리
+ * 밖(형제 경로)에 둔다 — 안에 두면 수리 대상과 같이 지워진다. 잠금 아래에서 권한을 다시 읽어, 이미 고쳐졌으면 아무것도
+ * 지우지 않는다 — 먼저 고친 프로세스가 막 만든 lock·last-sent를 뒤따른 프로세스가 지워 둘 다 보내는 일이 없게.
+ */
+function repairLooseDir(stateDir: string, nowMs: number): boolean {
+  const repairLock = `${stateDir}.repair-lock`;
+  if (!acquireLock(repairLock, nowMs)) return false;
+  try {
+    if ((statSync(stateDir).mode & 0o077) !== 0) {
       chmodSync(stateDir, 0o700);
-      // 느슨했던 동안 남이 심어 둔 상태(먼 미래의 last-sent·잠금)는 믿지 않는다 — 비우고 새로 시작
       for (const name of ['lock', 'last-sent']) {
         try {
           unlinkSync(join(stateDir, name));
@@ -119,8 +134,12 @@ function ensurePrivateDir(stateDir: string): boolean {
       }
     }
     return true;
-  } catch {
-    return false;
+  } finally {
+    try {
+      unlinkSync(repairLock);
+    } catch {
+      // 이미 없으면 그만
+    }
   }
 }
 
