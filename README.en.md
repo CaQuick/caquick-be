@@ -116,7 +116,7 @@ Customers end up hopping between platforms, combining screenshots, edits, and ex
 - **Jest** + **Testcontainers** + **Supertest**
   - Testcontainers starts real MySQL and Redis containers automatically; RabbitMQ consumer tests start a real broker container of their own.
   - HTTP paths are verified with Supertest.
-- The database and Redis are never mocked: 325 suites and more than 3,000 cases run against real stores. See [Testing](#-testing) for details.
+- Normal database and Redis behavior is never mocked: 325 suites and more than 3,000 cases run against real stores. Only failure injection (a Redis command failing, writes being refused, and so on) uses targeted stubs. See [Testing](#-testing) for details.
 
 ### Code Quality & Security
 
@@ -352,7 +352,7 @@ extend type Query {
 
 ## 🧪 Testing
 
-> **The database and Redis are never mocked.** [Testcontainers](https://node.testcontainers.org/) starts real MySQL 8 and Redis 7 containers and applies the Prisma migrations before the tests run. The RabbitMQ consumer host is verified against a real broker container.
+> **Normal database and Redis behavior is never mocked.** Only failure injection (a Redis command failing, writes being refused) uses targeted stubs. [Testcontainers](https://node.testcontainers.org/) starts real MySQL 8 and Redis 7 containers and applies the Prisma migrations before the tests run. The RabbitMQ consumer host is verified against a real broker container.
 
 | Layer                                  | Purpose                                                                                                                        |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |

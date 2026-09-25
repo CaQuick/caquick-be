@@ -36,7 +36,7 @@
 
 **왜.** 이것은 **프로젝트 컨벤션**이다(Prisma 공식 가이드는 서비스에 직접 주입한다). 테스트 seam과 ORM 변경으로부터의 격리를 산다.
 
-**soft-delete.** Extension이 루트 READ 쿼리에만 `deleted_at: null`을 넣는다(대상 모델 목록은 dmmf 대조 spec이 스키마와 일치를 강제). nested relation(`include`/`select` 안), relation 필터, mutation, raw SQL에는 닿지 않으므로 `@/prisma`의 `activeWhere`(활성)·`visibleWhere`(is_active 동반) 조각을 명시한다. 인라인 `deleted_at: null` 리터럴은 쓰지 않고, 루트 READ에는 중복 명시하지 않는다. 상위 엔티티의 활성 여부(리뷰 → 매장)까지 같은 조각으로 맞춘다. 탈퇴·삭제 사용자 데이터는 노출 전 익명화. 재시드 시 FK 위반이 없도록 `resetSeedScope` 범위를 함께 갱신한다.
+**soft-delete.** Extension이 루트 READ 쿼리(`findFirst`·`findFirstOrThrow`·`findMany`·`count`·`aggregate`·`groupBy`)에만 `deleted_at: null`을 넣는다(대상 모델 목록은 dmmf 대조 spec이 스키마와 일치를 강제). **`findUnique`·`findUniqueOrThrow`는 필터 밖**이다(unique 조건에 다른 컬럼을 더할 수 없어 — 삭제된 행도 돌려준다). nested relation(`include`/`select` 안), relation 필터, mutation, raw SQL에도 닿지 않으므로 이런 자리에서는 `findFirst`로 바꾸거나 `@/prisma`의 `activeWhere`(활성)·`visibleWhere`(is_active 동반) 조각을 명시한다. 인라인 `deleted_at: null` 리터럴은 쓰지 않고, 루트 READ에는 중복 명시하지 않는다. 상위 엔티티의 활성 여부(리뷰 → 매장)까지 같은 조각으로 맞춘다. 탈퇴·삭제 사용자 데이터는 노출 전 익명화. 재시드 시 FK 위반이 없도록 `resetSeedScope` 범위를 함께 갱신한다.
 
 ---
 
@@ -119,7 +119,7 @@
 
 ## 9. 테스트 규약
 
-**DB·Redis를 mock하지 않는다.** `jest.global-setup`이 testcontainers로 MySQL 8 + Redis 7을 띄우고 마이그레이션을 적용한다. RabbitMQ는 소비자 호스트 spec이 자체 컨테이너로 검증한다. mock이 통과해도 운영 마이그레이션이 깨지는 케이스(제약·cascade·soft-delete 주입·트랜잭션 격리)를 실제 의미론으로 잡기 위해서다.
+**정상 경로의 저장소 동작은 mock하지 않는다.** `jest.global-setup`이 testcontainers로 MySQL 8 + Redis 7을 띄우고 마이그레이션을 적용한다. 예외는 **장애 주입**이다 — 건강한 컨테이너로는 낼 수 없는 실패(Redis 명령 오류, 쓰기 거부, 브로커 blocked)를 검증할 때는 그 실패만 내는 stub을 목적 한정으로 쓴다(`token-blacklist.service.spec`의 실패하는 Redis 클라이언트, `blacklist-rebuild.service.spec`의 선택 명령 교체). 정상 동작을 stub으로 대신하는 것은 여전히 금지다. RabbitMQ는 소비자 호스트 spec이 자체 컨테이너로 검증한다. mock이 통과해도 운영 마이그레이션이 깨지는 케이스(제약·cascade·soft-delete 주입·트랜잭션 격리)를 실제 의미론으로 잡기 위해서다.
 
 **계층.** `*.service.spec`(분기·예외, 주력) / `*.resolver.spec`(전체 경로 1~2케이스, 상단에 `분기/집계 세부 검증은 service.spec.ts에서 담당` 한 줄) / `*.repository.spec`(repo에서만 도달 가능한 계약) / `*.input.spec`·`*.helper.spec`(순수 단위) / `src/test/*.spec`(소유권·경계 read·감사 경로·역할 인가 커버리지·모듈 배선 게이트) / `scripts/*.spec`(compose 렌더링·백업 복구·배포 워크플로·관측 설정·빌드 설정, `jest.scripts.config.js`).
 

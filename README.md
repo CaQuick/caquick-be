@@ -116,7 +116,7 @@
 - **Jest** + **Testcontainers** + **Supertest**
   - Testcontainers가 실제 MySQL·Redis 컨테이너를 자동으로 띄우고, RabbitMQ 소비자 테스트는 실제 브로커 컨테이너를 따로 띄웁니다.
   - HTTP 경로는 Supertest로 검증합니다.
-- DB와 Redis를 mock하지 않고 325개 suite, 3,000개가 넘는 케이스를 실제 저장소에 대해 통합 테스트합니다. 자세한 구성은 [테스트](#-테스트) 절에 있습니다.
+- 정상 경로의 DB·Redis 동작은 mock하지 않고 325개 suite, 3,000개가 넘는 케이스를 실제 저장소에 대해 통합 테스트합니다. 장애 주입(Redis 명령 실패 등)만 목적 한정 stub으로 검증합니다. 자세한 구성은 [테스트](#-테스트) 절에 있습니다.
 
 ### Code Quality & Security
 
@@ -352,7 +352,7 @@ extend type Query {
 
 ## 🧪 테스트
 
-> **DB와 Redis를 mock하지 않습니다.** [Testcontainers](https://node.testcontainers.org/)가 실제 MySQL 8과 Redis 7 컨테이너를 띄우고 Prisma 마이그레이션까지 적용한 뒤에 검증합니다. RabbitMQ 소비자 호스트는 실제 브로커 컨테이너로 검증합니다.
+> **정상 경로의 DB·Redis 동작은 mock하지 않습니다.** 장애 주입(Redis 명령 실패, 쓰기 거부 등)만 목적 한정 stub으로 검증합니다. [Testcontainers](https://node.testcontainers.org/)가 실제 MySQL 8과 Redis 7 컨테이너를 띄우고 Prisma 마이그레이션까지 적용한 뒤에 검증합니다. RabbitMQ 소비자 호스트는 실제 브로커 컨테이너로 검증합니다.
 
 | 레이어                                 | 목적                                                                                                      |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
