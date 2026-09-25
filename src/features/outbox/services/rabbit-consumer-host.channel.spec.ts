@@ -11,6 +11,7 @@ import {
   RabbitConsumerHostService,
 } from '@/features/outbox/services/rabbit-consumer-host.service';
 import type { AlertService } from '@/global/alerting';
+import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 
 type ConsumeCb = (message: ConsumeMessage | null) => void;
@@ -130,6 +131,7 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     handle: () => Promise<void>,
     names = ['A'],
     rabbit: Partial<RabbitConnectionService> = {},
+    metrics = new MetricsService(),
   ) {
     const host = new RabbitConsumerHostService(
       { getOrThrow: () => cfg } as unknown as ConfigService,
@@ -150,6 +152,7 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
       } as unknown as OutboxConsumerRegistry,
       alerts as unknown as AlertService,
       new RequestContextService(),
+      metrics,
     );
     return host;
   }
@@ -258,7 +261,8 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
   it('반증: 구독 목록에 없는 event_type(구독을 뺀 뒤 남은 durable 바인딩)은 handle 없이 ack — 재시도·DLQ로 보내지 않는다', async () => {
     const channel = fakeChannel({});
     const handle = jest.fn().mockResolvedValue(undefined);
-    const host = build(channel, handle);
+    const metrics = new MetricsService();
+    const host = build(channel, handle, ['A'], {}, metrics);
     const warn = jest
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
@@ -272,6 +276,9 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     expect(handle).not.toHaveBeenCalled();
     expect(channel.publish).not.toHaveBeenCalled();
     expect(channel.ack).toHaveBeenCalledTimes(1);
+    expect(await metrics.text()).toContain(
+      'caquick_outbox_consume_duration_seconds_count{consumer="A",result="dropped"} 1',
+    );
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('옛 바인딩'),
       expect.anything(),

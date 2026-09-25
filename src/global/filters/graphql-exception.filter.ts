@@ -16,6 +16,8 @@ import {
   resolveUserId,
 } from '@/common/utils/request-context';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { fieldDurationSeconds } from '@/global/metrics/graphql-field-timing';
+import { MetricsService } from '@/global/metrics/metrics.service';
 import { LogContext } from '@/global/types/log.type';
 
 /**
@@ -24,7 +26,10 @@ import { LogContext } from '@/global/types/log.type';
  */
 @Injectable()
 export class GraphQLExceptionFilter {
-  constructor(private readonly logger: CustomLoggerService) {}
+  constructor(
+    private readonly logger: CustomLoggerService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   format(exception: unknown, host: ArgumentsHost): GraphQLError {
     const gqlHost = GqlArgumentsHost.create(host);
@@ -49,6 +54,19 @@ export class GraphQLExceptionFilter {
       processingTimeInMs: duration,
       context: LogContext.GRAPHQL,
     });
+    // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 여기서, outcome은 유한한 분류(4xx·5xx 구분).
+    // 인터셉터와 같은 범위(Query·Mutation 루트)만 — 구독은 성공을 세지 않으므로 실패만 세면 오류율이 왜곡된다
+    const parentType = info.parentType.toString();
+    if (parentType === 'Query' || parentType === 'Mutation') {
+      this.metrics.graphqlRootFieldDuration.observe(
+        {
+          type: parentType,
+          field: info.fieldName,
+          outcome: classifyStatus(status),
+        },
+        fieldDurationSeconds(info),
+      );
+    }
 
     return new GraphQLError(message, {
       extensions: {

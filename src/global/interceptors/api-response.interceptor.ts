@@ -18,6 +18,7 @@ export const RAW_RESPONSE_PATHS: ReadonlySet<string> = new Set([
   '/health/ready',
   '/health/profiles',
   '/.well-known/jwks.json',
+  '/metrics',
 ]);
 
 export class ApiResponseInterceptor implements NestInterceptor {

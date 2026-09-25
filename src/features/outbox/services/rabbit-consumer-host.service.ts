@@ -26,6 +26,7 @@ import {
   toEvent,
 } from '@/features/outbox/rabbitmq/topology';
 import { AlertService } from '@/global/alerting';
+import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 
 /** 시작 실패가 이만큼 이어지면 경보 — 브로커 부재가 아니라 설정 문제일 수 있다. */
@@ -71,6 +72,7 @@ export class RabbitConsumerHostService
     private readonly consumers: OutboxConsumerRegistry,
     private readonly alerts: AlertService,
     private readonly requestContext: RequestContextService,
+    private readonly metrics: MetricsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -251,6 +253,13 @@ export class RabbitConsumerHostService
   ): Promise<void> {
     const attempts = readAttempts(message.properties.headers);
     const cfg = this.config.getOrThrow<OutboxConfig>('outbox');
+    // 관측은 파싱 전에 시작 — 깨진 본문의 DLQ 이동도 result=dlq로 세야 대시보드가 DLQ 사건을 놓치지 않는다
+    const startedAt = performance.now();
+    const observe = (result: 'ok' | 'retry' | 'dlq' | 'dropped') =>
+      this.metrics.outboxConsumeDuration.observe(
+        { consumer: consumer.name, result },
+        (performance.now() - startedAt) / 1000,
+      );
     let parsed;
     try {
       parsed = parseMessage(message.content);
@@ -265,6 +274,7 @@ export class RabbitConsumerHostService
         attempts,
       );
       if (!moved) return; // 옮기지 못했다 — 원본이 requeue/재전달되므로 DLQ라고 알리지 않는다
+      observe('dlq');
       this.logger.error(`${consumer.name} 본문 파싱 실패 — DLQ`, { detail });
       void this.alerts.notify({
         level: 'error',
@@ -281,6 +291,7 @@ export class RabbitConsumerHostService
         eventId: parsed.eventId,
       });
       this.ack(channel, message);
+      observe('dropped');
       return;
     }
     try {
@@ -300,6 +311,7 @@ export class RabbitConsumerHostService
           next,
         );
         if (!moved) return;
+        observe('dlq');
         this.logger.error(`${label} 소비 ${next}회 실패 — DLQ`, {
           eventId: parsed.eventId,
           attempts: next,
@@ -323,6 +335,7 @@ export class RabbitConsumerHostService
         delay,
       );
       if (!moved) return;
+      observe('retry');
       this.logger.warn(`${label} 소비 ${next}회 실패 — ${delay}ms 뒤 재시도`, {
         eventId: parsed.eventId,
         attempts: next,
@@ -331,6 +344,7 @@ export class RabbitConsumerHostService
       return;
     }
     this.ack(channel, message);
+    observe('ok');
   }
 
   /** 채널이 이미 닫혔으면 ack는 던진다 — 브로커가 unack 메시지를 재전달하므로 조용히 물러난다. */

@@ -12,6 +12,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { classifyStatus } from '@/common/utils/error';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { MetricsService } from '@/global/metrics/metrics.service';
 
 jest.mock('@/global/logger/logger', () => ({
   customLogger: {
@@ -27,13 +28,14 @@ function mockHost(
   fieldName = 'sellerMyStore',
   operation: 'query' | 'mutation' = 'query',
   reqHeaders: Record<string, string> = {},
+  parentType = 'Query',
 ): ArgumentsHost {
   // GqlArgumentsHost.create(host) reads host.getArgs() — 4-tuple [root, args, context, info]
   const info = {
     fieldName,
     operation: { operation },
     path: { key: fieldName },
-    parentType: { toString: () => 'Query' },
+    parentType: { toString: () => parentType },
   };
   const context = {
     req: {
@@ -55,10 +57,37 @@ describe('GraphQLExceptionFilter', () => {
   let filter: GraphQLExceptionFilter;
   let logger: CustomLoggerService;
 
+  let metrics: MetricsService;
+
   beforeEach(() => {
     logger = new CustomLoggerService();
     logger.txError = jest.fn();
-    filter = new GraphQLExceptionFilter(logger);
+    metrics = new MetricsService();
+    filter = new GraphQLExceptionFilter(logger, metrics);
+  });
+
+  // 인터셉터는 가드 뒤에 돌아 401·403을 못 본다 — 실패 관측은 필터가, outcome은 유한한 분류
+  it('실패를 type·field·outcome(분류) 라벨로 관측한다', async () => {
+    filter.format(new ForbiddenException(), mockHost('sellerMyStore'));
+    filter.format(new Error('boom'), mockHost('sellerMyStore'));
+
+    const text = await metrics.text();
+    expect(text).toContain(
+      'caquick_graphql_root_field_duration_seconds_count{type="Query",field="sellerMyStore",outcome="FORBIDDEN"} 1',
+    );
+    expect(text).toContain(
+      'caquick_graphql_root_field_duration_seconds_count{type="Query",field="sellerMyStore",outcome="INTERNAL_SERVER_ERROR"} 1',
+    );
+  });
+
+  it('반증: 구독(Subscription)·하위 필드 실패는 관측하지 않는다 — 인터셉터가 성공을 세지 않는 범위라 실패만 남으면 오류율이 왜곡된다', async () => {
+    filter.format(
+      new ForbiddenException(),
+      mockHost('conversationUpdated', 'query', {}, 'Subscription'),
+    );
+    filter.format(new Error('x'), mockHost('items', 'query', {}, 'Store'));
+
+    expect(await metrics.text()).not.toMatch(/type="(Subscription|Store)"/);
   });
 
   describe('classifyStatus', () => {

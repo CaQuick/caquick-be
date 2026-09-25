@@ -27,6 +27,7 @@ import type {
   OutboxEvent,
 } from '@/features/outbox/types/outbox-event.type';
 import { AlertService } from '@/global/alerting';
+import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 import { requestContextStorage } from '@/global/request-context/request-context.service';
 
@@ -89,6 +90,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
   let requestContext: RequestContextService;
   let consumer: RecordingConsumer;
   let publisher: ConfirmChannel;
+  let metrics: MetricsService;
   const queues = queuesFor('RecordingConsumer');
   const alerts = { notify: jest.fn().mockResolvedValue('sent') };
   const outboxCfg: OutboxConfig = {
@@ -124,6 +126,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
         OutboxConsumerRegistry,
         RequestContextService,
         RecordingConsumer,
+        MetricsService,
         { provide: AlertService, useValue: alerts },
         { provide: ConfigService, useValue: config },
       ],
@@ -133,6 +136,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     registry = module.get(OutboxConsumerRegistry);
     requestContext = module.get(RequestContextService);
     consumer = module.get(RecordingConsumer);
+    metrics = module.get(MetricsService);
     await host.start();
     publisher = await rabbit.createConfirmChannel();
   }, 150_000);
@@ -169,6 +173,13 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
   }
   async function count(queue: string): Promise<number> {
     return (await publisher.checkQueue(queue)).messageCount;
+  }
+  async function dlqObservations(): Promise<number> {
+    const match =
+      /caquick_outbox_consume_duration_seconds_count\{consumer="RecordingConsumer",result="dlq"\} (\d+)/.exec(
+        await metrics.text(),
+      );
+    return match ? Number(match[1]) : 0;
   }
 
   it('event_type으로 바인딩된 큐에서 받아 OutboxEvent로 넘기고 ack한다 — handle은 ALS eventId 안에서 돈다', async () => {
@@ -238,12 +249,14 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     expect(dead && dead.properties.headers?.[ATTEMPTS_HEADER]).toBe(2);
   });
 
-  it('반증: 깨진 본문은 재시도 없이 바로 DLQ + 경보', async () => {
+  it('반증: 깨진 본문은 재시도 없이 바로 DLQ + 경보 — 소비 지표에도 result=dlq로 센다', async () => {
+    const before = await dlqObservations();
     await publish('not json');
 
     await until(() => alerts.notify.mock.calls.length === 1);
     expect(await count(queues.dlq)).toBe(1);
     expect(consumer.received).toHaveLength(0);
+    expect(await dlqObservations()).toBe(before + 1);
   });
 
   it('반증: 처리 중 채널이 닫혀도 소비가 재시작되고 브로커가 재전달한다(거부 격리는 channel.spec의 ack 예외 케이스)', async () => {
@@ -280,6 +293,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
       } as OutboxConsumerRegistry,
       alerts as unknown as AlertService,
       requestContext,
+      metrics,
     );
     // "이전 배포"가 남긴 다른 인자의 큐
     const setup = await rabbit.createConfirmChannel();
@@ -326,5 +340,16 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     await expect(new RabbitHealthIndicator(dead).check()).rejects.toThrow(
       'down',
     );
+  });
+
+  it('소비 처리 시간이 consumer·result(ok·retry·dlq) 라벨로 관측된다(앞 케이스들의 누적)', async () => {
+    const text = await metrics.text();
+    for (const result of ['ok', 'retry', 'dlq']) {
+      expect(text).toMatch(
+        new RegExp(
+          `caquick_outbox_consume_duration_seconds_count\\{consumer="RecordingConsumer",result="${result}"\\} [1-9]`,
+        ),
+      );
+    }
   });
 });

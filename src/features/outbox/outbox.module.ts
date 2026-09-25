@@ -6,6 +6,7 @@ import { RabbitConnectionService } from '@/features/outbox/rabbitmq/rabbit-conne
 import { RabbitHealthIndicator } from '@/features/outbox/rabbitmq/rabbit-health.indicator';
 import { OutboxRepository } from '@/features/outbox/repositories/outbox.repository';
 import { OutboxDispatcherService } from '@/features/outbox/services/outbox-dispatcher.service';
+import { OutboxMetricsRegistrar } from '@/features/outbox/services/outbox-metrics.registrar';
 import { OutboxPublisher } from '@/features/outbox/services/outbox-publisher.service';
 import { OutboxRelayService } from '@/features/outbox/services/outbox-relay.service';
 import { RabbitConsumerHostService } from '@/features/outbox/services/rabbit-consumer-host.service';
@@ -25,6 +26,7 @@ import { RabbitConsumerHostService } from '@/features/outbox/services/rabbit-con
     RabbitHealthIndicator,
     OutboxRelayService,
     RabbitConsumerHostService,
+    OutboxMetricsRegistrar,
   ],
   exports: [OutboxPublisher, RabbitHealthIndicator],
 })

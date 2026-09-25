@@ -3,6 +3,7 @@ import { of, throwError } from 'rxjs';
 
 import { GqlLoggingInterceptor } from '@/global/interceptors/gql-logging.interceptor';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { MetricsService } from '@/global/metrics/metrics.service';
 
 jest.mock('@/global/logger/logger', () => ({
   customLogger: {
@@ -58,13 +59,15 @@ function mockErrorHandler(err: Error): CallHandler {
 
 describe('GqlLoggingInterceptor', () => {
   let interceptor: GqlLoggingInterceptor;
+  let metrics: MetricsService;
   let logger: CustomLoggerService;
 
   beforeEach(() => {
     logger = new CustomLoggerService();
     logger.tx = jest.fn();
     logger.txError = jest.fn();
-    interceptor = new GqlLoggingInterceptor(logger);
+    metrics = new MetricsService();
+    interceptor = new GqlLoggingInterceptor(logger, metrics);
   });
 
   it('graphql이 아니면 그대로 통과시킨다', (done) => {
@@ -140,5 +143,34 @@ describe('GqlLoggingInterceptor', () => {
         done();
       },
     });
+  });
+
+  it('성공한 루트 필드를 type·field(스키마 필드명)·outcome=ok로 관측한다 — operationName은 라벨이 아니다', (done) => {
+    interceptor
+      .intercept(mockGqlContext('Query'), mockHandler('ok'))
+      .subscribe({
+        complete: () => {
+          void metrics.text().then((text) => {
+            expect(text).toContain(
+              'caquick_graphql_root_field_duration_seconds_count{type="Query",field="testQuery",outcome="ok"} 1',
+            );
+            expect(text).not.toContain('TestOperation');
+            done();
+          });
+        },
+      });
+  });
+
+  it('반증: 실패는 인터셉터가 관측하지 않는다 — 가드 거절까지 포함해 GraphQLExceptionFilter가 분류로 센다', (done) => {
+    interceptor
+      .intercept(mockGqlContext('Mutation'), mockErrorHandler(new Error('x')))
+      .subscribe({
+        error: () => {
+          void metrics.text().then((text) => {
+            expect(text).not.toMatch(/type="Mutation",field="testQuery"/);
+            done();
+          });
+        },
+      });
   });
 });

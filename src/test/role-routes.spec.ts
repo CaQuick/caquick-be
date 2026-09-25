@@ -23,6 +23,8 @@ const ENV_DEFAULTS: Record<string, string> = {
   OIDC_KAKAO_CLIENT_ID: 'wiring',
   OIDC_KAKAO_CLIENT_SECRET: 'wiring',
   OUTBOX_DISPATCH_ENABLED: 'false',
+  // /metrics는 Bearer 토큰(P2 05) — 없으면 401, 있으면 Prometheus 텍스트
+  METRICS_ACCESS_TOKEN: 'wiring-metrics-token',
 };
 
 describe('역할별 HTTP 노출 (real app)', () => {
@@ -122,6 +124,32 @@ describe('역할별 HTTP 노출 (real app)', () => {
       } finally {
         await app.close();
       }
+    });
+  });
+
+  // /metrics는 운영 정보 — 두 역할 모두 토큰 없이는 닫혀 있고, 토큰이 맞으면 봉투 없는 Prometheus 텍스트
+  describe.each(['worker', 'api'] as const)('%s /metrics 토큰', (role) => {
+    let app: INestApplication<App>;
+    beforeAll(async () => {
+      app = await boot(role);
+    });
+    afterAll(() => app.close());
+
+    it('반증: 토큰 없으면 401', async () => {
+      await request(app.getHttpServer()).get('/metrics').expect(401);
+      await request(app.getHttpServer())
+        .get('/metrics')
+        .set('Authorization', 'Bearer wrong')
+        .expect(401);
+    });
+
+    it('토큰이 맞으면 200 + text/plain + 봉투 없음', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/metrics')
+        .set('Authorization', 'Bearer wiring-metrics-token')
+        .expect(200)
+        .expect('Content-Type', /^text\/plain/);
+      expect(res.text.startsWith('# HELP')).toBe(true); // JSON 봉투({"code":…})가 아니다
     });
   });
 

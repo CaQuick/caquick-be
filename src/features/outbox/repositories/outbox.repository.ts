@@ -131,4 +131,30 @@ export class OutboxRepository {
     });
     return count;
   }
+
+  /** 상태별 건수 — 메트릭 스크레이프용. 없는 상태는 0. */
+  async countByStatus(): Promise<Record<OutboxStatus, number>> {
+    const rows = await this.prisma.outbox.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    const counts: Record<OutboxStatus, number> = {
+      PENDING: 0,
+      PUBLISHED: 0,
+      FAILED: 0,
+    };
+    for (const row of rows) counts[row.status] = row._count._all;
+    return counts;
+  }
+
+  /** 가장 오래된 PENDING의 발생 시각 — 릴레이 lag 지표. 없으면 null. */
+  /** 릴레이 lag 지표 — 기한이 된 PENDING만. 백오프 대기(next_attempt_at 미래) 행은 릴레이 지연이 아니다. */
+  async oldestDuePendingOccurredAt(now: Date): Promise<Date | null> {
+    const row = await this.prisma.outbox.findFirst({
+      where: { status: OutboxStatus.PENDING, next_attempt_at: { lte: now } },
+      orderBy: { occurred_at: 'asc' },
+      select: { occurred_at: true },
+    });
+    return row?.occurred_at ?? null;
+  }
 }

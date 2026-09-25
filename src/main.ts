@@ -31,6 +31,7 @@ import {
 import { GqlLoggingInterceptor } from '@/global/interceptors/gql-logging.interceptor';
 import { HttpLoggingInterceptor } from '@/global/interceptors/http-logging.interceptor';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import { MetricsService } from '@/global/metrics';
 
 async function bootstrap(): Promise<void> {
   const role = resolveAppRole();
@@ -102,13 +103,14 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  const metrics = app.get(MetricsService);
   app.useGlobalInterceptors(
     new HttpLoggingInterceptor(logger),
-    new GqlLoggingInterceptor(logger),
+    new GqlLoggingInterceptor(logger, metrics),
     new ApiResponseInterceptor(RAW_RESPONSE_PATHS),
   );
 
-  const gqlExceptionFilter = new GraphQLExceptionFilter(logger);
+  const gqlExceptionFilter = new GraphQLExceptionFilter(logger, metrics);
   app.useGlobalFilters(
     new HttpExceptionFilter(
       httpAdapterHost.httpAdapter,
