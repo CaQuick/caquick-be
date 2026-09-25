@@ -24,15 +24,17 @@
    docker compose exec mysql bash -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE restored" && gunzip < /backup/restore.sql.gz | mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restored'
    docker compose exec mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT COUNT(*) FROM restored.account; SELECT MAX(finished_at) FROM restored._prisma_migrations; SELECT COUNT(*) FROM restored.\`order\`"
    ```
-3. 운영 DB 교체 — 쓰기를 멈추고 바꾼다
+3. 운영 DB 교체 — 쓰기를 멈추고, **브로커 큐를 비운 뒤** 바꾼다. 스냅샷 이후에 발행된 메시지는 복구된 DB에 없는 행(계정·주문·리뷰)을 가리켜 재시도·DLQ로 쌓이거나, 성공하면 스냅샷 이후 상태를 되살려 DB를 어긋나게 한다. 정본은 복구된 DB의 outbox 테이블이다 — 큐를 비우면 릴레이가 그 시점의 PENDING을 다시 발행한다(스냅샷 이후 PUBLISHED 행의 부수효과는 사라진다 — 알림 등은 다시 만들지 않는다)
    ```bash
    docker compose stop api worker
+   docker compose exec rabbitmq rabbitmqctl list_queues name messages
+   for q in $(docker compose exec -T rabbitmq rabbitmqctl -q list_queues name | grep '^q\.'); do docker compose exec -T rabbitmq rabbitmqctl purge_queue "$q"; done
    docker compose exec mysql bash -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE CaQuick; CREATE DATABASE CaQuick CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" && gunzip < /backup/restore.sql.gz | mysql -uroot -p"$MYSQL_ROOT_PASSWORD" CaQuick'
    docker compose --profile migrate run --rm migrate   # 덤프 이후 마이그레이션이 있으면 적용
    docker compose up -d worker api && docker compose ps
    ```
 4. 검증: `curl -s http://127.0.0.1:4000/health/ready`, 관리자 로그인, 최근 주문 조회. `restored`는 `DROP DATABASE restored`.
-5. 덤프 이후의 outbox 이벤트는 사라진다 — RabbitMQ 큐에 남은 메시지는 소비자가 멱등이라 그대로 두면 된다.
+5. 덤프 이후의 outbox 이벤트·그 부수효과(알림·일일 capacity 반영)는 사라진다. 복구된 outbox의 PENDING은 릴레이가 다시 발행하고 소비자는 멱등이라 중복 처리는 없다. 사라진 기간의 주문·리뷰는 사용자 문의로만 알 수 있다 — 복구 시각을 기록해 둔다.
 
 리허설: `scripts/backup-restore.spec.ts`가 실제 mysqldump → 새 DB 복구 → 행·루틴 일치를 CI마다 돈다.
 
