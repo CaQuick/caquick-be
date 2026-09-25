@@ -12,6 +12,8 @@ const PROFILES = ['edge', 'observability', 'migrate'];
 interface Service {
   image?: string;
   build?: unknown;
+  depends_on?: Record<string, { condition?: string }>;
+  entrypoint?: string[];
   restart?: string;
   mem_limit?: string | number;
   ports?: Array<{ published?: string | number; host_ip?: string }>;
@@ -25,14 +27,13 @@ interface Rendered {
   volumes?: Record<string, unknown>;
 }
 
+/** base 스택(프로필 없음)이 요구하는 값 — 프로필 서비스의 비밀은 여기 없어야 한다(아래 반증) */
 const REQUIRED_KEYS = [
   'IMAGE',
   'MYSQL_ROOT_PASSWORD',
   'MYSQL_PASSWORD',
   'RABBITMQ_USER',
   'RABBITMQ_PASSWORD',
-  'GRAFANA_ADMIN_PASSWORD',
-  'TUNNEL_TOKEN',
 ];
 
 function envFile(omit: string[] = [], extra: string[] = []): string {
@@ -142,6 +143,36 @@ describe('infra/compose.yml', () => {
       0,
     );
     expect(total).toBeLessThanOrEqual(6 * 1024 ** 3);
+  });
+
+  it('기동 게이트는 각 역할의 ready 범위와 같다 — api·migrate는 RabbitMQ를 기다리지 않는다(브로커 장애 중에도 api는 떠야 한다), worker만 기다린다', () => {
+    const deps = (name: string) =>
+      Object.keys(rendered.services[name].depends_on ?? {}).sort();
+    expect(deps('api')).toEqual(['mysql', 'redis']);
+    expect(deps('migrate')).toEqual(['mysql']);
+    expect(deps('worker')).toEqual(['mysql', 'rabbitmq', 'redis']);
+    for (const name of ['api', 'worker', 'migrate']) {
+      for (const dep of Object.values(
+        rendered.services[name].depends_on ?? {},
+      )) {
+        expect(dep.condition).toBe('service_healthy');
+      }
+    }
+  });
+
+  it('반증: 프로필이 꺼진 서비스의 비밀(TUNNEL_TOKEN·GRAFANA_ADMIN_PASSWORD)이 없어도 base config가 렌더링된다 — 값 검사는 컨테이너 시작으로 미룬다', () => {
+    // beforeAll의 render가 두 값 없이 성공한 것이 곧 반증이다. 시작 시 검사가 실제로 걸려 있는지만 본다
+    expect(rendered.services.cloudflared.environment?.TUNNEL_TOKEN).toBe('');
+    expect(
+      rendered.services.grafana.environment?.GF_SECURITY_ADMIN_PASSWORD,
+    ).toBe('');
+    // config 출력은 리터럴 $를 $$로 다시 이스케이프한다
+    expect(rendered.services.grafana.entrypoint?.join(' ')).toMatch(
+      /\[ -n "\$+GF_SECURITY_ADMIN_PASSWORD" \] \|\|/,
+    );
+    expect(rendered.services.grafana.entrypoint?.join(' ')).toContain(
+      'exec /run.sh',
+    );
   });
 
   it('반증: 인바운드 포트는 열지 않는다 — 저장소·worker는 포트 없음, 나머지 진단 포트는 전부 127.0.0.1', () => {

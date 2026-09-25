@@ -18,7 +18,7 @@ cd infra && cp .env.example .env && cp app.env.example app.env   # 값 채우기
 docker compose --profile migrate run --rm migrate
 docker compose up -d                          # 앱 + 저장소 + 백업
 docker compose --profile observability up -d  # 관측
-docker compose --profile edge up -d           # 터널
+docker compose --profile edge up -d           # 터널(TUNNEL_TOKEN 없으면 cloudflared가 바로 죽는다)
 docker compose ps                             # healthy 확인 — api·worker는 /health/ready
 ```
 

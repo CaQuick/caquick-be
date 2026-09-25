@@ -20,12 +20,11 @@ x-app: &app
       required: false
   restart: unless-stopped
   logging: *logging
+  # api의 ready와 같은 범위(MySQL·Redis) — api는 outbox 테이블만 쓰므로 브로커 장애 중에도 떠야 한다. RabbitMQ는 worker만 기다린다
   depends_on:
     mysql:
       condition: service_healthy
     redis:
-      condition: service_healthy
-    rabbitmq:
       condition: service_healthy
   # ready = MySQL·Redis(·worker는 RabbitMQ) 왕복. 이미지에 curl이 없어 node fetch로 찍는다
   healthcheck:
@@ -55,6 +54,13 @@ services:
     environment:
       APP_ROLE: worker
       PORT: '4000'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     mem_limit: 512m
 
   # 배포 절차(E9): compose run --rm migrate → worker → api. 서비스로 두는 이유는 같은 이미지·env를 쓰기 위해서다
@@ -145,8 +151,10 @@ services:
     restart: unless-stopped
     logging: *logging
     command: ['tunnel', '--no-autoupdate', '--metrics', '127.0.0.1:2000', 'run']
+    # 프로필이 꺼진 채 base만 올릴 때도 compose는 파일 전체를 보간한다 — `:?`를 쓰면 토큰 없는 base 기동이 막힌다.
+    # 빈 토큰이면 cloudflared가 바로 죽어 unhealthy로 남고, 배포 잡이 edge healthy를 기다린다
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       api:
         condition: service_healthy
@@ -261,9 +269,14 @@ services:
     profiles: [observability]
     restart: unless-stopped
     logging: *logging
+    # 위 cloudflared와 같은 이유로 `:?` 대신 시작 시 검사 — 비어 있으면 기본 admin/admin으로 뜨지 않게 exit 1
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "GRAFANA_ADMIN_PASSWORD 없음" >&2; exit 1; }; exec /run.sh'
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
       GF_USERS_ALLOW_SIGN_UP: 'false'
       GF_ANALYTICS_REPORTING_ENABLED: 'false'
     volumes:
