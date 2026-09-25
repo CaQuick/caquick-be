@@ -293,7 +293,7 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 
 - `GET /health/live`: 프로세스 생존만 확인합니다.
 - `GET /health/ready`: MySQL과 Redis(worker는 RabbitMQ까지)의 연결을 확인하고, 하나라도 끊겨 있으면 503을 반환합니다.
-- `GET /metrics`: Prometheus 메트릭. Bearer 토큰(`METRICS_ACCESS_TOKEN`)이 필요합니다.
+- `GET /metrics`: Prometheus 메트릭. `METRICS_ACCESS_TOKEN`을 설정하면 Bearer 토큰을 검사하고(운영에서는 필수), 설정하지 않은 비운영 환경에서는 인증 없이 열립니다.
 
 ### 필요 환경 변수
 

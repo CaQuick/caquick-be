@@ -293,7 +293,7 @@ Operational endpoints
 
 - `GET /health/live`: process liveness only.
 - `GET /health/ready`: checks MySQL and Redis (and RabbitMQ for the worker); returns 503 if any of them is down.
-- `GET /metrics`: Prometheus metrics; requires a Bearer token (`METRICS_ACCESS_TOKEN`).
+- `GET /metrics`: Prometheus metrics. When `METRICS_ACCESS_TOKEN` is configured (mandatory in production) a Bearer token is checked; in non-production environments without the token the endpoint is open.
 
 ### Environment Variables
 

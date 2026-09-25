@@ -22,7 +22,7 @@
 
 ## 2. feature 경계 — 배럴(`index.ts`)이 공개 API
 
-**규칙.** feature 사이의 import는 대상 feature의 `index.ts`로만 한다(ESLint `boundaries`가 차단). 배럴은 `Module` + 토큰·인터페이스 타입(토큰 패턴) 또는 구체 repository 클래스(구체 주입)만 노출한다. 밖에서 쓰이지 않는 feature(`core`·`dashboard`·`mypage`·`system`)는 배럴이 없고 `app.module`이 직접 경로로 import한다.
+**규칙.** feature 사이의 import는 대상 feature의 `index.ts`로만 한다(ESLint `boundaries`가 차단). 배럴은 다른 feature가 실제로 쓰는 것만 노출한다: `Module`, 주입 대상(구체 주입이면 서비스·repository 클래스, 토큰 패턴이면 토큰과 인터페이스 타입), 그리고 계약(DTO·출력 타입·이벤트·상수·순수 헬퍼). 토큰 패턴인 feature는 구체 repository 클래스를 노출하지 않는다(계약 우회 경로가 된다). 노출 목록이 곧 공개 API이므로 새 export는 "밖에서 쓰는가"로 판단하고, 쓰는 곳이 사라지면 뺀다(`knip`이 미사용 export를 리포트한다). 밖에서 쓰이지 않는 feature(`core`·`dashboard`·`mypage`·`system`)는 배럴이 없고 `app.module`이 직접 경로로 import한다.
 
 **왜.** NestJS 모듈의 진짜 경계는 `exports` 배열(런타임)이다. 배럴은 그 위의 컴파일타임 경계이고 둘은 일관돼야 한다. 배럴이 없는 feature에 배럴을 만들면 "누군가 써도 된다"는 신호가 된다.
 
