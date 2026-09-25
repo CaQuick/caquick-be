@@ -70,6 +70,8 @@ describe('build-image.yml', () => {
       s.uses?.startsWith('docker/metadata-action'),
     );
     expect(String(meta?.with?.tags)).toContain('workflow_run.head_sha');
+    // 가변 태그(main)는 늦게 끝난 옛 빌드가 덮어쓸 수 있다 — sha 태그만
+    expect(String(meta?.with?.tags)).not.toContain('value=main');
     const login = build.steps.find((s) =>
       s.uses?.startsWith('docker/login-action'),
     );
@@ -156,7 +158,7 @@ describe('deploy.yml', () => {
     for (const u of usesOf(wf)) expect(u).toMatch(PINNED);
   });
 
-  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다 — 입력·출력은 env를 거쳐 따옴표 친 변수로. image_tag은 sha·main 형식만', () => {
+  it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다 — 입력·출력은 env를 거쳐 따옴표 친 변수로. image_tag은 전체 sha만(수동 기본값은 main 끝 sha)', () => {
     for (const [name, job] of Object.entries(wf.jobs)) {
       for (const step of job.steps) {
         expect({
@@ -171,7 +173,9 @@ describe('deploy.yml', () => {
     const tag = job.steps.find((s) => s.id === 'tag');
     expect(tag?.env?.INPUT_TAG).toBe('${{ inputs.image_tag }}');
     // build-image가 푸시하는 태그(전체 sha·main)만 — 짧은 sha·hex 아닌 접미사는 거절
-    expect(tag?.run).toContain('^([0-9a-f]{40}|main)$');
+    expect(tag?.run).toContain('^[0-9a-f]{40}$');
+    expect(tag?.run).toContain('tag=$MAIN_SHA');
+    expect(tag?.env?.MAIN_SHA).toBe('${{ github.sha }}');
     expect(tag?.run).toContain('exit 1');
   });
 
