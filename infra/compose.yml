@@ -93,6 +93,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
     volumes:
       - mysql-data:/var/lib/mysql
+      # 복구 때 backup 컨테이너가 받아 둔 덤프를 바로 읽는다(runbook) — 쓰지는 않는다
+      - backup-data:/backup:ro
     healthcheck:
       test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '--silent']
       interval: 10s
