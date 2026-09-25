@@ -124,6 +124,29 @@ describe('shouldSendBootAlert', () => {
     expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 
+  it('반증: 느슨한 디렉터리에 lock을 디렉터리(미래 mtime)로 심어 둬도 치우고 정상 동작한다 — 영구 busy가 되지 않는다', () => {
+    const stateDir = join(dir, 'planted-dir-lock');
+    mkdirSync(stateDir);
+    chmodSync(stateDir, 0o777);
+    mkdirSync(join(stateDir, 'lock'));
+    const future = new Date(Date.now() + 10 ** 9);
+    utimesSync(join(stateDir, 'lock'), future, future);
+    writeFileSync(join(stateDir, 'last-sent'), String(10 ** 13), 'utf8');
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+  });
+
+  it('반증: 700 디렉터리라도 lock이 미래 mtime이면 죽은 잠금으로 보고 회수한다', () => {
+    const stateDir = join(dir, 'future-lock');
+    mkdirSync(stateDir, { mode: 0o700 });
+    writeFileSync(join(stateDir, 'lock'), '', 'utf8');
+    const future = new Date(Date.now() + 10 ** 9);
+    utimesSync(join(stateDir, 'lock'), future, future);
+    expect(shouldSendBootAlert(Date.now(), 5_000, stateDir)).toBe(true);
+  });
+
   it('반증: 수리 잠금을 만들 수 없는 곳(부모가 쓰기 불가)이면 아무것도 지우지 않고 보낸다', () => {
     const parent = join(dir, 'ro-parent');
     const stateDir = join(parent, 'state');

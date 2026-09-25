@@ -3,10 +3,12 @@ import {
   closeSync,
   constants,
   fstatSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeSync,
@@ -87,7 +89,11 @@ function acquireExclusive(
  */
 function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
   try {
-    if (nowMs - statSync(lockPath).mtimeMs <= STALE_LOCK_MS) return false;
+    const st = lstatSync(lockPath);
+    // 우리가 만드는 잠금은 빈 일반 파일이고 mtime은 지금 언저리다 — 디렉터리·링크·먼 미래 mtime은 심어 둔 것이라 stale로
+    // 본다(방금 만든 파일의 mtime은 ms 반올림으로 nowMs보다 살짝 앞설 수 있어 |차이|로 본다)
+    if (st.isFile() && Math.abs(nowMs - st.mtimeMs) <= STALE_LOCK_MS)
+      return false;
   } catch {
     return true; // 그새 풀렸다 — 다시 시도
   }
@@ -97,12 +103,17 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
   } catch {
     return false; // 다른 프로세스가 먼저 가져갔다
   }
-  try {
-    unlinkSync(taken);
-  } catch {
-    // 남아도 무해
-  }
+  rmSync(taken, { recursive: true, force: true });
   return true;
+}
+
+function exists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -139,12 +150,11 @@ function repairLooseDir(stateDir: string, nowMs: number): boolean {
     return waitUntil(() => !isWritableByOthers(statSync(stateDir).mode));
   try {
     if (isWritableByOthers(statSync(stateDir).mode)) {
+      // 심어 둔 것이 파일이 아니라 디렉터리일 수도 있다(unlink는 EISDIR) — 통째로 지우고, 정말 없어졌는지 확인한 뒤에만
+      // 700으로 잠근다. 못 지웠으면 수리 실패로 두어 억제 파일을 믿지 않는다.
       for (const name of ['lock', 'last-sent']) {
-        try {
-          unlinkSync(join(stateDir, name));
-        } catch {
-          // 없으면 그만
-        }
+        rmSync(join(stateDir, name), { recursive: true, force: true });
+        if (exists(join(stateDir, name))) return false;
       }
       chmodSync(stateDir, 0o700);
     }
@@ -193,7 +203,7 @@ function writeStateNoFollow(statePath: string, value: string): void {
   }
 }
 
-/** 내 소유의 일반 파일만 읽는다(링크·남의 파일은 0). 미래 값은 억제를 영구화하므로 무시한다. */
+/** 내 소유의 일반 파일만 읽는다(링크·남의 파일은 0). 먼 미래 값은 억제를 영구화하므로 무시한다. */
 function readLastSentAt(statePath: string, nowMs: number): number {
   try {
     const { O_RDONLY, O_NOFOLLOW } = constants;
@@ -203,7 +213,10 @@ function readLastSentAt(statePath: string, nowMs: number): number {
       const uid = process.getuid?.();
       if (!st.isFile() || (uid !== undefined && st.uid !== uid)) return 0;
       const value = Number(readFileSync(fd, 'utf8'));
-      return Number.isFinite(value) && value <= nowMs ? value : 0;
+      // 동시에 뜬 프로세스끼리는 nowMs가 몇 ms 어긋난다 — 그만큼 앞선 기록은 미래가 아니다. 그보다 먼 미래만 심어 둔 값으로 버린다
+      return Number.isFinite(value) && value - nowMs <= STALE_LOCK_MS
+        ? value
+        : 0;
     } finally {
       closeSync(fd);
     }
