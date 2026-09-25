@@ -108,12 +108,15 @@ describe('deploy.yml', () => {
     expect(env?.env?.DOTENV).toBe('${{ secrets.DOTENV }}');
     expect(env?.env?.APP_ENV).toBe('${{ secrets.APP_ENV }}');
     expect(env?.run).toContain('umask 077');
+    // 이미 있던 644 파일의 권한을 물려받지 않게 — 임시 파일 600 + mv
+    expect(env?.run).toContain('chmod 600 "$tmp_env" "$tmp_app"');
+    expect(env?.run).toContain('mv -f "$tmp_env" "$DEPLOY_DIR/.env"');
     expect(env?.run).toContain("--exclude '.env'");
     expect(env?.run).toContain("--exclude 'app.env'");
-    expect(env?.run).toContain('> "$DEPLOY_DIR/app.env"');
+    expect(env?.run).toContain('mv -f "$tmp_app" "$DEPLOY_DIR/app.env"');
     // Prometheus 스크레이프 토큰·백업 경보 웹훅은 compose가 .env에서 읽는다 — app.env에서 복사
     expect(env?.run).toContain(
-      'grep -E \'^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=\' "$DEPLOY_DIR/app.env" >> "$DEPLOY_DIR/.env"',
+      'grep -E \'^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=\' "$tmp_app" >> "$tmp_env"',
     );
     expect(env?.run).toContain("grep -q '^METRICS_ACCESS_TOKEN=.'");
     // 비어 있는 secret으로 빈 파일을 만들어 배포하지 않는다

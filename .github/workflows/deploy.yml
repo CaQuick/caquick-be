@@ -95,13 +95,18 @@ jobs:
           [ -n "$DOTENV" ] && [ -n "$APP_ENV" ] || { echo "Environment secrets DOTENV·APP_ENV가 비어 있다" >&2; exit 1; }
           mkdir -p "$DEPLOY_DIR"
           rsync -a --delete --exclude '.env' --exclude 'app.env' infra/ "$DEPLOY_DIR/"
+          # 임시 파일에 600으로 쓰고 원자적으로 바꾼다 — 이미 있던 파일(예: cp .env.example 644)의 권한을 물려받지 않게
           umask 077
-          printf '%s\n' "$DOTENV" > "$DEPLOY_DIR/.env"
-          printf 'IMAGE=%s\nIMAGE_TAG=%s\n' "$IMAGE" "$IMAGE_TAG" >> "$DEPLOY_DIR/.env"
-          printf '%s\n' "$APP_ENV" > "$DEPLOY_DIR/app.env"
+          tmp_env=$(mktemp "$DEPLOY_DIR/.env.XXXXXX"); tmp_app=$(mktemp "$DEPLOY_DIR/app.env.XXXXXX")
+          printf '%s\n' "$APP_ENV" > "$tmp_app"
+          printf '%s\n' "$DOTENV" > "$tmp_env"
+          printf 'IMAGE=%s\nIMAGE_TAG=%s\n' "$IMAGE" "$IMAGE_TAG" >> "$tmp_env"
           # compose가 인프라 컨테이너(Prometheus 스크레이프·백업 경보)에 넘기는 앱 값 — app.env에서 복사해 secret을 두 번 관리하지 않는다
-          grep -E '^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=' "$DEPLOY_DIR/app.env" >> "$DEPLOY_DIR/.env" || true
-          grep -q '^METRICS_ACCESS_TOKEN=.' "$DEPLOY_DIR/app.env" || { echo "app.env에 METRICS_ACCESS_TOKEN이 없다" >&2; exit 1; }
+          grep -E '^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=' "$tmp_app" >> "$tmp_env" || true
+          grep -q '^METRICS_ACCESS_TOKEN=.' "$tmp_app" || { echo "app.env에 METRICS_ACCESS_TOKEN이 없다" >&2; exit 1; }
+          chmod 600 "$tmp_env" "$tmp_app"
+          mv -f "$tmp_env" "$DEPLOY_DIR/.env"
+          mv -f "$tmp_app" "$DEPLOY_DIR/app.env"
 
       - name: Deploy (E9)
         if: env.SKIP_DEPLOY != '1'
