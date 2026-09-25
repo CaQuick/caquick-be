@@ -108,23 +108,6 @@ describe('shouldSendBootAlert', () => {
     expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
   });
 
-  it('반증: 느슨한 디렉터리(심어 둔 상태 포함)를 프로세스 4개가 동시에 수리해도 정확히 1개만 보낸다', async () => {
-    const stateDir = join(dir, 'loose-race');
-    mkdirSync(stateDir);
-    chmodSync(stateDir, 0o777);
-    writeFileSync(
-      join(stateDir, 'last-sent'),
-      String(Date.now() + 10 ** 12),
-      'utf8',
-    );
-
-    const results = await runInProcesses(4, stateDir);
-
-    expect(results.filter((r) => r === 'sent')).toHaveLength(1);
-    expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
-    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
-  });
-
   it('반증: 느슨한 디렉터리에 lock을 디렉터리(미래 mtime)로 심어 둬도 치우고 정상 동작한다 — 영구 busy가 되지 않는다', () => {
     const stateDir = join(dir, 'planted-dir-lock');
     mkdirSync(stateDir);
@@ -148,41 +131,6 @@ describe('shouldSendBootAlert', () => {
     expect(shouldSendBootAlert(Date.now(), 5_000, stateDir)).toBe(true);
   });
 
-  it('다른 프로세스가 수리 중이면(수리 잠금 존재) 700이 될 때까지 기다렸다가 그 결과를 쓴다', () => {
-    const stateDir = join(dir, 'repair-in-progress');
-    mkdirSync(stateDir);
-    chmodSync(stateDir, 0o777);
-    writeFileSync(join(stateDir, 'last-sent'), String(10 ** 13), 'utf8');
-    writeFileSync(`${stateDir}.repair-lock`, '', 'utf8'); // 방금 잡힌 수리 잠금
-    // 수리자 역할: 잠깐 뒤 심어 둔 상태를 지우고 700으로 잠근 뒤 수리 잠금을 푼다
-    const repairer = spawn(process.execPath, [
-      '-e',
-      `const fs=require('fs');setTimeout(()=>{fs.rmSync(${JSON.stringify(join(stateDir, 'last-sent'))},{force:true});fs.chmodSync(${JSON.stringify(stateDir)},0o700);fs.unlinkSync(${JSON.stringify(`${stateDir}.repair-lock`)})},200)`,
-    ]);
-    try {
-      expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
-      expect(statSync(stateDir).mode & 0o777).toBe(0o700);
-      expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
-    } finally {
-      repairer.kill();
-    }
-  });
-
-  it('반증: 수리 잠금이 잡힌 채 아무도 끝내지 않으면 상한(2초) 뒤 억제 파일을 믿지 않고 보낸다 — 아무것도 지우지 않는다', () => {
-    const stateDir = join(dir, 'repair-stuck');
-    mkdirSync(stateDir);
-    chmodSync(stateDir, 0o777);
-    writeFileSync(join(stateDir, 'last-sent'), '1', 'utf8');
-    writeFileSync(`${stateDir}.repair-lock`, '', 'utf8');
-
-    const started = Date.now();
-    expect(shouldSendBootAlert(Date.now(), 5_000, stateDir)).toBe(true);
-
-    expect(Date.now() - started).toBeGreaterThanOrEqual(1_900);
-    expect(statSync(stateDir).mode & 0o777).toBe(0o777);
-    expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
-  });
-
   it('반증: 상태 디렉터리 경로가 심볼릭 링크면 믿지 않는다 — 링크 대상은 건드리지 않고 보낸다', () => {
     const target = join(dir, 'target');
     mkdirSync(target);
@@ -199,20 +147,43 @@ describe('shouldSendBootAlert', () => {
     expect(existsSync(join(target, 'lock'))).toBe(false);
   });
 
-  it('반증: 수리 잠금을 만들 수 없는 곳(부모가 쓰기 불가)이면 아무것도 지우지 않고 보낸다', () => {
-    const parent = join(dir, 'ro-parent');
-    const stateDir = join(parent, 'state');
-    mkdirSync(stateDir, { recursive: true });
+  it('반증: 느슨한 디렉터리에 심어 둔 미래 last-sent가 있어도 프로세스 4개 동시 기동에 정확히 1개만 보낸다(지우지 않고 걸러낸다)', async () => {
+    const stateDir = join(dir, 'loose-race');
+    mkdirSync(stateDir);
     chmodSync(stateDir, 0o777);
-    writeFileSync(join(stateDir, 'last-sent'), '1', 'utf8');
-    chmodSync(parent, 0o555);
-    try {
-      expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
-      expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
-      expect(statSync(stateDir).mode & 0o777).toBe(0o777);
-    } finally {
-      chmodSync(parent, 0o755);
-    }
+    writeFileSync(
+      join(stateDir, 'last-sent'),
+      String(Date.now() + 10 ** 12),
+      'utf8',
+    );
+
+    const results = await runInProcesses(4, stateDir);
+
+    expect(results.filter((r) => r === 'sent')).toHaveLength(1);
+    expect(results.filter((r) => r === 'suppressed')).toHaveLength(3);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+  });
+
+  it('반증: 부모 디렉터리를 남이 쓸 수 있고 sticky가 아니면 믿지 않는다 — 아무것도 만들지 않고 보낸다', () => {
+    const parent = join(dir, 'shared-parent');
+    mkdirSync(parent);
+    chmodSync(parent, 0o777);
+    const stateDir = join(parent, 'state');
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(true);
+    expect(existsSync(stateDir)).toBe(false);
+  });
+
+  it('sticky 부모(/tmp 식 1777)는 남이 내 디렉터리를 바꿔치기할 수 없으므로 허용한다', () => {
+    const parent = join(dir, 'sticky-parent');
+    mkdirSync(parent);
+    chmodSync(parent, 0o1777);
+    const stateDir = join(parent, 'state');
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 
   it('반증: 상태 디렉터리를 만들 수 없으면 보내는 쪽으로 기운다', () => {

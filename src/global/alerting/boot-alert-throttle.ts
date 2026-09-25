@@ -9,12 +9,11 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /**
  * 부팅 실패 경보는 AlertService(프로세스 메모리 억제)를 못 쓴다 — 프로세스가 매번 새로 뜬다.
@@ -24,14 +23,18 @@ import { join } from 'node:path';
  * 파일을 못 쓰는 환경이면 보내는 쪽으로 기운다(경보 누락보다 중복이 낫다).
  *
  * 상태 디렉터리는 공유 tmp가 아니라 실행 사용자의 홈 아래(700)다 — tmp의 고정 경로는 다른 로컬 사용자가 먼저 만들거나
- * 심볼릭 링크를 심을 수 있다(CodeQL insecure-temporary-file). 상태 파일은 O_NOFOLLOW로 열어 링크를 따라가지 않는다.
+ * 심볼릭 링크를 심을 수 있다(CodeQL insecure-temporary-file). 남이 만들었거나 바꿔치기할 수 있는 디렉터리는 믿지 않고
+ * 억제 없이 보내며, 그 안의 파일은 소유자·종류·시각으로 걸러 심어 둔 값이 억제를 조작하지 못하게 한다.
  */
 export function defaultBootAlertStateDir(): string {
   const fromEnv = process.env.BOOT_ALERT_STATE_DIR?.trim();
   return fromEnv || join(homedir(), '.caquick', 'boot-alert');
 }
 
-/** 결정은 ms 단위로 끝난다 — 이보다 오래된 잠금은 죽은 프로세스가 남긴 것으로 보고 치운다. */
+/**
+ * 결정은 ms 단위로 끝난다 — 이보다 오래된 잠금은 죽은 프로세스가 남긴 것으로 보고 치운다.
+ * 시각 비교의 여유이기도 하다: 동시에 뜬 프로세스끼리 nowMs가 몇 ms 어긋나고, 방금 만든 파일의 mtime은 반올림으로 살짝 앞선다.
+ */
 const STALE_LOCK_MS = 10_000;
 
 export function shouldSendBootAlert(
@@ -39,7 +42,7 @@ export function shouldSendBootAlert(
   windowMs: number,
   stateDir: string = defaultBootAlertStateDir(),
 ): boolean {
-  if (!ensurePrivateDir(stateDir, nowMs)) return true;
+  if (!ensurePrivateDir(stateDir)) return true;
   const lockPath = join(stateDir, 'lock');
   if (!acquireLock(lockPath, nowMs)) return false;
   try {
@@ -62,25 +65,16 @@ export function shouldSendBootAlert(
 }
 
 function acquireLock(lockPath: string, nowMs: number): boolean {
-  return acquireExclusive(lockPath, nowMs) !== 'busy'; // 잠금 자체를 못 쓰는 환경이면 보내는 쪽으로
-}
-
-/** O_EXCL 생성. busy = 다른 프로세스가 들고 있다, unavailable = 이 경로엔 잠금을 만들 수 없다(권한 등). */
-function acquireExclusive(
-  lockPath: string,
-  nowMs: number,
-): 'acquired' | 'busy' | 'unavailable' {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       closeSync(openSync(lockPath, 'wx'));
-      return 'acquired';
+      return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST')
-        return 'unavailable';
-      if (!reclaimStaleLock(lockPath, nowMs)) return 'busy';
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return true; // 잠금 자체를 못 쓰는 환경
+      if (!reclaimStaleLock(lockPath, nowMs)) return false;
     }
   }
-  return 'busy';
+  return false;
 }
 
 /**
@@ -90,8 +84,7 @@ function acquireExclusive(
 function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
   try {
     const st = lstatSync(lockPath);
-    // 우리가 만드는 잠금은 빈 일반 파일이고 mtime은 지금 언저리다 — 디렉터리·링크·먼 미래 mtime은 심어 둔 것이라 stale로
-    // 본다(방금 만든 파일의 mtime은 ms 반올림으로 nowMs보다 살짝 앞설 수 있어 |차이|로 본다)
+    // 우리가 만드는 잠금은 빈 일반 파일이고 mtime은 지금 언저리다 — 디렉터리·링크·먼 미래 mtime은 심어 둔 것이라 stale로 본다
     if (st.isFile() && Math.abs(nowMs - st.mtimeMs) <= STALE_LOCK_MS)
       return false;
   } catch {
@@ -107,86 +100,34 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
   return true;
 }
 
-function exists(path: string): boolean {
-  try {
-    lstatSync(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * 디렉터리를 만들고 700을 **강제**한다 — 이미 있던(미리 만들어 둔·bind mount) 디렉터리는 mkdir의 mode가 손대지 않으므로
- * 다른 사용자가 쓸 수 있는 채로 남는다. 내 소유가 아니거나 권한을 못 고치면 억제 파일을 믿지 않는다(호출자가 보낸다).
+ * 상태 디렉터리를 만들고 믿을 수 있는지 본다. 믿지 않는 경우(호출자는 억제 없이 보낸다):
+ * - 부모를 남이 쓸 수 있고 sticky가 아니다 — 검사 뒤에 디렉터리를 통째로 링크로 바꿔치기할 수 있다
+ * - 경로가 디렉터리가 아니거나(링크 포함 — lstat) 내 소유가 아니다
+ * 이미 있던 디렉터리는 mkdir의 mode가 손대지 않으므로 남이 쓸 수 있으면 700으로 고친다 — chmod는 멱등이라 동시에 해도
+ * 안전하고, 그동안 심어 둔 항목은 지우지 않아도 소유자·종류·시각 검사(readLastSentAt·reclaimStaleLock)에 걸러진다.
+ * 지우는 수리는 두지 않는다 — 수리 잠금·삭제 순서·회수 경쟁이 전부 억제 중복의 구멍이 됐다.
  */
-function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
+function ensurePrivateDir(stateDir: string): boolean {
   try {
+    const parent = lstatSync(dirname(stateDir));
+    if (isWritableByOthers(parent.mode) && (parent.mode & 0o1000) === 0)
+      return false;
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-    // 링크를 따라가지 않는다 — 남이 쓸 수 있는 부모 아래라면 경로 자체를 링크로 심어 내 다른 디렉터리를 가리키게 할 수 있다
     const st = lstatSync(stateDir);
     if (!st.isDirectory()) return false;
     const uid = process.getuid?.();
     if (uid !== undefined && st.uid !== uid) return false;
-    if (!isWritableByOthers(st.mode)) return true;
-    return repairLooseDir(stateDir, nowMs);
+    if (isWritableByOthers(st.mode)) chmodSync(stateDir, 0o700);
+    return true;
   } catch {
     return false;
   }
 }
 
-/**
- * 느슨한 디렉터리의 수리(700 + 남이 심어 둔 상태 삭제)는 **수리 잠금** 아래에서 한 프로세스만 한다. 잠금은 상태 디렉터리
- * 밖(형제 경로)에 둔다 — 안에 두면 수리 대상과 같이 지워진다. 잠금 아래에서 권한을 다시 읽어, 이미 고쳐졌으면 아무것도
- * 지우지 않는다 — 먼저 고친 프로세스가 막 만든 lock·last-sent를 뒤따른 프로세스가 지워 둘 다 보내는 일이 없게.
- */
-function repairLooseDir(stateDir: string, nowMs: number): boolean {
-  const repairLock = `${stateDir}.repair-lock`;
-  const got = acquireExclusive(repairLock, nowMs);
-  // 잠금을 만들 수 없는 곳(부모 디렉터리가 남의 것)이면 수리(삭제)를 하지 않는다 — 잠금 없이 지우면 서로의 상태를 지운다
-  if (got === 'unavailable') return false;
-  // 다른 프로세스가 고치는 중 — 700이 되기를 잠깐 기다린다. 700은 수리의 **마지막** 단계라 그때는 삭제도 끝나 있다.
-  // 잠금을 못 잡았다고 "보낸다"로 기울면 동시 재시작 때 수리한 쪽과 둘 다 보낸다.
-  if (got === 'busy')
-    return waitUntil(() => !isWritableByOthers(statSync(stateDir).mode));
-  try {
-    if (isWritableByOthers(statSync(stateDir).mode)) {
-      // 심어 둔 것이 파일이 아니라 디렉터리일 수도 있다(unlink는 EISDIR) — 통째로 지우고, 정말 없어졌는지 확인한 뒤에만
-      // 700으로 잠근다. 못 지웠으면 수리 실패로 두어 억제 파일을 믿지 않는다.
-      for (const name of ['lock', 'last-sent']) {
-        rmSync(join(stateDir, name), { recursive: true, force: true });
-        if (exists(join(stateDir, name))) return false;
-      }
-      chmodSync(stateDir, 0o700);
-    }
-    return true;
-  } finally {
-    try {
-      unlinkSync(repairLock);
-    } catch {
-      // 이미 없으면 그만
-    }
-  }
-}
-
-/** 위협은 다른 사용자의 **쓰기**다(lock·last-sent 교체). 읽기 비트는 문제가 아니라 기본 755 디렉터리를 수리 대상으로 보지 않는다. */
+/** 위협은 다른 사용자의 **쓰기**다(lock·last-sent 교체). 읽기 비트는 문제가 아니라 기본 755 디렉터리를 고치지 않는다. */
 function isWritableByOthers(mode: number): boolean {
   return (mode & 0o022) !== 0;
-}
-
-/** 동기 대기 — 부팅 실패 경로라 이벤트 루프를 막아도 되고, 상한(2초) 안에 안 되면 false. */
-function waitUntil(done: () => boolean, deadlineMs = 2_000): boolean {
-  const cell = new Int32Array(new SharedArrayBuffer(4));
-  const until = Date.now() + deadlineMs;
-  while (Date.now() < until) {
-    try {
-      if (done()) return true;
-    } catch {
-      return false;
-    }
-    Atomics.wait(cell, 0, 0, 10);
-  }
-  return false;
 }
 
 /** 심볼릭 링크면 열기가 실패한다 — 링크 대상 파일을 덮어쓰지 않는다. */
@@ -214,7 +155,6 @@ function readLastSentAt(statePath: string, nowMs: number): number {
       const uid = process.getuid?.();
       if (!st.isFile() || (uid !== undefined && st.uid !== uid)) return 0;
       const value = Number(readFileSync(fd, 'utf8'));
-      // 동시에 뜬 프로세스끼리는 nowMs가 몇 ms 어긋난다 — 그만큼 앞선 기록은 미래가 아니다. 그보다 먼 미래만 심어 둔 값으로 버린다
       return Number.isFinite(value) && value - nowMs <= STALE_LOCK_MS
         ? value
         : 0;
