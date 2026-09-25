@@ -38,5 +38,20 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    container_name: caquick-rabbitmq
+    # outbox 릴레이 → 소비자(worker) 이벤트 백본(P2 04). 큐·바인딩은 `rabbitmqctl list_queues/list_bindings`로 본다.
+    # 일부 호스트에서 docker run이 `.erlang.cookie: eacces`로 실패하는 사례가 있다(같은 이미지가 testcontainers로는 기동) — 그때는
+    # `docker compose logs rabbitmq`로 확인하고 이미지를 다시 받는다.
+    ports:
+      - '5672:5672'
+    # 로컬은 볼륨 없이 — 개발 브로커 데이터는 잃어도 된다. 운영 compose(P2 06)가 볼륨·권한을 정한다.
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   caquick-mysql-data:
