@@ -12,6 +12,7 @@ import {
   unlinkSync,
   writeSync,
 } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -110,7 +111,8 @@ function reclaimStaleLock(lockPath: string, nowMs: number): boolean {
  */
 function ensurePrivateDir(stateDir: string): boolean {
   try {
-    const parent = lstatSync(dirname(stateDir));
+    // 부모가 없으면(새 설치의 ~/.caquick) 700으로 만들어 쓴다. 있으면 만들기 전에 검사한다 — 남의 디렉터리 아래에 흔적을 남기지 않게
+    const parent = lstatParentOrCreate(stateDir);
     if (isWritableByOthers(parent.mode) && (parent.mode & 0o1000) === 0)
       return false;
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
@@ -125,13 +127,28 @@ function ensurePrivateDir(stateDir: string): boolean {
   }
 }
 
+function lstatParentOrCreate(stateDir: string): Stats {
+  const parent = dirname(stateDir);
+  try {
+    return lstatSync(parent);
+  } catch {
+    mkdirSync(parent, { recursive: true, mode: 0o700 });
+    return lstatSync(parent);
+  }
+}
+
 /** 위협은 다른 사용자의 **쓰기**다(lock·last-sent 교체). 읽기 비트는 문제가 아니라 기본 755 디렉터리를 고치지 않는다. */
 function isWritableByOthers(mode: number): boolean {
   return (mode & 0o022) !== 0;
 }
 
-/** 심볼릭 링크면 열기가 실패한다 — 링크 대상 파일을 덮어쓰지 않는다. */
+/**
+ * 내 소유의 일반 파일에만 쓴다. 남이 심어 둔 것(링크·디렉터리·남의 파일)이 있으면 그 항목을 지우고 새로 만든다 — 링크는 따라가지
+ * 않으니 대상은 무사하고, 남의 파일을 truncate만 하면 소유가 남아 영영 읽히지 않는다(부팅 루프마다 경보). 잠금 아래라 우리끼리는 경쟁하지 않는다.
+ */
 function writeStateNoFollow(statePath: string, value: string): void {
+  if (!isOwnRegularFile(statePath))
+    rmSync(statePath, { recursive: true, force: true });
   const { O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW } = constants;
   const fd = openSync(
     statePath,
@@ -142,6 +159,16 @@ function writeStateNoFollow(statePath: string, value: string): void {
     writeSync(fd, value);
   } finally {
     closeSync(fd);
+  }
+}
+
+function isOwnRegularFile(path: string): boolean {
+  try {
+    const st = lstatSync(path);
+    const uid = process.getuid?.();
+    return st.isFile() && (uid === undefined || st.uid === uid);
+  } catch {
+    return true; // 없으면 새로 만들면 된다
   }
 }
 

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -186,6 +187,27 @@ describe('shouldSendBootAlert', () => {
     expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 
+  it('반증: 부모가 아직 없는 경로(새 설치의 ~/.caquick/boot-alert)도 만들어 쓰고 억제가 동작한다', () => {
+    const stateDir = join(dir, 'fresh', 'nested', 'boot-alert');
+    expect(existsSync(join(dir, 'fresh'))).toBe(false);
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+
+    expect(statSync(join(dir, 'fresh')).mode & 0o777).toBe(0o700);
+    expect(statSync(stateDir).mode & 0o777).toBe(0o700);
+  });
+
+  it('반증: last-sent 자리에 디렉터리·링크가 심겨 있으면 그 항목을 치우고 내 파일로 바꾼다 — 부팅 루프에서 경보가 계속 나가지 않는다', () => {
+    const stateDir = join(dir, 'planted-state');
+    mkdirSync(stateDir, { mode: 0o700 });
+    mkdirSync(join(stateDir, 'last-sent'));
+
+    expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
+    expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
+  });
+
   it('반증: 상태 디렉터리를 만들 수 없으면 보내는 쪽으로 기운다', () => {
     const notADir = join(dir, 'file');
     writeFileSync(notADir, 'x', 'utf8');
@@ -251,8 +273,10 @@ describe('shouldSendBootAlert', () => {
     symlinkSync(victim, join(stateDir, 'last-sent'));
 
     expect(shouldSendBootAlert(10_000, 5_000, stateDir)).toBe(true);
-
+    // 링크 자체를 치우고 내 파일을 썼다 — 대상은 그대로, 이후 억제는 정상
     expect(readFileSync(victim, 'utf8')).toBe('untouched');
+    expect(lstatSync(join(stateDir, 'last-sent')).isSymbolicLink()).toBe(false);
+    expect(shouldSendBootAlert(10_001, 5_000, stateDir)).toBe(false);
     expect(statSync(stateDir).mode & 0o777).toBe(0o700);
   });
 });
