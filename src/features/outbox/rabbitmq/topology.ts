@@ -52,6 +52,7 @@ export async function assertTopology(
   await channel.assertExchange(DLQ_EXCHANGE, 'direct', { durable: true });
   for (const { queues, eventTypes } of consumers) {
     await channel.assertQueue(queues.main, { durable: true });
+    // 구독에서 뺀 event_type의 옛 바인딩은 여기서 못 지운다(AMQP엔 바인딩 열거가 없다) — 호스트가 구독 목록 밖 메시지를 버린다
     for (const eventType of eventTypes) {
       await channel.bindQueue(queues.main, EVENTS_EXCHANGE, eventType);
     }

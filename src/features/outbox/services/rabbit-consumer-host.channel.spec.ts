@@ -48,25 +48,27 @@ function fakeChannel(opts: {
     on: (event: string, fn: (payload?: unknown) => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), fn]);
     },
-    publish: (
-      _ex: string,
-      _rk: string,
-      _content: Buffer,
-      options: { messageId?: string },
-      cb: (error: unknown) => void,
-    ) => {
-      if (opts.unroutable) {
-        for (const fn of listeners.get('return') ?? []) {
-          fn({ properties: { messageId: options.messageId } });
+    publish: jest.fn(
+      (
+        _ex: string,
+        _rk: string,
+        _content: Buffer,
+        options: { messageId?: string },
+        cb: (error: unknown) => void,
+      ) => {
+        if (opts.unroutable) {
+          for (const fn of listeners.get('return') ?? []) {
+            fn({ properties: { messageId: options.messageId } });
+          }
         }
-      }
-      if (opts.nack) {
-        cb(new Error('basic.nack'));
+        if (opts.nack) {
+          cb(new Error('basic.nack'));
+          return true;
+        }
+        if (opts.confirm !== false) cb(null);
         return true;
-      }
-      if (opts.confirm !== false) cb(null);
-      return true;
-    },
+      },
+    ),
     consume: (queue: string, cb: ConsumeCb) => {
       if (opts.failConsumeFor?.includes(queue)) {
         return Promise.reject(new Error(`consume ${queue} 실패`));
@@ -82,7 +84,11 @@ function fakeChannel(opts: {
   return channel;
 }
 
-function message(eventId: string): ConsumeMessage {
+function message(
+  eventId: string,
+  eventType = 'test.a',
+  headers: Record<string, unknown> = {},
+): ConsumeMessage {
   return {
     content: Buffer.from(
       JSON.stringify({
@@ -90,7 +96,7 @@ function message(eventId: string): ConsumeMessage {
         eventId,
         aggregateType: 'test',
         aggregateId: 'A',
-        eventType: 'test.a',
+        eventType,
         payload: {},
         occurredAt: '2026-09-24T12:00:00.000Z',
         actorAccountId: null,
@@ -99,7 +105,7 @@ function message(eventId: string): ConsumeMessage {
       }),
     ),
     properties: {
-      headers: {},
+      headers,
       messageId: eventId,
     } as ConsumeMessage['properties'],
     fields: {} as ConsumeMessage['fields'],
@@ -248,6 +254,66 @@ describe('RabbitConsumerHostService (fake channel — 채널 수명주기)', () 
     warn.mockRestore();
     await host.onModuleDestroy();
   });
+
+  it('반증: 구독 목록에 없는 event_type(구독을 뺀 뒤 남은 durable 바인딩)은 handle 없이 ack — 재시도·DLQ로 보내지 않는다', async () => {
+    const channel = fakeChannel({});
+    const handle = jest.fn().mockResolvedValue(undefined);
+    const host = build(channel, handle);
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    await host.start();
+    channel.deliver('q.A', message('e-1', 'test.removed'));
+    await Promise.all([
+      ...(host as unknown as { inFlight: Set<Promise<void>> }).inFlight,
+    ]);
+
+    expect(handle).not.toHaveBeenCalled();
+    expect(channel.publish).not.toHaveBeenCalled();
+    expect(channel.ack).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('옛 바인딩'),
+      expect.anything(),
+    );
+    warn.mockRestore();
+    await host.onModuleDestroy();
+  });
+
+  it.each([['abc'], ['NaN'], [-1], [1.5], ['Infinity'], [null]])(
+    '반증: x-caquick-attempts=%p 는 0으로 보고 재시도 발행엔 1과 숫자 expiration을 쓴다 — NaN이면 상한 비교가 영영 참이 안 되고 expiration "NaN"은 브로커가 거절해 무한 재전달',
+    async (header) => {
+      const channel = fakeChannel({});
+      const host = build(channel, () => Promise.reject(new Error('boom')));
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+
+      await host.start();
+      channel.deliver(
+        'q.A',
+        message('e-1', 'test.a', { 'x-caquick-attempts': header }),
+      );
+      await Promise.all([
+        ...(host as unknown as { inFlight: Set<Promise<void>> }).inFlight,
+      ]);
+
+      expect(channel.publish).toHaveBeenCalledTimes(1);
+      const [, routingKey, , options] = channel.publish.mock
+        .calls[0] as unknown as [
+        string,
+        string,
+        Buffer,
+        { headers: Record<string, unknown>; expiration?: string },
+      ];
+      expect(routingKey).toBe('q.A.retry');
+      expect(options.headers['x-caquick-attempts']).toBe(1);
+      expect(options.expiration).toBe('1000');
+      expect(channel.ack).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+      await host.onModuleDestroy();
+    },
+  );
 
   it('반증: 브로커가 없을 때 종료하면 재연결 sleep(최대 30초)을 깨워 바로 돌아온다', async () => {
     const host = build(

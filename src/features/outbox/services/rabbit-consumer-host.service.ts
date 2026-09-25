@@ -249,7 +249,7 @@ export class RabbitConsumerHostService
     consumer: RegisteredConsumer,
     message: ConsumeMessage,
   ): Promise<void> {
-    const attempts = Number(message.properties.headers?.[ATTEMPTS_HEADER] ?? 0);
+    const attempts = readAttempts(message.properties.headers);
     const cfg = this.config.getOrThrow<OutboxConfig>('outbox');
     let parsed;
     try {
@@ -275,6 +275,14 @@ export class RabbitConsumerHostService
       return;
     }
     const label = `${consumer.name} ${parsed.eventType}#${parsed.eventId}`;
+    if (!consumer.eventTypes.includes(parsed.eventType)) {
+      // 구독에서 뺀 event_type의 durable 바인딩은 브로커에 남고 AMQP로는 열거할 수 없다 — 처리하지 않고 버린다(재시도·DLQ면 경보만 는다)
+      this.logger.warn(`${label} 구독하지 않는 event_type — 버림(옛 바인딩)`, {
+        eventId: parsed.eventId,
+      });
+      this.ack(channel, message);
+      return;
+    }
     try {
       // 소비 중 모든 로그 줄에 eventId — 발행 로그(requestId+eventId)와 이어 보는 열쇠(P2 E8)
       await this.requestContext.run({ eventId: parsed.eventId }, () =>
@@ -401,6 +409,18 @@ export class RabbitConsumerHostService
       return false;
     }
   }
+}
+
+/**
+ * 손으로 발행·shovel된 메시지의 헤더는 믿지 않는다 — 음이 아닌 정수가 아니면 0(첫 시도)으로 본다. NaN이면 상한 비교가
+ * 영영 참이 되지 않고 expiration "NaN"은 브로커가 거절해 같은 메시지가 무한 재전달돼 prefetch 1 소비자가 막힌다.
+ */
+export function readAttempts(
+  headers: ConsumeMessage['properties']['headers'],
+): number {
+  const raw: unknown = headers?.[ATTEMPTS_HEADER];
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : 0;
 }
 
 function withConfirm(

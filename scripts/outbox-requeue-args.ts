@@ -15,8 +15,9 @@ export function parseRequeueArgs(argv: string[]): RequeueArgs {
   const args: RequeueArgs = { all: false, republish: false };
   for (const raw of argv) {
     const [key, value] = raw.split('=', 2);
-    if (key === '--all') args.all = true;
-    else if (key === '--republish') args.republish = true;
+    // 불리언 플래그는 정확히 그 문자열만 — --all=false가 all을 켜면 필터 없는 실행이 된다
+    if (raw === '--all') args.all = true;
+    else if (raw === '--republish') args.republish = true;
     else if (key === '--id' && value) args.id = BigInt(value);
     else if (key === '--event-id' && value && UUID.test(value)) {
       args.eventId = value;

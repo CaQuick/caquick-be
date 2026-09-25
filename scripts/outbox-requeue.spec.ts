@@ -44,6 +44,8 @@ describe('parseRequeueArgs — --event-id·--republish', () => {
     [['--republish'], '--event-id'],
     [['--event-type=x', '--republish'], '--event-id'],
     [['--event-id=not-a-uuid'], '알 수 없는 인자'],
+    [['--all=false'], '알 수 없는 인자'],
+    [[`--event-id=${uuid}`, '--republish=false'], '알 수 없는 인자'],
   ])('반증: %j → 거절(%s)', (argv, message) => {
     expect(() => parseRequeueArgs(argv)).toThrow(message);
   });
