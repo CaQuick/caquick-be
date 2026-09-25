@@ -56,7 +56,7 @@ terraform import github_repository_ruleset.develop_msa_protection caquick-be:<ru
 terraform plan
 ```
 
-AWS 미디어 버킷은 `aws.tf`의 `import` 블록이 apply 때 자동으로 연결한다(이미 state에 있으면 no-op) — 별도 import 명령이 없다.
+AWS 리소스(미디어 버킷 2개·백업 버킷·IAM 사용자·정책·연결)는 전부 `aws.tf`의 `import` 블록이 apply 때 자동으로 연결한다(이미 state에 있으면 no-op) — 별도 import 명령이 없다. state를 잃었을 때 빈 state로 plan하면 AWS 쪽은 전부 `to import`(add 0)로 잡힌다 — `to add`로 남는 4개(레포·Ruleset 3)는 위 GitHub import 명령으로 먼저 연결한다(실측 2026-09-25: `16 to import, 4 to add`).
 
 > owner는 provider 인증(`GITHUB_TOKEN`)에서 자동 결정되므로 import 시 별도 지정 불필요.
 

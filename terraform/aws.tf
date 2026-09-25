@@ -1,9 +1,11 @@
 ############################################
 # AWS — S3(미디어·백업) + 앱 IAM 사용자 (로드맵 v2 08, M7)
 ############################################
-# 미디어 버킷 2개는 이미 있다. import 블록이 apply 때 state에 연결한다(이미 연결돼 있으면 no-op).
-# 설정값은 2026-09-25 실측(공개 읽기 정책·PUT/GET CORS·ACL 차단·BucketOwnerEnforced)을 그대로 옮겼다 — drift 0이 목표.
-# 배포 아티팩트 버킷(caquick-deploy-artifacts)은 CodeDeploy와 함께 폐기했다(관리 대상 아님, CLI로 삭제).
+# 영속 리소스 전부에 import 블록을 둔다 — state를 잃고 다시 세울 때 apply 한 번으로 연결된다(이미 state에 있으면 no-op).
+# 미디어 버킷 설정값은 2026-09-25 실측(공개 읽기 정책·PUT/GET CORS·ACL 차단·BucketOwnerEnforced)을 그대로 옮겼다 — drift 0이 목표.
+# 배포 아티팩트 버킷(caquick-deploy-artifacts)은 CodeDeploy와 함께 폐기했다(관리 대상 아님, CLI로 삭제. 옛 deploy.yml은 07 PR이 교체).
+
+data "aws_caller_identity" "current" {}
 
 ############################################
 # 미디어 버킷 (dev·prod)
@@ -99,6 +101,19 @@ resource "aws_s3_bucket_cors_configuration" "media" {
 ############################################
 # DB 백업 버킷 — 매일 mysqldump, 14일 뒤 만료, 버전 없음, 비공개
 ############################################
+import {
+  to = aws_s3_bucket.backup
+  id = var.backup_bucket
+}
+import {
+  to = aws_s3_bucket_public_access_block.backup
+  id = var.backup_bucket
+}
+import {
+  to = aws_s3_bucket_lifecycle_configuration.backup
+  id = var.backup_bucket
+}
+
 resource "aws_s3_bucket" "backup" {
   bucket = var.backup_bucket
 
@@ -143,6 +158,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup" {
 ############################################
 # 액세스 키는 Terraform으로 만들지 않는다 — secret이 state에 남는다. 콘솔/CLI로 발급해 GitHub secret·.env에 넣는다:
 #   aws iam create-access-key --user-name caquick-app
+import {
+  to = aws_iam_user.app
+  id = var.app_iam_user
+}
+import {
+  to = aws_iam_policy.app
+  id = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/CaQuickApp"
+}
+import {
+  to = aws_iam_user_policy_attachment.app
+  id = "${var.app_iam_user}/arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/CaQuickApp"
+}
+
 resource "aws_iam_user" "app" {
   name = var.app_iam_user
 }

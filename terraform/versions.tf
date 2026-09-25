@@ -1,5 +1,6 @@
 terraform {
-  required_version = ">= 1.6.0"
+  # import 블록의 for_each는 1.7부터
+  required_version = ">= 1.7.0"
 
   required_providers {
     github = {
