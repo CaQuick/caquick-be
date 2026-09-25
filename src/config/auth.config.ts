@@ -23,7 +23,7 @@ export interface AuthConfig {
   cookieDomain?: string;
   cookieSecure: boolean;
   cookieSameSite: 'lax' | 'strict' | 'none';
-  /** 리다이렉트 기본값(단일 값). */
+  /** 리다이렉트 기본값 — FRONTEND_BASE_URL 목록의 첫 값. */
   frontendBaseUrl: string;
   /** CORS 허용 오리진 목록 — FRONTEND_BASE_URL에 쉼표로 여러 개를 적을 수 있다. 미설정이면 빈 배열. */
   frontendOrigins: string[];
@@ -86,8 +86,9 @@ export default registerAs('auth', (): AuthConfig => {
     cookieDomain: parseEnvString(process.env.AUTH_COOKIE_DOMAIN),
     cookieSecure: parseEnvBoolean(process.env.AUTH_COOKIE_SECURE, isProd),
     cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE),
+    // 목록의 첫 값이 리다이렉트 기본값 — 쉼표 문자열을 통째로 쓰면 returnTo 기본값·허용 접두가 깨진 URL이 된다
     frontendBaseUrl:
-      parseEnvString(process.env.FRONTEND_BASE_URL) ?? 'http://localhost:3000',
+      parseEnvList(process.env.FRONTEND_BASE_URL)[0] ?? 'http://localhost:3000',
     frontendOrigins: parseEnvList(process.env.FRONTEND_BASE_URL),
     backendBaseUrl:
       parseEnvString(process.env.BACKEND_BASE_URL) ?? 'http://localhost:4000',
