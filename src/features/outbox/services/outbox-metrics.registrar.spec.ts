@@ -72,6 +72,7 @@ describe('OutboxMetricsRegistrar (real DB)', () => {
   it('worker 역할에서는 onModuleInit이 등록한다 — no-op이면 게이지가 영영 안 나온다', async () => {
     process.env.APP_ROLE = 'worker';
     const own = new MetricsService();
+    own.collectTimeoutMs = metrics.collectTimeoutMs; // 같은 이유로 실DB collect 상한을 넉넉히
     new OutboxMetricsRegistrar(own, repo, {
       now: () => NOW,
     } as ClockService).onModuleInit();
