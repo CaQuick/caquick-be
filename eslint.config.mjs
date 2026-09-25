@@ -15,7 +15,6 @@ export default defineConfig(
   { 
     ignores: [
       'eslint.config.mjs',
-      'ecosystem.config.js',
       'dist/**',
       'node_modules/**',
       'coverage/**',

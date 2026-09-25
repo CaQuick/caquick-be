@@ -1,0 +1,152 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { parse } from 'yaml';
+
+// 이미지 빌드·배포 워크플로(P2-07)의 형태를 고정한다 — 공개 레포 + 셀프호스트 러너라 트리거·러너·권한이 곧 보안 경계다.
+const ROOT = join(__dirname, '..');
+const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
+
+interface Step {
+  name?: string;
+  uses?: string;
+  if?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+  env?: Record<string, string>;
+}
+interface Job {
+  'runs-on': string | string[];
+  environment?: string;
+  if?: string;
+  steps: Step[];
+}
+interface Triggers {
+  push?: { branches: string[] };
+  pull_request?: { branches: string[] };
+  workflow_run?: { workflows: string[]; branches: string[] };
+  workflow_dispatch?: unknown;
+}
+interface Workflow {
+  on: Triggers;
+  concurrency?: Record<string, unknown>;
+  jobs: Record<string, Job>;
+}
+const workflow = (p: string) => parse(read(p)) as Workflow;
+
+const PINNED = /@[0-9a-f]{40}$/;
+function usesOf(wf: Workflow): string[] {
+  return Object.values(wf.jobs)
+    .flatMap((j) => j.steps)
+    .map((s) => s.uses)
+    .filter((u): u is string => typeof u === 'string');
+}
+
+describe('build-image.yml', () => {
+  const wf = workflow('.github/workflows/build-image.yml');
+  const build = wf.jobs.build;
+
+  it('main push에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
+    expect(wf.on.push?.branches).toEqual(['main']);
+    expect(wf.on.pull_request?.branches).toEqual(
+      expect.arrayContaining(['main', 'develop-msa']),
+    );
+    const push = build.steps.find((s) =>
+      s.uses?.startsWith('docker/build-push-action'),
+    );
+    expect(push?.with?.push).toBe("${{ github.event_name == 'push' }}");
+    expect(push?.with?.platforms).toBe('linux/arm64');
+    const login = build.steps.find((s) =>
+      s.uses?.startsWith('docker/login-action'),
+    );
+    expect(login?.if).toBe("github.event_name == 'push'");
+  });
+
+  it('반증: 셀프호스트 러너를 쓰지 않는다 — 공개 레포의 PR 코드가 홈서버에서 돌면 안 된다', () => {
+    expect(JSON.stringify(build['runs-on'])).not.toContain('self-hosted');
+  });
+
+  it('액션은 커밋 SHA로 고정', () => {
+    const uses = usesOf(wf);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const u of uses) expect(u).toMatch(PINNED);
+  });
+});
+
+describe('deploy.yml', () => {
+  const wf = workflow('.github/workflows/deploy.yml');
+  const job = wf.jobs.deploy;
+
+  it('Build Image 성공(main)·수동 실행만 받고, production Environment + 셀프호스트 macmini 러너에서 돈다', () => {
+    expect(wf.on.workflow_run?.workflows).toEqual(['Build Image']);
+    expect(wf.on.workflow_run?.branches).toEqual(['main']);
+    expect(wf.on.workflow_dispatch).toBeDefined();
+    expect(wf.on.push).toBeUndefined();
+    expect(wf.on.pull_request).toBeUndefined();
+    expect(job.environment).toBe('production');
+    expect(job['runs-on']).toEqual(['self-hosted', 'macmini']);
+    // workflow_run은 실패한 빌드·다른 브랜치에서도 온다 — if로 한 번 더 거른다
+    expect(job.if).toContain("conclusion == 'success'");
+    expect(job.if).toContain("head_branch == 'main'");
+  });
+
+  it('반증: 배포는 한 번에 하나, 진행 중인 배포를 취소하지 않는다 — 끊긴 배포가 절반만 교체된 채 남지 않게', () => {
+    expect(wf.concurrency).toEqual({
+      group: 'deploy-production',
+      'cancel-in-progress': false,
+    });
+  });
+
+  it('.env·app.env는 Environment secret(DOTENV·APP_ENV)에서 600으로 쓰고, 서버의 두 파일·토큰 파일은 rsync가 지우지 않으며, 실행은 infra/deploy.sh', () => {
+    const env = job.steps.find((s) => s.name?.includes('.env'));
+    expect(env?.env?.DOTENV).toBe('${{ secrets.DOTENV }}');
+    expect(env?.env?.APP_ENV).toBe('${{ secrets.APP_ENV }}');
+    expect(env?.run).toContain('umask 077');
+    expect(env?.run).toContain("--exclude '.env'");
+    expect(env?.run).toContain("--exclude 'app.env'");
+    expect(env?.run).toContain('> "$DEPLOY_DIR/app.env"');
+    // Prometheus 스크레이프 토큰·백업 경보 웹훅은 compose가 .env에서 읽는다 — app.env에서 복사
+    expect(env?.run).toContain(
+      'grep -E \'^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=\' "$DEPLOY_DIR/app.env" >> "$DEPLOY_DIR/.env"',
+    );
+    expect(env?.run).toContain("grep -q '^METRICS_ACCESS_TOKEN=.'");
+    // 비어 있는 secret으로 빈 파일을 만들어 배포하지 않는다
+    expect(env?.run).toContain('[ -n "$DOTENV" ] && [ -n "$APP_ENV" ]');
+    const deploy = job.steps.find((s) => s.name?.startsWith('Deploy'));
+    expect(deploy?.run).toContain('deploy.sh');
+    const checkout = job.steps.find((s) =>
+      s.uses?.startsWith('actions/checkout'),
+    );
+    expect(checkout?.with?.['sparse-checkout']).toBe('infra');
+  });
+
+  it('액션은 커밋 SHA로 고정', () => {
+    for (const u of usesOf(wf)) expect(u).toMatch(PINNED);
+  });
+});
+
+describe('infra/deploy.sh', () => {
+  const script = read('infra/deploy.sh');
+
+  it('E9 순서: pull → migrate → worker(ready 대기) → api(ready 대기) → 나머지 프로필 → 터널 healthy 대기', () => {
+    const marks = [
+      '--profile migrate pull',
+      'run --rm migrate',
+      'up -d --no-deps worker',
+      'wait_healthy worker',
+      'up -d --no-deps api',
+      'wait_healthy api',
+      '--profile edge --profile observability up -d',
+      'wait_healthy cloudflared',
+    ].map((m) => ({ m, at: script.indexOf(m) }));
+    for (const { m, at } of marks)
+      expect({ m, found: at > -1 }).toEqual({ m, found: true });
+    const positions = marks.map((x) => x.at);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it('반증: ready 대기가 실패하면 set -e로 멈춘다 — worker가 안 뜨면 api를 교체하지 않는다', () => {
+    expect(script).toContain('set -euo pipefail');
+    expect(script).toMatch(/wait_healthy\(\) \{[\s\S]*?return 1[\s\S]*?\n\}/);
+  });
+});
