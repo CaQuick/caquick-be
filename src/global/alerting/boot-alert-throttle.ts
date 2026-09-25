@@ -123,7 +123,8 @@ function exists(path: string): boolean {
 function ensurePrivateDir(stateDir: string, nowMs: number): boolean {
   try {
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-    const st = statSync(stateDir);
+    // 링크를 따라가지 않는다 — 남이 쓸 수 있는 부모 아래라면 경로 자체를 링크로 심어 내 다른 디렉터리를 가리키게 할 수 있다
+    const st = lstatSync(stateDir);
     if (!st.isDirectory()) return false;
     const uid = process.getuid?.();
     if (uid !== undefined && st.uid !== uid) return false;

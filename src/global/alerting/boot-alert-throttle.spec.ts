@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -180,6 +181,22 @@ describe('shouldSendBootAlert', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(1_900);
     expect(statSync(stateDir).mode & 0o777).toBe(0o777);
     expect(statSync(join(stateDir, 'last-sent')).isFile()).toBe(true);
+  });
+
+  it('반증: 상태 디렉터리 경로가 심볼릭 링크면 믿지 않는다 — 링크 대상은 건드리지 않고 보낸다', () => {
+    const target = join(dir, 'target');
+    mkdirSync(target);
+    chmodSync(target, 0o777);
+    writeFileSync(join(target, 'last-sent'), '1', 'utf8');
+    const linked = join(dir, 'linked-state');
+    symlinkSync(target, linked);
+
+    expect(shouldSendBootAlert(10_000, 5_000, linked)).toBe(true);
+    expect(shouldSendBootAlert(10_001, 5_000, linked)).toBe(true); // 억제 파일을 쓰지도 읽지도 않는다
+
+    expect(statSync(target).mode & 0o777).toBe(0o777);
+    expect(readFileSync(join(target, 'last-sent'), 'utf8')).toBe('1');
+    expect(existsSync(join(target, 'lock'))).toBe(false);
   });
 
   it('반증: 수리 잠금을 만들 수 없는 곳(부모가 쓰기 불가)이면 아무것도 지우지 않고 보낸다', () => {
