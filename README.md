@@ -307,7 +307,7 @@ yarn start:dev
 # 이미지 빌드 (멀티스테이지: deps → build → runtime, non-root)
 docker build -t caquick-be:local .
 
-# 운영 compose — 값은 infra/.env (키 목록: infra/.env.example)
+# 운영 compose — 값은 infra/.env(저장소·터널)와 infra/app.env(앱) (키 목록: *.example)
 cd infra
 docker compose --profile migrate run --rm migrate        # prisma migrate deploy
 docker compose up -d                                     # api·worker·mysql·redis·rabbitmq·backup

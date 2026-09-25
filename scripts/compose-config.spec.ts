@@ -35,25 +35,28 @@ const REQUIRED_KEYS = [
   'TUNNEL_TOKEN',
 ];
 
-function envFile(omit: string[] = []): string {
+function envFile(omit: string[] = [], extra: string[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), 'caquick-compose-'));
   const path = join(dir, 'env');
   writeFileSync(
     path,
-    REQUIRED_KEYS.filter((k) => !omit.includes(k))
-      .map((k) => `${k}=x`)
-      .join('\n') + '\n',
+    [
+      ...REQUIRED_KEYS.filter((k) => !omit.includes(k)).map((k) => `${k}=x`),
+      ...extra,
+    ].join('\n') + '\n',
   );
   return path;
 }
 
-function render(env: string): Rendered {
+/** env_file은 config가 environment로 풀어 버린다 — 프로젝트 디렉터리를 바꿔 넣은 app.env가 어디로 흘러가는지 본다 */
+function render(env: string, projectDir?: string): Rendered {
   const out = execFileSync(
     'docker',
     [
       'compose',
       '-f',
       COMPOSE,
+      ...(projectDir ? ['--project-directory', projectDir] : []),
       '--env-file',
       env,
       ...PROFILES.flatMap((p) => ['--profile', p]),
@@ -165,6 +168,44 @@ describe('infra/compose.yml', () => {
     expect((rendered.services.rabbitmq as { hostname?: string }).hostname).toBe(
       'rabbitmq',
     );
+  });
+
+  it('반증: app.env는 앱 컨테이너(api·worker·migrate)에만 들어가고, .env(compose 보간용)는 어느 컨테이너에도 통째로 들어가지 않는다', () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'caquick-compose-proj-'));
+    writeFileSync(join(projectDir, 'app.env'), 'CAQUICK_APP_ONLY=1\n');
+    const withSentinel = render(
+      envFile([], ['CAQUICK_INFRA_ONLY=1']),
+      projectDir,
+    );
+    for (const [name, service] of Object.entries(withSentinel.services)) {
+      const env = service.environment ?? {};
+      expect({ name, app: 'CAQUICK_APP_ONLY' in env }).toEqual({
+        name,
+        app: ['api', 'worker', 'migrate'].includes(name),
+      });
+      expect({ name, infra: 'CAQUICK_INFRA_ONLY' in env }).toEqual({
+        name,
+        infra: false,
+      });
+    }
+  });
+
+  it('반증: root 비밀번호·터널 토큰·Grafana 비밀은 소유 컨테이너 밖으로 나가지 않는다', () => {
+    const owner: Record<string, string> = {
+      MYSQL_ROOT_PASSWORD: 'mysql',
+      RABBITMQ_DEFAULT_PASS: 'rabbitmq',
+      GF_SECURITY_ADMIN_PASSWORD: 'grafana',
+      TUNNEL_TOKEN: 'cloudflared',
+    };
+    for (const [name, service] of Object.entries(rendered.services)) {
+      for (const key of Object.keys(owner)) {
+        expect({ name, key, has: key in (service.environment ?? {}) }).toEqual({
+          name,
+          key,
+          has: owner[key] === name,
+        });
+      }
+    }
   });
 
   it.each(REQUIRED_KEYS)(
