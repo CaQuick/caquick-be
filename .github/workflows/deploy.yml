@@ -81,6 +81,22 @@ jobs:
             echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
           fi
 
+      # 맥 러너의 docker CLI는 auth가 없는 설정이면 키체인 helper(docker-credential-osxkeychain)를 자동 감지하고,
+      # launchd 세션에는 키체인 UI가 없어 login이 -25308로 죽는다. auths 항목이 있는 별도 DOCKER_CONFIG(runner.temp)를 쓰면
+      # 파일 저장소를 쓴다. 컨텍스트·CLI 플러그인(compose)도 그 설정 밑에서 찾으므로 데몬 주소는 지금 컨텍스트에서 읽어
+      # DOCKER_HOST로 넘기고, 플러그인 디렉터리는 링크한다(러너 사용자의 ~/.docker는 읽기만 한다)
+      - name: Isolated docker config (no keychain helper)
+        if: env.SKIP_DEPLOY != '1'
+        run: |
+          set -euo pipefail
+          host=$(docker context inspect --format '{{ .Endpoints.docker.Host }}')
+          dir="$RUNNER_TEMP/docker-config"
+          mkdir -p "$dir" && chmod 700 "$dir"
+          printf '{"auths":{"ghcr.io":{}}}\n' > "$dir/config.json"
+          [ -d "$HOME/.docker/cli-plugins" ] && ln -s "$HOME/.docker/cli-plugins" "$dir/cli-plugins"
+          DOCKER_CONFIG=$dir DOCKER_HOST=$host docker compose version > /dev/null
+          { echo "DOCKER_CONFIG=$dir"; echo "DOCKER_HOST=$host"; } >> "$GITHUB_ENV"
+
       - name: Login to GHCR
         if: env.SKIP_DEPLOY != '1'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

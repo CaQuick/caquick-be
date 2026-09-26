@@ -184,12 +184,41 @@ describe('deploy.yml', () => {
     expect(tag?.run).toContain('exit 1');
   });
 
+  it('반증: GHCR login은 키체인 helper가 잡히지 않는 별도 DOCKER_CONFIG에서 한다 — auths 항목을 미리 넣고, 데몬 주소는 DOCKER_HOST로 넘긴다(실제 사고: launchd 러너에서 -25308)', () => {
+    const idx = (prefix: string) =>
+      job.steps.findIndex((s) => s.name?.startsWith(prefix));
+    const config = job.steps[idx('Isolated docker config')];
+    expect(idx('Isolated docker config')).toBeGreaterThan(-1);
+    expect(idx('Isolated docker config')).toBeLessThan(idx('Login to GHCR'));
+    // auths가 비어 있으면 docker CLI가 osxkeychain을 자동 감지한다 — 항목이 하나는 있어야 파일 저장소를 쓴다
+    expect(config?.run).toContain('{"auths":{"ghcr.io":{}}}');
+    expect(config?.run).toContain('echo "DOCKER_CONFIG=$dir"');
+    expect(config?.run).toContain('echo "DOCKER_HOST=$host"');
+    expect(config?.run).toContain('>> "$GITHUB_ENV"');
+    expect(config?.run).toContain('chmod 700 "$dir"');
+    // compose는 $DOCKER_CONFIG/cli-plugins에서만 찾는다(OrbStack은 ~/.docker/cli-plugins에 링크) — 링크 없이는 deploy.sh가 "unknown command"로 죽는다
+    expect(config?.run).toContain(
+      'ln -s "$HOME/.docker/cli-plugins" "$dir/cli-plugins"',
+    );
+    expect(config?.run).toContain(
+      'DOCKER_CONFIG=$dir DOCKER_HOST=$host docker compose version',
+    );
+    // credsStore를 고정하거나 ~/.docker/config.json을 고쳐 우회하지 않는다 — 러너 사용자의 docker 설정은 읽기만
+    expect(config?.run).not.toContain('credsStore');
+    expect(config?.run).not.toContain('.docker/config.json');
+  });
+
   it('반증: workflow_run의 head_sha가 지금 main 끝이 아니면 배포 단계를 전부 건너뛴다', () => {
     const skip = job.steps.find((s) => s.name?.startsWith('Skip if not'));
     expect(skip?.if).toBe("github.event_name == 'workflow_run'");
     expect(skip?.env?.MAIN_SHA).toBe('${{ github.sha }}');
     expect(skip?.run).toContain('SKIP_DEPLOY=1');
-    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy']) {
+    for (const name of [
+      'Isolated docker config',
+      'Login to GHCR',
+      'Sync infra/',
+      'Deploy',
+    ]) {
       const step = job.steps.find((s) => s.name?.startsWith(name));
       expect({ name, if: step?.if }).toEqual({
         name,

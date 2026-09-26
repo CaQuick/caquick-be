@@ -26,6 +26,6 @@ docker compose --profile edge up -d           # 터널(TUNNEL_TOKEN 없으면 cl
 docker compose ps                             # healthy 확인 — api·worker는 /health/ready
 ```
 
-배포(`.github/workflows/deploy.yml` → `deploy.sh`)는 `.env`·`app.env` 생성 → `compose pull` → `migrate` → `worker` 교체(ready) → `api` 교체(ready) → 나머지 프로필 → Discord 순서. 롤백은 Actions에서 `deploy` 수동 실행에 이전 sha를 넣는다(마이그레이션은 앞으로만). 셀프호스트 러너·Environment `production`·secrets(`DOTENV`·`APP_ENV`·`DISCORD_WEBHOOK_URL`)·`vars.DEPLOY_DIR`(기본 `/opt/caquick`)는 GitHub 설정.
+배포(`.github/workflows/deploy.yml` → `deploy.sh`)는 `.env`·`app.env` 생성 → `compose pull` → `migrate` → `worker` 교체(ready) → `api` 교체(ready) → 나머지 프로필 → Discord 순서. 롤백은 Actions에서 `deploy` 수동 실행에 이전 sha를 넣는다(마이그레이션은 앞으로만). 셀프호스트 러너·Environment `production`·secrets(`DOTENV`·`APP_ENV`·`DISCORD_WEBHOOK_URL`)·`vars.DEPLOY_DIR`(기본 `/opt/caquick`)는 GitHub 설정. 맥 러너의 GHCR login은 키체인 helper를 피하려고 잡 전용 `DOCKER_CONFIG`(auths 항목 선기입)를 쓴다 — launchd 세션에서는 키체인 UI가 없어 `-25308`로 죽기 때문이며, 러너 사용자의 `~/.docker`는 건드리지 않는다.
 
 메모리 상한(`mem_limit`)은 홈서버 실측(유휴·부하)으로 확정했다 — 표는 [`runbook.md`](./runbook.md) §관측(합계 ≤ 6 GB, spec이 고정).
