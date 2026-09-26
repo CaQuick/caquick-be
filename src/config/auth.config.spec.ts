@@ -16,6 +16,7 @@ const ENV_KEYS = [
   'JWT_PUBLIC_KEY_PATH',
   'JWT_ISSUER',
   'JWT_AUDIENCE',
+  'FRONTEND_BASE_URL',
 ] as const;
 
 const KEYS = generateEphemeralKeyMaterial();
@@ -128,6 +129,35 @@ describe('authConfig', () => {
 
       expect(first.privateKeyPem).toContain('PRIVATE KEY');
       expect(second.kid).not.toBe(first.kid);
+    });
+  });
+
+  describe('FRONTEND_BASE_URL', () => {
+    it('쉼표 목록이면 전부 CORS 오리진이고, 첫 값만 리다이렉트 기본값이다', () => {
+      setEnv({
+        JWT_PRIVATE_KEY_PEM_B64: b64(KEYS.privateKeyPem),
+        FRONTEND_BASE_URL: 'https://www.caquick.site, https://caquick.site',
+      });
+      expect(authConfig()).toMatchObject({
+        frontendBaseUrl: 'https://www.caquick.site',
+        frontendOrigins: ['https://www.caquick.site', 'https://caquick.site'],
+      });
+    });
+
+    it('반증: 리다이렉트 기본값에 쉼표 문자열이 통째로 들어가지 않는다', () => {
+      setEnv({
+        JWT_PRIVATE_KEY_PEM_B64: b64(KEYS.privateKeyPem),
+        FRONTEND_BASE_URL: 'https://a.example,https://b.example',
+      });
+      expect(authConfig().frontendBaseUrl).not.toContain(',');
+    });
+
+    it('미설정이면 localhost 기본값과 빈 오리진 목록', () => {
+      setEnv({ JWT_PRIVATE_KEY_PEM_B64: b64(KEYS.privateKeyPem) });
+      expect(authConfig()).toMatchObject({
+        frontendBaseUrl: 'http://localhost:3000',
+        frontendOrigins: [],
+      });
     });
   });
 
