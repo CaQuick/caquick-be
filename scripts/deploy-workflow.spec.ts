@@ -229,6 +229,10 @@ describe('infra/deploy.sh', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
+  it('반증: pull은 빌드 전용 이미지(backup)를 건너뛴다 — 새 호스트에서 caquick-backup:local pull 실패로 배포가 멈추지 않게', () => {
+    expect(script).toMatch(/pull --quiet --ignore-buildable/);
+  });
+
   it('반증: worker·api를 --no-deps로 올리지 않는다 — 새 호스트에서 redis·rabbitmq가 없으면 ready가 영영 안 온다', () => {
     expect(script).not.toContain('--no-deps');
   });
