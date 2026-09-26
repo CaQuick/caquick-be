@@ -221,7 +221,7 @@ describe('infra/deploy.sh', () => {
       'wait_healthy api',
       '--profile edge --profile observability up -d --build',
       'wait_healthy cloudflared',
-      'for s in grafana alloy mysqld-exporter redis-exporter; do wait_healthy "$s"; done',
+      'for s in grafana alloy mysqld-exporter redis-exporter backup; do wait_healthy "$s"; done',
     ].map((m) => ({ m, at: script.indexOf(m) }));
     for (const { m, at } of marks)
       expect({ m, found: at > -1 }).toEqual({ m, found: true });

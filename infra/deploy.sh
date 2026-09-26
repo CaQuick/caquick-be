@@ -37,7 +37,7 @@ echo "== rest"
 docker compose --profile edge --profile observability up -d --build --remove-orphans
 # 터널이 곧 운영 진입점 — 토큰이 비었거나 엣지에 못 붙으면 배포를 실패로 끝낸다
 wait_healthy cloudflared
-# 관측이 조용히 죽지 않게 — grafana(비밀 가드)·alloy(cAdvisor)·exporter(실제 스크레이프)까지 healthy를 본다
-for s in grafana alloy mysqld-exporter redis-exporter; do wait_healthy "$s"; done
+# 관측·백업이 조용히 죽지 않게 — grafana(비밀 가드)·alloy(cAdvisor)·exporter(실제 스크레이프)·backup(설정 오류로 루프 진입 전 종료)까지 healthy를 본다
+for s in grafana alloy mysqld-exporter redis-exporter backup; do wait_healthy "$s"; done
 docker image prune -f > /dev/null
 echo "== done: $(grep '^IMAGE_TAG=' .env)"

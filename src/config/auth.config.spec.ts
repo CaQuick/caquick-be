@@ -69,6 +69,15 @@ describe('authConfig', () => {
       expect(authConfig().jwtKeys.privateKeyPem).toBe(KEYS.privateKeyPem);
     });
 
+    it('반증: 공개키가 개인키와 짝이 아니면 부팅에서 던진다 — 로그인은 되고 모든 보호 요청이 거절되는 상태를 막는다', () => {
+      const other = generateEphemeralKeyMaterial();
+      setEnv({
+        JWT_PRIVATE_KEY_PEM_B64: b64(KEYS.privateKeyPem),
+        JWT_PUBLIC_KEY_PEM_B64: b64(other.publicKeyPem),
+      });
+      expect(() => authConfig()).toThrow('짝이 아닙니다');
+    });
+
     it('공개키를 주지 않으면 개인키에서 유도한다', () => {
       setEnv({ JWT_PRIVATE_KEY_PEM_B64: b64(KEYS.privateKeyPem) });
 
