@@ -60,7 +60,7 @@ describe('OutboxPublisher (real DB)', () => {
     );
 
     expect(eventId).toBe(uuidAt(1));
-    // 조인 키 — 요청 로그(requestId)와 worker 소비 로그(eventId)를 잇는 발행 줄(P2 E8)
+    // 조인 키 — 요청 로그(requestId)와 worker 소비 로그(eventId)를 잇는 발행 줄
     expect(log).toHaveBeenCalledWith('outbox 적재(tx 커밋 전)', {
       eventId: uuidAt(1),
       eventType: 'order.status_changed',

@@ -144,7 +144,7 @@ describe('AccountCredentialRepository (real DB)', () => {
       expect(updated!.password_hash).toBe('new_hash_value');
       expect(updated!.password_updated_at!.getTime()).toBe(now.getTime());
       expect(updated!.must_change_password).toBe(false);
-      // 같은 트랜잭션에서 전 세션을 끊고 감사를 남긴다(P1-12)
+      // 같은 트랜잭션에서 전 세션을 끊고 감사를 남긴다
       expect(
         (
           await prisma.authRefreshSession.findUniqueOrThrow({

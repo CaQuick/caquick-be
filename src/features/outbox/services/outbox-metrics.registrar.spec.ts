@@ -34,6 +34,9 @@ describe('OutboxMetricsRegistrar (real DB)', () => {
     });
     registrar = module.get(OutboxMetricsRegistrar);
     metrics = module.get(MetricsService);
+    // 값의 정확성만 본다 — 운영 상한(2초)은 metrics.service.spec이 검증한다. CI 커버리지 잡의 부하에서 실DB count가
+    // 2초를 넘기면 게이지가 빠지고(HELP/TYPE만, 나이 NaN) 이 spec이 헛되이 실패한다(릴리즈 PR #413 coverage-report).
+    metrics.collectTimeoutMs = 30_000;
     repo = module.get(OutboxRepository);
     publisher = module.get(OutboxPublisher);
     prisma = p;
@@ -69,6 +72,7 @@ describe('OutboxMetricsRegistrar (real DB)', () => {
   it('worker 역할에서는 onModuleInit이 등록한다 — no-op이면 게이지가 영영 안 나온다', async () => {
     process.env.APP_ROLE = 'worker';
     const own = new MetricsService();
+    own.collectTimeoutMs = metrics.collectTimeoutMs; // 같은 이유로 실DB collect 상한을 넉넉히
     new OutboxMetricsRegistrar(own, repo, {
       now: () => NOW,
     } as ClockService).onModuleInit();

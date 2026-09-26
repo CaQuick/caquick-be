@@ -34,9 +34,9 @@ import { StoreModule } from '@/features/store';
   ],
   providers: [
     OrderRepository,
-    // catalog 픽업 판정이 읽는 예약 수량(booked) 포트 구현(D7-a)
+    // catalog 픽업 판정이 읽는 예약 수량(booked) 포트 구현
     { provide: BOOKED_QUANTITY_QUERY, useClass: OrderBookedRepository },
-    // 일일 capacity 복제본 + 변경 이벤트 소비자(D7-a)
+    // 일일 capacity 복제본 + 변경 이벤트 소비자
     OrderStoreDailyLimitRepository,
     OrderStoreDailyLimitConsumer,
     OrderStatusTransitionPolicy,

@@ -25,7 +25,7 @@ export class StoreSellerRepository {
   ) {}
 
   /**
-   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다(P1-12) — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
+   * 도메인 write와 감사 기록을 한 트랜잭션으로 묶는다 — 조작만 커밋되고 기록이 빠지는 상태를 막는다.
    * 판매자 매장 조작이 모두 이 헬퍼를 거친다.
    */
   private async writeWithAudit<T>(

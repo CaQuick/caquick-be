@@ -8,7 +8,7 @@ import type {
 } from '@/features/store/repositories/store-catalog-query.repository.interface';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
-/** CatalogQuery 포트의 모놀리스 구현 — conversation이 쓰던 조회를 그대로 옮겼다. */
+/** CatalogQuery 포트의 모놀리스 구현. 서비스로 분리되면 클라이언트 구현으로 바뀐다. */
 @Injectable()
 export class StoreCatalogQueryRepository implements ICatalogQuery {
   constructor(private readonly prisma: PrismaService) {}

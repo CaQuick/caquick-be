@@ -1,6 +1,6 @@
 # infra/ — 홈서버 운영 compose
 
-로드맵 v2(모듈러 모놀리스 + 이벤트 백본)의 운영 형태. 앱 이미지 1개(`../Dockerfile`)를 `api`·`worker`로 띄우고, MySQL·Redis·RabbitMQ·백업이 같이 돈다. 인바운드 포트는 열지 않는다 — 외부는 Cloudflare Tunnel(`cloudflared`)만.
+홈서버 운영 형태. 앱 이미지 1개(`../Dockerfile`)를 `api`·`worker`로 띄우고, MySQL·Redis·RabbitMQ·백업이 같이 돈다. 인바운드 포트는 열지 않는다 — 외부는 Cloudflare Tunnel(`cloudflared`)만.
 
 | 파일                       | 역할                                                                                                                                                                                                        |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -26,6 +26,6 @@ docker compose --profile edge up -d           # 터널(TUNNEL_TOKEN 없으면 cl
 docker compose ps                             # healthy 확인 — api·worker는 /health/ready
 ```
 
-배포(`.github/workflows/deploy.yml` → `deploy.sh`)는 `.env`·`app.env` 생성 → `compose pull` → `migrate` → `worker` 교체(ready) → `api` 교체(ready) → 나머지 프로필 → Discord 순서(E9). 롤백은 Actions에서 `deploy` 수동 실행에 이전 sha를 넣는다(마이그레이션은 앞으로만). 셀프호스트 러너·Environment `production`·secrets(`DOTENV`·`APP_ENV`·`DISCORD_WEBHOOK_URL`)·`vars.DEPLOY_DIR`(기본 `/opt/caquick`)는 GitHub 설정.
+배포(`.github/workflows/deploy.yml` → `deploy.sh`)는 `.env`·`app.env` 생성 → `compose pull` → `migrate` → `worker` 교체(ready) → `api` 교체(ready) → 나머지 프로필 → Discord 순서. 롤백은 Actions에서 `deploy` 수동 실행에 이전 sha를 넣는다(마이그레이션은 앞으로만). 셀프호스트 러너·Environment `production`·secrets(`DOTENV`·`APP_ENV`·`DISCORD_WEBHOOK_URL`)·`vars.DEPLOY_DIR`(기본 `/opt/caquick`)는 GitHub 설정.
 
 메모리 상한(`mem_limit`)은 홈서버 실측(유휴·부하)으로 확정했다 — 표는 [`runbook.md`](./runbook.md) §관측(합계 ≤ 6 GB, spec이 고정).

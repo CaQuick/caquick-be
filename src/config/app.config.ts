@@ -9,7 +9,7 @@ export interface AppConfig {
   role: AppRole;
 }
 
-/** 같은 이미지가 역할 플래그로 갈린다(P2 E1). 잘못된 값은 기본값으로 숨기지 않고 부팅에서 던진다. */
+/** 같은 이미지가 역할 플래그로 갈린다. 잘못된 값은 기본값으로 숨기지 않고 부팅에서 던진다. */
 export function parseAppRole(raw: string | undefined): AppRole {
   const value = raw?.trim().toLowerCase();
   if (!value) return 'api';

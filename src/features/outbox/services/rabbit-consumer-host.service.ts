@@ -295,7 +295,7 @@ export class RabbitConsumerHostService
       return;
     }
     try {
-      // 소비 중 모든 로그 줄에 eventId — 발행 로그(requestId+eventId)와 이어 보는 열쇠(P2 E8)
+      // 소비 중 모든 로그 줄에 eventId — 발행 로그(requestId+eventId)와 이어 보는 열쇠
       await this.requestContext.run({ eventId: parsed.eventId }, () =>
         consumer.instance.handle(toEvent(parsed, attempts)),
       );

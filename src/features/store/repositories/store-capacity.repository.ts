@@ -12,7 +12,7 @@ import { PrismaService } from '@/prisma';
 
 /**
  * 일일 capacity 설정의 write 진입점. 변경마다 같은 tx에 StoreDailyCapacityChanged를 적재해
- * order의 복제본(order_store_daily_limit)이 따라오게 한다(D7-a). 조회는 StoreSellerRepository.
+ * order의 복제본(order_store_daily_limit)이 따라오게 한다. 조회는 StoreSellerRepository.
  */
 @Injectable()
 export class StoreCapacityRepository {

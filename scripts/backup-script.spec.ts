@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// 백업 스크립트의 실패 전파(P2-06 리뷰): mysqldump·S3 업로드 실패가 성공으로 기록되면 "어제 백업 있음"이 거짓이 된다.
+// 백업 스크립트의 실패 전파: mysqldump·S3 업로드 실패가 성공으로 기록되면 "어제 백업 있음"이 거짓이 된다.
 // mysqldump·aws는 PATH의 가짜로 바꿔 돌린다 — 실DB 덤프·복구 리허설은 08의 spec.
 const SCRIPT = join(__dirname, '..', 'infra', 'backup', 'backup.sh');
 

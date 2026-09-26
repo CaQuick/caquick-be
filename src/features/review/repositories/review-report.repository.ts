@@ -36,7 +36,7 @@ export class ReviewReportRepository {
    * 대상 확인 → 본인 판정 → 미처리 신고 조회 → 생성을 한 트랜잭션에서 한다.
    * - 대상 행을 FOR UPDATE로 잠가(가시성 조인 포함) 작성자 삭제와 직렬화한다 — 잠금 전에 확인만
    *   하면 그 사이 삭제된 대상에 PENDING이 남아 복원된 새 내용에 붙는다. 댓글은 부모 리뷰부터 잠근다
-   * - 같은 신고자·대상의 중복 PENDING은 `uk_review_report_open`(reporter, open_key) unique가 막는다(D7-c).
+   * - 같은 신고자·대상의 중복 PENDING은 `uk_review_report_open`(reporter, open_key) unique가 막는다.
    *   open_key는 종결 시 NULL이 되고 MySQL unique는 NULL을 중복으로 보지 않아, 처리 뒤 재신고는 그대로 허용된다.
    *   동시 요청이 조회를 함께 통과하면 P2002를 받아 already-pending으로 돌려준다 — 신고자 계정 행 잠금은 필요 없다.
    */

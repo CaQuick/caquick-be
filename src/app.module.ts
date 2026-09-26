@@ -107,7 +107,7 @@ function httpModules(): NonNullable<DynamicModule['imports']> {
 export class AppModule implements NestModule {
   constructor(@Inject(APP_ROLE_TOKEN) private readonly role: AppRole) {}
 
-  /** 같은 이미지가 역할 플래그로 갈린다(P2 E1). main.ts가 env를 읽어 넘기고, 테스트는 역할별로 compile해 배선을 본다. */
+  /** 같은 이미지가 역할 플래그로 갈린다. main.ts가 env를 읽어 넘기고, 테스트는 역할별로 compile해 배선을 본다. */
   static forRole(role: AppRole): DynamicModule {
     return {
       module: AppModule,

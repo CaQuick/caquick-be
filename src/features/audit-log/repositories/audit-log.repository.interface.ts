@@ -28,7 +28,7 @@ export const AUDIT_LOG_REPOSITORY = Symbol('AUDIT_LOG_REPOSITORY');
 export interface IAuditLogRepository {
   /**
    * 감사 기록의 유일한 쓰기 경로. tx가 **필수**라 본 조작과 항상 같은 트랜잭션에 남는다 —
-   * 조작은 커밋됐는데 기록만 빠지는 상태를 타입 수준에서 막는다(P1-12).
+   * 조작은 커밋됐는데 기록만 빠지는 상태를 타입 수준에서 막는다.
    * ip/ua는 넘기지 않으면 요청 컨텍스트(ALS)에서 보강한다.
    */
   recordAudit(

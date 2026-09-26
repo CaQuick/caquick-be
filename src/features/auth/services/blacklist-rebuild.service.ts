@@ -15,7 +15,7 @@ import { TokenBlacklistService } from '@/global/auth/blacklist';
 export const BLACKLIST_REBUILD_INTERVAL_MS = 60_000;
 
 /**
- * Redis가 비거나(재시작·flush) 커밋 뒤 등록이 실패했을 때를 위해, worker가 DB에서 블랙리스트를 다시 채운다(P2 03).
+ * Redis가 비거나(재시작·flush) 커밋 뒤 등록이 실패했을 때를 위해, worker가 DB에서 블랙리스트를 다시 채운다.
  * TTL 창 안의 정지·탈퇴·비밀번호 변경을 다시 등록하고, Redis에 정지·탈퇴로 남았지만 DB에선 활성인 계정(복구 쓰기가
  * 실패한 경우)을 복구로 덮은 뒤 "완전함" 표식을 세운다 — 표식이 없는 동안 전략은 DB로 폴백한다.
  */

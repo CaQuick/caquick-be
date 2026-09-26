@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { parse } from 'yaml';
 
-// 관측 설정 유효성(P2-09): 실제 도구로 검사한다 — promtool(Prometheus), alloy validate, Grafana를 띄워 프로비저닝(규칙·접점·대시보드)이 읽히는지.
+// 관측 설정 유효성: 실제 도구로 검사한다 — promtool(Prometheus), alloy validate, Grafana를 띄워 프로비저닝(규칙·접점·대시보드)이 읽히는지.
 const INFRA = join(__dirname, '..', 'infra');
 const PROM = 'prom/prometheus:v3.5.0';
 const ALLOY = 'grafana/alloy:v1.10.0';

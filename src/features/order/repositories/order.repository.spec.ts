@@ -623,7 +623,6 @@ describe('OrderRepository (real DB)', () => {
       expect(auditLogs[0].action).toBe('STATUS_CHANGE');
     });
 
-    // 이전에는 이 경로가 auditLog를 직접 만들며 ip/ua를 인자로만 받아 늘 null로 남았다(P1-12).
     it('ip/ua를 넘기지 않아도 요청 컨텍스트에서 보강해 감사에 남긴다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { parse } from 'yaml';
 
-// 이미지 빌드·배포 워크플로(P2-07)의 형태를 고정한다 — 공개 레포 + 셀프호스트 러너라 트리거·러너·권한이 곧 보안 경계다.
+// 이미지 빌드·배포 워크플로의 형태를 고정한다 — 공개 레포 + 셀프호스트 러너라 트리거·러너·권한이 곧 보안 경계다.
 const ROOT = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
@@ -189,7 +189,7 @@ describe('deploy.yml', () => {
     expect(skip?.if).toBe("github.event_name == 'workflow_run'");
     expect(skip?.env?.MAIN_SHA).toBe('${{ github.sha }}');
     expect(skip?.run).toContain('SKIP_DEPLOY=1');
-    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy (E9)']) {
+    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy']) {
       const step = job.steps.find((s) => s.name?.startsWith(name));
       expect({ name, if: step?.if }).toEqual({
         name,
@@ -227,6 +227,10 @@ describe('infra/deploy.sh', () => {
       expect({ m, found: at > -1 }).toEqual({ m, found: true });
     const positions = marks.map((x) => x.at);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it('반증: pull은 빌드 전용 이미지(backup)를 건너뛴다 — 새 호스트에서 caquick-backup:local pull 실패로 배포가 멈추지 않게', () => {
+    expect(script).toMatch(/pull --quiet --ignore-buildable/);
   });
 
   it('반증: worker·api를 --no-deps로 올리지 않는다 — 새 호스트에서 redis·rabbitmq가 없으면 ready가 영영 안 온다', () => {

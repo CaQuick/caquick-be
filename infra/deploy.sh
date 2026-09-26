@@ -1,5 +1,5 @@
 #!/bin/bash
-# 홈서버 배포 절차(E9). 배포 잡이 .env(IMAGE·IMAGE_TAG 포함)를 만든 뒤 이 디렉터리에서 부른다.
+# 홈서버 배포 절차. 배포 잡이 .env(IMAGE·IMAGE_TAG 포함)를 만든 뒤 이 디렉터리에서 부른다.
 # 순서: pull → migrate(일회성) → worker 교체 → api 교체 → ready 대기 → 나머지(edge·observability·backup) 정합.
 # 롤백: IMAGE_TAG를 이전 sha로 바꿔 다시 실행(workflow_dispatch) — 마이그레이션은 앞으로만 간다.
 set -euo pipefail
@@ -21,7 +21,8 @@ wait_healthy() {
 }
 
 echo "== pull"
-docker compose --profile edge --profile observability --profile migrate pull --quiet
+# --ignore-buildable: backup 이미지는 레지스트리가 아니라 ./backup에서 빌드한다 — 새 호스트에서는 pull이 실패해 set -e로 멈춘다
+docker compose --profile edge --profile observability --profile migrate pull --quiet --ignore-buildable
 echo "== migrate"
 docker compose --profile migrate run --rm migrate
 # 의존을 건너뛰지 않는다 — 새 호스트에서는 redis·rabbitmq가 아직 없다. compose가 의존(healthy)을 먼저 올린다

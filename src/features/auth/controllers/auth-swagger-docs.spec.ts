@@ -10,7 +10,7 @@ import { CredentialAuthService } from '@/features/auth/services/credential-auth.
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
-/** 데코레이터를 묶음으로 추출해도 operation의 summary·description·security·response 스키마가 바뀌지 않아야 한다 — 스냅샷은 추출 전 코드로 생성했다. JWKS(P1-13)가 더해져 14개다. */
+/** 공용 데코레이터 묶음이 operation의 summary·description·security·response 스키마를 바꾸지 않는지 스냅샷으로 고정한다(JWKS 포함 14개). */
 describe('Auth REST Swagger 문서', () => {
   let app: INestApplication;
 

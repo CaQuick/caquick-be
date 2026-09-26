@@ -78,7 +78,7 @@ export class OrderCheckoutService {
     // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
     const preparationDeadlineMs =
       now.getTime() + product.preparation_time_minutes * 60_000;
-    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다(D7-a)
+    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
     const capacityGuard = this.buildCapacityGuard(
       product.store_id,
       input.pickupAt,
@@ -138,7 +138,7 @@ export class OrderCheckoutService {
         storeId: product.store_id,
         productId: product.id,
         productNameSnapshot: product.name,
-        // 주문 시점 표시값 — 이후 매장명·이미지가 바뀌어도 주문 화면은 이 값을 유지한다(P1-16)
+        // 주문 시점 표시값 — 이후 매장명·이미지가 바뀌어도 주문 화면은 이 값을 유지한다
         storeNameSnapshot: product.store.store_name,
         productThumbnailUrlSnapshot: product.images[0]?.image_url ?? null,
         regularPriceSnapshot: product.regular_price,

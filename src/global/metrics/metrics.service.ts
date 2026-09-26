@@ -16,7 +16,7 @@ const SECONDS_BUCKETS = [
 export const COLLECT_TIMEOUT_MS = 2_000;
 
 /**
- * Prometheus 지표의 단일 레지스트리(P2 E8·05). 요청·소비 히스토그램은 여기서 정의하고, feature 쪽 게이지(outbox 수 등)는
+ * Prometheus 지표의 단일 레지스트리. 요청·소비 히스토그램은 여기서 정의하고, feature 쪽 게이지(outbox 수 등)는
  * registerGauge로 collect 콜백을 등록한다 — global은 feature를 import하지 않는다.
  * 라벨은 카디널리티가 유한한 것만 — 스키마·라우터가 정하는 값(라우트 패턴·루트 필드명·상태 코드·분류). 클라이언트가 정하는
  * 값(operationName·id·쿼리스트링)은 절대 라벨로 쓰지 않는다.

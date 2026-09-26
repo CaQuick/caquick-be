@@ -6,7 +6,7 @@ import { OutboxRepository } from '@/features/outbox/repositories/outbox.reposito
 import { MetricsService } from '@/global/metrics';
 
 /**
- * outbox 게이지(P2 05): 상태별 건수와 릴레이 lag. 값은 스크레이프 때 계산한다(카운트 쿼리 2개).
+ * outbox 게이지: 상태별 건수와 릴레이 lag. 값은 스크레이프 때 계산한다(카운트 쿼리 2개).
  * worker에서만 등록한다 — 전역 값이라 api 복제본마다 노출하면 sum()이 부풀고 스크레이프마다 DB 쿼리가 N배다.
  */
 @Injectable()
