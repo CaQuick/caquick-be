@@ -1,17 +1,12 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { IdGenerator } from '@/common/providers/id-generator.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createUserProfile } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Test DB 인프라 파이프라인 검증용 샘플 스펙.
- *
- * 여기서 녹색이 나와야 PR 1 인프라가 동작한다고 본다.
- */
+// 테스트 DB 인프라(컨테이너·worker DB·soft-delete extension) 파이프라인 확인용.
 describe('Test DB infra pipeline', () => {
   let prisma: PrismaClient;
   let clock: ClockService;

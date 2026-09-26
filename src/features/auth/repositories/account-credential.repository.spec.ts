@@ -1,10 +1,21 @@
-import type { PrismaClient } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountCredentialRepository } from '@/features/auth/repositories/account-credential.repository';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createAccountCredential } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+/** repository가 조작과 같은 트랜잭션에 남기는 감사 항목. */
+const AUDIT_ENTRY = {
+  actorAccountId: 1n,
+  storeId: null,
+  targetType: AuditTargetType.CHANGE_PASSWORD,
+  targetId: 1n,
+  action: AuditActionType.UPDATE,
+};
 
 describe('AccountCredentialRepository (real DB)', () => {
   let repo: AccountCredentialRepository;
@@ -12,7 +23,10 @@ describe('AccountCredentialRepository (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [AccountCredentialRepository],
+      providers: [
+        AccountCredentialRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     repo = module.get(AccountCredentialRepository);
     prisma = p;
@@ -106,12 +120,23 @@ describe('AccountCredentialRepository (real DB)', () => {
         must_change_password: true,
       });
 
-      const now = new Date();
-      await repo.updatePasswordHash({
-        accountId: sellerAccount.id,
-        passwordHash: 'new_hash_value',
-        now,
+      const session = await prisma.authRefreshSession.create({
+        data: {
+          account_id: sellerAccount.id,
+          token_hash: 'hash',
+          expires_at: new Date(Date.now() + 86_400_000),
+        },
       });
+
+      const now = new Date();
+      await repo.changePassword(
+        {
+          accountId: sellerAccount.id,
+          passwordHash: 'new_hash_value',
+          now,
+        },
+        () => AUDIT_ENTRY,
+      );
 
       const updated = await prisma.accountCredential.findUnique({
         where: { account_id: sellerAccount.id },
@@ -119,6 +144,15 @@ describe('AccountCredentialRepository (real DB)', () => {
       expect(updated!.password_hash).toBe('new_hash_value');
       expect(updated!.password_updated_at!.getTime()).toBe(now.getTime());
       expect(updated!.must_change_password).toBe(false);
+      // 같은 트랜잭션에서 전 세션을 끊고 감사를 남긴다
+      expect(
+        (
+          await prisma.authRefreshSession.findUniqueOrThrow({
+            where: { id: session.id },
+          })
+        ).revoked_at,
+      ).not.toBeNull();
+      expect(await prisma.auditLog.count()).toBe(1);
     });
   });
 });

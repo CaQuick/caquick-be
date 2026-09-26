@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
+
+import { DomainException } from '@/common/errors/error-catalog';
+import { OrderStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class OrderStatusTransitionPolicy {
@@ -9,29 +11,29 @@ export class OrderStatusTransitionPolicy {
     if (raw === 'MADE') return OrderStatus.MADE;
     if (raw === 'PICKED_UP') return OrderStatus.PICKED_UP;
     if (raw === 'CANCELED') return OrderStatus.CANCELED;
-    throw new BadRequestException('Invalid order status.');
+    throw new DomainException('INVALID_ORDER_STATUS');
   }
 
   assertSellerTransition(from: OrderStatus, to: OrderStatus): void {
     if (from === to) {
-      throw new BadRequestException('Order status is already set to target.');
+      throw new DomainException('ORDER_STATUS_UNCHANGED');
     }
 
     // SUBMITTED는 주문 생성 시점의 초기 상태이므로 어떤 상태에서도 되돌아갈 수 없다.
     if (to === OrderStatus.SUBMITTED) {
-      throw new BadRequestException('Invalid order status transition.');
+      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
     }
 
     if (to === OrderStatus.CONFIRMED && from !== OrderStatus.SUBMITTED) {
-      throw new BadRequestException('Invalid order status transition.');
+      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
     }
 
     if (to === OrderStatus.MADE && from !== OrderStatus.CONFIRMED) {
-      throw new BadRequestException('Invalid order status transition.');
+      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
     }
 
     if (to === OrderStatus.PICKED_UP && from !== OrderStatus.MADE) {
-      throw new BadRequestException('Invalid order status transition.');
+      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
     }
 
     if (to === OrderStatus.CANCELED) {
@@ -40,9 +42,7 @@ export class OrderStatusTransitionPolicy {
         from === OrderStatus.CONFIRMED ||
         from === OrderStatus.MADE;
       if (!cancellable) {
-        throw new BadRequestException(
-          'Order cannot be canceled from current status.',
-        );
+        throw new DomainException('ORDER_NOT_CANCELLABLE');
       }
     }
   }

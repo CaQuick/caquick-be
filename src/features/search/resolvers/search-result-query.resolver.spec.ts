@@ -1,22 +1,25 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository, ProductSearchService } from '@/features/product';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { SearchResultQueryResolver } from '@/features/search/resolvers/search-result-query.resolver';
 import { SearchResultService } from '@/features/search/services/search-result.service';
 import { StoreSearchService } from '@/features/store';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/집계 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/집계 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('SearchResultQueryResolver (real DB)', () => {
   let resolver: SearchResultQueryResolver;
   let prisma: PrismaClient;
@@ -24,10 +27,16 @@ describe('SearchResultQueryResolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        StoreCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         SearchResultQueryResolver,
         SearchResultService,
         ProductSearchService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StoreSearchService,
         StoreListingService,
         StoreRepository,

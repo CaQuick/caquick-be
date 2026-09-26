@@ -1,15 +1,14 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
 import { PubSub } from 'graphql-subscriptions';
 
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
+import { CATALOG_QUERY } from '@/features/store';
+import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -30,8 +29,11 @@ describe('ConversationInquiryService (real DB)', () => {
         ConversationInquiryService,
         ConversationRepository,
         ConversationEventsService,
+        AccountUserRepository,
+        { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
         // 발행 경로 실검증은 events service spec(실 Redis) 담당 — 여기선 in-memory
         { provide: PUB_SUB, useValue: new PubSub() },
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(ConversationInquiryService);
@@ -46,6 +48,12 @@ describe('ConversationInquiryService (real DB)', () => {
   beforeEach(async () => {
     await truncateAll();
   });
+
+  /** DB 시계(NOW(3)). 테스트 컨테이너는 TZ 미설정(UTC)이라 Prisma의 UTC DATETIME 매핑과 일치한다. */
+  async function fetchDbNow(): Promise<Date> {
+    const rows = await prisma.$queryRaw<{ now: Date }[]>`SELECT NOW(3) AS now`;
+    return rows[0].now;
+  }
 
   async function setupBuyer(nickname = '김현진') {
     const account = await createAccount(prisma, { account_type: 'USER' });
@@ -80,7 +88,6 @@ describe('ConversationInquiryService (real DB)', () => {
     });
   }
 
-  // ─── storeInquiryContext ───
   describe('storeInquiryContext', () => {
     it('매장 정보·기본 인사말·FAQ 칩·요일별 상담시간을 반환한다', async () => {
       const buyer = await setupBuyer('김현진');
@@ -155,10 +162,10 @@ describe('ConversationInquiryService (real DB)', () => {
 
       await expect(
         service.storeInquiryContext(buyer.id, inactive.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.storeInquiryContext(buyer.id, deleted.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('없는 계정은 Unauthorized, SELLER 계정은 Forbidden', async () => {
@@ -167,14 +174,13 @@ describe('ConversationInquiryService (real DB)', () => {
 
       await expect(
         service.storeInquiryContext(BigInt(999999), store.id.toString()),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       await expect(
         service.storeInquiryContext(seller.id, store.id.toString()),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
-  // ─── sendConversationMessage ───
   describe('sendConversationMessage', () => {
     it('첫 전송이면 대화를 생성하고 인사말(STORE) → 유저 메시지 순으로 저장한다', async () => {
       const buyer = await setupBuyer('김현진');
@@ -238,14 +244,16 @@ describe('ConversationInquiryService (real DB)', () => {
       const conversation = await prisma.storeConversation.findFirstOrThrow({
         where: { account_id: buyer.id, store_id: store.id },
       });
-      // 판매자 답장(미읽음) 도착 재현
+      // 판매자 답장(미읽음) 도착 재현. 마커 판정은 DB NOW(3) 기준이라 호스트 시계로 심으면
+      // (DB − 호스트) ≥ 1s인 환경에서 답장이 마커보다 과거가 되어 케이스가 무너진다 → DB 시계 기준.
+      const dbNow = await fetchDbNow();
       await prisma.storeConversationMessage.create({
         data: {
           conversation_id: conversation.id,
           sender_type: 'STORE',
           body_format: 'TEXT',
           body_text: '아직 안 읽은 답장',
-          created_at: new Date(Date.now() + 1000),
+          created_at: new Date(dbNow.getTime() + 1000),
         },
       });
       const markerBefore = conversation.last_read_at;
@@ -302,13 +310,13 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           bodyText: '   ',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.sendConversationMessage(buyer.id, {
           storeId: store.id.toString(),
           bodyText: 'a'.repeat(2001),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('비활성 매장에는 전송할 수 없다', async () => {
@@ -320,11 +328,10 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           bodyText: '안녕하세요',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 
-  // ─── sendConversationFaqMessage ───
   describe('sendConversationFaqMessage', () => {
     it('첫 전송이면 인사말 → 유저 질문(TEXT) → 자동응답(HTML) 3건을 저장한다', async () => {
       const buyer = await setupBuyer();
@@ -387,13 +394,13 @@ describe('ConversationInquiryService (real DB)', () => {
           storeId: store.id.toString(),
           faqTopicId: inactiveFaq.id.toString(),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.sendConversationFaqMessage(buyer.id, {
           storeId: store.id.toString(),
           faqTopicId: othersFaq.id.toString(),
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

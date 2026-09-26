@@ -1,11 +1,11 @@
-import type { PrismaClient } from '@prisma/client';
-import { AuditActionType, AuditTargetType } from '@prisma/client';
-
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { AuditEntry } from '@/features/audit-log/repositories/audit-log.repository.interface';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import { RequestContextService } from '@/global/request-context';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount } from '@/test/factories';
+import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('AuditLogRepository (real DB)', () => {
@@ -31,11 +31,18 @@ describe('AuditLogRepository (real DB)', () => {
     await truncateAll();
   });
 
-  describe('createAuditLog', () => {
+  // recordAudit는 tx가 필수라 여기서도 트랜잭션을 열어 부른다.
+  async function record(entry: AuditEntry): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await repo.recordAudit(tx, entry);
+    });
+  }
+
+  describe('recordAudit', () => {
     it('감사 로그를 생성한다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.CHANGE_PASSWORD,
         targetId: account.id,
@@ -56,7 +63,7 @@ describe('AuditLogRepository (real DB)', () => {
     it('storeId/ipAddress/userAgent/beforeJson 모두 생략해도 기본 null 처리로 생성된다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.STORE,
         targetId: account.id,
@@ -78,7 +85,7 @@ describe('AuditLogRepository (real DB)', () => {
       const account = await createAccount(prisma);
       const storeId = BigInt(42);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         storeId,
         targetType: AuditTargetType.STORE,
@@ -98,7 +105,7 @@ describe('AuditLogRepository (real DB)', () => {
       await requestContext.run(
         { clientIp: '203.0.113.7', userAgent: 'ctx-agent' },
         async () => {
-          await repo.createAuditLog({
+          await record({
             actorAccountId: account.id,
             targetType: AuditTargetType.STORE,
             targetId: account.id,
@@ -120,7 +127,7 @@ describe('AuditLogRepository (real DB)', () => {
       await requestContext.run(
         { clientIp: '203.0.113.7', userAgent: 'ctx-agent' },
         async () => {
-          await repo.createAuditLog({
+          await record({
             actorAccountId: account.id,
             targetType: AuditTargetType.STORE,
             targetId: account.id,
@@ -141,7 +148,7 @@ describe('AuditLogRepository (real DB)', () => {
     it('요청 컨텍스트 밖에서는 ip/ua 가 null 로 저장된다', async () => {
       const account = await createAccount(prisma);
 
-      await repo.createAuditLog({
+      await record({
         actorAccountId: account.id,
         targetType: AuditTargetType.STORE,
         targetId: account.id,
@@ -161,7 +168,7 @@ describe('AuditLogRepository (real DB)', () => {
       const overlong = `not-an-ip-${'x'.repeat(80)}`;
 
       await requestContext.run({ clientIp: overlong }, async () => {
-        await repo.createAuditLog({
+        await record({
           actorAccountId: account.id,
           targetType: AuditTargetType.STORE,
           targetId: account.id,
@@ -180,7 +187,7 @@ describe('AuditLogRepository (real DB)', () => {
       const account = await createAccount(prisma);
 
       await requestContext.run({ clientIp: '2001:db8::1' }, async () => {
-        await repo.createAuditLog({
+        await record({
           actorAccountId: account.id,
           targetType: AuditTargetType.STORE,
           targetId: account.id,
@@ -195,7 +202,7 @@ describe('AuditLogRepository (real DB)', () => {
     });
   });
 
-  describe('createAuditLog(tx)', () => {
+  describe('recordAudit(tx)', () => {
     const args = {
       actorAccountId: BigInt(1),
       targetType: 'ACCOUNT' as const,
@@ -206,16 +213,150 @@ describe('AuditLogRepository (real DB)', () => {
     it('트랜잭션 클라이언트를 넘기면 그 트랜잭션에서 기록되고, 롤백 시 함께 사라진다', async () => {
       await expect(
         prisma.$transaction(async (tx) => {
-          await repo.createAuditLog(args, tx);
+          await repo.recordAudit(tx, args);
           throw new Error('rollback');
         }),
       ).rejects.toThrow('rollback');
       expect(await prisma.auditLog.count()).toBe(0);
 
       await prisma.$transaction(async (tx) => {
-        await repo.createAuditLog(args, tx);
+        await repo.recordAudit(tx, args);
       });
       expect(await prisma.auditLog.count()).toBe(1);
+    });
+  });
+
+  describe('listAuditLogsBySeller', () => {
+    async function createLog(
+      args: Partial<{
+        actorAccountId: bigint;
+        storeId: bigint | null;
+        targetType: 'STORE' | 'PRODUCT' | 'ORDER';
+        targetId: bigint;
+      }> = {},
+    ) {
+      const me = await setupSellerWithStore(prisma);
+      return prisma.auditLog.create({
+        data: {
+          actor_account_id: args.actorAccountId ?? me.account.id,
+          store_id: args.storeId === undefined ? me.store.id : args.storeId,
+          target_type: args.targetType ?? 'STORE',
+          target_id: args.targetId ?? me.store.id,
+          action: 'UPDATE',
+        },
+      });
+    }
+
+    it('actor=본인 또는 storeId=본인 인 row 반환 (OR)', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+
+      // 본인 actor
+      const mineByActor = await prisma.auditLog.create({
+        data: {
+          actor_account_id: me.account.id,
+          store_id: null,
+          target_type: 'STORE',
+          target_id: me.store.id,
+          action: 'UPDATE',
+        },
+      });
+      // 본인 store
+      const mineByStore = await prisma.auditLog.create({
+        data: {
+          actor_account_id: other.account.id,
+          store_id: me.store.id,
+          target_type: 'STORE',
+          target_id: me.store.id,
+          action: 'UPDATE',
+        },
+      });
+      // 다른 매장 (제외)
+      await prisma.auditLog.create({
+        data: {
+          actor_account_id: other.account.id,
+          store_id: other.store.id,
+          target_type: 'STORE',
+          target_id: other.store.id,
+          action: 'UPDATE',
+        },
+      });
+
+      const rows = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 100,
+      });
+      const ids = rows.map((r) => r.id);
+      expect(ids).toContain(mineByActor.id);
+      expect(ids).toContain(mineByStore.id);
+      expect(rows).toHaveLength(2);
+    });
+
+    it('targetType 필터', async () => {
+      await createLog({ targetType: 'STORE' });
+      const orderLog = await createLog({ targetType: 'ORDER' });
+      const filtered = await repo.listAuditLogsBySeller({
+        sellerAccountId: orderLog.actor_account_id,
+        storeId: orderLog.store_id!,
+        limit: 100,
+        targetType: 'ORDER',
+      });
+      expect(filtered.every((r) => r.target_type === 'ORDER')).toBe(true);
+    });
+
+    it('관리자 조작 대상 종류(ACCOUNT 등)는 매장 ID가 달려 있어도 제외한다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      await prisma.auditLog.create({
+        data: {
+          actor_account_id: me.account.id,
+          store_id: me.store.id,
+          target_type: 'ACCOUNT',
+          target_id: me.account.id,
+          action: 'STATUS_CHANGE',
+        },
+      });
+      const mine = await createLog({
+        actorAccountId: me.account.id,
+        storeId: me.store.id,
+      });
+
+      const rows = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 100,
+      });
+
+      expect(rows.map((r) => r.id)).toEqual([mine.id]);
+    });
+
+    it('cursor / limit', async () => {
+      const me = await setupSellerWithStore(prisma);
+      for (let i = 0; i < 3; i++) {
+        await prisma.auditLog.create({
+          data: {
+            actor_account_id: me.account.id,
+            store_id: me.store.id,
+            target_type: 'STORE',
+            target_id: me.store.id,
+            action: 'UPDATE',
+          },
+        });
+      }
+      const first = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 1,
+      });
+      expect(first).toHaveLength(2);
+
+      const paged = await repo.listAuditLogsBySeller({
+        sellerAccountId: me.account.id,
+        storeId: me.store.id,
+        limit: 100,
+        cursor: first[0].id,
+      });
+      expect(paged.every((r) => r.id < first[0].id)).toBe(true);
     });
   });
 });

@@ -17,16 +17,13 @@ export class SearchEntryService {
     private readonly clock: ClockService,
   ) {}
 
-  /** 검색 진입 배너(placement=SEARCH). 없으면 null — 홈 배너와 동일하게 fallback 없음. */
+  /** 없으면 null — 홈 배너와 동일하게 fallback 없음. */
   async searchBanner(): Promise<HomeBanner | null> {
     const row = await this.productRepo.findSearchBanner(this.clock.now());
     return row ? toHomeBanner(row) : null;
   }
 
-  /**
-   * 검색 실행 기록. 정규화(trim·공백 축약)된 검색어를 저장해 최근 검색어·인기 검색어가
-   * 같은 키로 모이게 한다. 비로그인(accountId undefined)은 집계 이벤트만 남긴다.
-   */
+  /** 정규화(trim·공백 축약)된 검색어를 저장해 최근 검색어·인기 검색어가 같은 키로 모이게 한다. */
   async recordSearch(rawKeyword: string, accountId?: bigint): Promise<boolean> {
     const { keyword } = parseSearchKeyword(rawKeyword);
     await this.repo.recordSearch({

@@ -1,17 +1,12 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import { RegionService } from '@/features/region/services/region.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createRegion } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Service ↔ Repository ↔ DB 통합 검증. region feature는 인증이 없는 public 조회라
- * 분기/매핑 검증을 service spec에 집중한다.
- */
+// region은 인증 없는 public 조회라 분기/매핑 검증을 service spec에 집중한다.
 describe('RegionService (real DB)', () => {
   let service: RegionService;
   let prisma: PrismaClient;
@@ -145,13 +140,11 @@ describe('RegionService (real DB)', () => {
       });
     });
 
-    it('존재하지 않는 1차면 NotFoundException', async () => {
-      await expect(service.regions('999999')).rejects.toThrow(
-        NotFoundException,
-      );
+    it('존재하지 않는 1차면 404', async () => {
+      await expect(service.regions('999999')).rejects.toThrowDomain(404);
     });
 
-    it('2차 id를 parentId로 주면 NotFoundException (level 1만 허용)', async () => {
+    it('2차 id를 parentId로 주면 404 (level 1만 허용)', async () => {
       const parent = await createRegion(prisma, { level: 1, slug: 'pp' });
       const child = await createRegion(prisma, {
         level: 2,
@@ -159,15 +152,13 @@ describe('RegionService (real DB)', () => {
         parent_id: parent.id,
       });
 
-      await expect(service.regions(child.id.toString())).rejects.toThrow(
-        NotFoundException,
+      await expect(service.regions(child.id.toString())).rejects.toThrowDomain(
+        404,
       );
     });
 
-    it('유효하지 않은 parentId 문자열이면 BadRequestException', async () => {
-      await expect(service.regions('not-a-number')).rejects.toThrow(
-        BadRequestException,
-      );
+    it('유효하지 않은 parentId 문자열이면 400', async () => {
+      await expect(service.regions('not-a-number')).rejects.toThrowDomain(400);
     });
   });
 

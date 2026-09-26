@@ -1,18 +1,13 @@
-import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import { RegionQueryResolver } from '@/features/region/resolvers/region-query.resolver';
 import { RegionService } from '@/features/region/services/region.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createRegion } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기별 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기별 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('Region Query Resolver (real DB)', () => {
   let resolver: RegionQueryResolver;
   let prisma: PrismaClient;
@@ -63,8 +58,8 @@ describe('Region Query Resolver (real DB)', () => {
     expect(result[0].name).toBe('강남구');
   });
 
-  it('regions: 존재하지 않는 parentId면 NotFoundException 전파', async () => {
-    await expect(resolver.regions('999999')).rejects.toThrow(NotFoundException);
+  it('regions: 존재하지 않는 parentId면 404 전파', async () => {
+    await expect(resolver.regions('999999')).rejects.toThrowDomain(404);
   });
 
   it('searchRegions: 키워드로 검색 결과를 반환한다', async () => {

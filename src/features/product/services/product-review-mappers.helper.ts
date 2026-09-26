@@ -1,60 +1,14 @@
+import { buildRegionLabel } from '@/common/utils/region-label';
 import { anonymizeReviewAuthor } from '@/common/utils/review-author';
-import type {
-  ProductReviewRow,
-  ReviewAuthorRow,
-  ReviewCommentRow,
-  ReviewDetailProductRow,
-} from '@/features/product/repositories/product-review.repository';
 import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type {
-  ProductReview,
   ReviewCommentItem,
   ReviewDetailProduct,
 } from '@/features/product/types/product-review-output.type';
-import { buildRegionLabel } from '@/features/store';
-
-/** 리뷰별 집계값(좋아요/댓글/isLiked) 매퍼 입력. */
-export interface ProductReviewStats {
-  likeCount: number;
-  isLiked: boolean;
-  commentCount: number;
-}
-
-/** 탈퇴(soft-delete) 작성자는 닉네임/프로필을 익명화한다. */
-function toAuthor(account: ReviewAuthorRow): {
-  nickname: string | null;
-  profileImageUrl: string | null;
-} {
-  return anonymizeReviewAuthor(account.user_profile);
-}
-
-export function toProductReview(
-  row: ProductReviewRow,
-  stats: ProductReviewStats,
-): ProductReview {
-  const author = toAuthor(row.account);
-  return {
-    id: row.id.toString(),
-    rating: Number(row.rating),
-    content: row.content,
-    media: row.media.map((m) => ({
-      mediaType: m.media_type,
-      mediaUrl: m.media_url,
-      thumbnailUrl: m.thumbnail_url,
-      sortOrder: m.sort_order,
-    })),
-    likeCount: stats.likeCount,
-    isLiked: stats.isLiked,
-    commentCount: stats.commentCount,
-    authorNickname: author.nickname,
-    authorProfileImageUrl: author.profileImageUrl,
-    customOptions: row.order_item.option_items.map((option) => ({
-      groupName: option.group_name_snapshot,
-      optionTitle: option.option_title_snapshot,
-    })),
-    createdAt: row.created_at,
-  };
-}
+import type {
+  ReviewCommentRow,
+  ReviewDetailProductRow,
+} from '@/features/review';
 
 export function toReviewDetailProduct(
   row: ReviewDetailProductRow,
@@ -75,7 +29,7 @@ export function toReviewCommentItem(
   row: ReviewCommentRow,
   accountId: bigint | undefined,
 ): ReviewCommentItem {
-  const author = toAuthor(row.account);
+  const author = anonymizeReviewAuthor(row.account.user_profile);
   return {
     id: row.id.toString(),
     content: row.content,

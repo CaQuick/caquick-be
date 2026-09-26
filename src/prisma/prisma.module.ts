@@ -4,24 +4,25 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
+import type { DatabaseConfig } from '@/config/database.config';
 import {
   createExtendedPrismaClient,
   PrismaService,
 } from '@/prisma/prisma.service';
 
-/**
- * Prisma 모듈.
- *
- * - PrismaService 토큰은 useFactory 로 확장(soft-delete) 적용된 PrismaClient 인스턴스를 제공한다.
- * - 클라이언트의 connect/disconnect 라이프사이클은 본 모듈이 소유한다.
- */
+/** PrismaService 토큰은 useFactory로 확장(soft-delete) 적용된 인스턴스를 제공하고, connect/disconnect 라이프사이클은 본 모듈이 소유한다. */
 @Global()
 @Module({
   providers: [
     {
       provide: PrismaService,
-      useFactory: createExtendedPrismaClient,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        createExtendedPrismaClient(
+          config.getOrThrow<DatabaseConfig>('database').url,
+        ),
     },
   ],
   exports: [PrismaService],

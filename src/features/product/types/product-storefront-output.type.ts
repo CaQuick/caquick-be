@@ -1,25 +1,14 @@
-/**
- * product-storefront resolver 반환용 도메인 출력 타입.
- * SDL(product-storefront.graphql)의 타입과 필드 일치.
- */
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
 
 export interface StoreProduct {
-  id: string;
-  name: string;
+  product: ProductCardOutput;
   description: string | null;
-  thumbnailUrl: string | null;
-  regularPrice: number;
-  salePrice: number | null;
-  discountRate: number;
   currency: string;
   categoryIds: string[];
 }
 
-export interface StoreProductConnection {
-  items: StoreProduct[];
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type StoreProductConnection = CursorConnection<StoreProduct>;
 
 export interface StoreProductCategory {
   id: string;

@@ -1,0 +1,144 @@
+extend type Query {
+  """
+  기간별 운영 지표를 요청 시점에 집계한다(스냅샷 테이블 없음). 기간은 created_at 기준 UTC이며 클라이언트가
+  KST 경계를 환산해 넘긴다. from ≤ to, 최대 366일이 아니면 BAD_USER_INPUT. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminDashboardSummary(
+    input: AdminDashboardSummaryInput!
+  ): AdminDashboardSummary!
+  """
+  인기 검색어 스냅샷(시간 단위 크론 산출)을 조회한다. rankedAt 미지정 시 최신 스냅샷. 스냅샷이 없으면 rankedAt null·빈 목록.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminSearchKeywordSnapshot(
+    input: AdminSearchKeywordSnapshotInput
+  ): AdminSearchKeywordSnapshot!
+}
+
+"""
+집계 기간 입력.
+"""
+input AdminDashboardSummaryInput {
+  """
+  집계 시작(이상).
+  """
+  from: DateTime!
+  """
+  집계 종료(이하).
+  """
+  to: DateTime!
+}
+
+"""
+기간별 운영 지표.
+"""
+type AdminDashboardSummary {
+  """
+  집계 시작.
+  """
+  from: DateTime!
+  """
+  집계 종료.
+  """
+  to: DateTime!
+  """
+  기간 내 가입한 구매자 수(탈퇴 제외).
+  """
+  newUserCount: Int!
+  """
+  기간 내 등록된 판매자 수(탈퇴 제외).
+  """
+  newSellerCount: Int!
+  """
+  기간 내 생성된 주문의 상태별 건수.
+  """
+  orderCounts: AdminOrderStatusCounts!
+  """
+  기간 내 생성된 주문의 최종 결제 금액 합(원). 취소 주문은 제외.
+  """
+  orderAmountSum: Int!
+  """
+  현재 노출 중인 매장 수(기간 무관).
+  """
+  activeStoreCount: Int!
+  """
+  현재 노출 중인 상품 수(기간 무관, 매장 노출 여부는 보지 않음).
+  """
+  activeProductCount: Int!
+  """
+  현재 미처리 신고 수(기간 무관).
+  """
+  pendingReportCount: Int!
+}
+
+"""
+주문 상태별 건수.
+"""
+type AdminOrderStatusCounts {
+  """
+  접수(SUBMITTED).
+  """
+  submitted: Int!
+  """
+  확인(CONFIRMED).
+  """
+  confirmed: Int!
+  """
+  제작 완료(MADE).
+  """
+  made: Int!
+  """
+  픽업 완료(PICKED_UP).
+  """
+  pickedUp: Int!
+  """
+  취소(CANCELED).
+  """
+  canceled: Int!
+}
+
+"""
+인기 검색어 스냅샷 조회 입력.
+"""
+input AdminSearchKeywordSnapshotInput {
+  """
+  스냅샷 시각(정각). 미지정 시 최신.
+  """
+  rankedAt: DateTime
+  """
+  가져올 순위 수. 기본 20, 1~100.
+  """
+  limit: Int = 20
+}
+
+"""
+인기 검색어 스냅샷.
+"""
+type AdminSearchKeywordSnapshot {
+  """
+  스냅샷 시각. 스냅샷이 없으면 null.
+  """
+  rankedAt: DateTime
+  """
+  순위별 검색어.
+  """
+  items: [AdminSearchKeywordRank!]!
+}
+
+"""
+검색어 순위 1건.
+"""
+type AdminSearchKeywordRank {
+  """
+  순위(1부터).
+  """
+  rank: Int!
+  """
+  검색어.
+  """
+  keyword: String!
+  """
+  집계 창 안의 검색 횟수.
+  """
+  searchCount: Int!
+}

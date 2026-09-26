@@ -1,9 +1,14 @@
-import type { PrismaClient, Product, Store } from '@prisma/client';
-
 import { RandomService } from '@/common/providers/random.service';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { ReviewReadRepository } from '@/features/review';
+import { snapshotReviewOrderItem } from '@/features/review/repositories/review-order-item-snapshot.helper';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
+import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -13,6 +18,8 @@ import {
   createOrderItem,
   createProduct,
   createReview,
+  createReviewLike,
+  createReviewMedia,
   createStore,
   createUserProfile,
   linkProductCategory,
@@ -26,9 +33,13 @@ describe('ProductHomeService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        StoreStatsRepository,
         ProductHomeService,
         ProductRepository,
-        ProductReviewRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        ReviewReadRepository,
         RandomService,
       ],
     });
@@ -45,7 +56,6 @@ describe('ProductHomeService (real DB)', () => {
     await truncateAll();
   });
 
-  /** 확정(CONFIRMED) 주문 n건을 만들어 상품의 최근 주문수를 채운다. */
   async function confirmOrders(product: Product, count: number): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       const order = await createOrder(prisma, { status: 'CONFIRMED' });
@@ -56,7 +66,6 @@ describe('ProductHomeService (real DB)', () => {
     }
   }
 
-  /** 활성 찜 n건 생성. */
   async function wishProduct(product: Product, count: number): Promise<void> {
     for (let i = 0; i < count; i += 1) {
       const account = await createAccount(prisma, { account_type: 'USER' });
@@ -90,7 +99,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual([
+      expect(result.items.map((i) => i.product.name)).toEqual([
         '1등 케이크',
         '2등 케이크',
         '3등 케이크',
@@ -107,7 +116,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items[0].name).toBe('찜 많은 케이크');
+      expect(result.items[0].product.name).toBe('찜 많은 케이크');
     });
 
     it('categoryId 지정 시 해당 카테고리 상품만 랭킹 대상이다', async () => {
@@ -124,7 +133,7 @@ describe('ProductHomeService (real DB)', () => {
         categoryId: birthday.id.toString(),
       });
 
-      expect(result.items.map((i) => i.name)).toEqual(['생일 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['생일 케이크']);
     });
 
     it('EVENT가 아닌 카테고리 id가 오면 빈 결과를 반환한다(홈 칩은 EVENT 한정)', async () => {
@@ -159,7 +168,7 @@ describe('ProductHomeService (real DB)', () => {
         regionIds: [regionA.id.toString()],
       });
 
-      expect(result.items.map((i) => i.name)).toEqual(['강남 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['강남 케이크']);
     });
 
     it('비활성 상품과 비활성 매장 상품은 제외한다', async () => {
@@ -171,7 +180,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.popularCakes();
 
-      expect(result.items.map((i) => i.name)).toEqual(['활성 케이크']);
+      expect(result.items.map((i) => i.product.name)).toEqual(['활성 케이크']);
     });
 
     it('기본 3개, limit 지정 시 해당 수만큼 자른다', async () => {
@@ -218,14 +227,17 @@ describe('ProductHomeService (real DB)', () => {
       const [item] = (await service.popularCakes()).items;
 
       expect(item).toMatchObject({
-        name: '레터링 케이크',
-        storeId: store.id.toString(),
-        storeName: '청담 케이크샵',
-        regionLabel: '서울 청담동',
-        regularPrice: 40000,
-        salePrice: 30000,
-        discountRate: 25,
-        thumbnailUrl: 'https://img/cake.png',
+        rank: 1,
+        product: {
+          name: '레터링 케이크',
+          storeId: store.id.toString(),
+          storeName: '청담 케이크샵',
+          regionLabel: '서울 청담동',
+          regularPrice: 40000,
+          salePrice: 30000,
+          discountRate: 25,
+          thumbnailUrl: 'https://img/cake.png',
+        },
       });
     });
 
@@ -412,10 +424,7 @@ describe('ProductHomeService (real DB)', () => {
   });
 
   describe('customCakeShowcase', () => {
-    /**
-     * Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰 생성.
-     * storeId를 주면 해당 매장 소속으로 만든다.
-     */
+    /** Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰. */
     async function makeShowcaseReview(args?: {
       storeId?: bigint;
       nickname?: string;
@@ -441,12 +450,9 @@ describe('ProductHomeService (real DB)', () => {
         content: args?.content ?? '후기 본문',
       });
       if (args?.after !== false) {
-        await prisma.reviewMedia.create({
-          data: {
-            review_id: review.id,
-            media_type: 'IMAGE',
-            media_url: `https://img/after-${review.id}.png`,
-          },
+        await createReviewMedia(prisma, {
+          review_id: review.id,
+          media_url: `https://img/after-${review.id}.png`,
         });
       }
       if (args?.nickname) {
@@ -461,12 +467,12 @@ describe('ProductHomeService (real DB)', () => {
       return review.id;
     }
 
-    /** 유효 좋아요 n건 생성. */
     async function likeReview(reviewId: bigint, count: number): Promise<void> {
       for (let i = 0; i < count; i += 1) {
         const account = await createAccount(prisma, { account_type: 'USER' });
-        await prisma.reviewLike.create({
-          data: { review_id: reviewId, account_id: account.id },
+        await createReviewLike(prisma, {
+          review_id: reviewId,
+          account_id: account.id,
         });
       }
     }
@@ -478,12 +484,10 @@ describe('ProductHomeService (real DB)', () => {
       await likeReview(second, 1);
       // soft-delete된 좋아요는 집계에서 제외되어야 한다
       const ghost = await createAccount(prisma, { account_type: 'USER' });
-      await prisma.reviewLike.create({
-        data: {
-          review_id: second,
-          account_id: ghost.id,
-          deleted_at: new Date(),
-        },
+      await createReviewLike(prisma, {
+        review_id: second,
+        account_id: ghost.id,
+        deleted_at: new Date(),
       });
 
       const result = await service.customCakeShowcase();
@@ -508,30 +512,24 @@ describe('ProductHomeService (real DB)', () => {
         content: '비디오+이미지',
         after: false,
       });
-      await prisma.reviewMedia.create({
-        data: {
-          review_id: review,
-          media_type: 'VIDEO',
-          media_url: 'https://img/video.mp4',
-          sort_order: 0,
-        },
+      await createReviewMedia(prisma, {
+        review_id: review,
+        media_type: 'VIDEO',
+        media_url: 'https://img/video.mp4',
+        sort_order: 0,
       });
-      await prisma.reviewMedia.create({
-        data: {
-          review_id: review,
-          media_type: 'IMAGE',
-          media_url: 'https://img/real-after.png',
-          sort_order: 1,
-        },
+      await createReviewMedia(prisma, {
+        review_id: review,
+        media_type: 'IMAGE',
+        media_url: 'https://img/real-after.png',
+        sort_order: 1,
       });
       await makeShowcaseReview({ content: '비디오만', after: false }).then(
         (id) =>
-          prisma.reviewMedia.create({
-            data: {
-              review_id: id,
-              media_type: 'VIDEO',
-              media_url: 'https://img/only-video.mp4',
-            },
+          createReviewMedia(prisma, {
+            review_id: id,
+            media_type: 'VIDEO',
+            media_url: 'https://img/only-video.mp4',
           }),
       );
 
@@ -606,6 +604,11 @@ describe('ProductHomeService (real DB)', () => {
           sort_order: 0,
         },
       });
+      // before 이미지는 작성 시점 스냅샷(07b) — 크롭을 만든 뒤 작성 경로와 같은 규칙으로 다시 찍는다
+      await prisma.review.update({
+        where: { id: review },
+        data: await snapshotReviewOrderItem(prisma, row.order_item_id),
+      });
 
       const result = await service.customCakeShowcase();
 
@@ -618,7 +621,6 @@ describe('ProductHomeService (real DB)', () => {
       jest.restoreAllMocks();
     });
 
-    /** 대표 이미지가 있는 활성 케이크 n개 생성. */
     async function makeCakesWithImage(
       store: Store,
       count: number,

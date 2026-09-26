@@ -1,0 +1,7 @@
+"""커서 페이지네이션 공통 입력. 필터가 필요한 목록은 같은 두 필드를 가진 전용 input을 쓴다."""
+input CursorInput {
+  """페이지 크기. 1~100, 기본 20. 벗어나면 BAD_USER_INPUT."""
+  limit: Int = 20
+  """이전 페이지의 nextCursor. 불투명 토큰이라 정렬 기준이 바뀌면 무효. 형식이 어긋나면 BAD_USER_INPUT."""
+  cursor: String
+}

@@ -1,11 +1,14 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';
@@ -15,10 +18,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 const NOW = new Date('2026-08-19T07:00:00.000Z');
 const TODAY_WEEKDAY = new Date(Date.UTC(2026, 7, 19)).getUTCDay();
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 슬롯/휴무/capacity 분기 세부 검증은 service.spec.ts에서 담당.
- */
+// 슬롯/휴무/capacity 분기 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('StoreTodayPickup Query Resolver (real DB)', () => {
   let resolver: StoreTodayPickupQueryResolver;
   let clock: ClockService;
@@ -27,12 +27,16 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         StoreTodayPickupQueryResolver,
         StoreTodayPickupService,
         StoreListingService,
         StoreRepository,
         StoreWishlistRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(StoreTodayPickupQueryResolver);
@@ -68,7 +72,9 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
 
     const result = await resolver.todayPickupStores(undefined);
 
-    expect(result.items.map((i) => i.storeName)).toEqual(['오늘영업매장']);
+    expect(result.items.map((i) => i.store.storeName)).toEqual([
+      '오늘영업매장',
+    ]);
     expect(result.items[0].slots.length).toBeGreaterThan(0);
     expect(result.asOf).toEqual(NOW);
   });

@@ -5,16 +5,7 @@ import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
 
-/**
- * Auth Cookie 설정을 생성한다.
- */
 export class AuthCookie {
-  /**
-   * Refresh 쿠키를 세팅한다.
-   *
-   * @param res express Response
-   * @param args 토큰/만료/옵션
-   */
   static setRefreshCookie(
     res: Response,
     args: {
@@ -39,13 +30,7 @@ export class AuthCookie {
     });
   }
 
-  /**
-   * Refresh 쿠키를 삭제한다.
-   *
-   * @param res express Response
-   * @param cookieDomain 쿠키 도메인
-   * @param secure secure 여부(옵션 일치 필요)
-   */
+  /** secure는 세팅 때와 일치해야 브라우저가 지운다. */
   static clearRefreshCookie(
     res: Response,
     cookieDomain: string | undefined,
@@ -63,12 +48,6 @@ export class AuthCookie {
     res.clearCookie(AUTH_COOKIE.REFRESH, base);
   }
 
-  /**
-   * OIDC 임시 쿠키를 세팅한다.
-   *
-   * @param res express Response
-   * @param args state/nonce/cv/returnTo 및 옵션
-   */
   static setOidcTempCookies(
     res: Response,
     args: {
@@ -96,13 +75,7 @@ export class AuthCookie {
     res.cookie(AUTH_COOKIE.OIDC_RETURN_TO, args.returnTo, base);
   }
 
-  /**
-   * OIDC 임시 쿠키를 삭제한다.
-   *
-   * @param res express Response
-   * @param cookieDomain 쿠키 도메인
-   * @param secure secure 여부
-   */
+  /** secure는 세팅 때와 일치해야 브라우저가 지운다. */
   static clearOidcTempCookies(
     res: Response,
     cookieDomain: string | undefined,

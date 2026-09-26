@@ -8,9 +8,6 @@ import type {
   RegionSearchResultOutput,
 } from '@/features/region/types/region-output.type';
 
-/**
- * 지역 조회 resolver. 비로그인도 접근 가능한 public query (가드 없음).
- */
 @Resolver('Query')
 export class RegionQueryResolver {
   constructor(private readonly regionService: RegionService) {}

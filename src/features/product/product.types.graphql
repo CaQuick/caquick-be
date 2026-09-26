@@ -1,3 +1,30 @@
+"""상품 카드. 인기 케이크·판매 Best·검색 결과·매장 상품·찜·최근 본 상품이 공용으로 쓴다."""
+type ProductCard {
+  id: ID!
+  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
+  storeId: ID!
+  """상품명."""
+  name: String!
+  """대표 이미지(sort_order 최소). 없으면 null."""
+  thumbnailUrl: String
+  """정가(원)."""
+  regularPrice: Int!
+  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
+  salePrice: Int
+  """할인율(0~100). salePrice 없으면 0."""
+  discountRate: Int!
+  """매장명."""
+  storeName: String!
+  """매장 위치 표기(예: 인천 청라동)."""
+  regionLabel: String
+  """상품 평균 평점(0.0~5.0, 소수 첫째 자리). 리뷰 없으면 0.0."""
+  ratingAverage: Float!
+  """리뷰 수."""
+  reviewCount: Int!
+  """로그인 사용자의 찜 여부(비로그인 시 false)."""
+  isWishlisted: Boolean!
+}
+
 """
 배너 클릭 시 이동할 대상 타입. 구매자 노출·판매자 관리 API가 공용으로 쓴다.
 
@@ -42,13 +69,4 @@ enum BannerPlacement {
   HOME_SUB
   """예약값. 이 자리를 읽는 구매자 쿼리가 없어 등록해도 노출되지 않는다."""
   STORE
-}
-
-
-"""리뷰 목록 정렬. 상품 리뷰·매장 리뷰가 공용으로 쓴다."""
-enum ReviewSort {
-  """최신순."""
-  LATEST
-  """좋아요순(동률이면 최신순)."""
-  LIKES
 }

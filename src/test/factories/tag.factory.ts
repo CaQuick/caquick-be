@@ -1,5 +1,4 @@
-import type { PrismaClient, Tag } from '@prisma/client';
-
+import type { PrismaClient, Tag } from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export async function createTag(
@@ -15,7 +14,6 @@ export async function createTag(
   });
 }
 
-/** 상품 ↔ 태그 연결. */
 export async function linkProductTag(
   prisma: PrismaClient,
   args: { productId: bigint; tagId: bigint; deleted_at?: Date | null },

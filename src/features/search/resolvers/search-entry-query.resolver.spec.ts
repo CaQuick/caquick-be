@@ -1,15 +1,20 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import {
   ProductBestSellerService,
   ProductRepository,
 } from '@/features/product';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryMutationResolver } from '@/features/search/resolvers/search-entry-mutation.resolver';
 import { SearchEntryQueryResolver } from '@/features/search/resolvers/search-entry-query.resolver';
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
 import { SearchKeywordRankService } from '@/features/search/services/search-keyword-rank.service';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -22,10 +27,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/집계 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/집계 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('SearchEntry Resolvers (real DB)', () => {
   let queryResolver: SearchEntryQueryResolver;
   let mutationResolver: SearchEntryMutationResolver;
@@ -34,6 +36,10 @@ describe('SearchEntry Resolvers (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         SearchEntryQueryResolver,
         SearchEntryMutationResolver,
         SearchEntryService,
@@ -41,6 +47,7 @@ describe('SearchEntry Resolvers (real DB)', () => {
         SearchRepository,
         ProductBestSellerService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ClockService,
       ],
     });
@@ -104,9 +111,12 @@ describe('SearchEntry Resolvers (real DB)', () => {
       quantity: 2,
     });
 
-    const result = await queryResolver.realtimeBestCakes({ limit: 5 });
+    const result = await queryResolver.realtimeBestCakes(
+      { limit: 5 },
+      undefined,
+    );
 
-    expect(result.items.map((i) => i.name)).toEqual(['베스트']);
+    expect(result.items.map((i) => i.product.name)).toEqual(['베스트']);
     expect(result.rankedAt).toBeInstanceOf(Date);
   });
 

@@ -3,16 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
+import type { AuthConfig } from '@/config/auth.config';
 import { JwtAuthGuard } from '@/global/auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '@/global/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '@/global/auth/guards/roles.guard';
 
-/**
- * 전역 인증 인프라 모듈
- *
- * - JWT 가드, 데코레이터, 모듈 설정 제공
- * - 모든 도메인에서 인증 기능 사용 가능
- */
 @Global()
 @Module({
   imports: [
@@ -20,11 +15,19 @@ import { RolesGuard } from '@/global/auth/guards/roles.guard';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_ACCESS_SECRET');
-        if (!secret || secret.trim().length === 0) {
-          throw new Error('Missing JWT_ACCESS_SECRET');
-        }
-        return { secret };
+        // 키 해석(env b64/파일·prod fail-fast)과 iss/aud는 authConfig가 단일 소스다.
+        const auth = config.getOrThrow<AuthConfig>('auth');
+        return {
+          privateKey: auth.jwtKeys.privateKeyPem,
+          publicKey: auth.jwtKeys.publicKeyPem,
+          signOptions: {
+            algorithm: 'RS256' as const,
+            issuer: auth.jwtIssuer,
+            audience: auth.jwtAudience,
+            keyid: auth.jwtKeys.kid,
+            expiresIn: auth.jwtAccessExpiresSeconds,
+          },
+        };
       },
     }),
   ],

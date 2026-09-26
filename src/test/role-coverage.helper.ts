@@ -1,8 +1,6 @@
 /**
- * "루트 필드 전수 × 인가 선언" 대조 헬퍼. seller·admin 커버리지 spec이 공유한다.
- *
- * 입력 공간을 SDL에서 읽어 온다 — 접두 필드가 생기면 표에 자동으로 줄이 늘고,
- * 그 필드를 처리하는 메서드가 RolesGuard + @Roles(role)를 갖추지 않으면 실패한다.
+ * 입력 공간을 SDL에서 읽어 온다 — 접두 필드가 생기면 표에 자동으로 줄이 늘고, 그 필드를 처리하는 메서드가
+ * RolesGuard + @Roles(role)를 갖추지 않으면 실패한다. roles-coverage spec이 역할별 표로 돌린다.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,7 +28,6 @@ export interface HandlerAuth {
   guards: unknown[];
 }
 
-/** src/features 아래 SDL에서 접두가 일치하는 루트 필드 이름을 모은다. */
 export function collectRootFieldsWithPrefix(
   prefix: string,
   dir: string = FEATURES_DIR,
@@ -59,7 +56,6 @@ export function collectRootFieldsWithPrefix(
   return names.sort();
 }
 
-/** 리졸버 클래스들의 루트 핸들러를 필드 이름 → 인가 선언으로 매핑한다. */
 export function collectHandlerAuth(classes: Ctor[]): Map<string, HandlerAuth> {
   const map = new Map<string, HandlerAuth>();
   for (const cls of classes) {
@@ -96,7 +92,6 @@ export function collectHandlerAuth(classes: Ctor[]): Map<string, HandlerAuth> {
   return map;
 }
 
-/** 필드마다 위반 사유를 돌려준다. 빈 배열이면 통과. */
 export function violationsOf(
   auth: HandlerAuth | undefined,
   role: AccountRole,
@@ -108,10 +103,38 @@ export function violationsOf(
   return reasons;
 }
 
-/** Nest 모듈 메타데이터에서 *Resolver 클래스만 뽑는다. */
-export function resolverClassesOf(module: Ctor): Ctor[] {
-  const providers = Reflect.getMetadata('providers', module) as unknown[];
+function resolverClassesOf(module: Ctor): Ctor[] {
+  const providers =
+    (Reflect.getMetadata('providers', module) as unknown[] | undefined) ?? [];
   return providers.filter(
     (p): p is Ctor => typeof p === 'function' && p.name.endsWith('Resolver'),
   );
+}
+
+/**
+ * src/features 아래 모든 `*.module.ts`를 읽어 Resolver 클래스를 모은다 — 새 feature 모듈이 생기면 자동으로 포함된다.
+ * AppModule을 import하지 않는 이유: GraphQL 드라이버 설정의 타입이 ts-jest 해석 아래서 어긋나 suite가 열리지 않는다.
+ */
+export function collectFeatureResolverClasses(
+  dir: string = FEATURES_DIR,
+): Ctor[] {
+  const out: Ctor[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectFeatureResolverClasses(full));
+      continue;
+    }
+    if (!entry.name.endsWith('.module.ts')) continue;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- 파일 목록이 동적이라 정적 import 불가
+    const exported = require(full) as Record<string, unknown>;
+    for (const value of Object.values(exported)) {
+      if (
+        typeof value === 'function' &&
+        Reflect.hasMetadata('providers', value)
+      )
+        out.push(...resolverClassesOf(value as Ctor));
+    }
+  }
+  return out;
 }

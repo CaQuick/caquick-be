@@ -1,5 +1,3 @@
-import type { Prisma, StoreMapProvider } from '@prisma/client';
-
 import {
   LATITUDE_RANGE,
   LONGITUDE_RANGE,
@@ -9,7 +7,6 @@ import {
   cleanNullableText,
   cleanRequiredText,
 } from '@/common/utils/text-cleaner';
-import { INVALID_DECIMAL_VALUE } from '@/features/store/constants/store-basic-info-error-messages';
 import {
   MAX_ADDRESS_CITY_LENGTH,
   MAX_ADDRESS_DISTRICT_LENGTH,
@@ -21,11 +18,9 @@ import {
   MAX_STORE_PHONE_LENGTH,
   MAX_STORE_URL_LENGTH,
 } from '@/features/store/constants/store-field-limits';
+import type { Prisma, StoreMapProvider } from '@/generated/prisma/client';
 
-/**
- * 매장 기본 정보 부분 수정 입력. undefined는 유지, null/빈 문자열은 제거(nullable 컬럼).
- * 판매자(내 매장)와 관리자(대리 수정)가 같은 규칙을 탄다.
- */
+/** undefined는 유지, null/빈 문자열은 제거(nullable 컬럼). 판매자(내 매장)와 관리자(대리 수정)가 같은 규칙을 탄다. */
 export interface StoreBasicInfoPatch {
   storeName?: string;
   storePhone?: string;
@@ -42,10 +37,6 @@ export interface StoreBasicInfoPatch {
   greetingMessage?: string | null;
 }
 
-/**
- * 전달된 필드만 Prisma update 데이터로 만든다(DI-free 순수 함수).
- * 길이 초과·필수 공백·좌표 형식 오류는 BadRequestException.
- */
 export function buildStoreBasicInfoUpdateData(
   input: StoreBasicInfoPatch,
 ): Prisma.StoreUpdateInput {
@@ -97,20 +88,12 @@ export function buildStoreBasicInfoUpdateData(
       : {}),
     ...(input.latitude !== undefined
       ? {
-          latitude: parseDecimalOrNull(
-            input.latitude,
-            INVALID_DECIMAL_VALUE,
-            LATITUDE_RANGE,
-          ),
+          latitude: parseDecimalOrNull(input.latitude, LATITUDE_RANGE),
         }
       : {}),
     ...(input.longitude !== undefined
       ? {
-          longitude: parseDecimalOrNull(
-            input.longitude,
-            INVALID_DECIMAL_VALUE,
-            LONGITUDE_RANGE,
-          ),
+          longitude: parseDecimalOrNull(input.longitude, LONGITUDE_RANGE),
         }
       : {}),
     ...(input.mapProvider !== undefined && input.mapProvider !== null
@@ -132,7 +115,7 @@ export function buildStoreBasicInfoUpdateData(
           ),
         }
       : {}),
-    // 프로필(로고) 이미지. null/빈 문자열 전달 시 제거, 미전달(undefined) 시 유지.
+    // null/빈 문자열 전달 시 제거, 미전달(undefined) 시 유지.
     ...(input.profileImageUrl !== undefined
       ? {
           profile_image_url: cleanNullableText(

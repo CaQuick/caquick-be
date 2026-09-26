@@ -1,17 +1,10 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
 import { AuthService } from '@/features/auth/auth.service';
 import { AuthController } from '@/features/auth/controllers/auth.controller';
-import {
-  CREDENTIAL_AUTH_SERVICE,
-  type ICredentialAuthService,
-} from '@/features/auth/services/credential-auth.service.interface';
-import {
-  OIDC_LOGIN_SERVICE,
-  type IOidcLoginService,
-} from '@/features/auth/services/oidc-login.service.interface';
+import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
+import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import type { JwtUser } from '@/global/auth';
 
 function mockRes(): Response {
@@ -26,8 +19,8 @@ function mockRes(): Response {
 describe('AuthController', () => {
   let controller: AuthController;
   let auth: jest.Mocked<AuthService>;
-  let oidcLogin: jest.Mocked<IOidcLoginService>;
-  let credentialAuth: jest.Mocked<ICredentialAuthService>;
+  let oidcLogin: jest.Mocked<OidcLoginService>;
+  let credentialAuth: jest.Mocked<CredentialAuthService>;
 
   beforeEach(async () => {
     auth = {
@@ -39,21 +32,21 @@ describe('AuthController', () => {
     oidcLogin = {
       startOidcLogin: jest.fn(),
       handleOidcCallback: jest.fn(),
-    };
+    } as unknown as jest.Mocked<OidcLoginService>;
 
     credentialAuth = {
       login: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
       changePassword: jest.fn(),
-    };
+    } as unknown as jest.Mocked<CredentialAuthService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         { provide: AuthService, useValue: auth },
-        { provide: OIDC_LOGIN_SERVICE, useValue: oidcLogin },
-        { provide: CREDENTIAL_AUTH_SERVICE, useValue: credentialAuth },
+        { provide: OidcLoginService, useValue: oidcLogin },
+        { provide: CredentialAuthService, useValue: credentialAuth },
       ],
     }).compile();
 
@@ -256,7 +249,7 @@ describe('AuthController', () => {
           req,
           res,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
   });
 
@@ -273,7 +266,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({ accountId: '1' }, res),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
       expect(auth.issueDevAccessToken).not.toHaveBeenCalled();
     });
 
@@ -283,7 +276,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({} as unknown as { accountId: string }, res),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('accountId가 BigInt로 파싱 불가하면 BadRequestException', async () => {
@@ -292,7 +285,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.devIssueToken({ accountId: 'not-a-number' }, res),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('정상 발급: service 위임 + 200 응답', async () => {

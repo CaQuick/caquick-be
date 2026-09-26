@@ -3,8 +3,7 @@ import type {
   ReviewReport,
   ReviewReportReason,
   ReviewReportStatus,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { createReview } from '@/test/factories/review.factory';
 

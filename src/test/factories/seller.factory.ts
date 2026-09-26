@@ -3,8 +3,7 @@ import type {
   PrismaClient,
   SellerProfile,
   Store,
-} from '@prisma/client';
-
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 import { createStore } from '@/test/factories/store.factory';
@@ -34,10 +33,7 @@ export async function createSellerProfile(
   });
 }
 
-/**
- * SELLER 계정 + Store + SellerProfile 한 세트를 생성한다.
- * seller-* 서비스 테스트는 모두 SellerContext가 필요하므로 매번 같은 셋업을 반복하지 않도록 helper 제공.
- */
+/** seller-* 서비스 테스트는 모두 SellerContext가 필요하므로 같은 셋업을 반복하지 않도록 둔다. */
 export interface SellerContextSetup {
   account: Account;
   store: Store;

@@ -1,9 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createStore } from '@/test/factories';
@@ -12,10 +12,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 달력 판정·슬롯 분기 세부 검증은 service.spec.ts에서 담당.
- */
+// 달력 판정·슬롯 분기 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('StorePickupSchedule Query Resolver (real DB)', () => {
   let resolver: StorePickupScheduleQueryResolver;
   let clock: ClockService;
@@ -28,6 +25,7 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(StorePickupScheduleQueryResolver);
@@ -63,11 +61,11 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
     }
   }
 
-  it('storePickupCalendar: ID 문자열을 파싱해 월 달력을 반환한다', async () => {
+  it('pickupCalendar: ID 문자열을 파싱해 월 달력을 반환한다', async () => {
     const store = await createStore(prisma);
     await openAllWeek(store.id);
 
-    const result = await resolver.storePickupCalendar(
+    const result = await resolver.pickupCalendar(
       store.id.toString(),
       '2026-09',
     );
@@ -81,11 +79,11 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
     });
   });
 
-  it('storePickupTimeSlots: 선택 날짜의 오전/오후 슬롯을 반환한다', async () => {
+  it('pickupTimeSlots: 선택 날짜의 오전/오후 슬롯을 반환한다', async () => {
     const store = await createStore(prisma);
     await openAllWeek(store.id);
 
-    const result = await resolver.storePickupTimeSlots(
+    const result = await resolver.pickupTimeSlots(
       store.id.toString(),
       '2026-09-18',
     );

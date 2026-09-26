@@ -1,10 +1,7 @@
-import { Prisma } from '@prisma/client';
-
-import type {
-  StoreDetailRow,
-  StoreReviewStat,
-} from '@/features/store/repositories/store.repository';
+import type { ReviewStat } from '@/features/review';
+import type { StoreDetailRow } from '@/features/store/repositories/store.repository';
 import { toStoreDetail } from '@/features/store/services/store-detail-mappers.helper';
+import { Prisma } from '@/generated/prisma/client';
 
 function makeRow(overrides: Partial<StoreDetailRow> = {}): StoreDetailRow {
   return {
@@ -87,7 +84,7 @@ describe('toStoreDetail', () => {
   });
 
   it('평점은 소수 첫째 자리로 반올림하고 리뷰 수를 채운다', () => {
-    const stat: StoreReviewStat = { average: 4.666, count: 122 };
+    const stat: ReviewStat = { average: 4.666, count: 122 };
     const result = toStoreDetail(makeRow(), stat, false);
     expect(result.ratingAverage).toBe(4.7);
     expect(result.reviewCount).toBe(122);

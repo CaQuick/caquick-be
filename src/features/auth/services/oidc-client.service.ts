@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IdentityProvider } from '@prisma/client';
 import {
   Issuer,
   generators,
@@ -10,25 +9,16 @@ import {
 } from 'openid-client';
 
 import { mustGetEnv } from '@/common/helpers/config.helper';
+import type { AuthConfig } from '@/config/auth.config';
 import type { OidcProvider } from '@/features/auth/types/oidc-provider.type';
+import { IdentityProvider } from '@/generated/prisma/client';
 
-/**
- * OIDC Client를 생성/캐싱하고, 인증 URL 생성 및 콜백 처리까지 담당한다.
- */
 @Injectable()
 export class OidcClientService {
   private readonly clients = new Map<OidcProvider, Client>();
 
-  /**
-   * @param config ConfigService
-   */
   constructor(private readonly config: ConfigService) {}
 
-  /**
-   * Provider별 issuer/client를 준비한다.
-   *
-   * @param provider provider
-   */
   async getClient(provider: OidcProvider): Promise<Client> {
     const cached = this.clients.get(provider);
     if (cached) return cached;
@@ -57,11 +47,6 @@ export class OidcClientService {
     return client;
   }
 
-  /**
-   * 인증 시작에 필요한 state/nonce/pkce 및 authorizationUrl을 만든다.
-   *
-   * @param provider provider
-   */
   async buildAuthorizationUrl(provider: OidcProvider): Promise<{
     authorizationUrl: string;
     state: string;
@@ -87,15 +72,8 @@ export class OidcClientService {
   }
 
   /**
-   * provider별 OIDC scope를 반환한다.
-   *
-   * 카카오는 표준 `email`/`profile`이 아니라 자체 동의항목 ID
-   * (`account_email`/`profile_nickname`/`profile_image`)를 사용한다. 표준 scope를 보내면
-   * KOE205(invalid_scope)가 발생하므로 provider별로 분리한다.
-   * 콘솔에 활성화한 동의항목과 정확히 맞추도록 env(`OIDC_GOOGLE_SCOPE`/`OIDC_KAKAO_SCOPE`)로
-   * 덮어쓸 수 있다(예: account_email 미승인 시 카카오 scope에서 제외).
-   *
-   * @param provider provider
+   * 카카오는 표준 `email`/`profile`이 아니라 자체 동의항목 ID(`account_email`/`profile_nickname`/`profile_image`)를
+   * 쓴다 — 표준 scope를 보내면 KOE205(invalid_scope). 콘솔의 동의항목과 맞추도록 env(`OIDC_*_SCOPE`)로 덮어쓸 수 있다.
    */
   private getScope(provider: OidcProvider): string {
     if (provider === 'google') {
@@ -110,12 +88,6 @@ export class OidcClientService {
     );
   }
 
-  /**
-   * OIDC callback 처리 후 TokenSet을 반환한다.
-   *
-   * @param provider provider
-   * @param args 콜백 파라미터
-   */
   async exchangeCode(
     provider: OidcProvider,
     args: {
@@ -134,21 +106,11 @@ export class OidcClientService {
     });
   }
 
-  /**
-   * provider에 해당하는 IdentityProvider(enum)로 변환한다.
-   *
-   * @param provider provider
-   */
   toIdentityProvider(provider: OidcProvider): IdentityProvider {
     if (provider === 'google') return IdentityProvider.GOOGLE;
     return IdentityProvider.KAKAO;
   }
 
-  /**
-   * Provider별 설정을 반환한다.
-   *
-   * @param provider provider
-   */
   private getProviderConfig(provider: OidcProvider): {
     issuerUrl: string;
     clientId: string;
@@ -157,8 +119,7 @@ export class OidcClientService {
     tokenEndpointAuthMethod: ClientAuthMethod;
   } {
     const backendBaseUrl =
-      this.config.get<string>('BACKEND_BASE_URL')?.trim() ??
-      'http://localhost:4000';
+      this.config.getOrThrow<AuthConfig>('auth').backendBaseUrl;
 
     if (provider === 'google') {
       const issuerUrl = this.mustGet('OIDC_GOOGLE_ISSUER_URL');
@@ -189,11 +150,6 @@ export class OidcClientService {
     };
   }
 
-  /**
-   * 환경변수 필수값을 읽는다(없으면 fail-fast).
-   *
-   * @param key env key
-   */
   private mustGet(key: string): string {
     return mustGetEnv(this.config, key);
   }

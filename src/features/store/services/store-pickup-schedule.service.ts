@@ -1,9 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import {
   daysInMonth,
@@ -13,8 +10,8 @@ import {
   parseKstYearMonth,
   toKstYmd,
 } from '@/common/utils/kst-time';
-import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/pickup';
-import { STORE_PICKUP_SCHEDULE_ERRORS } from '@/features/store/constants/store-pickup-schedule-error-messages';
+import { PICKUP_AFTERNOON_START_MINUTES } from '@/features/store/constants/store-pickup-schedule.constants';
+import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import {
   StoreRepository,
   type StorePickupPolicyRow,
@@ -25,11 +22,11 @@ import {
   type PickupDayInput,
 } from '@/features/store/services/store-pickup-policy.helper';
 import type {
-  StorePickupCalendar,
-  StorePickupDay,
-  StorePickupSlot,
-  StorePickupTimeSlots,
-} from '@/features/store/types/store-pickup-schedule-output.type';
+  PickupCalendar,
+  PickupDay,
+  PickupSlot,
+  PickupTimeSlots,
+} from '@/features/store/types/pickup-schedule-output.type';
 
 // MySQL DATE/DATETIME 표현 범위(1000-01-01~9999-12-31) 안에서 KST 자정(-9h) 경계와
 // 익월/익일 상한 계산이 넘치지 않도록 연도를 제한한다.
@@ -39,7 +36,6 @@ import type {
 const MIN_SCHEDULE_YEAR = 1001;
 const MAX_SCHEDULE_YEAR = 9998;
 
-/** 월/일 범위 벌크 조회 결과(달력 판정 컨텍스트). */
 interface ScheduleContext {
   hoursByWeekday: Map<number, StoreWeekdayBusinessHourRow>;
   closureDates: Set<string>;
@@ -51,26 +47,22 @@ interface ScheduleContext {
 export class StorePickupScheduleService {
   constructor(
     private readonly repo: StoreRepository,
+    private readonly booked: BookedQuantityPort,
     private readonly clock: ClockService,
   ) {}
 
-  /**
-   * 매장별 월 픽업 가능 날짜. todayPickupStores와 동일한 매장 정책
-   * (요일 영업시간·특별휴무·일일 capacity·리드타임)을 월 단위로 판정한다.
-   */
-  async storePickupCalendar(
+  /** todayPickupStores와 동일한 매장 정책(요일 영업시간·특별휴무·일일 capacity·리드타임)을 월 단위로 판정한다. */
+  async pickupCalendar(
     storeId: bigint,
     yearMonth: string,
-  ): Promise<StorePickupCalendar> {
+  ): Promise<PickupCalendar> {
     const ym = parseKstYearMonth(yearMonth);
     if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
-      throw new BadRequestException(
-        STORE_PICKUP_SCHEDULE_ERRORS.INVALID_YEAR_MONTH,
-      );
+      throw new DomainException('INVALID_YEAR_MONTH');
     }
     const store = await this.repo.findStoreForPickupSchedule(storeId);
     if (!store) {
-      throw new NotFoundException(STORE_PICKUP_SCHEDULE_ERRORS.STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
 
     const now = this.clock.now();
@@ -84,45 +76,39 @@ export class StorePickupScheduleService {
       kstMidnightUtc(ym.year, ym.month + 1, 1),
     );
 
-    const days: StorePickupDay[] = Array.from(
-      { length: dayCount },
-      (_, index) => {
-        const day = index + 1;
-        const { reason } = evaluatePickupDay(
-          this.pickupDayInput(store, ctx, now, ym.year, ym.month, day),
-        );
-        return {
-          date: new Date(Date.UTC(ym.year, ym.month - 1, day))
-            .toISOString()
-            .slice(0, 10),
-          selectable: reason === null,
-          reason,
-        };
-      },
-    );
+    const days: PickupDay[] = Array.from({ length: dayCount }, (_, index) => {
+      const day = index + 1;
+      const { reason } = evaluatePickupDay(
+        this.pickupDayInput(store, ctx, now, ym.year, ym.month, day),
+      );
+      return {
+        date: new Date(Date.UTC(ym.year, ym.month - 1, day))
+          .toISOString()
+          .slice(0, 10),
+        selectable: reason === null,
+        reason,
+      };
+    });
 
     return { yearMonth, days };
   }
 
-  /**
-   * 매장별 특정 날짜의 시간 슬롯(오전/오후). 영업하지 않는 날은 빈 배열,
-   * 선택 불가 날짜(과거·범위 초과·휴무·capacity 소진)는 전 슬롯 마감 표기.
-   */
-  async storePickupTimeSlots(
+  /** 영업하지 않는 날은 빈 배열, 선택 불가 날짜(과거·범위 초과·휴무·capacity 소진)는 전 슬롯 마감 표기. */
+  async pickupTimeSlots(
     storeId: bigint,
     date: string,
-  ): Promise<StorePickupTimeSlots> {
+  ): Promise<PickupTimeSlots> {
     const parsed = parseKstDate(date);
     if (!parsed) {
-      throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
+      throw new DomainException('INVALID_DATE');
     }
     const { year, month, day } = toKstYmd(parsed);
     if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
-      throw new BadRequestException(STORE_PICKUP_SCHEDULE_ERRORS.INVALID_DATE);
+      throw new DomainException('INVALID_DATE');
     }
     const store = await this.repo.findStoreForPickupSchedule(storeId);
     if (!store) {
-      throw new NotFoundException(STORE_PICKUP_SCHEDULE_ERRORS.STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
 
     const now = this.clock.now();
@@ -160,15 +146,14 @@ export class StorePickupScheduleService {
   }
 
   /**
-   * 특정 픽업 일시가 예약 가능한지 판정한다(주문 생성 재검증용).
-   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합과
-   * capacity 잔여(기존 점유 + additionalQuantity ≤ capacity)를 확인한다.
+   * 달력·시간 슬롯과 동일 규칙에 더해 슬롯 시작 시각 정합을 확인한다.
+   * **capacity는 보지 않는다** — 일일 수량 판정은 order가 자기 복제본으로만 한다.
+   * 여기서 catalog 설정을 함께 보면 복제 지연 구간에 두 소스가 어긋나 "복제본 없으면 무제한"이 깨진다.
    * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
    */
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
-    additionalQuantity?: number;
   }): Promise<boolean> {
     const store = await this.repo.findStoreForPickupSchedule(args.storeId);
     if (!store) return false;
@@ -192,22 +177,12 @@ export class StorePickupScheduleService {
       new Date(Date.UTC(year, month - 1, day + 1)),
       kstMidnightUtc(year, month, day),
       kstMidnightUtc(year, month, day + 1),
+      { withCapacity: false },
     );
 
     const input = this.pickupDayInput(store, ctx, now, year, month, day);
     const result = evaluatePickupDay(input);
     if (result.reason !== null) return false;
-
-    // capacity 잔여: 이번 주문 수량까지 더해 초과하면 불가 — 공용 판정(소진 여부)에
-    // 얹는 주문 생성 전용 확장 검사.
-    // (명세 외 정책 결정: capacity는 일일 제작 '수량' 소진 모델과 일관되게 해석)
-    const quantity = args.additionalQuantity ?? 1;
-    if (
-      input.capacity !== undefined &&
-      input.booked + quantity > input.capacity
-    ) {
-      return false;
-    }
 
     const pickupMinutes = kstMinutesOfDay(args.pickupAt);
     return result.slots.some(
@@ -215,12 +190,14 @@ export class StorePickupScheduleService {
     );
   }
 
+  /** withCapacity=false면 capacity·예약 수량을 읽지 않는다(주문 생성 재검증 — 수량 판정은 order 몫). */
   private async loadScheduleContext(
     storeId: bigint,
     fromDateOnly: Date,
     toDateOnly: Date,
     rangeStartUtc: Date,
     rangeEndUtc: Date,
+    options: { withCapacity: boolean } = { withCapacity: true },
   ): Promise<ScheduleContext> {
     const [hours, closureDates, capacities, bookedByDate] = await Promise.all([
       this.repo.findBusinessHoursForStore(storeId),
@@ -229,12 +206,16 @@ export class StorePickupScheduleService {
         fromDateOnly,
         toDateOnly,
       ),
-      this.repo.findDailyCapacitiesInRange(storeId, fromDateOnly, toDateOnly),
-      this.repo.sumPickupQuantitiesByKstDate(
-        storeId,
-        rangeStartUtc,
-        rangeEndUtc,
-      ),
+      options.withCapacity
+        ? this.repo.findDailyCapacitiesInRange(
+            storeId,
+            fromDateOnly,
+            toDateOnly,
+          )
+        : new Map<string, number>(),
+      options.withCapacity
+        ? this.booked.sumByKstDate(storeId, rangeStartUtc, rangeEndUtc)
+        : new Map<string, number>(),
     ]);
     return {
       hoursByWeekday: new Map(hours.map((h) => [h.day_of_week, h])),
@@ -244,10 +225,7 @@ export class StorePickupScheduleService {
     };
   }
 
-  /**
-   * 월/일 벌크 조회 컨텍스트를 해당 KST 달력일의 정책 입력으로 변환한다.
-   * 판정 자체는 공용 정책(store-pickup-policy.helper)이 담당한다.
-   */
+  /** 판정 자체는 공용 정책(store-pickup-policy.helper)이 담당한다. */
   private pickupDayInput(
     store: StorePickupPolicyRow,
     ctx: ScheduleContext,
@@ -270,8 +248,7 @@ export class StorePickupScheduleService {
   }
 }
 
-/** "HH:MM" 슬롯 시각을 자정 경과 분으로 변환(오전/오후 분리용). */
-function slotMinutes(slot: StorePickupSlot): number {
+function slotMinutes(slot: PickupSlot): number {
   const hours = Number(slot.time.slice(0, 2));
   const minutes = Number(slot.time.slice(3, 5));
   return hours * 60 + minutes;

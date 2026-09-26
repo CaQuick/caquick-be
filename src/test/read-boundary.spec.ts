@@ -1,0 +1,279 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  collectCrossReadsInFeatures,
+  loadSchema,
+} from '@/test/model-ownership.helper';
+
+// 서비스 경계를 넘는 읽기(nested include/select/_count, relation 필터, raw JOIN, 다른 서비스 모델의 root read)를 허용 목록으로 고정한다.
+// P1 마감 기준 남은 98건은 전부 P4 이관분이다 — 추적 이슈 #393(federation·projection)·#394(집계)·#395(사가). 새 항목은 늘리지 않는다.
+// 한계: Prisma.raw(table)처럼 테이블명이 동적인 raw SQL은 보지 못한다(admin.repository lockActiveRow — D2 해체로 소멸).
+
+const schema = loadSchema();
+
+/** 'file|kind|key' — nested/filter는 Root.path->Target, raw는 method:table,..., root는 method:Model.호출 */
+/**
+ * P4에서 어떻게 없앨지로 나눈 허용 목록. 새 항목은 반드시 한 범주에 넣는다 —
+ * 어느 범주에도 안 맞으면 P4 이관분이 아니라 지금 고쳐야 할 read라는 뜻이다.
+ */
+const CROSS_READ_BY_P4_PLAN: Record<string, string[]> = {
+  // 표시값을 다른 서비스 모델에서 nested로 읽는다 → P4 federation으로 이관
+  'display-nested': [
+    'src/features/auth/repositories/account-admin.repository.ts|nested|Account.store->Store',
+    'src/features/conversation/repositories/conversation.repository.ts|nested|StoreConversation.store->Store',
+    'src/features/order/repositories/order.repository.ts|nested|Order.account->Account',
+    'src/features/order/repositories/order.repository.ts|nested|Order.account.user_profile->UserProfile',
+    'src/features/order/repositories/order.repository.ts|nested|Order.items.store->Store',
+    'src/features/order/repositories/order.repository.ts|nested|Order.items.store.business_hours->StoreBusinessHour',
+    'src/features/order/repositories/order.repository.ts|nested|OrderItem.store->Store',
+    'src/features/order/repositories/order.repository.ts|nested|OrderItem.store.region->Region',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.account->Account',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.account.user_profile->UserProfile',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.product->Product',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.product.images->ProductImage',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.product.store->Store',
+    'src/features/review/repositories/product-review.repository.ts|nested|Review.product.store.region->Region',
+    'src/features/review/repositories/product-review.repository.ts|nested|ReviewComment.account->Account',
+    'src/features/review/repositories/product-review.repository.ts|nested|ReviewComment.account.user_profile->UserProfile',
+    'src/features/review/repositories/recent-product-view.repository.ts|nested|RecentProductView.product->Product',
+    'src/features/review/repositories/recent-product-view.repository.ts|nested|RecentProductView.product.images->ProductImage',
+    'src/features/review/repositories/recent-product-view.repository.ts|nested|RecentProductView.product.store->Store',
+    'src/features/review/repositories/recent-product-view.repository.ts|nested|RecentProductView.product.store.region->Region',
+    'src/features/review/repositories/review-admin.repository.ts|nested|Review.account->Account',
+    'src/features/review/repositories/review-admin.repository.ts|nested|Review.account.user_profile->UserProfile',
+    'src/features/review/repositories/review-admin.repository.ts|nested|Review.store->Store',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewComment.account->Account',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewComment.account.user_profile->UserProfile',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review.account->Account',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review.account.user_profile->UserProfile',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account->Account',
+    'src/features/review/repositories/review-admin.repository.ts|nested|ReviewReport.review_comment.account.user_profile->UserProfile',
+    'src/features/review/repositories/review-engagement.repository.ts|root|likeReview:Store.findFirst',
+    'src/features/review/repositories/review-order-item-snapshot.helper.ts|root|snapshotReviewOrderItem:OrderItem.findUniqueOrThrow',
+    'src/features/review/repositories/review-read.repository.ts|nested|Review.account->Account',
+    'src/features/review/repositories/review-read.repository.ts|nested|Review.account.user_profile->UserProfile',
+    'src/features/review/repositories/review.repository.ts|nested|Review.order_item->OrderItem',
+    'src/features/review/repositories/store-wishlist.repository.ts|nested|StoreWishlistItem.store->Store',
+    'src/features/review/repositories/store-wishlist.repository.ts|nested|StoreWishlistItem.store.region->Region',
+    'src/features/review/repositories/wishlist.repository.ts|nested|WishlistItem.product->Product',
+    'src/features/review/repositories/wishlist.repository.ts|nested|WishlistItem.product.images->ProductImage',
+    'src/features/review/repositories/wishlist.repository.ts|nested|WishlistItem.product.store->Store',
+    'src/features/review/repositories/wishlist.repository.ts|nested|WishlistItem.product.store.region->Region',
+    'src/features/store/repositories/store-admin.repository.ts|nested|Store.seller_account->Account',
+    'src/features/store/repositories/store-admin.repository.ts|nested|Store.seller_account.credential->AccountCredential',
+  ],
+  // 자격·가시성 판정에 쓴다(값은 화면에 안 나간다) → P4에서 게이트 API·projection
+  'visibility-gate': [
+    'src/features/auth/repositories/account-credential.repository.ts|nested|AccountCredential.account.store->Store',
+    'src/features/auth/repositories/account.repository.ts|nested|Account.store->Store',
+    'src/features/notification/repositories/notification-admin.repository.ts|root|filterActiveUserAccountIds:Account.findMany',
+    'src/features/notification/repositories/notification-admin.repository.ts|root|listActiveUserAccountIds:Account.findMany',
+    'src/features/order/repositories/order.repository.ts|filter|OrderItem.review->Review',
+    'src/features/order/repositories/order.repository.ts|nested|Order.items.review->Review',
+    'src/features/order/repositories/order.repository.ts|root|findAccountWithProfileForCheckout:Account.findFirst',
+    'src/features/review/repositories/product-review.repository.ts|filter|Review.product->Product',
+    'src/features/review/repositories/product-review.repository.ts|filter|Review.store->Store',
+    'src/features/review/repositories/recent-product-view.repository.ts|filter|RecentProductView.product->Product',
+    'src/features/review/repositories/recent-product-view.repository.ts|filter|RecentProductView.product.store->Store',
+    'src/features/review/repositories/review-read.repository.ts|filter|Review.product->Product',
+    'src/features/review/repositories/review-read.repository.ts|filter|Review.store->Store',
+    'src/features/review/repositories/review-read.repository.ts|raw|listReviewIdsByLikes:product,store',
+    'src/features/review/repositories/review-read.repository.ts|raw|listReviewIdsByLikes:store',
+    'src/features/review/repositories/review-read.repository.ts|raw|listShowcaseReviewIdsByLikes:product,review,review_like,review_media,store',
+    'src/features/review/repositories/review.repository.ts|nested|OrderItem.review->Review',
+    'src/features/review/repositories/review.repository.ts|root|findOrderItemForReview:OrderItem.findFirst',
+    'src/features/review/repositories/store-wishlist.repository.ts|filter|StoreWishlistItem.store->Store',
+    'src/features/review/repositories/store-wishlist.repository.ts|root|isActiveUserAccount:Account.findFirst',
+    'src/features/review/repositories/wishlist.repository.ts|filter|WishlistItem.product->Product',
+    'src/features/review/repositories/wishlist.repository.ts|filter|WishlistItem.product.store->Store',
+    'src/features/store/repositories/store-seller.repository.ts|nested|Account.store->Store',
+    'src/features/store/repositories/store-seller.repository.ts|root|findSellerAccountContext:Account.findFirst',
+  ],
+  // 다른 서비스 모델의 집계·통계 → P4에서 통계 컬럼·projection
+  'ranking-aggregate': [
+    'src/features/auth/repositories/account-admin.repository.ts|nested|Account._count.orders->Order',
+    'src/features/auth/repositories/account-admin.repository.ts|nested|Account._count.reviews->Review',
+    'src/features/notification/repositories/notification-admin.repository.ts|root|snapshotActiveUserAudience:Account.aggregate',
+    'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.order_items->OrderItem',
+    'src/features/product/repositories/product-admin.repository.ts|nested|Product._count.reviews->Review',
+    'src/features/store/repositories/store-admin.repository.ts|nested|Store._count.order_items->OrderItem',
+    'src/features/store/repositories/store-stats.repository.ts|root|aggregateRecentOrderCounts:OrderItem.groupBy',
+    'src/features/store/repositories/store-stats.repository.ts|root|aggregateSoldQuantities:OrderItem.groupBy',
+    'src/features/store/repositories/store.repository.ts|root|aggregateWishlistCounts:StoreWishlistItem.groupBy',
+  ],
+  // 다른 서비스 모델을 검색 조건으로 조인한다 → P4에서 검색 projection
+  'cross-search': [
+    'src/features/auth/repositories/account-admin.repository.ts|filter|Account.store->Store',
+  ],
+  // raw SQL 행 잠금이 다른 서비스 테이블을 활성 조건으로 JOIN한다 → P4에서 잠금 설계 자체를 바꿔야 한다
+  'lock-raw': [
+    'src/features/review/repositories/review-engagement.repository.ts|raw|createReviewComment:product,review,store',
+    'src/features/review/repositories/review-report.repository.ts|raw|lockReportableComment:product,review,review_comment,store',
+    'src/features/review/repositories/review-report.repository.ts|raw|lockReportableTarget:product,review,store',
+  ],
+  // 경계를 넘지 않는다. 페이로드가 변수라 검사기가 형태를 못 본 자기 소유 모델의 자리
+  'opaque-args': [
+    'src/features/auth/repositories/account-admin.repository.ts|opaque|createSellerAccount:SellerProfile.data=args.profile',
+    'src/features/product/repositories/product-admin.repository.ts|opaque|createBanner:Banner.data=data',
+    'src/features/product/repositories/product-admin.repository.ts|opaque|createOrRestoreCategory:Category.data=data',
+    'src/features/product/repositories/product-admin.repository.ts|opaque|updateBanner:Banner.data=args.data',
+    'src/features/product/repositories/product-admin.repository.ts|opaque|updateCategory:Category.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|createOptionGroup:ProductOptionGroup.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|createOptionItem:ProductOptionItem.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|createProduct:Product.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|findFirstBanner:Banner.where=placementWhere',
+    'src/features/product/repositories/product.repository.ts|opaque|updateOptionGroup:ProductOptionGroup.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|updateOptionItem:ProductOptionItem.data=args.data',
+    'src/features/product/repositories/product.repository.ts|opaque|updateProduct:Product.data=args.data',
+    'src/features/region/repositories/region-admin.repository.ts|opaque|createOrRestoreRegion:Region.data=data',
+    'src/features/region/repositories/region-admin.repository.ts|opaque|updateRegion:Region.data=args.data',
+    'src/features/review/repositories/review-lock.helper.ts|opaque|resolvePendingReports:ReviewReport.where=args.where',
+    'src/features/store/repositories/store-admin.repository.ts|opaque|updateStore:Store.data=args.data',
+    'src/features/store/repositories/store-seller-create.helper.ts|opaque|createStoreForSeller:Store.data=args.store',
+    'src/features/store/repositories/store-seller.repository.ts|opaque|updateFaqTopic:StoreFaqTopic.data=args.data',
+    'src/features/store/repositories/store-seller.repository.ts|opaque|updateStore:Store.data=args.data',
+  ],
+};
+
+const CROSS_READ_ALLOWLIST: string[] = Object.values(
+  CROSS_READ_BY_P4_PLAN,
+).flat();
+
+function keysOf(dir?: string): string[] {
+  return collectCrossReadsInFeatures(schema, dir)
+    .map((r) => `${r.file}|${r.kind}|${r.key}`)
+    .sort();
+}
+
+describe('서비스 경계를 넘는 read', () => {
+  it('허용 목록과 정확히 일치한다', () => {
+    expect(keysOf()).toEqual([...CROSS_READ_ALLOWLIST].sort());
+  });
+
+  // P1 마감 실측(2026-09-19). 항목이 늘거나 줄면 이 표도 같이 고쳐야 한다 — 범주 없이 늘어나는 걸 막는다.
+  it.each([
+    ['display-nested', 42],
+    ['visibility-gate', 24],
+    ['ranking-aggregate', 9],
+    ['cross-search', 1],
+    ['lock-raw', 3],
+    ['opaque-args', 19],
+  ])('%s 범주는 %d건', (category, count) => {
+    expect(CROSS_READ_BY_P4_PLAN[category]).toHaveLength(count);
+  });
+
+  it('모든 항목은 정확히 한 범주에 속한다', () => {
+    expect(new Set(CROSS_READ_ALLOWLIST).size).toBe(
+      CROSS_READ_ALLOWLIST.length,
+    );
+    expect(Object.keys(CROSS_READ_BY_P4_PLAN)).toEqual([
+      'display-nested',
+      'visibility-gate',
+      'ranking-aggregate',
+      'cross-search',
+      'lock-raw',
+      'opaque-args',
+    ]);
+  });
+
+  describe('검사기 반증', () => {
+    let dir: string;
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), 'read-boundary-'));
+      mkdirSync(join(dir, 'review'), { recursive: true });
+      writeFileSync(
+        join(dir, 'review', 'fragments.ts'),
+        [
+          'export const productInclude = { product: { select: { store: { select: { region: true } } } } } as const;',
+          'export function buildAccountWhere() { return { account: { user_profile: { is: { nickname: "x" } } } }; }',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(dir, 'review', 'probe.repository.ts'),
+        [
+          "import { activeWhere } from '@/prisma';",
+          "import { buildAccountWhere, productInclude } from './fragments';",
+          'const authorInclude = { account: { select: { user_profile: true } } } as const;',
+          'export class R {',
+          '  constructor(private readonly prisma: any) {}',
+          '  private readonly itemInclude = { order_item: { select: { store: true } } };',
+          '  private scoped(where: object) { return { ...where, store: { is_active: true } }; }',
+          '  private publicWhere(photoOnly: boolean) {',
+          '    return { ...activeWhere, store: { region: { is_active: true } }, ...(photoOnly ? { media: { some: {} } } : {}) };',
+          '  }',
+          '  async a() {',
+          '    const where = { product: { is_active: true, store: { deleted_at: null } } };',
+          '    return this.prisma.review.findMany({ where, include: { ...authorInclude, order_item: { select: { product: true } } } });',
+          '  }',
+          '  async b(tx: any) {',
+          '    return tx.$queryRaw`SELECT r.id FROM review r JOIN product p ON p.id = r.product_id WHERE p.is_active = 1`;',
+          '  }',
+          '  async c() {',
+          '    return this.prisma.review.count({ where: { media: { some: { deleted_at: null } } } });',
+          '  }',
+          '  async d() {',
+          '    const args = { where: { store: { is_active: true } } };',
+          '    return this.prisma.review.count(args);',
+          '  }',
+          '  async e() {',
+          '    return this.prisma.review.findMany({ where: this.publicWhere(true), include: this.itemInclude });',
+          '  }',
+          '  async f(args: { where?: object }, ids: bigint[]) {',
+          '    return this.prisma.review.findMany({',
+          '      where: { AND: [args.where ?? buildAccountWhere(), { OR: ids.map((id) => ({ order_item: { store: { id } } })) }] },',
+          '      include: productInclude,',
+          '    });',
+          '  }',
+          '  async i() {',
+          '    return this.prisma.review.count({ where: this.scoped({ order_item: { product: { is_active: true } } }) });',
+          '  }',
+          '  async j() {',
+          '    return this.prisma.review.findMany({ include: { _count: true } });',
+          '  }',
+          '  async k(trx: any) {',
+          '    return trx.order.findMany({ include: { _count: { select: { items: { where: { store: { is: { is_active: true } } } } } } } });',
+          '  }',
+          '  async g(args: any) {',
+          '    return this.prisma.review.findMany(args);',
+          '  }',
+          '  async h(args: { data: any }) {',
+          '    return this.prisma.review.update({ where: { id: 1n }, data: args.data });',
+          '  }',
+          '}',
+        ].join('\n'),
+      );
+    });
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('상수·클래스 멤버·헬퍼 함수(파라미터 전달 포함)·import·??·map으로 만든 include/where·`_count`(true·필터)와 raw JOIN·다른 서비스 모델의 root read를 어떤 수신자 이름에서든 잡고, 같은 서비스 안의 relation은 무시하며, 못 푸는 잎(??의 왼쪽·파라미터)은 opaque로 남긴다', () => {
+      expect(keysOf(dir)).toEqual([
+        'review/probe.repository.ts|filter|Order._count.items.store->Store',
+        'review/probe.repository.ts|filter|Review.account->Account',
+        'review/probe.repository.ts|filter|Review.account.user_profile->UserProfile',
+        'review/probe.repository.ts|filter|Review.order_item->OrderItem',
+        'review/probe.repository.ts|filter|Review.order_item.product->Product',
+        'review/probe.repository.ts|filter|Review.order_item.store->Store',
+        'review/probe.repository.ts|filter|Review.product->Product',
+        'review/probe.repository.ts|filter|Review.product.store->Store',
+        'review/probe.repository.ts|filter|Review.store->Store',
+        'review/probe.repository.ts|filter|Review.store.region->Region',
+        'review/probe.repository.ts|nested|Review._count.notifications->Notification',
+        'review/probe.repository.ts|nested|Review.account->Account',
+        'review/probe.repository.ts|nested|Review.account.user_profile->UserProfile',
+        'review/probe.repository.ts|nested|Review.order_item->OrderItem',
+        'review/probe.repository.ts|nested|Review.order_item.product->Product',
+        'review/probe.repository.ts|nested|Review.order_item.store->Store',
+        'review/probe.repository.ts|nested|Review.product->Product',
+        'review/probe.repository.ts|nested|Review.product.store->Store',
+        'review/probe.repository.ts|nested|Review.product.store.region->Region',
+        'review/probe.repository.ts|opaque|f:Review.where.AND=args.where',
+        'review/probe.repository.ts|opaque|g:Review=args',
+        'review/probe.repository.ts|opaque|h:Review.data=args.data',
+        'review/probe.repository.ts|raw|b:product,review',
+        'review/probe.repository.ts|root|k:Order.findMany',
+      ]);
+    });
+  });
+});

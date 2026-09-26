@@ -13,37 +13,38 @@ import {
 import type { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
 import type { PopularCakesInput } from '@/features/product/dto/inputs/popular-cakes.input';
 import type { RandomCakesInput } from '@/features/product/dto/inputs/random-cakes.input';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
-import {
-  toHomeBanner,
-  toPopularCake,
-} from '@/features/product/services/product-home-mappers.helper';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { toHomeBanner } from '@/features/product/services/product-home-mappers.helper';
 import type {
   CustomCakeShowcaseItem,
   PopularCakesResult,
   RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
 
 @Injectable()
 export class ProductHomeService {
   constructor(
     private readonly repo: ProductRepository,
-    private readonly reviewRepo: ProductReviewRepository,
+    private readonly reviewRepo: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly random: RandomService,
+    private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
-  /**
-   * 홈 '상황별 인기 케이크' 섹션. 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을
-   * 상품 단위로 적용해 상위 카드를 뽑고, 카테고리 대표 배너를 함께 반환한다.
-   * 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리, 정책 확정 사항).
-   */
-  async popularCakes(input?: PopularCakesInput): Promise<PopularCakesResult> {
+  /** 인기 매장과 동일 산식(최근 주문·찜·베이지안 평점)을 상품 단위로 적용한다. 배너는 등록분이 없으면 null(fallback 없음 — FE placeholder 처리). */
+  async popularCakes(
+    input?: PopularCakesInput,
+    accountId?: bigint,
+  ): Promise<PopularCakesResult> {
     // DTO(@Max)가 1차로 막지만, 직접 호출 경로에서도 "최대 3개" 계약을 지키도록 클램프
     const limit = Math.min(
       input?.limit ?? DEFAULT_POPULAR_CAKES_LIMIT,
@@ -71,10 +72,10 @@ export class ProductHomeService {
 
     const [wishlistCounts, reviewStats, orderCounts, globalAverage] =
       await Promise.all([
-        this.repo.aggregateProductWishlistCounts(productIds),
-        this.repo.aggregateProductReviewStats(productIds),
-        this.repo.aggregateProductRecentOrderCounts(productIds, since),
-        this.repo.globalReviewAverage(),
+        this.wishlists.aggregateProductWishlistCounts(productIds),
+        this.reviewRepo.aggregateReviewStats('product_id', productIds),
+        this.stats.aggregateRecentOrderCounts('product_id', productIds, since),
+        this.reviewRepo.globalReviewAverage(),
       ]);
     const prior = globalAverage ?? DEFAULT_GLOBAL_RATING_PRIOR;
 
@@ -85,18 +86,17 @@ export class ProductHomeService {
       prior,
     );
 
-    const items = scored
-      .slice(0, limit)
-      .map((entry, idx) => toPopularCake(entry.candidate, idx + 1));
+    const cards = await this.cards.buildCards(
+      scored.slice(0, limit).map((entry) => entry.candidate),
+      accountId,
+      { stats: reviewStats },
+    );
+    const items = cards.map((product, idx) => ({ rank: idx + 1, product }));
 
     return { banner: bannerOutput, items, rankedAt };
   }
 
-  /**
-   * 홈 '다른 사람들은 이렇게 만들었어요' 제작 후기(전체기간 좋아요순).
-   * Before(주문 커스텀 크롭)/After(리뷰 첫 이미지)가 모두 있는 리뷰만 후보.
-   * 데이터가 없으면 빈 배열(FE가 빈 상태 문구 처리).
-   */
+  /** Before(주문 커스텀 크롭)/After(리뷰 첫 이미지)가 모두 있는 리뷰만 후보 — 대비 연출이 섹션의 본질. */
   async customCakeShowcase(
     input?: CustomCakeShowcaseInput,
   ): Promise<CustomCakeShowcaseItem[]> {
@@ -112,7 +112,7 @@ export class ProductHomeService {
     const items: CustomCakeShowcaseItem[] = [];
     for (const entry of ranked) {
       const row = rowById.get(entry.id.toString());
-      const beforeImageUrl = row?.order_item.free_edits[0]?.crop_image_url;
+      const beforeImageUrl = row?.before_image_url;
       const afterImageUrl = row?.media[0]?.media_url;
       // 후보 SQL이 존재를 보장하지만, 조회 사이의 삭제 경합에 대비해 한 번 더 방어
       if (!row || !beforeImageUrl || !afterImageUrl) continue;
@@ -132,10 +132,7 @@ export class ProductHomeService {
     return items;
   }
 
-  /**
-   * 홈 '렌덤 케이크 둘러보기'. 호출마다 후보 풀에서 무작위 재추출한다
-   * (호출 간 중복 허용 — '새로보기 1/3' 카운트는 FE 로컬 상태, 정책 확정 사항).
-   */
+  /** 호출마다 후보 풀에서 무작위 재추출한다(호출 간 중복 허용 — '새로보기 1/3' 카운트는 FE 로컬 상태). */
   async randomCakes(input?: RandomCakesInput): Promise<RandomCakesResult> {
     const limit = input?.limit ?? DEFAULT_RANDOM_CAKES_LIMIT;
     const categoryId =

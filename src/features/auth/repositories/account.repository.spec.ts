@@ -1,10 +1,8 @@
-import { ConflictException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-import { IdentityProvider } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { buildWithdrawnProviderSubject } from '@/common/utils/withdrawn-identity';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
+import { IdentityProvider } from '@/generated/prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -241,7 +239,6 @@ describe('AccountRepository (real DB)', () => {
         emailVerified: true,
       });
 
-      // 새 계정으로 가입된다
       expect(result.account).not.toBeNull();
       expect(result.account!.id).not.toBe(withdrawn.id);
       expect(result.account!.deleted_at).toBeNull();
@@ -294,7 +291,7 @@ describe('AccountRepository (real DB)', () => {
           providerEmail: 'orphan@example.com',
           emailVerified: true,
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrowDomain(409);
     });
 
     it('기존 Identity + account email이 null + user_profile 없는 경우: profile 신규 생성 + email 주입', async () => {

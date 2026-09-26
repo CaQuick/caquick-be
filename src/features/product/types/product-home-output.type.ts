@@ -1,7 +1,4 @@
-/**
- * product-home resolver 반환용 도메인 출력 타입.
- * SDL(product-home.graphql)의 타입과 필드 일치.
- */
+import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
 
 export interface HomeBanner {
   id: string;
@@ -16,16 +13,8 @@ export interface HomeBanner {
 }
 
 export interface PopularCake {
-  id: string;
-  storeId: string;
   rank: number;
-  name: string;
-  thumbnailUrl: string | null;
-  storeName: string;
-  regionLabel: string | null;
-  regularPrice: number;
-  salePrice: number | null;
-  discountRate: number;
+  product: ProductCardOutput;
 }
 
 export interface PopularCakesResult {

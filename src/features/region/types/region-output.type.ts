@@ -1,8 +1,3 @@
-/**
- * region resolver 반환용 도메인 출력 타입.
- * SDL(region.types.graphql)의 RegionGroup / Region / RegionSearchResult 와 필드 일치.
- */
-
 export interface RegionGroupOutput {
   id: string;
   name: string;

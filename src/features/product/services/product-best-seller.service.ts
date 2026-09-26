@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { ClockService } from '@/common/providers/clock.service';
 import { DAY_MS } from '@/common/utils/kst-time';
+import { HOUR_MS } from '@/common/utils/kst-time';
 import {
   DEFAULT_REALTIME_BEST_LIMIT,
   MAX_REALTIME_BEST_LIMIT,
@@ -9,31 +10,34 @@ import {
 } from '@/features/product/constants/product-best-seller.constants';
 import type { RealtimeBestCakesInput } from '@/features/product/dto/inputs/realtime-best-cakes.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
-import { toPopularCake } from '@/features/product/services/product-home-mappers.helper';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import type { RealtimeBestCakesResult } from '@/features/product/types/product-best-seller-output.type';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
-
-const HOUR_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class ProductBestSellerService {
   constructor(
     private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
+    private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
   /**
-   * 검색 진입 화면 '실시간 판매 Best'. 최근 24시간 유효 주문(인기 점수와 동일 상태 집합)의
-   * 수량 합 desc로 정렬하고, 동률은 인기 점수(→ 리뷰수 → id desc) 순으로 푼다(자체 판단).
-   * 판매가 0인 상품은 'Best'가 아니므로 제외 — 데이터가 적으면 빈 목록이 될 수 있다(사용자 확정).
-   * 호출 시점에 실시간 집계하며 rankedAt은 호출 시각이다(스냅샷 없음).
+   * 최근 24시간 유효 주문(인기 점수와 동일 상태 집합)의 수량 합 desc, 동률은 인기 점수(→ 리뷰수 → id desc) 순.
+   * 판매가 0인 상품은 'Best'가 아니므로 제외 — 데이터가 적으면 빈 목록이 될 수 있다. 호출 시점에 실시간 집계한다(스냅샷 없음).
    */
   async realtimeBestCakes(
     input?: RealtimeBestCakesInput,
+    accountId?: bigint,
   ): Promise<RealtimeBestCakesResult> {
     const limit = Math.min(
       input?.limit ?? DEFAULT_REALTIME_BEST_LIMIT,
@@ -45,7 +49,8 @@ export class ProductBestSellerService {
     if (candidates.length === 0) return { items: [], rankedAt };
 
     const productIds = candidates.map((c) => c.id);
-    const soldQuantities = await this.repo.aggregateProductSoldQuantities(
+    const soldQuantities = await this.stats.aggregateSoldQuantities(
+      'product_id',
       productIds,
       new Date(rankedAt.getTime() - REALTIME_BEST_WINDOW_HOURS * HOUR_MS),
     );
@@ -59,10 +64,10 @@ export class ProductBestSellerService {
     );
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
-        this.repo.aggregateProductWishlistCounts(soldIds),
-        this.repo.aggregateProductReviewStats(soldIds),
-        this.repo.aggregateProductRecentOrderCounts(soldIds, since),
-        this.repo.globalReviewAverage(),
+        this.wishlists.aggregateProductWishlistCounts(soldIds),
+        this.reviews.aggregateReviewStats('product_id', soldIds),
+        this.stats.aggregateRecentOrderCounts('product_id', soldIds, since),
+        this.reviews.globalReviewAverage(),
       ]);
     const byPopularity = scoreAndSortByPopularity(
       sold,
@@ -77,10 +82,13 @@ export class ProductBestSellerService {
         (soldQuantities.get(a.candidate.id) ?? 0),
     );
 
+    const cards = await this.cards.buildCards(
+      ranked.slice(0, limit).map((entry) => entry.candidate),
+      accountId,
+      { stats: reviewStats },
+    );
     return {
-      items: ranked
-        .slice(0, limit)
-        .map((entry, idx) => toPopularCake(entry.candidate, idx + 1)),
+      items: cards.map((product, idx) => ({ rank: idx + 1, product })),
       rankedAt,
     };
   }

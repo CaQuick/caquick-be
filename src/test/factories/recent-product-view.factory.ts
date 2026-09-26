@@ -1,5 +1,7 @@
-import type { PrismaClient, RecentProductView } from '@prisma/client';
-
+import type {
+  PrismaClient,
+  RecentProductView,
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 

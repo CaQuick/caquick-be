@@ -1,7 +1,8 @@
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import type {
   ConversationBodyFormat,
   ConversationSenderType,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 
 export interface InquiryBusinessHourOutput {
   dayOfWeek: number;
@@ -50,24 +51,13 @@ export interface MyConversationItemOutput {
   unreadCount: number;
 }
 
-export interface MyConversationConnection {
-  items: MyConversationItemOutput[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type MyConversationConnection =
+  CursorConnection<MyConversationItemOutput>;
 
-export interface ConversationMessageConnection {
-  items: ConversationMessageOutput[];
-  totalCount: number;
-  hasMore: boolean;
-  nextCursor: string | null;
-}
+export type ConversationMessageConnection =
+  CursorConnection<ConversationMessageOutput>;
 
-/**
- * subscription 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO
- * 문자열로 나른다(DateTime 스칼라가 문자열도 직렬화 가능).
- */
+/** Redis JSON 직렬화를 거치므로 날짜는 ISO 문자열로 나른다(DateTime 스칼라가 문자열도 직렬화 가능). */
 export interface ConversationMessageEvent {
   id: string;
   conversationId: string;

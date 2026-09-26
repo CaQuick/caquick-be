@@ -1,0 +1,88 @@
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
+import { UserOrderService } from '@/features/order/services/order-my.service';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createOrder,
+  createOrderItem,
+  createProduct,
+  createStore,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
+
+describe('User Order Resolver (real DB)', () => {
+  let resolver: UserOrderQueryResolver;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [
+        UserOrderQueryResolver,
+        UserOrderService,
+        OrderRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders(),
+      ],
+    });
+    resolver = module.get(UserOrderQueryResolver);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it('Query.myOrders: DB에서 본인 주문 목록을 반환한다', async () => {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const store = await createStore(prisma);
+    const product = await createProduct(prisma, { store_id: store.id });
+    const order = await createOrder(prisma, {
+      account_id: account.id,
+      status: 'SUBMITTED',
+    });
+    await createOrderItem(prisma, {
+      order_id: order.id,
+      product_id: product.id,
+    });
+
+    const result = await resolver.myOrders(
+      { accountId: account.id.toString() },
+      { offset: 0, limit: 20 },
+    );
+
+    expect(result.totalCount).toBe(1);
+    expect(result.items[0].orderId).toBe(order.id.toString());
+  });
+
+  it('Query.myOrder: 타 계정 주문 접근은 404가 전파된다', async () => {
+    const me = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: me.id });
+    const other = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: other.id });
+    const othersOrder = await createOrder(prisma, {
+      account_id: other.id,
+      status: 'SUBMITTED',
+    });
+
+    await expect(
+      resolver.myOrder(
+        { accountId: me.id.toString() },
+        othersOrder.id.toString(),
+      ),
+    ).rejects.toThrowDomain(404);
+  });
+});

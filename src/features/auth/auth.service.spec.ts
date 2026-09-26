@@ -1,4 +1,3 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -19,8 +18,8 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -33,6 +32,8 @@ describe('AuthService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     mockJwt = {
@@ -43,7 +44,14 @@ describe('AuthService', () => {
       findIdentityByProviderSubject: jest.fn(),
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      findAccountForJwt: jest.fn(),
+      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다 — 기본값을 깔아 둔다
+      findAccountForJwt: jest.fn().mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
+      }),
     };
 
     mockRefreshSessions = {
@@ -55,7 +63,11 @@ describe('AuthService', () => {
     };
 
     mockAuditLogs = {
-      createAuditLog: jest.fn(),
+      recordAudit: jest.fn(),
+      countAuditLogsBySeller: jest.fn(),
+      listAuditLogsBySeller: jest.fn(),
+      countAuditLogs: jest.fn(),
+      listAuditLogs: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -63,10 +75,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,
@@ -86,12 +95,8 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  // OIDC 흐름 (startOidcLogin / handleOidcCallback) 은 OidcLoginService 로 분리.
-  // 해당 케이스는 oidc-login.service.spec.ts 에서 다룬다.
-
   describe('refresh', () => {
     it('refresh 토큰을 성공적으로 회전시켜야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'old-refresh-token',
@@ -123,10 +128,8 @@ describe('AuthService', () => {
       mockRefreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
       mockJwt.sign.mockReturnValue('new-access-token');
 
-      // Act
       const result = await service.refresh(mockReq, mockRes);
 
-      // Assert
       expect(
         mockRefreshSessions.findActiveRefreshSessionByHash,
       ).toHaveBeenCalled();
@@ -140,21 +143,18 @@ describe('AuthService', () => {
     });
 
     it('refresh 토큰이 없으면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {},
       } as unknown as Request;
 
       const mockRes = {} as Response;
 
-      // Act & Assert
-      await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Missing refresh token.',
+      await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
+        'MISSING_REFRESH_TOKEN',
       );
     });
 
     it('유효하지 않은 refresh 토큰이면 UnauthorizedException을 던져야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'invalid-token',
@@ -167,16 +167,14 @@ describe('AuthService', () => {
         null,
       );
 
-      // Act & Assert
-      await expect(service.refresh(mockReq, mockRes)).rejects.toThrow(
-        'Invalid refresh token.',
+      await expect(service.refresh(mockReq, mockRes)).rejects.toThrowDomain(
+        'INVALID_REFRESH_TOKEN',
       );
     });
   });
 
   describe('logout', () => {
     it('refresh 세션을 revoke하고 쿠키를 삭제해야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {
           caquick_rt: 'valid-token',
@@ -200,10 +198,8 @@ describe('AuthService', () => {
 
       mockRefreshSessions.revokeRefreshSession.mockResolvedValue({} as never);
 
-      // Act
       await service.logout(mockReq, mockRes);
 
-      // Assert
       expect(mockRefreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
         BigInt(1),
       );
@@ -211,7 +207,6 @@ describe('AuthService', () => {
     });
 
     it('refresh 토큰이 없어도 쿠키를 삭제해야 한다', async () => {
-      // Arrange
       const mockReq = {
         cookies: {},
       } as unknown as Request;
@@ -222,10 +217,8 @@ describe('AuthService', () => {
 
       mockConfig.get.mockReturnValue(undefined);
 
-      // Act
       await service.logout(mockReq, mockRes);
 
-      // Assert
       expect(mockRefreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
     });
@@ -246,6 +239,7 @@ describe('AuthService', () => {
         status: 'ACTIVE',
         account_type: 'USER',
         credential: null,
+        store: null,
       });
 
       const result = await service.issueDevAccessToken(BigInt(1));
@@ -255,17 +249,21 @@ describe('AuthService', () => {
         tokenType: 'Bearer',
         expiresInSeconds: 900,
       });
-      expect(mockJwt.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: '1', typ: 'access' }),
-      );
+      // 신원 클레임만 담고 시간·발급자 클레임은 서명 옵션이 붙인다
+      expect(mockJwt.sign).toHaveBeenCalledWith({
+        sub: '1',
+        typ: 'access',
+        role: 'USER',
+        mustChangePassword: false,
+      });
     });
 
     it('존재하지 않는 accountId면 NotFoundException', async () => {
       mockAccounts.findAccountForJwt.mockResolvedValue(null);
 
-      await expect(service.issueDevAccessToken(BigInt(999))).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.issueDevAccessToken(BigInt(999)),
+      ).rejects.toThrowDomain(404);
       expect(mockJwt.sign).not.toHaveBeenCalled();
     });
 
@@ -274,12 +272,13 @@ describe('AuthService', () => {
         id: BigInt(2),
         status: 'SUSPENDED',
         account_type: 'USER',
+        store: null,
         credential: null,
       });
 
-      await expect(service.issueDevAccessToken(BigInt(2))).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.issueDevAccessToken(BigInt(2)),
+      ).rejects.toThrowDomain(403);
       expect(mockJwt.sign).not.toHaveBeenCalled();
     });
   });

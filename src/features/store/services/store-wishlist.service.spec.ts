@@ -1,20 +1,14 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
-  createOrderItem,
   createProduct,
-  createReview,
   createStore,
   createStoreWishlist,
 } from '@/test/factories';
@@ -27,6 +21,8 @@ describe('StoreWishlistService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
+        ReviewReadRepository,
         StoreWishlistService,
         StoreWishlistRepository,
         StoreRepository,
@@ -111,26 +107,26 @@ describe('StoreWishlistService (real DB)', () => {
       expect(await activeWishlistCount(account.id, store.id)).toBe(1);
     });
 
-    it('존재하지 않는 매장이면 NotFoundException', async () => {
+    it('존재하지 않는 매장이면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.addStoreToWishlist(account.id, '999999'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('비활성 매장이면 NotFoundException', async () => {
+    it('비활성 매장이면 404', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       const inactive = await createStore(prisma, { is_active: false });
       await expect(
         service.addStoreToWishlist(account.id, inactive.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
-    it('유효하지 않은 storeId면 BadRequestException', async () => {
+    it('유효하지 않은 storeId면 400', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await expect(
         service.addStoreToWishlist(account.id, 'not-a-number'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('USER가 아닌 계정(SELLER)은 찜할 수 없다(Forbidden)', async () => {
@@ -138,12 +134,11 @@ describe('StoreWishlistService (real DB)', () => {
       const store = await createStore(prisma);
       await expect(
         service.addStoreToWishlist(seller.id, store.id.toString()),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
     });
   });
 
   describe('myWishlistedStores', () => {
-    /** 상품 1개 + 대표 이미지 1장 생성(카드 이미지 소스). */
     async function addProductWithImage(
       storeId: bigint,
       imageUrl: string,
@@ -177,45 +172,17 @@ describe('StoreWishlistService (real DB)', () => {
       expect(result.totalCount).toBe(2);
       expect(result.hasMore).toBe(false);
       // 나중에 찜한 storeB가 먼저(최신순)
-      expect(result.items.map((i) => i.storeId)).toEqual([
+      expect(result.items.map((i) => i.store.id)).toEqual([
         storeB.id.toString(),
         storeA.id.toString(),
       ]);
       const haz = result.items[1];
-      expect(haz.storeName).toBe('해즈케이크');
-      expect(haz.profileImageUrl).toBe('https://cdn.example.com/haz-logo.png');
-      expect(haz.regionLabel).toBe('인천 청라동');
+      expect(haz.store.storeName).toBe('해즈케이크');
+      expect(haz.store.profileImageUrl).toBe(
+        'https://cdn.example.com/haz-logo.png',
+      );
+      expect(haz.store.regionLabel).toBe('인천 청라동');
       expect(haz.addedAt).toBeInstanceOf(Date);
-    });
-
-    it('카드 이미지는 상품 대표 이미지 최대 3장(최신 상품 우선), 이미지 없는 매장은 빈 배열이다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      const store = await createStore(prisma);
-      const empty = await createStore(prisma);
-      // 상품 4개 → 최신(id desc) 3개의 대표 이미지만 포함
-      await addProductWithImage(store.id, 'u0');
-      await addProductWithImage(store.id, 'u1');
-      await addProductWithImage(store.id, 'u2');
-      await addProductWithImage(store.id, 'u3');
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: store.id,
-      });
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: empty.id,
-      });
-
-      const result = await service.myWishlistedStores(account.id);
-
-      const withImages = result.items.find(
-        (i) => i.storeId === store.id.toString(),
-      );
-      const withoutImages = result.items.find(
-        (i) => i.storeId === empty.id.toString(),
-      );
-      expect(withImages?.imageUrls).toEqual(['u3', 'u2', 'u1']);
-      expect(withoutImages?.imageUrls).toEqual([]);
     });
 
     it('삭제된 이미지·비활성 상품은 카드 이미지에서 제외한다', async () => {
@@ -249,39 +216,7 @@ describe('StoreWishlistService (real DB)', () => {
 
       const result = await service.myWishlistedStores(account.id);
 
-      expect(result.items[0].imageUrls).toEqual(['kept']);
-    });
-
-    it('평점은 소수 첫째 자리 반올림, 리뷰 없으면 0.0/0건이다', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      const rated = await createStore(prisma);
-      const unrated = await createStore(prisma);
-      const oi1 = await createOrderItem(prisma, { store_id: rated.id });
-      const oi2 = await createOrderItem(prisma, { store_id: rated.id });
-      await createReview(prisma, { order_item_id: oi1.id, rating: 4.5 });
-      await createReview(prisma, { order_item_id: oi2.id, rating: 5 });
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: rated.id,
-      });
-      await createStoreWishlist(prisma, {
-        account_id: account.id,
-        store_id: unrated.id,
-      });
-
-      const result = await service.myWishlistedStores(account.id);
-
-      const ratedItem = result.items.find(
-        (i) => i.storeId === rated.id.toString(),
-      );
-      const unratedItem = result.items.find(
-        (i) => i.storeId === unrated.id.toString(),
-      );
-      // (4.5 + 5.0) / 2 = 4.75 → 4.8
-      expect(ratedItem?.ratingAverage).toBe(4.8);
-      expect(ratedItem?.reviewCount).toBe(2);
-      expect(unratedItem?.ratingAverage).toBe(0);
-      expect(unratedItem?.reviewCount).toBe(0);
+      expect(result.items[0].store.cakeImageUrls).toEqual(['kept']);
     });
 
     it('비활성·삭제 매장과 soft-delete된 찜은 목록·카운트에서 제외한다', async () => {
@@ -315,7 +250,7 @@ describe('StoreWishlistService (real DB)', () => {
       const result = await service.myWishlistedStores(account.id);
 
       expect(result.totalCount).toBe(1);
-      expect(result.items.map((i) => i.storeId)).toEqual([
+      expect(result.items.map((i) => i.store.id)).toEqual([
         active.id.toString(),
       ]);
     });
@@ -334,7 +269,7 @@ describe('StoreWishlistService (real DB)', () => {
 
       const result = await service.myWishlistedStores(account.id);
 
-      expect(result.items.map((i) => i.storeId)).toEqual([
+      expect(result.items.map((i) => i.store.id)).toEqual([
         first.id.toString(),
         second.id.toString(),
       ]);
@@ -382,7 +317,7 @@ describe('StoreWishlistService (real DB)', () => {
       expect(page2.items).toHaveLength(1);
       expect(page2.hasMore).toBe(false);
       // 페이지를 이어 붙이면 최신순 전체와 일치(경계 중복/누락 없음)
-      expect([...page1.items, ...page2.items].map((i) => i.storeId)).toEqual(
+      expect([...page1.items, ...page2.items].map((i) => i.store.id)).toEqual(
         stores.map((s) => s.id.toString()).reverse(),
       );
     });

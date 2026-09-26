@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -15,8 +14,8 @@ import {
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('OidcLoginService', () => {
   let service: OidcLoginService;
@@ -29,6 +28,8 @@ describe('OidcLoginService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     mockOidc = {
@@ -41,7 +42,14 @@ describe('OidcLoginService', () => {
       findIdentityByProviderSubject: jest.fn(),
       findAccountByEmail: jest.fn(),
       upsertUserByOidcIdentity: jest.fn(),
-      findAccountForJwt: jest.fn(),
+      // 토큰 발급이 발급 시점 계정을 조회해 클레임을 만든다 — 기본값을 깔아 둔다
+      findAccountForJwt: jest.fn().mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
+      }),
     };
 
     mockRefreshSessions = {
@@ -62,10 +70,7 @@ describe('OidcLoginService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: JwtService, useValue: mockJwt },
         { provide: OidcClientService, useValue: mockOidc },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_REPOSITORY,
           useValue: mockAccounts,
@@ -137,10 +142,9 @@ describe('OidcLoginService', () => {
 
     it('returnTo가 undefined이면 기본 프론트 URL을 사용한다', async () => {
       const mockRes = { cookie: jest.fn() } as unknown as Response;
-      mockConfig.get.mockImplementation((key: string) => {
-        if (key === 'FRONTEND_BASE_URL') return 'http://front.example';
-        return undefined;
-      });
+      mockConfig.getOrThrow.mockReturnValue(
+        testAuthConfig({ frontendBaseUrl: 'http://front.example' }),
+      );
       mockOidc.buildAuthorizationUrl.mockResolvedValue({
         authorizationUrl: 'https://a',
         state: 's',
@@ -349,10 +353,10 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC session is missing.');
+      ).rejects.toThrowDomain('OIDC_SESSION_MISSING');
     });
 
     it('OIDC subject가 없으면 UnauthorizedException을 던져야 한다', async () => {
@@ -376,7 +380,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('OIDC subject is missing.');
+      ).rejects.toThrowDomain('OIDC_SUBJECT_MISSING');
     });
 
     it('upsertUserByOidcIdentity가 account=null을 반환하면 UnauthorizedException', async () => {
@@ -402,7 +406,7 @@ describe('OidcLoginService', () => {
 
       await expect(
         service.handleOidcCallback('google', mockReq, mockRes),
-      ).rejects.toThrow('Account upsert failed.');
+      ).rejects.toThrowDomain('ACCOUNT_UPSERT_FAILED');
     });
   });
 });

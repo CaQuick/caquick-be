@@ -1,10 +1,10 @@
-import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -21,6 +21,8 @@ describe('Store Wishlist Mutation Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
+        ReviewReadRepository,
         StoreWishlistMutationResolver,
         StoreWishlistService,
         StoreWishlistRepository,
@@ -61,14 +63,14 @@ describe('Store Wishlist Mutation Resolver (real DB)', () => {
     expect(row.deleted_at).toBeNull();
   });
 
-  it('addStoreToWishlist: 없는 매장이면 NotFoundException 전파', async () => {
+  it('addStoreToWishlist: 없는 매장이면 404 전파', async () => {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await expect(
       resolver.addStoreToWishlist(
         { accountId: account.id.toString() },
         '999999',
       ),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
   it('removeStoreFromWishlist: 찜을 해제한다', async () => {

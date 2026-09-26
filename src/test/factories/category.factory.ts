@@ -1,5 +1,8 @@
-import type { Category, CategoryType, PrismaClient } from '@prisma/client';
-
+import type {
+  Category,
+  CategoryType,
+  PrismaClient,
+} from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface CategoryOverrides {
@@ -27,7 +30,6 @@ export async function createCategory(
   });
 }
 
-/** 상품 ↔ 카테고리 연결. */
 export async function linkProductCategory(
   prisma: PrismaClient,
   args: { productId: bigint; categoryId: bigint },

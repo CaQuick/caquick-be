@@ -4,16 +4,15 @@ import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { kstDayBoundaries } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { roundRatingAverage } from '@/common/utils/rating';
 import { DEFAULT_POPULAR_STORES_LIMIT } from '@/features/store/constants/store-ranking.constants';
 import type { TodayPickupStoresInput } from '@/features/store/dto/inputs/today-pickup-stores.input';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import {
   StoreListingService,
   type ScoredStore,
 } from '@/features/store/services/store-listing.service';
-import { buildRegionLabel } from '@/features/store/services/store-mappers.helper';
 import { evaluatePickupDay } from '@/features/store/services/store-pickup-policy.helper';
 import type {
   TodayPickupSlot,
@@ -24,16 +23,13 @@ import type {
 export class StoreTodayPickupService {
   constructor(
     private readonly repo: StoreRepository,
-    private readonly wishlistRepo: StoreWishlistRepository,
+    private readonly booked: BookedQuantityPort,
     private readonly listingService: StoreListingService,
+    private readonly cards: StoreCardService,
     private readonly clock: ClockService,
   ) {}
 
-  /**
-   * 오늘(KST) 픽업 가능 매장 리스트. 인기 매장과 동일 랭킹으로 정렬하되,
-   * 매장별 정책(요일 영업시간·특별휴무·슬롯 간격·리드타임·일일 capacity)을
-   * 모두 반영해 오늘 예약 가능 슬롯이 1개 이상인 매장만 노출한다.
-   */
+  /** 매장별 정책(요일 영업시간·특별휴무·슬롯 간격·리드타임·일일 capacity)을 모두 반영해 오늘 예약 가능 슬롯이 1개 이상인 매장만 노출한다. */
   async todayPickupStores(
     input?: TodayPickupStoresInput,
     accountId?: bigint,
@@ -57,7 +53,7 @@ export class StoreTodayPickupService {
         this.repo.findBusinessHoursByWeekday(storeIds, weekday),
         this.repo.findSpecialClosureStoreIds(storeIds, dateOnlyUtc),
         this.repo.findDailyCapacities(storeIds, dateOnlyUtc),
-        this.repo.sumPickupQuantitiesInRange(storeIds, dayStartUtc, dayEndUtc),
+        this.booked.sumByStore(storeIds, dayStartUtc, dayEndUtc),
       ]);
     const hourByStore = new Map(
       businessHours.map((h) => [h.store_id.toString(), h]),
@@ -84,27 +80,18 @@ export class StoreTodayPickupService {
 
     const totalCount = open.length;
     const page = open.slice(offset, offset + limit);
-    const pageStoreIds = page.map((p) => p.entry.candidate.id);
-    const [imagesByStore, wishlistedIds] = await Promise.all([
-      this.repo.findStoreCakeImages(pageStoreIds),
-      // 0n도 유효한 계정 id — truthy 체크는 0n을 비로그인으로 떨궈 undefined로만 분기한다
-      accountId !== undefined
-        ? this.wishlistRepo.findWishlistedStoreIds({
-            accountId,
-            storeIds: pageStoreIds,
-          })
-        : Promise.resolve(new Set<string>()),
-    ]);
-
-    const items = page.map(({ entry, slots }) => ({
-      id: entry.candidate.id.toString(),
-      storeName: entry.candidate.store_name,
-      ratingAverage: roundRatingAverage(entry.metrics.ratingAverage),
-      reviewCount: entry.metrics.reviewCount,
-      regionLabel: buildRegionLabel(entry.candidate),
-      cakeImageUrls: imagesByStore.get(entry.candidate.id) ?? [],
-      isWishlisted: wishlistedIds.has(entry.candidate.id.toString()),
-      slots,
+    const cards = await this.cards.buildCards(
+      page.map(({ entry }) => entry.candidate),
+      accountId,
+      {
+        stats: new Map(
+          page.map(({ entry }) => [entry.candidate.id, entry.metrics]),
+        ),
+      },
+    );
+    const items = cards.map((store, idx) => ({
+      store,
+      slots: page[idx].slots,
     }));
 
     return {

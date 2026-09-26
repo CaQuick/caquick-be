@@ -2,9 +2,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, develop-msa]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, develop-msa]
   schedule:
     # 매주 월요일 03:00 UTC (= 12:00 KST) 정기 스캔. 의존성 업데이트 없이도 새로운 룰 반영.
     - cron: "0 3 * * 1"

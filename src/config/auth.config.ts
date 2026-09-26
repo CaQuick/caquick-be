@@ -1,70 +1,96 @@
 import { registerAs } from '@nestjs/config';
 
-/**
- * 인증 설정 타입
- */
+import {
+  parseEnvBoolean,
+  parseEnvList,
+  parseEnvNumber,
+  parseEnvString,
+} from '@/common/utils/env-parse';
+import {
+  buildKeyMaterial,
+  generateEphemeralKeyMaterial,
+  type JwtKeyMaterial,
+  readPem,
+} from '@/config/jwt-key';
+
 export interface AuthConfig {
-  jwtSecret: string;
+  /** RS256 서명/검증 키 + JWKS 공개용 JWK. kid는 RFC 7638 썸프린트다. */
+  jwtKeys: JwtKeyMaterial;
+  jwtIssuer: string;
+  jwtAudience: string;
   jwtAccessExpiresSeconds: number;
   refreshExpiresInDays: number;
   cookieDomain?: string;
   cookieSecure: boolean;
+  cookieSameSite: 'lax' | 'strict' | 'none';
+  /** 리다이렉트 기본값 — FRONTEND_BASE_URL 목록의 첫 값. */
   frontendBaseUrl: string;
+  /** CORS 허용 오리진 목록 — FRONTEND_BASE_URL에 쉼표로 여러 개를 적을 수 있다. 미설정이면 빈 배열. */
+  frontendOrigins: string[];
   backendBaseUrl: string;
 }
 
 /**
- * 환경변수를 숫자로 파싱 (실패 시 기본값 반환)
+ * 서명 키 — base64 PEM(JWT_PRIVATE_KEY_PEM_B64) 또는 파일 경로(JWT_PRIVATE_KEY_PATH).
+ * 공개키는 생략하면 개인키에서 유도한다. 미설정이면 운영에서 부팅을 막고, 그 외에는 임시 키를 만든다.
  */
-function parseNumber(value: string | undefined, defaultValue: number): number {
-  if (!value) return defaultValue;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+function readJwtKeys(isProd: boolean): JwtKeyMaterial {
+  const privateKeyPem = readPem({
+    base64: process.env.JWT_PRIVATE_KEY_PEM_B64,
+    path: process.env.JWT_PRIVATE_KEY_PATH,
+  });
+  if (!privateKeyPem) {
+    if (isProd) {
+      throw new Error(
+        'JWT_PRIVATE_KEY_PEM_B64 or JWT_PRIVATE_KEY_PATH must be set in production environment',
+      );
+    }
+    return generateEphemeralKeyMaterial();
+  }
+  return buildKeyMaterial({
+    privateKeyPem,
+    publicKeyPem: readPem({
+      base64: process.env.JWT_PUBLIC_KEY_PEM_B64,
+      path: process.env.JWT_PUBLIC_KEY_PATH,
+    }),
+  });
 }
 
-/**
- * 환경변수를 불리언으로 파싱
- */
-function parseBoolean(
+/** 알 수 없는 값은 가장 보수적인 기본값(lax)으로. */
+function parseSameSite(
   value: string | undefined,
-  defaultValue: boolean,
-): boolean {
-  if (!value) return defaultValue;
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed === 'true') return true;
-  if (trimmed === 'false') return false;
-  return defaultValue;
+): AuthConfig['cookieSameSite'] {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'none' ||
+    normalized === 'strict' ||
+    normalized === 'lax'
+    ? normalized
+    : 'lax';
 }
 
-/**
- * 인증 설정
- */
 export default registerAs('auth', (): AuthConfig => {
   const isProd = process.env.NODE_ENV === 'production';
-  const jwtSecret =
-    process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? '';
-
-  if (isProd && !jwtSecret) {
-    throw new Error(
-      'JWT_SECRET or JWT_ACCESS_SECRET must be set in production environment',
-    );
-  }
 
   return {
-    jwtSecret: jwtSecret || 'dev_jwt_secret',
-    jwtAccessExpiresSeconds: parseNumber(
+    jwtKeys: readJwtKeys(isProd),
+    jwtIssuer: parseEnvString(process.env.JWT_ISSUER) ?? 'caquick-identity',
+    jwtAudience: parseEnvString(process.env.JWT_AUDIENCE) ?? 'caquick-api',
+    jwtAccessExpiresSeconds: parseEnvNumber(
       process.env.JWT_ACCESS_EXPIRES_SECONDS,
       900,
     ), // 15분
-    refreshExpiresInDays: parseNumber(
+    refreshExpiresInDays: parseEnvNumber(
       process.env.AUTH_REFRESH_EXPIRES_DAYS,
       30,
     ), // 30일
-    cookieDomain: process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined,
-    cookieSecure: parseBoolean(process.env.AUTH_COOKIE_SECURE, isProd),
+    cookieDomain: parseEnvString(process.env.AUTH_COOKIE_DOMAIN),
+    cookieSecure: parseEnvBoolean(process.env.AUTH_COOKIE_SECURE, isProd),
+    cookieSameSite: parseSameSite(process.env.AUTH_COOKIE_SAMESITE),
+    // 목록의 첫 값이 리다이렉트 기본값 — 쉼표 문자열을 통째로 쓰면 returnTo 기본값·허용 접두가 깨진 URL이 된다
     frontendBaseUrl:
-      process.env.FRONTEND_BASE_URL?.trim() || 'http://localhost:3000',
+      parseEnvList(process.env.FRONTEND_BASE_URL)[0] ?? 'http://localhost:3000',
+    frontendOrigins: parseEnvList(process.env.FRONTEND_BASE_URL),
     backendBaseUrl:
-      process.env.BACKEND_BASE_URL?.trim() || 'http://localhost:4000',
+      parseEnvString(process.env.BACKEND_BASE_URL) ?? 'http://localhost:4000',
   };
 });

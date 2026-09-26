@@ -9,11 +9,7 @@ import type {
 } from '@/features/conversation/types/conversation-output.type';
 import { PUB_SUB } from '@/global/pubsub';
 
-/**
- * 대화 subscription 이벤트 발행/구독 어댑터.
- * 토픽 문자열은 여기서만 조립한다 — 발행자(구매자 전송·FAQ 자동응답·판매자
- * 답장)와 구독 리졸버가 같은 토픽을 보게 하는 단일 소스.
- */
+/** 토픽 문자열은 여기서만 조립한다 — 발행자(구매자 전송·FAQ 자동응답·판매자 답장)와 구독 리졸버가 같은 토픽을 보게 하는 단일 소스. */
 @Injectable()
 export class ConversationEventsService {
   private readonly logger = new Logger(ConversationEventsService.name);
@@ -21,9 +17,8 @@ export class ConversationEventsService {
   constructor(@Inject(PUB_SUB) private readonly pubSub: PubSubEngine) {}
 
   /**
-   * 발행은 DB 커밋 이후의 부수효과 — Redis 장애가 이미 성공한 전송을
-   * 실패로 둔갑시키면 클라이언트 재시도로 중복 전송이 난다(리뷰 반영).
-   * 실패는 경고 로그만 남기고 삼킨다(구독자는 재조회 폴백).
+   * 발행은 DB 커밋 이후의 부수효과 — Redis 장애가 이미 성공한 전송을 실패로 둔갑시키면 클라이언트 재시도로
+   * 중복 전송이 난다. 실패는 경고 로그만 남기고 삼킨다(구독자는 재조회 폴백).
    */
   private async safePublish(topic: string, payload: unknown): Promise<void> {
     try {
@@ -49,7 +44,6 @@ export class ConversationEventsService {
     return `conversation.seller.${storeId}`;
   }
 
-  /** 저장된 메시지들을 대화방 토픽에 순서대로 발행한다. */
   async publishMessagesAdded(
     messages: ConversationMessageOutput[],
   ): Promise<void> {

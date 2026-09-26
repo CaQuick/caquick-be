@@ -1,0 +1,88 @@
+import { PubSub } from 'graphql-subscriptions';
+
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { SellerConversationMutationResolver } from '@/features/conversation/resolvers/conversation-seller-mutation.resolver';
+import { SellerConversationQueryResolver } from '@/features/conversation/resolvers/conversation-seller-query.resolver';
+import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
+import { SellerConversationService } from '@/features/conversation/services/conversation-seller.service';
+import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import { createAccount, setupSellerWithStore } from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+describe('Seller Conversation Resolvers (real DB)', () => {
+  let queryResolver: SellerConversationQueryResolver;
+  let mutationResolver: SellerConversationMutationResolver;
+  let prisma: PrismaClient;
+
+  beforeAll(async () => {
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [
+        SellerConversationQueryResolver,
+        SellerConversationMutationResolver,
+        SellerConversationService,
+        StoreSellerRepository,
+        ConversationRepository,
+        ConversationEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useClass: AuditLogRepository,
+        },
+      ],
+    });
+    queryResolver = module.get(SellerConversationQueryResolver);
+    mutationResolver = module.get(SellerConversationMutationResolver);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function createConv(storeId: bigint) {
+    const customer = await createAccount(prisma, { account_type: 'USER' });
+    return prisma.storeConversation.create({
+      data: { account_id: customer.id, store_id: storeId },
+    });
+  }
+
+  it('Query.sellerConversations: 본인 store의 conversation만 반환', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const other = await setupSellerWithStore(prisma);
+    await createConv(me.store.id);
+    await createConv(other.store.id);
+
+    const result = await queryResolver.sellerConversations({
+      accountId: me.account.id.toString(),
+    });
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('Mutation.sellerSendConversationMessage: 타 store conversation은 404 전파', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const other = await setupSellerWithStore(prisma);
+    const othersConv = await createConv(other.store.id);
+
+    await expect(
+      mutationResolver.sellerSendConversationMessage(
+        { accountId: me.account.id.toString() },
+        {
+          conversationId: othersConv.id.toString(),
+          bodyFormat: 'TEXT',
+          bodyText: 'x',
+        } as never,
+      ),
+    ).rejects.toThrowDomain(404);
+  });
+});

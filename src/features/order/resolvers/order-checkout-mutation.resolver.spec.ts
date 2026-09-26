@@ -1,14 +1,16 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -18,14 +20,12 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 옵션·픽업·가격 분기 세부 검증은 service.spec.ts에서 담당.
- */
+// 옵션·픽업·가격 분기 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('OrderCheckout Mutation Resolver (real DB)', () => {
   let resolver: OrderCheckoutMutationResolver;
   let clock: ClockService;
@@ -38,10 +38,14 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         OrderCheckoutService,
         OrderRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
         RandomService,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders({ clock: true }),
+        ...bookedQuantityProviders(),
       ],
     });
     resolver = module.get(OrderCheckoutMutationResolver);

@@ -1,24 +1,18 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
-import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
+import { evaluateActiveUserAccount } from '@/features/auth';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
-import { evaluateActiveUserAccount } from '@/features/user';
+import { Prisma } from '@/generated/prisma/client';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -30,7 +24,6 @@ const ORDER_NUMBER_MAX_ATTEMPTS = 3;
 // "저장은 됐는데 응답 직렬화에서 실패 → 재시도 중복 주문" 경로를 차단한다.
 const MAX_ORDER_AMOUNT = 2_147_483_647;
 
-/** 옵션 검증 결과(스냅샷 조립용). */
 interface ResolvedOptionSelection {
   optionGroupId: bigint;
   optionItemId: bigint;
@@ -49,10 +42,7 @@ export class OrderCheckoutService {
     private readonly random: RandomService,
   ) {}
 
-  /**
-   * 주문 생성(정식 API의 확정 부분집합 — 커스텀 입력은 스펙 확정 후 확장).
-   * 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다.
-   */
+  /** 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다. 커스텀 입력은 스펙 확정 후 확장. */
   async createOrder(
     accountId: bigint,
     input: CreateOrderInput,
@@ -61,8 +51,7 @@ export class OrderCheckoutService {
     const optionItemIds = input.optionItemIds.map((id) => parseId(id));
     const quantity = input.quantity ?? 1;
 
-    // 멱등 replay: 같은 (계정, 키)의 주문이 있으면 검증·생성 없이 그 결과를
-    // 반환한다 — 원 요청 시점의 검증을 이미 통과한 주문이다(이슈 #212).
+    // 멱등 replay: 같은 (계정, 키)의 주문이 있으면 검증·생성 없이 그 결과를 반환한다 — 원 요청 시점의 검증을 이미 통과한 주문이다.
     const replayed = await this.orderRepo.findOrderByIdempotencyKey(
       accountId,
       input.idempotencyKey,
@@ -75,12 +64,11 @@ export class OrderCheckoutService {
 
     const product = await this.productRepo.findProductDetailById(productId);
     if (!product) {
-      throw new NotFoundException(ORDER_CHECKOUT_ERRORS.PRODUCT_NOT_FOUND);
+      throw new DomainException('PRODUCT_NOT_FOUND');
     }
-    // Order/OrderItem에 통화 스냅샷 컬럼이 없어 비 KRW 금액은 통화 정보가
-    // 소실된다 — 다국통화 스냅샷 설계 전까지 KRW만 허용(명세 외 정책 결정)
+    // Order/OrderItem에 통화 스냅샷 컬럼이 없어 비 KRW 금액은 통화 정보가 소실된다 — 다국통화 스냅샷 설계 전까지 KRW만 허용
     if (product.currency !== 'KRW') {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.UNSUPPORTED_CURRENCY);
+      throw new DomainException('UNSUPPORTED_CURRENCY');
     }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
@@ -90,17 +78,21 @@ export class OrderCheckoutService {
     // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
     const preparationDeadlineMs =
       now.getTime() + product.preparation_time_minutes * 60_000;
+    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
+    const capacityGuard = this.buildCapacityGuard(
+      product.store_id,
+      input.pickupAt,
+    );
     const pickupAvailable =
       input.pickupAt.getTime() >= preparationDeadlineMs &&
       (await this.pickupSchedule.isPickupSlotAvailable({
         storeId: product.store_id,
         pickupAt: input.pickupAt,
-        additionalQuantity: quantity,
-      }));
+      })) &&
+      !(await this.orderRepo.isDailyCapacityExceeded(capacityGuard, quantity));
     if (!pickupAvailable) {
-      // 같은 키의 동시 재시도가 방금 capacity를 채운 것일 수 있다 — 거절 전에
-      // 키를 재조회해, 내 주문이 이미 생성돼 있으면 실패 대신 replay로 응답한다
-      // (릴리즈 리뷰 반영: 응답 유실 재시도가 '가득 참' 실패를 받는 race 차단).
+      // 같은 키의 동시 재시도가 방금 capacity를 채운 것일 수 있다 — 거절 전에 키를 재조회해,
+      // 내 주문이 이미 생성돼 있으면 실패 대신 replay로 응답한다(응답 유실 재시도가 '가득 참' 실패를 받는 race 차단).
       const raced = await this.replayAfterCapacityReject(
         accountId,
         input.idempotencyKey,
@@ -126,9 +118,7 @@ export class OrderCheckoutService {
         amount < 0 ||
         amount > MAX_ORDER_AMOUNT
       ) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.ORDER_AMOUNT_OUT_OF_RANGE,
-        );
+        throw new DomainException('ORDER_AMOUNT_OUT_OF_RANGE');
       }
     }
 
@@ -143,11 +133,14 @@ export class OrderCheckoutService {
       discountPrice,
       totalPrice: itemSubtotalPrice,
       submittedAt,
-      capacityGuard: this.buildCapacityGuard(product.store_id, input.pickupAt),
+      capacityGuard,
       item: {
         storeId: product.store_id,
         productId: product.id,
         productNameSnapshot: product.name,
+        // 주문 시점 표시값 — 이후 매장명·이미지가 바뀌어도 주문 화면은 이 값을 유지한다
+        storeNameSnapshot: product.store.store_name,
+        productThumbnailUrlSnapshot: product.images[0]?.image_url ?? null,
         regularPriceSnapshot: product.regular_price,
         salePriceSnapshot: product.sale_price,
         quantity,
@@ -175,25 +168,19 @@ export class OrderCheckoutService {
     };
   }
 
-  /** capacity 원자 검사 조건(픽업 KST 달력일 기준). */
   private buildCapacityGuard(storeId: bigint, pickupAt: Date) {
     const { dateOnlyUtc, dayStartUtc, dayEndUtc } = kstDayBoundaries(pickupAt);
     return { storeId, dateOnlyUtc, dayStartUtc, dayEndUtc };
   }
 
-  /**
-   * 옵션 선택 검증. 중복·타 상품 옵션을 거절하고 그룹 규칙을 확인한다.
-   * 명세 외 정책 결정: 필수 그룹은 min~max개 선택, 선택 그룹은 0개 또는 min~max개.
-   */
+  /** 필수 그룹은 min~max개 선택, 선택 그룹은 0개 또는 min~max개. */
   private resolveOptionSelections(
     product: ProductDetailRow,
     optionItemIds: bigint[],
   ): ResolvedOptionSelection[] {
     const uniqueIds = new Set(optionItemIds.map((id) => id.toString()));
     if (uniqueIds.size !== optionItemIds.length) {
-      throw new BadRequestException(
-        ORDER_CHECKOUT_ERRORS.DUPLICATE_OPTION_ITEM,
-      );
+      throw new DomainException('DUPLICATE_OPTION_ITEM');
     }
 
     const selectionByItemId = new Map<string, ResolvedOptionSelection>();
@@ -215,9 +202,7 @@ export class OrderCheckoutService {
     const selections = optionItemIds.map((id) => {
       const selection = selectionByItemId.get(id.toString());
       if (!selection) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.INVALID_OPTION_ITEM,
-        );
+        throw new DomainException('INVALID_OPTION_ITEM');
       }
       const groupId = groupIdByItemId.get(id.toString());
       if (groupId !== undefined) {
@@ -234,9 +219,7 @@ export class OrderCheckoutService {
         ? withinRange
         : count === 0 || withinRange;
       if (!valid) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.OPTION_GROUP_RULE_VIOLATION,
-        );
+        throw new DomainException('OPTION_GROUP_RULE_VIOLATION');
       }
       // 설명/이미지 필수 옵션은 커스텀 입력 없이는 판매자 요구 정보가 빠진 채
       // 주문된다 — 커스텀 체크아웃 확장 전까지 해당 옵션 선택은 거절한다
@@ -244,20 +227,13 @@ export class OrderCheckoutService {
         count > 0 &&
         (group.option_requires_description || group.option_requires_image)
       ) {
-        throw new BadRequestException(
-          ORDER_CHECKOUT_ERRORS.OPTION_CUSTOMIZATION_REQUIRED,
-        );
+        throw new DomainException('OPTION_CUSTOMIZATION_REQUIRED');
       }
     }
     return selections;
   }
 
-  /**
-   * 활성 USER 계정 + 활성 프로필 강제. 판정 분기는 user feature의 공용 정책
-   * (evaluateActiveUserAccount) 단일 소스를 소비하고, 실패 사유 → 주문 도메인
-   * 에러 메시지 매핑만 여기서 한다.
-   * SELLER/ADMIN이 구매자 mutation으로 주문을 만드는 것을 차단한다.
-   */
+  /** 판정 분기는 user feature의 공용 정책(evaluateActiveUserAccount)을 소비하고 실패 사유 → 주문 도메인 코드 매핑만 여기서 한다. SELLER/ADMIN이 구매자 mutation으로 주문을 만드는 것을 차단한다. */
   private async requireActiveBuyer(
     accountId: bigint,
   ): Promise<{ nickname: string; phone_number: string | null }> {
@@ -265,17 +241,14 @@ export class OrderCheckoutService {
       await this.orderRepo.findAccountWithProfileForCheckout(accountId);
     const failure = evaluateActiveUserAccount(account);
     if (failure === 'NOT_USER') {
-      throw new ForbiddenException(ORDER_CHECKOUT_ERRORS.BUYER_NOT_USER);
+      throw new DomainException('USER_ONLY');
     }
     if (failure !== null || !account?.user_profile) {
-      throw new UnauthorizedException(
-        ORDER_CHECKOUT_ERRORS.BUYER_ACCOUNT_NOT_ACTIVE,
-      );
+      throw new DomainException('BUYER_ACCOUNT_NOT_ACTIVE');
     }
     return account.user_profile;
   }
 
-  /** 주문자 정보: input 우선, 없으면 프로필(닉네임·전화번호) fallback. */
   private resolveBuyerInfo(
     profile: { nickname: string; phone_number: string | null },
     input: CreateOrderInput,
@@ -286,12 +259,11 @@ export class OrderCheckoutService {
     const name = trimmedName || profile.nickname;
     const phone = input.buyerPhone ?? profile.phone_number ?? undefined;
     if (!phone) {
-      throw new BadRequestException(ORDER_CHECKOUT_ERRORS.BUYER_PHONE_REQUIRED);
+      throw new DomainException('BUYER_PHONE_REQUIRED');
     }
     return { name, phone };
   }
 
-  /** 주문번호 unique 충돌(P2002) 시 새 번호로 소수 재시도. */
   private async createWithOrderNumberRetry(
     args: Omit<
       Parameters<OrderRepository['createSubmittedOrder']>[0],
@@ -317,57 +289,39 @@ export class OrderCheckoutService {
         const isUniqueViolation =
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === 'P2002';
-        // 멱등 키 unique 충돌 = 같은 키의 동시 중복 제출. 사전 조회를 둘 다
-        // 통과한 race라, 먼저 생성된 주문을 조회해 replay로 반환한다(이슈 #212).
+        // 멱등 키 unique 충돌 = 같은 키의 동시 중복 제출. 사전 조회를 둘 다 통과한 race라, 먼저 생성된 주문을 조회해 replay로 반환한다.
         if (isUniqueViolation && this.isIdempotencyConflict(error)) {
           const existing = await this.orderRepo.findOrderByIdempotencyKey(
             args.accountId,
             args.idempotencyKey,
           );
           if (existing) return existing;
-          // 활성 주문이 없는데 키 unique가 충돌했다면 soft-delete된 주문이 키를
-          // 점유한 경우다 — MySQL unique는 deleted_at을 보지 않는다. 같은 키로는
-          // 몇 번을 재시도해도 동일하게 실패하므로, 재시도를 유도하지 말고
-          // 새 주문서(새 키)로 유도한다(릴리즈 리뷰 반영, PR #237).
+          // 활성 주문이 없는데 키 unique가 충돌했다면 soft-delete된 주문이 키를 점유한 경우다 — MySQL unique는
+          // deleted_at을 보지 않는다. 같은 키로는 몇 번을 재시도해도 동일하게 실패하므로 새 주문서(새 키)로 유도한다.
           const heldByDeleted =
             await this.orderRepo.existsDeletedOrderWithIdempotencyKey(
               args.accountId,
               args.idempotencyKey,
             );
           if (heldByDeleted) {
-            // 409가 아니라 400을 쓴다 — GraphQL 필터의 STATUS_TO_CODE에 409
-            // 매핑이 없어 INTERNAL_SERVER_ERROR로 나가고, 그러면 클라이언트가
-            // 일시 장애로 오인해 같은 키로 재시도한다(릴리즈 리뷰 반영).
-            // BAD_USER_INPUT이 "입력을 고쳐 다시 보내라"는 이 상황과도 맞다.
-            throw new BadRequestException(
-              ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
-            );
+            // 409가 아니라 400 — 클라이언트가 일시 장애로 오인해 같은 키로 재시도하지 않게, "입력을 고쳐 다시 보내라"는 의미로 분류한다.
+            throw new DomainException('IDEMPOTENCY_KEY_UNAVAILABLE');
           }
           // 그 외(조회 직후 하드 삭제 등 극단적 race)는 재시도가 유효할 수 있다
-          throw new InternalServerErrorException(
-            ORDER_CHECKOUT_ERRORS.IDEMPOTENT_REPLAY_FAILED,
-          );
+          throw new DomainException('IDEMPOTENT_REPLAY_FAILED');
         }
         if (!isUniqueViolation || attempt === ORDER_NUMBER_MAX_ATTEMPTS - 1) {
           if (isUniqueViolation) {
-            throw new InternalServerErrorException(
-              ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
-            );
+            throw new DomainException('ORDER_NUMBER_GENERATION_FAILED');
           }
           throw error;
         }
       }
     }
     // 루프는 반환/throw로만 종료된다 — 타입 좁히기용 방어
-    throw new InternalServerErrorException(
-      ORDER_CHECKOUT_ERRORS.ORDER_NUMBER_GENERATION_FAILED,
-    );
+    throw new DomainException('ORDER_NUMBER_GENERATION_FAILED');
   }
 
-  /**
-   * capacity 계열 거절 직전의 멱등 replay 확인. 같은 키의 주문이 있으면
-   * 그 주문을 반환하고, 없으면(진짜 잔여 부족) 픽업 불가로 거절한다.
-   */
   private async replayAfterCapacityReject(
     accountId: bigint,
     idempotencyKey: string,
@@ -377,21 +331,16 @@ export class OrderCheckoutService {
       idempotencyKey,
     );
     if (existing) return existing;
-    throw new BadRequestException(ORDER_CHECKOUT_ERRORS.PICKUP_NOT_AVAILABLE);
+    throw new DomainException('PICKUP_NOT_AVAILABLE');
   }
 
-  /**
-   * P2002 충돌이 멱등 키 unique(uk_order_account_idempotency)에서 난 것인지 판별.
-   * MySQL은 meta.target에 제약 이름을 담는다 — 그 외(주문번호 등)는 재시도 대상.
-   */
+  /** 그 외 P2002(주문번호 등)는 재시도 대상이라 구분한다. */
   private isIdempotencyConflict(
     error: Prisma.PrismaClientKnownRequestError,
   ): boolean {
-    const target = error.meta?.target;
-    return typeof target === 'string' && target.includes('idempotency');
+    return uniqueConstraintName(error)?.includes('idempotency') ?? false;
   }
 
-  /** 주문번호: ORD-YYYYMMDD-XXXXXX (KST 날짜 + 혼동 문자 제외 랜덤 6자리). */
   private generateOrderNumber(at: Date): string {
     const datePart = formatKstDate(at).replaceAll('-', '');
     let randomPart = '';

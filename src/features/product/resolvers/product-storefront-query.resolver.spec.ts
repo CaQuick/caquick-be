@@ -1,17 +1,18 @@
-import type { PrismaClient } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductStorefrontQueryResolver } from '@/features/product/resolvers/product-storefront-query.resolver';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductStorefrontService } from '@/features/product/services/product-storefront.service';
+import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/필터 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/필터 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductStorefront Query Resolver (real DB)', () => {
   let resolver: ProductStorefrontQueryResolver;
   let prisma: PrismaClient;
@@ -19,9 +20,13 @@ describe('ProductStorefront Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        ReviewReadRepository,
         ProductStorefrontQueryResolver,
         ProductStorefrontService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     resolver = module.get(ProductStorefrontQueryResolver);
@@ -41,11 +46,12 @@ describe('ProductStorefront Query Resolver (real DB)', () => {
     const store = await createStore(prisma);
     await createProduct(prisma, { store_id: store.id, name: '케이크' });
 
-    const result = await resolver.storeProducts({
-      storeId: store.id.toString(),
-    });
+    const result = await resolver.storeProducts(
+      { storeId: store.id.toString() },
+      undefined,
+    );
 
-    expect(result.items.map((p) => p.name)).toEqual(['케이크']);
+    expect(result.items.map((p) => p.product.name)).toEqual(['케이크']);
     expect(result.hasMore).toBe(false);
   });
 

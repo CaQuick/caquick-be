@@ -1,8 +1,6 @@
-import { ForbiddenException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createRefreshSession } from '@/test/factories';
@@ -200,7 +198,7 @@ describe('RefreshSessionRepository (real DB)', () => {
             tokenHash: 'h'.repeat(64),
             expiresAt: new Date(Date.now() + 60_000),
           }),
-        ).rejects.toThrow(ForbiddenException);
+        ).rejects.toThrowDomain(403);
         expect(
           await prisma.authRefreshSession.count({
             where: { account_id: account.id },
@@ -226,7 +224,7 @@ describe('RefreshSessionRepository (real DB)', () => {
           newTokenHash: 'n'.repeat(64),
           newExpiresAt: new Date(Date.now() + 60_000),
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
       expect(
         await prisma.authRefreshSession.count({
           where: { account_id: account.id },

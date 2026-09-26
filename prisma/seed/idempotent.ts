@@ -10,7 +10,7 @@
  * 정리 시 위 prefix에 매칭되는 row와 그 종속 데이터(주문/리뷰/찜/...)를
  * 삭제한 뒤 다시 삽입하므로, 수동으로 만든 다른 데이터는 보존된다.
  */
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 
 export const SEED_USER_EMAIL_PREFIX = 'seed-user-';
 export const SEED_STORE_NAME_PREFIX = '[SEED] ';
@@ -42,7 +42,14 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       where: {
         OR: [
           { reporter_account_id: { in: userIds } },
-          { review: { OR: [{ account_id: { in: userIds } }, { store_id: { in: storeIds } }] } },
+          {
+            review: {
+              OR: [
+                { account_id: { in: userIds } },
+                { store_id: { in: storeIds } },
+              ],
+            },
+          },
           { review_comment: { account_id: { in: userIds } } },
         ],
       },
@@ -143,11 +150,6 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       where: { account_id: { in: userIds } },
     });
 
-    // 커스텀 드래프트
-    await prisma.customDraft.deleteMany({
-      where: { account_id: { in: userIds } },
-    });
-
     // 검색 히스토리
     await prisma.searchHistory.deleteMany({
       where: { account_id: { in: userIds } },
@@ -157,27 +159,6 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     await prisma.searchEvent.deleteMany({
       where: { account_id: { in: userIds } },
     });
-
-    // 카트
-    const userCarts = await prisma.cart.findMany({
-      where: { account_id: { in: userIds } },
-      select: { id: true },
-    });
-    const cartIds = userCarts.map((c) => c.id);
-    if (cartIds.length > 0) {
-      const cartItems = await prisma.cartItem.findMany({
-        where: { cart_id: { in: cartIds } },
-        select: { id: true },
-      });
-      const cartItemIds = cartItems.map((i) => i.id);
-      if (cartItemIds.length > 0) {
-        await prisma.cartItemOptionItem.deleteMany({
-          where: { cart_item_id: { in: cartItemIds } },
-        });
-      }
-      await prisma.cartItem.deleteMany({ where: { cart_id: { in: cartIds } } });
-      await prisma.cart.deleteMany({ where: { id: { in: cartIds } } });
-    }
 
     // 인증 세션
     await prisma.authRefreshSession.deleteMany({
@@ -246,28 +227,12 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
         where: { product_id: { in: productIds } },
       });
 
-      // 다른 사용자의 cartItem/wishlist/recentView/customDraft에 이 product가 참조될 수 있음
+      // 다른 사용자의 wishlist/recentView에 이 product가 참조될 수 있음
       // 시드 store의 product를 안전하게 지우려면 외부 참조도 같이 정리
-      const sharedItems = await prisma.cartItem.findMany({
-        where: { product_id: { in: productIds } },
-        select: { id: true },
-      });
-      const sharedItemIds = sharedItems.map((i) => i.id);
-      if (sharedItemIds.length > 0) {
-        await prisma.cartItemOptionItem.deleteMany({
-          where: { cart_item_id: { in: sharedItemIds } },
-        });
-      }
-      await prisma.cartItem.deleteMany({
-        where: { product_id: { in: productIds } },
-      });
       await prisma.wishlistItem.deleteMany({
         where: { product_id: { in: productIds } },
       });
       await prisma.recentProductView.deleteMany({
-        where: { product_id: { in: productIds } },
-      });
-      await prisma.customDraft.deleteMany({
         where: { product_id: { in: productIds } },
       });
 

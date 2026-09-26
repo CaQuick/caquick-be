@@ -1,18 +1,17 @@
-import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductDetailQueryResolver } from '@/features/product/resolvers/product-detail-query.resolver';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
+import { ReviewReadRepository } from '@/features/review/repositories/review-read.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createProduct } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/필터 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/필터 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductDetail Query Resolver (real DB)', () => {
   let resolver: ProductDetailQueryResolver;
   let prisma: PrismaClient;
@@ -20,9 +19,12 @@ describe('ProductDetail Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ReviewReadRepository,
         ProductDetailQueryResolver,
         ProductDetailService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     resolver = module.get(ProductDetailQueryResolver);
@@ -65,9 +67,9 @@ describe('ProductDetail Query Resolver (real DB)', () => {
     expect(result.isWishlisted).toBe(true);
   });
 
-  it('productDetail: 없는 상품은 NotFoundException', async () => {
+  it('productDetail: 없는 상품은 404', async () => {
     await expect(
       resolver.productDetail('999999', undefined),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

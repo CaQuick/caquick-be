@@ -1,102 +1,139 @@
-name: Deploy Backend
+name: Deploy
 
-# 현재 개발 단계 인프라 비용 절감 차원에서 RDS 삭제(스냅샷 보관) + EC2 중지
-# 상태이므로 자동 배포를 비활성화한다. 인프라 복구 후 재개 시 trigger를
-# `push: branches: ["main"]`으로 되돌리면 된다.
+# 홈서버 자동 배포. Build Image가 main에서 성공하면 셀프호스트 러너(맥미니)가
+# .env(600) 생성 → compose pull → migrate → worker → api → ready 대기 → Discord 순서로 교체한다.
+# 롤백 = workflow_dispatch에 이전 sha를 넣어 같은 잡을 돌린다. main 밖의 실행은 environment 규칙과 if로 막는다.
 on:
+  workflow_run:
+    workflows: [Build Image]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '배포할 이미지 태그(전체 sha). 비우면 지금 main 끝 커밋'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  packages: read
 
 concurrency:
-  group: backend-deploy
-  cancel-in-progress: true
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-
+    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다. Build Image가 GHCR에 푸시하는 유일한 경로는
+    # CI 성공(workflow_run) 트리거이고 그 빌드는 이 레포 main push의 CI에서만 시작되므로, 여기서는 그 체인 이벤트만 받는다
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'workflow_run' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, macmini]
+    environment: production
+    timeout-minutes: 30
     env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-      S3_BUCKET: ${{ vars.S3_BUCKET }}
-      S3_KEY_PREFIX: backend
-      CODEDEPLOY_APP: ${{ vars.CODEDEPLOY_APPLICATION }}
-      CODEDEPLOY_GROUP: ${{ vars.CODEDEPLOY_DG_BACKEND }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/caquick' }}
+      IMAGE: ghcr.io/caquick/caquick-be
 
     steps:
-      - name: Checkout
+      - name: Checkout (infra만)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: "24.x"
-          cache: "yarn"
+          sparse-checkout: infra
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
 
-      - name: Install dependencies
-        run: |
-          corepack enable
-          node -v
-          yarn -v || true
-          (YARN_ENABLE_IMMUTABLE_INSTALLS=1 yarn install --immutable) || yarn install --frozen-lockfile
-
-      - name: GraphQL codegen
-        run: yarn graphql:codegen
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Lint
-        run: yarn lint
-
-      - name: Test
-        run: yarn test
-
-      - name: Build
-        run: |
-          yarn graphql:docs
-          yarn build
-
-      - name: Create deployment zip (bundle + node_modules)
+      # 식(${{ }})은 셸에 직접 넣지 않는다 — env를 거쳐 따옴표 친 변수로만. 입력은 sha 또는 main 형식만 받는다
+      - name: Resolve image tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.image_tag }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          MAIN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          SHORT_SHA="${GITHUB_SHA::7}"
-          ARTIFACT="backend-${SHORT_SHA}.zip"
-          echo "ARTIFACT=${ARTIFACT}" >> $GITHUB_ENV
+          # 가변 태그(main)는 쓰지 않는다 — 수동 실행의 기본값은 지금 main 끝 커밋의 sha
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            tag=$INPUT_TAG
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag=$MAIN_SHA
+          else
+            tag=$RUN_SHA
+          fi
+          # build-image는 전체 sha(40 hex)만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
+          [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag은 전체 커밋 sha(40 hex)만: $tag" >&2; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-          # 필수 파일 확인
-          test -f appspec.yml
-          test -d scripts
+      # 빌드 완료 순서는 커밋 순서와 다를 수 있다 — 지금 main 끝이 아닌 커밋의 빌드는 배포하지 않는다(수동 실행은 그대로)
+      - name: Skip if not the current main head
+        if: github.event_name == 'workflow_run'
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          if [ "$RUN_SHA" != "$MAIN_SHA" ]; then
+            echo "main 끝($MAIN_SHA)이 아닌 빌드($RUN_SHA) — 배포 건너뜀"
+            echo "SKIP_DEPLOY=1" >> "$GITHUB_ENV"
+          fi
 
-          rm -rf bundle
-          mkdir -p bundle
-
-          cp -r dist bundle/dist
-          cp -r public bundle/public
-          cp -r scripts bundle/scripts
-          cp -r prisma bundle/prisma
-          cp ecosystem.config.js bundle/
-          cp package.json yarn.lock bundle/
-          cp appspec.yml bundle/
-          cp -r node_modules bundle/node_modules
-
-          chmod +x bundle/scripts/*.sh bundle/scripts/function/*.sh
-          (cd bundle && zip -r "../$ARTIFACT" .)
-
-      - name: Configure AWS credentials (Access Key)
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+      - name: Login to GHCR
+        if: env.SKIP_DEPLOY != '1'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to S3
+      # .env(compose 보간·저장소·터널 비밀)와 app.env(앱 값)는 Environment secret 2개를 그대로 쓴다(키 목록: infra/*.example).
+      # 서버에 있는 두 파일과 토큰 파일은 rsync가 지우지 않는다 — 배포 사이에도 compose가 읽는다
+      - name: Sync infra/ + write .env·app.env (600)
+        if: env.SKIP_DEPLOY != '1'
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+          APP_ENV: ${{ secrets.APP_ENV }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          S3_KEY="${S3_KEY_PREFIX}/${ARTIFACT}"
-          echo "S3_KEY=$S3_KEY" >> $GITHUB_ENV
-          aws s3 cp "$ARTIFACT" "s3://${S3_BUCKET}/${S3_KEY}"
+          set -euo pipefail
+          [ -n "$DOTENV" ] && [ -n "$APP_ENV" ] || { echo "Environment secrets DOTENV·APP_ENV가 비어 있다" >&2; exit 1; }
+          mkdir -p "$DEPLOY_DIR"
+          rsync -a --delete --exclude '.env' --exclude 'app.env' infra/ "$DEPLOY_DIR/"
+          # 임시 파일에 600으로 쓰고 원자적으로 바꾼다 — 이미 있던 파일(예: cp .env.example 644)의 권한을 물려받지 않게
+          umask 077
+          tmp_env=$(mktemp "$DEPLOY_DIR/.env.XXXXXX"); tmp_app=$(mktemp "$DEPLOY_DIR/app.env.XXXXXX")
+          printf '%s\n' "$APP_ENV" > "$tmp_app"
+          printf '%s\n' "$DOTENV" > "$tmp_env"
+          printf 'IMAGE=%s\nIMAGE_TAG=%s\n' "$IMAGE" "$IMAGE_TAG" >> "$tmp_env"
+          # compose가 인프라 컨테이너(Prometheus 스크레이프·백업 경보)에 넘기는 앱 값 — app.env에서 복사해 secret을 두 번 관리하지 않는다
+          grep -E '^(METRICS_ACCESS_TOKEN|DISCORD_ALERT_WEBHOOK_URL)=' "$tmp_app" >> "$tmp_env" || true
+          grep -q '^METRICS_ACCESS_TOKEN=.' "$tmp_app" || { echo "app.env에 METRICS_ACCESS_TOKEN이 없다" >&2; exit 1; }
+          # 경보 채널·Grafana 비밀이 비면 관측이 조용히 죽는다(웹훅은 닿지 않는 자리표시자, Grafana는 crash loop) — 배포에서 막는다
+          grep -q '^DISCORD_ALERT_WEBHOOK_URL=.' "$tmp_app" || { echo "app.env에 DISCORD_ALERT_WEBHOOK_URL이 없다" >&2; exit 1; }
+          for key in GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY MYSQL_EXPORTER_PASSWORD; do
+            grep -q "^${key}=." "$tmp_env" || { echo ".env에 ${key}가 없다" >&2; exit 1; }
+          done
+          chmod 600 "$tmp_env" "$tmp_app"
+          mv -f "$tmp_env" "$DEPLOY_DIR/.env"
+          mv -f "$tmp_app" "$DEPLOY_DIR/app.env"
 
-      - name: Create CodeDeploy deployment
+      - name: Deploy
+        if: env.SKIP_DEPLOY != '1'
+        run: bash "$DEPLOY_DIR/deploy.sh"
+        working-directory: ${{ env.DEPLOY_DIR }}
+
+      - name: Discord
+        if: always() && env.SKIP_DEPLOY != '1'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          STATUS: ${{ job.status }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          aws deploy create-deployment \
-            --application-name "$CODEDEPLOY_APP" \
-            --deployment-group-name "$CODEDEPLOY_GROUP" \
-            --s3-location bucket="$S3_BUCKET",bundleType=zip,key="$S3_KEY"
+          [ -n "$DISCORD_WEBHOOK_URL" ] || { echo "DISCORD_WEBHOOK_URL 없음 — 알림 생략"; exit 0; }
+          if [ "$STATUS" = "success" ]; then color=3066993; title="배포 성공"; else color=15158332; title="배포 실패"; fi
+          payload=$(printf '{"embeds":[{"title":"%s","description":"caquick-be %s\\n%s","color":%s}]}' "$title" "$TAG" "$RUN_URL" "$color")
+          curl -fsS -H 'content-type: application/json' -d "$payload" "$DISCORD_WEBHOOK_URL" > /dev/null || echo "Discord 전송 실패"

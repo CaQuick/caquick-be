@@ -1,3 +1,4 @@
+import { DAY_MS } from '@/common/utils/kst-time';
 import type {
   AccountCredential,
   AccountIdentity,
@@ -5,9 +6,7 @@ import type {
   AuthRefreshSession,
   IdentityProvider,
   PrismaClient,
-} from '@prisma/client';
-
-import { DAY_MS } from '@/common/utils/kst-time';
+} from '@/generated/prisma/client';
 import { createAccount } from '@/test/factories/account.factory';
 import { nextSeq } from '@/test/factories/sequence';
 

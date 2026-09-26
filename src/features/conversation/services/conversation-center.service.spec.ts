@@ -1,8 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationCenterService } from '@/features/conversation/services/conversation-center.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -18,7 +19,12 @@ describe('ConversationCenterService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ConversationCenterService, ConversationRepository],
+      providers: [
+        ConversationCenterService,
+        ConversationRepository,
+        AccountUserRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+      ],
     });
     service = module.get(ConversationCenterService);
     prisma = p;
@@ -82,7 +88,6 @@ describe('ConversationCenterService (real DB)', () => {
     });
   }
 
-  // ─── myConversations ───
   describe('myConversations', () => {
     it('마지막 메시지 최신순으로 매장 정보·미리보기·안읽음 수를 반환한다', async () => {
       const buyer = await setupBuyer();
@@ -213,7 +218,7 @@ describe('ConversationCenterService (real DB)', () => {
 
       await expect(
         service.myConversations(buyer.id, { cursor: 'abc' }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const result = await service.myConversations(buyer.id);
       expect(result.totalCount).toBe(0);
@@ -221,7 +226,6 @@ describe('ConversationCenterService (real DB)', () => {
     });
   });
 
-  // ─── conversationMessages ───
   describe('conversationMessages', () => {
     it('메시지를 최신순 키셋 커서로 반환하고, 조회 시 last_read_at을 갱신한다', async () => {
       const buyer = await setupBuyer();
@@ -316,7 +320,7 @@ describe('ConversationCenterService (real DB)', () => {
         service.conversationMessages(buyer.id, conv.id.toString(), {
           cursor: '9'.repeat(30),
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('남의 대화·없는 대화는 NotFoundException', async () => {
@@ -330,10 +334,10 @@ describe('ConversationCenterService (real DB)', () => {
 
       await expect(
         service.conversationMessages(buyer.id, othersConv.id.toString()),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.conversationMessages(buyer.id, '999999'),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
   });
 });

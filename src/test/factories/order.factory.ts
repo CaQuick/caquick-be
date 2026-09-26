@@ -1,11 +1,11 @@
+import { DAY_MS } from '@/common/utils/kst-time';
 import type {
   Order,
   OrderItem,
   OrderStatus,
   PrismaClient,
-} from '@prisma/client';
-
-import { DAY_MS } from '@/common/utils/kst-time';
+} from '@/generated/prisma/client';
+import { activeWhere } from '@/prisma';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';
@@ -59,6 +59,9 @@ export interface OrderItemOverrides {
   store_id?: bigint;
   product_id?: bigint;
   product_name_snapshot?: string;
+  /** 미지정 시 주문 생성 경로와 같은 규칙(현재 매장명·활성 첫 이미지)으로 채운다. */
+  store_name_snapshot?: string;
+  product_thumbnail_url_snapshot?: string | null;
   regular_price_snapshot?: number;
   sale_price_snapshot?: number | null;
   quantity?: number;
@@ -74,13 +77,11 @@ export async function createOrderItem(
   let productId = overrides.product_id;
   let storeId = overrides.store_id;
   if (productId && !storeId) {
-    // product_id만 제공: 실제 product의 store_id를 조회해서 사용
     const product = await prisma.product.findUniqueOrThrow({
       where: { id: productId },
     });
     storeId = product.store_id;
   } else if (!productId) {
-    // product_id 미제공: 새 product 생성 (storeId가 있으면 그 store에)
     const product = await createProduct(prisma, {
       ...(storeId ? { store_id: storeId } : {}),
     });
@@ -89,6 +90,19 @@ export async function createOrderItem(
   }
 
   const orderId = overrides.order_id ?? (await createOrder(prisma)).id;
+  const storeName =
+    overrides.store_name_snapshot ??
+    (await prisma.store.findUniqueOrThrow({ where: { id: storeId! } }))
+      .store_name;
+  const thumbnail =
+    overrides.product_thumbnail_url_snapshot === undefined
+      ? ((
+          await prisma.productImage.findFirst({
+            where: { product_id: productId, ...activeWhere },
+            orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+          })
+        )?.image_url ?? null)
+      : overrides.product_thumbnail_url_snapshot;
 
   return prisma.orderItem.create({
     data: {
@@ -97,6 +111,8 @@ export async function createOrderItem(
       product_id: productId,
       product_name_snapshot:
         overrides.product_name_snapshot ?? 'Product snapshot',
+      store_name_snapshot: storeName,
+      product_thumbnail_url_snapshot: thumbnail,
       regular_price_snapshot: overrides.regular_price_snapshot ?? 10000,
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
       quantity: overrides.quantity ?? 1,

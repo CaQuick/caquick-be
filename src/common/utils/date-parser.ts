@@ -1,15 +1,14 @@
-import { BadRequestException } from '@nestjs/common';
+import { DomainException } from '@/common/errors/error-catalog';
 
 export function toDate(raw?: Date | string | null): Date | undefined {
   if (raw === undefined || raw === null) return undefined;
   const date = raw instanceof Date ? raw : new Date(raw);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException('Invalid date value.');
+    throw new DomainException('INVALID_DATE_VALUE');
   }
   return date;
 }
 
-/** 시간 부분을 버리고 UTC 자정으로 정규화(@db.Date 비교/저장용). */
 export function utcDateOnly(date: Date): Date {
   return new Date(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
@@ -21,6 +20,6 @@ export function toDateRequired(
   field: string,
 ): Date {
   const date = toDate(raw);
-  if (!date) throw new BadRequestException(`${field} is required.`);
+  if (!date) throw new DomainException('DATE_REQUIRED', { field });
   return date;
 }

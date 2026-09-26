@@ -8,12 +8,13 @@
  *   p4 글레이즈드 도넛 (다른 매장)
  *   p5 비활성 상품 (찜 가시성 검증용)
  */
-import type { PrismaClient, Product, Store } from '@prisma/client';
 import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';
 import { assertSeedCredential } from './credential-policy';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
+
+import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 
 /**
  * 시드 판매자 로그인용 자격증명. SELLER_SEED_PASSWORD가 없으면 만들지 않는다

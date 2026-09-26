@@ -1,0 +1,85 @@
+extend type Mutation {
+  """
+  운영 공지(SYSTEM)·마케팅(MARKETING) 알림을 보낸다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  대상은 요청 시점에 확정하고(ALL_USERS는 활성 USER 전체, ACCOUNT_IDS는 accountIds 최대 500 중 활성 USER)
+  발송 요청 1건을 적재한다 — 실제 알림 저장은 백그라운드 소비자가 1,000건 단위로 한다.
+  같은 관리자가 같은 idempotencyKey로 다시 부르면 새로 발송하지 않고 처음 응답을 그대로 돌려준다.
+  활성 USER가 아닌 ID는 skippedAccountIds로 돌려준다.
+  """
+  adminSendNotification(
+    input: AdminSendNotificationInput!
+  ): AdminSendNotificationResult!
+}
+
+"""
+관리자가 보낼 수 있는 알림 분류. 주문·리뷰 이벤트 알림은 시스템이 만든다.
+"""
+enum AdminNotificationType {
+  """
+  운영 공지.
+  """
+  SYSTEM
+  """
+  마케팅.
+  """
+  MARKETING
+}
+
+"""
+발송 대상 지정 방식.
+"""
+enum AdminNotificationTargetKind {
+  """
+  활성(ACTIVE·미탈퇴) USER 전체.
+  """
+  ALL_USERS
+  """
+  accountIds로 지정한 계정.
+  """
+  ACCOUNT_IDS
+}
+
+"""
+알림 발송 입력.
+"""
+input AdminSendNotificationInput {
+  """
+  알림 분류.
+  """
+  type: AdminNotificationType!
+  """
+  제목. 1~200자.
+  """
+  title: String!
+  """
+  본문. 1~2000자.
+  """
+  body: String!
+  """
+  발송 요청 멱등 키. 8~64자, 공백 불가. 같은 관리자·같은 키의 재요청은 처음 결과를 재생한다(중복 발송 없음).
+  """
+  idempotencyKey: String!
+  """
+  대상 지정 방식.
+  """
+  targetKind: AdminNotificationTargetKind!
+  """
+  targetKind가 ACCOUNT_IDS일 때 대상 계정 ID. 1~500개, 중복은 한 번으로 센다. ALL_USERS면 무시된다.
+  """
+  accountIds: [ID!]
+}
+
+"""
+알림 발송 결과.
+"""
+type AdminSendNotificationResult {
+  """
+  요청 시점에 대상으로 확정된 활성 USER 수. 저장은 백그라운드 소비자가 하므로 조회 시점에는 아직 일부가 없을 수 있고,
+  요청 이후 정지·탈퇴한 계정은 발송에서 제외되므로 실제 저장 건수는 이보다 적을 수 있다.
+  """
+  sentCount: Int!
+  """
+  대상에서 빠진 계정 ID(활성 USER가 아니거나 없음). ALL_USERS면 빈 배열.
+  """
+  skippedAccountIds: [ID!]!
+}

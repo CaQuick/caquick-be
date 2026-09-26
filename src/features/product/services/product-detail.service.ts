@@ -1,19 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
-import { PRODUCT_DETAIL_ERRORS } from '@/features/product/constants/product-detail-error-messages';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { toProductDetail } from '@/features/product/services/product-detail-mappers.helper';
 import type { ProductDetail } from '@/features/product/types/product-detail-output.type';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 
 @Injectable()
 export class ProductDetailService {
-  constructor(private readonly repo: ProductRepository) {}
+  constructor(
+    private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly wishlists: WishlistRepository,
+  ) {}
 
-  /**
-   * 상품 상세. 비활성/삭제 상품(또는 매장)은 NOT_FOUND.
-   * 리뷰 수는 실시간 집계, isWishlisted는 로그인 사용자에 한해 채운다(비로그인 false).
-   */
   async productDetail(
     productIdRaw: string,
     accountId?: bigint,
@@ -21,13 +22,13 @@ export class ProductDetailService {
     const productId = parseId(productIdRaw);
     const row = await this.repo.findProductDetailById(productId);
     if (!row) {
-      throw new NotFoundException(PRODUCT_DETAIL_ERRORS.PRODUCT_NOT_FOUND);
+      throw new DomainException('PRODUCT_NOT_FOUND');
     }
 
     const [reviewCount, isWishlisted] = await Promise.all([
-      this.repo.countProductReviews(productId),
+      this.reviews.countProductReviews(productId),
       accountId !== undefined
-        ? this.repo.isProductWishlisted({ accountId, productId })
+        ? this.wishlists.isProductWishlisted({ accountId, productId })
         : Promise.resolve(false),
     ]);
 

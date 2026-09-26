@@ -32,17 +32,23 @@ describe('ApiResponseTemplate', () => {
   });
 
   describe('ERROR', () => {
-    it('기본값으로 error, 500을 생성한다', () => {
+    it('기본값으로 error, 500, errorCode null을 생성한다', () => {
       const res = ApiResponseTemplate.ERROR();
       expect(res.message).toBe('error');
       expect(res.code).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
       expect(res.data).toBeNull();
+      expect(res.errorCode).toBeNull();
     });
 
-    it('커스텀 message와 status를 지정할 수 있다', () => {
-      const res = ApiResponseTemplate.ERROR('Not Found', HttpStatus.NOT_FOUND);
+    it('커스텀 message·status·errorCode를 지정할 수 있다', () => {
+      const res = ApiResponseTemplate.ERROR(
+        'Not Found',
+        HttpStatus.NOT_FOUND,
+        'STORE_NOT_FOUND',
+      );
       expect(res.message).toBe('Not Found');
       expect(res.code).toBe(404);
+      expect(res.errorCode).toBe('STORE_NOT_FOUND');
     });
   });
 
@@ -57,6 +63,17 @@ describe('ApiResponseTemplate', () => {
       expect(res.message).toBe('Validation Error');
       expect(res.code).toBe(400);
       expect(res.data).toEqual(errors);
+      expect(res.errorCode).toBeNull();
+    });
+
+    it('errorCode를 함께 실을 수 있다', () => {
+      const res = ApiResponseTemplate.ERROR_WITH_DATA(
+        [],
+        'Validation Error',
+        HttpStatus.BAD_REQUEST,
+        'VALIDATION_FAILED',
+      );
+      expect(res.errorCode).toBe('VALIDATION_FAILED');
     });
 
     it('message/status 기본값: "error", 500', () => {

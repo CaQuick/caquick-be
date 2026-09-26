@@ -1,5 +1,7 @@
+import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
+import databaseConfig from '@/config/database.config';
 import { PrismaModule } from '@/prisma/prisma.module';
 import {
   createExtendedPrismaClient,
@@ -12,26 +14,13 @@ import {
 } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 
-/**
- * Prisma 모듈/서비스 — useFactory + class+interface declaration merging 패턴 검증.
- *
- * - createExtendedPrismaClient: 확장(soft-delete) 적용된 PrismaClient 인스턴스 생성
- * - PrismaModule: 인스턴스 라이프사이클 (connect/disconnect) 소유
- * - DI 토큰으로 사용된 PrismaService 클래스 → 실제 주입되는 인스턴스는 factory 반환값
- */
+// useFactory + abstract class 토큰 패턴 검증 — 주입되는 인스턴스는 factory 반환값이다.
 describe('Prisma (real DB)', () => {
-  let originalDatabaseUrl: string | undefined;
-
   beforeAll(async () => {
-    // test container 기동 + DATABASE_URL 치환 (createExtendedPrismaClient 가 이 URL 을 사용)
     await getTestPrismaClient();
-    originalDatabaseUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = getTestDatabaseUrl();
   });
 
   afterAll(async () => {
-    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
-    else process.env.DATABASE_URL = originalDatabaseUrl;
     await closeTruncateConnection();
     await disconnectTestPrismaClient();
   });
@@ -42,7 +31,9 @@ describe('Prisma (real DB)', () => {
 
   describe('createExtendedPrismaClient', () => {
     it('확장 적용된 Prisma 클라이언트를 반환한다 + 기본 쿼리 동작', async () => {
-      const client = createExtendedPrismaClient();
+      const client = createExtendedPrismaClient(getTestDatabaseUrl(), {
+        allowPublicKeyRetrieval: true,
+      });
       await client.$connect();
       try {
         const count = await client.account.count();
@@ -53,7 +44,9 @@ describe('Prisma (real DB)', () => {
     });
 
     it('softDelete 확장이 적용되어 deleted_at 이 null 인 row 만 자동 필터한다', async () => {
-      const client = createExtendedPrismaClient();
+      const client = createExtendedPrismaClient(getTestDatabaseUrl(), {
+        allowPublicKeyRetrieval: true,
+      });
       await client.$connect();
       try {
         const active = await client.account.create({
@@ -86,17 +79,37 @@ describe('Prisma (real DB)', () => {
   });
 
   describe('PrismaModule (라이프사이클 owner)', () => {
-    it('모듈 init 시 $connect, destroy 시 $disconnect 가 호출된다', async () => {
-      const moduleRef = await Test.createTestingModule({
-        imports: [PrismaModule],
+    // PrismaModule은 ConfigService('database')에서 URL을 받는다 — 실제 config 경로를 그대로 태운다.
+    let originalDatabaseUrl: string | undefined;
+    beforeAll(() => {
+      originalDatabaseUrl = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = `${getTestDatabaseUrl()}?allowPublicKeyRetrieval=true`;
+    });
+    afterAll(() => {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    });
+    function compilePrismaModule() {
+      return Test.createTestingModule({
+        imports: [
+          ConfigModule.forRoot({
+            isGlobal: true,
+            ignoreEnvFile: true,
+            load: [databaseConfig],
+          }),
+          PrismaModule,
+        ],
       }).compile();
+    }
+
+    it('모듈 init 시 $connect, destroy 시 $disconnect 가 호출된다', async () => {
+      const moduleRef = await compilePrismaModule();
       // compile 단계에서 useFactory 가 즉시 호출되어 클라이언트 인스턴스가 생성된다.
 
       const prisma = moduleRef.get(PrismaService);
       const connectSpy = jest.spyOn(prisma, '$connect');
       const disconnectSpy = jest.spyOn(prisma, '$disconnect');
 
-      // init/close 를 호출하면 모듈 라이프사이클 훅이 동작한다.
       await moduleRef.init();
       expect(connectSpy).toHaveBeenCalledTimes(1);
 
@@ -105,9 +118,7 @@ describe('Prisma (real DB)', () => {
     });
 
     it('PrismaService 토큰으로 주입된 인스턴스는 확장 적용된 클라이언트이다 (account 모델 접근 가능)', async () => {
-      const moduleRef = await Test.createTestingModule({
-        imports: [PrismaModule],
-      }).compile();
+      const moduleRef = await compilePrismaModule();
       await moduleRef.init();
       try {
         const prisma = moduleRef.get(PrismaService);

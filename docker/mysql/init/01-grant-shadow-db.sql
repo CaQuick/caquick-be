@@ -2,8 +2,8 @@
 -- caquick 유저에게 DB 생성 권한을 부여한다.
 GRANT ALL PRIVILEGES ON *.* TO 'caquick'@'%';
 
--- prisma client 6.x가 일부 환경에서 caching_sha2_password를
--- sha256_password로 잘못 인식하는 호환 이슈가 있어 native_password로 통일.
+-- caching_sha2_password 는 비TLS 콜드 연결에서 RSA 공개키 조회가 필요하고
+-- mariadb 드라이버(Prisma 7 어댑터)가 기본 차단하므로 native_password 로 통일.
 -- (docker-compose의 --default-authentication-plugin과 이중 안전망)
 ALTER USER 'caquick'@'%' IDENTIFIED WITH mysql_native_password BY 'caquick';
 

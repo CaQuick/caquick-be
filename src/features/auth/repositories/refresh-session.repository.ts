@@ -1,22 +1,13 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import type { AuthRefreshSession, Prisma } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import type { IRefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository.interface';
+import type { AuthRefreshSession, Prisma } from '@/generated/prisma/client';
 import { PrismaService } from '@/prisma';
 
-/**
- * RefreshSession Repository 구체 구현.
- *
- * Prisma 의 `authRefreshSession` 테이블을 직접 다룬다.
- */
 @Injectable()
 export class RefreshSessionRepository implements IRefreshSessionRepository {
-  /**
-   * @param prisma PrismaService
-   * @param clock ClockService
-   */
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: ClockService,
@@ -57,7 +48,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
       WHERE id = ${accountId} AND deleted_at IS NULL
       FOR UPDATE`;
     if (rows[0]?.status !== 'ACTIVE') {
-      throw new ForbiddenException(AUTH_ERROR_MESSAGES.ACCOUNT_NOT_ACTIVE);
+      throw new DomainException('ACCOUNT_NOT_ACTIVE');
     }
   }
 

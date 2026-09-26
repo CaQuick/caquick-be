@@ -1,10 +1,13 @@
-import type { PrismaClient, Store } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
+import type { PrismaClient, Store } from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -12,6 +15,7 @@ import {
   createOrder,
   createOrderItem,
   createStore,
+  createStoreDailyCapacity,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -30,11 +34,15 @@ describe('StoreTodayPickupService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         StoreTodayPickupService,
         StoreListingService,
         StoreRepository,
         StoreWishlistRepository,
         ClockService,
+        ...bookedQuantityProviders(),
       ],
     });
     service = module.get(StoreTodayPickupService);
@@ -56,7 +64,6 @@ describe('StoreTodayPickupService (real DB)', () => {
     jest.restoreAllMocks();
   });
 
-  /** 오늘 요일 영업시간(HH 기준) 설정. */
   async function openToday(
     store: Store,
     openHour: number,
@@ -73,7 +80,6 @@ describe('StoreTodayPickupService (real DB)', () => {
     });
   }
 
-  /** 오늘 픽업 유효 주문 n건 생성(주문당 케이크 quantity개). */
   async function bookToday(
     store: Store,
     count: number,
@@ -105,7 +111,7 @@ describe('StoreTodayPickupService (real DB)', () => {
       expect(result.totalCount).toBe(1);
       expect(result.asOf).toEqual(NOW);
       const [item] = result.items;
-      expect(item.storeName).toBe('헤즈케이크');
+      expect(item.store.storeName).toBe('헤즈케이크');
       expect(item.slots).toEqual([
         { time: '14:00', available: false },
         { time: '14:30', available: false },
@@ -170,23 +176,19 @@ describe('StoreTodayPickupService (real DB)', () => {
     it('일일 capacity가 소진된 매장은 제외한다(CANCELED 주문 미집계)', async () => {
       const full = await createStore(prisma, { store_name: '마감매장' });
       await openToday(full, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: full.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: full.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(full, 2);
 
       const available = await createStore(prisma, { store_name: '여유매장' });
       await openToday(available, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: available.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: available.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(available, 1);
       // CANCELED 주문은 capacity를 소모하지 않는다
@@ -201,19 +203,17 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual(['여유매장']);
+      expect(result.items.map((i) => i.store.storeName)).toEqual(['여유매장']);
     });
 
     it('capacity는 주문 수가 아니라 제작 수량(quantity 합) 기준으로 소진된다', async () => {
       // 주문 1건이라도 quantity=2면 capacity 2를 전부 소진한다
       const store = await createStore(prisma, { store_name: '수량마감매장' });
       await openToday(store, 10, 20);
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: TODAY_DATE_ONLY,
-          capacity: 2,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 2,
       });
       await bookToday(store, 1, 2);
 
@@ -229,7 +229,9 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual(['무제한매장']);
+      expect(result.items.map((i) => i.store.storeName)).toEqual([
+        '무제한매장',
+      ]);
     });
 
     it('인기 매장 랭킹 순으로 정렬한다(찜 많은 매장 우선)', async () => {
@@ -246,7 +248,7 @@ describe('StoreTodayPickupService (real DB)', () => {
 
       const result = await service.todayPickupStores();
 
-      expect(result.items.map((i) => i.storeName)).toEqual([
+      expect(result.items.map((i) => i.store.storeName)).toEqual([
         '인기매장',
         '일반매장',
       ]);
@@ -267,37 +269,14 @@ describe('StoreTodayPickupService (real DB)', () => {
       const filtered = await service.todayPickupStores({
         regionIds: [region.id.toString()],
       });
-      expect(filtered.items.map((i) => i.storeName)).toEqual(['청라매장']);
+      expect(filtered.items.map((i) => i.store.storeName)).toEqual([
+        '청라매장',
+      ]);
 
       const paged = await service.todayPickupStores({ offset: 1, limit: 1 });
       expect(paged.totalCount).toBe(2);
       expect(paged.items).toHaveLength(1);
       expect(paged.hasMore).toBe(false);
-    });
-
-    it('로그인 사용자의 찜 여부와 매장 카드 정보를 채운다', async () => {
-      const store = await createStore(prisma, {
-        store_name: '찜매장',
-        address_city: '인천',
-        address_neighborhood: '청라동',
-      });
-      await openToday(store, 10, 20);
-      const user = await createAccount(prisma, { account_type: 'USER' });
-      await prisma.storeWishlistItem.create({
-        data: { account_id: user.id, store_id: store.id },
-      });
-
-      const [asUser, asGuest] = [
-        await service.todayPickupStores(undefined, user.id),
-        await service.todayPickupStores(),
-      ];
-
-      expect(asUser.items[0]).toMatchObject({
-        storeName: '찜매장',
-        regionLabel: '인천 청라동',
-        isWishlisted: true,
-      });
-      expect(asGuest.items[0].isWishlisted).toBe(false);
     });
 
     it('매장이 없으면 빈 결과를 반환한다', async () => {

@@ -1,9 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ConversationBodyFormat, ConversationSenderType } from '@prisma/client';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
+import { AccountUserRepository } from '@/features/auth';
 import { MAX_INQUIRY_BODY_TEXT_LENGTH } from '@/features/conversation/constants/conversation.constants';
 import type { SendConversationFaqMessageInput } from '@/features/conversation/dto/inputs/send-conversation-faq-message.input';
 import type { SendConversationMessageInput } from '@/features/conversation/dto/inputs/send-conversation-message.input';
@@ -24,6 +24,11 @@ import type {
   ConversationMessagesPayload,
   StoreInquiryContextOutput,
 } from '@/features/conversation/types/conversation-output.type';
+import { CATALOG_QUERY, type ICatalogQuery } from '@/features/store';
+import {
+  ConversationBodyFormat,
+  ConversationSenderType,
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {
@@ -31,9 +36,11 @@ export class ConversationInquiryService extends ConversationBaseService {
 
   constructor(
     repo: ConversationRepository,
+    accounts: AccountUserRepository,
     private readonly events: ConversationEventsService,
+    @Inject(CATALOG_QUERY) private readonly catalog: ICatalogQuery,
   ) {
-    super(repo);
+    super(repo, accounts);
   }
 
   async storeInquiryContext(
@@ -45,7 +52,7 @@ export class ConversationInquiryService extends ConversationBaseService {
 
     const store = await this.requireInquiryStore(storeId);
     const [faqTopics, conversation] = await Promise.all([
-      this.repo.listActiveFaqTopics(storeId),
+      this.catalog.listActiveFaqTopics(storeId),
       this.repo.findConversationByAccountAndStore({ accountId, storeId }),
     ]);
 
@@ -105,16 +112,15 @@ export class ConversationInquiryService extends ConversationBaseService {
     const storeId = parseId(input.storeId);
     const store = await this.requireInquiryStore(storeId);
 
-    const topic = await this.repo.findActiveFaqTopic({
+    const topic = await this.catalog.findActiveFaqTopic({
       storeId,
       faqTopicId: parseId(input.faqTopicId),
     });
     if (!topic) {
-      throw new NotFoundException(CONVERSATION_ERRORS.FAQ_TOPIC_NOT_FOUND);
+      throw new DomainException('FAQ_TOPIC_NOT_FOUND');
     }
 
-    // 칩 탭 = 유저 질문(칩 제목) + 매장 자동응답(FAQ 답변 스냅샷) 한 쌍 저장.
-    // 이후 FAQ가 수정돼도 저장된 대화 이력은 당시 답변을 유지한다.
+    // 칩 탭 = 유저 질문(칩 제목) + 매장 자동응답(FAQ 답변 스냅샷) 한 쌍 — 이후 FAQ가 수정돼도 대화 이력은 당시 답변을 유지한다.
     return this.saveBuyerMessages({
       accountId,
       storeId,
@@ -174,11 +180,7 @@ export class ConversationInquiryService extends ConversationBaseService {
     };
   }
 
-  /**
-   * 실시간 이벤트 발행 — 대화방 메시지 + 양측 목록/배지 갱신.
-   * 저장 트랜잭션 밖의 부수효과라 실패해도 전송 자체는 성공으로 남는다
-   * (구독자는 폴백 재조회 가능).
-   */
+  /** 저장 트랜잭션 밖의 부수효과라 실패해도 전송 자체는 성공으로 남는다(구독자는 폴백 재조회 가능). */
   private async publishBuyerSendEvents(args: {
     accountId: bigint;
     storeId: bigint;
@@ -186,9 +188,8 @@ export class ConversationInquiryService extends ConversationBaseService {
     conversationId: bigint;
     messages: ConversationMessagesPayload['messages'];
   }): Promise<void> {
-    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 여기서 나는
-    // 예외가 mutation을 실패로 둔갑시키면 클라이언트 재시도로 중복 전송이
-    // 난다(리뷰 반영). 실패는 경고 로그만 남긴다.
+    // 커밋 이후의 부수효과 전체(스냅샷 조회 포함)를 격리한다 — 여기서 나는 예외가 mutation을 실패로
+    // 둔갑시키면 클라이언트 재시도로 중복 전송이 난다. 실패는 경고 로그만 남긴다.
     try {
       await this.doPublishBuyerSendEvents(args);
     } catch (e) {
@@ -210,10 +211,8 @@ export class ConversationInquiryService extends ConversationBaseService {
     const lastMessage = args.messages[args.messages.length - 1];
     if (!lastMessage) return;
 
-    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 단일 트랜잭션 스냅샷
-    // 으로 다시 읽어 조립한다 — 독립 조회로 쪼개면 경쟁 커밋이 끼어들어
-    // 혼합 상태(남의 미리보기 + 내 시각)가 나갈 수 있다(리뷰 반영).
-    // 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
+    // 목록 이벤트는 "발행 시점의 최신 커밋 상태"를 단일 트랜잭션 스냅샷으로 다시 읽어 조립한다 — 독립 조회로
+    // 쪼개면 경쟁 커밋이 끼어들어 혼합 상태(남의 미리보기 + 내 시각)가 나갈 수 있다. 메시지 스트림 이벤트는 id를 실어 구독자가 정렬한다.
     const snapshot = await this.repo.getConversationEventSnapshot(
       args.conversationId,
     );
@@ -227,8 +226,7 @@ export class ConversationInquiryService extends ConversationBaseService {
     const lastReadAtIso =
       snapshot?.conversation.last_read_at?.toISOString() ?? null;
     const unreadCount = snapshot?.unreadCount ?? 0;
-    // 매장명도 스냅샷 값을 우선한다 — 최초 조회 후 개명되면 최신 메시지
-    // 상태에 옛 이름이 실려 나갈 수 있다(리뷰 반영)
+    // 매장명도 스냅샷 값을 우선한다 — 최초 조회 후 개명되면 최신 메시지 상태에 옛 이름이 실려 나갈 수 있다
     const storeName = snapshot?.conversation.store.store_name ?? args.storeName;
 
     await this.events.publishMessagesAdded(args.messages);
@@ -250,9 +248,9 @@ export class ConversationInquiryService extends ConversationBaseService {
   }
 
   private async requireInquiryStore(storeId: bigint) {
-    const store = await this.repo.findInquiryStore(storeId);
+    const store = await this.catalog.findInquiryStore(storeId);
     if (!store) {
-      throw new NotFoundException(CONVERSATION_ERRORS.STORE_NOT_FOUND);
+      throw new DomainException('STORE_NOT_FOUND');
     }
     return store;
   }

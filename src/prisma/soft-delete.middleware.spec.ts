@@ -1,5 +1,9 @@
-import { Prisma } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
+import { getDMMF } from '@prisma/internals';
+
+import { Prisma } from '@/generated/prisma/client';
 import {
   applySoftDeleteArgs,
   SOFT_DELETE_MODEL_NAMES,
@@ -198,13 +202,24 @@ describe('soft delete extension', () => {
   });
 });
 
-// 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례, 이슈 #207)을 구조로 차단한다.
+// 모델 추가 시 SOFT_DELETE_MODELS 갱신 누락(Region 사례)을 구조로 차단한다.
 describe('SOFT_DELETE_MODELS 커버리지 (dmmf 대조)', () => {
-  const modelsWithDeletedAt = Prisma.dmmf.datamodel.models
-    .filter((model) =>
-      model.fields.some((field) => field.name === 'deleted_at'),
-    )
-    .map((model) => model.name);
+  // Prisma 7의 prisma-client 생성물은 런타임 DMMF를 노출하지 않아 스키마 파일을 직접 파싱한다.
+  let modelsWithDeletedAt: string[];
+
+  beforeAll(async () => {
+    const dmmf = await getDMMF({
+      datamodel: readFileSync(
+        join(process.cwd(), 'prisma/schema.prisma'),
+        'utf8',
+      ),
+    });
+    modelsWithDeletedAt = dmmf.datamodel.models
+      .filter((model) =>
+        model.fields.some((field) => field.name === 'deleted_at'),
+      )
+      .map((model) => model.name);
+  });
 
   it('deleted_at 컬럼을 가진 모든 모델이 목록에 등록되어 있다', () => {
     const missing = modelsWithDeletedAt.filter(

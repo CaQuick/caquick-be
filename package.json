@@ -4,7 +4,7 @@
   "description": "케이퀵(CaQuick) 백엔드 - 시각 기반 올인원 맞춤 케이크 주문 플랫폼",
   "author": "chanwoo7",
   "private": true,
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -19,7 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:dev": "prisma migrate dev && prisma generate",
     "prisma:migrate:create": "prisma migrate dev --create-only",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
@@ -32,10 +32,9 @@
     "arch:check": "depcruise --config .dependency-cruiser.cjs src",
     "knip": "knip --no-config-hints",
     "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn docs:check && yarn arch:check && yarn test:scripts && yarn test:cov",
-    "prepare": "husky"
-  },
-  "prisma": {
-    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+    "postinstall": "prisma generate",
+    "prepare": "husky",
+    "outbox:requeue": "ts-node -r tsconfig-paths/register scripts/outbox-requeue.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
@@ -53,11 +52,14 @@
     "@nestjs/schedule": "^6.1.3",
     "@nestjs/serve-static": "^5.0.5",
     "@nestjs/swagger": "^11.4.7",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "amqplib": "^0.10",
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
+    "dotenv": "^17",
     "express": "^5.2.1",
     "graphql": "^16.14.0",
     "graphql-redis-subscriptions": "^2.7.0",
@@ -68,6 +70,7 @@
     "openid-client": "5.7.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "prom-client": "^15",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "useragent": "^2.3.0",
@@ -82,6 +85,8 @@
     "@nestjs/cli": "^11.0.24",
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "11.2.1",
+    "@prisma/internals": "7.10.0",
+    "@types/amqplib": "^0.10",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jest": "^30",
@@ -104,7 +109,7 @@
     "lint-staged": "^17.3.0",
     "mysql2": "^3.24.2",
     "prettier": "^3.9.6",
-    "prisma": "^6.19.3",
+    "prisma": "7.10.0",
     "spectaql": "^3.0.9",
     "supertest": "^7.2.2",
     "testcontainers": "^12.1.0",
@@ -113,7 +118,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.67.0"
+    "typescript-eslint": "^8.67.0",
+    "yaml": "^2.9.0"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -145,6 +151,7 @@
       "!**/*.module.ts",
       "!**/*.d.ts",
       "!**/graphql/graphql.types.ts",
+      "!**/generated/**",
       "!**/config/**",
       "!test/**"
     ],
@@ -163,7 +170,10 @@
     "testTimeout": 60000,
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "setupFilesAfterEnv": [
+      "<rootDir>/test/matchers/domain-error.matcher.ts"
+    ]
   },
   "lint-staged": {
     "*.ts": [

@@ -46,7 +46,7 @@ input PopularCakesInput {
 type PopularCakesResult {
   """카테고리 대표 배너. 등록된 배너가 없으면 null(FE placeholder 처리)."""
   banner: HomeBanner
-  """인기 케이크 카드. rank 오름차순."""
+  """인기 케이크 항목. rank 오름차순."""
   items: [PopularCake!]!
   """랭킹 산출 기준 시각(서버 조회 시점)."""
   rankedAt: DateTime!
@@ -99,25 +99,10 @@ type CustomCakeShowcaseItem {
   afterImageUrl: String!
 }
 
-"""인기 케이크 카드(지역명·매장명·케이크명·가격·할인율)."""
+"""인기 케이크 항목. rank + 공용 상품 카드."""
 type PopularCake {
-  id: ID!
-  """소속 매장 ID(상세 URL 구성용: /store/{storeId}/products/{id})."""
-  storeId: ID!
   """인기 순위. 1부터 시작한다."""
   rank: Int!
-  """상품명."""
-  name: String!
-  """대표 이미지(sort_order 최소). 없으면 null."""
-  thumbnailUrl: String
-  """매장명."""
-  storeName: String!
-  """매장 위치 표기(예: 서울 청담동)."""
-  regionLabel: String
-  """정가(원)."""
-  regularPrice: Int!
-  """할인가(원). 할인이 없으면 null이고 regularPrice가 표시가로 쓰인다."""
-  salePrice: Int
-  """할인율(0~100). salePrice 없으면 0."""
-  discountRate: Int!
+  """상품 카드."""
+  product: ProductCard!
 }

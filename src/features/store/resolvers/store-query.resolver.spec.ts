@@ -1,18 +1,17 @@
-import type { PrismaClient } from '@prisma/client';
-
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createRegion, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/집계 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/집계 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('Store Query Resolver (real DB)', () => {
   let resolver: StoreQueryResolver;
   let prisma: PrismaClient;
@@ -20,6 +19,9 @@ describe('Store Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        StoreCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         StoreQueryResolver,
         StoreListingService,
         StoreRepository,
@@ -45,7 +47,7 @@ describe('Store Query Resolver (real DB)', () => {
     const result = await resolver.popularStores(undefined);
 
     expect(result.totalCount).toBe(1);
-    expect(result.items[0].storeName).toBe('리졸버매장');
+    expect(result.items[0].store.storeName).toBe('리졸버매장');
     expect(result.rankedAt).toBeInstanceOf(Date);
   });
 
@@ -59,6 +61,6 @@ describe('Store Query Resolver (real DB)', () => {
     });
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].id).toBe(target.id.toString());
+    expect(result.items[0].store.id).toBe(target.id.toString());
   });
 });

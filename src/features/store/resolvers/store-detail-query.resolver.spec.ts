@@ -1,10 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -14,10 +13,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 분기/집계 세부 검증은 service.spec.ts에서 담당.
- */
+// 분기/집계 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('Store Detail Query Resolver (real DB)', () => {
   let resolver: StoreDetailQueryResolver;
   let prisma: PrismaClient;
@@ -25,6 +21,7 @@ describe('Store Detail Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        ReviewReadRepository,
         StoreDetailQueryResolver,
         StoreDetailService,
         StoreRepository,
@@ -69,9 +66,9 @@ describe('Store Detail Query Resolver (real DB)', () => {
     expect(result.isWishlisted).toBe(true);
   });
 
-  it('storeDetail: 없는 매장은 NotFoundException', async () => {
+  it('storeDetail: 없는 매장은 404', async () => {
     await expect(
       resolver.storeDetail('999999', undefined),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 });

@@ -38,14 +38,14 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
  * 미기재로 센다.
  */
 const BASELINE: Record<Category, Baseline> = {
-  rootField: { documented: 130, total: 130 },
-  fieldArg: { documented: 6, total: 6 },
-  inputType: { documented: 73, total: 73 },
-  inputField: { documented: 229, total: 229 },
-  outputType: { documented: 134, total: 134 },
-  outputField: { documented: 618, total: 618 },
-  enumType: { documented: 17, total: 17 },
-  enumValue: { documented: 61, total: 61 },
+  rootField: { documented: 177, total: 177 },
+  fieldArg: { documented: 4, total: 4 },
+  inputType: { documented: 108, total: 108 },
+  inputField: { documented: 358, total: 358 },
+  outputType: { documented: 163, total: 163 },
+  outputField: { documented: 744, total: 744 },
+  enumType: { documented: 28, total: 28 },
+  enumValue: { documented: 102, total: 102 },
 };
 
 const args = new Set(process.argv.slice(2));
@@ -104,7 +104,9 @@ function main(): void {
     const actual = percentOf(stat);
     const threshold = percentOf({ ...baseline, missing: [] });
     const label = CATEGORY_LABELS[category].padEnd(22, ' ');
-    const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(9);
+    const ratio = `${String(stat.documented)}/${String(stat.total)}`.padStart(
+      9,
+    );
     console.log(
       `  ${label}${ratio}  ${actual.toFixed(1).padStart(5)}%  ` +
         `(기준 ${String(baseline.documented)}/${String(baseline.total)} = ${threshold.toFixed(1)}%, ` +

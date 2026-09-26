@@ -1,8 +1,4 @@
-import {
-  type ExecutionContext,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { Roles } from '@/global/auth/decorators/roles.decorator';
@@ -86,7 +82,7 @@ describe('RolesGuard', () => {
         cls: SellerOnlyResolver,
         user: { accountId: '1', accountType },
       });
-      expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(ctx)).toThrowDomain(403);
     },
   );
 
@@ -96,7 +92,7 @@ describe('RolesGuard', () => {
       cls: SellerOnlyResolver,
       user: { accountId: '1' },
     });
-    expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(ctx)).toThrowDomain(403);
   });
 
   it('타입이 맞아도 mustChangePassword면 FORBIDDEN', () => {
@@ -105,7 +101,7 @@ describe('RolesGuard', () => {
       cls: SellerOnlyResolver,
       user: { accountId: '1', accountType: 'SELLER', mustChangePassword: true },
     });
-    expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(ctx)).toThrowDomain(403);
   });
 
   it('@Roles 선언이 없으면 mustChangePassword여도 통과한다(비밀번호 변경 경로)', () => {
@@ -122,7 +118,7 @@ describe('RolesGuard', () => {
       handler: SellerOnlyResolver.prototype.handler,
       cls: SellerOnlyResolver,
     });
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(ctx)).toThrowDomain(401);
   });
 
   it('메서드 @Roles가 클래스 선언을 덮어쓴다', () => {
@@ -138,7 +134,7 @@ describe('RolesGuard', () => {
       cls: SellerOnlyResolver,
       user: { accountId: '1', accountType: 'SELLER' },
     });
-    expect(() => guard.canActivate(asSeller)).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(asSeller)).toThrowDomain(403);
   });
 
   it('HTTP 컨텍스트에서도 req.user로 판정한다', () => {
@@ -154,6 +150,6 @@ describe('RolesGuard', () => {
       cls: SellerOnlyResolver,
       user: { accountId: '1', accountType: 'USER' },
     });
-    expect(() => guard.canActivate(denied)).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(denied)).toThrowDomain(403);
   });
 });

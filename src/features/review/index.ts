@@ -1,0 +1,34 @@
+// cross-feature 공개 API. 단일 구현 repo라 토큰/인터페이스 없이 구체 클래스로 주입(의도적).
+export { ReviewModule } from '@/features/review/review.module';
+// review 소유 모델 write·구매자/매장/상품 화면용 read. 이 feature 밖에서는 이 배럴로만 주입받는다.
+export { ReviewRepository } from '@/features/review/repositories/review.repository';
+export { ReviewEngagementRepository } from '@/features/review/repositories/review-engagement.repository';
+export {
+  ProductReviewRepository,
+  type ReviewCommentRow,
+  type ReviewDetailProductRow,
+} from '@/features/review/repositories/product-review.repository';
+export { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+export { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+export { RecentProductViewRepository } from '@/features/review/repositories/recent-product-view.repository';
+// 공개 리뷰 읽기(집계·row 조회·쇼케이스). 리뷰 상세·댓글(product)과 홈 쇼케이스(product)가 소비한다.
+export {
+  ReviewReadRepository,
+  type ReviewStat,
+} from '@/features/review/repositories/review-read.repository';
+// 리뷰 카드·미디어 매핑. 리뷰 상세(product)와 내 리뷰(user)가 같은 1벌을 쓴다.
+export {
+  toProductReview,
+  toReviewMedia,
+} from '@/features/review/services/review-listing-mappers.helper';
+export type {
+  ProductReview,
+  ReviewMedia,
+} from '@/features/review/types/review-listing-output.type';
+// 관리자 신고 집계(dashboard feature).
+export { ReviewAdminRepository } from '@/features/review/repositories/review-admin.repository';
+// 리뷰 좋아요 이벤트 계약(outbox). 소비자(notification)는 payload 스냅샷만 읽는다.
+export {
+  parseReviewLikedPayload,
+  REVIEW_LIKED,
+} from '@/features/review/events/review-liked.event';

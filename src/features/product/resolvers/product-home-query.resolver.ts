@@ -1,3 +1,4 @@
+import { UseGuards } from '@nestjs/common';
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
 import { CustomCakeShowcaseInput } from '@/features/product/dto/inputs/custom-cake-showcase.input';
@@ -9,19 +10,26 @@ import type {
   PopularCakesResult,
   RandomCakesResult,
 } from '@/features/product/types/product-home-output.type';
+import {
+  CurrentUser,
+  OptionalJwtAuthGuard,
+  parseAccountId,
+  type JwtUser,
+} from '@/global/auth';
 
-/**
- * 홈 화면 섹션 조회 resolver. 개인화 필드가 없는 public query(인증 불필요).
- */
+/** popularCakes는 옵셔널 인증으로 로그인 시에만 카드의 isWishlisted를 채운다. */
 @Resolver('Query')
 export class ProductHomeQueryResolver {
   constructor(private readonly service: ProductHomeService) {}
 
   @Query('popularCakes')
+  @UseGuards(OptionalJwtAuthGuard)
   popularCakes(
-    @Args('input') input?: PopularCakesInput,
+    @Args('input') input: PopularCakesInput | undefined,
+    @CurrentUser() user: JwtUser | undefined,
   ): Promise<PopularCakesResult> {
-    return this.service.popularCakes(input);
+    const accountId = user ? parseAccountId(user) : undefined;
+    return this.service.popularCakes(input, accountId);
   }
 
   @Query('customCakeShowcase')

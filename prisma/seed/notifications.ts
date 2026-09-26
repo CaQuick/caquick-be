@@ -5,11 +5,12 @@
  * - 3개월 경과 1건: myNotifications 3개월 노출 필터 검증용(목록·배지에서 제외).
  * 문구는 notification feature 상수(figma notification-center 톤)와 동일하게 유지.
  */
-import type { PrismaClient } from '@prisma/client';
 
 import type { SeededOrders } from './orders';
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
+
+import type { PrismaClient } from '@/generated/prisma/client';
 
 export async function seedNotifications(
   prisma: PrismaClient,
@@ -21,11 +22,20 @@ export async function seedNotifications(
   if (!p1 || !p2 || !p3) {
     throw new Error('seedStores must run before seedNotifications');
   }
+  const storeNameOf = (storeId: bigint): string | null =>
+    ctx.stores.stores.find((s) => s.id === storeId)?.store_name ?? null;
 
   // 리뷰 좋아요 알림은 seedReviews가 만든 user1 리뷰(p1, storeA)에 연결한다.
   const review = await prisma.review.findFirstOrThrow({
     where: { account_id: user1.id, product_id: p1.id },
     select: { id: true, store_id: true, product_id: true },
+  });
+
+  // 연관 ID 미저장 과거 알림(o4)은 백필 규칙(첫 품목의 매장·상품·주문 시점 상품명)으로 채운 상태를 재현한다
+  const o4FirstItem = await prisma.orderItem.findFirstOrThrow({
+    where: { order_id: ctx.orders.o4PickedUpReviewed },
+    orderBy: { id: 'asc' },
+    select: { store_id: true, product_id: true, product_name_snapshot: true },
   });
 
   const now = Date.now();
@@ -43,6 +53,8 @@ export async function seedNotifications(
         review_id: review.id,
         store_id: review.store_id,
         product_id: review.product_id,
+        store_name: storeNameOf(review.store_id),
+        product_name: p1.name,
         read_at: null,
         created_at: new Date(now - 1 * hour),
       },
@@ -55,6 +67,9 @@ export async function seedNotifications(
         order_id: ctx.orders.o2Confirmed,
         store_id: p2.store_id,
         product_id: p2.id,
+        order_number: 'SEED-O2-CONF',
+        store_name: storeNameOf(p2.store_id),
+        product_name: p2.name,
         read_at: null,
         created_at: new Date(now - 5 * hour),
       },
@@ -67,17 +82,25 @@ export async function seedNotifications(
         order_id: ctx.orders.o3Made,
         store_id: p3.store_id,
         product_id: p3.id,
+        order_number: 'SEED-O3-MADE',
+        store_name: storeNameOf(p3.store_id),
+        product_name: p3.name,
         read_at: null,
         created_at: new Date(now - 1 * day),
       },
       {
-        // 연관 ID 미저장 과거 주문 알림 재현 — 조회 시 order.items 폴백 검증용.
+        // 연관 ID 미저장 과거 주문 알림 재현 — 표시값·연관 ID는 07a 백필 규칙(첫 품목)으로 채웠다.
         account_id: user1.id,
         type: 'ORDER_STATUS',
         event: 'ORDER_PICKED_UP',
         title: '픽업완료',
         body: 'SEED-O4-PICKED-RE 케이크 픽업이 완료되었어요.',
         order_id: ctx.orders.o4PickedUpReviewed,
+        store_id: o4FirstItem.store_id,
+        product_id: o4FirstItem.product_id,
+        order_number: 'SEED-O4-PICKED-RE',
+        store_name: storeNameOf(o4FirstItem.store_id),
+        product_name: o4FirstItem.product_name_snapshot,
         read_at: new Date(now - 9 * day),
         created_at: new Date(now - 10 * day),
       },

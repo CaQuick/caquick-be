@@ -1,7 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-
 import { buildStoreBasicInfoUpdateData } from '@/features/store/services/store-basic-info.helper';
+import { Prisma } from '@/generated/prisma/client';
 
 describe('buildStoreBasicInfoUpdateData', () => {
   it('빈 입력이면 빈 update 데이터', () => {
@@ -52,9 +50,9 @@ describe('buildStoreBasicInfoUpdateData', () => {
   it.each(['storeName', 'storePhone', 'addressFull'] as const)(
     '필수 %s가 공백이면 BadRequestException',
     (field) => {
-      expect(() => buildStoreBasicInfoUpdateData({ [field]: '   ' })).toThrow(
-        BadRequestException,
-      );
+      expect(() =>
+        buildStoreBasicInfoUpdateData({ [field]: '   ' }),
+      ).toThrowDomain(400);
     },
   );
 
@@ -64,14 +62,12 @@ describe('buildStoreBasicInfoUpdateData', () => {
     ['위도 범위 밖', { latitude: '-90.5' }],
     ['경도 범위 밖', { longitude: '181' }],
   ])('좌표 %s이면 BadRequestException', (_label, coords) => {
-    expect(() => buildStoreBasicInfoUpdateData(coords)).toThrow(
-      BadRequestException,
-    );
+    expect(() => buildStoreBasicInfoUpdateData(coords)).toThrowDomain(400);
   });
 
-  it('길이 초과는 BadRequestException', () => {
+  it('길이 초과는 400', () => {
     expect(() =>
       buildStoreBasicInfoUpdateData({ storeName: 'n'.repeat(201) }),
-    ).toThrow(BadRequestException);
+    ).toThrowDomain(400);
   });
 });

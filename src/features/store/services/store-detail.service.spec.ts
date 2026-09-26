@@ -1,9 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -21,7 +20,12 @@ describe('StoreDetailService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [StoreDetailService, StoreRepository, StoreWishlistRepository],
+      providers: [
+        StoreDetailService,
+        StoreRepository,
+        StoreWishlistRepository,
+        ReviewReadRepository,
+      ],
     });
     service = module.get(StoreDetailService);
     prisma = p;
@@ -36,23 +40,19 @@ describe('StoreDetailService (real DB)', () => {
     await truncateAll();
   });
 
-  it('존재하지 않는 매장은 NotFoundException', async () => {
-    await expect(service.storeDetail('999999')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+  it('존재하지 않는 매장은 404', async () => {
+    await expect(service.storeDetail('999999')).rejects.toThrowDomain(404);
   });
 
-  it('비활성 매장은 NotFoundException', async () => {
+  it('비활성 매장은 404', async () => {
     const store = await createStore(prisma, { is_active: false });
     await expect(
       service.storeDetail(store.id.toString()),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toThrowDomain(404);
   });
 
-  it('잘못된 id 형식은 BadRequestException', async () => {
-    await expect(service.storeDetail('abc')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+  it('잘못된 id 형식은 400', async () => {
+    await expect(service.storeDetail('abc')).rejects.toThrowDomain(400);
   });
 
   it('매장 헤더와 신규 필드, 이미지(sort_order asc)를 반환한다', async () => {

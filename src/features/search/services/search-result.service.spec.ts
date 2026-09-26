@@ -1,13 +1,18 @@
-import { BadRequestException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository, ProductSearchService } from '@/features/product';
+import { ProductCardService } from '@/features/product/services/product-card.service';
+import { ReviewReadRepository } from '@/features/review';
+import { StoreWishlistRepository } from '@/features/review/repositories/store-wishlist.repository';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
 import { SearchResultService } from '@/features/search/services/search-result.service';
 import { StoreSearchService } from '@/features/store';
-import { StoreWishlistRepository } from '@/features/store/repositories/store-wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createProduct, createRegion, createStore } from '@/test/factories';
@@ -20,9 +25,15 @@ describe('SearchResultService (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        StoreCardService,
+        ReviewReadRepository,
+        StoreStatsRepository,
         SearchResultService,
         ProductSearchService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StoreSearchService,
         StoreListingService,
         StoreRepository,
@@ -89,9 +100,9 @@ describe('SearchResultService (real DB)', () => {
     });
 
     it('빈 검색어는 400', async () => {
-      await expect(service.searchSummary({ keyword: '' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.searchSummary({ keyword: '' }),
+      ).rejects.toThrowDomain(400);
     });
   });
 });

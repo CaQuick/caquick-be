@@ -19,22 +19,22 @@ import {
   setResponseTimeHeader,
 } from '@/common/utils/request-context';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
+import {
+  fieldDurationSeconds,
+  markFieldStart,
+} from '@/global/metrics/graphql-field-timing';
+import { MetricsService } from '@/global/metrics/metrics.service';
 import { LogContext } from '@/global/types/log.type';
 
-/**
- * GraphQL 요청/응답을 로깅하는 인터셉터.
- * - 루트(Query/Mutation) 레벨만 로깅한다.
- */
+/** 루트(Query/Mutation) 레벨만 로깅한다. */
 @Injectable()
 export class GqlLoggingInterceptor implements NestInterceptor {
-  constructor(private readonly logger: CustomLoggerService) {}
+  constructor(
+    private readonly logger: CustomLoggerService,
+    private readonly metrics: MetricsService,
+  ) {}
 
-  /**
-   * GraphQL 실행 컨텍스트에서 메타데이터를 수집하고,
-   * 성공 시 트랜잭션 로그(tx) 를 남긴다.
-   * 에러 로깅은 GraphQLExceptionFilter 가 담당 (HTTP path 의 HttpExceptionFilter 와 동일 패턴).
-   * 단, 에러 응답에도 response time header 가 누락되지 않도록 setResponseTimeHeader 는 본 인터셉터에서 유지.
-   */
+  /** 에러 로깅은 GraphQLExceptionFilter가 담당하지만, 에러 응답에도 response time header가 누락되지 않도록 setResponseTimeHeader는 여기서 유지한다. */
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const type = context.getType<GqlContextType>();
 
@@ -61,6 +61,8 @@ export class GqlLoggingInterceptor implements NestInterceptor {
       request: gqlRequest,
       context: LogContext.GRAPHQL as const,
     };
+    // 루트 필드별 시작 — 요청 시작으로 재면 루트 필드가 여럿일 때 뒤 필드가 앞 시간을 떠안는다
+    markFieldStart(info);
 
     return next.handle().pipe(
       tap({
@@ -73,12 +75,15 @@ export class GqlLoggingInterceptor implements NestInterceptor {
           });
 
           setResponseTimeHeader(res, duration);
+          // 라벨은 스키마가 정하는 루트 필드명 — operationName은 클라이언트가 정해 카디널리티가 무한하다
+          this.metrics.graphqlRootFieldDuration.observe(
+            { type: parentType, field: info.fieldName, outcome: 'ok' },
+            fieldDurationSeconds(info),
+          );
         },
+        // 실패는 GraphQLExceptionFilter가 outcome=분류로 센다(가드 거절까지 포함)
         error: () => {
-          // 에러 로깅은 GraphQLExceptionFilter 가 담당 (중복 방지).
-          // 본 인터셉터에서는 응답 시간 헤더만 누락 없이 기록한다.
-          const duration = calculateDuration(startTime);
-          setResponseTimeHeader(res, duration);
+          setResponseTimeHeader(res, calculateDuration(startTime));
         },
       }),
     );

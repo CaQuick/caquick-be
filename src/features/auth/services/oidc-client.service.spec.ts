@@ -1,10 +1,10 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { IdentityProvider } from '@prisma/client';
 
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
+import { IdentityProvider } from '@/generated/prisma/client';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
-// openid-client 모킹
 jest.mock('openid-client', () => ({
   Issuer: {
     discover: jest.fn(),
@@ -31,6 +31,8 @@ describe('OidcClientService', () => {
   beforeEach(async () => {
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     mockClient = {
@@ -61,7 +63,6 @@ describe('OidcClientService', () => {
 
   describe('getClient', () => {
     it('Google provider의 client를 생성하고 캐싱해야 한다', async () => {
-      // Arrange
       mockConfig.get.mockImplementation((key: string) => {
         const config: Record<string, string> = {
           OIDC_GOOGLE_ISSUER_URL: 'https://accounts.google.com',
@@ -72,11 +73,9 @@ describe('OidcClientService', () => {
         return config[key];
       });
 
-      // Act
       const client1 = await service.getClient('google');
       const client2 = await service.getClient('google');
 
-      // Assert
       expect(client1).toBe(client2); // 캐싱 확인
       expect(mockIssuer.Client).toHaveBeenCalledTimes(1); // 한 번만 생성
       expect(mockIssuer.Client).toHaveBeenCalledWith({
@@ -90,7 +89,6 @@ describe('OidcClientService', () => {
     });
 
     it('Kakao provider의 client를 client_secret_post 인증방식으로 생성해야 한다 (invalid_client 방지)', async () => {
-      // Arrange
       mockConfig.get.mockImplementation((key: string) => {
         const config: Record<string, string> = {
           OIDC_KAKAO_ISSUER_URL: 'https://kauth.kakao.com',
@@ -101,12 +99,9 @@ describe('OidcClientService', () => {
         return config[key];
       });
 
-      // Act
       await service.getClient('kakao');
 
-      // Assert
-      // 카카오 토큰 엔드포인트는 client_secret_post만 지원한다.
-      // 기본값(client_secret_basic)으로 두면 invalid_client (Bad client credentials)로 거부된다.
+      // 카카오 토큰 엔드포인트는 client_secret_post만 지원한다 — 기본값(client_secret_basic)이면 invalid_client로 거부된다.
       expect(mockIssuer.Client).toHaveBeenCalledWith({
         client_id: 'kakao-client-id',
         client_secret: 'kakao-client-secret',
@@ -117,10 +112,8 @@ describe('OidcClientService', () => {
     });
 
     it('필수 환경 변수가 없으면 에러를 던져야 한다', async () => {
-      // Arrange
       mockConfig.get.mockReturnValue(undefined);
 
-      // Act & Assert
       await expect(service.getClient('google')).rejects.toThrow(
         'Missing required environment variable',
       );
@@ -141,15 +134,12 @@ describe('OidcClientService', () => {
     });
 
     it('인증 URL과 PKCE 파라미터를 생성해야 한다', async () => {
-      // Arrange
       mockClient.authorizationUrl.mockReturnValue(
         'https://accounts.google.com/o/oauth2/v2/auth?client_id=...',
       );
 
-      // Act
       const result = await service.buildAuthorizationUrl('google');
 
-      // Assert
       expect(result).toEqual({
         authorizationUrl:
           'https://accounts.google.com/o/oauth2/v2/auth?client_id=...',
@@ -229,7 +219,6 @@ describe('OidcClientService', () => {
     });
 
     it('authorization code를 token으로 교환해야 한다', async () => {
-      // Arrange
       const mockTokenSet = {
         access_token: 'access-token',
         id_token: 'id-token',
@@ -249,10 +238,8 @@ describe('OidcClientService', () => {
         codeVerifier: 'verifier-123',
       };
 
-      // Act
       const result = await service.exchangeCode('google', args);
 
-      // Assert
       expect(result).toEqual(mockTokenSet);
       expect(mockClient.callback).toHaveBeenCalledWith(
         'http://localhost:4000/auth/oidc/google/callback',
@@ -268,18 +255,14 @@ describe('OidcClientService', () => {
 
   describe('toIdentityProvider', () => {
     it('google provider를 GOOGLE enum으로 변환해야 한다', () => {
-      // Act
       const result = service.toIdentityProvider('google');
 
-      // Assert
       expect(result).toBe(IdentityProvider.GOOGLE);
     });
 
     it('kakao provider를 KAKAO enum으로 변환해야 한다', () => {
-      // Act
       const result = service.toIdentityProvider('kakao');
 
-      // Assert
       expect(result).toBe(IdentityProvider.KAKAO);
     });
   });

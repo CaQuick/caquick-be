@@ -9,13 +9,11 @@
  * 발급된 테스트 accountId가 콘솔에 출력되며, GraphQL Playground에서 dev 토큰
  * 발급 헬퍼(POST /auth/dev/issue-token)와 함께 사용한다.
  */
-import { PrismaClient } from '@prisma/client';
 
 import { seedAdmins } from './seed/admins';
 import { seedBanners } from './seed/banners';
 import { seedCategories } from './seed/categories';
 import { seedConversations } from './seed/conversations';
-import { seedCustomDrafts } from './seed/custom-drafts';
 import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
 import { seedOrders } from './seed/orders';
@@ -28,12 +26,19 @@ import { seedStores } from './seed/stores';
 import { seedUsers } from './seed/users';
 import { seedWishlist } from './seed/wishlist';
 
+import { PrismaClient } from '@/generated/prisma/client';
+import { createMariaDbAdapter } from '@/prisma/mariadb-adapter';
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('seed는 production 환경에서 실행할 수 없습니다.');
   }
 
-  const prisma = new PrismaClient();
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL must be set');
+  const prisma = new PrismaClient({
+    adapter: createMariaDbAdapter(databaseUrl),
+  });
   try {
     log('기존 시드 영역 정리 중...');
     await resetSeedScope(prisma);
@@ -67,9 +72,6 @@ async function main(): Promise<void> {
 
     log('대화 + FAQ 시드 중...');
     await seedConversations(prisma, { users, stores });
-
-    log('커스텀 드래프트 시드 중...');
-    await seedCustomDrafts(prisma, { users, stores });
 
     log('검색 히스토리 시드 중...');
     await seedSearchHistory(prisma, { users });

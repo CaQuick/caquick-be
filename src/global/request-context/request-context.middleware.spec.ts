@@ -11,6 +11,13 @@ function mockReq(overrides: Partial<Request> = {}): Request {
   } as unknown as Request;
 }
 
+/** requestId 확정이 응답 헤더까지 쓰므로 setHeader가 있어야 한다. */
+function mockRes(): Response & { setHeader: jest.Mock } {
+  return { headersSent: false, setHeader: jest.fn() } as unknown as Response & {
+    setHeader: jest.Mock;
+  };
+}
+
 describe('RequestContextMiddleware', () => {
   let requestContext: RequestContextService;
   let middleware: RequestContextMiddleware;
@@ -33,7 +40,7 @@ describe('RequestContextMiddleware', () => {
       seenUa = requestContext.getUserAgent();
     };
 
-    middleware.use(req, {} as Response, next);
+    middleware.use(req, mockRes(), next);
 
     expect(seenIp).toBe('203.0.113.9');
     expect(seenUa).toBe('jest-agent');
@@ -46,7 +53,7 @@ describe('RequestContextMiddleware', () => {
     } as Partial<Request>);
 
     let seenIp: string | undefined;
-    middleware.use(req, {} as Response, () => {
+    middleware.use(req, mockRes(), () => {
       seenIp = requestContext.getClientIp();
     });
 
@@ -61,7 +68,7 @@ describe('RequestContextMiddleware', () => {
 
     let seenIp: string | undefined;
     await new Promise<void>((resolve) => {
-      middleware.use(req, {} as Response, () => {
+      middleware.use(req, mockRes(), () => {
         void (async () => {
           await Promise.resolve();
           seenIp = requestContext.getClientIp();
@@ -77,10 +84,30 @@ describe('RequestContextMiddleware', () => {
     const req = mockReq({ headers: {}, socket: {} } as Partial<Request>);
 
     let seen: { clientIp?: string; userAgent?: string } | undefined;
-    middleware.use(req, {} as Response, () => {
+    middleware.use(req, mockRes(), () => {
       seen = requestContext.get();
     });
 
-    expect(seen).toEqual({ clientIp: undefined, userAgent: undefined });
+    expect(seen).toEqual({
+      clientIp: undefined,
+      userAgent: undefined,
+      requestId: expect.any(String) as string,
+    });
+  });
+
+  it('requestId를 컨텍스트에 싣고 응답 헤더와 같은 값으로 확정한다(들어온 x-request-id 우선)', () => {
+    const req = mockReq({
+      ip: '203.0.113.9',
+      headers: { 'x-request-id': 'req-abc' },
+    } as Partial<Request>);
+    const res = mockRes();
+
+    let seen: string | undefined;
+    middleware.use(req, res, () => {
+      seen = requestContext.get()?.requestId;
+    });
+
+    expect(seen).toBe('req-abc');
+    expect(res.setHeader).toHaveBeenCalledWith('x-request-id', 'req-abc');
   });
 });

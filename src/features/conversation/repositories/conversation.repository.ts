@@ -1,13 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+
+import {
+  AUDIT_LOG_REPOSITORY,
+  type AuditEntry,
+  type IAuditLogRepository,
+} from '@/features/audit-log';
 import {
   ConversationBodyFormat,
   ConversationSenderType,
   Prisma,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
+import { PrismaService } from '@/prisma';
 
-import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
-
-/** 구매자 메시지 전송 시 한 트랜잭션으로 저장할 메시지 명세. */
 export interface ConversationMessageEntry {
   senderType: ConversationSenderType;
   senderAccountId: bigint | null;
@@ -18,14 +22,15 @@ export interface ConversationMessageEntry {
 
 @Injectable()
 export class ConversationRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(AUDIT_LOG_REPOSITORY)
+    private readonly auditLogs: IAuditLogRepository,
+  ) {}
 
   /**
-   * 판매자 대화 목록 페이지. (updated_at, id) desc 키셋.
-   *
-   * 커서가 id 단독이면 정렬 순서와 무관한 행을 잘라내 목록에서 영영 빠지는
-   * 대화가 생긴다 — 정렬 키를 그대로 커서에 담는다. schema.prisma의
-   * [store_id, updated_at] 인덱스가 이 정렬을 받친다.
+   * (updated_at, id) desc 키셋. 커서가 id 단독이면 정렬 순서와 무관한 행을 잘라내 목록에서 영영 빠지는
+   * 대화가 생긴다 — 정렬 키를 그대로 커서에 담는다. schema.prisma의 [store_id, updated_at] 인덱스가 이 정렬을 받친다.
    */
   async listConversationsByStore(args: {
     storeId: bigint;
@@ -57,7 +62,6 @@ export class ConversationRepository {
     });
   }
 
-  /** 판매자 대화방 전체 수(커서 무관). 목록 where와 커서 조건만 다르다. */
   async countConversationsByStore(storeId: bigint): Promise<number> {
     return this.prisma.storeConversation.count({
       where: { store_id: storeId },
@@ -91,67 +95,9 @@ export class ConversationRepository {
     });
   }
 
-  /** 대화방 메시지 전체 수(커서 무관). */
   async countConversationMessages(conversationId: bigint): Promise<number> {
     return this.prisma.storeConversationMessage.count({
       where: { conversation_id: conversationId },
-    });
-  }
-
-  /** 활성 USER 계정 판정용 부분집합 조회(user feature 정책 헬퍼와 계약 공유). */
-  async findUserAccountForInquiry(accountId: bigint) {
-    return this.prisma.account.findFirst({
-      where: { id: accountId },
-      select: {
-        id: true,
-        account_type: true,
-        deleted_at: true,
-        user_profile: { select: { nickname: true, deleted_at: true } },
-      },
-    });
-  }
-
-  /** 문의 가능 매장(활성·미삭제) + 요일별 영업시간. 없으면 null. */
-  async findInquiryStore(storeId: bigint) {
-    return this.prisma.store.findFirst({
-      where: { id: storeId, ...visibleWhere },
-      select: {
-        id: true,
-        store_name: true,
-        profile_image_url: true,
-        greeting_message: true,
-        business_hours: {
-          where: activeWhere,
-          orderBy: { day_of_week: 'asc' },
-          select: {
-            day_of_week: true,
-            is_closed: true,
-            open_time: true,
-            close_time: true,
-          },
-        },
-      },
-    });
-  }
-
-  /** 질문 칩 노출용 활성 FAQ 목록(노출 순서). */
-  async listActiveFaqTopics(storeId: bigint) {
-    return this.prisma.storeFaqTopic.findMany({
-      where: { store_id: storeId, is_active: true },
-      orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
-      select: { id: true, title: true },
-    });
-  }
-
-  /** 칩 전송 대상 FAQ 단건(활성만). */
-  async findActiveFaqTopic(args: { storeId: bigint; faqTopicId: bigint }) {
-    return this.prisma.storeFaqTopic.findFirst({
-      where: {
-        id: args.faqTopicId,
-        store_id: args.storeId,
-        is_active: true,
-      },
-      select: { id: true, title: true, answer_html: true },
     });
   }
 
@@ -165,11 +111,9 @@ export class ConversationRepository {
   }
 
   /**
-   * 구매자 대화 목록 페이지 + 부가 정보(마지막 메시지·안읽음 수)를 한
-   * 트랜잭션(단일 REPEATABLE READ 스냅샷)으로 읽는다 — 조회를 쪼개면
-   * 사이에 커밋된 메시지가 미리보기/안읽음 수에만 반영되고 정렬 기준·
-   * 커서(lastMessageAt)는 과거 값으로 남는 혼합 상태가 나갈 수 있다
-   * (릴리즈 리뷰 반영).
+   * 페이지 + 부가 정보(마지막 메시지·안읽음 수)를 한 트랜잭션(단일 REPEATABLE READ 스냅샷)으로 읽는다 —
+   * 조회를 쪼개면 사이에 커밋된 메시지가 미리보기/안읽음 수에만 반영되고 정렬 기준·커서(lastMessageAt)는
+   * 과거 값으로 남는 혼합 상태가 나갈 수 있다.
    */
   async getConversationPageWithExtras(args: {
     accountId: bigint;
@@ -193,16 +137,12 @@ export class ConversationRepository {
         return { rows, totalCount, extras };
       },
       // 단일 스냅샷 보장은 REPEATABLE READ 전제 — 서버/세션 기본값이
-      // READ COMMITTED면 문장마다 새 스냅샷이라 명시로 고정한다(리뷰 반영)
+      // READ COMMITTED면 문장마다 새 스냅샷이라 명시로 고정한다
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
   }
 
-  /**
-   * 구매자 대화 목록 페이지. (last_message_at, id) desc 키셋.
-   * 대화는 첫 메시지 전송 시에만 생성되지만, 방어적으로 메시지 없는
-   * 대화(last_message_at null)는 목록에서 제외한다 — 커서 정렬 키가 없다.
-   */
+  /** 메시지 없는 대화(last_message_at null)는 커서 정렬 키가 없어 제외한다. */
   private async listConversationsByAccount(
     tx: Prisma.TransactionClient,
     args: {
@@ -250,11 +190,8 @@ export class ConversationRepository {
   }
 
   /**
-   * 목록 아이템 부가 정보 — 대화별 마지막 메시지와 안읽은 수신 메시지 수.
-   * 안읽음 = last_read_at 이후 도착한, 내가 보낸 것이 아닌 메시지.
-   * per-row 쿼리는 페이지 50건 기준 100쿼리로 풀을 압박한다(리뷰 반영) —
-   * 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의
-   * 고정 3쿼리로 배치한다.
+   * 안읽음 = last_read_at 이후 도착한, 내가 보낸 것이 아닌 메시지. per-row 쿼리는 페이지 50건 기준
+   * 100쿼리로 풀을 압박한다 — 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의 고정 3쿼리.
    */
   private async getConversationListExtras(
     tx: Prisma.TransactionClient,
@@ -324,13 +261,9 @@ export class ConversationRepository {
   }
 
   /**
-   * 구매자 채팅 상세 조회 + 읽음 마커 전진(한 트랜잭션).
-   *
-   * 전송 경로와 같은 대화 row 잠금을 잡는다 — 미커밋 전송이 있으면 커밋을
-   * 기다린 뒤 조회하므로, "아직 안 보이는 메시지"를 건너뛰고 마커가
-   * 전진하는 레이스가 없다(리뷰 반영). 마커는 실제 내려준 최신 메시지의
-   * created_at까지만, 과거 페이지 조회로 후퇴하지 않게 단조 증가 조건으로
-   * 갱신한다.
+   * 조회 + 읽음 마커 전진을 한 트랜잭션으로, 전송 경로와 같은 대화 row 잠금을 잡는다 — 미커밋 전송이 있으면
+   * 커밋을 기다린 뒤 조회하므로 "아직 안 보이는 메시지"를 건너뛰고 마커가 전진하는 레이스가 없다. 마커는
+   * 실제 내려준 최신 메시지의 created_at까지만, 과거 페이지 조회로 후퇴하지 않게 단조 증가 조건으로 갱신한다.
    */
   async listBuyerMessagesAndMarkRead(args: {
     conversationId: bigint;
@@ -373,10 +306,8 @@ export class ConversationRepository {
   }
 
   /**
-   * 목록 갱신 이벤트용 대화 스냅샷 — 한 트랜잭션(단일 REPEATABLE READ
-   * 스냅샷)에서 대화·매장명·최신 메시지·안읽음 수를 함께 읽는다. 독립
-   * 조회로 쪼개면 경쟁 커밋이 끼어들어 "B의 미리보기 + A의 시각" 같은
-   * 혼합 상태가 이벤트로 나갈 수 있다(리뷰 반영).
+   * 대화·매장명·최신 메시지·안읽음 수를 한 트랜잭션(단일 REPEATABLE READ 스냅샷)에서 읽는다 — 독립 조회로
+   * 쪼개면 경쟁 커밋이 끼어들어 "B의 미리보기 + A의 시각" 같은 혼합 상태가 이벤트로 나갈 수 있다.
    */
   async getConversationEventSnapshot(conversationId: bigint) {
     return this.prisma.$transaction(async (tx) => {
@@ -414,35 +345,17 @@ export class ConversationRepository {
     });
   }
 
-  /** subscription 구독 권한 판정용 — 대화 소유 구매자/해당 매장 판매자 확인. */
   async findConversationAccess(conversationId: bigint) {
     return this.prisma.storeConversation.findFirst({
       where: { id: conversationId },
-      select: {
-        id: true,
-        account_id: true,
-        store_id: true,
-        store: { select: { seller_account_id: true } },
-      },
-    });
-  }
-
-  /** 판매자 구독 대상 매장(활성) 조회. */
-  async findStoreBySellerAccount(sellerAccountId: bigint) {
-    return this.prisma.store.findFirst({
-      where: { seller_account_id: sellerAccountId, ...activeWhere },
-      select: { id: true },
+      select: { id: true, account_id: true, store_id: true },
     });
   }
 
   /**
-   * 구매자 메시지 저장. 대화가 없으면 같은 트랜잭션에서 생성하고, 인사말은
-   * "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.
-   *
-   * 대화 생성과 메시지 저장을 한 트랜잭션으로 묶는다 — 대화 row가 먼저
-   * 커밋되면 판매자 목록에 빈 대화가 노출되고, 이후 메시지 저장이 실패하면
-   * 유령 대화가 남는다(리뷰 반영). 실패 시 전체가 롤백되므로 재시도에서
-   * 인사말 계약도 유지된다.
+   * 인사말은 "대화의 첫 메시지"일 때만(메시지 0건) 유저 메시지보다 앞서 저장한다.
+   * 대화 생성과 메시지 저장을 한 트랜잭션으로 묶는다 — 대화 row가 먼저 커밋되면 판매자 목록에 빈 대화가
+   * 노출되고, 이후 메시지 저장이 실패하면 유령 대화가 남는다. 실패 시 전체가 롤백되므로 재시도에서 인사말 계약도 유지된다.
    */
   async createBuyerMessages(args: {
     accountId: bigint;
@@ -454,9 +367,8 @@ export class ConversationRepository {
       const conversation = await this.lockOrCreateConversation(tx, args);
       const conversationId = conversation.id;
       // 메시지 시각은 대화 잠금 획득 "이후" DB 시계(NOW(3))로 채번한다 —
-      // 앱 호스트 시계는 다중 인스턴스에서 노드 간 오차로 잠금 순서와
-      // 어긋날 수 있다(릴리즈 리뷰 반영). DB가 단일 시계 소스이므로
-      // 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다.
+      // 앱 호스트 시계는 다중 인스턴스에서 노드 간 오차로 잠금 순서와 어긋날 수 있다.
+      // DB가 단일 시계 소스이므로 잠금 순서 = 시각 순서 = 커밋 순서가 대화 단위로 보장된다.
       const now = await this.fetchMonotonicNow(tx, conversationId);
 
       // 인사말 필요 여부는 실제 메시지 수로 판정한다 — "생성 여부" 플래그는
@@ -469,9 +381,8 @@ export class ConversationRepository {
       const messageCount = Number(messageCountRows[0]?.c ?? 0n);
 
       // 이번 전송 "이전"의 미읽음 수신 메시지 — 읽음 마커 전진 가능 여부 판정용.
-      // 잠금 조회(FOR SHARE)로 최신 커밋을 읽는다 — 트랜잭션 초입의 일반
-      // 조회가 만든 REPEATABLE READ 스냅샷은 잠금 대기 중 커밋된 판매자
-      // 답장을 못 본다(리뷰 반영). raw라 soft-delete 필터를 수동 명시.
+      // 잠금 조회(FOR SHARE)로 최신 커밋을 읽는다 — 트랜잭션 초입의 일반 조회가 만든 REPEATABLE READ
+      // 스냅샷은 잠금 대기 중 커밋된 판매자 답장을 못 본다. raw라 soft-delete 필터를 수동 명시.
       const unreadRows = conversation.lastReadAt
         ? await tx.$queryRaw<{ c: bigint }[]>`
             SELECT COUNT(*) AS c FROM store_conversation_message
@@ -527,15 +438,12 @@ export class ConversationRepository {
         data: {
           last_message_at: now,
           updated_at: now,
-          // 이번 mutation 응답으로 인사말·FAQ 자동응답까지 구매자에게 즉시
-          // 표시되므로 여기까지 읽음으로 전진시키되, 이전에 쌓인 미읽음
-          // 답장이 있으면 전진하지 않는다 — 단일 워터마크라 함께 읽음
-          // 처리돼 버리기 때문(리뷰 반영). 그 경우 방금 받은 자동응답도
-          // 미읽음에 포함되지만, 채팅 상세를 열면 함께 해소된다.
+          // 인사말·FAQ 자동응답까지 이번 응답으로 즉시 표시되므로 여기까지 읽음으로 전진시키되, 이전에 쌓인
+          // 미읽음 답장이 있으면 전진하지 않는다 — 단일 워터마크라 함께 읽음 처리돼 버리기 때문.
+          // 그 경우 방금 받은 자동응답도 미읽음에 포함되지만, 채팅 상세를 열면 함께 해소된다.
           ...(pendingUnread === 0 ? { last_read_at: now } : {}),
-          // soft-delete된 대화를 재사용한 경우 복구한다 — 삭제 상태로 두면
-          // 구매자·판매자 어느 조회에도 잡히지 않아 메시지가 유실돼 보인다
-          // (리뷰 반영). 평상시엔 이미 null이라 no-op.
+          // soft-delete된 대화를 재사용한 경우 복구한다 — 삭제 상태로 두면 구매자·판매자 어느 조회에도
+          // 잡히지 않아 메시지가 유실돼 보인다. 평상시엔 이미 null이라 no-op.
           deleted_at: null,
         },
       });
@@ -545,19 +453,16 @@ export class ConversationRepository {
   }
 
   /**
-   * 대화 단위 단조 시각 채번 — 인스턴스 간 단일 시계(DB NOW(3))를 쓰되,
-   * 해당 대화의 기존 last_message_at/last_read_at보다 1ms 이상 뒤로 보정한다.
-   * 앱 시계로 찍힌 과거 row(시계가 DB보다 앞섰던 노드)가 남아 있어도 새
-   * 메시지가 마커보다 과거/동률 시각을 받아 안읽음 판정(created_at >
-   * last_read_at)에서 누락되지 않는다(릴리즈 리뷰 반영). 잠금 획득 후 호출 전제.
+   * 인스턴스 간 단일 시계(DB NOW(3))를 쓰되 해당 대화의 기존 last_message_at/last_read_at보다 1ms 이상
+   * 뒤로 보정한다 — 앱 시계로 찍힌 과거 row(시계가 DB보다 앞섰던 노드)가 남아 있어도 새 메시지가 마커보다
+   * 과거/동률 시각을 받아 안읽음 판정(created_at > last_read_at)에서 누락되지 않는다. 잠금 획득 후 호출 전제.
    */
   private async fetchMonotonicNow(
     tx: Prisma.TransactionClient,
     conversationId: bigint,
   ): Promise<Date> {
-    // FOR UPDATE 잠금 조회 — 일반 조회는 트랜잭션 초입 스냅샷을 읽어,
-    // 잠금 대기 중 커밋된 마커 갱신을 놓칠 수 있다(릴리즈 리뷰 반영).
-    // row는 이미 본 트랜잭션이 잠갔으므로 추가 대기는 없다.
+    // FOR UPDATE 잠금 조회 — 일반 조회는 트랜잭션 초입 스냅샷을 읽어 잠금 대기 중 커밋된 마커 갱신을
+    // 놓칠 수 있다. row는 이미 본 트랜잭션이 잠갔으므로 추가 대기는 없다.
     const rows = await tx.$queryRaw<{ now: Date }[]>`
       SELECT GREATEST(
         NOW(3),
@@ -604,10 +509,8 @@ export class ConversationRepository {
       return row ? { id: row.id, lastReadAt: row.last_read_at } : null;
     };
 
-    // 사전 조회도 tx 경유 — 트랜잭션 안에서 루트 클라이언트를 쓰면 풀
-    // 커넥션을 2개 점유해 동시 전송이 풀을 소진하면 상호 대기가 난다(리뷰
-    // 반영). tx 스냅샷이 경쟁 커밋을 못 봐도 create → P2002 → 잠금 조회
-    // 경로가 복구하므로 안전하다.
+    // 사전 조회도 tx 경유 — 트랜잭션 안에서 루트 클라이언트를 쓰면 풀 커넥션을 2개 점유해 동시 전송이
+    // 풀을 소진하면 상호 대기가 난다. tx 스냅샷이 경쟁 커밋을 못 봐도 create → P2002 → 잠금 조회 경로가 복구한다.
     const existing = await tx.storeConversation.findFirst({
       where: {
         account_id: args.accountId,
@@ -643,17 +546,19 @@ export class ConversationRepository {
     }
   }
 
-  async createSellerConversationMessage(args: {
-    conversationId: bigint;
-    sellerAccountId: bigint;
-    bodyFormat: ConversationBodyFormat;
-    bodyText: string | null;
-    bodyHtml: string | null;
-  }) {
+  async createSellerConversationMessage(
+    args: {
+      conversationId: bigint;
+      sellerAccountId: bigint;
+      bodyFormat: ConversationBodyFormat;
+      bodyText: string | null;
+      bodyHtml: string | null;
+    },
+    audit: (row: { id: bigint }) => AuditEntry,
+  ) {
     return this.prisma.$transaction(async (tx) => {
-      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 DB 시계로 시각을
-      // 채번해 커밋 순서와 시각 순서를 대화 단위로 일치시킨다(읽음 마커
-      // 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약, 릴리즈 리뷰 반영).
+      // 구매자 전송·읽음 처리와 같은 대화 잠금 아래에서 DB 시계로 시각을 채번해 커밋 순서와 시각 순서를
+      // 대화 단위로 일치시킨다(읽음 마커 정합 — 앱 호스트 시계는 다중 인스턴스 오차에 취약).
       await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
       const now = await this.fetchMonotonicNow(tx, args.conversationId);
 
@@ -676,6 +581,9 @@ export class ConversationRepository {
           updated_at: now,
         },
       });
+
+      // 판매자 답장은 감사 대상이다 — 메시지 저장과 같은 트랜잭션에 남긴다
+      await this.auditLogs.recordAudit(tx, audit(message));
 
       return message;
     });

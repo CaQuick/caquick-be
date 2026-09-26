@@ -15,12 +15,12 @@ export default defineConfig(
   { 
     ignores: [
       'eslint.config.mjs',
-      'ecosystem.config.js',
       'dist/**',
       'node_modules/**',
       'coverage/**',
       '.yarn/**',
-      'src/graphql/graphql.types.ts'
+      'src/graphql/graphql.types.ts',
+      'src/generated/**'
     ]
   },
 
@@ -112,10 +112,28 @@ export default defineConfig(
     },
   },
 
-  // common/utils 는 순수 함수 — DI(Injectable/Inject)·ConfigService·Prisma 의존 금지.
+  // 예외는 DomainException(카탈로그 코드)로만 던진다 — Nest 예외 직접 생성 금지.
+  // 예외 1곳: main.ts ValidationPipe exceptionFactory(필터가 VALIDATION_FAILED로 매핑).
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'NewExpression[callee.name=/^(BadRequest|Unauthorized|Forbidden|NotFound|Conflict|InternalServerError|Http)Exception$/]',
+          message:
+            '예외는 new DomainException(코드)로 던진다 — 코드·status·메시지는 src/common/errors/error-catalog.ts.',
+        },
+      ],
+    },
+  },
+
+  // common/utils·errors 는 순수 함수/값 — DI(Injectable/Inject)·ConfigService·Prisma 의존 금지.
   // (DI 없는 값 클래스인 HttpException 류는 허용)
   {
-    files: ['src/common/utils/**/*.ts'],
+    files: ['src/common/utils/**/*.ts', 'src/common/errors/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -181,6 +199,7 @@ export default defineConfig(
       // mode는 v7에서 deprecated — 'folder'가 기본값이라 생략한다.
       'boundaries/elements': [
         { type: 'common', pattern: 'src/common' },
+        { type: 'generated', pattern: 'src/generated' },
         { type: 'config', pattern: 'src/config' },
         { type: 'prisma', pattern: 'src/prisma' },
         { type: 'global', pattern: 'src/global' },
@@ -207,7 +226,9 @@ export default defineConfig(
               from: { element: { type: '*' } },
               allow: {
                 to: {
-                  element: { types: ['common', 'config', 'prisma', 'global'] },
+                  element: {
+                    types: ['common', 'config', 'prisma', 'global', 'generated'],
+                  },
                 },
               },
             },

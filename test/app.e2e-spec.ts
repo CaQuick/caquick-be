@@ -1,19 +1,19 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AccountType } from '@prisma/client';
 import request from 'supertest';
 import { App } from 'supertest/types';
 
 import { AppModule } from './../src/app.module';
+import { AccountUserRepository } from './../src/features/auth/repositories/account-user.repository';
 import { ACCOUNT_REPOSITORY } from './../src/features/auth/repositories/account.repository.interface';
-import { UserRepository } from './../src/features/user/repositories/user.repository';
 import { PrismaService } from './../src/prisma';
+
+import { AccountType } from '@/generated/prisma/client';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   let jwt: JwtService;
-  let originalJwtSecret: string | undefined;
   const mockAccountRepository = {
     findAccountForJwt: jest.fn().mockResolvedValue({
       id: BigInt(1),
@@ -48,15 +48,15 @@ describe('AppController (e2e)', () => {
   };
 
   beforeAll(async () => {
-    originalJwtSecret = process.env.JWT_ACCESS_SECRET;
-    process.env.JWT_ACCESS_SECRET = 'test_jwt_secret';
-
+    process.env.REDIS_URL ??= 'redis://localhost:6379';
+    process.env.RABBITMQ_URL ??= 'amqp://guest:guest@localhost:5672';
+    // 서명 키는 authConfig가 만든다(RS256, 미설정이면 임시 키) — 시크릿 env는 더 이상 쓰이지 않는다
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule.forRole('api')],
     })
       .overrideProvider(ACCOUNT_REPOSITORY)
       .useValue(mockAccountRepository)
-      .overrideProvider(UserRepository)
+      .overrideProvider(AccountUserRepository)
       .useValue(mockUserRepository)
       .overrideProvider(PrismaService)
       .useValue(mockPrismaService)
@@ -69,11 +69,6 @@ describe('AppController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
-    if (originalJwtSecret === undefined) {
-      delete process.env.JWT_ACCESS_SECRET;
-      return;
-    }
-    process.env.JWT_ACCESS_SECRET = originalJwtSecret;
   });
 
   it('/health (GET)', () => {
@@ -87,6 +82,7 @@ describe('AppController (e2e)', () => {
     const accessToken = jwt.sign({
       sub: '1',
       typ: 'access',
+      role: 'USER',
     });
 
     const response = await request(app.getHttpServer())
@@ -182,7 +178,7 @@ describe('AppController (e2e)', () => {
 
   it('만료된 JWT가 전달되면 GraphQL me 쿼리는 에러를 반환해야 한다', async () => {
     const expiredToken = jwt.sign(
-      { sub: '1', typ: 'access' },
+      { sub: '1', typ: 'access', role: 'USER' },
       { expiresIn: '0s' },
     );
 

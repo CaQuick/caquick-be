@@ -1,17 +1,11 @@
 import {
   type CanActivate,
   type ExecutionContext,
-  ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-import {
-  ACCOUNT_TYPE_NOT_ALLOWED,
-  AUTHENTICATION_REQUIRED,
-  PASSWORD_CHANGE_REQUIRED,
-} from '@/global/auth/constants/auth-error-messages';
+import { DomainException } from '@/common/errors/error-catalog';
 import { ROLES_METADATA_KEY } from '@/global/auth/decorators/roles.decorator';
 import { requestOfContext } from '@/global/auth/guards/request-of-context.helper';
 import type { AccountRole } from '@/global/auth/types/jwt-payload.type';
@@ -36,12 +30,12 @@ export class RolesGuard implements CanActivate {
     if (!roles || roles.length === 0) return true;
 
     const user = requestOfContext(context)?.user;
-    if (!user) throw new UnauthorizedException(AUTHENTICATION_REQUIRED);
+    if (!user) throw new DomainException('AUTHENTICATION_REQUIRED');
     if (!user.accountType || !roles.includes(user.accountType)) {
-      throw new ForbiddenException(ACCOUNT_TYPE_NOT_ALLOWED);
+      throw new DomainException('ACCOUNT_TYPE_NOT_ALLOWED');
     }
     if (user.mustChangePassword) {
-      throw new ForbiddenException(PASSWORD_CHANGE_REQUIRED);
+      throw new DomainException('PASSWORD_CHANGE_REQUIRED');
     }
     return true;
   }

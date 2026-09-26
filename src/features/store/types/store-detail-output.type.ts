@@ -1,8 +1,3 @@
-/**
- * storeDetail resolver 반환용 도메인 출력 타입.
- * SDL(store-detail.graphql)의 StoreDetail 와 필드 일치.
- */
-
 export interface StoreDetail {
   id: string;
   storeName: string;

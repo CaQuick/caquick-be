@@ -1,17 +1,13 @@
-import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import { STORAGE_ERRORS } from '@/global/storage/constants/storage.constants';
 import { S3Service } from '@/global/storage/s3.service';
 
-// getSignedUrl을 모킹
 jest.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
 }));
 
-// S3Client를 모킹
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({})),
   PutObjectCommand: jest.fn().mockImplementation((input) => input),
@@ -107,7 +103,7 @@ describe('S3Service', () => {
       it('허용되지 않은 contentType이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentType: 'image/gif' }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('5MB 초과하면 거부해야 한다', async () => {
@@ -116,7 +112,7 @@ describe('S3Service', () => {
             ...baseInput,
             contentLength: 6 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('5MB 이하이면 허용해야 한다', async () => {
@@ -149,7 +145,7 @@ describe('S3Service', () => {
             ...reviewImageInput,
             contentLength: 11 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
     });
 
@@ -189,7 +185,7 @@ describe('S3Service', () => {
             ...reviewVideoInput,
             contentLength: 51 * 1024 * 1024,
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
 
       it('이미지 contentType이면 거부해야 한다', async () => {
@@ -198,7 +194,7 @@ describe('S3Service', () => {
             ...reviewVideoInput,
             contentType: 'image/jpeg',
           }),
-        ).rejects.toThrow(BadRequestException);
+        ).rejects.toThrowDomain(400);
       });
     });
 
@@ -206,13 +202,13 @@ describe('S3Service', () => {
       it('0이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: 0 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrowDomain('INVALID_CONTENT_LENGTH');
       });
 
       it('음수이면 거부해야 한다', async () => {
         await expect(
           service.createUploadUrl({ ...baseInput, contentLength: -1 }),
-        ).rejects.toThrow(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+        ).rejects.toThrowDomain('INVALID_CONTENT_LENGTH');
       });
     });
 
@@ -223,7 +219,7 @@ describe('S3Service', () => {
             ...baseInput,
             contentType: 'application/pdf',
           }),
-        ).rejects.toThrow('허용되지 않은 파일 형식입니다.');
+        ).rejects.toThrowDomain('INVALID_CONTENT_TYPE');
       });
 
       it('용량 초과 에러에 최대 크기가 포함되어야 한다', async () => {
@@ -232,12 +228,12 @@ describe('S3Service', () => {
             ...baseInput,
             contentLength: 100 * 1024 * 1024,
           }),
-        ).rejects.toThrow('최대 5MB');
+        ).rejects.toThrowDomain('FILE_TOO_LARGE');
       });
     });
 
     describe('S3 presign 실패', () => {
-      it('getSignedUrl 실패 시 InternalServerErrorException을 던져야 한다', async () => {
+      it('getSignedUrl 실패 시 500을 던져야 한다', async () => {
         const { getSignedUrl: mockGetSignedUrl } = jest.requireMock<
           typeof import('@aws-sdk/s3-request-presigner')
         >('@aws-sdk/s3-request-presigner');
@@ -245,8 +241,8 @@ describe('S3Service', () => {
           new Error('Credential is missing'),
         );
 
-        await expect(service.createUploadUrl(baseInput)).rejects.toThrow(
-          STORAGE_ERRORS.S3_PRESIGN_FAILED,
+        await expect(service.createUploadUrl(baseInput)).rejects.toThrowDomain(
+          'S3_PRESIGN_FAILED',
         );
         // 실제 원인이 구조화 로그로 남아야 한다 (일반 메시지로 가려지지 않도록)
         expect(mockLogger.error).toHaveBeenCalledWith(
@@ -294,61 +290,61 @@ describe('S3Service', () => {
     });
   });
 
-  describe('isOwnedProfileImageUrl', () => {
-    it('이 버킷·해당 계정 prefix 의 URL 이면 true', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(true);
-    });
+  describe('isOwnedUploadUrl', () => {
+    const HOST = 'caquick-media-test.s3.ap-northeast-2.amazonaws.com';
+    // purpose별 prefix와 "다른 purpose"의 prefix — 용도 교차 반증용
+    const PURPOSES = [
+      ['PROFILE_IMAGE', 'profile-images', 'review-media/images'],
+      ['REVIEW_IMAGE', 'review-media/images', 'profile-images'],
+      ['REVIEW_VIDEO', 'review-media/videos', 'review-media/images'],
+    ] as const;
 
-    it('다른 계정 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/2/2026-06-10/abc.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('다른 버킷/외부 도메인 URL 이면 false', () => {
-      expect(
-        service.isOwnedProfileImageUrl(
-          'https://evil.example.com/profile-images/1/x.jpg',
-          BigInt(1),
-        ),
-      ).toBe(false);
-    });
-
-    it('review-media 등 다른 prefix 면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/review-media/images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('path traversal(../)로 타 계정 key 를 가리키면 false (정규화 후 검증)', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/../2/2026-06-10/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('인코딩된 dot(%2e)이 포함되면 false', () => {
-      const url =
-        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/%2e%2e/2/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('http(비 https)면 false', () => {
-      const url =
-        'http://caquick-media-test.s3.ap-northeast-2.amazonaws.com/profile-images/1/x.jpg';
-      expect(service.isOwnedProfileImageUrl(url, BigInt(1))).toBe(false);
-    });
-
-    it('URL 형식이 아니면 false', () => {
-      expect(service.isOwnedProfileImageUrl('not a url', BigInt(1))).toBe(
-        false,
-      );
+    describe.each(PURPOSES)('%s', (purpose, prefix, otherPrefix) => {
+      it.each([
+        [
+          '이 버킷·계정·용도 prefix',
+          `https://${HOST}/${prefix}/1/2026-06-10/a.jpg`,
+          true,
+        ],
+        [
+          '다른 계정 prefix',
+          `https://${HOST}/${prefix}/2/2026-06-10/a.jpg`,
+          false,
+        ],
+        ['다른 용도 prefix', `https://${HOST}/${otherPrefix}/1/a.jpg`, false],
+        [
+          '다른 버킷',
+          `https://other.s3.ap-northeast-2.amazonaws.com/${prefix}/1/a.jpg`,
+          false,
+        ],
+        [
+          '다른 리전',
+          `https://caquick-media-test.s3.us-east-1.amazonaws.com/${prefix}/1/a.jpg`,
+          false,
+        ],
+        ['외부 도메인', `https://evil.example.com/${prefix}/1/a.jpg`, false],
+        ['http', `http://${HOST}/${prefix}/1/a.jpg`, false],
+        [
+          'literal ../ traversal(정규화 후 타 계정)',
+          `https://${HOST}/${prefix}/1/../2/a.jpg`,
+          false,
+        ],
+        [
+          '인코딩된 dot(%2e)',
+          `https://${HOST}/${prefix}/1/%2e%2e/2/a.jpg`,
+          false,
+        ],
+        ['URL 아님', 'not a url', false],
+        ['빈 문자열', '', false],
+      ])('%s → %s', (_label, url, expected) => {
+        expect(service.isOwnedUploadUrl(url, purpose, BigInt(1))).toBe(
+          expected,
+        );
+      });
     });
   });
 });
 
-// Jest 커스텀 매처
 expect.extend({
   toEndWith(received: string, suffix: string) {
     const pass = received.endsWith(suffix);

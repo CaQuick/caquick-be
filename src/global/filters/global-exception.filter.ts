@@ -4,7 +4,11 @@ import type { GqlContextType } from '@nestjs/graphql';
 import type { Request, Response } from 'express';
 import type { GraphQLError } from 'graphql';
 
-import { resolveMessage, resolveStatus } from '@/common/utils/error';
+import {
+  resolveErrorCode,
+  resolveMessage,
+  resolveStatus,
+} from '@/common/utils/error';
 import {
   buildHttpRequestMeta,
   calculateDuration,
@@ -21,13 +25,7 @@ import { CustomLoggerService } from '@/global/logger/custom-logger.service';
 import { LogContext } from '@/global/types/log.type';
 import { ApiResponseTemplate } from '@/global/types/response';
 
-/**
- * 전역 예외 필터.
- * - HTTP 컨텍스트: 자체 처리 (구조화 로그 + 표준 응답 포맷)
- * - GraphQL 컨텍스트: GraphQLExceptionFilter 에 위임 (extensions 부착된 GraphQLError 반환)
- *
- * NestJS 글로벌 필터는 host type 별로 1 회만 매칭되므로 컨텍스트별 분기는 본 필터에서 수행한다.
- */
+/** NestJS 글로벌 필터는 host type별로 1회만 매칭되므로 컨텍스트별 분기(HTTP 자체 처리 / GraphQL은 GraphQLExceptionFilter 위임)를 본 필터에서 수행한다. */
 @Catch()
 export class HttpExceptionFilter extends BaseExceptionFilter {
   constructor(
@@ -38,10 +36,6 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
     super(httpAdapter);
   }
 
-  /**
-   * 발생한 예외를 가로채어 구조화 로그를 기록하고, 표준 API 응답 포맷으로 변환한다.
-   * GraphQL context 인 경우 GraphQLError 를 반환해 Apollo 가 응답에 포함시키도록 한다.
-   */
   override catch(exception: unknown, host: ArgumentsHost): GraphQLError | void {
     if (host.getType<GqlContextType>() === 'graphql') {
       return this.gqlFilter.format(exception, host);
@@ -62,6 +56,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
 
     const status = resolveStatus(exception);
     const message = resolveMessage(exception);
+    const errorCode = resolveErrorCode(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
     const duration = calculateDuration(startTime);
 
@@ -92,17 +87,22 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
           .json(
             ApiResponseTemplate.ERROR_WITH_DATA(
               list,
-              'Validation Error',
+              message,
               status,
+              errorCode,
             ),
           );
         return;
       }
 
-      res.status(status).json(ApiResponseTemplate.ERROR(message, status));
+      res
+        .status(status)
+        .json(ApiResponseTemplate.ERROR(message, status, errorCode));
       return;
     }
 
-    res.status(status).json(ApiResponseTemplate.ERROR(message, status));
+    res
+      .status(status)
+      .json(ApiResponseTemplate.ERROR(message, status, errorCode));
   }
 }

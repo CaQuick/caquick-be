@@ -1,0 +1,104 @@
+// 1) docker 컨테이너 로그 → Loki (이 compose 프로젝트만). 앱(api·worker)의 JSON 한 줄 로그는 level·role을 라벨로 올린다 —
+//    requestId·eventId는 카디널리티가 커서 라벨이 아니라 본문 필드로 남기고 LogQL `| json`으로 찾는다(api↔worker 조인 키).
+// 2) 컨테이너 자원(cAdvisor) → Prometheus remote write. OrbStack의 overlayfs 드라이버에선 docker 핸들러(이름 조회)가 실패하므로
+//    raw cgroup만 읽고, compose의 cgroup_parent(/caquick/<service>)에서 service 라벨을 만든다.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    action        = "keep"
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "caquick"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.app.receiver]
+}
+
+loki.process "app" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.match {
+    selector = "{container=~\"api|worker\"}"
+
+    stage.json {
+      expressions = {
+        level = "level",
+        role  = "role",
+      }
+    }
+    stage.labels {
+      values = {
+        level = "",
+        role  = "",
+      }
+    }
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+prometheus.exporter.cadvisor "containers" {
+  // docker 핸들러는 OrbStack(overlayfs)에서 rw 레이어 조회에 실패해 컨테이너마다 error 로그를 남긴다 — 소켓을 끊어 raw cgroup만 쓴다
+  docker_host                 = "unix:///var/run/docker-disabled.sock"
+  docker_only                 = false
+  raw_cgroup_prefix_allowlist = ["/caquick/"]
+  // disk·diskIO는 rw 레이어 조회가 필요해 OrbStack에서 실패한다 — 나머지 기본 제외 목록에 더한다
+  disabled_metrics = ["cpu_topology", "resctrl", "udp", "advtcp", "sched", "hugetlb", "memory_numa", "tcp", "process", "disk", "diskIO"]
+}
+
+prometheus.scrape "cadvisor" {
+  targets         = prometheus.exporter.cadvisor.containers.targets
+  forward_to      = [prometheus.relabel.cadvisor.receiver]
+  job_name        = "cadvisor"
+  scrape_interval = "15s"
+}
+
+prometheus.relabel "cadvisor" {
+  forward_to = [prometheus.remote_write.prometheus.receiver]
+
+  // /caquick/<service>/<container>만 남기고 service 라벨을 만든다(부모 cgroup 집계는 버린다). 꼬리(컨테이너 id)는 한 조각으로만 본다.
+  // 홈서버는 OrbStack(cgroupfs 드라이버) — systemd 드라이버는 cgroup_parent에 *.slice를 요구해 이 compose와 맞지 않는다
+  rule {
+    action        = "keep"
+    source_labels = ["id"]
+    regex         = "/caquick/[^/]+/[^/]+"
+  }
+  rule {
+    source_labels = ["id"]
+    regex         = "/caquick/([^/]+)/[^/]+"
+    target_label  = "service"
+    replacement   = "$1"
+  }
+  // exporter 타깃이 job=integrations/cadvisor를 달고 온다 — 대시보드·경보는 job="cadvisor"로 본다
+  rule {
+    target_label = "job"
+    replacement  = "cadvisor"
+  }
+}
+
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}

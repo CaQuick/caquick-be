@@ -1,21 +1,20 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  InternalServerErrorException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import type { Account, PrismaClient, Product, Store } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
-import { ORDER_CHECKOUT_ERRORS } from '@/features/order/constants/order-error-messages';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import type {
+  Account,
+  PrismaClient,
+  Product,
+  Store,
+} from '@/generated/prisma/client';
+import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -24,9 +23,11 @@ import {
   createOrderItem,
   createProduct,
   createStore,
+  createStoreDailyCapacity,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -46,10 +47,14 @@ describe('OrderCheckoutService (real DB)', () => {
         OrderCheckoutService,
         OrderRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
         RandomService,
+        // 발행 repository가 OutboxPublisher를 주입받는다(08b)
+        ...outboxPublisherProviders({ clock: true }),
+        ...bookedQuantityProviders(),
       ],
     });
     service = module.get(OrderCheckoutService);
@@ -181,6 +186,19 @@ describe('OrderCheckoutService (real DB)', () => {
       const { product, sizeSmallId, candleId } = await makeProductWithOptions(
         store.id,
       );
+      // 썸네일 스냅샷은 활성 첫 이미지(sort_order 순) — 뒤 순서를 먼저 만들어 정렬을 확인한다
+      for (const [url, sortOrder] of [
+        ['https://img/second.png', 1],
+        ['https://img/first.png', 0],
+      ] as const) {
+        await prisma.productImage.create({
+          data: {
+            product_id: product.id,
+            image_url: url,
+            sort_order: sortOrder,
+          },
+        });
+      }
       const buyer = await makeBuyer();
 
       const result = await service.createOrder(
@@ -217,6 +235,8 @@ describe('OrderCheckoutService (real DB)', () => {
 
       const [item] = saved.items;
       expect(item.product_name_snapshot).toBe(product.name);
+      expect(item.store_name_snapshot).toBe(store.store_name);
+      expect(item.product_thumbnail_url_snapshot).toBe('https://img/first.png');
       expect(item.regular_price_snapshot).toBe(30000);
       expect(item.sale_price_snapshot).toBe(25000);
       expect(item.quantity).toBe(2);
@@ -268,7 +288,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString(), optionItemIds: [] }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.createOrder(
           buyer.id,
@@ -277,7 +297,7 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [sizeSmallId.toString(), sizeLargeId.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('타 상품 옵션·중복 옵션·비활성 옵션은 거절한다', async () => {
@@ -294,7 +314,7 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [other.sizeSmallId.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       await expect(
         service.createOrder(
           buyer.id,
@@ -303,7 +323,7 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [sizeSmallId.toString(), sizeSmallId.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       // 비활성 아이템은 활성 조회에서 빠져 '타 상품 옵션'과 동일하게 거절된다
       await prisma.productOptionItem.update({
@@ -318,7 +338,7 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [sizeSmallId.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('설명/이미지 필수 옵션 선택은 커스텀 확장 전까지 거절한다', async () => {
@@ -347,7 +367,7 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [item.id.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       // 해당 그룹을 선택하지 않으면 주문 가능(선택 그룹이므로)
       const ok = await service.createOrder(
@@ -367,19 +387,19 @@ describe('OrderCheckoutService (real DB)', () => {
 
       await expect(
         service.createOrder(buyer.id, baseInput({ productId: '999999' })),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.createOrder(
           buyer.id,
           baseInput({ productId: inactiveProduct.id.toString() }),
         ),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
       await expect(
         service.createOrder(
           buyer.id,
           baseInput({ productId: productInInactiveStore.id.toString() }),
         ),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toThrowDomain(404);
     });
 
     it('주문자 정보 미입력 시 프로필로 채우고, 전화번호가 어디에도 없으면 거절한다', async () => {
@@ -413,7 +433,7 @@ describe('OrderCheckoutService (real DB)', () => {
           phonelessBuyer.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('휴무일·슬롯 비정렬·과거 픽업 일시는 거절한다', async () => {
@@ -436,7 +456,7 @@ describe('OrderCheckoutService (real DB)', () => {
             pickupAt: new Date('2026-09-19T05:00:00.000Z'),
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 슬롯 비정렬(14:10)
       await expect(
         service.createOrder(
@@ -446,7 +466,7 @@ describe('OrderCheckoutService (real DB)', () => {
             pickupAt: new Date('2026-09-18T05:10:00.000Z'),
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
       // 과거(9/15)
       await expect(
         service.createOrder(
@@ -456,19 +476,17 @@ describe('OrderCheckoutService (real DB)', () => {
             pickupAt: new Date('2026-09-15T05:00:00.000Z'),
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('capacity 잔여가 주문 수량보다 작으면 거절한다', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date(Date.UTC(2026, 8, 18)),
-          capacity: 3,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 3,
       });
       // 기존 점유 2 → 잔여 1
       const existing = await createOrderRow(prisma, {
@@ -486,7 +504,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString(), quantity: 2 }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const ok = await service.createOrder(
         buyer.id,
@@ -506,13 +524,13 @@ describe('OrderCheckoutService (real DB)', () => {
           seller.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrowDomain(403);
       await expect(
         service.createOrder(
           profileless.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
     });
 
     it('상품 제작 소요시간 이전 픽업 일시는 거절한다', async () => {
@@ -532,7 +550,7 @@ describe('OrderCheckoutService (real DB)', () => {
             pickupAt: new Date('2026-09-17T05:00:00.000Z'),
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const ok = await service.createOrder(
         buyer.id,
@@ -554,7 +572,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('32비트 초과·음수 금액은 커밋 전에 거절한다', async () => {
@@ -570,7 +588,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: expensive.id.toString(), quantity: 3 }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       // 음수 델타가 상품가를 초과 → 음수 금액
       const cheap = await createProduct(prisma, {
@@ -601,7 +619,79 @@ describe('OrderCheckoutService (real DB)', () => {
             optionItemIds: [negativeItem.id.toString()],
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
+    });
+
+    it('반증: 복제 지연 — catalog 설정이 아직 복제되지 않았으면 제한 없이 받는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      // 설정만 있고 order 복제본이 없는 상태(변경 이벤트 미소비)
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+        replicate: false,
+      });
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString(), quantity: 5 }),
+        ),
+      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+    });
+
+    it('반증: 복제 지연 — catalog 기준으로는 이미 소진이어도 복제본이 없으면 받는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      // catalog 설정(capacity 1)만 있고 복제본은 없다. 기존 예약 2건이라 catalog 기준으로는 이미 소진 상태
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+        replicate: false,
+      });
+      const booked = await createOrderRow(prisma, {
+        status: 'CONFIRMED',
+        pickup_at: VALID_PICKUP_AT,
+      });
+      await createOrderItem(prisma, {
+        order_id: booked.id,
+        store_id: store.id,
+        quantity: 2,
+      });
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+    });
+
+    it('반증: 설정 삭제가 아직 복제되지 않았으면 기존 제한이 유지된다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const capacity = await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+      // catalog에서만 지우고 삭제 이벤트는 아직 소비되지 않은 상태
+      await prisma.storeDailyCapacity.update({
+        where: { id: capacity.id },
+        data: { deleted_at: new Date() },
+      });
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString(), quantity: 2 }),
+        ),
+      ).rejects.toThrowDomain(400);
     });
 
     it('동시 주문이 마지막 capacity 잔여를 함께 차지하지 못한다', async () => {
@@ -609,12 +699,10 @@ describe('OrderCheckoutService (real DB)', () => {
       const product = await createProduct(prisma, { store_id: store.id });
       const buyerA = await makeBuyer();
       const buyerB = await makeBuyer();
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date(Date.UTC(2026, 8, 18)),
-          capacity: 1,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
       });
 
       // 둘 다 사전 검사는 통과하지만, 트랜잭션 내 FOR UPDATE 재검사가
@@ -662,7 +750,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).rejects.toThrow(InternalServerErrorException);
+      ).rejects.toThrowDomain(500);
     });
 
     it('같은 키 재요청은 새 주문 없이 기존 주문을 반환한다', async () => {
@@ -764,9 +852,9 @@ describe('OrderCheckoutService (real DB)', () => {
         );
       // BadRequest여야 GraphQL 코드가 BAD_USER_INPUT으로 나간다 — 500(재시도
       // 유도)으로 보이면 클라이언트가 같은 키로 재시도해 같은 실패를 반복한다
-      await expect(retry()).rejects.toThrow(BadRequestException);
-      await expect(retry()).rejects.toThrow(
-        ORDER_CHECKOUT_ERRORS.IDEMPOTENCY_KEY_UNAVAILABLE,
+      await expect(retry()).rejects.toThrowDomain(400);
+      await expect(retry()).rejects.toThrowDomain(
+        'IDEMPOTENCY_KEY_UNAVAILABLE',
       );
 
       // 새 키로는 정상 생성된다(키 단위 문제임을 확인)
@@ -808,12 +896,10 @@ describe('OrderCheckoutService (real DB)', () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
-      await prisma.storeDailyCapacity.create({
-        data: {
-          store_id: store.id,
-          capacity_date: new Date(Date.UTC(2026, 8, 18)),
-          capacity: 1,
-        },
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
       });
 
       const first = await service.createOrder(
@@ -856,7 +942,7 @@ describe('OrderCheckoutService (real DB)', () => {
             pickupAt: new Date('2026-09-01T05:00:00.000Z'),
           }),
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
 
       const retried = await service.createOrder(
         buyer.id,

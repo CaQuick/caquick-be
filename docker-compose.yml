@@ -2,9 +2,10 @@ services:
   mysql:
     image: mysql:8.0
     container_name: caquick-mysql
-    # MySQL 8 기본 caching_sha2_password 가 prisma client(현 6.x)에서
-    # 일부 환경에서 sha256_password 로 잘못 인식되어 연결이 실패하는 케이스가
-    # 있어 mysql_native_password 로 통일한다. 새로 생성되는 사용자도 동일 plugin.
+    # MySQL 8 기본 caching_sha2_password 는 비TLS·콜드 캐시 첫 연결에서 RSA 공개키
+    # 조회를 요구하는데 mariadb 드라이버(Prisma 7 어댑터)가 기본적으로 이를 차단해
+    # 연결이 실패한다. 로컬은 mysql_native_password 로 통일해 우회한다(TLS 정책은
+    # 홈서버 compose 때 함께 결정). 새로 생성되는 사용자도 동일 plugin.
     command:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
@@ -33,6 +34,21 @@ services:
       - '6379:6379'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    container_name: caquick-rabbitmq
+    # outbox 릴레이 → 소비자(worker) 이벤트 백본(P2 04). 큐·바인딩은 `rabbitmqctl list_queues/list_bindings`로 본다.
+    # 일부 호스트에서 docker run이 `.erlang.cookie: eacces`로 실패하는 사례가 있다(같은 이미지가 testcontainers로는 기동) — 그때는
+    # `docker compose logs rabbitmq`로 확인하고 이미지를 다시 받는다.
+    ports:
+      - '5672:5672'
+    # 로컬은 볼륨 없이 — 개발 브로커 데이터는 잃어도 된다. 운영 compose(P2 06)가 볼륨·권한을 정한다.
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5

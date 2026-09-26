@@ -1,12 +1,6 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AccountType } from '@prisma/client';
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
@@ -15,21 +9,25 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
-import { AUTH_ERROR_MESSAGES } from '@/features/auth/constants/auth-error-messages';
 import {
   ACCOUNT_CREDENTIAL_REPOSITORY,
   type AccountCredentialWithAccount,
   type IAccountCredentialRepository,
 } from '@/features/auth/repositories/account-credential.repository.interface';
+import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
-import type { CredentialRole } from '@/features/auth/services/credential-auth.service.interface';
+import {
+  CredentialAuthService,
+  type CredentialRole,
+} from '@/features/auth/services/credential-auth.service';
 import { TokenService } from '@/features/auth/services/token.service';
-import { TOKEN_SERVICE } from '@/features/auth/services/token.service.interface';
+import { AccountType } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 function makeCredential(
   overrides: Partial<AccountCredentialWithAccount> & {
@@ -58,7 +56,20 @@ function makeCredential(
   };
 }
 
+/** changePassword에 넘긴 감사 항목 콜백을 실행해 항목을 꺼낸다(repository가 tx 안에서 하는 일). */
+function auditEntryOf(mock: unknown) {
+  const calls = (mock as jest.Mock).mock.calls;
+  const audit = calls[calls.length - 1][1] as () => unknown;
+  return audit();
+}
+
 describe('CredentialAuthService', () => {
+  const blacklist = {
+    blockCredentials: jest.fn().mockResolvedValue(undefined),
+  };
+  afterEach(() => {
+    blacklist.blockCredentials.mockClear();
+  });
   let service: CredentialAuthService;
   let credentials: jest.Mocked<IAccountCredentialRepository>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
@@ -81,7 +92,7 @@ describe('CredentialAuthService', () => {
       findCredentialByUsername: jest.fn(),
       findCredentialByAccountId: jest.fn(),
       updateLastLogin: jest.fn(),
-      updatePasswordHash: jest.fn(),
+      changePassword: jest.fn(),
     };
 
     refreshSessions = {
@@ -93,25 +104,29 @@ describe('CredentialAuthService', () => {
     };
 
     auditLogs = {
-      createAuditLog: jest.fn(),
+      recordAudit: jest.fn(),
+      countAuditLogsBySeller: jest.fn(),
+      listAuditLogsBySeller: jest.fn(),
+      countAuditLogs: jest.fn(),
+      listAuditLogs: jest.fn(),
     };
 
     mockConfig = {
       get: jest.fn(),
+      // 소비처는 raw env가 아니라 authConfig 네임스페이스를 읽는다
+      getOrThrow: jest.fn(() => TEST_AUTH_CONFIG),
     } as unknown as jest.Mocked<ConfigService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CredentialAuthService,
+        { provide: TokenBlacklistService, useValue: blacklist },
         { provide: ConfigService, useValue: mockConfig },
         {
           provide: JwtService,
           useValue: { sign: jest.fn(() => 'mock-access-token') },
         },
-        {
-          provide: TOKEN_SERVICE,
-          useClass: TokenService,
-        },
+        TokenService,
         {
           provide: ACCOUNT_CREDENTIAL_REPOSITORY,
           useValue: credentials,
@@ -119,6 +134,18 @@ describe('CredentialAuthService', () => {
         {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
+        },
+        {
+          provide: ACCOUNT_REPOSITORY,
+          useValue: {
+            findAccountForJwt: jest.fn().mockResolvedValue({
+              id: BigInt(1),
+              status: 'ACTIVE',
+              account_type: 'USER',
+              credential: null,
+              store: null,
+            }),
+          },
         },
         {
           provide: AUDIT_LOG_REPOSITORY,
@@ -187,7 +214,7 @@ describe('CredentialAuthService', () => {
       ['password 빈 문자열', { password: '' }],
       ['password 공백', { password: '   ' }],
     ])('%s이면 UnauthorizedException', async (_label, overrides) => {
-      await expect(login(overrides)).rejects.toThrow(UnauthorizedException);
+      await expect(login(overrides)).rejects.toThrowDomain(401);
       expect(credentials.findCredentialByUsername).not.toHaveBeenCalled();
     });
 
@@ -195,8 +222,8 @@ describe('CredentialAuthService', () => {
       const verify = jest.spyOn(argon2, 'verify').mockResolvedValue(true);
       credentials.findCredentialByUsername.mockResolvedValue(null);
 
-      await expect(login({ username: 'nonexistent' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
+      await expect(login({ username: 'nonexistent' })).rejects.toThrowDomain(
+        'INVALID_CREDENTIALS',
       );
       // 응답 시간 평준화 — 실제 해시가 없어도 verify는 1회 실행된다
       expect(verify).toHaveBeenCalledTimes(1);
@@ -216,8 +243,8 @@ describe('CredentialAuthService', () => {
         const credential = makeCredential({ accountType });
         credentials.findCredentialByUsername.mockResolvedValue(credential);
 
-        await expect(login({ role })).rejects.toThrow(
-          new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
+        await expect(login({ role })).rejects.toThrowDomain(
+          'INVALID_CREDENTIALS',
         );
         // 더미 해시로 1회 — 비밀번호가 맞아도(verify=true) 거부되고, 실제 해시는 쓰이지 않는다
         expect(verify).toHaveBeenCalledTimes(1);
@@ -230,9 +257,9 @@ describe('CredentialAuthService', () => {
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
       credentials.findCredentialByUsername.mockResolvedValue(makeCredential());
 
-      await expect(login({ password: 'WrongPassword!123' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS),
-      );
+      await expect(
+        login({ password: 'WrongPassword!123' }),
+      ).rejects.toThrowDomain('INVALID_CREDENTIALS');
       expect(credentials.updateLastLogin).not.toHaveBeenCalled();
     });
   });
@@ -274,9 +301,7 @@ describe('CredentialAuthService', () => {
     it('refresh 쿠키가 없으면 회전 없이 MISSING_REFRESH_TOKEN', async () => {
       await expect(
         service.refresh({ role: 'SELLER', req: mockReq, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
 
@@ -285,9 +310,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
 
@@ -299,9 +322,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.refresh({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
       expect(rotate).not.toHaveBeenCalled();
     });
   });
@@ -333,9 +354,7 @@ describe('CredentialAuthService', () => {
     it('refresh 쿠키가 없으면 MISSING_REFRESH_TOKEN', async () => {
       await expect(
         service.logout({ role: 'SELLER', req: mockReq, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.MISSING_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
     });
 
     it('활성 세션이 없으면 INVALID_REFRESH_TOKEN', async () => {
@@ -343,9 +362,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.logout({ role: 'SELLER', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN),
-      );
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
     });
 
     it('세션 계정의 타입이 경로 role과 다르면 revoke하지 않는다', async () => {
@@ -356,7 +373,7 @@ describe('CredentialAuthService', () => {
 
       await expect(
         service.logout({ role: 'ADMIN', req: reqWithCookie, res: mockRes }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrowDomain(401);
       expect(refreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
     });
   });
@@ -394,22 +411,26 @@ describe('CredentialAuthService', () => {
 
       await change();
 
-      expect(credentials.updatePasswordHash).toHaveBeenCalledWith({
-        accountId: BigInt(10),
-        passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
-        now: expect.any(Date),
-      });
-      expect(refreshSessions.revokeAllRefreshSessions).toHaveBeenCalledWith(
+      // 교체·세션 무효화·감사는 repository가 한 트랜잭션에서 한다 — 서비스는 항목만 넘긴다
+      expect(credentials.changePassword).toHaveBeenCalledWith(
+        {
+          accountId: BigInt(10),
+          passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$new$newHash',
+          now: expect.any(Date),
+        },
+        expect.any(Function),
+      );
+      expect(refreshSessions.revokeAllRefreshSessions).not.toHaveBeenCalled();
+      // 커밋 뒤 — 변경 시각이 cutoff가 되어 그 전에 발급된 액세스 토큰을 막는다
+      expect(blacklist.blockCredentials).toHaveBeenCalledWith(
         BigInt(10),
-        expect.any(Date),
+        credentials.changePassword.mock.calls[0]?.[0].now,
       );
-      expect(auditLogs.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorAccountId: BigInt(10),
-          storeId: BigInt(5),
-          targetId: BigInt(10),
-        }),
-      );
+      expect(auditEntryOf(credentials.changePassword)).toMatchObject({
+        actorAccountId: BigInt(10),
+        storeId: BigInt(5),
+        targetId: BigInt(10),
+      });
     });
 
     it('관리자는 매장이 없어 audit storeId가 null이다', async () => {
@@ -424,16 +445,16 @@ describe('CredentialAuthService', () => {
 
       await change({ role: 'ADMIN' });
 
-      expect(auditLogs.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({ storeId: null }),
-      );
+      expect(auditEntryOf(credentials.changePassword)).toMatchObject({
+        storeId: null,
+      });
     });
 
     it('자격증명이 없으면 CREDENTIAL_NOT_FOUND', async () => {
       credentials.findCredentialByAccountId.mockResolvedValue(null);
 
-      await expect(change({ accountId: BigInt(999) })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.CREDENTIAL_NOT_FOUND),
+      await expect(change({ accountId: BigInt(999) })).rejects.toThrowDomain(
+        'CREDENTIAL_NOT_FOUND',
       );
     });
 
@@ -442,33 +463,32 @@ describe('CredentialAuthService', () => {
         makeCredential({ accountType: AccountType.ADMIN }),
       );
 
-      await expect(change({ role: 'SELLER' })).rejects.toThrow(
-        new ForbiddenException(AUTH_ERROR_MESSAGES.ROLE_MISMATCH),
+      await expect(change({ role: 'SELLER' })).rejects.toThrowDomain(
+        'ROLE_MISMATCH',
       );
     });
 
-    // NOTE: currentPassword/newPassword 형식(빈 문자열, 길이, 복잡도)은 DTO 책임.
-    // - 길이/필수: change-password.input.spec.ts
-    // - 강 정책: strong-password.validator.spec.ts
+    // currentPassword/newPassword 형식(빈 문자열·길이·복잡도)은 DTO 책임 — change-password.input.spec·strong-password.validator.spec.
 
     it('현재 비밀번호가 틀리면 CURRENT_PASSWORD_INVALID', async () => {
       credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
       jest.spyOn(argon2, 'verify').mockResolvedValue(false);
 
-      await expect(change({ currentPassword: 'Wrong!123' })).rejects.toThrow(
-        new UnauthorizedException(AUTH_ERROR_MESSAGES.CURRENT_PASSWORD_INVALID),
-      );
-      expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
+      await expect(
+        change({ currentPassword: 'Wrong!123' }),
+      ).rejects.toThrowDomain('CURRENT_PASSWORD_INVALID');
+      expect(credentials.changePassword).not.toHaveBeenCalled();
+      expect(blacklist.blockCredentials).not.toHaveBeenCalled();
     });
 
     it('새 비밀번호가 현재와 같으면 PASSWORD_UNCHANGED', async () => {
       credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
       jest.spyOn(argon2, 'verify').mockResolvedValue(true);
 
-      await expect(change({ newPassword: 'OldPassword!123' })).rejects.toThrow(
-        new BadRequestException(AUTH_ERROR_MESSAGES.PASSWORD_UNCHANGED),
-      );
-      expect(credentials.updatePasswordHash).not.toHaveBeenCalled();
+      await expect(
+        change({ newPassword: 'OldPassword!123' }),
+      ).rejects.toThrowDomain('PASSWORD_UNCHANGED');
+      expect(credentials.changePassword).not.toHaveBeenCalled();
     });
   });
 });

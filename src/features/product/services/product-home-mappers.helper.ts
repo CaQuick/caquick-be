@@ -1,13 +1,5 @@
-import type {
-  CakeCandidateRow,
-  HomeBannerRow,
-} from '@/features/product/repositories/product.repository';
-import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
-import type {
-  HomeBanner,
-  PopularCake,
-} from '@/features/product/types/product-home-output.type';
-import { buildRegionLabel } from '@/features/store';
+import type { HomeBannerRow } from '@/features/product/repositories/product.repository';
+import type { HomeBanner } from '@/features/product/types/product-home-output.type';
 
 /**
  * SDL 계약("linkType에 대응하는 링크 필드 하나만 채워진다")을 매퍼에서 강제한다.
@@ -38,23 +30,5 @@ export function toHomeBanner(row: HomeBannerRow): HomeBanner {
       row.link_type === 'CATEGORY'
         ? (row.link_category_id?.toString() ?? null)
         : null,
-  };
-}
-
-export function toPopularCake(
-  row: CakeCandidateRow,
-  rank: number,
-): PopularCake {
-  return {
-    id: row.id.toString(),
-    storeId: row.store_id.toString(),
-    rank,
-    name: row.name,
-    thumbnailUrl: row.images[0]?.image_url ?? null,
-    storeName: row.store.store_name,
-    regionLabel: buildRegionLabel(row.store),
-    regularPrice: row.regular_price,
-    salePrice: row.sale_price,
-    discountRate: calcDiscountRate(row.regular_price, row.sale_price),
   };
 }

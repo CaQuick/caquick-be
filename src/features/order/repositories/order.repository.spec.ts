@@ -1,7 +1,13 @@
-import type { PrismaClient } from '@prisma/client';
-import { OrderStatus } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
+import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
+import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { OutboxDispatcherService } from '@/features/outbox';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { OrderStatus } from '@/generated/prisma/client';
+import { RequestContextService } from '@/global/request-context';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -12,16 +18,33 @@ import {
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import {
+  drainOutbox,
+  OUTBOX_TEST_IMPORTS,
+  outboxTestProviders,
+} from '@/test/outbox';
 
 describe('OrderRepository (real DB)', () => {
   let repo: OrderRepository;
   let prisma: PrismaClient;
+  let dispatcher: OutboxDispatcherService;
+  let requestContext: RequestContextService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [OrderRepository],
+      imports: OUTBOX_TEST_IMPORTS,
+      providers: [
+        OrderRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        ...outboxTestProviders(),
+        NotificationOutboxConsumer,
+        NotificationRepository,
+        NotificationAdminRepository,
+      ],
     });
     repo = module.get(OrderRepository);
+    dispatcher = module.get(OutboxDispatcherService);
+    requestContext = module.get(RequestContextService);
     prisma = p;
   });
 
@@ -131,7 +154,7 @@ describe('OrderRepository (real DB)', () => {
       expect(rows.map((r) => r.id)).not.toContain(oldOrder.id);
     });
 
-    it('첫 item + 첫 image까지 포함하여 반환', async () => {
+    it('첫 item(주문 시점 썸네일 스냅샷 포함)을 반환한다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -159,7 +182,9 @@ describe('OrderRepository (real DB)', () => {
       });
       expect(rows[0].items).toHaveLength(1);
       expect(rows[0].items[0].product_name_snapshot).toBe('케이크');
-      expect(rows[0].items[0].product.images).toHaveLength(1);
+      expect(rows[0].items[0].product_thumbnail_url_snapshot).toBe(
+        'https://i.example/1.png',
+      );
     });
   });
 
@@ -578,11 +603,14 @@ describe('OrderRepository (real DB)', () => {
       expect(histories[0].from_status).toBe('SUBMITTED');
       expect(histories[0].to_status).toBe('CONFIRMED');
 
+      // 알림은 outbox 소비자가 만든다 — 같은 tx에 적재된 이벤트를 소진한 뒤 본다
+      await drainOutbox(dispatcher);
       const notifications = await prisma.notification.findMany({
         where: { order_id: order.id },
       });
       expect(notifications).toHaveLength(1);
       expect(notifications[0].event).toBe('ORDER_CONFIRMED');
+      expect(notifications[0].created_at).toEqual(now);
       expect(notifications[0].account_id).toBe(buyer.id);
       // 알림센터 서브라인·딥링크용 연관 ID까지 저장한다
       expect(notifications[0].store_id).toBe(store.id);
@@ -593,6 +621,35 @@ describe('OrderRepository (real DB)', () => {
       });
       expect(auditLogs).toHaveLength(1);
       expect(auditLogs[0].action).toBe('STATUS_CHANGE');
+    });
+
+    it('ip/ua를 넘기지 않아도 요청 컨텍스트에서 보강해 감사에 남긴다', async () => {
+      const store = await createStore(prisma);
+      const buyer = await setupBuyer();
+      const order = await setupOrderForStore(store.id, buyer.id);
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      await requestContext.run(
+        { clientIp: '203.0.113.9', userAgent: 'seller-app' },
+        async () => {
+          await repo.updateOrderStatusBySeller({
+            orderId: order.id,
+            storeId: store.id,
+            actorAccountId: seller.id,
+            toStatus: OrderStatus.CONFIRMED,
+            assertTransition: () => undefined,
+            note: null,
+            now: new Date('2026-04-22T10:00:00Z'),
+          });
+        },
+      );
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: { target_id: order.id, target_type: 'ORDER' },
+      });
+      expect(auditLogs).toHaveLength(1);
+      expect(auditLogs[0].ip_address).toBe('203.0.113.9');
+      expect(auditLogs[0].user_agent).toBe('seller-app');
     });
 
     it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {
@@ -616,6 +673,7 @@ describe('OrderRepository (real DB)', () => {
       expect(updated?.canceled_at?.toISOString()).toBe(now.toISOString());
 
       // 취소도 구매자에게 알린다(판매자·운영자 취소 공통)
+      await drainOutbox(dispatcher);
       const notifications = await prisma.notification.findMany({
         where: { order_id: order.id },
       });
@@ -686,6 +744,7 @@ describe('OrderRepository (real DB)', () => {
         'PICKED_UP',
       ]);
 
+      await drainOutbox(dispatcher);
       const notifEvents = (
         await prisma.notification.findMany({
           where: { order_id: order.id },

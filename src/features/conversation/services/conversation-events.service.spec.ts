@@ -1,7 +1,4 @@
-/**
- * 실 Redis(testcontainers) 기반 발행/구독 왕복 검증 — JSON 직렬화를 거친
- * payload가 구독자에게 그대로 도착하는지까지 확인한다(DB 불필요).
- */
+/** 실 Redis(testcontainers) 발행/구독 왕복 — JSON 직렬화를 거친 payload가 구독자에게 그대로 도착하는지 확인한다(DB 불필요). */
 import { RedisPubSub } from 'graphql-redis-subscriptions';
 import type { PubSubEngine } from 'graphql-subscriptions';
 import Redis from 'ioredis';

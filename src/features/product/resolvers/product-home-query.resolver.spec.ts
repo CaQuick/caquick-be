@@ -1,24 +1,26 @@
-import type { PrismaClient } from '@prisma/client';
-
 import { RandomService } from '@/common/providers/random.service';
-import { ProductReviewRepository } from '@/features/product/repositories/product-review.repository';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
+import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createOrderItem,
   createProduct,
   createReview,
+  createReviewMedia,
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 랭킹/배너/필터 세부 검증은 service.spec.ts에서 담당.
- */
+// 랭킹/배너/필터 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductHome Query Resolver (real DB)', () => {
   let resolver: ProductHomeQueryResolver;
   let prisma: PrismaClient;
@@ -26,10 +28,14 @@ describe('ProductHome Query Resolver (real DB)', () => {
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
+        WishlistRepository,
+        ProductCardService,
+        StoreStatsRepository,
         ProductHomeQueryResolver,
         ProductHomeService,
         ProductRepository,
-        ProductReviewRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        ReviewReadRepository,
         RandomService,
       ],
     });
@@ -50,9 +56,9 @@ describe('ProductHome Query Resolver (real DB)', () => {
     const store = await createStore(prisma);
     await createProduct(prisma, { store_id: store.id, name: '인기 케이크' });
 
-    const result = await resolver.popularCakes();
+    const result = await resolver.popularCakes(undefined, undefined);
 
-    expect(result.items.map((i) => i.name)).toEqual(['인기 케이크']);
+    expect(result.items.map((i) => i.product.name)).toEqual(['인기 케이크']);
     expect(result.banner).toBeNull();
   });
 
@@ -69,12 +75,10 @@ describe('ProductHome Query Resolver (real DB)', () => {
       order_item_id: orderItem.id,
       content: '제작 후기',
     });
-    await prisma.reviewMedia.create({
-      data: {
-        review_id: review.id,
-        media_type: 'IMAGE',
-        media_url: 'https://img/after.png',
-      },
+    await createReviewMedia(prisma, {
+      review_id: review.id,
+      media_type: 'IMAGE',
+      media_url: 'https://img/after.png',
     });
 
     const result = await resolver.customCakeShowcase();

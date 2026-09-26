@@ -1,3 +1,4 @@
+import type { Baseline, Category, Coverage } from './sdl-description-coverage';
 import {
   CATEGORIES,
   collectCoverage,
@@ -7,7 +8,6 @@ import {
   isPlaceholderDescription,
   percentOf,
 } from './sdl-description-coverage';
-import type { Baseline, Category, Coverage } from './sdl-description-coverage';
 import { IGNORED_KINDS } from './sdl-description-coverage';
 
 // DB 불필요한 순수 단위 테스트. SDL 문자열만으로 검증한다.
@@ -22,10 +22,16 @@ describe('sdl-description-coverage', () => {
         true,
       );
       expect(
-        isPlaceholderDescription('SellerOrderListInput', 'SellerOrderListInput 입력 타입'),
+        isPlaceholderDescription(
+          'SellerOrderListInput',
+          'SellerOrderListInput 입력 타입',
+        ),
       ).toBe(true);
       expect(
-        isPlaceholderDescription('SellerStoreMapProvider', 'SellerStoreMapProvider 열거형'),
+        isPlaceholderDescription(
+          'SellerStoreMapProvider',
+          'SellerStoreMapProvider 열거형',
+        ),
       ).toBe(true);
       expect(isPlaceholderDescription('SellerOrder', 'SellerOrder')).toBe(true);
     });
@@ -37,11 +43,17 @@ describe('sdl-description-coverage', () => {
 
     it('실제 의미가 담긴 설명은 플레이스홀더가 아니다', () => {
       expect(
-        isPlaceholderDescription('CreateOrderInput', '주문 생성 입력. 옵션을 서버가 재검증한다.'),
+        isPlaceholderDescription(
+          'CreateOrderInput',
+          '주문 생성 입력. 옵션을 서버가 재검증한다.',
+        ),
       ).toBe(false);
       // 이름으로 시작하더라도 뒤에 내용이 붙으면 정보가 있다
       expect(
-        isPlaceholderDescription('SellerOrder', 'SellerOrder 타입. 판매자 화면 주문 카드.'),
+        isPlaceholderDescription(
+          'SellerOrder',
+          'SellerOrder 타입. 판매자 화면 주문 카드.',
+        ),
       ).toBe(false);
     });
   });
@@ -73,7 +85,9 @@ describe('sdl-description-coverage', () => {
         }
       `);
       expect(coverage.rootField).toMatchObject({ documented: 1, total: 2 });
-      expect(coverage.rootField.missing).toEqual(['test.graphql: Query.storeDetail']);
+      expect(coverage.rootField.missing).toEqual([
+        'test.graphql: Query.storeDetail',
+      ]);
     });
 
     it('input 객체가 아닌 루트 인자만 집계하고 식별자 인자는 제외한다', () => {
@@ -133,7 +147,9 @@ describe('sdl-description-coverage', () => {
       `);
       // id·createdAt·storeId 제외, pickupAt만 남는다
       expect(coverage.outputField).toMatchObject({ documented: 0, total: 1 });
-      expect(coverage.outputField.missing).toEqual(['test.graphql: Order.pickupAt']);
+      expect(coverage.outputField.missing).toEqual([
+        'test.graphql: Order.pickupAt',
+      ]);
     });
 
     it('enum 선언과 값을 따로 집계한다', () => {
@@ -168,7 +184,9 @@ describe('sdl-description-coverage', () => {
         extend type Card { subtitle: String }
       `);
       expect(coverage.inputField).toMatchObject({ documented: 1, total: 2 });
-      expect(coverage.inputField.missing).toEqual(['test.graphql: MyListInput.cursor']);
+      expect(coverage.inputField.missing).toEqual([
+        'test.graphql: MyListInput.cursor',
+      ]);
       expect(coverage.enumValue).toMatchObject({ documented: 1, total: 2 });
       expect(coverage.outputField).toMatchObject({ documented: 1, total: 2 });
       // 선언 설명은 확장에 붙일 수 없으므로 정의 1건씩만 센다
@@ -191,31 +209,62 @@ describe('sdl-description-coverage', () => {
     });
   });
 
-
   // 설명을 붙일 수 있는 SDL 자리를 빠짐없이 나열하고, 각 자리에 설명 없는 요소를
   // 넣어 게이트가 잡아내는지 본다. 새 자리가 생기면 여기에 줄을 추가한다.
   describe('설명을 붙일 수 있는 모든 자리를 빠짐없이 집계한다', () => {
     const SITES: [name: string, sdl: string, expected: string][] = [
       ['object type 선언', 'type A { """f.""" f: String }', 'A'],
       ['object type 필드', '"""A.""" type A { f: String }', 'A.f'],
-      ['object type 필드의 인자', '"""A.""" type A { """f.""" f(bad: String): String }', 'A.f(bad)'],
+      [
+        'object type 필드의 인자',
+        '"""A.""" type A { """f.""" f(bad: String): String }',
+        'A.f(bad)',
+      ],
       ['root 필드', 'extend type Query { q: String }', 'Query.q'],
-      ['root 필드의 인자', 'extend type Query { """q.""" q(bad: String): String }', 'Query.q(bad)'],
-      ['object 확장 필드', '"""A.""" type A { """f.""" f: String } extend type A { g: String }', 'A.g'],
-      ['object 확장 필드의 인자', '"""A.""" type A { """f.""" f: String } extend type A { """g.""" g(bad: String): String }', 'A.g(bad)'],
+      [
+        'root 필드의 인자',
+        'extend type Query { """q.""" q(bad: String): String }',
+        'Query.q(bad)',
+      ],
+      [
+        'object 확장 필드',
+        '"""A.""" type A { """f.""" f: String } extend type A { g: String }',
+        'A.g',
+      ],
+      [
+        'object 확장 필드의 인자',
+        '"""A.""" type A { """f.""" f: String } extend type A { """g.""" g(bad: String): String }',
+        'A.g(bad)',
+      ],
       ['input 선언', 'input I { """v.""" v: String }', 'I'],
       ['input 필드', '"""I.""" input I { v: String }', 'I.v'],
-      ['input 확장 필드', '"""I.""" input I { """v.""" v: String } extend input I { w: String }', 'I.w'],
+      [
+        'input 확장 필드',
+        '"""I.""" input I { """v.""" v: String } extend input I { w: String }',
+        'I.w',
+      ],
       ['enum 선언', 'enum E { """A.""" A }', 'E'],
       ['enum 값', '"""E.""" enum E { A }', 'E.A'],
-      ['enum 확장 값', '"""E.""" enum E { """A.""" A } extend enum E { B }', 'E.B'],
+      [
+        'enum 확장 값',
+        '"""E.""" enum E { """A.""" A } extend enum E { B }',
+        'E.B',
+      ],
       ['interface 선언', 'interface N { """f.""" f: String }', 'N'],
       ['interface 필드', '"""N.""" interface N { f: String }', 'N.f'],
-      ['interface 확장 필드', '"""N.""" interface N { """f.""" f: String } extend interface N { g: String }', 'N.g'],
+      [
+        'interface 확장 필드',
+        '"""N.""" interface N { """f.""" f: String } extend interface N { g: String }',
+        'N.g',
+      ],
       ['union 선언', '"""A.""" type A { """f.""" f: String } union U = A', 'U'],
       ['scalar 선언', 'scalar S', 'S'],
       ['directive 선언', 'directive @d on FIELD_DEFINITION', '@d'],
-      ['directive 인자', '"""d.""" directive @d(bad: String) on FIELD_DEFINITION', '@d(bad)'],
+      [
+        'directive 인자',
+        '"""d.""" directive @d(bad: String) on FIELD_DEFINITION',
+        '@d(bad)',
+      ],
     ];
 
     it.each(SITES)('%s', (_site, sdl, expected) => {
@@ -314,7 +363,10 @@ describe('sdl-description-coverage', () => {
     it('기준선을 만족하면 위반이 없다', () => {
       const coverage = coverageOf(oneRootField);
       expect(
-        findViolations(coverage, baselineOf({ rootField: { documented: 0, total: 1 } })),
+        findViolations(
+          coverage,
+          baselineOf({ rootField: { documented: 0, total: 1 } }),
+        ),
       ).toEqual([]);
     });
 
@@ -325,7 +377,9 @@ describe('sdl-description-coverage', () => {
         coverage,
         baselineOf({ rootField: { documented: 1, total: 2 } }),
       );
-      expect(violations).toMatchObject([{ category: 'rootField', reason: 'ratio' }]);
+      expect(violations).toMatchObject([
+        { category: 'rootField', reason: 'ratio' },
+      ]);
     });
 
     it('미기재 건수가 늘면 count 위반으로 잡는다', () => {
@@ -335,7 +389,10 @@ describe('sdl-description-coverage', () => {
       `);
       // 기준선 1/2(미기재 1) → 실제 1/3(미기재 2)
       expect(
-        findViolations(coverage, baselineOf({ outputField: { documented: 1, total: 2 } })),
+        findViolations(
+          coverage,
+          baselineOf({ outputField: { documented: 1, total: 2 } }),
+        ),
       ).toMatchObject([{ category: 'outputField', reason: 'count' }]);
     });
 
@@ -349,11 +406,17 @@ describe('sdl-description-coverage', () => {
       `);
       expect(percentOf(coverage.fieldArg)).toBe(0);
       expect(
-        findViolations(coverage, baselineOf({ fieldArg: { documented: 0, total: 1 } })),
+        findViolations(
+          coverage,
+          baselineOf({ fieldArg: { documented: 0, total: 1 } }),
+        ),
       ).toMatchObject([{ category: 'fieldArg', reason: 'count' }]);
       // 기준선이 같은 미기재 2건이면 통과
       expect(
-        findViolations(coverage, baselineOf({ fieldArg: { documented: 0, total: 2 } })),
+        findViolations(
+          coverage,
+          baselineOf({ fieldArg: { documented: 0, total: 2 } }),
+        ),
       ).toEqual([]);
     });
 
@@ -364,7 +427,10 @@ describe('sdl-description-coverage', () => {
         type A { """값.""" one: String, two: String, three: String }
       `);
       expect(
-        findViolations(coverage, baselineOf({ outputField: { documented: 1, total: 3 } })),
+        findViolations(
+          coverage,
+          baselineOf({ outputField: { documented: 1, total: 3 } }),
+        ),
       ).toEqual([]);
     });
   });

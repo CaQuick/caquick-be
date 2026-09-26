@@ -2,27 +2,19 @@ import { randomUUID } from 'node:crypto';
 
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import type { S3Config } from '@/config/s3.config';
 import { CustomLoggerService } from '@/global/logger/custom-logger.service';
-import {
-  STORAGE_ERRORS,
-  UPLOAD_POLICIES,
-} from '@/global/storage/constants/storage.constants';
+import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 import type {
   CreateUploadUrlInput,
   CreateUploadUrlOutput,
+  UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
-/**
- * Content-Type에서 확장자를 추출하는 맵
- */
 const CONTENT_TYPE_TO_EXT: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -37,8 +29,7 @@ export class S3Service {
   private readonly bucket: string;
   private readonly region: string;
   private readonly presignExpiresSeconds: number;
-  // presign 실패 진단용: 정적 자격증명(Access Key) 주입 여부.
-  // 로컬에서 키 누락이면 getSignedUrl이 "Credential is missing"으로 throw된다.
+  // presign 실패 진단용 — 로컬에서 키 누락이면 getSignedUrl이 "Credential is missing"으로 throw된다.
   private readonly hasStaticCredentials: boolean;
 
   constructor(
@@ -67,13 +58,6 @@ export class S3Service {
     });
   }
 
-  /**
-   * Presigned PUT URL을 발급한다.
-   *
-   * 1. purpose별 정책(크기/타입) 검증
-   * 2. S3 key 생성
-   * 3. Presigned URL 발급
-   */
   async createUploadUrl(
     input: CreateUploadUrlInput,
   ): Promise<CreateUploadUrlOutput> {
@@ -120,22 +104,20 @@ export class S3Service {
             ? `${error.name}: ${error.message}`
             : String(error),
       });
-      throw new InternalServerErrorException(STORAGE_ERRORS.S3_PRESIGN_FAILED);
+      throw new DomainException('S3_PRESIGN_FAILED');
     }
   }
 
   /**
-   * 주어진 URL 이 이 버킷에 발급된 "해당 계정의 프로필 이미지" URL 인지 검증한다.
-   * 클라이언트가 임의 URL(외부 링크·타인 key)을 프로필 이미지로 저장하는 것을 막는다.
-   *
-   * raw `startsWith` 비교는 path traversal(`/profile-images/1/../2/...`)로 우회 가능하므로
-   * URL 을 파싱해 host·protocol 과 **정규화된 pathname** 을 검증하고, dot segment(`.`/`..`)와
-   * 인코딩된 dot(`%2e`)은 거절한다.
-   *
-   * @param url 저장하려는 URL
-   * @param accountId 소유 계정
+   * 클라이언트가 임의 URL(외부 링크·타인 key·다른 용도 key)을 저장하는 것을 막는다. raw startsWith 비교는
+   * path traversal(`/profile-images/1/../2/...`)로 우회 가능하므로 URL을 파싱해 host·protocol과 정규화된
+   * pathname을 검증하고, 인코딩된 dot(`%2e`)은 거절한다.
    */
-  isOwnedProfileImageUrl(url: string, accountId: bigint): boolean {
+  isOwnedUploadUrl(
+    url: string,
+    purpose: UploadPurpose,
+    accountId: bigint,
+  ): boolean {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -143,12 +125,11 @@ export class S3Service {
       return false;
     }
 
-    // 인코딩된 path traversal(%2e) 차단 — URL 파서가 정규화하지 않는 케이스 방어.
-    // (literal `../`·`./` 는 new URL 이 정규화하므로, 아래 정규화된 pathname prefix 검사로 자동 차단됨)
+    // literal `../`는 new URL이 정규화하므로 prefix 검사에서 걸리지만 `%2e`는 정규화되지 않는다.
     if (/%2e/i.test(parsed.pathname)) return false;
 
     const expectedHost = `${this.bucket}.s3.${this.region}.amazonaws.com`;
-    const expectedPathPrefix = `/${UPLOAD_POLICIES.PROFILE_IMAGE.keyPrefix}/${accountId.toString()}/`;
+    const expectedPathPrefix = `/${UPLOAD_POLICIES[purpose].keyPrefix}/${accountId.toString()}/`;
 
     return (
       parsed.protocol === 'https:' &&
@@ -162,9 +143,9 @@ export class S3Service {
     allowedTypes: readonly string[],
   ): void {
     if (!allowedTypes.includes(contentType)) {
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.INVALID_CONTENT_TYPE} (허용: ${allowedTypes.join(', ')})`,
-      );
+      throw new DomainException('INVALID_CONTENT_TYPE', {
+        allowed: allowedTypes.join(', '),
+      });
     }
   }
 
@@ -173,19 +154,14 @@ export class S3Service {
     maxSizeBytes: number,
   ): void {
     if (contentLength <= 0) {
-      throw new BadRequestException(STORAGE_ERRORS.INVALID_CONTENT_LENGTH);
+      throw new DomainException('INVALID_CONTENT_LENGTH');
     }
     if (contentLength > maxSizeBytes) {
       const maxMB = Math.round(maxSizeBytes / (1024 * 1024));
-      throw new BadRequestException(
-        `${STORAGE_ERRORS.FILE_TOO_LARGE} (최대 ${maxMB}MB)`,
-      );
+      throw new DomainException('FILE_TOO_LARGE', { maxMb: maxMB });
     }
   }
 
-  /**
-   * S3 key 생성 규칙: {prefix}/{accountId}/{yyyy-mm-dd}/{uuid}.{ext}
-   */
   private buildKey(
     prefix: string,
     accountId: bigint,

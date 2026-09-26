@@ -3,9 +3,6 @@ import type {
   UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
-/**
- * 업로드 목적별 정책
- */
 export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
   PROFILE_IMAGE: {
     keyPrefix: 'profile-images',
@@ -22,14 +19,20 @@ export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
     maxSizeBytes: 50 * 1024 * 1024, // 50MB
     allowedContentTypes: ['video/mp4', 'video/quicktime'],
   },
-} as const;
-
-/**
- * 스토리지 에러 메시지
- */
-export const STORAGE_ERRORS = {
-  INVALID_CONTENT_TYPE: '허용되지 않은 파일 형식입니다.',
-  FILE_TOO_LARGE: '파일 용량이 허용 한도를 초과했습니다.',
-  S3_PRESIGN_FAILED: '업로드 URL 생성에 실패했습니다.',
-  INVALID_CONTENT_LENGTH: '파일 용량은 0보다 커야 합니다.',
+  // 판매자·관리자 이미지는 프로필 이미지와 같은 정책
+  PRODUCT_IMAGE: {
+    keyPrefix: 'product-images',
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  STORE_IMAGE: {
+    keyPrefix: 'store-images',
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  BANNER_IMAGE: {
+    keyPrefix: 'banner-images',
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
 } as const;

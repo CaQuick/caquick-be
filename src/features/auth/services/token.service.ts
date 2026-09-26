@@ -1,59 +1,69 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 
-import { getEnvAsNumber } from '@/common/helpers/config.helper';
+import { DomainException } from '@/common/errors/error-catalog';
 import {
   generateRandomToken,
   sha256Hex as sha256HexUtil,
 } from '@/common/utils/crypto';
 import { tryClientIp, tryUserAgent } from '@/common/utils/http-meta';
+import type { AuthConfig } from '@/config/auth.config';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
+import {
+  ACCOUNT_REPOSITORY,
+  type AccountForJwt,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import type { ITokenService } from '@/features/auth/services/token.service.interface';
 import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import type { AccessTokenPayload } from '@/global/auth/types/jwt-payload.type';
+import type { AccessTokenClaims } from '@/global/auth/types/jwt-payload.type';
 
-/**
- * 인증 토큰 발급/회전/검증 + refresh 쿠키 관리 서비스.
- *
- * AuthService 의 토큰 관련 책임을 분리한 결과물.
- */
 @Injectable()
-export class TokenService implements ITokenService {
-  /**
-   * @param config ConfigService
-   * @param jwt JwtService
-   * @param refreshSessions RefreshSessionRepository
-   */
+export class TokenService {
   constructor(
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     @Inject(REFRESH_SESSION_REPOSITORY)
     private readonly refreshSessions: IRefreshSessionRepository,
+    @Inject(ACCOUNT_REPOSITORY)
+    private readonly accounts: IAccountRepository,
   ) {}
 
-  signAccessToken(accountId: bigint): string {
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + this.getAccessExpiresSeconds();
-
-    const payload: AccessTokenPayload = {
-      sub: accountId.toString(),
+  /** iat·exp·iss·aud·kid는 서명 옵션(JwtModule)이 붙인다 — 여기서는 신원 클레임만 만든다. */
+  signAccessToken(account: AccountForJwt): string {
+    const claims: AccessTokenClaims = {
+      sub: account.id.toString(),
       typ: 'access',
-      iat: now,
-      exp,
+      role: account.account_type,
+      mustChangePassword: account.credential?.must_change_password ?? false,
+      ...(account.store ? { storeId: account.store.id.toString() } : {}),
     };
 
-    return this.jwt.sign(payload);
+    return this.jwt.sign(claims);
+  }
+
+  /** 발급 시점의 계정 상태를 클레임에 담기 위해 매번 조회한다(재발급 포함). */
+  async signAccessTokenFor(accountId: bigint): Promise<string> {
+    const account = await this.accounts.findAccountForJwt(accountId);
+    if (!account) throw new DomainException('SESSION_ACCOUNT_MISSING');
+    if (account.status !== 'ACTIVE') {
+      throw new DomainException('ACCOUNT_NOT_ACTIVE');
+    }
+    return this.signAccessToken(account);
   }
 
   getAccessExpiresSeconds(): number {
-    return getEnvAsNumber(this.config, 'JWT_ACCESS_EXPIRES_SECONDS', 900);
+    return this.authConfig().jwtAccessExpiresSeconds;
+  }
+
+  private authConfig(): AuthConfig {
+    return this.config.getOrThrow<AuthConfig>('auth');
   }
 
   async issueAuthTokens(args: {
@@ -61,7 +71,7 @@ export class TokenService implements ITokenService {
     req: Request;
     res: Response;
   }): Promise<{ accessToken: string }> {
-    const accessToken = this.signAccessToken(args.accountId);
+    const accessToken = await this.signAccessTokenFor(args.accountId);
 
     const refreshToken = this.generateRefreshToken();
     const refreshHash = this.sha256Hex(refreshToken);
@@ -96,13 +106,13 @@ export class TokenService implements ITokenService {
       string | undefined;
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Missing refresh token.');
+      throw new DomainException('MISSING_REFRESH_TOKEN');
     }
 
     const tokenHash = this.sha256Hex(refreshToken);
     const session =
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-    if (!session) throw new UnauthorizedException('Invalid refresh token.');
+    if (!session) throw new DomainException('INVALID_REFRESH_TOKEN');
 
     const newRefreshToken = this.generateRefreshToken();
     const newTokenHash = this.sha256Hex(newRefreshToken);
@@ -119,7 +129,7 @@ export class TokenService implements ITokenService {
       newExpiresAt,
     });
 
-    const accessToken = this.signAccessToken(session.account_id);
+    const accessToken = await this.signAccessTokenFor(session.account_id);
 
     AuthCookie.setRefreshCookie(res, {
       refreshToken: newRefreshToken,
@@ -148,17 +158,11 @@ export class TokenService implements ITokenService {
     );
   }
 
-  /**
-   * refresh token 랜덤 문자열을 생성한다. (32 bytes → 64 hex)
-   */
   private generateRefreshToken(): string {
     return generateRandomToken(32);
   }
 
-  /**
-   * Refresh 만료(일) 를 반환한다.
-   */
   private getRefreshDays(): number {
-    return getEnvAsNumber(this.config, 'AUTH_REFRESH_EXPIRES_DAYS', 30);
+    return this.authConfig().refreshExpiresInDays;
   }
 }

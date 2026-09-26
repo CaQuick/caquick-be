@@ -1,20 +1,23 @@
 import { registerAs } from '@nestjs/config';
 
-/**
- * Redis 설정 타입 (GraphQL subscription PubSub용)
- */
+import { parseEnvString } from '@/common/utils/env-parse';
+
 export interface RedisConfig {
   url: string;
 }
 
 /**
- * Redis 설정.
- * DATABASE_URL과 달리 미설정 시 로컬 docker-compose 기본값으로 폴백한다 —
- * 현재 배포 인프라가 꺼져 있고 FE도 로컬 백엔드로 테스트하는 개발 단계라,
- * 필수 강제보다 로컬 DX(compose up 후 바로 동작)를 우선한다.
+ * Redis는 subscription PubSub에 더해 인증 블랙리스트를 들고 있어 선택이 아니다 —
+ * 미설정이면 어느 환경에서든 부팅에서 드러낸다(localhost 폴백은 배포에서 조용히 빈 Redis를 가리켰다).
  */
-export default registerAs('redis', (): RedisConfig => {
-  return {
-    url: process.env.REDIS_URL ?? 'redis://localhost:6379',
-  };
-});
+export function readRedisConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): RedisConfig {
+  const url = parseEnvString(env.REDIS_URL);
+  if (!url) {
+    throw new Error('REDIS_URL must be set (redis://host:port)');
+  }
+  return { url };
+}
+
+export default registerAs('redis', (): RedisConfig => readRedisConfig());

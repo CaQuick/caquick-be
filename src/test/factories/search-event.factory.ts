@@ -1,5 +1,4 @@
-import type { PrismaClient, SearchEvent } from '@prisma/client';
-
+import type { PrismaClient, SearchEvent } from '@/generated/prisma/client';
 import { nextSeq } from '@/test/factories/sequence';
 
 export interface SearchEventOverrides {
@@ -9,7 +8,6 @@ export interface SearchEventOverrides {
   deleted_at?: Date | null;
 }
 
-/** 검색 집계 이벤트. 기본은 비로그인(account_id null). */
 export async function createSearchEvent(
   prisma: PrismaClient,
   overrides: SearchEventOverrides = {},
@@ -19,7 +17,6 @@ export async function createSearchEvent(
     data: {
       account_id: overrides.account_id ?? null,
       keyword: overrides.keyword ?? `keyword_${seq}`,
-      context: 'GLOBAL',
       created_at: overrides.created_at ?? new Date(),
       deleted_at: overrides.deleted_at ?? null,
     },

@@ -1,9 +1,13 @@
-import { BadRequestException } from '@nestjs/common';
-import type { PrismaClient, Product, Store } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductSearchService } from '@/features/product/services/product-search.service';
+import { ReviewReadRepository } from '@/features/review';
+import { WishlistRepository } from '@/features/review/repositories/wishlist.repository';
+import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
+import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -28,7 +32,16 @@ describe('ProductSearchService (real DB)', () => {
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
-      providers: [ProductSearchService, ProductRepository, ClockService],
+      providers: [
+        WishlistRepository,
+        ProductCardService,
+        ProductSearchService,
+        ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        ReviewReadRepository,
+        StoreStatsRepository,
+        ClockService,
+      ],
     });
     service = module.get(ProductSearchService);
     prisma = p;
@@ -143,12 +156,12 @@ describe('ProductSearchService (real DB)', () => {
     });
 
     it('빈 검색어·길이 초과는 400', async () => {
-      await expect(service.searchProducts({ keyword: '  ' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.searchProducts({ keyword: '  ' }),
+      ).rejects.toThrowDomain(400);
       await expect(
         service.searchProducts({ keyword: 'a'.repeat(201) }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('결과가 없으면 빈 커넥션', async () => {
@@ -245,7 +258,7 @@ describe('ProductSearchService (real DB)', () => {
           minPrice: 50000,
           maxPrice: 10000,
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrowDomain(400);
     });
 
     it('regionIds 지정 시 해당 지역 매장 상품만', async () => {

@@ -8,10 +8,27 @@ import {
   clientIpOf,
   userAgentOf,
 } from '@/common/utils/http-meta';
-import { buildQueryString, toQueryParams } from '@/common/utils/url-query';
+import {
+  buildQueryString,
+  type QueryParams,
+  toQueryParams,
+} from '@/common/utils/url-query';
 
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const RESPONSE_TIME_HEADER = 'x-response-time-ms';
+/** 클라이언트가 보낸 x-request-id를 그대로 로그·응답 헤더에 싣기 전 형식을 제한한다 — 길이·문자 무제한이면 로그 주입·헤더 부풀림. */
+export const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+/** 로그에 남기지 않는 쿼리 키 — OIDC 콜백의 code·state, 토큰류. 값만 가린다(키는 남겨 흐름은 보이게). */
+export const REDACTED_QUERY_KEYS: ReadonlySet<string> = new Set([
+  'code',
+  'state',
+  'token',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'password',
+]);
+export const REDACTED_VALUE = '[redacted]';
 
 export interface RequestTracking {
   requestId: string;
@@ -36,9 +53,6 @@ export interface GraphqlRequestMeta {
   agent: string;
 }
 
-/**
- * 요청 헤더에서 단일 문자열 헤더 값을 안전하게 꺼낸다.
- */
 function readSingleHeader(
   req: Request,
   headerName: string,
@@ -52,17 +66,16 @@ function readSingleHeader(
   return undefined;
 }
 
-/**
- * requestId/startTime을 보장하고 헤더에 반영한다.
- * - 들어온 x-request-id가 있으면 그 값을 우선 사용한다.
- */
 export function ensureRequestTracking(
   req: Request,
   res?: Response,
 ): RequestTracking {
   if (!req.requestId) {
     const incoming = readSingleHeader(req, REQUEST_ID_HEADER);
-    req.requestId = incoming ?? randomUUID();
+    req.requestId =
+      incoming !== undefined && REQUEST_ID_PATTERN.test(incoming)
+        ? incoming
+        : randomUUID();
   }
 
   if (res && !res.headersSent) {
@@ -76,17 +89,22 @@ export function ensureRequestTracking(
   return { requestId: req.requestId, startTime: req.startTime };
 }
 
-/**
- * 시작 시간 기준 처리 시간을 계산한다.
- */
+function redactQuery(params: QueryParams): QueryParams {
+  return Object.fromEntries(
+    Object.entries(params).map(([key, value]) => [
+      key,
+      REDACTED_QUERY_KEYS.has(key.toLowerCase()) && value !== undefined
+        ? REDACTED_VALUE
+        : value,
+    ]),
+  );
+}
+
 export function calculateDuration(startTime?: number): number | undefined {
   if (typeof startTime !== 'number') return undefined;
   return Date.now() - startTime;
 }
 
-/**
- * 응답 헤더에 처리 시간을 기록한다.
- */
 export function setResponseTimeHeader(
   res: Response | undefined,
   duration?: number,
@@ -95,15 +113,12 @@ export function setResponseTimeHeader(
   res.setHeader(RESPONSE_TIME_HEADER, String(duration));
 }
 
-/**
- * HTTP 요청 메타데이터를 구성한다.
- */
 export function buildHttpRequestMeta(
   req: Request,
   options?: { defaultVersion?: string },
 ): HttpRequestMeta {
   const path = req.originalUrl?.split('?')[0] ?? req.path ?? '';
-  const query = buildQueryString(toQueryParams(req.query));
+  const query = buildQueryString(redactQuery(toQueryParams(req.query)));
   const version = apiVersionOf(req) ?? options?.defaultVersion;
 
   return {
@@ -116,9 +131,6 @@ export function buildHttpRequestMeta(
   };
 }
 
-/**
- * GraphQL 요청 메타데이터를 구성한다.
- */
 export function buildGraphqlRequestMeta(
   info: GraphQLResolveInfo,
   req: Request,
@@ -138,9 +150,6 @@ export function buildGraphqlRequestMeta(
   };
 }
 
-/**
- * Express Request에 바인딩된 사용자 정보를 기반으로 userId를 추출한다.
- */
 export function resolveUserId(req: Request): number | null {
   const user = (req as { user?: { id?: unknown; sub?: unknown } }).user;
   const candidate = user?.id ?? user?.sub;

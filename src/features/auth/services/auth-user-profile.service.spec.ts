@@ -1,0 +1,584 @@
+import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
+import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
+import { S3Service } from '@/global/storage/s3.service';
+import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
+import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
+import {
+  createAccount,
+  createAccountIdentity,
+  createUserProfile,
+} from '@/test/factories';
+import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+
+describe('UserProfileService (real DB)', () => {
+  const blacklist = {
+    blockStatus: jest.fn().mockResolvedValue(undefined),
+  };
+  afterEach(() => {
+    blacklist.blockStatus.mockClear();
+  });
+  let service: UserProfileService;
+  let prisma: PrismaClient;
+  let s3Service: jest.Mocked<S3Service>;
+
+  beforeAll(async () => {
+    s3Service = {
+      createUploadUrl: jest.fn(),
+      isOwnedUploadUrl: jest.fn(),
+    } as unknown as jest.Mocked<S3Service>;
+
+    const { module, prisma: p } = await createTestingModuleWithRealDb({
+      providers: [
+        UserProfileService,
+        { provide: TokenBlacklistService, useValue: blacklist },
+        AccountUserRepository,
+        { provide: S3Service, useValue: s3Service },
+      ],
+    });
+
+    service = module.get(UserProfileService);
+    prisma = p;
+  });
+
+  afterAll(async () => {
+    await closeTruncateConnection();
+    await disconnectTestPrismaClient();
+  });
+
+  beforeEach(async () => {
+    await truncateAll();
+    jest.clearAllMocks();
+  });
+
+  describe('me', () => {
+    it('활성 USER의 프로필 정보를 MePayload로 반환한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        email: 'me@example.com',
+        name: '홍길동',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'gildong',
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result).toMatchObject({
+        accountId: account.id.toString(),
+        email: 'me@example.com',
+        name: '홍길동',
+        accountType: 'USER',
+        profile: { nickname: 'gildong' },
+      });
+    });
+
+    it('계정이 없으면 401을 던진다', async () => {
+      await expect(service.me(BigInt(999999))).rejects.toThrowDomain(401);
+    });
+
+    it('연동된 identity가 없으면 linkedIdentities는 빈 배열이다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([]);
+    });
+
+    it('연동된 identity가 있으면 provider/lastLoginAt을 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      const identity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const loggedInAt = new Date('2025-01-15T10:00:00Z');
+      await prisma.accountIdentity.update({
+        where: { id: identity.id },
+        data: { last_login_at: loggedInAt },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([
+        { provider: 'GOOGLE', lastLoginAt: loggedInAt },
+      ]);
+    });
+
+    it('여러 provider 연동 시 last_login_at desc 순으로 반환한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const oldLogin = new Date('2025-01-01T00:00:00Z');
+      const recentLogin = new Date('2025-03-01T00:00:00Z');
+
+      const google = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const kakao = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+      });
+      await prisma.accountIdentity.update({
+        where: { id: google.id },
+        data: { last_login_at: oldLogin },
+      });
+      await prisma.accountIdentity.update({
+        where: { id: kakao.id },
+        data: { last_login_at: recentLogin },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toEqual([
+        { provider: 'KAKAO', lastLoginAt: recentLogin },
+        { provider: 'GOOGLE', lastLoginAt: oldLogin },
+      ]);
+    });
+
+    it('soft-deleted identity는 linkedIdentities에서 제외된다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const activeIdentity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'GOOGLE',
+      });
+      const deletedIdentity = await createAccountIdentity(prisma, {
+        account_id: account.id,
+        provider: 'KAKAO',
+      });
+      await prisma.accountIdentity.update({
+        where: { id: deletedIdentity.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.me(account.id);
+
+      expect(result.linkedIdentities).toHaveLength(1);
+      expect(result.linkedIdentities[0]).toMatchObject({ provider: 'GOOGLE' });
+      // soft-deleted 식별자가 우연히 노출되지 않는지 명시적으로 검증
+      expect(result.linkedIdentities.some((i) => i.provider === 'KAKAO')).toBe(
+        false,
+      );
+      // 의도된 활성 identity가 실제 DB row와 매칭되는지 확인
+      expect(activeIdentity.provider).toBe('GOOGLE');
+    });
+  });
+
+  describe('completeOnboarding', () => {
+    it('이름 미존재 + 입력 이름이 있으면 Account.name과 프로필을 갱신한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: null,
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        onboarding_completed_at: null,
+      });
+
+      const result = await service.completeOnboarding(account.id, {
+        name: '홍길동',
+        nickname: 'gildong1',
+        birthDate: new Date('1990-01-01'),
+        phoneNumber: '010-1234-5678',
+      });
+
+      expect(result.name).toBe('홍길동');
+      expect(result.profile.nickname).toBe('gildong1');
+      expect(result.profile.onboardingCompletedAt).toBeInstanceOf(Date);
+
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('홍길동');
+    });
+
+    it('이미 Account.name이 존재하면 입력 name은 무시되고 기존 이름을 유지한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '기존이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.completeOnboarding(account.id, {
+        nickname: 'newNick',
+        name: '새이름',
+      });
+
+      expect(result.name).toBe('기존이름');
+    });
+
+    it('Account.name과 입력 name이 모두 없으면 400을 던진다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: null,
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.completeOnboarding(account.id, {
+          nickname: 'newNick',
+          name: null,
+        }),
+      ).rejects.toThrowDomain(400);
+    });
+
+    it('닉네임이 이미 다른 계정에서 사용 중이면 409를 던진다', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'takenNick',
+      });
+
+      const me = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '길동',
+      });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      await expect(
+        service.completeOnboarding(me.id, { nickname: 'takenNick' }),
+      ).rejects.toThrowDomain(409);
+    });
+  });
+
+  describe('updateMyProfile', () => {
+    it('변경할 필드가 하나도 없으면 400을 던진다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.updateMyProfile(account.id, {}),
+      ).rejects.toThrowDomain(400);
+    });
+
+    it('birthDate만 단독 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        birth_date: null,
+      });
+
+      const result = await service.updateMyProfile(account.id, {
+        birthDate: new Date('1995-03-20'),
+      });
+
+      expect(result.profile.birthDate).toBeInstanceOf(Date);
+      expect((result.profile.birthDate as Date).getFullYear()).toBe(1995);
+    });
+
+    it('phoneNumber만 단독 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        phone_number: null,
+      });
+
+      const result = await service.updateMyProfile(account.id, {
+        phoneNumber: '010-9999-8888',
+      });
+
+      expect(result.profile.phoneNumber).toBe('010-9999-8888');
+    });
+
+    it('사용 가능한 닉네임으로 변경한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'oldNick',
+      });
+
+      const result = await service.updateMyProfile(account.id, {
+        nickname: 'newNick',
+      });
+
+      expect(result.profile.nickname).toBe('newNick');
+    });
+
+    it('닉네임이 다른 계정에서 이미 쓰이면 409를 던진다', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'taken',
+      });
+
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      await expect(
+        service.updateMyProfile(me.id, { nickname: 'taken' }),
+      ).rejects.toThrowDomain(409);
+    });
+
+    it('name만 단독 업데이트하면 Account.name이 갱신된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '새이름',
+      });
+
+      expect(result.name).toBe('새이름');
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('새이름');
+    });
+
+    it('name 입력 시 trim 후 저장한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '  홍길동  ',
+      });
+
+      expect(result.name).toBe('홍길동');
+    });
+
+    it('name이 빈 문자열이면 400', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.updateMyProfile(account.id, { name: '' }),
+      ).rejects.toThrowDomain(400);
+    });
+
+    it('name이 공백-only이면 400', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await expect(
+        service.updateMyProfile(account.id, { name: '   ' }),
+      ).rejects.toThrowDomain(400);
+    });
+
+    it('name + nickname 동시 업데이트 시 둘 다 반영된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '구이름',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'oldNick',
+      });
+
+      const result = await service.updateMyProfile(account.id, {
+        name: '새이름',
+        nickname: 'newNick',
+      });
+
+      expect(result.name).toBe('새이름');
+      expect(result.profile.nickname).toBe('newNick');
+    });
+
+    it('name 미지정 시 기존 Account.name이 유지된다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        name: '유지될이름',
+      });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await service.updateMyProfile(account.id, {
+        nickname: 'newNick',
+      });
+
+      const saved = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(saved.name).toBe('유지될이름');
+    });
+  });
+
+  describe('updateMyProfileImage', () => {
+    it('발급된(소유) URL이면 프로필 이미지를 업데이트한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      s3Service.isOwnedUploadUrl.mockReturnValue(true);
+
+      const result = await service.updateMyProfileImage(account.id, {
+        profileImageUrl: 'https://s3.example.com/profile.jpg',
+      });
+
+      expect(result.profile.profileImageUrl).toBe(
+        'https://s3.example.com/profile.jpg',
+      );
+    });
+
+    it('발급되지 않은(소유 아님) URL이면 BadRequest 로 거절한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      s3Service.isOwnedUploadUrl.mockReturnValue(false);
+
+      await expect(
+        service.updateMyProfileImage(account.id, {
+          profileImageUrl: 'https://evil.example.com/someone-else.jpg',
+        }),
+      ).rejects.toThrowDomain(400);
+    });
+  });
+
+  describe('checkNicknameAvailability', () => {
+    it('사용 가능한 닉네임이면 available: true', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability(
+        'freshNick',
+        account.id,
+      );
+
+      expect(result).toEqual({ available: true, reason: null });
+    });
+
+    it('이미 사용 중인 닉네임이면 available: false + 사유 반환', async () => {
+      const other = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: other.id,
+        nickname: 'takenNick',
+      });
+
+      const me = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: me.id });
+
+      const result = await service.checkNicknameAvailability(
+        'takenNick',
+        me.id,
+      );
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('이미 사용 중');
+    });
+
+    it('자기 자신이 이미 쓰고 있는 닉네임은 사용 가능으로 판정한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'myNick',
+      });
+
+      const result = await service.checkNicknameAvailability(
+        'myNick',
+        account.id,
+      );
+
+      expect(result.available).toBe(true);
+    });
+
+    it('너무 짧으면 available: false + 길이 사유', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability('a', account.id);
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('2~20자');
+    });
+
+    it('특수문자가 포함되면 available: false + 문자 사유', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const result = await service.checkNicknameAvailability(
+        'nick@name',
+        account.id,
+      );
+
+      expect(result.available).toBe(false);
+      expect(result.reason).toContain('한글');
+    });
+  });
+
+  describe('createProfileImageUploadUrl', () => {
+    it('S3Service.createUploadUrl에 PROFILE_IMAGE purpose로 위임한다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      const uploadResult = {
+        uploadUrl: 'https://presigned.example.com',
+        publicUrl: 'https://s3.example.com/profile.jpg',
+        key: 'profile-images/x/2026-04-21/uuid.jpg',
+        expiresInSeconds: 600,
+      };
+      s3Service.createUploadUrl.mockResolvedValue(uploadResult);
+
+      const result = await service.createProfileImageUploadUrl(account.id, {
+        contentType: 'image/jpeg',
+        contentLength: 1024 * 1024,
+      });
+
+      expect(result).toEqual(uploadResult);
+      expect(s3Service.createUploadUrl).toHaveBeenCalledWith({
+        accountId: account.id,
+        purpose: 'PROFILE_IMAGE',
+        contentType: 'image/jpeg',
+        contentLength: 1024 * 1024,
+      });
+    });
+  });
+
+  describe('deleteMyAccount', () => {
+    it('계정/프로필을 soft delete하고 닉네임은 deleted_{id}로 치환한다', async () => {
+      const account = await createAccount(prisma, {
+        account_type: 'USER',
+        email: 'delete@example.com',
+      });
+      await createUserProfile(prisma, {
+        account_id: account.id,
+        nickname: 'preDelete',
+      });
+
+      const result = await service.deleteMyAccount(account.id);
+
+      expect(result).toBe(true);
+
+      const deletedAccount = await prisma.account.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(deletedAccount.deleted_at).toBeInstanceOf(Date);
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다. 버전 = DB에 기록한 status_changed_at(탈퇴도 같은 축)
+      expect(deletedAccount.status_changed_at).toEqual(
+        deletedAccount.deleted_at,
+      );
+      expect(blacklist.blockStatus).toHaveBeenCalledWith(
+        account.id,
+        'DELETED',
+        deletedAccount.status_changed_at,
+      );
+      expect(deletedAccount.email).toBeNull();
+
+      const deletedProfile = await prisma.userProfile.findUniqueOrThrow({
+        where: { account_id: account.id },
+      });
+      expect(deletedProfile.deleted_at).toBeInstanceOf(Date);
+      expect(deletedProfile.nickname).toBe(`deleted_${account.id.toString()}`);
+    });
+
+    it('삭제된 계정은 이후 me() 호출 시 401', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+
+      await service.deleteMyAccount(account.id);
+
+      await expect(service.me(account.id)).rejects.toThrowDomain(401);
+    });
+  });
+});

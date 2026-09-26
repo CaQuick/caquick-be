@@ -27,6 +27,37 @@ function parseBuildTsconfig(): ts.ParsedCommandLine {
   );
 }
 
+describe('Prisma 생성 클라이언트 경로 불변식', () => {
+  const schema = readFileSync(
+    path.join(REPO_ROOT, 'prisma', 'schema.prisma'),
+    'utf8',
+  );
+  const output = /generator client \{[^}]*output\s*=\s*"([^"]+)"/.exec(
+    schema,
+  )?.[1];
+
+  it('generator output은 tsconfig.build rootDir(src) 안이라 dist/generated로 함께 방출된다', () => {
+    // 왜: 런타임 import가 @/generated/prisma/client에 묶여 있다. output이 src 밖으로
+    // 나가면 tsc가 방출하지 않아 dist/main.js 부팅이 모듈 부재로 깨진다.
+    expect(output).toBeDefined();
+    const resolved = path.resolve(REPO_ROOT, 'prisma', output!);
+    expect(path.relative(path.join(REPO_ROOT, 'src'), resolved)).toBe(
+      path.join('generated', 'prisma'),
+    );
+  });
+
+  it('생성물은 커밋되지 않고 postinstall이 만든다', () => {
+    // 왜: 생성물(10만 줄)을 커밋하면 스키마와 어긋난 채 남을 수 있고, gitignore만 있고
+    // postinstall이 빠지면 clone·CI에서 tsc부터 실패한다. 둘이 짝이다.
+    const gitignore = readFileSync(path.join(REPO_ROOT, '.gitignore'), 'utf8');
+    expect(gitignore.split('\n')).toContain('src/generated/');
+    const pkg = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts.postinstall).toBe('prisma generate');
+  });
+});
+
 describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () => {
   it('deleteOutDir·incremental 동시 활성 시 tsbuildinfo는 outDir 안에 생성된다', () => {
     const nestCli = JSON.parse(readFileSync(NEST_CLI, 'utf8')) as NestCliJson;
@@ -41,10 +72,8 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
     const buildInfo = ts.getTsBuildInfoEmitOutputFilePath(options);
     expect(buildInfo).toBeDefined();
 
-    // 왜: buildinfo가 outDir 밖이면 deleteOutDir이 dist만 지우고 캐시는 살아남는다.
-    // tsc가 그 캐시를 보고 "전부 최신"으로 오판해 emit을 통째로 건너뛰고,
-    // dist/main.js가 없는 채 "Found 0 errors"만 출력된다 → 실행 시 MODULE_NOT_FOUND.
-    // rootDir 지정만으로 buildinfo가 루트로 밀려났던 회귀 이력이 있다(PR #60).
+    // buildinfo가 outDir 밖이면 deleteOutDir이 dist만 지우고 캐시는 살아남는다. tsc가 그 캐시를 보고 "전부 최신"으로
+    // 오판해 emit을 통째로 건너뛰고, dist/main.js가 없는 채 "Found 0 errors"만 출력된다 → 실행 시 MODULE_NOT_FOUND.
     const relativeToOutDir = path.relative(
       String(options.outDir),
       String(buildInfo),
@@ -60,9 +89,8 @@ describe('빌드 설정 불변식 (tsconfig.build.json × nest-cli.json)', () =>
       false,
     );
 
-    // 왜: ecosystem.config.js(script: dist/main.js)와 start:prod(node dist/main)가
-    // 이 경로에 묶여 있다. rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로
-    // 올라가 dist/src/main.js로 밀리고 PM2 부팅이 깨진다(회귀 이력: c43b5ba).
+    // Dockerfile CMD(node dist/main)와 start:prod가 이 경로에 묶여 있다.
+    // rootDir/include가 흔들리면 공통 루트가 프로젝트 루트로 올라가 dist/src/main.js로 밀리고 컨테이너 부팅이 깨진다.
     expect(path.relative(REPO_ROOT, jsOutput)).toBe(
       path.join('dist', 'main.js'),
     );

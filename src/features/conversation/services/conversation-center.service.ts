@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import {
+  CURSOR_PAGE_DEFAULT_LIMIT,
+  type CursorInput,
+} from '@/common/dto/inputs/cursor.input';
+import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import {
   buildTimestampIdCursor,
@@ -7,13 +12,7 @@ import {
   parseTimestampIdCursor,
 } from '@/common/utils/keyset-cursor';
 import { sliceCursorPage } from '@/common/utils/pagination';
-import { CONVERSATION_ERRORS } from '@/features/conversation/constants/conversation-error-messages';
-import {
-  DEFAULT_CONVERSATION_LIST_LIMIT,
-  DEFAULT_CONVERSATION_MESSAGES_LIMIT,
-} from '@/features/conversation/constants/conversation.constants';
-import type { ConversationMessagesInput } from '@/features/conversation/dto/inputs/conversation-messages.input';
-import type { MyConversationsInput } from '@/features/conversation/dto/inputs/my-conversations.input';
+import { AccountUserRepository } from '@/features/auth';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
@@ -25,24 +24,23 @@ import type {
 
 @Injectable()
 export class ConversationCenterService extends ConversationBaseService {
-  constructor(repo: ConversationRepository) {
-    super(repo);
+  constructor(repo: ConversationRepository, accounts: AccountUserRepository) {
+    super(repo, accounts);
   }
 
   async myConversations(
     accountId: bigint,
-    input?: MyConversationsInput,
+    input?: CursorInput,
   ): Promise<MyConversationConnection> {
     await this.requireActiveUser(accountId);
 
-    const limit = input?.limit ?? DEFAULT_CONVERSATION_LIST_LIMIT;
+    const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
     const cursor = input?.cursor
-      ? parseTimestampIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
+      ? parseTimestampIdCursor(input.cursor)
       : undefined;
 
-    // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로
-    // 읽는다 — 조회 사이에 커밋된 메시지로 미리보기와 정렬 기준·커서가
-    // 어긋나는 혼합 상태 방지(릴리즈 리뷰 반영).
+    // 페이지·건수·부가 정보는 repository가 한 트랜잭션(단일 스냅샷)으로 읽는다 — 조회 사이에 커밋된
+    // 메시지로 미리보기와 정렬 기준·커서가 어긋나는 혼합 상태 방지.
     const { rows, totalCount, extras } =
       await this.repo.getConversationPageWithExtras({
         accountId,
@@ -85,7 +83,7 @@ export class ConversationCenterService extends ConversationBaseService {
   async conversationMessages(
     accountId: bigint,
     conversationIdRaw: string,
-    input?: ConversationMessagesInput,
+    input?: CursorInput,
   ): Promise<ConversationMessageConnection> {
     await this.requireActiveUser(accountId);
     const conversationId = parseId(conversationIdRaw);
@@ -95,19 +93,15 @@ export class ConversationCenterService extends ConversationBaseService {
       accountId,
     });
     if (!conversation) {
-      throw new NotFoundException(CONVERSATION_ERRORS.CONVERSATION_NOT_FOUND);
+      throw new DomainException('CONVERSATION_NOT_FOUND');
     }
 
-    const limit = input?.limit ?? DEFAULT_CONVERSATION_MESSAGES_LIMIT;
-    // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로
-    // 번진다 — 상한까지 검증하는 커서 전용 파서를 쓴다(리뷰 반영)
-    const cursor = input?.cursor
-      ? parseIdCursor(input.cursor, CONVERSATION_ERRORS.INVALID_CURSOR)
-      : undefined;
+    const limit = input?.limit ?? CURSOR_PAGE_DEFAULT_LIMIT;
+    // parseId는 음수만 거르므로 UNSIGNED BIGINT 상한 초과가 커넥터 오류로 번진다 — 상한까지 검증하는 커서 전용 파서
+    const cursor = input?.cursor ? parseIdCursor(input.cursor) : undefined;
 
-    // 채팅 상세 진입/조회 = 읽음으로 간주 — 별도 mutation 없이 조회
-    // 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과, 사용자 확정
-    // 정책). 전송 경로와 같은 잠금·마커 정합은 repository가 담당한다.
+    // 채팅 상세 조회 = 읽음으로 간주 — 별도 mutation 없이 조회 트랜잭션이 last_read_at을 갱신한다(의도적 쓰기 부수효과).
+    // 전송 경로와 같은 잠금·마커 정합은 repository가 담당한다.
     const { rows, totalCount } = await this.repo.listBuyerMessagesAndMarkRead({
       conversationId,
       limit,

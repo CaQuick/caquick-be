@@ -1,17 +1,15 @@
-import type { PrismaClient } from '@prisma/client';
-
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { ProductCategoryQueryResolver } from '@/features/product/resolvers/product-category-query.resolver';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createCategory } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
-/**
- * Resolver ↔ Service ↔ Repository ↔ DB 통합 경로 검증.
- * 필터/정렬 세부 검증은 service.spec.ts에서 담당.
- */
+// 필터/정렬 세부 검증은 service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 describe('ProductCategory Query Resolver (real DB)', () => {
   let resolver: ProductCategoryQueryResolver;
   let prisma: PrismaClient;
@@ -22,6 +20,7 @@ describe('ProductCategory Query Resolver (real DB)', () => {
         ProductCategoryQueryResolver,
         ProductCategoryService,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     resolver = module.get(ProductCategoryQueryResolver);

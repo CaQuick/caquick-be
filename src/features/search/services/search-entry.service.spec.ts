@@ -1,10 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
-
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product';
 import { SearchRepository } from '@/features/search/repositories/search.repository';
 import { SearchEntryService } from '@/features/search/services/search-entry.service';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -26,6 +26,7 @@ describe('SearchEntryService (real DB)', () => {
         SearchEntryService,
         SearchRepository,
         ProductRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         ClockService,
       ],
     });
@@ -64,7 +65,6 @@ describe('SearchEntryService (real DB)', () => {
       expect(events).toHaveLength(1);
       expect(events[0].keyword).toBe('딸기 케이크');
       expect(events[0].account_id).toBeNull();
-      expect(events[0].context).toBe('GLOBAL');
       expect(await prisma.searchHistory.count()).toBe(0);
     });
 
@@ -119,15 +119,13 @@ describe('SearchEntryService (real DB)', () => {
     });
 
     it('공백만 있는 검색어는 400', async () => {
-      await expect(service.recordSearch('   ')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(service.recordSearch('   ')).rejects.toThrowDomain(400);
       expect(await searchEvents()).toHaveLength(0);
     });
 
     it('200자를 넘는 검색어는 400', async () => {
-      await expect(service.recordSearch('a'.repeat(201))).rejects.toThrow(
-        BadRequestException,
+      await expect(service.recordSearch('a'.repeat(201))).rejects.toThrowDomain(
+        400,
       );
     });
   });

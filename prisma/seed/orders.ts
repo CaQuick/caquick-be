@@ -9,10 +9,23 @@
  *   o5 PICKED_UP  - p4×1 (리뷰 미작성 → hasReviewableItem=true)
  *   o6 CANCELED   - p2×1
  */
-import type { OrderStatus, PrismaClient } from '@prisma/client';
-
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
+
+import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
+import { activeWhere } from '@/prisma';
+
+/** 주문 시점 썸네일 스냅샷 — 주문 생성 경로와 같은 규칙(활성 첫 이미지). */
+async function firstImageUrl(
+  prisma: PrismaClient,
+  productId: bigint,
+): Promise<string | null> {
+  const image = await prisma.productImage.findFirst({
+    where: { product_id: productId, ...activeWhere },
+    orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+  });
+  return image?.image_url ?? null;
+}
 
 export interface SeededOrders {
   o1Submitted: bigint;
@@ -58,6 +71,8 @@ export async function seedOrders(
             store_id: storeA.id,
             product_id: p1.id,
             product_name_snapshot: p1.name,
+            store_name_snapshot: storeA.store_name,
+            product_thumbnail_url_snapshot: await firstImageUrl(prisma, p1.id),
             regular_price_snapshot: p1.regular_price,
             sale_price_snapshot: p1.sale_price,
             quantity: 1,
@@ -111,6 +126,8 @@ export async function seedOrders(
       store_id: storeA.id,
       product_id: p2.id,
       product_name_snapshot: p2.name,
+      store_name_snapshot: storeA.store_name,
+      product_thumbnail_url_snapshot: await firstImageUrl(prisma, p2.id),
       regular_price_snapshot: p2.regular_price,
       sale_price_snapshot: p2.sale_price,
       quantity: 1,
@@ -177,6 +194,8 @@ export async function seedOrders(
             store_id: storeA.id,
             product_id: p3.id,
             product_name_snapshot: p3.name,
+            store_name_snapshot: storeA.store_name,
+            product_thumbnail_url_snapshot: await firstImageUrl(prisma, p3.id),
             regular_price_snapshot: p3.regular_price,
             sale_price_snapshot: p3.sale_price,
             quantity: 2,
@@ -242,6 +261,8 @@ export async function seedOrders(
       store_id: storeA.id,
       product_id: p1.id,
       product_name_snapshot: p1.name,
+      store_name_snapshot: storeA.store_name,
+      product_thumbnail_url_snapshot: await firstImageUrl(prisma, p1.id),
       regular_price_snapshot: p1.regular_price,
       sale_price_snapshot: p1.sale_price,
       quantity: 1,
@@ -282,6 +303,8 @@ export async function seedOrders(
             store_id: storeB.id,
             product_id: p4.id,
             product_name_snapshot: p4.name,
+            store_name_snapshot: storeB.store_name,
+            product_thumbnail_url_snapshot: await firstImageUrl(prisma, p4.id),
             regular_price_snapshot: p4.regular_price,
             sale_price_snapshot: null,
             quantity: 1,
@@ -337,6 +360,8 @@ export async function seedOrders(
             store_id: storeA.id,
             product_id: p2.id,
             product_name_snapshot: p2.name,
+            store_name_snapshot: storeA.store_name,
+            product_thumbnail_url_snapshot: await firstImageUrl(prisma, p2.id),
             regular_price_snapshot: p2.regular_price,
             sale_price_snapshot: null,
             quantity: 1,

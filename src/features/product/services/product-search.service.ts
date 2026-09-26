@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
 import { parseSearchKeyword } from '@/common/utils/search-keyword';
-import { PRODUCT_SEARCH_ERROR_MESSAGES } from '@/features/product/constants/product-search-error-messages';
 import {
   DEFAULT_PRODUCT_SEARCH_SORT,
   DEFAULT_SEARCH_PAGE_LIMIT,
@@ -19,19 +19,21 @@ import {
   type ProductSearchCandidateRow,
   type ProductSearchFilter,
 } from '@/features/product/repositories/product.repository';
+import { ProductCardService } from '@/features/product/services/product-card.service';
 import {
   buildPriceBuckets,
   displayPrice,
-  toSearchProduct,
 } from '@/features/product/services/product-search-mappers.helper';
 import type {
   SearchProductConnection,
   SearchProductFacets,
 } from '@/features/product/types/product-search-output.type';
+import { ReviewReadRepository, WishlistRepository } from '@/features/review';
 import {
   DEFAULT_GLOBAL_RATING_PRIOR,
   RANKING_RECENT_ORDER_DAYS,
   scoreAndSortByPopularity,
+  StoreStatsRepository,
 } from '@/features/store';
 
 /** 검색 요약(searchSummary)이 넘기는 공통 조건 — 정렬·가격·카테고리 없이 키워드+지역만. */
@@ -44,14 +46,14 @@ export interface ProductSearchScope {
 export class ProductSearchService {
   constructor(
     private readonly repo: ProductRepository,
+    private readonly reviews: ReviewReadRepository,
+    private readonly stats: StoreStatsRepository,
     private readonly clock: ClockService,
+    private readonly cards: ProductCardService,
+    private readonly wishlists: WishlistRepository,
   ) {}
 
-  /**
-   * 키워드 상품 검색. 후보 전량을 로드해 정렬 후 offset 페이지를 자르고, 페이지 상품만
-   * 평점·찜 여부를 채운다. 인기/판매순은 메모리 점수화라 DB 페이지네이션이 불가해
-   * 정렬 5종을 같은 파이프라인으로 통일했다(자체 판단 — 인기 매장과 동일 트레이드오프).
-   */
+  /** 인기/판매순은 메모리 점수화라 DB 페이지네이션이 불가해 정렬 5종을 같은 파이프라인(후보 전량 로드 → 정렬 → offset)으로 통일했다. */
   async searchProducts(
     input: SearchProductsInput,
     accountId?: bigint,
@@ -72,32 +74,21 @@ export class ProductSearchService {
     const page = sorted.slice(offset, offset + limit);
     const pageIds = page.map((row) => row.id);
 
-    const [reviewStats, wishlistedIds] = await Promise.all([
-      this.repo.aggregateProductReviewStats(pageIds),
-      // 0n도 유효한 계정 id — undefined로만 비로그인을 분기한다
-      accountId !== undefined
-        ? this.repo.findWishlistedProductIds({ accountId, productIds: pageIds })
-        : Promise.resolve(new Set<string>()),
-    ]);
+    const reviewStats = await this.reviews.aggregateReviewStats(
+      'product_id',
+      pageIds,
+    );
 
     return {
-      items: page.map((row) =>
-        toSearchProduct(
-          row,
-          reviewStats.get(row.id),
-          wishlistedIds.has(row.id.toString()),
-        ),
-      ),
+      items: await this.cards.buildCards(page, accountId, {
+        stats: reviewStats,
+      }),
       totalCount,
       hasMore: hasMoreByOffset(offset, limit, totalCount),
     };
   }
 
-  /**
-   * 가격대 시트 히스토그램. 가격 조건을 뺀 나머지 조건(키워드·카테고리·지역)으로 표시가를
-   * 모아 5,000원 버킷으로 센다. 상품 수 소규모 전제의 메모리 집계(자체 판단 — 규모가 커지면
-   * SQL FLOOR 그룹핑으로 전환). 'N개 상품보기' 카운트는 searchProducts.totalCount를 쓴다.
-   */
+  /** 상품 수 소규모 전제의 메모리 집계 — 규모가 커지면 SQL FLOOR 그룹핑으로 전환. 'N개 상품보기' 카운트는 searchProducts.totalCount를 쓴다. */
   async searchProductFacets(
     input: SearchProductFacetsInput,
   ): Promise<SearchProductFacets> {
@@ -123,7 +114,6 @@ export class ProductSearchService {
     };
   }
 
-  /** 검색 요약 탭의 상품 건수(필터·정렬 없이 키워드+지역). */
   countProducts(scope: ProductSearchScope): Promise<number> {
     return this.repo.countProductSearch(scope);
   }
@@ -145,9 +135,7 @@ export class ProductSearchService {
       input.maxPrice !== undefined &&
       input.minPrice > input.maxPrice
     ) {
-      throw new BadRequestException(
-        PRODUCT_SEARCH_ERROR_MESSAGES.INVALID_PRICE_RANGE,
-      );
+      throw new DomainException('INVALID_PRICE_RANGE');
     }
     const ids = (raw?: string[]): bigint[] | undefined =>
       raw && raw.length > 0 ? raw.map((id) => parseId(id)) : undefined;
@@ -188,7 +176,6 @@ export class ProductSearchService {
     }
   }
 
-  /** 인기 케이크·인기 매장과 동일 산식(최근 주문·찜·베이지안 평점). */
   private async sortByPopularity(
     candidates: ProductSearchCandidateRow[],
   ): Promise<ProductSearchCandidateRow[]> {
@@ -198,10 +185,10 @@ export class ProductSearchService {
     );
     const [wishlistCounts, reviewStats, recentOrderCounts, globalAverage] =
       await Promise.all([
-        this.repo.aggregateProductWishlistCounts(ids),
-        this.repo.aggregateProductReviewStats(ids),
-        this.repo.aggregateProductRecentOrderCounts(ids, since),
-        this.repo.globalReviewAverage(),
+        this.wishlists.aggregateProductWishlistCounts(ids),
+        this.reviews.aggregateReviewStats('product_id', ids),
+        this.stats.aggregateRecentOrderCounts('product_id', ids, since),
+        this.reviews.globalReviewAverage(),
       ]);
     return scoreAndSortByPopularity(
       candidates,
@@ -210,14 +197,15 @@ export class ProductSearchService {
     ).map((entry) => entry.candidate);
   }
 
-  /** 판매순: 최근 30일 유효 주문 수량 합 desc → id desc. 판매 0건도 뒤에 남긴다(검색 결과 누락 방지). */
+  /** 판매 0건도 뒤에 남긴다(검색 결과 누락 방지). */
   private async sortByRecentSales(
     candidates: ProductSearchCandidateRow[],
   ): Promise<ProductSearchCandidateRow[]> {
     const since = new Date(
       this.clock.now().getTime() - RANKING_RECENT_ORDER_DAYS * DAY_MS,
     );
-    const sold = await this.repo.aggregateProductSoldQuantities(
+    const sold = await this.stats.aggregateSoldQuantities(
+      'product_id',
       candidates.map((c) => c.id),
       since,
     );
