@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// 복구 리허설(P2-08): 실제 mysqldump로 덤프한 파일을 다른 DB로 복구해 같은 데이터·루틴이 나오는지.
+// 복구 리허설: 실제 mysqldump로 덤프한 파일을 다른 DB로 복구해 같은 데이터·루틴이 나오는지.
 // mysql:8.0 컨테이너 하나를 DB로, 같은 이미지로 backup.sh를 돌린다(운영 backup 이미지의 베이스). S3는 쓰지 않는다(단위 spec이 담당).
 const SCRIPT = join(__dirname, '..', 'infra', 'backup', 'backup.sh');
 const ID = `caquick-bkp-${process.pid}-${Date.now().toString(36)}`;

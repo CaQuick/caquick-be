@@ -105,7 +105,7 @@ export class OutboxRepository {
   }
 
   /**
-   * 사람이 되돌리는 재처리(E6). 기본은 FAILED(발행 실패)만. `republish`는 소비 DLQ에 빠진 이벤트를 위해 PUBLISHED
+   * 사람이 되돌리는 재처리. 기본은 FAILED(발행 실패)만. `republish`는 소비 DLQ에 빠진 이벤트를 위해 PUBLISHED
    * 행도 PENDING으로 되돌린다 — event_id 1건 지정에서만(소비자 멱등 계약에 기대므로 범위 실행은 막는다).
    */
   async requeue(

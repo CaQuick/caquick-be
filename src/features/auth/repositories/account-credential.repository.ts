@@ -59,7 +59,7 @@ export class AccountCredentialRepository implements IAccountCredentialRepository
   }
 
   /**
-   * 비밀번호 교체·전 세션 무효화·감사 기록을 한 트랜잭션으로 한다(P1-12) — 셋 중 하나만 커밋되면
+   * 비밀번호 교체·전 세션 무효화·감사 기록을 한 트랜잭션으로 한다 — 셋 중 하나만 커밋되면
    * "바꿨는데 옛 세션이 살아 있다"거나 "바꿨는데 기록이 없다"가 된다.
    */
   async changePassword(

@@ -6,7 +6,7 @@ import { BookedQuantityPort } from '@/features/store/repositories/booked-quantit
 
 /**
  * catalog 픽업 판정 spec에 booked 포트(order 구현)를 배선한다 — 앱에서는 OrderModule이 제공하고
- * store 쪽 포트가 ModuleRef로 지연 바인딩한다(D7-a, 순환 회피).
+ * store 쪽 포트가 ModuleRef로 지연 바인딩한다(순환 회피).
  */
 export function bookedQuantityProviders(): Provider[] {
   return [

@@ -429,7 +429,7 @@ describe('ReviewListingService (real DB)', () => {
       });
     });
 
-    it('비활성 상품의 리뷰도 매장 목록에는 남는다 (D34: 상품 가시성 가드는 productReviews만)', async () => {
+    it('비활성 상품의 리뷰도 매장 목록에는 남는다 (상품 가시성 가드는 productReviews만)', async () => {
       const target = await makeTarget();
       const inactive = await createProduct(prisma, {
         store_id: target.store.id,

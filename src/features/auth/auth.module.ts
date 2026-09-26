@@ -52,7 +52,7 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
       useClass: RefreshSessionRepository,
     },
     JwtBearerStrategy,
-    // worker가 TTL 창 안의 정지·탈퇴·비밀번호 변경을 Redis에 다시 채운다(P2 03)
+    // worker가 TTL 창 안의 정지·탈퇴·비밀번호 변경을 Redis에 다시 채운다
     BlacklistRebuildRepository,
     BlacklistRebuildService,
     // 관리자용 계정 관리(관리자·구매자 계정) — identity가 소유한다. 판매자 온보딩 화면은 store(매장 생성 tx 콜백)

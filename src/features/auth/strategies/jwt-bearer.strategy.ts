@@ -41,7 +41,7 @@ export class JwtBearerStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   /**
-   * 정상 경로는 DB를 읽지 않는다(P2 E2): 서명이 유효한 토큰의 클레임(role·mustChangePassword)을 신뢰하고,
+   * 정상 경로는 DB를 읽지 않는다: 서명이 유효한 토큰의 클레임(role·mustChangePassword)을 신뢰하고,
    * 정지·탈퇴·비밀번호 변경은 Redis 블랙리스트가 막는다. 블랙리스트가 불완전하거나(재구축 표식 없음 — Redis 초기화)
    * 조회가 실패하면 예전 방식(계정 재조회)으로 폴백한다 — 모놀리스는 DB가 바로 옆이라 열어 둘 이유가 없다.
    */

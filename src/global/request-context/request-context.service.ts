@@ -6,7 +6,7 @@ import { Injectable } from '@nestjs/common';
 export interface RequestContextStore {
   clientIp?: string;
   userAgent?: string;
-  /** 응답 헤더·tx 로그와 같은 값. 로거 포맷이 ALS에서 읽어 모든 줄에 싣는다(P2 E8). */
+  /** 응답 헤더·tx 로그와 같은 값. 로거 포맷이 ALS에서 읽어 모든 줄에 싣는다. */
   requestId?: string;
   /** 이벤트 소비(worker) 중에 연다 — 발행 로그의 (requestId, eventId)와 이어 본다. */
   eventId?: string;

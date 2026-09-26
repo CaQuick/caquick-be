@@ -1,4 +1,4 @@
-// 모델 소유권 정본(D1 서비스 경계). 모델 1개 = 소유 서비스 1개 = write가 허용되는 feature 목록.
+// 모델 소유권 정본. 모델 1개 = 소유 서비스 1개 = write가 허용되는 feature 목록.
 // 허용 목록이 빈 모델은 앱 코드 writer가 없어야 한다(시드 전용). 새 모델을 추가하면 여기와 스키마 대조 spec이 함께 실패한다.
 
 export type OwnerService =
@@ -80,7 +80,7 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   SearchKeywordRankSnapshot: catalog(['search']),
 
   Order: order(),
-  // catalog capacity 복제본(D7-a) — order가 소유, 소비자만 쓴다
+  // catalog capacity 복제본 — order가 소유, 소비자만 쓴다
   OrderStoreDailyLimit: order(),
   OrderStatusHistory: order(),
   OrderItem: order(),

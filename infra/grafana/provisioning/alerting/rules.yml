@@ -1,4 +1,4 @@
-# 로드맵 v2 09 경보(플랜 4 + 자체 리뷰로 더한 4): 스크레이프 실패 3분(전 잡) · exporter 대상 다운 · cAdvisor 시계열 부재 · 큐 적체 > 500 5분 · 컨테이너 메모리 > 90% 10분 ·
+# Grafana 경보 8종: 스크레이프 실패 3분(전 잡) · exporter 대상 다운 · cAdvisor 시계열 부재 · 큐 적체 > 500 5분 · 컨테이너 메모리 > 90% 10분 ·
 # Redis maxmemory 90% · outbox FAILED > 0 · DLQ 비어 있지 않음. `x == 0` 필터는 값 0을 남기므로 개수(count)·1-x로 센다.
 # Prometheus 데이터소스(uid prometheus)에 질의하고 Grafana가 평가한다 — Alertmanager 없음. 알림 경로는 policies.yml → contactpoints.yml(Discord).
 apiVersion: 1

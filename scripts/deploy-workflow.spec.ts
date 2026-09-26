@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { parse } from 'yaml';
 
-// 이미지 빌드·배포 워크플로(P2-07)의 형태를 고정한다 — 공개 레포 + 셀프호스트 러너라 트리거·러너·권한이 곧 보안 경계다.
+// 이미지 빌드·배포 워크플로의 형태를 고정한다 — 공개 레포 + 셀프호스트 러너라 트리거·러너·권한이 곧 보안 경계다.
 const ROOT = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
@@ -189,7 +189,7 @@ describe('deploy.yml', () => {
     expect(skip?.if).toBe("github.event_name == 'workflow_run'");
     expect(skip?.env?.MAIN_SHA).toBe('${{ github.sha }}');
     expect(skip?.run).toContain('SKIP_DEPLOY=1');
-    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy (E9)']) {
+    for (const name of ['Login to GHCR', 'Sync infra/', 'Deploy']) {
       const step = job.steps.find((s) => s.name?.startsWith(name));
       expect({ name, if: step?.if }).toEqual({
         name,

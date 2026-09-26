@@ -12,7 +12,7 @@ import {
   STORE_DAILY_CAPACITY_CHANGED,
 } from '@/features/store';
 
-/** catalog의 일일 capacity 변경을 order 복제본에 반영한다(D7-a). 멱등: 원본 updated_at 기준으로 오래된 이벤트는 무시. */
+/** catalog의 일일 capacity 변경을 order 복제본에 반영한다. 멱등: 원본 updated_at 기준으로 오래된 이벤트는 무시. */
 @Injectable()
 @SubscribeOutbox(STORE_DAILY_CAPACITY_CHANGED)
 export class OrderStoreDailyLimitConsumer implements OutboxConsumer {

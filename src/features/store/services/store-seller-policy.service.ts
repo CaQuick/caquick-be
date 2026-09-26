@@ -165,7 +165,7 @@ export class SellerStorePolicyService extends SellerBaseService {
 
     const capacityDate = toDateRequired(input.capacityDate, 'capacityDate');
 
-    // write는 StoreCapacityRepository — 변경 이벤트를 같은 tx에 적재해 order 복제본이 따라온다(D7-a)
+    // write는 StoreCapacityRepository — 변경 이벤트를 같은 tx에 적재해 order 복제본이 따라온다
     const auditCapacity = (created: StoreDailyCapacity): AuditEntry => ({
       actorAccountId: ctx.accountId,
       storeId: ctx.storeId,

@@ -218,7 +218,7 @@ export class OrderRepository {
   }
 
   /**
-   * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다(D7-a).
+   * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다.
    * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
    */
   private async capacityExceeded(
@@ -776,7 +776,7 @@ export class OrderRepository {
         }),
       );
 
-      // 감사 기록은 라이브러리(포트)를 통해서만 남긴다 — ip/ua는 넘긴 값이 없으면 요청 컨텍스트에서 보강된다(P1-12)
+      // 감사 기록은 라이브러리(포트)를 통해서만 남긴다 — ip/ua는 넘긴 값이 없으면 요청 컨텍스트에서 보강된다
       await this.auditLogs.recordAudit(tx, {
         actorAccountId: args.actorAccountId,
         storeId: args.storeId,

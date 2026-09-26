@@ -7,7 +7,7 @@ export interface RedisConfig {
 }
 
 /**
- * Redis는 subscription PubSub에 더해 인증 블랙리스트(P2 E2·E3)를 들고 있어 선택이 아니다 —
+ * Redis는 subscription PubSub에 더해 인증 블랙리스트를 들고 있어 선택이 아니다 —
  * 미설정이면 어느 환경에서든 부팅에서 드러낸다(localhost 폴백은 배포에서 조용히 빈 Redis를 가리켰다).
  */
 export function readRedisConfig(

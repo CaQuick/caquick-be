@@ -12,7 +12,7 @@ import {
   type WriteSite,
 } from '@/test/model-ownership.helper';
 
-// 모델별 단일 writer(D1 서비스 경계)를 코드로 강제한다. 판정은 write 호출이 놓인 feature 파일 기준(P1-2).
+// 모델별 단일 writer를 코드로 강제한다. 판정은 write 호출이 놓인 feature 파일 기준.
 // 아래 예외 목록은 P1 진행 중 실측(시작 92 사이트 → 0)이며, 이제 비어 있다 — 한 줄이라도 생기면 실패한다.
 
 const schema = loadSchema();

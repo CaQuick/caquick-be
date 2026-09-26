@@ -5,7 +5,7 @@ import type { CookieSameSite } from '@/features/auth/helpers/auth-cookie.helper'
 
 /**
  * Token/OIDC/Logout이 같은 쿠키 옵션을 쓰므로 한곳에 모은다.
- * 값 자체는 authConfig가 단일 소스 — 여기서 raw env를 다시 파싱하지 않는다(P1-11a).
+ * 값 자체는 authConfig가 단일 소스 — 여기서 raw env를 다시 파싱하지 않는다.
  */
 export class AuthCookieOptions {
   private static auth(config: ConfigService): AuthConfig {

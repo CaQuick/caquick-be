@@ -208,7 +208,7 @@ export class AdminSellerService extends AdminBaseService {
         afterJson: { passwordReset: true, mustChangePassword: true },
       },
     });
-    // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다(P2 03)
+    // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다
     await this.blacklist.blockCredentials(target.id, changedAt);
     return true;
   }

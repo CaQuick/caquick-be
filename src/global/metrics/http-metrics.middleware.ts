@@ -9,7 +9,7 @@ export const UNMATCHED_ROUTE = '<unmatched>';
 export const ABORTED_STATUS = 'aborted';
 
 /**
- * HTTP 요청 히스토그램(P2 05). 인터셉터가 아니라 Express 'finish'에서 잰다 — 인터셉터는 가드 뒤에 돌아 401·403은
+ * HTTP 요청 히스토그램. 인터셉터가 아니라 Express 'finish'에서 잰다 — 인터셉터는 가드 뒤에 돌아 401·403은
  * 아예 못 보고, 오류의 최종 상태는 필터가 정해 알 수 없었다. 여기서는 404·가드 거절·필터 결과가 전부 실제 상태 코드로 잡힌다.
  * 클라이언트가 끊으면 'finish'가 오지 않고 'close'만 온다 — 그 요청도 세지 않으면 타임아웃 사고가 지표에서 사라진다.
  */

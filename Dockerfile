@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# 앱 이미지 1개 — api·worker·migrate가 같은 이미지에 APP_ROLE·command만 다르다(로드맵 v2 M1·M3).
+# 앱 이미지 1개 — api·worker·migrate가 같은 이미지에 APP_ROLE·command만 다르다.
 ARG NODE_IMAGE=node:24-bookworm-slim
 
 # ---- deps: 잠금 파일 그대로 설치. postinstall(prisma generate)이 돌므로 스키마가 먼저 있어야 한다 ----
@@ -22,7 +22,7 @@ RUN yarn graphql:codegen && yarn graphql:docs && yarn build && test -f dist/main
 
 # ---- runtime ----
 # dev 의존성까지 그대로 싣는다 — 같은 이미지로 `prisma migrate deploy`(prisma CLI)·`yarn outbox:requeue`(ts-node)를 돌리기
-# 위해서다(E6·E9). 그래서 src·scripts·tsconfig도 함께 둔다. 슬림화(prod 의존성만)는 운영 실측 뒤 후속.
+# 위해서다. 그래서 src·scripts·tsconfig도 함께 둔다. 슬림화(prod 의존성만)는 운영 실측 뒤 후속.
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app

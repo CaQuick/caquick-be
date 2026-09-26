@@ -554,7 +554,7 @@ describe('UserProfileService (real DB)', () => {
         where: { id: account.id },
       });
       expect(deletedAccount.deleted_at).toBeInstanceOf(Date);
-      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다(P2 03). 버전 = DB에 기록한 status_changed_at(탈퇴도 같은 축)
+      // 커밋 뒤 블랙리스트 — 만료 전 액세스 토큰까지 즉시 막는다. 버전 = DB에 기록한 status_changed_at(탈퇴도 같은 축)
       expect(deletedAccount.status_changed_at).toEqual(
         deletedAccount.deleted_at,
       );

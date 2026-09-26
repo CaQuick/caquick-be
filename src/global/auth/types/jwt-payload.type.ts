@@ -1,4 +1,4 @@
-/** 서명할 때 우리가 직접 넣는 클레임. iat·exp·iss·aud·kid는 서명 옵션이 붙인다(P1-13). */
+/** 서명할 때 우리가 직접 넣는 클레임. iat·exp·iss·aud·kid는 서명 옵션이 붙인다. */
 export interface AccessTokenClaims {
   sub: string;
 

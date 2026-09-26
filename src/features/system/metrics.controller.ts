@@ -4,7 +4,7 @@ import type { Response } from 'express';
 
 import { MetricsService } from '@/global/metrics';
 
-/** Prometheus 스크레이프 대상(P2 05). 형식이 표준이라 전역 봉투 제외 목록에 있다. worker 리스너도 이 경로는 연다. 접근은 MetricsAccessMiddleware(Bearer 토큰). */
+/** Prometheus 스크레이프 대상. 형식이 표준이라 전역 봉투 제외 목록에 있다. worker 리스너도 이 경로는 연다. 접근은 MetricsAccessMiddleware(Bearer 토큰). */
 @ApiExcludeController()
 @Controller('metrics')
 export class MetricsController {

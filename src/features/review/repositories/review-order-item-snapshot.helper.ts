@@ -15,7 +15,7 @@ export interface ReviewOrderItemSnapshot {
 }
 
 /**
- * 리뷰 작성 시점에 주문 품목에서 표시값을 복사한다(P1-07b) — 이후 조회는 review 컬럼만 읽는다.
+ * 리뷰 작성 시점에 주문 품목에서 표시값을 복사한다 — 이후 조회는 review 컬럼만 읽는다.
  * 옵션은 활성 option_item을 id 순으로, before 이미지는 활성 free_edit 첫 장(sort_order·id 순). 옵션이 없으면 null.
  */
 export async function snapshotReviewOrderItem(

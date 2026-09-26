@@ -150,7 +150,7 @@ export class SellerConversationService extends SellerBaseService {
       throw new DomainException('BODY_HTML_REQUIRED');
     }
 
-    // 감사 기록은 repository가 메시지 저장과 같은 트랜잭션에서 남긴다(P1-12)
+    // 감사 기록은 repository가 메시지 저장과 같은 트랜잭션에서 남긴다
     const row =
       await this.conversationRepository.createSellerConversationMessage(
         {

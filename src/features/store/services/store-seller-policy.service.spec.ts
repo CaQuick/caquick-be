@@ -22,7 +22,7 @@ describe('SellerStorePolicyService (real DB)', () => {
       providers: [
         SellerStorePolicyService,
         StoreSellerRepository,
-        // capacity write는 변경 이벤트를 함께 적재한다(D7-a)
+        // capacity write는 변경 이벤트를 함께 적재한다
         StoreCapacityRepository,
         ...outboxPublisherProviders(),
         {

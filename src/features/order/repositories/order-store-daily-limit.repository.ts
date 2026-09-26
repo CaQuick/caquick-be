@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma';
 
 /**
- * order 소유 일일 capacity 복제본(D7-a). catalog의 StoreDailyCapacityChanged를 받아 갱신하며 FK 없음.
+ * order 소유 일일 capacity 복제본. catalog의 StoreDailyCapacityChanged를 받아 갱신하며 FK 없음.
  * 주문 생성은 이 테이블만 잠근다(catalog 행 잠금 0).
  * 삭제는 행을 지우지 않고 capacity를 비운다(tombstone) — 행이 사라지면 source_updated_at 기준점도 사라져
  * 뒤늦게 도착한 오래된 설정 이벤트가 삭제된 제한을 되살린다.
