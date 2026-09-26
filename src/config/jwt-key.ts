@@ -66,14 +66,23 @@ function toPublicJwk(publicKey: KeyObject): Omit<JwtPublicJwk, 'kid'> & {
   };
 }
 
-/** 공개키를 주지 않으면 개인키에서 유도한다(운영에서 둘 중 하나만 넣어도 되게). */
+/**
+ * 공개키를 주지 않으면 개인키에서 유도한다(운영에서 둘 중 하나만 넣어도 되게). 둘 다 주면 짝인지 확인한다 —
+ * 어긋난 채 부팅하면 서명은 개인키로, 검증·JWKS는 공개키로 돌아 로그인은 되는데 모든 보호 요청이 거절된다.
+ */
 export function buildKeyMaterial(args: {
   privateKeyPem: string;
   publicKeyPem?: string;
 }): JwtKeyMaterial {
+  const derived = createPublicKey(args.privateKeyPem);
   const publicKey = args.publicKeyPem
     ? createPublicKey(args.publicKeyPem)
-    : createPublicKey(args.privateKeyPem);
+    : derived;
+  if (args.publicKeyPem && !publicKey.equals(derived)) {
+    throw new Error(
+      'JWT 공개키가 개인키와 짝이 아닙니다 — JWT_PUBLIC_KEY_*를 지우거나 같은 키 쌍으로 맞추세요',
+    );
+  }
   const publicJwk = toPublicJwk(publicKey);
   return {
     // 어디서 왔든(환경변수·파일·즉석 생성) 같은 형태로 다듬어 비교·저장이 흔들리지 않게 한다
