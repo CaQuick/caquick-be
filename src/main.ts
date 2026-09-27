@@ -21,6 +21,7 @@ import { AppModule } from '@/app.module';
 import { readAlertingConfig } from '@/config/alerting.config';
 import { resolveAppRole, servesHttpApi } from '@/config/app.config';
 import type { AuthConfig } from '@/config/auth.config';
+import { resolveAllowedOrigins } from '@/config/cors-origins';
 import { postDiscordAlert, shouldSendBootAlert } from '@/global/alerting';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
@@ -51,15 +52,7 @@ async function bootstrap(): Promise<void> {
   // 허용 오리진 목록도 authConfig가 단일 소스
   const frontendFromEnv =
     configService.getOrThrow<AuthConfig>('auth').frontendOrigins;
-  const allowedOrigins: string[] = isProd
-    ? [
-        'https://www.caquick.site',
-        'https://caquick.site',
-        'https://caquick-fe.vercel.app',
-      ]
-    : frontendFromEnv.length > 0
-      ? frontendFromEnv
-      : ['http://localhost:3000'];
+  const allowedOrigins = resolveAllowedOrigins(isProd, frontendFromEnv);
 
   // TRUST_PROXY_HOPS = 앞단 프록시 hop 수(운영은 Cloudflare Tunnel 1). 미설정·0이면 X-Forwarded-For를 믿지 않는다.
   // 실제보다 크게 잡으면 클라이언트가 헤더로 IP를 속일 수 있으므로 인프라와 정확히 맞춘다.
