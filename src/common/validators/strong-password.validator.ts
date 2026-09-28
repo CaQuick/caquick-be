@@ -15,16 +15,12 @@ export class IsStrongPasswordConstraint implements ValidatorConstraintInterface 
     if (typeof value !== 'string') return false;
     const pw = value;
     if (pw.length < 8 || pw.length > 64) return false;
-    return (
-      /[a-z]/.test(pw) &&
-      /[A-Z]/.test(pw) &&
-      /[0-9]/.test(pw) &&
-      /[^A-Za-z0-9]/.test(pw)
-    );
+    // 대소문자는 구분하지 않는다 — 알파벳·숫자·특수문자 각 1개 이상
+    return /[A-Za-z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
   }
 
   defaultMessage(args: ValidationArguments): string {
-    return `${args.property} must be 8~64 characters and include lower/upper case, number, and special character.`;
+    return `${args.property} must be 8~64 characters and include a letter, a number, and a special character.`;
   }
 }
 
