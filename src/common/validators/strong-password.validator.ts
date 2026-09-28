@@ -16,11 +16,7 @@ export class IsStrongPasswordConstraint implements ValidatorConstraintInterface 
     const pw = value;
     if (pw.length < 8 || pw.length > 64) return false;
     // 대소문자는 구분하지 않는다 — 알파벳·숫자·특수문자 각 1개 이상
-    return (
-      /[A-Za-z]/.test(pw) &&
-      /[0-9]/.test(pw) &&
-      /[^A-Za-z0-9]/.test(pw)
-    );
+    return /[A-Za-z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
   }
 
   defaultMessage(args: ValidationArguments): string {
