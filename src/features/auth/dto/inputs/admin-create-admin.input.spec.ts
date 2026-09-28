@@ -34,7 +34,7 @@ describe('AdminCreateAdminInput', () => {
   it.each([
     ['길이 8 미만', 'S!p1'],
     ['특수문자 누락', 'NoSpecial1'],
-    ['대문자 누락', 'nocaps!1aa'],
+    ['알파벳 누락', '12345678!!'],
     ['숫자 누락', 'NoDigits!!'],
   ])('password %s 거절', async (_label, password) => {
     const errors = await validate(build({ ...valid, password }));
