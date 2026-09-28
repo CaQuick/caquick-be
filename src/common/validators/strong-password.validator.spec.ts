@@ -16,7 +16,9 @@ function build(plain: object): Sample {
 
 describe('IsStrongPassword', () => {
   it.each([
-    ['8자 + 4종', 'Aa1!aaaa'],
+    ['8자 + 3종', 'Aa1!aaaa'],
+    ['대문자 없음', 'aaaa1111!!!!'],
+    ['소문자 없음', 'AAAA1111!!!!'],
     ['긴 비밀번호', 'My!Sup3rL0ngPassword#WithSymbols'],
     [
       '64자 경계',
@@ -30,8 +32,7 @@ describe('IsStrongPassword', () => {
   it.each([
     ['7자', 'Aa1!aaa'],
     ['65자', 'Aa1!' + 'b'.repeat(61)],
-    ['소문자 누락', 'AAAA1111!!!!'],
-    ['대문자 누락', 'aaaa1111!!!!'],
+    ['알파벳 누락', '11112222!!!!'],
     ['숫자 누락', 'AAaa!!@@##'],
     ['특수문자 누락', 'AAaa1122334'],
   ])('거절: %s', async (_label, value) => {

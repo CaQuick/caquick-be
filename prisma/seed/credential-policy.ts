@@ -16,7 +16,7 @@ export function assertSeedCredential(args: {
   }
   if (!new IsStrongPasswordConstraint().validate(args.password)) {
     throw new Error(
-      '시드 password 정책 위반: 8~64자, 대문자·소문자·숫자·특수문자 각 1개 이상',
+      '시드 password 정책 위반: 8~64자, 알파벳·숫자·특수문자 각 1개 이상',
     );
   }
 }
