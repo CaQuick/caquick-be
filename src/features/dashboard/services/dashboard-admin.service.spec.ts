@@ -1,3 +1,8 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { buildSchema, graphql } from 'graphql';
+
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
@@ -21,6 +26,16 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+
+function collectSdl(dir: string): string {
+  return readdirSync(dir, { withFileTypes: true })
+    .map((entry) => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return collectSdl(full);
+      return entry.name.endsWith('.graphql') ? readFileSync(full, 'utf8') : '';
+    })
+    .join('\n');
+}
 
 describe('AdminDashboardService (real DB)', () => {
   let service: AdminDashboardService;
@@ -155,6 +170,42 @@ describe('AdminDashboardService (real DB)', () => {
         activeStoreCount: 1,
         activeProductCount: 1,
         pendingReportCount: 1,
+      });
+    });
+
+    it('비취소 주문 합계가 2^31을 넘어도 정확히 합산하고 SDL 타입으로 직렬화된다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      // 주문 1건 상한(2^31-1)으로 한 상태 그룹 합이 2^32도 넘게 하고, 취소 주문은 여전히 빠져야 한다
+      const max = 2_147_483_647;
+      for (const [status, total_price] of [
+        ['SUBMITTED', max],
+        ['SUBMITTED', max],
+        ['SUBMITTED', max],
+        ['PICKED_UP', 1_000],
+        ['CANCELED', max],
+      ] as const) {
+        await createOrder(prisma, {
+          account_id: user.id,
+          status,
+          total_price,
+          created_at: inRange,
+        });
+      }
+      const expected = max * 3 + 1_000;
+
+      const result = await service.adminDashboardSummary(actor, { from, to });
+      expect(result.orderAmountSum).toBe(expected);
+
+      // 리졸버 반환값이 SDL 스칼라 직렬화를 통과해야 요약 전체가 null로 전파되지 않는다
+      const executed = await graphql({
+        schema: buildSchema(collectSdl(join(process.cwd(), 'src/features'))),
+        source:
+          'query { adminDashboardSummary(input: { from: "x", to: "x" }) { orderAmountSum } }',
+        rootValue: { adminDashboardSummary: () => result },
+      });
+      expect(executed).toEqual({
+        data: { adminDashboardSummary: { orderAmountSum: expected } },
       });
     });
 
