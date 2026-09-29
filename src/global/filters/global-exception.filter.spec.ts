@@ -55,6 +55,9 @@ function mockHost(req: Request, res: Response) {
   } as never;
 }
 
+const PRISMA_MESSAGE =
+  'Invalid `prisma.store.findMany()` invocation: { where: { is_active: null } } Argument `is_active` must not be null.';
+
 describe('HttpExceptionFilter', () => {
   let filter: HttpExceptionFilter;
   let logger: CustomLoggerService;
@@ -119,6 +122,72 @@ describe('HttpExceptionFilter', () => {
       expect.objectContaining({ code: 500, errorCode: 'INTERNAL_ERROR' }),
     );
   });
+
+  // 응답은 공개 문구, 로그는 원문 — status로 가르지 않는다(500 DomainException 문구는 사용자용)
+  it.each([
+    [
+      'Prisma식 Error',
+      new Error(PRISMA_MESSAGE),
+      500,
+      '서버 오류가 발생했습니다.',
+      PRISMA_MESSAGE,
+      true,
+    ],
+    [
+      'string throw',
+      'plain string thrown',
+      500,
+      '서버 오류가 발생했습니다.',
+      'Internal Server Error',
+      false,
+    ],
+    [
+      'DomainException 500',
+      new DomainException('S3_PRESIGN_FAILED'),
+      500,
+      '업로드 URL 생성에 실패했습니다.',
+      '업로드 URL 생성에 실패했습니다.',
+      true,
+    ],
+    [
+      'DomainException 4xx',
+      new DomainException('STORE_NOT_FOUND'),
+      404,
+      '매장을 찾을 수 없습니다.',
+      '매장을 찾을 수 없습니다.',
+      true,
+    ],
+    [
+      'ValidationPipe',
+      new BadRequestException({
+        message: [{ property: 'email', constraints: { isEmail: 'bad' } }],
+      }),
+      400,
+      '입력값이 올바르지 않습니다.',
+      '입력값이 올바르지 않습니다.',
+      true,
+    ],
+  ])(
+    '%s: 응답은 공개 문구, 로그는 원문',
+    (_label, exception, status, responseMessage, logMessage, hasStack) => {
+      const res = mockRes();
+      filter.catch(exception, mockHost(mockReq(), res));
+
+      expect(res.status).toHaveBeenCalledWith(status);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: responseMessage, code: status }),
+      );
+      expect(logger.txError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            statusCode: status,
+            message: logMessage,
+            stack: hasStack ? expect.any(String) : undefined,
+          }),
+        }),
+      );
+    },
+  );
 
   it('ValidationError가 포함된 400이면 데이터 포함 응답을 반환한다', () => {
     const req = mockReq();

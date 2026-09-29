@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { GraphQLFormattedError } from 'graphql';
 import { PubSub } from 'graphql-subscriptions';
 import request from 'supertest';
 import type { App } from 'supertest/types';
@@ -169,6 +170,21 @@ describe('역할별 HTTP 노출 (real app)', () => {
         .post('/graphql')
         .send({ query: '{ __typename }' })
         .expect(200);
+    });
+
+    // 필터를 거치지 않는 Apollo 자체 오류도 필터 응답과 같은 모양·카탈로그 문구로 나간다
+    it('문서 검증 오류는 VALIDATION_FAILED로 정규화된다', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .send({ query: '{ noSuchField }' })
+        .expect(400);
+      const [error] = (res.body as { errors: GraphQLFormattedError[] }).errors;
+      expect(error.message).toBe('입력값이 올바르지 않습니다.');
+      expect(error.extensions).toEqual({
+        code: 'VALIDATION_FAILED',
+        classification: 'BAD_USER_INPUT',
+        statusCode: 400,
+      });
     });
   });
 });
