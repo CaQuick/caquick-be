@@ -32,6 +32,8 @@ describe('IsInitialPassword', () => {
     ['숫자 타입', 12345678],
     ['null', null],
     ['누락', undefined],
+    ['공백 8자', ' '.repeat(8)],
+    ['탭·공백만 64자', ' \t'.repeat(32)],
   ])('거절: %s', async (_label, value) => {
     expect(await errorsOf(value)).toEqual(['password']);
   });

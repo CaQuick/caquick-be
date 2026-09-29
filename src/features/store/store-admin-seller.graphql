@@ -162,7 +162,7 @@ input AdminCreateSellerInput {
   """
   username: String!
   """
-  초기 비밀번호. 8~64자. 최초 로그인 시 변경이 강제되므로 조합 규칙은 없다.
+  초기 비밀번호. 8~64자(공백만으로는 불가). 최초 로그인 시 변경이 강제되므로 조합 규칙은 없다.
   """
   password: String!
   """
@@ -246,7 +246,7 @@ input AdminResetSellerPasswordInput {
   """
   accountId: ID!
   """
-  새 초기 비밀번호. 8~64자. 최초 로그인 시 변경이 강제되므로 조합 규칙은 없다.
+  새 초기 비밀번호. 8~64자(공백만으로는 불가). 최초 로그인 시 변경이 강제되므로 조합 규칙은 없다.
   """
   newPassword: String!
 }
