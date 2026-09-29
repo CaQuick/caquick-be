@@ -18,7 +18,10 @@ export function resolveStatus(exception: unknown): number {
     : HttpStatus.INTERNAL_SERVER_ERROR;
 }
 
-// ValidationPipe 예외의 message는 필드별 constraints 배열이라 Nest 기본 문구('Bad Request Exception')가 나간다 — 카탈로그 문구로 바꾼다.
+/**
+ * 로그용 원문. 응답에는 resolvePublicMessage를 쓴다.
+ * ValidationPipe 예외의 message는 필드별 constraints 배열이라 Nest 기본 문구('Bad Request Exception')가 나간다 — 카탈로그 문구로 바꾼다.
+ */
 export function resolveMessage(exception: unknown): string {
   if (isValidationException(exception)) {
     return ERROR_CATALOG.VALIDATION_FAILED.message;
@@ -27,6 +30,18 @@ export function resolveMessage(exception: unknown): string {
     return exception.message;
   }
   return 'Internal Server Error';
+}
+
+/**
+ * 응답용 문구. HttpException(DomainException 포함)만 문구를 싣고, 그 밖의 예외(Prisma·일반 Error·non-Error)는
+ * 호출명·where 구조가 새지 않게 카탈로그 문구로 덮는다. status로 가르지 않는다 — 사용자 문구가 있는 500 DomainException이 있다.
+ */
+export function resolvePublicMessage(exception: unknown): string {
+  if (isValidationException(exception)) {
+    return ERROR_CATALOG.VALIDATION_FAILED.message;
+  }
+  if (exception instanceof HttpException) return exception.message;
+  return ERROR_CATALOG.INTERNAL_ERROR.message;
 }
 
 /** Apollo 관례의 분류값. `extensions.classification`으로만 노출하고 코드 정본은 카탈로그다. */

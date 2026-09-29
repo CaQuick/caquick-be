@@ -53,6 +53,12 @@ function mockHost(
   } as unknown as ArgumentsHost;
 }
 
+const PRISMA_MESSAGE =
+  'Invalid `prisma.store.findMany()` invocation: { where: { is_active: null } } Argument `is_active` must not be null.';
+const VALIDATION_EXCEPTION = new BadRequestException({
+  message: [{ property: 'email', constraints: { isEmail: 'bad' } }],
+});
+
 describe('GraphQLExceptionFilter', () => {
   let filter: GraphQLExceptionFilter;
   let logger: CustomLoggerService;
@@ -220,9 +226,62 @@ describe('GraphQLExceptionFilter', () => {
           statusCode: 500,
         }),
       );
-      // resolveMessage 가 fallback 'Internal Server Error' 반환
-      expect(result.message).toBe('Internal Server Error');
+      expect(result.message).toBe('서버 오류가 발생했습니다.');
     });
+
+    // 응답은 공개 문구, 로그는 원문 — status로 가르지 않는다(500 DomainException 문구는 사용자용)
+    it.each([
+      [
+        'Prisma식 Error',
+        new Error(PRISMA_MESSAGE),
+        '서버 오류가 발생했습니다.',
+        PRISMA_MESSAGE,
+        true,
+      ],
+      [
+        'string throw',
+        'plain string thrown',
+        '서버 오류가 발생했습니다.',
+        'Internal Server Error',
+        false,
+      ],
+      [
+        'DomainException 500',
+        new DomainException('S3_PRESIGN_FAILED'),
+        '업로드 URL 생성에 실패했습니다.',
+        '업로드 URL 생성에 실패했습니다.',
+        true,
+      ],
+      [
+        'DomainException 4xx',
+        new DomainException('STORE_NOT_FOUND'),
+        '매장을 찾을 수 없습니다.',
+        '매장을 찾을 수 없습니다.',
+        true,
+      ],
+      [
+        'ValidationPipe',
+        VALIDATION_EXCEPTION,
+        '입력값이 올바르지 않습니다.',
+        '입력값이 올바르지 않습니다.',
+        true,
+      ],
+    ])(
+      '%s: 응답은 공개 문구, 로그는 원문',
+      (_label, exception, responseMessage, logMessage, hasStack) => {
+        const result = filter.format(exception, mockHost());
+
+        expect(result.message).toBe(responseMessage);
+        expect(logger.txError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              message: logMessage,
+              stack: hasStack ? expect.any(String) : undefined,
+            }),
+          }),
+        );
+      },
+    );
 
     it('extensions.requestId 에 incoming x-request-id 를 사용한다', () => {
       const host = mockHost('sellerProducts', 'query', {

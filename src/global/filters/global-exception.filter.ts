@@ -7,6 +7,7 @@ import type { GraphQLError } from 'graphql';
 import {
   resolveErrorCode,
   resolveMessage,
+  resolvePublicMessage,
   resolveStatus,
 } from '@/common/utils/error';
 import {
@@ -70,6 +71,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
     });
 
     setResponseTimeHeader(res, duration);
+    const publicMessage = resolvePublicMessage(exception);
 
     if (exception instanceof BadRequestException) {
       const resp = exception.getResponse();
@@ -87,7 +89,7 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
           .json(
             ApiResponseTemplate.ERROR_WITH_DATA(
               list,
-              message,
+              publicMessage,
               status,
               errorCode,
             ),
@@ -97,12 +99,12 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
 
       res
         .status(status)
-        .json(ApiResponseTemplate.ERROR(message, status, errorCode));
+        .json(ApiResponseTemplate.ERROR(publicMessage, status, errorCode));
       return;
     }
 
     res
       .status(status)
-      .json(ApiResponseTemplate.ERROR(message, status, errorCode));
+      .json(ApiResponseTemplate.ERROR(publicMessage, status, errorCode));
   }
 }

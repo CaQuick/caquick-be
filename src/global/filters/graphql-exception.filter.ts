@@ -7,6 +7,7 @@ import {
   classifyStatus,
   resolveErrorCode,
   resolveMessage,
+  resolvePublicMessage,
   resolveStatus,
 } from '@/common/utils/error';
 import {
@@ -68,7 +69,7 @@ export class GraphQLExceptionFilter {
       );
     }
 
-    return new GraphQLError(message, {
+    return new GraphQLError(resolvePublicMessage(exception), {
       extensions: {
         code: resolveErrorCode(exception),
         classification: classifyStatus(status),

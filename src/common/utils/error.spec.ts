@@ -10,6 +10,7 @@ import {
   isValidationException,
   resolveErrorCode,
   resolveMessage,
+  resolvePublicMessage,
   resolveStatus,
 } from '@/common/utils/error';
 
@@ -73,6 +74,34 @@ describe('error', () => {
     });
   });
 
+  describe('resolvePublicMessage', () => {
+    // status로 가르지 않는다: 500 DomainException 문구는 유지, 4xx라도 HttpException이 아니면 덮는다
+    it.each([
+      ['ValidationPipe', VALIDATION_EXCEPTION, '입력값이 올바르지 않습니다.'],
+      [
+        'DomainException 4xx',
+        new DomainException('STORE_NOT_FOUND'),
+        '매장을 찾을 수 없습니다.',
+      ],
+      [
+        'DomainException 500',
+        new DomainException('S3_PRESIGN_FAILED'),
+        '업로드 URL 생성에 실패했습니다.',
+      ],
+      ['Nest HttpException', new HttpException('custom', 403), 'custom'],
+      [
+        'Prisma식 Error',
+        new Error('Invalid `prisma.store.findMany()` invocation'),
+        '서버 오류가 발생했습니다.',
+      ],
+      ['일반 Error', new Error('oops'), '서버 오류가 발생했습니다.'],
+      ['string throw', 'something', '서버 오류가 발생했습니다.'],
+      ['null throw', null, '서버 오류가 발생했습니다.'],
+    ])('%s → %s', (_label, exception, expected) => {
+      expect(resolvePublicMessage(exception)).toBe(expected);
+    });
+  });
+
   describe('resolveMessage', () => {
     it('ValidationPipe 예외면 카탈로그 VALIDATION_FAILED 문구를 반환한다', () => {
       expect(resolveMessage(VALIDATION_EXCEPTION)).toBe(
@@ -84,7 +113,7 @@ describe('error', () => {
       expect(resolveMessage(new HttpException('custom', 403))).toBe('custom');
     });
 
-    it('일반 Error이면 메시지를 반환한다', () => {
+    it('일반 Error이면 원문 메시지를 반환한다(로그용)', () => {
       expect(resolveMessage(new Error('oops'))).toBe('oops');
     });
 
