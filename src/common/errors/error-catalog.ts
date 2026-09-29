@@ -533,7 +533,7 @@ export const ERROR_CATALOG = {
   },
   REGION_HAS_CHILDREN: {
     status: HttpStatus.BAD_REQUEST,
-    message: '해당 지역에 활성 하위 지역이 있습니다.',
+    message: '해당 지역에 하위 지역(비활성 포함)이 있습니다.',
   },
   REGION_HAS_ACTIVE_CHILDREN: {
     status: HttpStatus.BAD_REQUEST,
