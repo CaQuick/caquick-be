@@ -30,13 +30,14 @@ export const GEOCODE_QUERY_MAX_LENGTH = 200;
 const COORDINATE_SCALE = 7;
 const LOGGED_BODY_LIMIT = 300;
 
+// 외부 응답이라 필드 타입을 믿지 않는다 — 읽을 때 문자열인지 확인한다
 interface KakaoAddress {
-  address_name?: string;
-  region_1depth_name?: string;
-  region_2depth_name?: string;
-  region_3depth_name?: string;
-  b_code?: string;
-  h_code?: string;
+  address_name?: unknown;
+  region_1depth_name?: unknown;
+  region_2depth_name?: unknown;
+  region_3depth_name?: unknown;
+  b_code?: unknown;
+  h_code?: unknown;
 }
 
 interface KakaoAddressDocument {
@@ -46,8 +47,8 @@ interface KakaoAddressDocument {
   road_address?: KakaoAddress | null;
 }
 
-function textOrNull(value: string | undefined): string | null {
-  return value?.trim() || null;
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value.trim() || null : null;
 }
 
 /** 이진 부동소수 곱셈 반올림은 경계값에서 한 자리씩 틀리므로 십진 연산으로 자른다. */
@@ -72,7 +73,11 @@ function toSigunguCode(
   address: KakaoAddress | null | undefined,
 ): string | null {
   for (const code of [address?.b_code, address?.h_code]) {
-    if (code && /^\d{10}$/.test(code) && code.slice(2, 5) !== '000') {
+    if (
+      typeof code === 'string' &&
+      /^\d{10}$/.test(code) &&
+      code.slice(2, 5) !== '000'
+    ) {
       return code.slice(0, 5);
     }
   }
@@ -82,9 +87,16 @@ function toSigunguCode(
 function parseDocuments(body: string): KakaoAddressDocument[] | null {
   try {
     const documents = (JSON.parse(body) as { documents?: unknown })?.documents;
-    return Array.isArray(documents)
-      ? (documents as KakaoAddressDocument[])
-      : null;
+    if (!Array.isArray(documents)) return null;
+    // [null]처럼 첫 문서가 객체가 아니면 '결과 없음'이 아니라 형식 오류다
+    const [first] = documents as unknown[];
+    if (
+      documents.length > 0 &&
+      (typeof first !== 'object' || first === null || Array.isArray(first))
+    ) {
+      return null;
+    }
+    return documents as KakaoAddressDocument[];
   } catch {
     return null;
   }

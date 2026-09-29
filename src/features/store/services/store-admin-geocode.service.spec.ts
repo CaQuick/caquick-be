@@ -236,6 +236,25 @@ describe('AdminGeocodeService (real DB)', () => {
       ).resolves.toMatchObject({ sigunguCode: expected });
     });
 
+    it('문자열이 아닌 주소·코드 필드는 오류 없이 비운다', async () => {
+      transport.mockResolvedValueOnce(
+        kakaoResponse([
+          {
+            ...ROAD_DOCUMENT,
+            address: {
+              ...ROAD_DOCUMENT.address,
+              address_name: 737,
+              b_code: 1168010100,
+              h_code: null,
+            },
+          },
+        ]),
+      );
+      await expect(
+        service.adminGeocodeAddress(await admin(), '테헤란로 152'),
+      ).resolves.toMatchObject({ jibunAddress: null, sigunguCode: null });
+    });
+
     it('지번 주소의 행정구역 이름이 비어 있으면 도로명 주소 값을 쓴다', async () => {
       transport.mockResolvedValueOnce(
         kakaoResponse([
@@ -303,6 +322,14 @@ describe('AdminGeocodeService (real DB)', () => {
       [
         'documents 배열 없음',
         () => transport.mockResolvedValue(new Response('{"meta":{}}')),
+      ],
+      [
+        '첫 문서가 null',
+        () => transport.mockResolvedValue(kakaoResponse([null])),
+      ],
+      [
+        '첫 문서가 문자열',
+        () => transport.mockResolvedValue(kakaoResponse(['doc'])),
       ],
       [
         '좌표가 숫자가 아님',
