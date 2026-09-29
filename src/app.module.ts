@@ -46,6 +46,7 @@ import { SystemModule } from '@/features/system/system.module';
 import { AlertingModule } from '@/global/alerting';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { BlacklistModule } from '@/global/auth/blacklist';
+import { formatGraphqlError } from '@/global/graphql/format-graphql-error';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
@@ -97,6 +98,7 @@ function httpModules(): NonNullable<DynamicModule['imports']> {
               : ApolloServerPluginLandingPageLocalDefault({ embed: true }),
           ],
           context: buildGraphqlContext,
+          formatError: formatGraphqlError,
         } as Omit<ApolloDriverConfig, 'driver'>;
       },
     }),
