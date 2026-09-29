@@ -601,6 +601,13 @@ describe('AdminModerationService (real DB)', () => {
       ],
       ['커서보다 앞선 리뷰면 1건', { reviewId: 'a', cursor: 'b' }, ['a'], 1],
       ['커서 이후에 없으면 0건', { reviewId: 'a', cursor: 'a' }, [], 1],
+      // 커서가 필터의 id 조건을 덮으면 b 아래의 a까지 섞여 나온다
+      [
+        '커서가 reviewId 조건을 덮지 않는다',
+        { reviewId: 'b', cursor: 'gone' },
+        ['b'],
+        1,
+      ],
     ])(
       'reviewId 필터: %s',
       async (_, { reviewId, includeDeleted, cursor }, expected, total) => {
