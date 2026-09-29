@@ -18,6 +18,10 @@ export class AdminReviewListInput extends CursorInput {
   accountId?: string;
 
   @IsOptional()
+  @IsString()
+  reviewId?: string | null;
+
+  @IsOptional()
   @IsBoolean()
   includeDeleted?: boolean;
 }

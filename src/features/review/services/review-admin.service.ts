@@ -121,6 +121,7 @@ export class AdminModerationService extends AdminBaseService {
       keyword: input?.keyword?.trim() || undefined,
       storeId: parseOptionalId(input?.storeId) ?? undefined,
       accountId: parseOptionalId(input?.accountId) ?? undefined,
+      reviewId: parseOptionalId(input?.reviewId) ?? undefined,
       includeDeleted: input?.includeDeleted ?? false,
     };
 

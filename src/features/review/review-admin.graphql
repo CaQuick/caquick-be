@@ -364,6 +364,10 @@ input AdminReviewListInput {
   """
   accountId: ID
   """
+  리뷰 ID 필터. 지정하면 그 리뷰 1건만(삭제 리뷰는 includeDeleted일 때만). 미지정 시 전체.
+  """
+  reviewId: ID
+  """
   삭제된 리뷰 포함 여부. 기본 false.
   """
   includeDeleted: Boolean = false
