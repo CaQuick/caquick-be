@@ -1,5 +1,5 @@
 import { HealthRepository } from '@/features/system/repositories/health.repository';
-import type { PrismaService } from '@/prisma';
+import { PrismaService } from '@/prisma';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection } from '@/test/db/truncate';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -12,6 +12,8 @@ describe('HealthRepository (real DB)', () => {
       providers: [HealthRepository],
     });
     repo = module.get(HealthRepository);
+    // 첫 쿼리는 커넥션 수립까지 포함해 부하가 크면 상한(2초)을 넘는다 — 풀을 데운 뒤 '살아 있는 DB'만 본다
+    await module.get(PrismaService).$queryRaw`SELECT 1`;
   });
   afterAll(async () => {
     await closeTruncateConnection();

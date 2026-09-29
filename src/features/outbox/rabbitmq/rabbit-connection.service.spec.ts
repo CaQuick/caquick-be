@@ -91,10 +91,17 @@ describe('RabbitConnectionService', () => {
     const service = build();
     await service.getConnection('consumer');
 
-    const started = Date.now();
-    await service.retire('consumer');
-
-    expect(Date.now() - started).toBeLessThan(1_500);
+    // 실시간 측정은 부하에 흔들린다 — 가짜 타이머로 1초 경계를 결정적으로 본다
+    jest.useFakeTimers();
+    try {
+      const retiring = service.retire('consumer');
+      await jest.advanceTimersByTimeAsync(999);
+      expect(destroy).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await retiring;
+    } finally {
+      jest.useRealTimers();
+    }
     expect(destroy).toHaveBeenCalled();
     expect(service.isConnected('consumer')).toBe(false);
   });
