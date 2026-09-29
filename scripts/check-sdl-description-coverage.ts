@@ -38,12 +38,12 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.yarn']);
  * 미기재로 센다.
  */
 const BASELINE: Record<Category, Baseline> = {
-  rootField: { documented: 177, total: 177 },
-  fieldArg: { documented: 4, total: 4 },
+  rootField: { documented: 178, total: 178 },
+  fieldArg: { documented: 5, total: 5 },
   inputType: { documented: 108, total: 108 },
   inputField: { documented: 358, total: 358 },
-  outputType: { documented: 163, total: 163 },
-  outputField: { documented: 744, total: 744 },
+  outputType: { documented: 164, total: 164 },
+  outputField: { documented: 752, total: 752 },
   enumType: { documented: 28, total: 28 },
   enumValue: { documented: 102, total: 102 },
 };

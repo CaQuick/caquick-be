@@ -4,6 +4,10 @@ import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { OutboxModule } from '@/features/outbox';
 import { ReviewModule } from '@/features/review';
+import {
+  fetchKakaoLocal,
+  KAKAO_LOCAL_TRANSPORT,
+} from '@/features/store/adapters/kakao-local.transport';
 import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
 import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
@@ -12,6 +16,7 @@ import { CATALOG_QUERY } from '@/features/store/repositories/store-catalog-query
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
+import { AdminGeocodeQueryResolver } from '@/features/store/resolvers/store-admin-geocode-query.resolver';
 import { AdminStoreMutationResolver } from '@/features/store/resolvers/store-admin-mutation.resolver';
 import { AdminStoreQueryResolver } from '@/features/store/resolvers/store-admin-query.resolver';
 import { AdminSellerMutationResolver } from '@/features/store/resolvers/store-admin-seller-mutation.resolver';
@@ -26,6 +31,7 @@ import { SellerStoreQueryResolver } from '@/features/store/resolvers/store-selle
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreWishlistMutationResolver } from '@/features/store/resolvers/store-wishlist-mutation.resolver';
 import { StoreWishlistQueryResolver } from '@/features/store/resolvers/store-wishlist-query.resolver';
+import { AdminGeocodeService } from '@/features/store/services/store-admin-geocode.service';
 import { AdminSellerService } from '@/features/store/services/store-admin-seller.service';
 import { AdminStoreService } from '@/features/store/services/store-admin.service';
 import { StoreCardService } from '@/features/store/services/store-card.service';
@@ -87,6 +93,10 @@ import { StoreWishlistService } from '@/features/store/services/store-wishlist.s
     AdminStoreService,
     AdminStoreQueryResolver,
     AdminStoreMutationResolver,
+    // 관리자 주소 → 좌표 변환(카카오 로컬 프록시)
+    { provide: KAKAO_LOCAL_TRANSPORT, useValue: fetchKakaoLocal },
+    AdminGeocodeService,
+    AdminGeocodeQueryResolver,
   ],
   // StorePickupScheduleService는 주문 생성(order feature)의 픽업 일시 재검증이,
   // StoreSearchService는 검색 요약(search feature)의 매장 건수가 소비한다

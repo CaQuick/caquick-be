@@ -362,6 +362,15 @@ export class StoreSellerRepository {
       })) !== null
     );
   }
+
+  /** 주소 좌표 변환 결과를 매장에 연결할 지역으로 잇는다 — 연결 규칙(2단계·활성)은 isRegionSelectable과 같다. */
+  async findSelectableRegionIdBySlug(slug: string): Promise<bigint | null> {
+    const region = await this.prisma.region.findFirst({
+      where: { slug, level: 2, is_active: true },
+      select: { id: true },
+    });
+    return region?.id ?? null;
+  }
 }
 
 export function isSellerAccount(accountType: AccountType): boolean {
