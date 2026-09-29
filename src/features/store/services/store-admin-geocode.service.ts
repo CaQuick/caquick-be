@@ -64,12 +64,19 @@ function toCoordinate(raw: unknown, range: DecimalRange): number | null {
   }
 }
 
-/** 법정동 코드(10자리)의 앞 5자리가 시군구 코드 — 지역 slug 'sgg-<시군구코드>'와 같은 체계다. */
+/**
+ * 법정동 코드(10자리)의 앞 5자리가 시군구 코드 — 지역 slug 'sgg-<시군구코드>'와 같은 체계다.
+ * 법정동 코드가 형식에 맞지 않으면 행정동 코드로, 시·도 단위 결과(xx000)는 시군구가 아니라 null.
+ */
 function toSigunguCode(
   address: KakaoAddress | null | undefined,
 ): string | null {
-  const code = address?.b_code || address?.h_code;
-  return code && /^\d{10}$/.test(code) ? code.slice(0, 5) : null;
+  for (const code of [address?.b_code, address?.h_code]) {
+    if (code && /^\d{10}$/.test(code) && code.slice(2, 5) !== '000') {
+      return code.slice(0, 5);
+    }
+  }
+  return null;
 }
 
 function parseDocuments(body: string): KakaoAddressDocument[] | null {
@@ -126,13 +133,15 @@ export class AdminGeocodeService extends AdminBaseService {
       longitude,
       roadAddress: textOrNull(road?.address_name),
       jibunAddress: textOrNull(address?.address_name),
-      sido: textOrNull(address?.region_1depth_name ?? road?.region_1depth_name),
-      sigungu: textOrNull(
-        address?.region_2depth_name ?? road?.region_2depth_name,
-      ),
-      bname: textOrNull(
-        address?.region_3depth_name ?? road?.region_3depth_name,
-      ),
+      sido:
+        textOrNull(address?.region_1depth_name) ??
+        textOrNull(road?.region_1depth_name),
+      sigungu:
+        textOrNull(address?.region_2depth_name) ??
+        textOrNull(road?.region_2depth_name),
+      bname:
+        textOrNull(address?.region_3depth_name) ??
+        textOrNull(road?.region_3depth_name),
       sigunguCode,
       regionId: regionId?.toString() ?? null,
     };

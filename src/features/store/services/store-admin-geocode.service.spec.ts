@@ -208,6 +208,60 @@ describe('AdminGeocodeService (real DB)', () => {
       });
     });
 
+    it.each([
+      [
+        '법정동 코드 정상',
+        { b_code: '1168010100', h_code: '1168064000' },
+        '11680',
+      ],
+      [
+        '법정동 형식 오류 → 행정동',
+        { b_code: '11680', h_code: '1168064000' },
+        '11680',
+      ],
+      ['시·도 단위 결과', { b_code: '1100000000', h_code: '1100000000' }, null],
+      [
+        '시·도 단위 법정동 → 행정동도 시·도',
+        { b_code: '4100000000', h_code: '' },
+        null,
+      ],
+    ])('sigunguCode: %s', async (_label, codes, expected) => {
+      transport.mockResolvedValueOnce(
+        kakaoResponse([
+          { ...ROAD_DOCUMENT, address: { ...ROAD_DOCUMENT.address, ...codes } },
+        ]),
+      );
+      await expect(
+        service.adminGeocodeAddress(await admin(), '테헤란로 152'),
+      ).resolves.toMatchObject({ sigunguCode: expected });
+    });
+
+    it('지번 주소의 행정구역 이름이 비어 있으면 도로명 주소 값을 쓴다', async () => {
+      transport.mockResolvedValueOnce(
+        kakaoResponse([
+          {
+            ...ROAD_DOCUMENT,
+            address: {
+              ...ROAD_DOCUMENT.address,
+              region_1depth_name: '',
+              region_2depth_name: '',
+              region_3depth_name: '',
+            },
+          },
+        ]),
+      );
+      const result = await service.adminGeocodeAddress(
+        await admin(),
+        '테헤란로 152',
+      );
+      expect(result).toMatchObject({
+        sido: ROAD_DOCUMENT.road_address?.region_1depth_name,
+        sigungu: ROAD_DOCUMENT.road_address?.region_2depth_name,
+        bname: ROAD_DOCUMENT.road_address?.region_3depth_name,
+      });
+      expect(result?.sido).not.toBeNull();
+    });
+
     it('결과가 0건이면 null', async () => {
       transport.mockResolvedValue(kakaoResponse([]));
       await expect(
