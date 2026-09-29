@@ -194,7 +194,7 @@ describe('역할별 refresh 쿠키 (real DB)', () => {
       },
     );
 
-    it.each(CROSS)(
+    it.each(CROSS.filter(([route]) => route !== 'USER'))(
       '%s 경로의 쿠키에 %s 세션이 있으면 로그아웃을 거절하고 세션을 남긴다',
       async (route, owner) => {
         const { raw, sessionId } = await login(owner);
@@ -204,6 +204,21 @@ describe('역할별 refresh 쿠키 (real DB)', () => {
           logoutAs(route, reqWith({ [COOKIE[route]]: raw }), res),
         ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
         expect(cleared).toEqual([]);
+        expect(await isRevoked(sessionId)).toBe(false);
+      },
+    );
+
+    // 구매자 FE는 로그아웃 실패를 오류로 띄운다 — 옛 쿠키 잔재가 있어도 로그아웃은 성공해야 한다
+    it.each(['SELLER', 'ADMIN'] as const)(
+      '구매자 쿠키에 %s 세션이 남아 있으면 로그아웃은 쿠키만 지우고 세션을 남긴다',
+      async (owner) => {
+        const { raw, sessionId } = await login(owner);
+        const { res, cleared } = jar();
+
+        await expect(
+          auth.logout(reqWith({ [COOKIE.USER]: raw }), res),
+        ).resolves.toBeUndefined();
+        expect(cleared).toEqual([COOKIE.USER]);
         expect(await isRevoked(sessionId)).toBe(false);
       },
     );

@@ -57,8 +57,11 @@ export class AuthService {
       const tokenHash = this.tokens.sha256Hex(refreshToken);
       const session =
         await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-      if (session) {
-        await this.tokens.assertSessionRole('USER', session.account_id);
+      // 쿠키 분리 전 caquick_rt에 남은 판매자·관리자 세션은 폐기하지 않고 쿠키만 지운다
+      if (
+        session &&
+        (await this.tokens.hasSessionRole('USER', session.account_id))
+      ) {
         await this.refreshSessions.revokeRefreshSession(session.id);
       }
     }

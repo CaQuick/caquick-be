@@ -113,9 +113,14 @@ export class TokenService {
   }
 
   /** 이름이 나뉘기 전에 구운 쿠키에는 다른 역할의 세션이 들어 있다 — 그 세션은 회전·폐기하지 않는다. */
-  async assertSessionRole(role: AccountRole, accountId: bigint): Promise<void> {
+  /** 계정이 없으면(탈퇴 등) true — 역할 불일치만 가려내고 계정 상태 판정은 호출부 몫이다. */
+  async hasSessionRole(role: AccountRole, accountId: bigint): Promise<boolean> {
     const account = await this.accounts.findAccountForJwt(accountId);
-    if (account && account.account_type !== role) {
+    return !account || account.account_type === role;
+  }
+
+  async assertSessionRole(role: AccountRole, accountId: bigint): Promise<void> {
+    if (!(await this.hasSessionRole(role, accountId))) {
       throw new DomainException('INVALID_REFRESH_TOKEN');
     }
   }
