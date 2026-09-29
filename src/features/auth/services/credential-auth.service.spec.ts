@@ -26,7 +26,7 @@ import {
 import { TokenService } from '@/features/auth/services/token.service';
 import { AccountType } from '@/generated/prisma/client';
 import { TokenBlacklistService } from '@/global/auth';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 function makeCredential(
@@ -267,7 +267,10 @@ describe('CredentialAuthService', () => {
   describe('refresh', () => {
     const reqWithCookie = {
       ...mockReq,
-      cookies: { [AUTH_COOKIE.REFRESH]: 'refresh-token' },
+      cookies: {
+        [REFRESH_COOKIE.SELLER]: 'refresh-token',
+        [REFRESH_COOKIE.ADMIN]: 'refresh-token',
+      },
     } as unknown as Request;
     const session = { id: BigInt(77), account_id: BigInt(10) } as never;
     let rotate: jest.SpyInstance;
@@ -290,7 +293,7 @@ describe('CredentialAuthService', () => {
         res: mockRes,
       });
 
-      expect(rotate).toHaveBeenCalledWith(reqWithCookie, mockRes);
+      expect(rotate).toHaveBeenCalledWith('SELLER', reqWithCookie, mockRes);
       expect(result).toEqual({
         accessToken: 'rotated',
         accountStatus: 'ACTIVE',
@@ -330,7 +333,10 @@ describe('CredentialAuthService', () => {
   describe('logout', () => {
     const reqWithCookie = {
       ...mockReq,
-      cookies: { [AUTH_COOKIE.REFRESH]: 'refresh-token' },
+      cookies: {
+        [REFRESH_COOKIE.SELLER]: 'refresh-token',
+        [REFRESH_COOKIE.ADMIN]: 'refresh-token',
+      },
     } as unknown as Request;
     const session = { id: BigInt(77), account_id: BigInt(10) } as never;
 
@@ -348,7 +354,7 @@ describe('CredentialAuthService', () => {
       expect(refreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
         BigInt(77),
       );
-      expect(clear).toHaveBeenCalledWith(mockRes);
+      expect(clear).toHaveBeenCalledWith('ADMIN', mockRes);
     });
 
     it('refresh 쿠키가 없으면 MISSING_REFRESH_TOKEN', async () => {

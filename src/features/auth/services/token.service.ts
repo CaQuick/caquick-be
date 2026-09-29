@@ -21,8 +21,11 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import type { AccessTokenClaims } from '@/global/auth/types/jwt-payload.type';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import type {
+  AccessTokenClaims,
+  AccountRole,
+} from '@/global/auth/types/jwt-payload.type';
 
 @Injectable()
 export class TokenService {
@@ -50,12 +53,18 @@ export class TokenService {
 
   /** 발급 시점의 계정 상태를 클레임에 담기 위해 매번 조회한다(재발급 포함). */
   async signAccessTokenFor(accountId: bigint): Promise<string> {
+    return this.signAccessToken(await this.requireActiveAccount(accountId));
+  }
+
+  private async requireActiveAccount(
+    accountId: bigint,
+  ): Promise<AccountForJwt> {
     const account = await this.accounts.findAccountForJwt(accountId);
     if (!account) throw new DomainException('SESSION_ACCOUNT_MISSING');
     if (account.status !== 'ACTIVE') {
       throw new DomainException('ACCOUNT_NOT_ACTIVE');
     }
-    return this.signAccessToken(account);
+    return account;
   }
 
   getAccessExpiresSeconds(): number {
@@ -71,7 +80,8 @@ export class TokenService {
     req: Request;
     res: Response;
   }): Promise<{ accessToken: string }> {
-    const accessToken = await this.signAccessTokenFor(args.accountId);
+    const account = await this.requireActiveAccount(args.accountId);
+    const accessToken = this.signAccessToken(account);
 
     const refreshToken = this.generateRefreshToken();
     const refreshHash = this.sha256Hex(refreshToken);
@@ -87,7 +97,7 @@ export class TokenService {
       expiresAt,
     });
 
-    AuthCookie.setRefreshCookie(args.res, {
+    AuthCookie.setRefreshCookie(args.res, account.account_type, {
       refreshToken,
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
@@ -98,12 +108,24 @@ export class TokenService {
     return { accessToken };
   }
 
+  readRefreshCookie(role: AccountRole, req: Request): string | undefined {
+    return req.cookies?.[REFRESH_COOKIE[role]] as string | undefined;
+  }
+
+  /** 이름이 나뉘기 전에 구운 쿠키에는 다른 역할의 세션이 들어 있다 — 그 세션은 회전·폐기하지 않는다. */
+  async assertSessionRole(role: AccountRole, accountId: bigint): Promise<void> {
+    const account = await this.accounts.findAccountForJwt(accountId);
+    if (account && account.account_type !== role) {
+      throw new DomainException('INVALID_REFRESH_TOKEN');
+    }
+  }
+
   async rotateRefresh(
+    role: AccountRole,
     req: Request,
     res: Response,
   ): Promise<{ accessToken: string; accountId: bigint }> {
-    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      string | undefined;
+    const refreshToken = this.readRefreshCookie(role, req);
 
     if (!refreshToken) {
       throw new DomainException('MISSING_REFRESH_TOKEN');
@@ -113,6 +135,8 @@ export class TokenService {
     const session =
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new DomainException('INVALID_REFRESH_TOKEN');
+
+    await this.assertSessionRole(role, session.account_id);
 
     const newRefreshToken = this.generateRefreshToken();
     const newTokenHash = this.sha256Hex(newRefreshToken);
@@ -131,7 +155,7 @@ export class TokenService {
 
     const accessToken = await this.signAccessTokenFor(session.account_id);
 
-    AuthCookie.setRefreshCookie(res, {
+    AuthCookie.setRefreshCookie(res, role, {
       refreshToken: newRefreshToken,
       refreshMaxAgeMs: refreshDays * 86400 * 1000,
       cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
@@ -149,9 +173,10 @@ export class TokenService {
     return sha256HexUtil(raw);
   }
 
-  clearRefreshCookie(res: Response): void {
+  clearRefreshCookie(role: AccountRole, res: Response): void {
     AuthCookie.clearRefreshCookie(
       res,
+      role,
       AuthCookieOptions.getCookieDomain(this.config),
       AuthCookieOptions.isCookieSecure(this.config),
       AuthCookieOptions.getCookieSameSite(this.config),

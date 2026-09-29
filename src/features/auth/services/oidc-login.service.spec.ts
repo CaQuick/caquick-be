@@ -14,7 +14,7 @@ import {
 import { OidcClientService } from '@/features/auth/services/oidc-client.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import { TokenService } from '@/features/auth/services/token.service';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('OidcLoginService', () => {
@@ -255,7 +255,7 @@ describe('OidcLoginService', () => {
         providerProfileImageUrl: 'https://example.com/photo.jpg',
       });
       expect(mockRes.cookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
+        REFRESH_COOKIE.USER,
         expect.any(String),
         expect.any(Object),
       );

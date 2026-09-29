@@ -23,6 +23,7 @@ import { resolveAppRole, servesHttpApi } from '@/config/app.config';
 import type { AuthConfig } from '@/config/auth.config';
 import { resolveAllowedOrigins } from '@/config/cors-origins';
 import { postDiscordAlert, shouldSendBootAlert } from '@/global/alerting';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { HttpExceptionFilter } from '@/global/filters/global-exception.filter';
 import { GraphQLExceptionFilter } from '@/global/filters/graphql-exception.filter';
 import {
@@ -132,9 +133,19 @@ function setupSwagger(app: INestApplication, version?: string): void {
       'access-token',
     )
     .addCookieAuth(
-      'caquick_rt',
+      REFRESH_COOKIE.USER,
       { type: 'apiKey', in: 'cookie' },
       'refresh-cookie',
+    )
+    .addCookieAuth(
+      REFRESH_COOKIE.SELLER,
+      { type: 'apiKey', in: 'cookie' },
+      'seller-refresh-cookie',
+    )
+    .addCookieAuth(
+      REFRESH_COOKIE.ADMIN,
+      { type: 'apiKey', in: 'cookie' },
+      'admin-refresh-cookie',
     )
     .build();
 

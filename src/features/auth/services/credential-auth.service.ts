@@ -25,7 +25,6 @@ import {
   AuditTargetType,
 } from '@/generated/prisma/client';
 import { type AccountRole, TokenBlacklistService } from '@/global/auth';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 export type CredentialRole = Exclude<AccountRole, 'USER'>;
 
@@ -108,7 +107,11 @@ export class CredentialAuthService {
       args.role,
       args.req,
     );
-    const { accessToken } = await this.tokens.rotateRefresh(args.req, args.res);
+    const { accessToken } = await this.tokens.rotateRefresh(
+      args.role,
+      args.req,
+      args.res,
+    );
     return this.toResult(accessToken, credential);
   }
 
@@ -122,7 +125,7 @@ export class CredentialAuthService {
       args.req,
     );
     await this.refreshSessions.revokeRefreshSession(session.id);
-    this.tokens.clearRefreshCookie(args.res);
+    this.tokens.clearRefreshCookie(args.role, args.res);
   }
 
   async changePassword(args: {
@@ -197,8 +200,7 @@ export class CredentialAuthService {
     session: { id: bigint; account_id: bigint };
     credential: AccountCredentialWithAccount;
   }> {
-    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      string | undefined;
+    const refreshToken = this.tokens.readRefreshCookie(role, req);
     if (!refreshToken) {
       throw new DomainException('MISSING_REFRESH_TOKEN');
     }
