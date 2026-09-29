@@ -18,7 +18,7 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 describe('AuthService', () => {
@@ -136,7 +136,7 @@ describe('AuthService', () => {
       expect(mockRefreshSessions.rotateRefreshSession).toHaveBeenCalled();
       expect(result).toEqual({ accessToken: 'new-access-token' });
       expect(mockRes.cookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
+        REFRESH_COOKIE.USER,
         expect.any(String),
         expect.any(Object),
       );

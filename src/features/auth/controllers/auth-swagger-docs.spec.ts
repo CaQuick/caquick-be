@@ -36,7 +36,7 @@ describe('Auth REST Swagger 문서', () => {
   });
 
   it('auth REST operation 14개(JWKS 포함)의 문서가 스냅샷과 같다', () => {
-    // main.ts와 같은 보안 스킴 이름(access-token·refresh-cookie)으로 문서를 만든다
+    // main.ts와 같은 보안 스킴 이름(access-token·역할별 refresh 쿠키)으로 문서를 만든다
     const config = new DocumentBuilder()
       .addBearerAuth(
         { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
@@ -46,6 +46,16 @@ describe('Auth REST Swagger 문서', () => {
         'caquick_rt',
         { type: 'apiKey', in: 'cookie' },
         'refresh-cookie',
+      )
+      .addCookieAuth(
+        'caquick_seller_rt',
+        { type: 'apiKey', in: 'cookie' },
+        'seller-refresh-cookie',
+      )
+      .addCookieAuth(
+        'caquick_admin_rt',
+        { type: 'apiKey', in: 'cookie' },
+        'admin-refresh-cookie',
       )
       .build();
     const document = SwaggerModule.createDocument(app, config);

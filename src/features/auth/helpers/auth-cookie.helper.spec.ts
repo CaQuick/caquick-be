@@ -24,11 +24,38 @@ function mockRes(): Response & {
   };
 }
 
+// 이름은 리터럴로 고정한다 — 운영 쿠키 이름이 바뀌면 전 세션이 끊긴다
+const REFRESH_COOKIE_NAMES = [
+  ['USER', 'caquick_rt'],
+  ['SELLER', 'caquick_seller_rt'],
+  ['ADMIN', 'caquick_admin_rt'],
+] as const;
+
 describe('AuthCookie', () => {
   describe('setRefreshCookie', () => {
+    it.each(REFRESH_COOKIE_NAMES)(
+      '%s refresh 쿠키 이름은 %s이다',
+      (role, name) => {
+        const res = mockRes();
+        AuthCookie.setRefreshCookie(res, role, {
+          refreshToken: 'token-abc',
+          refreshMaxAgeMs: 1000,
+          secure: false,
+          sameSite: 'lax',
+        });
+
+        expect(res.cookie).toHaveBeenCalledTimes(1);
+        expect(res.cookie).toHaveBeenCalledWith(
+          name,
+          'token-abc',
+          expect.any(Object),
+        );
+      },
+    );
+
     it('refresh 쿠키를 httpOnly, secure 옵션으로 설정한다', () => {
       const res = mockRes();
-      AuthCookie.setRefreshCookie(res, {
+      AuthCookie.setRefreshCookie(res, 'USER', {
         refreshToken: 'token-abc',
         refreshMaxAgeMs: 604800000,
         cookieDomain: '.caquick.site',
@@ -37,7 +64,7 @@ describe('AuthCookie', () => {
       });
 
       expect(res.cookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
+        'caquick_rt',
         'token-abc',
         expect.objectContaining({
           httpOnly: true,
@@ -51,12 +78,22 @@ describe('AuthCookie', () => {
   });
 
   describe('clearRefreshCookie', () => {
+    it.each(REFRESH_COOKIE_NAMES)(
+      '%s refresh 쿠키는 %s만 지운다',
+      (role, name) => {
+        const res = mockRes();
+        AuthCookie.clearRefreshCookie(res, role, undefined, false);
+
+        expect(res._cleared).toEqual([name]);
+      },
+    );
+
     it('refresh 쿠키를 삭제한다', () => {
       const res = mockRes();
-      AuthCookie.clearRefreshCookie(res, '.caquick.site', true, 'lax');
+      AuthCookie.clearRefreshCookie(res, 'USER', '.caquick.site', true, 'lax');
 
       expect(res.clearCookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
+        'caquick_rt',
         expect.objectContaining({
           httpOnly: true,
           secure: true,
@@ -67,10 +104,10 @@ describe('AuthCookie', () => {
 
     it('sameSite 기본값은 lax이다', () => {
       const res = mockRes();
-      AuthCookie.clearRefreshCookie(res, undefined, false);
+      AuthCookie.clearRefreshCookie(res, 'USER', undefined, false);
 
       expect(res.clearCookie).toHaveBeenCalledWith(
-        AUTH_COOKIE.REFRESH,
+        'caquick_rt',
         expect.objectContaining({ sameSite: 'lax' }),
       );
     });

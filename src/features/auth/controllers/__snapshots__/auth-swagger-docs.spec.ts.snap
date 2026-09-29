@@ -135,7 +135,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
       },
       "security": [
         {
-          "refresh-cookie": [],
+          "admin-refresh-cookie": [],
         },
       ],
       "summary": "관리자 로그아웃",
@@ -189,7 +189,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
       },
       "security": [
         {
-          "refresh-cookie": [],
+          "admin-refresh-cookie": [],
         },
       ],
       "summary": "관리자 Access/Refresh 재발급",
@@ -495,7 +495,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
       },
       "security": [
         {
-          "refresh-cookie": [],
+          "seller-refresh-cookie": [],
         },
       ],
       "summary": "판매자 로그아웃",
@@ -549,7 +549,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
       },
       "security": [
         {
-          "refresh-cookie": [],
+          "seller-refresh-cookie": [],
         },
       ],
       "summary": "판매자 Access/Refresh 재발급",
