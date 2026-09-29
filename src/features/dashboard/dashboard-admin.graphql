@@ -55,8 +55,9 @@ type AdminDashboardSummary {
   orderCounts: AdminOrderStatusCounts!
   """
   기간 내 생성된 주문의 최종 결제 금액 합(원). 취소 주문은 제외.
+  Int(32비트)를 넘을 수 있어 Float로 내리지만 값은 항상 정수다.
   """
-  orderAmountSum: Int!
+  orderAmountSum: Float!
   """
   현재 노출 중인 매장 수(기간 무관).
   """
