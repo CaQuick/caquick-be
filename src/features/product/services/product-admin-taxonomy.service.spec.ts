@@ -347,4 +347,94 @@ describe('AdminTaxonomyService (real DB)', () => {
       spy.mockRestore();
     });
   });
+
+  describe('이름 unique 충돌', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    const deleted = new Date('2026-01-01T00:00:00Z');
+    // 사전 조회를 지나친 동시 요청을 재현한다
+    const skipPrecheck = (
+      method: 'existsActiveCategoryName' | 'existsActiveTagName',
+    ) => jest.spyOn(service['repo'], method).mockResolvedValueOnce(false);
+
+    it.each([
+      {
+        title: '카테고리를 삭제된 카테고리 이름으로 바꾸면',
+        code: 'CATEGORY_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createCategory(prisma, { name: '점유', deleted_at: deleted });
+          const mine = await createCategory(prisma, { name: '내것' });
+          return service.adminUpdateCategory(actor, {
+            categoryId: mine.id.toString(),
+            name: '점유',
+          });
+        },
+      },
+      {
+        title: '카테고리 수정이 경쟁으로 활성 이름과 겹치면',
+        code: 'CATEGORY_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createCategory(prisma, { name: '점유' });
+          const mine = await createCategory(prisma, { name: '내것' });
+          skipPrecheck('existsActiveCategoryName');
+          return service.adminUpdateCategory(actor, {
+            categoryId: mine.id.toString(),
+            name: '점유',
+          });
+        },
+      },
+      {
+        title: '카테고리 생성이 경쟁으로 활성 이름과 겹치면',
+        code: 'CATEGORY_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createCategory(prisma, { name: '점유' });
+          skipPrecheck('existsActiveCategoryName');
+          return service.adminCreateCategory(actor, {
+            categoryType: 'EVENT',
+            name: '점유',
+          });
+        },
+      },
+      {
+        title: '태그를 삭제된 태그 이름으로 바꾸면',
+        code: 'TAG_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createTag(prisma, { name: '점유', deleted_at: deleted });
+          const mine = await createTag(prisma, { name: '내것' });
+          return service.adminUpdateTag(actor, {
+            tagId: mine.id.toString(),
+            name: '점유',
+          });
+        },
+      },
+      {
+        title: '태그 수정이 경쟁으로 활성 이름과 겹치면',
+        code: 'TAG_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createTag(prisma, { name: '점유' });
+          const mine = await createTag(prisma, { name: '내것' });
+          skipPrecheck('existsActiveTagName');
+          return service.adminUpdateTag(actor, {
+            tagId: mine.id.toString(),
+            name: '점유',
+          });
+        },
+      },
+      {
+        title: '태그 생성이 경쟁으로 활성 이름과 겹치면',
+        code: 'TAG_NAME_TAKEN',
+        run: async (actor: bigint) => {
+          await createTag(prisma, { name: '점유' });
+          skipPrecheck('existsActiveTagName');
+          return service.adminCreateTag(actor, { name: '점유' });
+        },
+      },
+    ])(
+      '$title $code로 거절하고 감사를 남기지 않는다',
+      async ({ code, run }) => {
+        await expect(run(await admin())).rejects.toThrowDomain(code);
+        expect(await prisma.auditLog.count()).toBe(0);
+      },
+    );
+  });
 });
