@@ -22,6 +22,11 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '입력값이 올바르지 않습니다.',
   },
+  GEOCODE_UNAVAILABLE: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message:
+      '주소 좌표 변환 서비스를 사용할 수 없습니다. 좌표를 직접 입력해 주세요.',
+  },
   ROUTE_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '요청한 경로를 찾을 수 없습니다.',

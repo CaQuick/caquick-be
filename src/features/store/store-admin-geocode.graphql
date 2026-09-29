@@ -1,0 +1,55 @@
+extend type Query {
+  """
+  주소 문자열을 좌표·행정구역으로 변환한다(카카오 로컬 주소 검색의 첫 결과). 매장 등록·수정과 지역 중심 좌표 입력을 돕는다. 결과가 없으면 null.
+  카카오가 거절·지연(3초)하거나 서버에 키가 없으면 GEOCODE_UNAVAILABLE — 좌표를 직접 입력받는다.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminGeocodeAddress(
+    """
+    검색할 주소(도로명·지번·지역명). 앞뒤 공백을 뺀 1~200자(코드 포인트 기준). 비면 TEXT_REQUIRED, 넘으면 TEXT_TOO_LONG.
+    """
+    query: String!
+  ): AdminGeocodeResult
+}
+
+"""
+주소 좌표 변환 결과.
+"""
+type AdminGeocodeResult {
+  """
+  위도. 매장 좌표 저장 정밀도에 맞춰 소수 7자리로 반올림한다.
+  """
+  latitude: Float!
+  """
+  경도. 매장 좌표 저장 정밀도에 맞춰 소수 7자리로 반올림한다.
+  """
+  longitude: Float!
+  """
+  도로명 주소. 지역명·지번만으로 찾아 도로명이 없으면 null.
+  """
+  roadAddress: String
+  """
+  지번 주소. 없으면 null.
+  """
+  jibunAddress: String
+  """
+  시·도 이름(예: 서울). 없으면 null.
+  """
+  sido: String
+  """
+  시·군·구 이름(예: 강남구, 수원시 영통구). 없으면 null.
+  """
+  sigungu: String
+  """
+  법정동·리 이름(예: 역삼동). 없으면 null.
+  """
+  bname: String
+  """
+  시군구 코드 5자리(법정동 코드 앞 5자리). 지역 slug 'sgg-<코드>'와 같은 체계다. 없으면 null.
+  """
+  sigunguCode: String
+  """
+  sigunguCode에 해당하는 활성 2단계 지역 ID. 매장 regionId에 그대로 쓸 수 있다. 등록된 지역이 없거나 비활성이면 null.
+  """
+  regionId: ID
+}

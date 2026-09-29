@@ -27,6 +27,7 @@ import appConfig, {
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
+import kakaoLocalConfig from '@/config/kakao-local.config';
 import metricsConfig from '@/config/metrics.config';
 import oidcConfig from '@/config/oidc.config';
 import outboxConfig from '@/config/outbox.config';
@@ -123,6 +124,7 @@ export class AppModule implements NestModule {
             authConfig,
             databaseConfig,
             docsConfig,
+            kakaoLocalConfig,
             metricsConfig,
             oidcConfig,
             outboxConfig,
