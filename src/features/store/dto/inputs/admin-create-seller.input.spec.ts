@@ -51,8 +51,25 @@ describe('AdminCreateSellerInput', () => {
   });
 
   it.each([
+    ['숫자만', '12345678'],
+    ['아이디와 같은 값', 'testadmin'],
+    ['같은 문자 반복', 'aaaaaaaa'],
+    ['특수문자 누락', 'weakpass1'],
+  ])('초기 password는 조합 규칙 없이 허용: %s', async (_label, password) => {
+    expect(await validate(build({ ...valid, password }))).toHaveLength(0);
+  });
+
+  it.each([
+    ['7자', 'abcdefg'],
+    ['65자', 'a'.repeat(65)],
+    ['비문자열', 12345678],
+  ])('password %s 거절', async (_label, password) => {
+    const errors = await validate(build({ ...valid, password }));
+    expect(errors.map((e) => e.property)).toEqual(['password']);
+  });
+
+  it.each([
     ['username 대문자', { username: 'Shop' }],
-    ['password 약함', { password: 'weakpass' }],
     ['email 형식', { email: 'nope' }],
     ['businessName 누락', { businessName: undefined }],
   ])('%s 거절', async (_label, overrides) => {

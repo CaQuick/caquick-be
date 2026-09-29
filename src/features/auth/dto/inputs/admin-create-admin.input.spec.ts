@@ -32,10 +32,20 @@ describe('AdminCreateAdminInput', () => {
   });
 
   it.each([
-    ['길이 8 미만', 'S!p1'],
+    ['숫자만', '12345678'],
+    ['아이디와 같은 값', 'testadmin'],
+    ['같은 문자 반복', 'aaaaaaaa'],
     ['특수문자 누락', 'NoSpecial1'],
     ['알파벳 누락', '12345678!!'],
     ['숫자 누락', 'NoDigits!!'],
+  ])('초기 password는 조합 규칙 없이 허용: %s', async (_label, password) => {
+    expect(await validate(build({ ...valid, password }))).toHaveLength(0);
+  });
+
+  it.each([
+    ['7자', 'abcdefg'],
+    ['65자', 'a'.repeat(65)],
+    ['비문자열', 12345678],
   ])('password %s 거절', async (_label, password) => {
     const errors = await validate(build({ ...valid, password }));
     expect(errors.map((e) => e.property)).toEqual(['password']);

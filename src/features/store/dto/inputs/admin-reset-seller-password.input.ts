@@ -1,11 +1,11 @@
 import { IsString } from 'class-validator';
 
-import { IsStrongPassword } from '@/common/validators/strong-password.validator';
+import { IsInitialPassword } from '@/common/validators/initial-password.validator';
 
 export class AdminResetSellerPasswordInput {
   @IsString()
   accountId!: string;
 
-  @IsStrongPassword()
+  @IsInitialPassword()
   newPassword!: string;
 }

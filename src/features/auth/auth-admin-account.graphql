@@ -83,7 +83,7 @@ input AdminCreateAdminInput {
   """
   username: String!
   """
-  초기 비밀번호. 8~64자에 알파벳·숫자·특수문자를 각각 1개 이상 포함해야 한다. 최초 로그인 시 변경이 강제된다.
+  초기 비밀번호. 8~64자. 최초 로그인 시 변경이 강제되므로 조합 규칙은 없다.
   """
   password: String!
   """

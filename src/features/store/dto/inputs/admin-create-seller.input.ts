@@ -10,7 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { IsStrongPassword } from '@/common/validators/strong-password.validator';
+import { IsInitialPassword } from '@/common/validators/initial-password.validator';
 import {
   MAX_ACCOUNT_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
@@ -26,7 +26,7 @@ export class AdminCreateSellerInput {
   @Matches(USERNAME_PATTERN)
   username!: string;
 
-  @IsStrongPassword()
+  @IsInitialPassword()
   password!: string;
 
   @IsOptional()
