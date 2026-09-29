@@ -122,6 +122,13 @@ describe('AdminBannerService (real DB)', () => {
       });
       expect(active.totalCount).toBe(1);
       expect(active.items[0].isActive).toBe(true);
+
+      // GraphQL nullable 인자에 명시적 null이 오면 필터 없음과 같다
+      const nullActive = await service.adminBanners(await admin(), {
+        placement: 'HOME_MAIN',
+        isActive: null,
+      });
+      expect(nullActive.totalCount).toBe(2);
     });
 
     it('limit+1 조회로 hasMore·nextCursor를 판정한다', async () => {

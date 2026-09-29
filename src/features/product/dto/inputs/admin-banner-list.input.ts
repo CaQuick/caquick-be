@@ -13,5 +13,5 @@ export class AdminBannerListInput extends CursorInput {
 
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  isActive?: boolean | null;
 }

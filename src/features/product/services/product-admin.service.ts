@@ -52,7 +52,7 @@ export class AdminProductService extends AdminBaseService {
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
       storeId: parseOptionalId(input?.storeId) ?? undefined,
-      isActive: input?.isActive,
+      isActive: input?.isActive ?? undefined,
     };
 
     const [rows, totalCount] = await Promise.all([
