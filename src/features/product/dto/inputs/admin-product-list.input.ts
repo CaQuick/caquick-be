@@ -15,5 +15,5 @@ export class AdminProductListInput extends CursorInput {
 
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  isActive?: boolean | null;
 }

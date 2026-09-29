@@ -78,7 +78,7 @@ export class AdminBannerService extends AdminBaseService {
     });
     const filter = {
       placement: input?.placement,
-      isActive: input?.isActive,
+      isActive: input?.isActive ?? undefined,
     };
 
     const [rows, totalCount] = await Promise.all([

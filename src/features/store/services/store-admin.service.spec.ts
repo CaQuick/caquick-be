@@ -81,6 +81,12 @@ describe('AdminStoreService (real DB)', () => {
       });
       expect(active.totalCount).toBe(1);
 
+      // GraphQL nullable 인자에 명시적 null이 오면 필터 없음과 같다
+      const nullActive = await service.adminStores(await admin(), {
+        isActive: null,
+      });
+      expect(nullActive.totalCount).toBe(2);
+
       const byRegion = await service.adminStores(await admin(), {
         regionId: region.id.toString(),
       });
