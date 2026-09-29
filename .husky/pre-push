@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
-# Push 전 로컬 검증.
-# - lint / type-check / dto:check / test:cov(커버리지 임계 포함) 일괄 실행
-# - 통과해야 push 진행. 긴급 시 `git push --no-verify` 로 우회 가능
-# - Docker(testcontainers) 가 동작 중이어야 한다
-yarn validate
+# Push 전 로컬 검증(yarn validate:push).
+# - lint / tsc / dto:check / docs:check / arch:check / test:scripts는 전부 돈다.
+#   CI의 dto:check는 경고만이라 여기가 하드 게이트다 — --no-verify로 우회하지 않는다.
+# - jest는 변경에 닿는 spec만(scripts/pre-push-test-plan.ts). SDL·prisma·테스트 인프라·의존성처럼
+#   import 그래프 밖 변경이면 전체. 전체 회귀·커버리지 임계는 CI check가 필수 체크로 돌린다.
+# - Docker(testcontainers)가 동작 중이어야 한다
+yarn validate:push
