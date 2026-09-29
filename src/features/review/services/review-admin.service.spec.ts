@@ -576,6 +576,58 @@ describe('AdminModerationService (real DB)', () => {
       ).toBe(0);
     });
 
+    type Key = 'a' | 'b' | 'gone';
+    it.each<
+      [
+        string,
+        {
+          reviewId: Key | '0' | null;
+          includeDeleted?: boolean;
+          cursor?: Key;
+        },
+        Key[],
+        number,
+      ]
+    >([
+      ['reviewId로 1건', { reviewId: 'a' }, ['a'], 1],
+      ['"0"은 유효 ID라 0건', { reviewId: '0' }, [], 0],
+      ['null은 미지정과 같아 전체', { reviewId: null }, ['b', 'a'], 2],
+      ['삭제 리뷰는 기본 0건', { reviewId: 'gone' }, [], 0],
+      [
+        '삭제 리뷰는 includeDeleted면 1건',
+        { reviewId: 'gone', includeDeleted: true },
+        ['gone'],
+        1,
+      ],
+      ['커서보다 앞선 리뷰면 1건', { reviewId: 'a', cursor: 'b' }, ['a'], 1],
+      ['커서 이후에 없으면 0건', { reviewId: 'a', cursor: 'a' }, [], 1],
+    ])(
+      'reviewId 필터: %s',
+      async (_, { reviewId, includeDeleted, cursor }, expected, total) => {
+        const ids: Record<Key, bigint> = {
+          a: (await createReview(prisma)).id,
+          b: (await createReview(prisma)).id,
+          gone: (await createReview(prisma)).id,
+        };
+        await prisma.review.update({
+          where: { id: ids.gone },
+          data: { deleted_at: new Date() },
+        });
+        const toId = (k: Key | '0' | null) =>
+          k === null || k === '0' ? k : ids[k].toString();
+
+        const result = await service.adminReviews(await admin(), {
+          reviewId: toId(reviewId),
+          includeDeleted,
+          cursor: cursor && toId(cursor)!,
+        });
+        expect(result.items.map((r) => r.id)).toEqual(
+          expected.map((k) => ids[k].toString()),
+        );
+        expect(result.totalCount).toBe(total);
+      },
+    );
+
     it('댓글 목록: reviewId 필터·includeDeleted·페이지', async () => {
       const review = await createReview(prisma);
       const c1 = await commentOn(review.id);
