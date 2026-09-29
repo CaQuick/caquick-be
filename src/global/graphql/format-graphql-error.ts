@@ -16,6 +16,12 @@ const CLIENT_ERROR_CODES = new Set<unknown>([
   ApolloServerErrorCode.OPERATION_RESOLUTION_FAILURE,
 ]);
 
+// APQ 프로토콜 신호 — 클라이언트가 전체 쿼리 재전송·APQ 끄기로 복구하는 데 쓰므로 코드를 바꾸면 안 된다
+const PROTOCOL_CODES = new Set<unknown>([
+  ApolloServerErrorCode.PERSISTED_QUERY_NOT_FOUND,
+  ApolloServerErrorCode.PERSISTED_QUERY_NOT_SUPPORTED,
+]);
+
 /**
  * Nest 필터를 거치지 않는 Apollo 자체 오류를 필터 응답과 같은 모양(code·classification·statusCode)으로 맞춘다.
  * 필터가 만든 오류는 classification이 있어 그대로 둔다. 원문은 영문·스키마 구조라 로그에만 남긴다.
@@ -25,6 +31,7 @@ export function formatGraphqlError(
   error: unknown,
 ): GraphQLFormattedError {
   if (formatted.extensions?.classification) return formatted;
+  if (PROTOCOL_CODES.has(formatted.extensions?.code)) return formatted;
 
   const original = `${String(formatted.extensions?.code)}: ${formatted.message}`;
   const code = CLIENT_ERROR_CODES.has(formatted.extensions?.code)

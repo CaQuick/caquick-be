@@ -72,10 +72,23 @@ describe('formatGraphqlError', () => {
     },
   );
 
+  it.each(['PERSISTED_QUERY_NOT_FOUND', 'PERSISTED_QUERY_NOT_SUPPORTED'])(
+    'APQ 프로토콜 신호(%s)는 클라이언트 복구에 쓰이므로 그대로 둔다',
+    (apolloCode) => {
+      const formatted = {
+        message: 'PersistedQueryNotFound',
+        extensions: { code: apolloCode },
+      };
+
+      expect(formatGraphqlError(formatted, new Error('x'))).toBe(formatted);
+      expect(error).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     ['code 없음', undefined],
     ['Apollo 기본값', 'INTERNAL_SERVER_ERROR'],
-    ['APQ 신호', 'PERSISTED_QUERY_NOT_FOUND'],
     ['알 수 없는 코드', 'SOMETHING_ELSE'],
   ])(
     '%s(%p)는 INTERNAL_ERROR(500)로 바꾸고 원문·stack은 error 로그로 남긴다',
