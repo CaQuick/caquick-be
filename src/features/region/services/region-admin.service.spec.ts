@@ -300,6 +300,47 @@ describe('AdminRegionService (real DB)', () => {
     });
   });
 
+  describe('adminCreateRegion 삭제 slug 복구의 level 불변', () => {
+    it.each([
+      { deleted: 1, input: 1, restored: true },
+      { deleted: 2, input: 2, restored: true },
+      { deleted: 1, input: 2, restored: false },
+      { deleted: 2, input: 1, restored: false },
+    ])(
+      '삭제된 $deleted차 slug로 $input차를 만들면 복구 여부는 $restored',
+      async ({ deleted, input, restored }) => {
+        const group = await createRegion(prisma, { level: 1 });
+        const gone = await createRegion(prisma, {
+          level: deleted,
+          parent_id: deleted === 2 ? group.id : null,
+          slug: 'gone',
+        });
+        await prisma.region.update({
+          where: { id: gone.id },
+          data: { deleted_at: new Date() },
+        });
+
+        const create = service.adminCreateRegion(await admin(), {
+          parentId: input === 2 ? group.id.toString() : undefined,
+          name: '재사용',
+          slug: 'gone',
+        });
+        if (restored) {
+          const row = await create;
+          expect(row.id).toBe(gone.id.toString());
+          expect(row.level).toBe(input);
+        } else {
+          await expect(create).rejects.toThrowDomain('REGION_SLUG_TAKEN');
+          const row = await prisma.region.findFirstOrThrow({
+            where: { id: gone.id, deleted_at: undefined },
+          });
+          expect(row.deleted_at).not.toBeNull();
+          expect(row.level).toBe(deleted);
+        }
+      },
+    );
+  });
+
   describe('adminCreateRegion 상위 확인', () => {
     it('비활성·삭제된 1차를 상위로 주면 400', async () => {
       const inactive = await createRegion(prisma, {
@@ -349,6 +390,44 @@ describe('AdminRegionService (real DB)', () => {
         expect(region.deleted_at).toBeNull();
         expect(row.region_id).toBe(child.id);
       }
+    });
+
+    it('비활성 하위만 있어도 1차 삭제는 400, 하위를 지우면 삭제된다', async () => {
+      const group = await createRegion(prisma, { level: 1 });
+      const child = await createRegion(prisma, {
+        level: 2,
+        parent_id: group.id,
+        is_active: false,
+      });
+
+      await expect(
+        service.adminDeleteRegion(await admin(), group.id),
+      ).rejects.toThrowDomain('REGION_HAS_CHILDREN');
+      expect(
+        (await prisma.region.findFirstOrThrow({ where: { id: group.id } }))
+          .deleted_at,
+      ).toBeNull();
+
+      await service.adminDeleteRegion(await admin(), child.id);
+      expect(await service.adminDeleteRegion(await admin(), group.id)).toBe(
+        true,
+      );
+    });
+
+    it('비활성 하위만 있는 1차는 비활성화할 수 있다', async () => {
+      const group = await createRegion(prisma, { level: 1 });
+      await createRegion(prisma, {
+        level: 2,
+        parent_id: group.id,
+        is_active: false,
+      });
+
+      const row = await service.adminUpdateRegion(await admin(), {
+        regionId: group.id.toString(),
+        isActive: false,
+      });
+      expect(row.isActive).toBe(false);
+      expect(row.childCount).toBe(0);
     });
 
     it('연결 매장이 있는 2차·활성 하위가 있는 1차는 400, 없으면 soft-delete + 감사', async () => {

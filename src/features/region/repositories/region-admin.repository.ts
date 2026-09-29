@@ -94,7 +94,7 @@ export class RegionAdminRepository {
   }
 
   /**
-   * 삭제된 같은 slug가 있으면 복구(unique 인덱스), 없으면 생성. 감사와 한 트랜잭션.
+   * 삭제된 같은 slug가 있으면 복구(unique 인덱스), 없으면 생성. 감사와 한 트랜잭션. level이 다르면 복구하지 않는다.
    * 상위는 같은 트랜잭션에서 잠가 확인한다(상위 삭제·비활성화와 교차 방지). 활성 slug 충돌은 P2002로 잡는다.
    */
   async createOrRestoreRegion(
@@ -120,8 +120,10 @@ export class RegionAdminRepository {
         }
         const deleted = await tx.region.findFirst({
           where: { slug: data.slug, deleted_at: { not: null } },
-          select: { id: true },
+          select: { id: true, level: true },
         });
+        // 다른 level로 되살리면 남은 하위·상위 관계가 뒤섞인다(level 불변)
+        if (deleted && deleted.level !== data.level) return 'slug-taken';
         const row = deleted
           ? await tx.region.update({
               where: { id: deleted.id },
@@ -202,7 +204,7 @@ export class RegionAdminRepository {
   }
 
   /**
-   * 잠금 뒤 트랜잭션 안에서 연결 매장(2차)·활성 하위(1차)를 세어 있으면 거절한다 —
+   * 잠금 뒤 트랜잭션 안에서 연결 매장(2차)·하위(1차, 비활성 포함)를 세어 있으면 거절한다 —
    * 미리 센 값은 그 사이 새 연결로 낡을 수 있다.
    */
   async softDeleteRegion(
@@ -216,7 +218,11 @@ export class RegionAdminRepository {
         include: regionInclude,
       });
       if (before._count.stores > 0) return 'has-stores';
-      if (before._count.children > 0) return 'has-children';
+      // 비활성 하위도 센다 — 부모만 지우면 하위가 화면에서 숨고 slug만 잡고 있다
+      const children = await tx.region.count({
+        where: { parent_id: regionId, ...activeWhere },
+      });
+      if (children > 0) return 'has-children';
       await tx.region.update({
         where: { id: regionId },
         data: { deleted_at: new Date() },
