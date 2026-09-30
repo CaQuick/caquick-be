@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { Change } from './pre-push-test-plan';
 import {
   isGateSpec,
   parseNameStatus,
   planTests,
+  pushedRefMismatch,
   RELATED_LIMIT,
   resolveBase,
 } from './pre-push-test-plan';
@@ -248,5 +252,41 @@ describe('isGateSpec', () => {
     ],
   ])('%s → %s', (path, source, expected) => {
     expect(isGateSpec(path, source)).toBe(expected);
+  });
+});
+
+describe('pushedRefMismatch', () => {
+  const HEAD = 'a'.repeat(40);
+  const OTHER = 'b'.repeat(40);
+  const ZERO = '0'.repeat(40);
+  it.each([
+    ['stdin 없음(직접 실행)', '', null],
+    ['HEAD를 push', `refs/heads/x ${HEAD} refs/heads/x ${OTHER}`, null],
+    ['브랜치 삭제는 무시', `(delete) ${ZERO} refs/heads/x ${OTHER}`, null],
+    [
+      '다른 ref를 push',
+      `refs/heads/feature-x ${OTHER} refs/heads/feature-x ${ZERO}`,
+      'push 대상 refs/heads/feature-x가 HEAD가 아님',
+    ],
+    [
+      '여러 ref 중 하나라도 HEAD가 아니면',
+      `refs/heads/x ${HEAD} refs/heads/x ${OTHER}\nrefs/heads/y ${OTHER} refs/heads/y ${ZERO}`,
+      'push 대상 refs/heads/y가 HEAD가 아님',
+    ],
+  ])('%s', (_label, refs, expected) => {
+    expect(pushedRefMismatch(refs, HEAD)).toBe(expected);
+  });
+
+  it('pre-push 훅이 stdin을 PRE_PUSH_REFS로 넘긴다', () => {
+    const hook = readFileSync(
+      join(__dirname, '..', '.husky', 'pre-push'),
+      'utf8',
+    );
+    expect(hook).toMatch(/^PRE_PUSH_REFS=\$\(cat\)$/m);
+    expect(hook).toMatch(/^export PRE_PUSH_REFS$/m);
+    // 머리 주석에도 명령 이름이 나오므로 실행 줄(줄 시작)끼리 순서를 본다
+    expect(hook.search(/^export PRE_PUSH_REFS$/m)).toBeLessThan(
+      hook.search(/^yarn validate:push$/m),
+    );
   });
 });

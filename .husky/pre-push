@@ -5,4 +5,7 @@
 # - jest는 변경에 닿는 spec만(scripts/pre-push-test-plan.ts). SDL·prisma·테스트 인프라·의존성처럼
 #   import 그래프 밖 변경이면 전체. 전체 회귀·커버리지 임계는 CI check가 필수 체크로 돌린다.
 # - Docker(testcontainers)가 동작 중이어야 한다
+# - git이 stdin으로 넘기는 push 대상을 판정에 넘긴다 — HEAD가 아닌 ref를 push하면 전체로 돌린다
+PRE_PUSH_REFS=$(cat)
+export PRE_PUSH_REFS
 yarn validate:push

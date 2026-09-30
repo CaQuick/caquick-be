@@ -168,8 +168,32 @@ function gitRunner(args: string[]): string {
   });
 }
 
+const DELETED_SHA = /^0+$/;
+
+/**
+ * pre-push stdin(`<local ref> <local sha> <remote ref> <remote sha>` 줄들) 중 HEAD가 아닌 커밋을 push하면
+ * 작업 트리 기준 판정이 push 내용과 어긋난다(예: `git push origin feature-x`) — 그럴 땐 전체로.
+ */
+export function pushedRefMismatch(
+  refs: string,
+  headSha: string,
+): string | null {
+  for (const line of refs.split('\n')) {
+    const [localRef, localSha] = line.trim().split(/\s+/);
+    if (!localSha || DELETED_SHA.test(localSha)) continue;
+    if (localSha !== headSha) return `push 대상 ${localRef}가 HEAD가 아님`;
+  }
+  return null;
+}
+
 /** 작업 트리 기준 diff — jest가 도는 것도 디스크의 파일이라 커밋 안 된 변경까지 같이 본다. */
 function computePlan(): { plan: TestPlan; base: string | null } {
+  const mismatch = pushedRefMismatch(
+    process.env.PRE_PUSH_REFS ?? '',
+    gitRunner(['rev-parse', 'HEAD']).trim(),
+  );
+  if (mismatch)
+    return { base: null, plan: { mode: 'full', reasons: [mismatch] } };
   const override = process.env.PRE_PUSH_BASE || undefined;
   const base = resolveBase(gitRunner, override);
   if (base === null) {
