@@ -96,6 +96,19 @@ describe('AdminProductService (real DB)', () => {
       expect(nullActive.totalCount).toBe(3);
     });
 
+    it('항목마다 소속 매장 노출 여부를 준다', async () => {
+      const shown = await createStore(prisma);
+      const hidden = await createStore(prisma, { is_active: false });
+      const a = await createProduct(prisma, { store_id: shown.id });
+      const b = await createProduct(prisma, { store_id: hidden.id });
+
+      const { items } = await service.adminProducts(await admin());
+
+      expect(
+        Object.fromEntries(items.map((p) => [p.id, p.storeIsActive])),
+      ).toEqual({ [a.id.toString()]: true, [b.id.toString()]: false });
+    });
+
     it('limit+1 조회로 hasMore·nextCursor를 판정하고 삭제 상품은 제외한다', async () => {
       const store = await createStore(prisma);
       const ids = [

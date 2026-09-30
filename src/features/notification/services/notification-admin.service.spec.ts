@@ -613,4 +613,101 @@ describe('AdminNotificationService (real DB)', () => {
       expect(item).toMatchObject({ status: 'IN_PROGRESS', deliveredCount: 2 });
     });
   });
+
+  describe('발송 이력 단건', () => {
+    const input = {
+      ...base,
+      targetKind: 'ACCOUNT_IDS' as const,
+    };
+
+    it('ID로 이력 1건을 목록과 같은 값으로 주고 목록 페이지 밖의 이력도 찾는다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const oldest = await service.adminSendNotification(actor, {
+        ...input,
+        idempotencyKey: 'detail-key-0',
+        accountIds: [user.id.toString()],
+      });
+      await drainOutbox(dispatcher);
+      await service.adminSendNotification(actor, {
+        ...input,
+        idempotencyKey: 'detail-key-1',
+        accountIds: [user.id.toString()],
+      });
+
+      const firstPage = await service.adminNotificationBroadcasts(actor, {
+        limit: 1,
+      });
+      expect(firstPage.items.map((i) => i.id)).not.toContain(
+        oldest.broadcastId,
+      );
+
+      const detail = await service.adminNotificationBroadcast(
+        actor,
+        BigInt(oldest.broadcastId),
+      );
+      const {
+        items: [listed],
+      } = await service.adminNotificationBroadcasts(actor, {
+        limit: 1,
+        cursor: firstPage.nextCursor!,
+      });
+      expect(detail).toEqual(listed);
+      expect(detail).toMatchObject({
+        id: oldest.broadcastId,
+        status: 'COMPLETED',
+        deliveredCount: 1,
+        targetAccountIds: [user.id.toString()],
+      });
+    });
+
+    it('미완료 이력의 저장 수는 조회 때 알림을 세어 채운다', async () => {
+      const actor = await admin();
+      const users = await Promise.all([
+        createAccount(prisma, { account_type: 'USER' }),
+        createAccount(prisma, { account_type: 'USER' }),
+      ]);
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: users.map((u) => u.id.toString()),
+      });
+      await drainOutbox(dispatcher);
+      await prisma.notificationBroadcast.updateMany({
+        data: { completed_at: null, delivered_count: null },
+      });
+
+      expect(
+        await service.adminNotificationBroadcast(actor, BigInt(broadcastId)),
+      ).toMatchObject({ status: 'IN_PROGRESS', deliveredCount: 2 });
+    });
+
+    it('없는 ID면 다른 이력이 있어도 null이다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+
+      expect(
+        await service.adminNotificationBroadcast(
+          actor,
+          BigInt(broadcastId) + 1n,
+        ),
+      ).toBeNull();
+    });
+
+    it('관리자가 아니면 거절한다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+
+      await expect(
+        service.adminNotificationBroadcast(user.id, BigInt(broadcastId)),
+      ).rejects.toThrowDomain('ADMIN_ONLY');
+    });
+  });
 });
