@@ -55,11 +55,12 @@ jobs:
       - name: Script unit tests
         run: yarn test:scripts
 
-      # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 validate(pre-push)뿐 아니라
+      # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 pre-push(validate:push)뿐 아니라
       # 보호된 check status에서도 강제해야 --no-verify/Husky 미설치 환경의 우회를 막는다.
       - name: Architecture check (dependency-cruiser)
         run: yarn arch:check
 
+      # 전체 회귀·커버리지 임계는 여기서만 — 로컬 pre-push는 변경에 닿는 spec만 돌린다.
       - name: Test with coverage
         run: yarn test:cov
 
