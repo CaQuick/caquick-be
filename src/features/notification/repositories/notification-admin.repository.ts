@@ -155,6 +155,10 @@ export class NotificationAdminRepository {
     });
   }
 
+  async findBroadcastById(id: bigint): Promise<NotificationBroadcast | null> {
+    return this.prisma.notificationBroadcast.findUnique({ where: { id } });
+  }
+
   async countBroadcasts(filter: NotificationBroadcastFilter): Promise<number> {
     return this.prisma.notificationBroadcast.count({
       where: broadcastWhere(filter),

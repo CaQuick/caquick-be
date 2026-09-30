@@ -157,6 +157,24 @@ export class AdminNotificationService extends AdminBaseService {
     );
   }
 
+  /** 공유 링크용 단건 조회. 상태·저장 수 계산은 목록과 같다. */
+  async adminNotificationBroadcast(
+    accountId: bigint,
+    broadcastId: bigint,
+  ): Promise<AdminNotificationBroadcastOutput | null> {
+    await this.requireAdminContext(accountId);
+    const row = await this.repo.findBroadcastById(broadcastId);
+    if (!row) return null;
+    const liveDelivered = await this.repo.countDeliveredByEventIds(
+      needsLiveDeliveredCount(row) ? [row.event_id] : [],
+    );
+    return toAdminNotificationBroadcastOutput(
+      row,
+      liveDelivered,
+      this.clock.now(),
+    );
+  }
+
   /** 발송 시점 발송자 표시 라벨 스냅샷 — 삭제된 자격증명의 아이디는 쓰지 않는다. */
   private async actorLabel(accountId: bigint): Promise<string | null> {
     const actor = await this.accounts.findAdminAccountById(accountId);

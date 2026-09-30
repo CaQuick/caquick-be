@@ -16,6 +16,7 @@ export function toAdminProductOutput(row: AdminProductRow): AdminProductOutput {
     id: row.id.toString(),
     storeId: row.store_id.toString(),
     storeName: row.store.store_name,
+    storeIsActive: row.store.is_active,
     name: row.name,
     regularPrice: row.regular_price,
     salePrice: row.sale_price,

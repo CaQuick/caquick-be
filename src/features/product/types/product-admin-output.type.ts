@@ -30,6 +30,7 @@ export interface AdminProductOutput {
   id: string;
   storeId: string;
   storeName: string;
+  storeIsActive: boolean;
   name: string;
   regularPrice: number;
   salePrice: number | null;

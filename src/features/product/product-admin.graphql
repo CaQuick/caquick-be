@@ -31,6 +31,10 @@ type AdminProduct {
   """
   storeName: String!
   """
+  소속 매장 노출 여부. 매장이 내려가 있으면 상품도 구매자에게 보이지 않는다.
+  """
+  storeIsActive: Boolean!
+  """
   상품명.
   """
   name: String!

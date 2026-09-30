@@ -6,6 +6,10 @@ extend type Query {
   adminNotificationBroadcasts(
     input: AdminNotificationBroadcastListInput
   ): AdminNotificationBroadcastConnection!
+  """
+  알림 발송 이력 1건. 없으면 null. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminNotificationBroadcast(broadcastId: ID!): AdminNotificationBroadcast
 }
 
 extend type Mutation {

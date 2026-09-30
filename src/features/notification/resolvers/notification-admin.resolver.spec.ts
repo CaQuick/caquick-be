@@ -91,5 +91,11 @@ describe('Admin Notification Resolver (real DB)', () => {
       deliveredCount: 1,
       targetAccountIds: [target.id.toString()],
     });
+
+    const detail = await queryResolver.adminNotificationBroadcast(
+      { accountId: actor.id.toString(), accountType: 'ADMIN' },
+      result.broadcastId,
+    );
+    expect(detail).toEqual(history.items[0]);
   });
 });
