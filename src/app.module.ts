@@ -27,6 +27,7 @@ import appConfig, {
 import authConfig from '@/config/auth.config';
 import databaseConfig from '@/config/database.config';
 import docsConfig from '@/config/docs.config';
+import kakaoLocalConfig from '@/config/kakao-local.config';
 import metricsConfig from '@/config/metrics.config';
 import oidcConfig from '@/config/oidc.config';
 import outboxConfig from '@/config/outbox.config';
@@ -46,6 +47,7 @@ import { SystemModule } from '@/features/system/system.module';
 import { AlertingModule } from '@/global/alerting';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { BlacklistModule } from '@/global/auth/blacklist';
+import { formatGraphqlError } from '@/global/graphql/format-graphql-error';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
 import { LoggerModule } from '@/global/logger/logger.module';
@@ -97,6 +99,7 @@ function httpModules(): NonNullable<DynamicModule['imports']> {
               : ApolloServerPluginLandingPageLocalDefault({ embed: true }),
           ],
           context: buildGraphqlContext,
+          formatError: formatGraphqlError,
         } as Omit<ApolloDriverConfig, 'driver'>;
       },
     }),
@@ -121,6 +124,7 @@ export class AppModule implements NestModule {
             authConfig,
             databaseConfig,
             docsConfig,
+            kakaoLocalConfig,
             metricsConfig,
             oidcConfig,
             outboxConfig,

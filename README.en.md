@@ -317,9 +317,11 @@ Operational endpoints
 
 | Command                   | Purpose                                                                                                                                                                                |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `yarn validate`           | runs lint, tsc, dto:check, docs:check, arch:check, test:scripts, and test:cov in sequence (same as pre-push)                                                                           |
+| `yarn validate:push`      | run by the pre-push hook: lint, tsc, dto:check, docs:check, arch:check, and test:scripts in full, plus only the Jest specs the change reaches (`test:push`)                            |
+| `yarn validate`           | the static checks above plus the full test:cov (manual full check); on the production Mac mini, run heavy test commands one at a time                                                  |
 | `yarn test [path]`        | Jest integration tests against a real database (Docker required)                                                                                                                       |
 | `yarn test:scripts`       | infrastructure and workflow specs (`scripts/*.spec.ts`)                                                                                                                                |
+| `yarn test:push`          | picks the Jest scope (full, related specs, or none) from changes against the base commit (`origin/develop` merge-base); `--dry-run` prints the plan only                               |
 | `yarn graphql:codegen`    | generates TypeScript types from the SDL                                                                                                                                                |
 | `yarn dto:check`          | verifies SDL inputs and DTO classes are in sync                                                                                                                                        |
 | `yarn docs:check`         | verifies SDL description coverage                                                                                                                                                      |
@@ -369,7 +371,10 @@ yarn test                     # everything (Docker required)
 yarn test src/features/order  # a single domain
 yarn test:cov                 # coverage (thresholds: statements 96 / branches 86 / functions 92 / lines 96)
 yarn test:scripts             # infrastructure specs
+yarn test:push --dry-run      # the Jest scope pre-push would run
 ```
+
+The pre-push hook runs every static check but only the Jest specs the change reaches. Changes the import graph cannot track (SDL, prisma, test infrastructure, dependencies, global wiring) fall back to the full suite. Full regression and the coverage thresholds belong to the required CI `check`. The development machine doubles as the production Mac mini and the test containers share its VM with production, so full test runs (`yarn validate`, `yarn test:cov`) go one at a time. The reasoning is in [architecture conventions §9](./docs/guide/architecture-conventions.md) (Korean).
 
 When a checker or gate is added, the **refutation cases** (proving it actually blocks what it should) are the core of its tests. CI uses the same testcontainers setup, so there is little difference between local and CI environments.
 

@@ -171,10 +171,10 @@ describe('TokenService', () => {
       const reqNoCookie = { cookies: {} } as unknown as Request;
 
       await expect(
-        service.rotateRefresh(reqNoCookie, mockRes),
+        service.rotateRefresh('USER', reqNoCookie, mockRes),
       ).rejects.toThrowDomain(401);
       await expect(
-        service.rotateRefresh(reqNoCookie, mockRes),
+        service.rotateRefresh('USER', reqNoCookie, mockRes),
       ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
     });
 
@@ -186,7 +186,7 @@ describe('TokenService', () => {
       refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(null);
 
       await expect(
-        service.rotateRefresh(reqWithCookie, mockRes),
+        service.rotateRefresh('USER', reqWithCookie, mockRes),
       ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
     });
 
@@ -210,7 +210,11 @@ describe('TokenService', () => {
 
       refreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
 
-      const result = await service.rotateRefresh(reqWithCookie, mockRes);
+      const result = await service.rotateRefresh(
+        'USER',
+        reqWithCookie,
+        mockRes,
+      );
 
       expect(result.accountId).toBe(BigInt(10));
       expect(result.accessToken).toBe('signed-token');
@@ -227,7 +231,7 @@ describe('TokenService', () => {
   describe('clearRefreshCookie', () => {
     it('refresh 쿠키를 삭제한다', () => {
       config.get.mockReturnValue(undefined);
-      service.clearRefreshCookie(mockRes);
+      service.clearRefreshCookie('USER', mockRes);
       expect(mockRes.clearCookie).toHaveBeenCalledTimes(1);
     });
   });

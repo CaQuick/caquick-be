@@ -11,7 +11,6 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 
 /** 일반 유저용 refresh/logout/dev token. OIDC는 OidcLoginService, 판매자·관리자 자격증명은 CredentialAuthService가 담당한다. */
 @Injectable()
@@ -25,7 +24,7 @@ export class AuthService {
   ) {}
 
   async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
-    const { accessToken } = await this.tokens.rotateRefresh(req, res);
+    const { accessToken } = await this.tokens.rotateRefresh('USER', req, res);
     return { accessToken };
   }
 
@@ -52,16 +51,21 @@ export class AuthService {
   }
 
   async logout(req: Request, res: Response): Promise<void> {
-    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH] as
-      string | undefined;
+    const refreshToken = this.tokens.readRefreshCookie('USER', req);
 
     if (refreshToken) {
       const tokenHash = this.tokens.sha256Hex(refreshToken);
       const session =
         await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
-      if (session) await this.refreshSessions.revokeRefreshSession(session.id);
+      // 쿠키 분리 전 caquick_rt에 남은 판매자·관리자 세션은 폐기하지 않고 쿠키만 지운다
+      if (
+        session &&
+        (await this.tokens.hasSessionRole('USER', session.account_id))
+      ) {
+        await this.refreshSessions.revokeRefreshSession(session.id);
+      }
     }
 
-    this.tokens.clearRefreshCookie(res);
+    this.tokens.clearRefreshCookie('USER', res);
   }
 }

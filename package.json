@@ -12,7 +12,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -29,12 +29,15 @@
     "dto:check": "ts-node -r tsconfig-paths/register scripts/check-graphql-dto-sync.ts",
     "docs:check": "ts-node -r tsconfig-paths/register scripts/check-sdl-description-coverage.ts",
     "test:scripts": "jest --config jest.scripts.config.js",
+    "test:push": "ts-node scripts/pre-push-test-plan.ts",
     "arch:check": "depcruise --config .dependency-cruiser.cjs src",
     "knip": "knip --no-config-hints",
     "validate": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn docs:check && yarn arch:check && yarn test:scripts && yarn test:cov",
+    "validate:push": "yarn lint && npx tsc --noEmit && yarn dto:check && yarn docs:check && yarn arch:check && yarn test:scripts && yarn test:push",
     "postinstall": "prisma generate",
     "prepare": "husky",
-    "outbox:requeue": "ts-node -r tsconfig-paths/register scripts/outbox-requeue.ts"
+    "outbox:requeue": "ts-node -r tsconfig-paths/register scripts/outbox-requeue.ts",
+    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

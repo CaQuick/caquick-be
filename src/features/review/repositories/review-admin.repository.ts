@@ -365,9 +365,11 @@ export class ReviewAdminRepository {
     keyword?: string;
     storeId?: bigint;
     accountId?: bigint;
+    reviewId?: bigint;
     includeDeleted: boolean;
   }): Prisma.ReviewWhereInput {
     return {
+      ...(filter.reviewId !== undefined ? { id: filter.reviewId } : {}),
       ...(filter.keyword ? { content: { contains: filter.keyword } } : {}),
       ...(filter.storeId !== undefined ? { store_id: filter.storeId } : {}),
       ...(filter.accountId !== undefined
@@ -382,14 +384,16 @@ export class ReviewAdminRepository {
     keyword?: string;
     storeId?: bigint;
     accountId?: bigint;
+    reviewId?: bigint;
     includeDeleted: boolean;
     limit: number;
     cursor?: bigint;
   }): Promise<AdminReviewRow[]> {
     return this.prisma.review.findMany({
       where: {
-        ...(args.cursor ? { id: { lt: args.cursor } } : {}),
         ...this.reviewFilterWhere(args),
+        // 필터의 id(reviewId)와 키가 겹치므로 커서는 AND로 합친다
+        ...(args.cursor ? { AND: [{ id: { lt: args.cursor } }] } : {}),
       },
       include: adminReviewInclude,
       orderBy: { id: 'desc' },
@@ -401,6 +405,7 @@ export class ReviewAdminRepository {
     keyword?: string;
     storeId?: bigint;
     accountId?: bigint;
+    reviewId?: bigint;
     includeDeleted: boolean;
   }): Promise<number> {
     return this.prisma.review.count({ where: this.reviewFilterWhere(filter) });

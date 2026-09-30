@@ -9,7 +9,7 @@ extend type Mutation {
   """
   지역을 만든다. parentId가 없으면 1차(광역), 있으면 그 아래 2차(시군구)다 — parentId는 활성 1차 지역이어야
   하며 아니면 BAD_USER_INPUT. slug가 이미 쓰이고 있으면 BAD_USER_INPUT. 삭제된 같은 slug가 있으면 새로 만들지
-  않고 복구한다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  않고 복구하되, 삭제된 지역과 level이 다르면 BAD_USER_INPUT. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminCreateRegion(input: AdminCreateRegionInput!): AdminRegion!
   """
@@ -17,7 +17,7 @@ extend type Mutation {
   """
   adminUpdateRegion(input: AdminUpdateRegionInput!): AdminRegion!
   """
-  지역을 삭제(soft-delete)한다. 2차 지역에 매장이 연결돼 있거나 1차 지역에 활성 하위 지역이 있으면 BAD_USER_INPUT.
+  지역을 삭제(soft-delete)한다. 2차 지역에 매장이 연결돼 있거나 1차 지역에 하위 지역(비활성 포함)이 있으면 BAD_USER_INPUT.
   없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminDeleteRegion(regionId: ID!): Boolean!

@@ -118,6 +118,9 @@ export async function getTestPrismaClient(): Promise<PrismaClient> {
   // 컨테이너 root는 caching_sha2_password라 콜드 연결에 RSA 키 조회 허용이 필요하다
   const client = new PrismaClient({
     adapter: createMariaDbAdapter(dbUrl, { allowPublicKeyRetrieval: true }),
+    // 테스트 DB는 워커 여럿이 한 컨테이너를 나눠 쓴다 — 부하가 크면 기본 상한(대기 2초·실행 5초)을 넘겨
+    // 무관한 스펙이 'expired transaction'으로 간헐 실패한다. 트랜잭션 시간 제한을 검증하는 스펙은 없다.
+    transactionOptions: { maxWait: 10_000, timeout: 60_000 },
   }).$extends(softDeleteExtension);
 
   cachedClient = client as unknown as PrismaClient;

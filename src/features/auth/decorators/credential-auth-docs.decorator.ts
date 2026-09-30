@@ -24,6 +24,12 @@ const CREDENTIAL_LOGIN_RESPONSE_SCHEMA = {
 
 export type CredentialRoleLabel = '판매자' | '관리자';
 
+/** main.ts의 addCookieAuth 스킴 이름 — 역할마다 refresh 쿠키 이름이 다르다. */
+const REFRESH_COOKIE_SCHEME: Record<CredentialRoleLabel, string> = {
+  판매자: 'seller-refresh-cookie',
+  관리자: 'admin-refresh-cookie',
+};
+
 /**
  * 자격증명(username/password) REST 문서 데코레이터 4묶음.
  * 판매자·관리자 핸들러 8개가 같은 문서 모양을 쓰며, 라우트·가드·본문은 각 핸들러에 남는다.
@@ -52,7 +58,7 @@ export function ApiCredentialRefresh(
       summary: `${role} Access/Refresh 재발급`,
       description: `${role} refresh 쿠키를 사용해 access token을 재발급한다.`,
     }),
-    ApiCookieAuth('refresh-cookie'),
+    ApiCookieAuth(REFRESH_COOKIE_SCHEME[role]),
     ApiOkResponse({
       description: `${role} 재발급 결과`,
       schema: CREDENTIAL_LOGIN_RESPONSE_SCHEMA,
@@ -68,7 +74,7 @@ export function ApiCredentialLogout(
       summary: `${role} 로그아웃`,
       description: `${role} refresh 세션을 폐기하고 쿠키를 제거한다.`,
     }),
-    ApiCookieAuth('refresh-cookie'),
+    ApiCookieAuth(REFRESH_COOKIE_SCHEME[role]),
     ApiNoContentResponse({ description: `${role} 로그아웃 완료` }),
   );
 }

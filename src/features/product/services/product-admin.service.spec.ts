@@ -84,6 +84,12 @@ describe('AdminProductService (real DB)', () => {
       });
       expect(inactive.totalCount).toBe(1);
       expect(inactive.items[0].isActive).toBe(false);
+
+      // GraphQL nullable 인자에 명시적 null이 오면 필터 없음과 같다
+      const nullActive = await service.adminProducts(await admin(), {
+        isActive: null,
+      });
+      expect(nullActive.totalCount).toBe(3);
     });
 
     it('limit+1 조회로 hasMore·nextCursor를 판정하고 삭제 상품은 제외한다', async () => {

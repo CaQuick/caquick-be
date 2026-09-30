@@ -76,7 +76,7 @@ export class AdminStoreService extends AdminBaseService {
     });
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
-      isActive: input?.isActive,
+      isActive: input?.isActive ?? undefined,
       regionId: parseOptionalId(input?.regionId) ?? undefined,
     };
 

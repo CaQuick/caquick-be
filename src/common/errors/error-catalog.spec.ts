@@ -16,6 +16,7 @@ const ALLOWED_STATUS = new Set<number>([
   HttpStatus.NOT_FOUND,
   HttpStatus.CONFLICT,
   HttpStatus.INTERNAL_SERVER_ERROR,
+  HttpStatus.SERVICE_UNAVAILABLE,
 ]);
 
 // 함수형 메시지의 렌더 파라미터 — 새 파라미터 코드를 추가하면 여기도 추가한다(전수 렌더 검사).

@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import {
   AUDIT_LOG_REPOSITORY,
   type AuditEntry,
@@ -26,6 +28,30 @@ const categoryInclude = {
 const tagInclude = {
   _count: { select: { product_tags: { where: activeWhere } } },
 } as const;
+
+/**
+ * 삭제 행도 이름을 점유하고(unique 인덱스) 사전 조회를 지나친 동시 요청도 있어,
+ * 이름 unique 충돌을 서비스 사전 검사와 같은 도메인 예외로 좁힌다.
+ */
+function rethrowNameTaken(
+  constraint: string,
+  code: 'CATEGORY_NAME_TAKEN' | 'TAG_NAME_TAKEN',
+): (error: unknown) => never {
+  return (error) => {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      uniqueConstraintName(error) === constraint
+    ) {
+      throw new DomainException(code);
+    }
+    throw error;
+  };
+}
+const categoryNameTaken = rethrowNameTaken(
+  'uk_category_type_name',
+  'CATEGORY_NAME_TAKEN',
+);
+const tagNameTaken = rethrowNameTaken('tag_name_key', 'TAG_NAME_TAKEN');
 
 export type AdminProductRow = Prisma.ProductGetPayload<{
   include: typeof productInclude;
@@ -354,7 +380,9 @@ export class ProductAdminRepository {
             data: { ...data, deleted_at: null },
             include: categoryInclude,
           })
-        : await tx.category.create({ data, include: categoryInclude });
+        : await tx.category
+            .create({ data, include: categoryInclude })
+            .catch(categoryNameTaken);
       await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
@@ -372,11 +400,13 @@ export class ProductAdminRepository {
         where: { id: args.categoryId },
         include: categoryInclude,
       });
-      const after = await tx.category.update({
-        where: { id: args.categoryId },
-        data: args.data,
-        include: categoryInclude,
-      });
+      const after = await tx.category
+        .update({
+          where: { id: args.categoryId },
+          data: args.data,
+          include: categoryInclude,
+        })
+        .catch(categoryNameTaken);
       await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });
@@ -461,7 +491,9 @@ export class ProductAdminRepository {
             data: { deleted_at: null },
             include: tagInclude,
           })
-        : await tx.tag.create({ data: { name }, include: tagInclude });
+        : await tx.tag
+            .create({ data: { name }, include: tagInclude })
+            .catch(tagNameTaken);
       await this.auditLogs.recordAudit(tx, audit(row));
       return row;
     });
@@ -477,11 +509,13 @@ export class ProductAdminRepository {
         where: { id: args.tagId },
         include: tagInclude,
       });
-      const after = await tx.tag.update({
-        where: { id: args.tagId },
-        data: { name: args.name },
-        include: tagInclude,
-      });
+      const after = await tx.tag
+        .update({
+          where: { id: args.tagId },
+          data: { name: args.name },
+          include: tagInclude,
+        })
+        .catch(tagNameTaken);
       await this.auditLogs.recordAudit(tx, audit(before, after));
       return after;
     });

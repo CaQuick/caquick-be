@@ -1,13 +1,18 @@
 import type { CookieOptions, Response } from 'express';
 
 import { OIDC_TEMP_COOKIE_MAX_AGE_MS } from '@/features/auth/constants/auth.constants';
-import { AUTH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
+import {
+  AUTH_COOKIE,
+  REFRESH_COOKIE,
+} from '@/global/auth/constants/auth-cookie.constants';
+import type { AccountRole } from '@/global/auth/types/jwt-payload.type';
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
 
 export class AuthCookie {
   static setRefreshCookie(
     res: Response,
+    role: AccountRole,
     args: {
       refreshToken: string;
       refreshMaxAgeMs: number;
@@ -24,7 +29,7 @@ export class AuthCookie {
       domain: args.cookieDomain,
     };
 
-    res.cookie(AUTH_COOKIE.REFRESH, args.refreshToken, {
+    res.cookie(REFRESH_COOKIE[role], args.refreshToken, {
       ...base,
       maxAge: args.refreshMaxAgeMs,
     });
@@ -33,6 +38,7 @@ export class AuthCookie {
   /** secure는 세팅 때와 일치해야 브라우저가 지운다. */
   static clearRefreshCookie(
     res: Response,
+    role: AccountRole,
     cookieDomain: string | undefined,
     secure: boolean,
     sameSite: CookieSameSite = 'lax',
@@ -45,7 +51,7 @@ export class AuthCookie {
       domain: cookieDomain,
     };
 
-    res.clearCookie(AUTH_COOKIE.REFRESH, base);
+    res.clearCookie(REFRESH_COOKIE[role], base);
   }
 
   static setOidcTempCookies(
