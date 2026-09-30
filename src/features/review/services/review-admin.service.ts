@@ -69,8 +69,11 @@ export class AdminModerationService extends AdminBaseService {
       this.repo.countReviewReports(filter),
     ]);
     const paged = sliceIdCursorPage(rows, normalized.limit);
+    const withdrawn = await this.withdrawnReporterIds(paged.items);
     return {
-      items: paged.items.map(toAdminReviewReportOutput),
+      items: paged.items.map((row) =>
+        toAdminReviewReportOutput(row, withdrawn),
+      ),
       totalCount,
       hasMore: paged.hasMore,
       nextCursor: paged.nextCursor,
@@ -83,7 +86,12 @@ export class AdminModerationService extends AdminBaseService {
   ): Promise<AdminReviewReportDetailOutput> {
     await this.requireAdminContext(accountId);
     const row = await this.repo.findReviewReportDetailById(reportId);
-    const detail = row ? toAdminReviewReportDetailOutput(row) : null;
+    const detail = row
+      ? toAdminReviewReportDetailOutput(
+          row,
+          await this.withdrawnReporterIds([row]),
+        )
+      : null;
     if (!detail) throw new DomainException('REVIEW_REPORT_NOT_FOUND');
     return detail;
   }
@@ -98,6 +106,7 @@ export class AdminModerationService extends AdminBaseService {
       action: input.action,
       note: cleanNullableText(input.note, MAX_REASON_LENGTH),
       actorAccountId: ctx.accountId,
+      actorLabel: ctx.displayLabel,
     });
     if (result === 'not-found') {
       throw new DomainException('REVIEW_REPORT_NOT_FOUND');
@@ -105,7 +114,10 @@ export class AdminModerationService extends AdminBaseService {
     if (result === 'already-resolved') {
       throw new DomainException('REVIEW_REPORT_ALREADY_RESOLVED');
     }
-    return toAdminReviewReportOutput(result);
+    return toAdminReviewReportOutput(
+      result,
+      await this.withdrawnReporterIds([result]),
+    );
   }
 
   async adminReviews(
@@ -175,6 +187,7 @@ export class AdminModerationService extends AdminBaseService {
       reviewId: parseId(input.reviewId),
       reason: cleanRequiredText(input.reason, MAX_REASON_LENGTH),
       actorAccountId: ctx.accountId,
+      actorLabel: ctx.displayLabel,
     });
     if (!deleted) throw new DomainException('REVIEW_NOT_FOUND');
     return true;
@@ -189,8 +202,18 @@ export class AdminModerationService extends AdminBaseService {
       commentId: parseId(input.commentId),
       reason: cleanRequiredText(input.reason, MAX_REASON_LENGTH),
       actorAccountId: ctx.accountId,
+      actorLabel: ctx.displayLabel,
     });
     if (!deleted) throw new DomainException('REVIEW_COMMENT_NOT_FOUND');
     return true;
+  }
+
+  /** 신고자 탈퇴 여부는 조회 때 identity에서 한 번에 붙인다(닉네임은 신고 시점 스냅샷). */
+  private withdrawnReporterIds(
+    rows: { reporter_account_id: bigint }[],
+  ): Promise<Set<bigint>> {
+    return this.accounts.findDeletedAccountIds([
+      ...new Set(rows.map((r) => r.reporter_account_id)),
+    ]);
   }
 }

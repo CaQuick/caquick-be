@@ -5,7 +5,7 @@ import { AdminAuditService } from '@/features/dashboard/services/dashboard-admin
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount } from '@/test/factories';
+import { createAccount, createAccountCredential } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('AdminAuditService (real DB)', () => {
@@ -77,6 +77,58 @@ describe('AdminAuditService (real DB)', () => {
     expect(result.totalCount).toBe(2);
   });
 
+  it.each([
+    ['이름과 아이디', '이찬우', 'chanwoo7', false, '이찬우(chanwoo7)'],
+    ['이름만(자격증명 없음)', '이찬우', null, false, '이찬우'],
+    ['아이디만', null, 'chanwoo7', false, 'chanwoo7'],
+    [
+      '삭제된 자격증명의 아이디는 쓰지 않음',
+      '이찬우',
+      'chanwoo7',
+      true,
+      '이찬우',
+    ],
+    ['둘 다 없음', null, null, false, null],
+  ] as const)(
+    '행위자 라벨: %s',
+    async (_case, name, username, credentialDeleted, expected) => {
+      const viewer = await admin();
+      const actor = await createAccount(prisma, {
+        account_type: 'SELLER',
+        name,
+      });
+      if (username) {
+        const credential = await createAccountCredential(prisma, {
+          account_id: actor.id,
+          username,
+        });
+        if (credentialDeleted) {
+          await prisma.accountCredential.update({
+            where: { id: credential.id },
+            data: { deleted_at: new Date() },
+          });
+        }
+      }
+      await log({ actor: actor.id });
+
+      const result = await service.adminAuditLogs(viewer);
+
+      expect(result.items[0].actorLabel).toBe(expected);
+    },
+  );
+
+  it('계정 행이 없는 행위자는 종류·라벨 모두 null', async () => {
+    const viewer = await admin();
+    await log({ actor: BigInt(999_999) });
+
+    const result = await service.adminAuditLogs(viewer);
+
+    expect(result.items[0]).toMatchObject({
+      actorAccountType: null,
+      actorLabel: null,
+    });
+  });
+
   // 필터 축 전수
   it.each([
     ['actorAccountId', (a: bigint) => ({ actorAccountId: a.toString() })],
@@ -131,8 +183,9 @@ describe('AdminAuditService (real DB)', () => {
       mid.id.toString(),
       old.id.toString(),
     ]);
-    // 탈퇴 계정도 soft-delete라 계정 행은 남아 종류가 붙는다
+    // 탈퇴 계정도 soft-delete라 계정 행은 남아 종류·라벨이 붙는다
     expect(ranged.items[0].actorAccountType).toBe('USER');
+    expect(ranged.items[0].actorLabel).toBe(ghost.name);
 
     const page = await service.adminAuditLogs(actor, { limit: 2 });
     expect(page.hasMore).toBe(true);

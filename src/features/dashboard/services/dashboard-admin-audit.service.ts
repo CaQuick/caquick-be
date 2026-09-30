@@ -49,8 +49,8 @@ export class AdminAuditService extends AdminBaseService {
       this.auditLogs.listAuditLogs({ ...filter, ...normalized }),
       this.auditLogs.countAuditLogs(filter),
     ]);
-    // AuditLog는 계정 FK가 없다(계정이 지워져도 기록을 남기기 위해). 행위자 종류는 identity에서 한 번에 붙인다
-    const typeById = await this.accounts.findAccountTypesByIds([
+    // AuditLog는 계정 FK가 없다(계정이 지워져도 기록을 남기기 위해). 행위자 종류·라벨은 identity에서 한 번에 붙인다
+    const actorById = await this.accounts.findAccountTypesByIds([
       ...new Set(rows.map((r) => r.actor_account_id)),
     ]);
     return toCursorConnection(
@@ -59,7 +59,7 @@ export class AdminAuditService extends AdminBaseService {
       (row) =>
         toAdminAuditLogOutput(
           row,
-          typeById.get(row.actor_account_id.toString()) ?? null,
+          actorById.get(row.actor_account_id.toString()) ?? null,
         ),
     );
   }
@@ -67,12 +67,13 @@ export class AdminAuditService extends AdminBaseService {
 
 function toAdminAuditLogOutput(
   row: AuditLog,
-  actorAccountType: AccountType | null,
+  actor: { type: AccountType; label: string | null } | null,
 ): AdminAuditLogOutput {
   return {
     id: row.id.toString(),
     actorAccountId: row.actor_account_id.toString(),
-    actorAccountType,
+    actorAccountType: actor?.type ?? null,
+    actorLabel: actor?.label ?? null,
     storeId: row.store_id?.toString() ?? null,
     targetType: row.target_type,
     targetId: row.target_id.toString(),

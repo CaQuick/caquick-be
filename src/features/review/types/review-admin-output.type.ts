@@ -9,11 +9,14 @@ export interface AdminReviewReportOutput {
   targetType: 'REVIEW' | 'REVIEW_COMMENT';
   targetId: string;
   reporterAccountId: string;
+  reporterNickname: string | null;
+  reporterWithdrawn: boolean;
   reason: ReviewReportReason;
   detail: string | null;
   contentSnapshot: string | null;
   status: ReviewReportStatus;
   resolvedByAccountId: string | null;
+  resolvedByLabel: string | null;
   resolvedAt: Date | null;
   resolutionNote: string | null;
   createdAt: Date;
@@ -28,6 +31,7 @@ export interface AdminReviewReportDetailOutput {
     authorNickname: string | null;
     content: string | null;
     storeId: string;
+    storeName: string;
     deleted: boolean;
     media: ReviewMedia[];
   };
@@ -38,6 +42,7 @@ export interface AdminReviewOutput {
   storeId: string;
   storeName: string;
   productId: string;
+  productName: string;
   authorAccountId: string;
   authorNickname: string | null;
   rating: number;

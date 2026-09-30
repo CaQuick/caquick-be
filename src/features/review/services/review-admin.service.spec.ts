@@ -9,6 +9,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createAccountCredential,
   createReview,
   createReviewMedia,
   createReviewReport,
@@ -847,6 +848,217 @@ describe('AdminModerationService (real DB)', () => {
       );
       expect(after.target.deleted).toBe(true);
       expect(after.target.media.map((m) => m.mediaUrl)).toEqual(['a.png']);
+    });
+  });
+
+  describe('표시값(상품명·매장명·신고자·처리자)', () => {
+    /** 이름·아이디가 모두 있는 관리자 — 라벨은 `이름(아이디)`. */
+    async function namedAdmin(): Promise<bigint> {
+      const account = await createAccount(prisma, {
+        account_type: 'ADMIN',
+        name: '이찬우',
+      });
+      await createAccountCredential(prisma, {
+        account_id: account.id,
+        username: 'chanwoo7',
+      });
+      return account.id;
+    }
+
+    it('리뷰 목록은 작성 시점 상품명을 준다', async () => {
+      const review = await createReview(prisma, {
+        product_name_snapshot: '작성 시점 케이크',
+      });
+
+      const result = await service.adminReviews(await admin());
+
+      expect(result.items[0]).toMatchObject({
+        id: review.id.toString(),
+        productName: '작성 시점 케이크',
+      });
+    });
+
+    it('신고 대상 매장명은 리뷰 작성 시점 값이고(리뷰·댓글 대상 모두) 매장명을 바꿔도 그대로다', async () => {
+      const review = await createReview(prisma, {
+        store_name_snapshot: '작성 시점 매장',
+      });
+      const reviewReport = await createReviewReport(prisma, {
+        review_id: review.id,
+      });
+      const comment = await commentOn(review.id);
+      const commentReport = await createReviewReport(prisma, {
+        review_id: null,
+        review_comment_id: comment.id,
+      });
+      await prisma.store.update({
+        where: { id: review.store_id },
+        data: { store_name: '바뀐 매장' },
+      });
+
+      for (const report of [reviewReport, commentReport]) {
+        const detail = await service.adminReviewReport(
+          await admin(),
+          report.id,
+        );
+        expect(detail.target.storeName).toBe('작성 시점 매장');
+      }
+    });
+
+    it.each([
+      ['활동 중', false],
+      ['탈퇴', true],
+    ] as const)(
+      '신고자 %s: 닉네임은 신고 시점 스냅샷, 탈퇴 여부는 조회 때 붙인다',
+      async (_case, withdrawn) => {
+        const reporter = await createAccount(prisma, { account_type: 'USER' });
+        const report = await createReviewReport(prisma, {
+          reporter_account_id: reporter.id,
+          reporter_nickname_snapshot: '신고자닉',
+        });
+        if (withdrawn) {
+          await prisma.account.update({
+            where: { id: reporter.id },
+            data: { deleted_at: new Date() },
+          });
+        }
+        const viewer = await admin();
+
+        const list = await service.adminReviewReports(viewer);
+        const detail = await service.adminReviewReport(viewer, report.id);
+
+        for (const row of [list.items[0], detail.report]) {
+          expect(row).toMatchObject({
+            reporterNickname: '신고자닉',
+            reporterWithdrawn: withdrawn,
+          });
+        }
+      },
+    );
+
+    it('신고 목록은 신고자마다 탈퇴 여부를 따로 붙인다', async () => {
+      const gone = await createAccount(prisma, {
+        account_type: 'USER',
+        deleted_at: new Date(),
+      });
+      const active = await createAccount(prisma, { account_type: 'USER' });
+      const r1 = await createReviewReport(prisma, {
+        reporter_account_id: gone.id,
+      });
+      const r2 = await createReviewReport(prisma, {
+        reporter_account_id: active.id,
+      });
+
+      const list = await service.adminReviewReports(await admin());
+
+      expect(
+        list.items.map((r) => [r.id, r.reporterNickname, r.reporterWithdrawn]),
+      ).toEqual([
+        [r2.id.toString(), null, false],
+        [r1.id.toString(), null, true],
+      ]);
+    });
+
+    it.each<[string, (actor: bigint, reviewId: bigint) => Promise<unknown>]>([
+      [
+        '신고 처리(REJECT)',
+        async (actor) => {
+          const report = await prisma.reviewReport.findFirstOrThrow();
+          return service.adminResolveReviewReport(actor, {
+            reportId: report.id.toString(),
+            action: 'REJECT',
+          });
+        },
+      ],
+      [
+        '신고 처리(DELETE_TARGET)',
+        async (actor) => {
+          const report = await prisma.reviewReport.findFirstOrThrow();
+          return service.adminResolveReviewReport(actor, {
+            reportId: report.id.toString(),
+            action: 'DELETE_TARGET',
+          });
+        },
+      ],
+      [
+        '리뷰 강제 삭제',
+        (actor, reviewId) =>
+          service.adminDeleteReview(actor, {
+            reviewId: reviewId.toString(),
+            reason: '위반',
+          }),
+      ],
+    ])('%s: 처리자 라벨 `이름(아이디)`를 신고에 남긴다', async (_case, act) => {
+      const review = await createReview(prisma);
+      const report = await createReviewReport(prisma, {
+        review_id: review.id,
+      });
+      const actor = await namedAdmin();
+
+      await act(actor, review.id);
+
+      const detail = await service.adminReviewReport(await admin(), report.id);
+      expect(detail.report).toMatchObject({
+        resolvedByAccountId: actor.toString(),
+        resolvedByLabel: '이찬우(chanwoo7)',
+      });
+    });
+
+    it('댓글 강제 삭제도 처리자 라벨을 남긴다', async () => {
+      const review = await createReview(prisma);
+      const comment = await commentOn(review.id);
+      const report = await createReviewReport(prisma, {
+        review_id: null,
+        review_comment_id: comment.id,
+      });
+
+      await service.adminDeleteReviewComment(await namedAdmin(), {
+        commentId: comment.id.toString(),
+        reason: '위반',
+      });
+
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: report.id },
+      });
+      expect(row.resolved_by_label_snapshot).toBe('이찬우(chanwoo7)');
+    });
+
+    it('처리 응답에도 라벨이 실리고, 이름·아이디가 없는 관리자는 null', async () => {
+      const review = await createReview(prisma);
+      const report = await createReviewReport(prisma, {
+        review_id: review.id,
+      });
+      const bare = await createAccount(prisma, {
+        account_type: 'ADMIN',
+        name: null,
+      });
+
+      const result = await service.adminResolveReviewReport(bare.id, {
+        reportId: report.id.toString(),
+        action: 'REJECT',
+      });
+
+      expect(result.resolvedByAccountId).toBe(bare.id.toString());
+      expect(result.resolvedByLabel).toBeNull();
+    });
+
+    it('작성자 삭제로 닫힌 신고는 처리자 라벨이 null', async () => {
+      const review = await createReview(prisma);
+      const report = await createReviewReport(prisma, {
+        review_id: review.id,
+      });
+
+      await reviewRepository.softDeleteReview({
+        reviewId: review.id,
+        accountId: review.account_id,
+        now: new Date(),
+      });
+
+      const detail = await service.adminReviewReport(await admin(), report.id);
+      expect(detail.report).toMatchObject({
+        status: 'RESOLVED',
+        resolvedByAccountId: null,
+        resolvedByLabel: null,
+      });
     });
   });
 });

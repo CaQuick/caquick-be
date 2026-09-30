@@ -25,7 +25,7 @@ export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
 const adminOrderInclude = {
   items: {
     where: activeWhere,
-    select: { store_id: true },
+    select: { store_id: true, store_name_snapshot: true },
     orderBy: { id: 'asc' },
     take: 1,
   },

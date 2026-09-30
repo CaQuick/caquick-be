@@ -19,6 +19,10 @@ type AdminAuditLog {
   """
   actorAccountType: AccountType
   """
+  조작한 계정의 현재 라벨 `이름(아이디)`. 한쪽만 있으면 그 값, 둘 다 없거나 계정이 지워졌으면 null.
+  """
+  actorLabel: String
+  """
   관련 매장 ID. 매장과 무관한 조작이면 null.
   """
   storeId: ID

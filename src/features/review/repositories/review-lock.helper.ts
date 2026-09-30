@@ -44,7 +44,8 @@ export async function resolvePendingReports(
   args: {
     where: Prisma.ReviewReportWhereInput;
     now: Date;
-    resolvedByAccountId: bigint | null;
+    /** 처리한 관리자. 작성자 삭제로 닫히면 null. */
+    resolvedBy: { accountId: bigint; label: string | null } | null;
     note: string;
   },
 ): Promise<number> {
@@ -54,7 +55,8 @@ export async function resolvePendingReports(
       status: 'RESOLVED',
       // 종결과 함께 unique 키를 비운다 — 같은 대상을 다시 신고할 수 있어야 한다
       open_key: null,
-      resolved_by_account_id: args.resolvedByAccountId,
+      resolved_by_account_id: args.resolvedBy?.accountId ?? null,
+      resolved_by_label_snapshot: args.resolvedBy?.label ?? null,
       resolved_at: args.now,
       resolution_note: args.note,
       updated_at: args.now,

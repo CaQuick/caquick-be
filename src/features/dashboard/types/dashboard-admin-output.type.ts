@@ -8,6 +8,7 @@ export interface AdminAuditLogOutput {
   id: string;
   actorAccountId: string;
   actorAccountType: AccountType | null;
+  actorLabel: string | null;
   storeId: string | null;
   targetType: AuditTargetType;
   targetId: string;

@@ -9,6 +9,7 @@ export interface AdminOrderSummaryOutput {
   orderNumber: string;
   accountId: string;
   storeId: string | null;
+  storeName: string | null;
   status: OrderStatus;
   pickupAt: Date;
   buyerName: string;

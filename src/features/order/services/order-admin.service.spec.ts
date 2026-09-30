@@ -172,6 +172,31 @@ describe('AdminOrderService (real DB)', () => {
       });
       expect(page2.items.map((o) => o.id)).toEqual([ids[0].toString()]);
     });
+
+    it('매장명은 첫 활성 품목의 주문 시점 스냅샷이고 품목이 없으면 null', async () => {
+      const { order, item } = await orderWithItem();
+      await prisma.orderItem.update({
+        where: { id: item.id },
+        data: { store_name_snapshot: '주문 시점 매장' },
+      });
+      await prisma.store.update({
+        where: { id: item.store_id },
+        data: { store_name: '바뀐 매장' },
+      });
+      const empty = await createOrder(prisma);
+
+      const result = await service.adminOrders(await admin());
+
+      const byId = new Map(result.items.map((o) => [o.id, o]));
+      expect(byId.get(order.id.toString())).toMatchObject({
+        storeId: item.store_id.toString(),
+        storeName: '주문 시점 매장',
+      });
+      expect(byId.get(empty.id.toString())).toMatchObject({
+        storeId: null,
+        storeName: null,
+      });
+    });
   });
 
   describe('adminOrder', () => {

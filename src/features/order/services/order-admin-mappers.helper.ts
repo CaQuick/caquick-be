@@ -21,6 +21,7 @@ export function toAdminOrderSummaryOutput(
     accountId: row.account_id.toString(),
     // 주문은 단일 매장 구조 — 첫 품목이 매장을 정한다(다상품 확장 시 재검토)
     storeId: row.items[0]?.store_id.toString() ?? null,
+    storeName: row.items[0]?.store_name_snapshot ?? null,
     status: row.status,
     pickupAt: row.pickup_at,
     buyerName: row.buyer_name,
