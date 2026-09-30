@@ -15,6 +15,12 @@ extend type Mutation {
   username이 이미 쓰이고 있으면 BAD_USER_INPUT. 생성된 계정은 최초 로그인 시 비밀번호 변경이 강제된다.
   """
   adminCreateAdmin(input: AdminCreateAdminInput!): AdminAccount!
+  """
+  다른 관리자의 비밀번호를 임시 비밀번호로 초기화한다. 모든 로그인 세션을 폐기하고 다음 로그인 때 변경을 강제한다.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN. 본인 계정이면 FORBIDDEN(본인은 비밀번호 변경을 쓴다).
+  대상이 ADMIN 계정이 아니거나 자격증명이 없으면 NOT_FOUND.
+  """
+  adminResetAdminPassword(input: AdminResetAdminPasswordInput!): Boolean!
 }
 
 """
@@ -94,4 +100,18 @@ input AdminCreateAdminInput {
   이름. 선택.
   """
   name: String
+}
+
+"""
+관리자 비밀번호 초기화 입력.
+"""
+input AdminResetAdminPasswordInput {
+  """
+  대상 관리자 계정 ID. 본인이면 FORBIDDEN.
+  """
+  accountId: ID!
+  """
+  새 임시 비밀번호. 8~64자(공백만으로는 불가). 다음 로그인 때 변경이 강제되므로 조합 규칙은 없다.
+  """
+  newPassword: String!
 }

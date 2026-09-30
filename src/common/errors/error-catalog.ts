@@ -488,6 +488,11 @@ export const ERROR_CATALOG = {
     status: HttpStatus.FORBIDDEN,
     message: '관리자 계정의 상태는 변경할 수 없습니다.',
   },
+  CANNOT_RESET_OWN_PASSWORD: {
+    status: HttpStatus.FORBIDDEN,
+    message:
+      '본인 비밀번호는 초기화할 수 없습니다. 비밀번호 변경을 이용해 주세요.',
+  },
   ONLY_ACTIVE_CAN_BE_SUSPENDED: {
     status: HttpStatus.BAD_REQUEST,
     message: 'ACTIVE 상태의 계정만 정지할 수 있습니다.',
