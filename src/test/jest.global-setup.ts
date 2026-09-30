@@ -7,11 +7,9 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import {
-  GenericContainer,
-  Wait,
-  type StartedTestContainer,
-} from 'testcontainers';
+import type { StartedTestContainer } from 'testcontainers';
+
+import { mysqlTestContainer, redisTestContainer } from './containers';
 
 const TMP_DIR = join(process.cwd(), '.tmp');
 const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
@@ -29,31 +27,7 @@ export default async function globalSetup(): Promise<void> {
 
   console.log('[test] starting MySQL container...');
 
-  const container: StartedTestContainer = await new GenericContainer(
-    'mysql:8.0',
-  )
-    .withExposedPorts(3306)
-    .withEnvironment({
-      MYSQL_ROOT_PASSWORD: 'test',
-      MYSQL_DATABASE: 'caquick_test_root',
-    })
-    .withCommand([
-      '--character-set-server=utf8mb4',
-      '--collation-server=utf8mb4_unicode_ci',
-    ])
-    .withWaitStrategy(Wait.forHealthCheck())
-    .withHealthCheck({
-      test: [
-        'CMD-SHELL',
-        'mysqladmin ping -h localhost -u root -ptest || exit 1',
-      ],
-      interval: 2_000_000_000, // 2s in nanoseconds
-      timeout: 5_000_000_000,
-      retries: 30,
-      startPeriod: 10_000_000_000,
-    })
-    .withStartupTimeout(120_000)
-    .start();
+  const container: StartedTestContainer = await mysqlTestContainer().start();
 
   const host = container.getHost();
   const port = container.getMappedPort(3306);
@@ -62,13 +36,7 @@ export default async function globalSetup(): Promise<void> {
 
   // 인증 블랙리스트는 실제 Redis로 검증한다 — DB와 같은 이유로 mock하지 않는다.
   console.log('[test] starting Redis container...');
-  const redis: StartedTestContainer = await new GenericContainer(
-    'redis:7-alpine',
-  )
-    .withExposedPorts(6379)
-    .withWaitStrategy(Wait.forLogMessage('Ready to accept connections'))
-    .withStartupTimeout(60_000)
-    .start();
+  const redis: StartedTestContainer = await redisTestContainer().start();
   const redisUrl = `redis://${redis.getHost()}:${redis.getMappedPort(6379)}`;
 
   const state = {

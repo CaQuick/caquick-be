@@ -30,6 +30,7 @@ import { AlertService } from '@/global/alerting';
 import { MetricsService } from '@/global/metrics';
 import { RequestContextService } from '@/global/request-context';
 import { requestContextStorage } from '@/global/request-context/request-context.service';
+import { RABBITMQ_QUOTA } from '@/test/containers';
 
 /** 받은 이벤트·시각·ALS eventId를 기록하고, 이벤트별로 남은 실패 횟수만큼 던진다(at-least-once가 그대로 드러난다). */
 @Injectable()
@@ -109,6 +110,7 @@ describe('RabbitConsumerHostService (real RabbitMQ)', () => {
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     container = await new GenericContainer('rabbitmq:4-alpine')
       .withExposedPorts(5672)
+      .withResourcesQuota(RABBITMQ_QUOTA)
       .withWaitStrategy(Wait.forLogMessage('Server startup complete'))
       .withStartupTimeout(120_000)
       .start();
