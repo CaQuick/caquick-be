@@ -19,7 +19,7 @@ extend type Mutation {
 }
 
 """
-주문 요약(관리자 시점). 매장 ID는 첫 품목 기준이다(주문은 단일 매장 구조).
+주문 요약(관리자 시점). 매장 ID·매장명은 첫 품목 기준이다(주문은 단일 매장 구조).
 """
 type AdminOrderSummary {
   id: ID!
@@ -35,6 +35,10 @@ type AdminOrderSummary {
   주문 품목이 속한 매장 ID. 품목이 없으면 null.
   """
   storeId: ID
+  """
+  주문 시점의 매장명(첫 품목 스냅샷). 품목이 없으면 null.
+  """
+  storeName: String
   """
   현재 주문 상태.
   """

@@ -14,6 +14,8 @@ export interface ReviewReportOverrides {
   reason?: ReviewReportReason;
   detail?: string | null;
   status?: ReviewReportStatus;
+  reporter_nickname_snapshot?: string | null;
+  resolved_by_label_snapshot?: string | null;
   deleted_at?: Date | null;
 }
 
@@ -38,6 +40,8 @@ export async function createReviewReport(
       reason: overrides.reason ?? 'SPAM',
       detail: overrides.detail ?? null,
       status: overrides.status ?? 'PENDING',
+      reporter_nickname_snapshot: overrides.reporter_nickname_snapshot ?? null,
+      resolved_by_label_snapshot: overrides.resolved_by_label_snapshot ?? null,
       deleted_at: overrides.deleted_at ?? null,
     },
   });

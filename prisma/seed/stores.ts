@@ -14,6 +14,7 @@ import type { SeededCategories } from './categories';
 import { assertSeedCredential } from './credential-policy';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
 
+import { formatAccountLabel } from '@/common/utils/account-label';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 
 /**
@@ -37,6 +38,14 @@ async function seedSellerCredential(
       password_hash: await argon2.hash(password, { type: argon2.argon2id }),
     },
   });
+}
+
+/** 판매자 생성 경로와 같은 라벨. 자격증명은 비밀번호가 있을 때만 만들어지므로 아이디도 그때만 붙는다. */
+function seedSellerLabel(name: string, username: string): string | null {
+  return formatAccountLabel(
+    name,
+    process.env.SELLER_SEED_PASSWORD ? username : null,
+  );
 }
 
 export interface SeededStores {
@@ -71,6 +80,7 @@ export async function seedStores(
   const storeA = await prisma.store.create({
     data: {
       seller_account_id: sellerA.id,
+      seller_label_snapshot: seedSellerLabel(sellerA.name!, 'seed-seller-a'),
       store_name: `${SEED_STORE_NAME_PREFIX}케이크샵 A`,
       store_phone: '02-1111-2222',
       address_full: '서울특별시 강남구 테헤란로 1길 10',
@@ -128,6 +138,7 @@ export async function seedStores(
   const storeB = await prisma.store.create({
     data: {
       seller_account_id: sellerB.id,
+      seller_label_snapshot: seedSellerLabel(sellerB.name!, 'seed-seller-b'),
       store_name: `${SEED_STORE_NAME_PREFIX}도넛샵 B`,
       store_phone: '02-3333-4444',
       address_full: '서울특별시 마포구 와우산로 5',

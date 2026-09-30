@@ -256,6 +256,7 @@ describe('AdminSellerService (real DB)', () => {
       });
       expect(store.latitude?.toString()).toBe('37.5012');
       expect(store.map_provider).toBe('NAVER');
+      expect(store.seller_label_snapshot).toBe('홍길동(cake.shop_1)');
       expect(store.region_id).toBeNull();
 
       const audit = await prisma.auditLog.findFirstOrThrow({
@@ -267,6 +268,22 @@ describe('AdminSellerService (real DB)', () => {
         action: 'CREATE',
       });
     });
+
+    it.each([
+      ['이름 생략', undefined, 'cake.shop_1'],
+      ['이름이 공백뿐', '   ', 'cake.shop_1'],
+    ])(
+      '%s이면 매장의 판매자 라벨은 아이디만 남는다',
+      async (_case, name, expected) => {
+        await service.adminCreateSeller(await admin(), {
+          ...validInput,
+          name,
+        });
+
+        const store = await prisma.store.findFirstOrThrow();
+        expect(store.seller_label_snapshot).toBe(expected);
+      },
+    );
 
     it('활성 2차 지역은 region_id로 연결된다', async () => {
       const group = await createRegion(prisma, { level: 1 });

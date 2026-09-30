@@ -173,7 +173,7 @@ export class ReviewEngagementRepository {
       await resolvePendingReports(tx, {
         where: { review_comment_id: args.commentId },
         now,
-        resolvedByAccountId: null,
+        resolvedBy: null,
         note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
       });
       return 'deleted';

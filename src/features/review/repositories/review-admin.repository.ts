@@ -49,6 +49,7 @@ const reviewReportDetailInclude = {
       id: true,
       account_id: true,
       store_id: true,
+      store_name_snapshot: true,
       content: true,
       deleted_at: true,
       media: adminReviewMediaSelect,
@@ -62,7 +63,7 @@ const reviewReportDetailInclude = {
       account_id: true,
       content: true,
       deleted_at: true,
-      review: { select: { store_id: true } },
+      review: { select: { store_id: true, store_name_snapshot: true } },
       ...authorInclude,
     },
   },
@@ -161,6 +162,7 @@ export class ReviewAdminRepository {
     action: 'DELETE_TARGET' | 'REJECT';
     note: string | null;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<ReviewReport | 'not-found' | 'already-resolved'> {
     const now = new Date();
     // 대상 id는 불변이라 트랜잭션 밖에서 읽는다 — 트랜잭션 안의 첫 일반 읽기가 REPEATABLE READ
@@ -217,6 +219,7 @@ export class ReviewAdminRepository {
             status: 'RESOLVED',
             open_key: null,
             resolved_by_account_id: args.actorAccountId,
+            resolved_by_label_snapshot: args.actorLabel,
             resolved_at: now,
             resolution_note: args.note,
             updated_at: now,
@@ -229,6 +232,7 @@ export class ReviewAdminRepository {
             status: 'REJECTED',
             open_key: null,
             resolved_by_account_id: args.actorAccountId,
+            resolved_by_label_snapshot: args.actorLabel,
             resolved_at: now,
             resolution_note: args.note,
           },
@@ -256,6 +260,7 @@ export class ReviewAdminRepository {
     reviewId: bigint;
     reason: string;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -277,7 +282,7 @@ export class ReviewAdminRepository {
           ],
         },
         now,
-        resolvedByAccountId: args.actorAccountId,
+        resolvedBy: { accountId: args.actorAccountId, label: args.actorLabel },
         note: args.reason,
       });
       return true;
@@ -288,6 +293,7 @@ export class ReviewAdminRepository {
     commentId: bigint;
     reason: string;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -305,7 +311,7 @@ export class ReviewAdminRepository {
       await resolvePendingReports(tx, {
         where: { review_comment_id: args.commentId },
         now,
-        resolvedByAccountId: args.actorAccountId,
+        resolvedBy: { accountId: args.actorAccountId, label: args.actorLabel },
         note: args.reason,
       });
       return true;

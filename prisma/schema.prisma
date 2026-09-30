@@ -394,6 +394,8 @@ model Store {
   // 문의 채팅 인사말 템플릿({nickname}/{storeName} 치환). null이면 서버 기본 문구 (figma notification-center)
   greeting_message String? @db.VarChar(500)
   is_active         Boolean @default(true) @db.TinyInt
+  // 판매자 생성 시점의 계정 라벨(formatAccountLabel). 원본(이름·아이디)은 쓰기 경로가 없어 갱신하지 않는다
+  seller_label_snapshot String? @db.VarChar(200)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -969,6 +971,7 @@ model Review {
 
   // 작성 시점 주문 품목 스냅샷. 목록·상세·쇼케이스가 order_item을 조인하지 않게 한다.
   product_name_snapshot String  @db.VarChar(200)
+  store_name_snapshot   String  @db.VarChar(200)
   /// [{ groupName, optionTitle }] — 주문 시 선택 옵션(활성, id 순). 없으면 null.
   option_summary        Json?
   before_image_url      String? @db.VarChar(2048)
@@ -1398,6 +1401,8 @@ model ReviewReport {
   // 신고 시점의 대상 본문. 작성자가 삭제·재작성하면 같은 리뷰 id가 새 내용으로 복원되므로
   // 무엇이 신고됐는지는 여기 남긴다(리뷰 본문은 2000자로 잘라 저장)
   content_snapshot String? @db.VarChar(2000)
+  // 신고 시점 신고자 닉네임. 탈퇴 여부는 조회 때 따로 붙인다(이 컬럼 도입 전에 탈퇴한 신고자는 복원할 수 없어 null)
+  reporter_nickname_snapshot String? @db.VarChar(50)
 
   status                 ReviewReportStatus @default(PENDING)
   /// PENDING 동안에만 대상 식별자('r:<reviewId>'·'c:<commentId>')를 담고 종결되면 NULL.
@@ -1406,6 +1411,8 @@ model ReviewReport {
   resolved_by_account_id BigInt?            @db.UnsignedBigInt
   resolved_at            DateTime?          @db.DateTime(3)
   resolution_note        String?            @db.VarChar(500)
+  // 처리한 관리자의 계정 라벨(formatAccountLabel). 작성자 삭제로 닫힌 신고는 null
+  resolved_by_label_snapshot String?        @db.VarChar(200)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)

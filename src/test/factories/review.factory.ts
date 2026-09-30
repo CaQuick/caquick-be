@@ -14,6 +14,7 @@ export interface ReviewOverrides {
   deleted_at?: Date | null;
   /** 미지정 시 작성 경로와 같은 규칙으로 order_item에서 찍는다. */
   product_name_snapshot?: string;
+  store_name_snapshot?: string;
   option_summary?: { groupName: string; optionTitle: string }[] | null;
   before_image_url?: string | null;
 }
@@ -52,6 +53,8 @@ export async function createReview(
       order_item_id: orderItemId,
       product_name_snapshot:
         overrides.product_name_snapshot ?? snapshot.product_name_snapshot,
+      store_name_snapshot:
+        overrides.store_name_snapshot ?? snapshot.store_name_snapshot,
       option_summary:
         overrides.option_summary === undefined
           ? snapshot.option_summary

@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
+import { formatAccountLabel } from '@/common/utils/account-label';
+import { activeOrNull } from '@/common/utils/active-or-null';
 import { nextStatusChangedAt } from '@/common/utils/status-version';
 import {
   AUDIT_LOG_REPOSITORY,
@@ -102,7 +104,13 @@ export class AccountAdminRepository {
   async findAdminAccountContext(accountId: bigint) {
     return this.prisma.account.findFirst({
       where: { id: accountId },
-      select: { id: true, account_type: true, status: true },
+      select: {
+        id: true,
+        account_type: true,
+        status: true,
+        name: true,
+        credential: { select: { username: true, deleted_at: true } },
+      },
     });
   }
 
@@ -492,15 +500,44 @@ export class AccountAdminRepository {
     });
   }
 
-  /** 감사 로그 행위자 종류 — AuditLog에 계정 FK가 없어 화면이 id로 한 번에 붙인다. 삭제된 계정도 포함(기록 보존). */
+  /** 탈퇴(soft-delete)한 계정 id — 신고 화면이 신고자 탈퇴 여부를 한 번에 붙인다. */
+  async findDeletedAccountIds(ids: bigint[]): Promise<Set<bigint>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.account.findMany({
+      where: { id: { in: ids }, deleted_at: { not: null } },
+      select: { id: true },
+    });
+    return new Set(rows.map((a) => a.id));
+  }
+
+  /**
+   * 감사 로그 행위자 종류·라벨 — AuditLog에 계정 FK가 없어 화면이 id로 한 번에 붙인다. 삭제된 계정도 포함(기록 보존).
+   * 라벨은 관리자 화면 공통 규칙(formatAccountLabel), 삭제된 자격증명의 아이디는 쓰지 않는다.
+   */
   async findAccountTypesByIds(
     ids: bigint[],
-  ): Promise<Map<string, AccountType>> {
+  ): Promise<Map<string, { type: AccountType; label: string | null }>> {
     if (ids.length === 0) return new Map();
     const rows = await this.prisma.account.findMany({
       where: { id: { in: ids }, deleted_at: undefined },
-      select: { id: true, account_type: true },
+      select: {
+        id: true,
+        account_type: true,
+        name: true,
+        credential: { select: { username: true, deleted_at: true } },
+      },
     });
-    return new Map(rows.map((a) => [a.id.toString(), a.account_type]));
+    return new Map(
+      rows.map((a) => [
+        a.id.toString(),
+        {
+          type: a.account_type,
+          label: formatAccountLabel(
+            a.name,
+            activeOrNull(a.credential)?.username,
+          ),
+        },
+      ]),
+    );
   }
 }

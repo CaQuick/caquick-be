@@ -88,6 +88,14 @@ type AdminReviewReport {
   """
   reporterAccountId: ID!
   """
+  신고 시점의 신고자 닉네임. 이후 닉네임을 바꾸거나 탈퇴해도 그대로 남는다. 이 값을 기록하기 전에 탈퇴한 신고자는 null.
+  """
+  reporterNickname: String
+  """
+  신고자가 지금 탈퇴한 상태면 true.
+  """
+  reporterWithdrawn: Boolean!
+  """
   신고 사유.
   """
   reason: ReviewReportReason!
@@ -107,6 +115,10 @@ type AdminReviewReport {
   처리한 관리자 계정 ID. 미처리면 null.
   """
   resolvedByAccountId: ID
+  """
+  처리한 관리자의 처리 시점 라벨 `이름(아이디)`(한쪽만 있으면 그 값). 미처리이거나 작성자 삭제로 닫혔으면 null.
+  """
+  resolvedByLabel: String
   """
   처리 시각. 미처리면 null.
   """
@@ -149,6 +161,10 @@ type AdminReviewReportTarget {
   리뷰가 달린 매장 ID.
   """
   storeId: ID!
+  """
+  리뷰 작성 시점의 매장명(주문 품목 스냅샷).
+  """
+  storeName: String!
   """
   이미 삭제된 대상이면 true.
   """
@@ -212,6 +228,10 @@ type AdminReview {
   상품 ID.
   """
   productId: ID!
+  """
+  리뷰 작성 시점의 상품명(주문 품목 스냅샷).
+  """
+  productName: String!
   """
   작성자 계정 ID.
   """
