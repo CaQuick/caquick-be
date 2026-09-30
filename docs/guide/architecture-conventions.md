@@ -127,7 +127,16 @@
 
 **반증이 본체.** 검사기·게이트·가드는 "막아야 할 것을 실제로 막는지"가 테스트다 — 현재 코드에서 통과하는 것은 오탐이 없다는 뜻일 뿐이다. 입력 공간이 열거 가능하면(SDL 자리, 상태 전이, 에러 종류) `it.each` 전수 표로 고정한다. 일회성 검증 스크립트도 "0건"을 믿기 전에 대상 수를 찍고 일부러 걸리는 항목을 넣어 본다. 로그·API 응답은 필터 전 원본을 먼저 본다.
 
-**정합성 도구.** `yarn validate` = lint → tsc → `dto:check`(SDL input ↔ DTO 필드 일치. DTO 없는 input은 기본 lenient 모드에서 정보만, `--strict`에서 오류) → `docs:check`(SDL description 커버리지 — 자명한 필드 `id`·`createdAt`류·`*Id`/`*Ids`는 제외, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:cov`(statements 96 / branches 86 / functions 92 / lines 96). Husky pre-push가 이 전체를 돌리는 **하드 게이트**다. CI `check` 잡은 같은 단계를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
+**정합성 도구.** `yarn validate:push`(Husky pre-push) = lint → tsc → `dto:check`(SDL input ↔ DTO 필드 일치. DTO 없는 input은 기본 lenient 모드에서 정보만, `--strict`에서 오류) → `docs:check`(SDL description 커버리지 — 자명한 필드 `id`·`createdAt`류·`*Id`/`*Ids`는 제외, 임계는 현재 달성치로 고정해 회귀만 차단) → `arch:check`(순환·Prisma-ban·레이어) → `test:scripts` → `test:push`. 정적 검사는 전부 돌고, jest 범위만 `scripts/pre-push-test-plan.ts`가 기준 커밋(`origin/develop` merge-base, 없으면 `origin/main`, `PRE_PUSH_BASE`로 지정) 대비 작업 트리 변경으로 고른다(`yarn test:push --dry-run`으로 미리 본다).
+
+- **related**: `src/**/*.ts`만 바뀌면 `jest --findRelatedTests`로 그 파일을 import 그래프로 끌어오는 spec만 돈다. 소스를 파일로 읽어 검사하는 게이트 spec(`src/test/*.spec`, `fs`를 import하는 spec — 모델 소유권·경계 read·잠금 순서 등)은 그래프로 이어지지 않으므로 항상 붙인다.
+- **full**: 그래프가 못 보는 변경은 전체로 되돌린다. SDL(`*.graphql`, 스키마로 로드), `prisma/**`·`prisma.config.ts`, 테스트 인프라(`src/test/**`·`test/**`), `package.json`(jest 설정이 여기 있다), 의존성(`yarn.lock`·`.yarnrc.yml`·`.yarn/**`), `tsconfig*.json`, 전역 배선(`src/config`·`src/global`·`app.module`·`main` — 모듈 배선 spec 전반에 닿는다), src `.ts` 삭제·이름 변경(없어진 모듈의 사용처는 역추적할 수 없다), src 변경 40개 초과, 분류 목록에 없는 파일(`.gitignore`·`nest-cli.json`은 `build-config.spec`이 읽는다), 기준 커밋 해석 실패.
+- **none**: 문서·`.github`·`infra`·`terraform`·도커·정적 검사 설정(`.dependency-cruiser.cjs`는 `arch:check`가 이미 돈다)·`scripts/**`(`test:scripts`가 전부 돌리고, src는 scripts를 import하지 않는다).
+- 커버리지는 로컬에서 재지 않는다. 부분 실행의 커버리지는 임계와 비교할 수 없어서다. 전체 회귀와 임계(statements 96 / branches 86 / functions 92 / lines 96)는 CI `check`(필수 체크)의 `test:cov`가 맡고, `yarn validate`(정적 검사 → `test:cov`)는 수동 전체 검증용으로 남는다.
+
+CI `check` 잡은 정적 검사를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
+
+**운영 호스트 보호.** 개발 머신이 운영 맥미니를 겸하고, testcontainers(MySQL·Redis)가 운영 컨테이너와 같은 OrbStack VM(4CPU·8GB)을 나눠 쓴다. 전체 jest(330스위트, 실DB 145개)를 pre-push마다 돌리던 시절 한 번에 5.7~12.7분이 걸렸고, 그동안 운영 응답이 느려지고 부하성 간헐 실패가 났다. 그래서 pre-push는 위처럼 범위를 좁히고 전체는 CI에 맡긴다. 맥미니에서 전체 테스트(`yarn validate`·`yarn test:cov`·경로 없는 `yarn test`)를 돌려야 하면 **한 번에 하나만** 돌린다(여러 세션·에이전트가 동시에 띄우지 않는다). 부하 중에 난 간헐 실패는 결함으로 단정하기 전에 단독 재실행으로 확인한다.
 
 ---
 

@@ -317,9 +317,11 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 
 | 명령                      | 용도                                                                                                                                                                                |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `yarn validate`           | lint, tsc, dto:check, docs:check, arch:check, test:scripts, test:cov를 차례로 실행합니다(pre-push와 동일)                                                                           |
+| `yarn validate:push`      | pre-push 훅이 실행합니다. lint, tsc, dto:check, docs:check, arch:check, test:scripts는 전부, jest는 변경에 닿는 spec만(`test:push`) 실행합니다                                      |
+| `yarn validate`           | 위 정적 검사와 전체 test:cov를 차례로 실행합니다(수동 전체 검증용). 운영 맥미니에서는 무거운 테스트를 한 번에 하나만 돌립니다                                                       |
 | `yarn test [경로]`        | Jest 실 DB 통합 테스트를 실행합니다(Docker 필요)                                                                                                                                    |
 | `yarn test:scripts`       | 인프라와 워크플로 spec(`scripts/*.spec.ts`)을 실행합니다                                                                                                                            |
+| `yarn test:push`          | 기준 커밋(`origin/develop` merge-base) 대비 변경으로 jest 범위(전체·관련 spec·생략)를 골라 실행합니다. `--dry-run`은 계획만 출력합니다                                              |
 | `yarn graphql:codegen`    | SDL에서 TypeScript 타입을 생성합니다                                                                                                                                                |
 | `yarn dto:check`          | SDL input과 DTO class의 동기화를 검사합니다                                                                                                                                         |
 | `yarn docs:check`         | SDL description 커버리지를 검사합니다                                                                                                                                               |
@@ -369,7 +371,10 @@ yarn test                     # 전체 실행 (Docker 필요)
 yarn test src/features/order  # 특정 도메인만 실행
 yarn test:cov                 # 커버리지 측정 (임계값: statements 96 / branches 86 / functions 92 / lines 96)
 yarn test:scripts             # 인프라 spec 실행
+yarn test:push --dry-run      # pre-push가 돌릴 jest 범위 확인
 ```
+
+pre-push는 정적 검사를 모두 돌리고, jest는 변경에 닿는 spec만 실행합니다. SDL·prisma·테스트 인프라·의존성·전역 배선처럼 import 그래프로 추적할 수 없는 변경이면 전체를 돌립니다. 전체 회귀와 커버리지 임계는 CI `check`(필수 체크)가 맡습니다. 개발 머신이 운영 맥미니를 겸하고 테스트 컨테이너가 운영과 같은 VM을 나눠 쓰므로, 전체 테스트(`yarn validate`·`yarn test:cov`)는 한 번에 하나만 돌립니다. 근거는 [아키텍처 컨벤션 §9](./docs/guide/architecture-conventions.md#9-테스트-규약)에 있습니다.
 
 검사기와 게이트를 만들 때는 "막아야 할 것을 실제로 막는지"를 확인하는 **반증 케이스**를 테스트의 본체로 둡니다. CI도 같은 testcontainers 구성으로 실행하므로 로컬과 환경 차이가 거의 없습니다.
 
@@ -402,7 +407,7 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 | Workflow                         | Trigger                                     | 역할                                                                                                                                                        |
 | -------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                    | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 통합 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
+| `pr-check.yml`                   | PR · push (main/develop)                    | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 전체 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
 | `codeql.yml`                     | PR · push · 주간                            | CodeQL 정적 보안 분석을 실행합니다                                                                                                                          |
 | `knip.yml` · `nestjs-doctor.yml` | PR                                          | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                         |
 | `build-image.yml`                | PR(빌드만) · main **CI 성공 뒤**(GHCR 푸시) | arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                                            |
