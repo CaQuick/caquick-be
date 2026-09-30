@@ -60,7 +60,7 @@ jobs:
       - name: Architecture check (dependency-cruiser)
         run: yarn arch:check
 
-      # 전체 회귀·커버리지 임계는 여기서만 — 로컬 pre-push는 변경에 닿는 spec만 돌린다.
+      # 전체 회귀·커버리지 임계는 CI(check·coverage-report)가 맡는다 — 로컬 pre-push는 변경에 닿는 spec만 돌린다.
       - name: Test with coverage
         run: yarn test:cov
 
