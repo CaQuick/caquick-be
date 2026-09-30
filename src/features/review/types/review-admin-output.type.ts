@@ -1,3 +1,4 @@
+import type { ReviewMedia } from '@/features/review/types/review-listing-output.type';
 import type {
   ReviewReportReason,
   ReviewReportStatus,
@@ -28,6 +29,7 @@ export interface AdminReviewReportDetailOutput {
     content: string | null;
     storeId: string;
     deleted: boolean;
+    media: ReviewMedia[];
   };
 }
 
@@ -43,6 +45,7 @@ export interface AdminReviewOutput {
   commentCount: number;
   likeCount: number;
   deleted: boolean;
+  media: ReviewMedia[];
   createdAt: Date;
 }
 

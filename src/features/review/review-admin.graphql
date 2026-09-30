@@ -153,6 +153,10 @@ type AdminReviewReportTarget {
   이미 삭제된 대상이면 true.
   """
   deleted: Boolean!
+  """
+  리뷰 대상이면 첨부 미디어(sortOrder 순, 삭제된 대상이면 함께 내려간 미디어). 댓글 대상이면 빈 배열.
+  """
+  media: [ReviewMedia!]!
 }
 
 """
@@ -236,6 +240,10 @@ type AdminReview {
   삭제된 리뷰면 true.
   """
   deleted: Boolean!
+  """
+  첨부 미디어(sortOrder 순). 삭제된 리뷰면 리뷰와 함께 내려간 미디어. 없으면 빈 배열.
+  """
+  media: [ReviewMedia!]!
   """
   작성 시각.
   """

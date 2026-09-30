@@ -4,18 +4,36 @@ import type {
   AdminReviewReportDetailRow,
   AdminReviewRow,
 } from '@/features/review/repositories/review-admin.repository';
+import type { ReviewMediaRow } from '@/features/review/repositories/review-read.repository';
+import { toReviewMedia } from '@/features/review/services/review-listing-mappers.helper';
 import type {
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
   AdminReviewReportOutput,
 } from '@/features/review/types/review-admin-output.type';
+import type { ReviewMedia } from '@/features/review/types/review-listing-output.type';
 
 /** 작성자 노출 정책은 common 헬퍼가 단일 소스(리뷰 화면과 동일). */
 function nicknameOf(account: {
   user_profile: { nickname: string; deleted_at: Date | null } | null;
 }): string | null {
   return anonymizeReviewAuthor(account.user_profile).nickname;
+}
+
+/**
+ * 리뷰가 보여 주던 사진. 활성 리뷰는 활성 사진만, 삭제 리뷰는 리뷰와 같은 시각에 함께 내려간
+ * 세트만 남긴다 — 두 삭제 경로가 리뷰와 사진에 같은 now를 쓰고, 재작성 전 세대 사진은 복원
+ * 시각으로 따로 내려가 있어 걸러진다.
+ */
+function adminMediaOf(review: {
+  deleted_at: Date | null;
+  media: (ReviewMediaRow & { deleted_at: Date | null })[];
+}): ReviewMedia[] {
+  const at = review.deleted_at?.getTime() ?? null;
+  return review.media
+    .filter((m) => (m.deleted_at?.getTime() ?? null) === at)
+    .map(toReviewMedia);
 }
 
 export function toAdminReviewReportOutput(row: {
@@ -66,6 +84,7 @@ export function toAdminReviewReportDetailOutput(
         content: c.content,
         storeId: c.review.store_id.toString(),
         deleted: c.deleted_at !== null,
+        media: [],
       },
     };
   }
@@ -81,6 +100,7 @@ export function toAdminReviewReportDetailOutput(
         content: r.content,
         storeId: r.store_id.toString(),
         deleted: r.deleted_at !== null,
+        media: adminMediaOf(r),
       },
     };
   }
@@ -101,6 +121,7 @@ export function toAdminReviewOutput(row: AdminReviewRow): AdminReviewOutput {
     commentCount: row._count.comments,
     likeCount: row._count.likes,
     deleted: row.deleted_at !== null,
+    media: adminMediaOf(row),
     createdAt: row.created_at,
   };
 }
