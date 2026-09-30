@@ -9,13 +9,14 @@ export type ReviewOptionSummaryItem = {
 
 export interface ReviewOrderItemSnapshot {
   product_name_snapshot: string;
+  store_name_snapshot: string;
   /** Json? 컬럼은 null 대신 Prisma.DbNull로 써야 한다 — 그대로 spread 가능한 형태 */
   option_summary: ReviewOptionSummaryItem[] | typeof Prisma.DbNull;
   before_image_url: string | null;
 }
 
 /**
- * 리뷰 작성 시점에 주문 품목에서 표시값을 복사한다 — 이후 조회는 review 컬럼만 읽는다.
+ * 리뷰 작성 시점에 주문 품목에서 표시값(상품명·매장명·옵션·before 이미지)을 복사한다 — 이후 조회는 review 컬럼만 읽는다.
  * 옵션은 활성 option_item을 id 순으로, before 이미지는 활성 free_edit 첫 장(sort_order·id 순). 옵션이 없으면 null.
  */
 export async function snapshotReviewOrderItem(
@@ -26,6 +27,7 @@ export async function snapshotReviewOrderItem(
     where: { id: orderItemId },
     select: {
       product_name_snapshot: true,
+      store_name_snapshot: true,
       option_items: {
         where: activeWhere,
         orderBy: { id: 'asc' },
@@ -41,6 +43,7 @@ export async function snapshotReviewOrderItem(
   });
   return {
     product_name_snapshot: item.product_name_snapshot,
+    store_name_snapshot: item.store_name_snapshot,
     option_summary:
       item.option_items.length > 0
         ? item.option_items.map((o) => ({

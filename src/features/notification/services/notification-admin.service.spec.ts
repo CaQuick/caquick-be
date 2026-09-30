@@ -1,3 +1,4 @@
+import { ClockService } from '@/common/providers/clock.service';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -12,7 +13,7 @@ import { OutboxDispatcherService } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount } from '@/test/factories';
+import { createAccount, createAccountCredential } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import {
   drainOutbox,
@@ -20,7 +21,11 @@ import {
   outboxTestProviders,
 } from '@/test/outbox';
 
+const T0 = new Date('2026-10-01T09:00:00.000Z');
+const MINUTE = 60_000;
+
 describe('AdminNotificationService (real DB)', () => {
+  let now = T0;
   let service: AdminNotificationService;
   let dispatcher: OutboxDispatcherService;
   let auditLogs: IAuditLogRepository;
@@ -34,7 +39,8 @@ describe('AdminNotificationService (real DB)', () => {
         NotificationAdminRepository,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
-        ...outboxTestProviders(),
+        ...outboxTestProviders({ clock: true }),
+        { provide: ClockService, useValue: { now: () => now } },
         NotificationOutboxConsumer,
         NotificationRepository,
       ],
@@ -51,6 +57,7 @@ describe('AdminNotificationService (real DB)', () => {
   });
 
   beforeEach(async () => {
+    now = T0;
     await truncateAll();
   });
 
@@ -156,7 +163,11 @@ describe('AdminNotificationService (real DB)', () => {
         targetKind: 'ALL_USERS',
       });
 
-      expect(result).toEqual({ sentCount: 2, skippedAccountIds: [] });
+      expect(result).toEqual({
+        sentCount: 2,
+        skippedAccountIds: [],
+        broadcastId: expect.any(String),
+      });
       await drainOutbox(dispatcher);
       const rows = await prisma.notification.findMany({
         orderBy: { account_id: 'asc' },
@@ -241,6 +252,7 @@ describe('AdminNotificationService (real DB)', () => {
 
       expect(replay).toEqual(first);
       expect(await prisma.outbox.count()).toBe(1);
+      expect(await prisma.notificationBroadcast.count()).toBe(1);
       expect(
         await prisma.auditLog.count({ where: { target_type: 'NOTIFICATION' } }),
       ).toBe(1);
@@ -266,6 +278,7 @@ describe('AdminNotificationService (real DB)', () => {
 
       expect(results[0]).toEqual(results[1]);
       expect(await prisma.outbox.count()).toBe(1);
+      expect(await prisma.notificationBroadcast.count()).toBe(1);
       expect(
         await prisma.auditLog.count({ where: { target_type: 'NOTIFICATION' } }),
       ).toBe(1);
@@ -287,6 +300,7 @@ describe('AdminNotificationService (real DB)', () => {
         'audit down',
       );
       expect(await prisma.outbox.count()).toBe(0);
+      expect(await prisma.notificationBroadcast.count()).toBe(0);
       spy.mockRestore();
 
       await service.adminSendNotification(actor, input);
@@ -317,6 +331,383 @@ describe('AdminNotificationService (real DB)', () => {
       expect(
         await prisma.notification.count({ where: { account_id: user.id } }),
       ).toBe(3);
+    });
+  });
+
+  describe('발송 이력', () => {
+    const input = {
+      ...base,
+      targetKind: 'ACCOUNT_IDS' as const,
+    };
+
+    async function namedAdmin(
+      name: string | null,
+      username: string | null,
+    ): Promise<bigint> {
+      const account = await createAccount(prisma, {
+        account_type: 'ADMIN',
+        name,
+      });
+      if (username !== null) {
+        await createAccountCredential(prisma, {
+          account_id: account.id,
+          username,
+        });
+      }
+      return account.id;
+    }
+
+    it('발송 요청과 같은 tx에 이력 1행을 남기고 broadcastId·요청 시각·대상·제외 ID를 기록한다', async () => {
+      const actor = await namedAdmin('이찬우', 'chanwoo7');
+      const user = await createAccount(prisma, { account_type: 'USER' });
+
+      const result = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString(), '999999'],
+      });
+
+      const row = await prisma.notificationBroadcast.findFirstOrThrow();
+      const event = await prisma.outbox.findFirstOrThrow();
+      expect(result.broadcastId).toBe(row.id.toString());
+      expect(row).toMatchObject({
+        event_id: event.event_id,
+        actor_account_id: actor,
+        actor_label: '이찬우(chanwoo7)',
+        type: 'SYSTEM',
+        title: '점검 안내',
+        body: base.body,
+        target_kind: 'ACCOUNT_IDS',
+        target_count: 1,
+        skipped_count: 1,
+        target_account_ids: [user.id.toString()],
+        skipped_account_ids: ['999999'],
+        delivered_count: null,
+        completed_at: null,
+        created_at: T0,
+      });
+      expect(event.occurred_at).toEqual(T0);
+    });
+
+    it('ALL_USERS 이력은 대상 ID를 싣지 않고(null) 제외 ID는 빈 배열이다', async () => {
+      const actor = await admin();
+      await createAccount(prisma, { account_type: 'USER' });
+
+      await service.adminSendNotification(actor, {
+        ...base,
+        targetKind: 'ALL_USERS',
+      });
+
+      expect(
+        await prisma.notificationBroadcast.findFirstOrThrow(),
+      ).toMatchObject({
+        target_kind: 'ALL_USERS',
+        target_count: 1,
+        skipped_count: 0,
+        target_account_ids: null,
+        skipped_account_ids: [],
+      });
+    });
+
+    it.each([
+      ['이름·아이디', '이찬우', 'chanwoo7', false, '이찬우(chanwoo7)'],
+      ['이름만', '이찬우', null, false, '이찬우'],
+      ['아이디만', null, 'chanwoo7', false, 'chanwoo7'],
+      ['공백 이름', '  ', 'chanwoo7', false, 'chanwoo7'],
+      ['삭제된 자격증명', '이찬우', 'chanwoo7', true, '이찬우'],
+      ['둘 다 없음', null, null, false, null],
+    ])(
+      '발송자 라벨 스냅샷: %s',
+      async (_label, name, username, credentialDeleted, expected) => {
+        const actor = await namedAdmin(name, username);
+        if (credentialDeleted) {
+          await prisma.accountCredential.updateMany({
+            where: { account_id: actor },
+            data: { deleted_at: T0 },
+          });
+        }
+        const user = await createAccount(prisma, { account_type: 'USER' });
+
+        await service.adminSendNotification(actor, {
+          ...input,
+          accountIds: [user.id.toString()],
+        });
+
+        const [row] = await prisma.notificationBroadcast.findMany();
+        expect(row.actor_label).toBe(expected);
+        const {
+          items: [item],
+        } = await service.adminNotificationBroadcasts(actor);
+        expect(item.actorLabel).toBe(expected);
+      },
+    );
+
+    it('같은 키의 재요청은 이력을 새로 만들지 않고 처음 이력 ID를 돌려준다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const first = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+      now = new Date(T0.getTime() + MINUTE);
+      const replay = await service.adminSendNotification(actor, {
+        ...input,
+        title: '다른 제목',
+        accountIds: [user.id.toString()],
+      });
+
+      expect(replay.broadcastId).toBe(first.broadcastId);
+      const rows = await prisma.notificationBroadcast.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ title: '점검 안내', created_at: T0 });
+    });
+
+    it('목록은 최신 요청이 먼저 오고 유형·대상 필터와 커서로 나눠 본다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const sends: [
+        string,
+        'SYSTEM' | 'MARKETING',
+        'ALL_USERS' | 'ACCOUNT_IDS',
+      ][] = [
+        ['k-000001', 'SYSTEM', 'ACCOUNT_IDS'],
+        ['k-000002', 'MARKETING', 'ALL_USERS'],
+        ['k-000003', 'SYSTEM', 'ALL_USERS'],
+        ['k-000004', 'MARKETING', 'ACCOUNT_IDS'],
+        ['k-000005', 'SYSTEM', 'ACCOUNT_IDS'],
+      ];
+      const ids: string[] = [];
+      for (const [idempotencyKey, type, targetKind] of sends) {
+        const r = await service.adminSendNotification(actor, {
+          ...base,
+          idempotencyKey,
+          type,
+          targetKind,
+          accountIds: [user.id.toString()],
+        });
+        ids.push(r.broadcastId);
+      }
+
+      const page1 = await service.adminNotificationBroadcasts(actor, {
+        limit: 2,
+      });
+      expect(page1.items.map((i) => i.id)).toEqual([ids[4], ids[3]]);
+      expect(page1).toMatchObject({ totalCount: 5, hasMore: true });
+      const page2 = await service.adminNotificationBroadcasts(actor, {
+        limit: 2,
+        cursor: page1.nextCursor!,
+      });
+      expect(page2.items.map((i) => i.id)).toEqual([ids[2], ids[1]]);
+      const page3 = await service.adminNotificationBroadcasts(actor, {
+        limit: 2,
+        cursor: page2.nextCursor!,
+      });
+      expect(page3).toMatchObject({ hasMore: false, nextCursor: null });
+      expect(page3.items.map((i) => i.id)).toEqual([ids[0]]);
+
+      const system = await service.adminNotificationBroadcasts(actor, {
+        type: 'SYSTEM',
+      });
+      expect(system.items.map((i) => i.id)).toEqual([ids[4], ids[2], ids[0]]);
+      expect(system.totalCount).toBe(3);
+      const systemAccounts = await service.adminNotificationBroadcasts(actor, {
+        type: 'SYSTEM',
+        targetKind: 'ACCOUNT_IDS',
+      });
+      expect(systemAccounts.items.map((i) => i.id)).toEqual([ids[4], ids[0]]);
+      expect(systemAccounts.totalCount).toBe(2);
+      const allUsers = await service.adminNotificationBroadcasts(actor, {
+        targetKind: 'ALL_USERS',
+      });
+      expect(allUsers.items.map((i) => i.id)).toEqual([ids[2], ids[1]]);
+      expect(allUsers.items[0]).toMatchObject({
+        targetAccountIds: [],
+        skippedAccountIds: [],
+      });
+    });
+
+    it.each(['abc', '-1', '1.5', '18446744073709551616'])(
+      '반증: 커서 %p는 INVALID_CURSOR',
+      async (cursor) => {
+        const actor = await admin();
+        await expect(
+          service.adminNotificationBroadcasts(actor, { cursor }),
+        ).rejects.toThrowDomain('INVALID_CURSOR');
+      },
+    );
+
+    it.each([
+      ['요청 직후', 'IN_PROGRESS', 0],
+      ['30분 1ms 전', 'IN_PROGRESS', 30 * MINUTE - 1],
+      ['정확히 30분', 'DELAYED', 30 * MINUTE],
+      ['하루 뒤', 'DELAYED', 24 * 60 * MINUTE],
+    ])('완료 기록이 없으면 %s는 %s다', async (_label, expected, elapsedMs) => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+
+      now = new Date(T0.getTime() + elapsedMs);
+      const {
+        items: [item],
+      } = await service.adminNotificationBroadcasts(actor);
+      expect(item).toMatchObject({
+        status: expected,
+        deliveredCount: 0,
+        completedAt: null,
+        requestedAt: T0,
+      });
+    });
+
+    it('소비자가 끝내면 완료 시각·저장 수가 기록되고 30분이 지나도 COMPLETED다', async () => {
+      const actor = await admin();
+      const [a, b] = await Promise.all([
+        createAccount(prisma, { account_type: 'USER' }),
+        createAccount(prisma, { account_type: 'USER' }),
+      ]);
+      await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [a.id, b.id].map(String),
+      });
+      const done = new Date(T0.getTime() + 5_000);
+      now = done;
+      await drainOutbox(dispatcher);
+
+      now = new Date(T0.getTime() + 60 * MINUTE);
+      const {
+        items: [item],
+      } = await service.adminNotificationBroadcasts(actor);
+      expect(item).toMatchObject({
+        status: 'COMPLETED',
+        deliveredCount: 2,
+        targetCount: 2,
+        completedAt: done,
+      });
+    });
+
+    it('미완료 이력의 저장 수는 조회 때 알림을 세어 채운다(삭제된 알림 제외)', async () => {
+      const actor = await admin();
+      const users = await Promise.all([
+        createAccount(prisma, { account_type: 'USER' }),
+        createAccount(prisma, { account_type: 'USER' }),
+        createAccount(prisma, { account_type: 'USER' }),
+      ]);
+      await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: users.map((u) => u.id.toString()),
+      });
+      await drainOutbox(dispatcher);
+      // 진행 중 상태 재현: 완료 기록을 지우고 알림 1건을 삭제 처리한다
+      await prisma.notificationBroadcast.updateMany({
+        data: { completed_at: null, delivered_count: null },
+      });
+      await prisma.notification.updateMany({
+        where: { account_id: users[0].id },
+        data: { deleted_at: T0 },
+      });
+
+      const {
+        items: [item],
+      } = await service.adminNotificationBroadcasts(actor);
+      expect(item).toMatchObject({ status: 'IN_PROGRESS', deliveredCount: 2 });
+    });
+  });
+
+  describe('발송 이력 단건', () => {
+    const input = {
+      ...base,
+      targetKind: 'ACCOUNT_IDS' as const,
+    };
+
+    it('ID로 이력 1건을 목록과 같은 값으로 주고 목록 페이지 밖의 이력도 찾는다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const oldest = await service.adminSendNotification(actor, {
+        ...input,
+        idempotencyKey: 'detail-key-0',
+        accountIds: [user.id.toString()],
+      });
+      await drainOutbox(dispatcher);
+      await service.adminSendNotification(actor, {
+        ...input,
+        idempotencyKey: 'detail-key-1',
+        accountIds: [user.id.toString()],
+      });
+
+      const firstPage = await service.adminNotificationBroadcasts(actor, {
+        limit: 1,
+      });
+      expect(firstPage.items.map((i) => i.id)).not.toContain(
+        oldest.broadcastId,
+      );
+
+      const detail = await service.adminNotificationBroadcast(
+        actor,
+        BigInt(oldest.broadcastId),
+      );
+      const {
+        items: [listed],
+      } = await service.adminNotificationBroadcasts(actor, {
+        limit: 1,
+        cursor: firstPage.nextCursor!,
+      });
+      expect(detail).toEqual(listed);
+      expect(detail).toMatchObject({
+        id: oldest.broadcastId,
+        status: 'COMPLETED',
+        deliveredCount: 1,
+        targetAccountIds: [user.id.toString()],
+      });
+    });
+
+    it('미완료 이력의 저장 수는 조회 때 알림을 세어 채운다', async () => {
+      const actor = await admin();
+      const users = await Promise.all([
+        createAccount(prisma, { account_type: 'USER' }),
+        createAccount(prisma, { account_type: 'USER' }),
+      ]);
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: users.map((u) => u.id.toString()),
+      });
+      await drainOutbox(dispatcher);
+      await prisma.notificationBroadcast.updateMany({
+        data: { completed_at: null, delivered_count: null },
+      });
+
+      expect(
+        await service.adminNotificationBroadcast(actor, BigInt(broadcastId)),
+      ).toMatchObject({ status: 'IN_PROGRESS', deliveredCount: 2 });
+    });
+
+    it('없는 ID면 다른 이력이 있어도 null이다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+
+      expect(
+        await service.adminNotificationBroadcast(
+          actor,
+          BigInt(broadcastId) + 1n,
+        ),
+      ).toBeNull();
+    });
+
+    it('관리자가 아니면 거절한다', async () => {
+      const actor = await admin();
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      const { broadcastId } = await service.adminSendNotification(actor, {
+        ...input,
+        accountIds: [user.id.toString()],
+      });
+
+      await expect(
+        service.adminNotificationBroadcast(user.id, BigInt(broadcastId)),
+      ).rejects.toThrowDomain('ADMIN_ONLY');
     });
   });
 });

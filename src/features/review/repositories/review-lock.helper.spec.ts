@@ -94,7 +94,7 @@ describe('review-lock.helper (real DB)', () => {
         resolvePendingReports(tx, {
           where: { review_id: review.id },
           now,
-          resolvedByAccountId: admin.id,
+          resolvedBy: { accountId: admin.id, label: '관리자(admin1)' },
           note: 'closed',
         }),
       );
@@ -106,6 +106,7 @@ describe('review-lock.helper (real DB)', () => {
       expect(after).toMatchObject({
         status: 'RESOLVED',
         resolved_by_account_id: admin.id,
+        resolved_by_label_snapshot: '관리자(admin1)',
         resolved_at: now,
         resolution_note: 'closed',
       });
@@ -125,14 +126,14 @@ describe('review-lock.helper (real DB)', () => {
       ).toBe('PENDING');
     });
 
-    it('처리자 없이(작성자 삭제) 종결하면 resolved_by_account_id는 null', async () => {
+    it('처리자 없이(작성자 삭제) 종결하면 처리자 id·라벨은 null', async () => {
       const review = await createReview(prisma);
       const report = await createReviewReport(prisma, { review_id: review.id });
       await prisma.$transaction((tx) =>
         resolvePendingReports(tx, {
           where: { review_id: review.id },
           now: new Date(),
-          resolvedByAccountId: null,
+          resolvedBy: null,
           note: 'author',
         }),
       );
@@ -141,6 +142,7 @@ describe('review-lock.helper (real DB)', () => {
       });
       expect(after.status).toBe('RESOLVED');
       expect(after.resolved_by_account_id).toBeNull();
+      expect(after.resolved_by_label_snapshot).toBeNull();
     });
   });
 });

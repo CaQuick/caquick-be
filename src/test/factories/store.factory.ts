@@ -18,6 +18,7 @@ export interface StoreOverrides {
   business_hours_text?: string | null;
   profile_image_url?: string | null;
   greeting_message?: string | null;
+  seller_label_snapshot?: string | null;
   deleted_at?: Date | null;
   access_guide_text?: string | null;
   regular_closure_text?: string | null;
@@ -53,6 +54,7 @@ export async function createStore(
       business_hours_text: overrides.business_hours_text ?? null,
       profile_image_url: overrides.profile_image_url ?? null,
       greeting_message: overrides.greeting_message ?? null,
+      seller_label_snapshot: overrides.seller_label_snapshot ?? null,
       deleted_at: overrides.deleted_at ?? null,
       access_guide_text: overrides.access_guide_text ?? null,
       regular_closure_text: overrides.regular_closure_text ?? null,

@@ -3,7 +3,11 @@ import { Injectable } from '@nestjs/common';
 import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
-import { AccountUserRepository, UserBaseService } from '@/features/auth';
+import {
+  AccountUserRepository,
+  UserBaseService,
+  type ActiveUserAccount,
+} from '@/features/auth';
 import {
   MAX_REVIEW_REPORT_DETAIL_LENGTH,
   MAX_REVIEW_REPORT_SNAPSHOT_LENGTH,
@@ -31,9 +35,9 @@ export class UserReportService extends UserBaseService {
     accountId: bigint,
     input: ReportReviewInput,
   ): Promise<ReviewReportResult> {
-    await this.requireActiveUser(accountId);
+    const reporter = await this.requireActiveUser(accountId);
     return this.submit(
-      accountId,
+      reporter,
       { kind: 'review', id: parseId(input.reviewId) },
       input,
       'REVIEW_NOT_FOUND',
@@ -44,9 +48,9 @@ export class UserReportService extends UserBaseService {
     accountId: bigint,
     input: ReportReviewCommentInput,
   ): Promise<ReviewReportResult> {
-    await this.requireActiveUser(accountId);
+    const reporter = await this.requireActiveUser(accountId);
     return this.submit(
-      accountId,
+      reporter,
       { kind: 'review_comment', id: parseId(input.commentId) },
       input,
       'REVIEW_COMMENT_NOT_FOUND',
@@ -54,13 +58,14 @@ export class UserReportService extends UserBaseService {
   }
 
   private async submit(
-    accountId: bigint,
+    reporter: ActiveUserAccount,
     target: ReportTarget,
     input: { reason: ReviewReport['reason']; detail?: string | null },
     notFoundCode: ErrorCode,
   ): Promise<ReviewReportResult> {
     const result = await this.reports.submitReport({
-      reporterAccountId: accountId,
+      reporterAccountId: reporter.id,
+      reporterNickname: reporter.user_profile.nickname,
       target,
       reason: input.reason,
       detail: cleanNullableText(input.detail, MAX_REVIEW_REPORT_DETAIL_LENGTH),

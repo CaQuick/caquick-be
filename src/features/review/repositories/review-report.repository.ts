@@ -42,6 +42,8 @@ export class ReviewReportRepository {
    */
   async submitReport(args: {
     reporterAccountId: bigint;
+    /** 신고 시점 닉네임 스냅샷. 이미 접수된 PENDING을 돌려줄 때는 쓰지 않는다. */
+    reporterNickname: string;
     target: ReportTarget;
     reason: ReviewReportReason;
     detail: string | null;
@@ -81,6 +83,7 @@ export class ReviewReportRepository {
             // 작성자가 삭제·재작성하면 같은 id가 새 내용으로 복원되므로 신고 시점 본문을 남긴다
             content_snapshot:
               target.content?.slice(0, args.snapshotLength) ?? null,
+            reporter_nickname_snapshot: args.reporterNickname,
           },
         });
         return { outcome: 'created', report };

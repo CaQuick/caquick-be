@@ -1,6 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { ClockService } from '@/common/providers/clock.service';
+import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { formatAccountLabel } from '@/common/utils/account-label';
+import { activeOrNull } from '@/common/utils/active-or-null';
 import { parseId } from '@/common/utils/id-parser';
+import { parseIdCursor } from '@/common/utils/keyset-cursor';
+import {
+  normalizeCursorInput,
+  sliceIdCursorPage,
+  toCursorConnection,
+} from '@/common/utils/pagination';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import { deterministicUuid } from '@/common/utils/uuid';
 import {
@@ -12,6 +22,7 @@ import {
   MAX_NOTIFICATION_BODY_LENGTH,
   MAX_NOTIFICATION_TITLE_LENGTH,
 } from '@/features/notification/constants/notification-admin.constants';
+import type { AdminNotificationBroadcastListInput } from '@/features/notification/dto/inputs/admin-notification-broadcast-list.input';
 import type { AdminSendNotificationInput } from '@/features/notification/dto/inputs/admin-send-notification.input';
 import {
   audienceCount,
@@ -22,7 +33,14 @@ import {
   parseNotificationBroadcastRequestedPayload,
 } from '@/features/notification/events/notification-broadcast-requested.event';
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
-import type { AdminSendNotificationResultOutput } from '@/features/notification/types/notification-admin-output.type';
+import {
+  needsLiveDeliveredCount,
+  toAdminNotificationBroadcastOutput,
+} from '@/features/notification/services/notification-admin-mappers.helper';
+import type {
+  AdminNotificationBroadcastOutput,
+  AdminSendNotificationResultOutput,
+} from '@/features/notification/types/notification-admin-output.type';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
 /**
@@ -36,6 +54,7 @@ export class AdminNotificationService extends AdminBaseService {
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
     private readonly repo: NotificationAdminRepository,
+    private readonly clock: ClockService,
   ) {
     super(accounts, auditLogs);
   }
@@ -45,6 +64,7 @@ export class AdminNotificationService extends AdminBaseService {
     input: AdminSendNotificationInput,
   ): Promise<AdminSendNotificationResultOutput> {
     const ctx = await this.requireAdminContext(accountId);
+    const actorLabel = await this.actorLabel(ctx.accountId);
     const { audience, skippedAccountIds } = await this.resolveAudience(input);
     const sentCount = audienceCount(audience);
     const payload: NotificationBroadcastRequestedPayload = {
@@ -59,13 +79,29 @@ export class AdminNotificationService extends AdminBaseService {
       `${ctx.accountId}:${input.idempotencyKey}`,
     );
 
-    // 감사는 이벤트 적재와 같은 tx — 개별 알림 ID가 아니라 발송 요청 자체를 남긴다(대상은 afterJson)
+    const requestedAt = this.clock.now();
+
+    // 이력·감사는 이벤트 적재와 같은 tx — 개별 알림 ID가 아니라 발송 요청 자체를 남긴다(대상은 afterJson)
     const result = await this.repo.requestBroadcast(
       notificationBroadcastRequestedEvent({
         eventId,
         actorAccountId: ctx.accountId,
         payload,
+        occurredAt: requestedAt,
       }),
+      {
+        actorAccountId: ctx.accountId,
+        actorLabel,
+        type: payload.type,
+        title: payload.title,
+        body: payload.body,
+        targetKind: audience.kind,
+        targetCount: sentCount,
+        targetAccountIds:
+          audience.kind === 'ACCOUNT_IDS' ? audience.accountIds : null,
+        skippedAccountIds,
+        requestedAt,
+      },
       (tx) =>
         this.auditLogs.recordAudit(tx, {
           actorAccountId: ctx.accountId,
@@ -83,15 +119,69 @@ export class AdminNotificationService extends AdminBaseService {
           },
         }),
     );
+    const broadcastId = result.broadcastId.toString();
     if (!result.created) {
       // 재생 — 처음 확정한 대상이 정답. 이번 입력으로 다시 계산한 대상은 버린다
       const first = parseNotificationBroadcastRequestedPayload(result.payload);
       return {
         sentCount: audienceCount(first.audience),
         skippedAccountIds: first.skippedAccountIds,
+        broadcastId,
       };
     }
-    return { sentCount, skippedAccountIds };
+    return { sentCount, skippedAccountIds, broadcastId };
+  }
+
+  /** 상태는 조회 시각 기준 — 완료 기록이 없는 요청은 30분이 지나면 지연으로 보인다. */
+  async adminNotificationBroadcasts(
+    accountId: bigint,
+    input?: AdminNotificationBroadcastListInput,
+  ): Promise<CursorConnection<AdminNotificationBroadcastOutput>> {
+    await this.requireAdminContext(accountId);
+    const normalized = normalizeCursorInput({
+      limit: input?.limit ?? null,
+      cursor: input?.cursor != null ? parseIdCursor(input.cursor) : null,
+    });
+    const filter = { type: input?.type, targetKind: input?.targetKind };
+    const [rows, totalCount] = await Promise.all([
+      this.repo.listBroadcasts({ ...filter, ...normalized }),
+      this.repo.countBroadcasts(filter),
+    ]);
+    const page = sliceIdCursorPage(rows, normalized.limit);
+    const liveDelivered = await this.repo.countDeliveredByEventIds(
+      page.items.filter(needsLiveDeliveredCount).map((r) => r.event_id),
+    );
+    const now = this.clock.now();
+    return toCursorConnection(page, totalCount, (row) =>
+      toAdminNotificationBroadcastOutput(row, liveDelivered, now),
+    );
+  }
+
+  /** 공유 링크용 단건 조회. 상태·저장 수 계산은 목록과 같다. */
+  async adminNotificationBroadcast(
+    accountId: bigint,
+    broadcastId: bigint,
+  ): Promise<AdminNotificationBroadcastOutput | null> {
+    await this.requireAdminContext(accountId);
+    const row = await this.repo.findBroadcastById(broadcastId);
+    if (!row) return null;
+    const liveDelivered = await this.repo.countDeliveredByEventIds(
+      needsLiveDeliveredCount(row) ? [row.event_id] : [],
+    );
+    return toAdminNotificationBroadcastOutput(
+      row,
+      liveDelivered,
+      this.clock.now(),
+    );
+  }
+
+  /** 발송 시점 발송자 표시 라벨 스냅샷 — 삭제된 자격증명의 아이디는 쓰지 않는다. */
+  private async actorLabel(accountId: bigint): Promise<string | null> {
+    const actor = await this.accounts.findAdminAccountById(accountId);
+    return formatAccountLabel(
+      actor?.name,
+      activeOrNull(actor?.credential)?.username,
+    );
   }
 
   /**

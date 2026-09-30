@@ -10,7 +10,11 @@ import { AdminModerationService } from '@/features/review/services/review-admin.
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createReviewReport } from '@/test/factories';
+import {
+  createAccount,
+  createReviewMedia,
+  createReviewReport,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('Admin Moderation Resolvers (real DB)', () => {
@@ -50,6 +54,10 @@ describe('Admin Moderation Resolvers (real DB)', () => {
       accountType: 'ADMIN' as const,
     };
     const report = await createReviewReport(prisma);
+    await createReviewMedia(prisma, {
+      review_id: report.review_id!,
+      media_url: 'a.png',
+    });
 
     const queue = await queryResolver.adminReviewReports(user);
     expect(queue.totalCount).toBe(1);
@@ -59,6 +67,7 @@ describe('Admin Moderation Resolvers (real DB)', () => {
       report.id.toString(),
     );
     expect(detail.target.deleted).toBe(false);
+    expect(detail.target.media.map((m) => m.mediaUrl)).toEqual(['a.png']);
 
     const resolved = await mutationResolver.adminResolveReviewReport(user, {
       reportId: report.id.toString(),
@@ -70,6 +79,7 @@ describe('Admin Moderation Resolvers (real DB)', () => {
       includeDeleted: true,
     });
     expect(reviews.items[0].deleted).toBe(true);
+    expect(reviews.items[0].media.map((m) => m.mediaUrl)).toEqual(['a.png']);
     expect((await queryResolver.adminReviewReports(user)).totalCount).toBe(0);
   });
 });

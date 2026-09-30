@@ -3,6 +3,7 @@ import argon2 from 'argon2';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { formatAccountLabel } from '@/common/utils/account-label';
 import {
   LATITUDE_RANGE,
   LONGITUDE_RANGE,
@@ -119,6 +120,7 @@ export class AdminSellerService extends AdminBaseService {
     const passwordHash = await argon2.hash(input.password, {
       type: argon2.argon2id,
     });
+    const name = cleanNullableText(input.name, MAX_ACCOUNT_NAME_LENGTH);
     const profile = {
       business_name: cleanRequiredText(
         input.businessName,
@@ -162,6 +164,8 @@ export class AdminSellerService extends AdminBaseService {
       latitude: parseDecimalOrNull(input.store.latitude, LATITUDE_RANGE),
       longitude: parseDecimalOrNull(input.store.longitude, LONGITUDE_RANGE),
       map_provider: input.store.mapProvider ?? 'NONE',
+      // 관리자 매장 목록이 판매자 계정을 조인하지 않게 생성 시점 라벨을 남긴다(이름·아이디는 이후 바뀌지 않는다)
+      seller_label_snapshot: formatAccountLabel(name, input.username),
     };
     const created = await this.accounts.createSellerAccount(
       {
@@ -169,7 +173,7 @@ export class AdminSellerService extends AdminBaseService {
         username: input.username,
         passwordHash,
         email: cleanNullableText(input.email, MAX_EMAIL_LENGTH),
-        name: cleanNullableText(input.name, MAX_ACCOUNT_NAME_LENGTH),
+        name,
         profile,
       },
       // 매장 행은 catalog 코드가 같은 tx 안에서 만든다(P1-7)

@@ -1,3 +1,4 @@
+import { ClockService } from '@/common/providers/clock.service';
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
@@ -39,7 +40,9 @@ function event(
 // 알림 생성의 단일 진입점 — payload 스냅샷 → 알림 컬럼 매핑, SUBMITTED 무시, 재전달 멱등, 형식 오류는 던진다.
 describe('NotificationOutboxConsumer (real DB)', () => {
   let consumer: NotificationOutboxConsumer;
+  let repo: NotificationRepository;
   let prisma: PrismaClient;
+  let now = OCCURRED_AT;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -48,10 +51,12 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         NotificationRepository,
         // 대상 조회 repository가 발행 API를 주입받는다(08b)
         NotificationAdminRepository,
-        ...outboxPublisherProviders(),
+        ...outboxPublisherProviders({ clock: true }),
+        { provide: ClockService, useValue: { now: () => now } },
       ],
     });
     consumer = module.get(NotificationOutboxConsumer);
+    repo = module.get(NotificationRepository);
     prisma = p;
   });
   afterAll(async () => {
@@ -59,6 +64,7 @@ describe('NotificationOutboxConsumer (real DB)', () => {
     await disconnectTestPrismaClient();
   });
   beforeEach(async () => {
+    now = OCCURRED_AT;
     await truncateAll();
   });
 
@@ -158,6 +164,169 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         })),
       });
     }
+
+    const EVENT_ID = '11111111-1111-4111-8111-111111111111';
+
+    /** 발송 요청 tx가 남기는 이력 행(완료 전 상태). */
+    async function broadcastRow(targetCount: number): Promise<void> {
+      await prisma.notificationBroadcast.create({
+        data: {
+          event_id: EVENT_ID,
+          actor_account_id: 1n,
+          type: 'SYSTEM',
+          title: '공지',
+          body: '본문',
+          target_kind: 'ACCOUNT_IDS',
+          target_count: targetCount,
+          skipped_count: 0,
+          skipped_account_ids: [],
+          created_at: OCCURRED_AT,
+        },
+      });
+    }
+    function accountIdsEvent(ids: bigint[]): OutboxEvent {
+      return event('notification.broadcast_requested', {
+        type: 'SYSTEM',
+        title: '공지',
+        body: '본문',
+        audience: { kind: 'ACCOUNT_IDS', accountIds: ids.map(String) },
+        skippedAccountIds: [],
+      });
+    }
+    function allUsersEvent(maxAccountId: bigint, count: number): OutboxEvent {
+      return event('notification.broadcast_requested', {
+        type: 'SYSTEM',
+        title: '공지',
+        body: '본문',
+        audience: {
+          kind: 'ALL_USERS',
+          maxAccountId: maxAccountId.toString(),
+          count,
+        },
+        skippedAccountIds: [],
+      });
+    }
+    async function history() {
+      return prisma.notificationBroadcast.findUniqueOrThrow({
+        where: { event_id: EVENT_ID },
+      });
+    }
+
+    describe('발송 이력 완료 기록', () => {
+      it('ACCOUNT_IDS는 청크를 전부 넣은 뒤 완료 시각과 실제 저장 수를 기록한다', async () => {
+        await bulkUsers(1_005);
+        const ids = (
+          await prisma.account.findMany({ select: { id: true } })
+        ).map((a) => a.id);
+        await broadcastRow(1_005);
+        now = new Date(OCCURRED_AT.getTime() + 7_000);
+
+        await consumer.handle(accountIdsEvent(ids));
+
+        expect(await history()).toMatchObject({
+          delivered_count: 1_005,
+          completed_at: now,
+        });
+      });
+
+      it('ALL_USERS는 키셋 페이지를 끝까지 훑은 뒤 완료를 기록한다', async () => {
+        await bulkUsers(1_000);
+        const cutoff = (await prisma.account.aggregate({ _max: { id: true } }))
+          ._max.id!;
+        await broadcastRow(1_000);
+
+        await consumer.handle(allUsersEvent(cutoff, 1_000));
+
+        expect(await history()).toMatchObject({
+          delivered_count: 1_000,
+          completed_at: OCCURRED_AT,
+        });
+      });
+
+      it.each([
+        ['ALL_USERS 대상 0명', () => allUsersEvent(0n, 0)],
+        ['ACCOUNT_IDS 전원 비활성', () => accountIdsEvent([999_999n])],
+      ])('%s이면 저장 없이 즉시 완료한다', async (_label, build) => {
+        await broadcastRow(0);
+
+        await consumer.handle(build());
+
+        expect(await prisma.notification.count()).toBe(0);
+        expect(await history()).toMatchObject({
+          delivered_count: 0,
+          completed_at: OCCURRED_AT,
+        });
+      });
+
+      it('재전달은 저장 수를 다시 세고 첫 완료 시각은 유지한다(멱등)', async () => {
+        const user = await createAccount(prisma, { account_type: 'USER' });
+        await broadcastRow(1);
+        await consumer.handle(accountIdsEvent([user.id]));
+
+        now = new Date(OCCURRED_AT.getTime() + 60_000);
+        await consumer.handle(accountIdsEvent([user.id]));
+
+        expect(await prisma.notification.count()).toBe(1);
+        expect(await history()).toMatchObject({
+          delivered_count: 1,
+          completed_at: OCCURRED_AT,
+        });
+      });
+
+      it('요청 뒤 정지된 계정은 저장되지 않아 저장 수가 대상 수보다 적다', async () => {
+        const [stays, suspended] = await Promise.all([
+          createAccount(prisma, { account_type: 'USER' }),
+          createAccount(prisma, { account_type: 'USER' }),
+        ]);
+        await broadcastRow(2);
+        await prisma.account.update({
+          where: { id: suspended.id },
+          data: { status: 'SUSPENDED' },
+        });
+
+        await consumer.handle(accountIdsEvent([stays.id, suspended.id]));
+
+        expect(await history()).toMatchObject({
+          target_count: 2,
+          delivered_count: 1,
+        });
+      });
+
+      it('반증: 청크 저장이 중간에 실패하면 완료를 기록하지 않는다', async () => {
+        await bulkUsers(1_005);
+        const ids = (
+          await prisma.account.findMany({ select: { id: true } })
+        ).map((a) => a.id);
+        await broadcastRow(1_005);
+        const original = repo.createFromEvent.bind(repo);
+        const spy = jest
+          .spyOn(repo, 'createFromEvent')
+          .mockImplementationOnce(original)
+          .mockRejectedValueOnce(new Error('db down'));
+
+        await expect(consumer.handle(accountIdsEvent(ids))).rejects.toThrow(
+          'db down',
+        );
+        spy.mockRestore();
+
+        expect(await prisma.notification.count()).toBe(1_000);
+        expect(await history()).toMatchObject({
+          delivered_count: null,
+          completed_at: null,
+        });
+      });
+
+      it('이력 행이 없는 요청(이력 도입 전)도 알림은 저장하고 던지지 않는다', async () => {
+        const user = await createAccount(prisma, { account_type: 'USER' });
+
+        await expect(
+          consumer.handle(accountIdsEvent([user.id])),
+        ).resolves.toBeUndefined();
+
+        expect(await prisma.notification.count()).toBe(1);
+        expect(await prisma.notificationBroadcast.count()).toBe(0);
+      });
+    });
 
     it('ACCOUNT_IDS 목록은 청크 단위로 만들고 재전달에도 한 번씩만 남는다', async () => {
       await bulkUsers(1_005);

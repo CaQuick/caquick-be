@@ -7,6 +7,7 @@ import { AdminAccountMutationResolver } from '@/features/auth/resolvers/auth-adm
 import { AdminAccountQueryResolver } from '@/features/auth/resolvers/auth-admin-account-query.resolver';
 import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccountCredential } from '@/test/factories';
@@ -25,6 +26,10 @@ describe('Admin Account Resolvers (real DB)', () => {
         AdminAccountService,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        {
+          provide: TokenBlacklistService,
+          useValue: { blockCredentials: jest.fn() },
+        },
       ],
     });
     queryResolver = module.get(AdminAccountQueryResolver);
@@ -73,5 +78,30 @@ describe('Admin Account Resolvers (real DB)', () => {
 
     expect(list.totalCount).toBe(2);
     expect(list.items[0].accountId).toBe(created.accountId);
+  });
+
+  it('Mutation.adminResetAdminPassword → Query.adminAdmins: 대상의 mustChangePassword가 true로 바뀐다', async () => {
+    const actor = await createAccountCredential(prisma, {
+      account_type: 'ADMIN',
+    });
+    const target = await createAccountCredential(prisma, {
+      account_type: 'ADMIN',
+    });
+    const user = {
+      accountId: actor.account_id.toString(),
+      accountType: 'ADMIN' as const,
+    };
+
+    const ok = await mutationResolver.adminResetAdminPassword(user, {
+      accountId: target.account_id.toString(),
+      newPassword: 'Reset!Pass9',
+    });
+    const list = await queryResolver.adminAdmins(user, { limit: 10 });
+
+    expect(ok).toBe(true);
+    const row = list.items.find(
+      (i) => i.accountId === target.account_id.toString(),
+    );
+    expect(row?.mustChangePassword).toBe(true);
   });
 });

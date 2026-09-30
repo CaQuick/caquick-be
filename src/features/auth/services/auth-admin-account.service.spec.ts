@@ -5,14 +5,22 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createAccountCredential } from '@/test/factories';
+import {
+  createAccount,
+  createAccountCredential,
+  createRefreshSession,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 describe('AdminAccountService (real DB)', () => {
   let service: AdminAccountService;
   let prisma: PrismaClient;
+  const blacklist = {
+    blockCredentials: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -20,6 +28,7 @@ describe('AdminAccountService (real DB)', () => {
         AdminAccountService,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        { provide: TokenBlacklistService, useValue: blacklist },
       ],
     });
     service = module.get(AdminAccountService);
@@ -33,6 +42,7 @@ describe('AdminAccountService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    blacklist.blockCredentials.mockClear();
   });
 
   async function makeAdmin(overrides: { username?: string } = {}) {
@@ -296,6 +306,172 @@ describe('AdminAccountService (real DB)', () => {
       expect(
         await prisma.account.count({ where: { account_type: 'ADMIN' } }),
       ).toBe(2);
+      spy.mockRestore();
+    });
+  });
+
+  describe('adminResetAdminPassword', () => {
+    const OLD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$mock_salt$mock_hash';
+
+    it('비밀번호를 교체하고 변경을 강제하며 세션을 전부 폐기하고 audit을 남긴 뒤 블랙리스트에 등록한다', async () => {
+      const actor = await makeAdmin();
+      const target = await makeAdmin();
+      const session = await createRefreshSession(prisma, {
+        account_id: target,
+      });
+
+      const ok = await service.adminResetAdminPassword(actor, {
+        accountId: target.toString(),
+        newPassword: 'Reset!Pass9',
+      });
+
+      expect(ok).toBe(true);
+      const credential = await prisma.accountCredential.findUniqueOrThrow({
+        where: { account_id: target },
+      });
+      expect(await argon2.verify(credential.password_hash, 'Reset!Pass9')).toBe(
+        true,
+      );
+      expect(credential.must_change_password).toBe(true);
+      expect(credential.password_updated_at).not.toBeNull();
+      // cutoff = DB에 기록한 변경 시각
+      expect(blacklist.blockCredentials).toHaveBeenCalledTimes(1);
+      expect(blacklist.blockCredentials).toHaveBeenCalledWith(
+        target,
+        credential.password_updated_at,
+      );
+      const revoked = await prisma.authRefreshSession.findUniqueOrThrow({
+        where: { id: session.id },
+      });
+      expect(revoked.revoked_at).not.toBeNull();
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { target_type: 'ACCOUNT', target_id: target, action: 'UPDATE' },
+      });
+      expect(audit).toMatchObject({ actor_account_id: actor, store_id: null });
+      expect(audit.after_json).toEqual({
+        passwordReset: true,
+        mustChangePassword: true,
+      });
+    });
+
+    it('본인 계정이면 403이고 비밀번호·세션·감사가 그대로다', async () => {
+      const actor = await makeAdmin();
+      const session = await createRefreshSession(prisma, {
+        account_id: actor,
+      });
+
+      await expect(
+        service.adminResetAdminPassword(actor, {
+          accountId: actor.toString(),
+          newPassword: 'Reset!Pass9',
+        }),
+      ).rejects.toThrowDomain('CANNOT_RESET_OWN_PASSWORD');
+
+      const credential = await prisma.accountCredential.findUniqueOrThrow({
+        where: { account_id: actor },
+      });
+      expect(credential.password_hash).toBe(OLD_HASH);
+      expect(credential.must_change_password).toBe(false);
+      expect(credential.password_updated_at).toBeNull();
+      const kept = await prisma.authRefreshSession.findUniqueOrThrow({
+        where: { id: session.id },
+      });
+      expect(kept.revoked_at).toBeNull();
+      expect(await prisma.auditLog.count()).toBe(0);
+      expect(blacklist.blockCredentials).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        '자격증명 없는 ADMIN(개발용)',
+        async () => (await createAccount(prisma, { account_type: 'ADMIN' })).id,
+      ],
+      [
+        '자격증명이 삭제된 ADMIN',
+        async () => {
+          const credential = await createAccountCredential(prisma, {
+            account_type: 'ADMIN',
+          });
+          await prisma.accountCredential.update({
+            where: { id: credential.id },
+            data: { deleted_at: new Date() },
+          });
+          return credential.account_id;
+        },
+      ],
+      [
+        'SELLER 계정',
+        async () =>
+          (await createAccountCredential(prisma, { account_type: 'SELLER' }))
+            .account_id,
+      ],
+      [
+        'USER 계정',
+        async () =>
+          (await createAccountCredential(prisma, { account_type: 'USER' }))
+            .account_id,
+      ],
+      [
+        '탈퇴(soft-delete)한 ADMIN',
+        async () => {
+          const credential = await createAccountCredential(prisma, {
+            account_type: 'ADMIN',
+          });
+          await prisma.account.update({
+            where: { id: credential.account_id },
+            data: { deleted_at: new Date() },
+          });
+          return credential.account_id;
+        },
+      ],
+      ['없는 계정', () => Promise.resolve(BigInt(999_999))],
+    ])('%s이면 404이고 아무것도 바꾸지 않는다', async (_label, makeId) => {
+      const actor = await makeAdmin();
+      const targetId = await makeId();
+
+      await expect(
+        service.adminResetAdminPassword(actor, {
+          accountId: targetId.toString(),
+          newPassword: 'Reset!Pass9',
+        }),
+      ).rejects.toThrowDomain('ACCOUNT_NOT_FOUND');
+
+      expect(
+        await prisma.accountCredential.count({
+          where: { password_updated_at: { not: null } },
+        }),
+      ).toBe(0);
+      expect(await prisma.auditLog.count()).toBe(0);
+      expect(blacklist.blockCredentials).not.toHaveBeenCalled();
+    });
+
+    it('감사 기록이 실패하면 비밀번호·세션 변경도 롤백되고 블랙리스트에 등록하지 않는다', async () => {
+      const actor = await makeAdmin();
+      const target = await makeAdmin();
+      const session = await createRefreshSession(prisma, {
+        account_id: target,
+      });
+      const spy = jest
+        .spyOn(service['auditLogs'], 'recordAudit')
+        .mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(
+        service.adminResetAdminPassword(actor, {
+          accountId: target.toString(),
+          newPassword: 'Reset!Pass9',
+        }),
+      ).rejects.toThrow('audit down');
+
+      const credential = await prisma.accountCredential.findUniqueOrThrow({
+        where: { account_id: target },
+      });
+      expect(credential.password_hash).toBe(OLD_HASH);
+      expect(credential.must_change_password).toBe(false);
+      const kept = await prisma.authRefreshSession.findUniqueOrThrow({
+        where: { id: session.id },
+      });
+      expect(kept.revoked_at).toBeNull();
+      expect(blacklist.blockCredentials).not.toHaveBeenCalled();
       spy.mockRestore();
     });
   });

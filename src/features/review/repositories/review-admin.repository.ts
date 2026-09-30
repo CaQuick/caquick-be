@@ -24,6 +24,22 @@ const authorInclude = {
   },
 } as const;
 
+/**
+ * 첨부 미디어. soft-delete 확장은 nested include에 닿지 않고, 삭제 리뷰는 함께 내려간 사진을
+ * 보여 줘야 해서 where 없이 전부 읽는다 — 매퍼가 리뷰와 deleted_at이 같은 세트만 남긴다.
+ */
+const adminReviewMediaSelect = {
+  select: {
+    media_type: true,
+    media_url: true,
+    thumbnail_url: true,
+    sort_order: true,
+    deleted_at: true,
+  },
+  orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+} satisfies Prisma.ReviewMediaFindManyArgs;
+
+// orderBy 배열은 as const로 readonly가 되면 Prisma 타입과 어긋나 satisfies로 고정한다
 export type AdminReviewReportDetailRow = Prisma.ReviewReportGetPayload<{
   include: typeof reviewReportDetailInclude;
 }>;
@@ -33,8 +49,10 @@ const reviewReportDetailInclude = {
       id: true,
       account_id: true,
       store_id: true,
+      store_name_snapshot: true,
       content: true,
       deleted_at: true,
+      media: adminReviewMediaSelect,
       ...authorInclude,
     },
   },
@@ -45,17 +63,18 @@ const reviewReportDetailInclude = {
       account_id: true,
       content: true,
       deleted_at: true,
-      review: { select: { store_id: true } },
+      review: { select: { store_id: true, store_name_snapshot: true } },
       ...authorInclude,
     },
   },
-} as const;
+} satisfies Prisma.ReviewReportInclude;
 
 export type AdminReviewRow = Prisma.ReviewGetPayload<{
   include: typeof adminReviewInclude;
 }>;
 const adminReviewInclude = {
   store: { select: { store_name: true } },
+  media: adminReviewMediaSelect,
   ...authorInclude,
   _count: {
     select: {
@@ -63,7 +82,7 @@ const adminReviewInclude = {
       likes: { where: activeWhere },
     },
   },
-} as const;
+} satisfies Prisma.ReviewInclude;
 
 export type AdminReviewCommentRow = Prisma.ReviewCommentGetPayload<{
   include: typeof adminReviewCommentInclude;
@@ -143,6 +162,7 @@ export class ReviewAdminRepository {
     action: 'DELETE_TARGET' | 'REJECT';
     note: string | null;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<ReviewReport | 'not-found' | 'already-resolved'> {
     const now = new Date();
     // 대상 id는 불변이라 트랜잭션 밖에서 읽는다 — 트랜잭션 안의 첫 일반 읽기가 REPEATABLE READ
@@ -199,6 +219,7 @@ export class ReviewAdminRepository {
             status: 'RESOLVED',
             open_key: null,
             resolved_by_account_id: args.actorAccountId,
+            resolved_by_label_snapshot: args.actorLabel,
             resolved_at: now,
             resolution_note: args.note,
             updated_at: now,
@@ -211,6 +232,7 @@ export class ReviewAdminRepository {
             status: 'REJECTED',
             open_key: null,
             resolved_by_account_id: args.actorAccountId,
+            resolved_by_label_snapshot: args.actorLabel,
             resolved_at: now,
             resolution_note: args.note,
           },
@@ -238,6 +260,7 @@ export class ReviewAdminRepository {
     reviewId: bigint;
     reason: string;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -259,7 +282,7 @@ export class ReviewAdminRepository {
           ],
         },
         now,
-        resolvedByAccountId: args.actorAccountId,
+        resolvedBy: { accountId: args.actorAccountId, label: args.actorLabel },
         note: args.reason,
       });
       return true;
@@ -270,6 +293,7 @@ export class ReviewAdminRepository {
     commentId: bigint;
     reason: string;
     actorAccountId: bigint;
+    actorLabel: string | null;
   }): Promise<boolean> {
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -287,7 +311,7 @@ export class ReviewAdminRepository {
       await resolvePendingReports(tx, {
         where: { review_comment_id: args.commentId },
         now,
-        resolvedByAccountId: args.actorAccountId,
+        resolvedBy: { accountId: args.actorAccountId, label: args.actorLabel },
         note: args.reason,
       });
       return true;

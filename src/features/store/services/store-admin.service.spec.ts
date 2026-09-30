@@ -160,6 +160,37 @@ describe('AdminStoreService (real DB)', () => {
     });
   });
 
+  describe('판매자 라벨(sellerLabel)', () => {
+    it('목록·상세·토글·수정 응답 모두 매장의 판매자 라벨 스냅샷을 준다', async () => {
+      const store = await createStore(prisma, {
+        seller_label_snapshot: '홍길동(cake.shop_1)',
+      });
+      const actor = await admin();
+      const storeId = store.id.toString();
+
+      const list = await service.adminStores(actor);
+      const detail = await service.adminStore(actor, store.id);
+      const toggled = await service.adminSetStoreActive(actor, {
+        storeId,
+        isActive: false,
+      });
+      const updated = await service.adminUpdateStoreBasicInfo(actor, {
+        storeId,
+        storeName: '새 이름',
+      });
+
+      for (const row of [list.items[0], detail.store, toggled, updated]) {
+        expect(row.sellerLabel).toBe('홍길동(cake.shop_1)');
+      }
+    });
+
+    it('라벨이 없는 매장은 null', async () => {
+      await createStore(prisma);
+      const list = await service.adminStores(await admin());
+      expect(list.items[0].sellerLabel).toBeNull();
+    });
+  });
+
   describe('adminSetStoreActive', () => {
     it('노출을 끄고 audit(STORE/STATUS_CHANGE, reason)을 남긴다', async () => {
       const actor = await admin();

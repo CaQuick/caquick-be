@@ -61,6 +61,11 @@ enum NotificationType {
   MARKETING
 }
 
+enum NotificationBroadcastTargetKind {
+  ALL_USERS
+  ACCOUNT_IDS
+}
+
 enum ConversationSenderType {
   USER
   STORE
@@ -389,6 +394,8 @@ model Store {
   // 문의 채팅 인사말 템플릿({nickname}/{storeName} 치환). null이면 서버 기본 문구 (figma notification-center)
   greeting_message String? @db.VarChar(500)
   is_active         Boolean @default(true) @db.TinyInt
+  // 판매자 생성 시점의 계정 라벨(formatAccountLabel). 원본(이름·아이디)은 쓰기 경로가 없어 갱신하지 않는다
+  seller_label_snapshot String? @db.VarChar(200)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -964,6 +971,7 @@ model Review {
 
   // 작성 시점 주문 품목 스냅샷. 목록·상세·쇼케이스가 order_item을 조인하지 않게 한다.
   product_name_snapshot String  @db.VarChar(200)
+  store_name_snapshot   String  @db.VarChar(200)
   /// [{ groupName, optionTitle }] — 주문 시 선택 옵션(활성, id 순). 없으면 null.
   option_summary        Json?
   before_image_url      String? @db.VarChar(2048)
@@ -1087,6 +1095,40 @@ model Notification {
   @@index([review_id], map: "idx_notification_review")
   @@index([deleted_at], map: "idx_notification_deleted_at")
   @@map("notification")
+}
+
+// 관리자 일괄 발송 이력. 발송 요청 1건(outbox 이벤트 1건)마다 1행이고, 요청 tx에서 outbox·감사 기록과 함께 쓴다.
+// 완료는 worker 소비자가 fan-out을 끝낸 뒤 기록한다. 계정 FK는 두지 않는다(감사 로그처럼 계정과 독립된 기록).
+model NotificationBroadcast {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  // outbox event_id = notification.source_event_id
+  event_id String @db.Char(36)
+
+  actor_account_id BigInt  @db.UnsignedBigInt
+  // 발송 시점 발송자 표시 라벨 스냅샷(이름(아이디))
+  actor_label      String? @db.VarChar(200)
+
+  type  NotificationType
+  title String           @db.VarChar(200)
+  body  String           @db.VarChar(2000)
+
+  target_kind         NotificationBroadcastTargetKind
+  // 요청 시점에 확정한 대상 수(발송 응답의 sentCount)
+  target_count        Int
+  skipped_count       Int
+  // ACCOUNT_IDS만 대상 ID 배열(최대 500), ALL_USERS는 null. 제외 ID는 ALL_USERS면 빈 배열
+  target_account_ids  Json?
+  skipped_account_ids Json
+
+  // 완료 때 소비자가 다시 센 실제 저장 수. 미완료 행은 조회 때 실시간으로 센다
+  delivered_count Int?
+  completed_at    DateTime? @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([event_id], map: "uk_notification_broadcast_event")
+  @@index([type, id], map: "idx_notification_broadcast_type")
+  @@map("notification_broadcast")
 }
 
 /**
@@ -1359,6 +1401,8 @@ model ReviewReport {
   // 신고 시점의 대상 본문. 작성자가 삭제·재작성하면 같은 리뷰 id가 새 내용으로 복원되므로
   // 무엇이 신고됐는지는 여기 남긴다(리뷰 본문은 2000자로 잘라 저장)
   content_snapshot String? @db.VarChar(2000)
+  // 신고 시점 신고자 닉네임. 탈퇴 여부는 조회 때 따로 붙인다(이 컬럼 도입 전에 탈퇴한 신고자는 복원할 수 없어 null)
+  reporter_nickname_snapshot String? @db.VarChar(50)
 
   status                 ReviewReportStatus @default(PENDING)
   /// PENDING 동안에만 대상 식별자('r:<reviewId>'·'c:<commentId>')를 담고 종결되면 NULL.
@@ -1367,6 +1411,8 @@ model ReviewReport {
   resolved_by_account_id BigInt?            @db.UnsignedBigInt
   resolved_at            DateTime?          @db.DateTime(3)
   resolution_note        String?            @db.VarChar(500)
+  // 처리한 관리자의 계정 라벨(formatAccountLabel). 작성자 삭제로 닫힌 신고는 null
+  resolved_by_label_snapshot String?        @db.VarChar(200)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)

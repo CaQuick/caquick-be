@@ -216,6 +216,34 @@ describe('UserReportService (real DB)', () => {
       expect(row.content_snapshot).toBe('원래 내용');
     });
 
+    it('신고 시점 신고자 닉네임을 남기고, 이미 접수된 건을 돌려줄 때는 바뀐 닉네임으로 덮지 않는다', async () => {
+      const { review } = await visibleReview();
+      const reporter = await buyer();
+      await prisma.userProfile.update({
+        where: { account_id: reporter },
+        data: { nickname: '처음닉' },
+      });
+      const first = await service.reportReview(reporter, {
+        reviewId: review.id.toString(),
+        reason: 'SPAM',
+      });
+      await prisma.userProfile.update({
+        where: { account_id: reporter },
+        data: { nickname: '바뀐닉' },
+      });
+
+      const again = await service.reportReview(reporter, {
+        reviewId: review.id.toString(),
+        reason: 'SPAM',
+      });
+
+      expect(again.reportId).toBe(first.reportId);
+      const row = await prisma.reviewReport.findUniqueOrThrow({
+        where: { id: BigInt(first.reportId) },
+      });
+      expect(row.reporter_nickname_snapshot).toBe('처음닉');
+    });
+
     it('작성자가 리뷰를 삭제하면 그 리뷰·댓글의 미처리 신고가 RESOLVED(작성자 삭제)로 닫힌다', async () => {
       const { review, author } = await visibleReview();
       const comment = await commentOn(review.id, await buyer());
@@ -366,6 +394,10 @@ describe('UserReportService (real DB)', () => {
       });
       expect(row.review_comment_id).toBe(comment.id);
       expect(row.review_id).toBeNull();
+      const profile = await prisma.userProfile.findUniqueOrThrow({
+        where: { account_id: reporter },
+      });
+      expect(row.reporter_nickname_snapshot).toBe(profile.nickname);
     });
 
     it('본인 댓글은 400, 삭제된 댓글·삭제된 리뷰의 댓글은 404', async () => {

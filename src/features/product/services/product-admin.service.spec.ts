@@ -8,10 +8,14 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createCategory,
   createOrderItem,
   createProduct,
   createReview,
   createStore,
+  createTag,
+  linkProductCategory,
+  linkProductTag,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -92,6 +96,19 @@ describe('AdminProductService (real DB)', () => {
       expect(nullActive.totalCount).toBe(3);
     });
 
+    it('항목마다 소속 매장 노출 여부를 준다', async () => {
+      const shown = await createStore(prisma);
+      const hidden = await createStore(prisma, { is_active: false });
+      const a = await createProduct(prisma, { store_id: shown.id });
+      const b = await createProduct(prisma, { store_id: hidden.id });
+
+      const { items } = await service.adminProducts(await admin());
+
+      expect(
+        Object.fromEntries(items.map((p) => [p.id, p.storeIsActive])),
+      ).toEqual({ [a.id.toString()]: true, [b.id.toString()]: false });
+    });
+
     it('limit+1 조회로 hasMore·nextCursor를 판정하고 삭제 상품은 제외한다', async () => {
       const store = await createStore(prisma);
       const ids = [
@@ -155,6 +172,233 @@ describe('AdminProductService (real DB)', () => {
       expect(result.imageUrls).toEqual(['https://i/1.png', 'https://i/2.png']);
       expect(result.reviewCount).toBe(1);
       expect(result.orderItemCount).toBe(1);
+    });
+
+    it('카테고리는 종류 → 노출 순서로 오고 숨김은 isActive=false로 담고 삭제된 연결·카테고리는 뺀다', async () => {
+      const product = await createProduct(prisma);
+      const link = async (
+        overrides: Parameters<typeof createCategory>[1],
+      ): Promise<bigint> => {
+        const category = await createCategory(prisma, overrides);
+        await linkProductCategory(prisma, {
+          productId: product.id,
+          categoryId: category.id,
+        });
+        return category.id;
+      };
+      // 생성 순서를 기대 순서와 엇갈리게 넣어 정렬이 id 순서에 기대지 않음을 확인한다
+      await link({ category_type: 'OTHER', name: '기타', sort_order: 0 });
+      await link({ category_type: 'STYLE', name: '레터링', sort_order: 2 });
+      await link({
+        category_type: 'STYLE',
+        name: '숨김 스타일',
+        sort_order: 1,
+        is_active: false,
+      });
+      await link({ category_type: 'EVENT', name: '생일', sort_order: 5 });
+      await link({
+        category_type: 'EVENT',
+        name: '삭제된 카테고리',
+        deleted_at: new Date(),
+      });
+      const unlinked = await link({
+        category_type: 'EVENT',
+        name: '연결 해제',
+      });
+      await prisma.productCategory.update({
+        where: {
+          product_id_category_id: {
+            product_id: product.id,
+            category_id: unlinked,
+          },
+        },
+        data: { deleted_at: new Date() },
+      });
+
+      const result = await service.adminProduct(await admin(), product.id);
+
+      expect(
+        result.categories.map(({ categoryType, name, isActive }) => [
+          categoryType,
+          name,
+          isActive,
+        ]),
+      ).toEqual([
+        ['EVENT', '생일', true],
+        ['STYLE', '숨김 스타일', false],
+        ['STYLE', '레터링', true],
+        ['OTHER', '기타', true],
+      ]);
+    });
+
+    it('태그는 이름순으로 오고 삭제된 연결·태그는 뺀다', async () => {
+      const product = await createProduct(prisma);
+      const link = async (
+        name: string,
+        opts: { tagDeleted?: boolean; linkDeleted?: boolean } = {},
+      ): Promise<void> => {
+        const tag = await createTag(prisma, {
+          name,
+          deleted_at: opts.tagDeleted ? new Date() : null,
+        });
+        await linkProductTag(prisma, {
+          productId: product.id,
+          tagId: tag.id,
+          deleted_at: opts.linkDeleted ? new Date() : null,
+        });
+      };
+      await link('촉촉');
+      await link('달콤');
+      await link('삭제된태그', { tagDeleted: true });
+      await link('해제된태그', { linkDeleted: true });
+
+      const result = await service.adminProduct(await admin(), product.id);
+
+      expect(result.tags.map((t) => t.name)).toEqual(['달콤', '촉촉']);
+    });
+
+    it('옵션 그룹·선택지는 sortOrder 순으로 숨김을 담고 삭제는 빼며 음수 가격 증감과 커스텀 입력 플래그를 그대로 준다', async () => {
+      const product = await createProduct(prisma);
+      const later = await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '토핑', sort_order: 2 },
+      });
+      const first = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '문구',
+          sort_order: 1,
+          is_required: false,
+          min_select: 0,
+          max_select: 3,
+          is_active: false,
+          option_requires_description: true,
+          option_requires_image: true,
+        },
+      });
+      await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '삭제된 그룹',
+          sort_order: 0,
+          deleted_at: new Date(),
+        },
+      });
+      await prisma.productOptionItem.createMany({
+        data: [
+          { option_group_id: later.id, title: '딸기', sort_order: 2 },
+          {
+            option_group_id: later.id,
+            title: '빼기',
+            sort_order: 1,
+            price_delta: -1000,
+            is_active: false,
+          },
+          {
+            option_group_id: later.id,
+            title: '삭제된 선택지',
+            sort_order: 0,
+            deleted_at: new Date(),
+          },
+        ],
+      });
+
+      const result = await service.adminProduct(await admin(), product.id);
+
+      expect(result.optionGroups.map((g) => g.name)).toEqual(['문구', '토핑']);
+      expect(result.optionGroups[0]).toMatchObject({
+        id: first.id.toString(),
+        isRequired: false,
+        minSelect: 0,
+        maxSelect: 3,
+        isActive: false,
+        optionRequiresDescription: true,
+        optionRequiresImage: true,
+        optionItems: [],
+      });
+      expect(
+        result.optionGroups[1].optionItems.map(
+          ({ title, priceDelta, isActive }) => [title, priceDelta, isActive],
+        ),
+      ).toEqual([
+        ['빼기', -1000, false],
+        ['딸기', 0, true],
+      ]);
+    });
+
+    it('커스텀 템플릿이 없으면 null이고, 있으면 삭제된 슬롯을 뺀 슬롯을 sortOrder 순으로 준다', async () => {
+      const bare = await createProduct(prisma);
+      const product = await createProduct(prisma);
+      const template = await prisma.productCustomTemplate.create({
+        data: {
+          product_id: product.id,
+          base_image_url: 'https://i/tpl.png',
+          is_active: false,
+        },
+      });
+      await prisma.productCustomTextToken.createMany({
+        data: [
+          {
+            template_id: template.id,
+            token_key: 'NAME',
+            default_text: '이름',
+            max_length: 10,
+            sort_order: 2,
+            is_required: false,
+          },
+          {
+            template_id: template.id,
+            token_key: 'MSG',
+            default_text: '축하해',
+            max_length: 20,
+            sort_order: 1,
+          },
+          {
+            template_id: template.id,
+            token_key: 'GONE',
+            default_text: '삭제',
+            sort_order: 0,
+            deleted_at: new Date(),
+          },
+        ],
+      });
+
+      expect(
+        (await service.adminProduct(await admin(), bare.id)).customTemplate,
+      ).toBeNull();
+      const result = await service.adminProduct(await admin(), product.id);
+      expect(result.customTemplate).toMatchObject({
+        id: template.id.toString(),
+        baseImageUrl: 'https://i/tpl.png',
+        isActive: false,
+      });
+      expect(
+        result.customTemplate?.textTokens.map(
+          ({ tokenKey, defaultText, maxLength, isRequired }) => [
+            tokenKey,
+            defaultText,
+            maxLength,
+            isRequired,
+          ],
+        ),
+      ).toEqual([
+        ['MSG', '축하해', 20, true],
+        ['NAME', '이름', 10, false],
+      ]);
+    });
+
+    it('삭제된 커스텀 템플릿은 null로 준다', async () => {
+      const product = await createProduct(prisma);
+      await prisma.productCustomTemplate.create({
+        data: {
+          product_id: product.id,
+          base_image_url: 'https://i/tpl.png',
+          deleted_at: new Date(),
+        },
+      });
+
+      const result = await service.adminProduct(await admin(), product.id);
+
+      expect(result.customTemplate).toBeNull();
     });
 
     it('없거나 삭제된 상품이면 404', async () => {

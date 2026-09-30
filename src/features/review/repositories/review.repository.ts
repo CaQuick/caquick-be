@@ -69,7 +69,7 @@ export class ReviewRepository {
             ],
           },
           now: new Date(),
-          resolvedByAccountId: null,
+          resolvedBy: null,
           note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
         });
 
@@ -191,7 +191,7 @@ export class ReviewRepository {
             ],
           },
           now: args.now,
-          resolvedByAccountId: null,
+          resolvedBy: null,
           note: REVIEW_REPORT_CLOSED_BY_AUTHOR_NOTE,
         });
         await tx.reviewMedia.updateMany({

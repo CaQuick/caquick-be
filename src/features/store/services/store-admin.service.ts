@@ -20,9 +20,11 @@ import type { AdminStoreListInput } from '@/features/store/dto/inputs/admin-stor
 import type { AdminUpdateStoreBasicInfoInput } from '@/features/store/dto/inputs/admin-update-store-basic-info.input';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
-import { toAdminStoreDetailOutput } from '@/features/store/services/store-admin-mappers.helper';
+import {
+  toAdminStoreDetailOutput,
+  toAdminStoreOutput,
+} from '@/features/store/services/store-admin-mappers.helper';
 import { buildStoreBasicInfoUpdateData } from '@/features/store/services/store-basic-info.helper';
-import { toStoreOutput } from '@/features/store/services/store-output-mappers.helper';
 import type {
   AdminStoreDetailOutput,
   AdminStoreOutput,
@@ -86,7 +88,7 @@ export class AdminStoreService extends AdminBaseService {
     ]);
     const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
-      items: paged.items.map(toStoreOutput),
+      items: paged.items.map(toAdminStoreOutput),
       totalCount,
       hasMore: paged.hasMore,
       nextCursor: paged.nextCursor,
@@ -123,7 +125,7 @@ export class AdminStoreService extends AdminBaseService {
       }),
     );
     if (!result) throw new DomainException('STORE_NOT_FOUND');
-    return toStoreOutput(result.row);
+    return toAdminStoreOutput(result.row);
   }
 
   async adminUpdateStoreBasicInfo(
@@ -176,6 +178,6 @@ export class AdminStoreService extends AdminBaseService {
       throw new DomainException('REGION_NOT_SELECTABLE');
     }
     if (!updated) throw new DomainException('STORE_NOT_FOUND');
-    return toStoreOutput(updated);
+    return toAdminStoreOutput(updated);
   }
 }

@@ -7,6 +7,7 @@ export type { AdminSellerRow } from '@/features/auth/repositories/account-admin.
 export * from '@/features/auth/constants/auth-admin.constants';
 // 구매자 컨텍스트(활성 사용자 재확인)·계정/프로필 저장소·정책. 구매자 화면 서비스(review·notification·mypage·order·conversation)가 쓴다.
 export { UserBaseService } from '@/features/auth/services/auth-user-base.service';
+export type { ActiveUserAccount } from '@/features/auth/services/auth-user-base.service';
 export { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 export { evaluateActiveUserAccount } from '@/features/auth/services/auth-user-account-policy.helper';
 export * from '@/features/auth/constants/auth-user.constants';

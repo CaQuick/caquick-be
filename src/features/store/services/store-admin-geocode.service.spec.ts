@@ -367,15 +367,21 @@ describe('AdminGeocodeService (real DB)', () => {
       expect(transport).not.toHaveBeenCalled();
     });
 
-    it('요청 신호는 제한 시간이 지나면 끊긴다', async () => {
-      transport.mockResolvedValue(kakaoResponse([]));
-      await service.adminGeocodeAddress(await admin(), '테헤란로 152');
-      const { signal } = transport.mock.calls[0][1];
-      expect(signal?.aborted).toBe(false);
-      await new Promise((resolve) =>
-        setTimeout(resolve, GEOCODE_TIMEOUT_MS + 100),
-      );
-      expect(signal?.aborted).toBe(true);
+    // 실제 제한 시간만큼 기다리지 않고, 신호를 만든 인자와 전달 여부만 본다
+    it('요청 신호는 제한 시간으로 만든 AbortSignal.timeout이다', async () => {
+      const timeout = jest.spyOn(AbortSignal, 'timeout');
+      try {
+        transport.mockResolvedValue(kakaoResponse([]));
+        await service.adminGeocodeAddress(await admin(), '테헤란로 152');
+
+        expect(timeout).toHaveBeenCalledTimes(1);
+        expect(timeout).toHaveBeenCalledWith(GEOCODE_TIMEOUT_MS);
+        expect(transport.mock.calls[0][1].signal).toBe(
+          timeout.mock.results[0].value,
+        );
+      } finally {
+        timeout.mockRestore();
+      }
     });
 
     it.each([

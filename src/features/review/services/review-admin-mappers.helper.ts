@@ -4,12 +4,15 @@ import type {
   AdminReviewReportDetailRow,
   AdminReviewRow,
 } from '@/features/review/repositories/review-admin.repository';
+import type { ReviewMediaRow } from '@/features/review/repositories/review-read.repository';
+import { toReviewMedia } from '@/features/review/services/review-listing-mappers.helper';
 import type {
   AdminReviewCommentOutput,
   AdminReviewOutput,
   AdminReviewReportDetailOutput,
   AdminReviewReportOutput,
 } from '@/features/review/types/review-admin-output.type';
+import type { ReviewMedia } from '@/features/review/types/review-listing-output.type';
 
 /** 작성자 노출 정책은 common 헬퍼가 단일 소스(리뷰 화면과 동일). */
 function nicknameOf(account: {
@@ -18,20 +21,43 @@ function nicknameOf(account: {
   return anonymizeReviewAuthor(account.user_profile).nickname;
 }
 
-export function toAdminReviewReportOutput(row: {
-  id: bigint;
-  review_id: bigint | null;
-  review_comment_id: bigint | null;
-  reporter_account_id: bigint;
-  reason: AdminReviewReportOutput['reason'];
-  detail: string | null;
-  content_snapshot: string | null;
-  status: AdminReviewReportOutput['status'];
-  resolved_by_account_id: bigint | null;
-  resolved_at: Date | null;
-  resolution_note: string | null;
-  created_at: Date;
-}): AdminReviewReportOutput {
+/**
+ * 리뷰가 보여 주던 사진. 활성 리뷰는 활성 사진만, 삭제 리뷰는 리뷰와 같은 시각에 함께 내려간
+ * 세트만 남긴다 — 두 삭제 경로가 리뷰와 사진에 같은 now를 쓰고, 재작성 전 세대 사진은 복원
+ * 시각으로 따로 내려가 있어 걸러진다.
+ */
+function adminMediaOf(review: {
+  deleted_at: Date | null;
+  media: (ReviewMediaRow & { deleted_at: Date | null })[];
+}): ReviewMedia[] {
+  const at = review.deleted_at?.getTime() ?? null;
+  return review.media
+    .filter((m) => (m.deleted_at?.getTime() ?? null) === at)
+    .map(toReviewMedia);
+}
+
+/**
+ * @param withdrawnReporterIds 탈퇴한 신고자 id — 닉네임은 신고 시점 스냅샷을 그대로 보여 주고 탈퇴 여부만 따로 알린다
+ */
+export function toAdminReviewReportOutput(
+  row: {
+    id: bigint;
+    review_id: bigint | null;
+    review_comment_id: bigint | null;
+    reporter_account_id: bigint;
+    reporter_nickname_snapshot: string | null;
+    reason: AdminReviewReportOutput['reason'];
+    detail: string | null;
+    content_snapshot: string | null;
+    status: AdminReviewReportOutput['status'];
+    resolved_by_account_id: bigint | null;
+    resolved_by_label_snapshot: string | null;
+    resolved_at: Date | null;
+    resolution_note: string | null;
+    created_at: Date;
+  },
+  withdrawnReporterIds: ReadonlySet<bigint>,
+): AdminReviewReportOutput {
   const isComment = row.review_comment_id !== null;
   return {
     id: row.id.toString(),
@@ -39,11 +65,14 @@ export function toAdminReviewReportOutput(row: {
     // 서비스가 둘 중 하나를 보장한다
     targetId: (isComment ? row.review_comment_id! : row.review_id!).toString(),
     reporterAccountId: row.reporter_account_id.toString(),
+    reporterNickname: row.reporter_nickname_snapshot,
+    reporterWithdrawn: withdrawnReporterIds.has(row.reporter_account_id),
     reason: row.reason,
     detail: row.detail,
     contentSnapshot: row.content_snapshot,
     status: row.status,
     resolvedByAccountId: row.resolved_by_account_id?.toString() ?? null,
+    resolvedByLabel: row.resolved_by_label_snapshot,
     resolvedAt: row.resolved_at,
     resolutionNote: row.resolution_note,
     createdAt: row.created_at,
@@ -52,8 +81,9 @@ export function toAdminReviewReportOutput(row: {
 
 export function toAdminReviewReportDetailOutput(
   row: AdminReviewReportDetailRow,
+  withdrawnReporterIds: ReadonlySet<bigint>,
 ): AdminReviewReportDetailOutput | null {
-  const report = toAdminReviewReportOutput(row);
+  const report = toAdminReviewReportOutput(row, withdrawnReporterIds);
   if (row.review_comment) {
     const c = row.review_comment;
     return {
@@ -65,7 +95,9 @@ export function toAdminReviewReportDetailOutput(
         authorNickname: nicknameOf(c.account),
         content: c.content,
         storeId: c.review.store_id.toString(),
+        storeName: c.review.store_name_snapshot,
         deleted: c.deleted_at !== null,
+        media: [],
       },
     };
   }
@@ -80,7 +112,9 @@ export function toAdminReviewReportDetailOutput(
         authorNickname: nicknameOf(r.account),
         content: r.content,
         storeId: r.store_id.toString(),
+        storeName: r.store_name_snapshot,
         deleted: r.deleted_at !== null,
+        media: adminMediaOf(r),
       },
     };
   }
@@ -94,6 +128,7 @@ export function toAdminReviewOutput(row: AdminReviewRow): AdminReviewOutput {
     storeId: row.store_id.toString(),
     storeName: row.store.store_name,
     productId: row.product_id.toString(),
+    productName: row.product_name_snapshot,
     authorAccountId: row.account_id.toString(),
     authorNickname: nicknameOf(row.account),
     rating: Number(row.rating),
@@ -101,6 +136,7 @@ export function toAdminReviewOutput(row: AdminReviewRow): AdminReviewOutput {
     commentCount: row._count.comments,
     likeCount: row._count.likes,
     deleted: row.deleted_at !== null,
+    media: adminMediaOf(row),
     createdAt: row.created_at,
   };
 }
