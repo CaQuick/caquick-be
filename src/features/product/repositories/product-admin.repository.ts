@@ -77,6 +77,45 @@ const productDetailInclude = {
       order_items: { where: activeWhere },
     },
   },
+  // 관리자는 판매자의 현재 설정을 봐야 하므로 숨김 카테고리·그룹·항목도 담고 삭제만 거른다.
+  // CategoryType은 MySQL ENUM이라 선언 순서(EVENT → STYLE → OTHER)로 정렬된다.
+  product_categories: {
+    where: { ...activeWhere, category: activeWhere },
+    select: {
+      category: {
+        select: { id: true, name: true, category_type: true, is_active: true },
+      },
+    },
+    orderBy: [
+      { category: { category_type: 'asc' } },
+      { category: { sort_order: 'asc' } },
+      { category_id: 'asc' },
+    ],
+  },
+  product_tags: {
+    where: { ...activeWhere, tag: activeWhere },
+    select: { tag: { select: { id: true, name: true } } },
+    orderBy: { tag: { name: 'asc' } },
+  },
+  option_groups: {
+    where: activeWhere,
+    orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+    include: {
+      option_items: {
+        where: activeWhere,
+        orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+      },
+    },
+  },
+  // to-one include는 where를 못 걸어 템플릿 삭제 여부는 mapper가 거른다
+  custom_template: {
+    include: {
+      text_tokens: {
+        where: activeWhere,
+        orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+      },
+    },
+  },
 } satisfies Prisma.ProductInclude;
 
 /** 관리자 상품 관리(상품 노출·카테고리·태그·배너). 조작과 감사 기록을 한 트랜잭션으로 묶는다. */
