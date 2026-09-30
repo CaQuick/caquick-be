@@ -4,7 +4,7 @@ extend type Query {
   """
   adminProducts(input: AdminProductListInput): AdminProductConnection!
   """
-  상품 1건을 소속 매장·이미지·집계와 함께 조회한다. 없거나 삭제됐으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  상품 1건을 소속 매장·이미지·집계·분류·옵션·커스텀 템플릿과 함께 조회한다. 없거나 삭제됐으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminProduct(productId: ID!): AdminProductDetail!
 }
@@ -59,7 +59,7 @@ type AdminProduct {
 }
 
 """
-상품 상세. 소속 매장 상태·이미지·집계를 함께 준다.
+상품 상세. 소속 매장 상태·이미지·집계와 판매자가 설정한 분류·옵션·커스텀 템플릿을 함께 준다.
 """
 type AdminProductDetail {
   """
@@ -94,6 +94,177 @@ type AdminProductDetail {
   주문 항목 수(삭제 제외).
   """
   orderItemCount: Int!
+  """
+  연결된 카테고리. 종류(EVENT → STYLE → OTHER) → 노출 순서로 정렬한다. 삭제된 연결·카테고리는 빼고 숨김 카테고리는 isActive=false로 담는다.
+  """
+  categories: [AdminProductCategory!]!
+  """
+  연결된 태그. 이름순. 삭제된 연결·태그는 뺀다.
+  """
+  tags: [AdminProductTag!]!
+  """
+  옵션 그룹. sortOrder 오름차순. 삭제는 빼고 숨김 그룹·선택지는 isActive=false로 담는다.
+  """
+  optionGroups: [AdminProductOptionGroup!]!
+  """
+  커스텀 템플릿 요약(문구 좌표 제외). 없거나 삭제됐으면 null.
+  """
+  customTemplate: AdminProductCustomTemplate
+}
+
+"""
+상품에 연결된 카테고리.
+"""
+type AdminProductCategory {
+  id: ID!
+  """
+  카테고리 분류.
+  """
+  categoryType: CategoryType!
+  """
+  카테고리명.
+  """
+  name: String!
+  """
+  카테고리 노출 여부. false면 숨김 카테고리다(상품 연결은 유지).
+  """
+  isActive: Boolean!
+}
+
+"""
+상품에 연결된 태그.
+"""
+type AdminProductTag {
+  id: ID!
+  """
+  태그명.
+  """
+  name: String!
+}
+
+"""
+옵션 그룹. 구매자는 이 그룹 단위로 선택지를 고른다.
+활성 필수 그룹의 minSelect가 1 이상인데 활성 선택지가 없으면 구매자가 주문할 수 없다.
+"""
+type AdminProductOptionGroup {
+  id: ID!
+  """
+  그룹명.
+  """
+  name: String!
+  """
+  그룹 안내 문구. 미등록 시 null.
+  """
+  description: String
+  """
+  필수 선택 여부. true면 선택 개수가 minSelect~maxSelect 범위 안이어야 하고, false면 0개 선택도 허용된다.
+  """
+  isRequired: Boolean!
+  """
+  최소 선택 개수.
+  """
+  minSelect: Int!
+  """
+  최대 선택 개수. 둘 다 1이면 단일 선택이다.
+  """
+  maxSelect: Int!
+  """
+  선택지에 구매자 커스텀 입력(설명)이 필요한 그룹인지. 현재는 true인 그룹의 옵션을 고르면 주문이 거절된다(잠정 가드).
+  """
+  optionRequiresDescription: Boolean!
+  """
+  선택지에 구매자 커스텀 입력(이미지)이 필요한 그룹인지. 현재는 true인 그룹의 옵션을 고르면 주문이 거절된다(잠정 가드).
+  """
+  optionRequiresImage: Boolean!
+  """
+  상품 안에서의 그룹 노출 순서. 오름차순.
+  """
+  sortOrder: Int!
+  """
+  노출 여부. false면 구매자에게 그룹 자체가 보이지 않는다.
+  """
+  isActive: Boolean!
+  """
+  선택지. sortOrder 오름차순. 삭제는 빼고 숨김 선택지는 isActive=false로 담는다.
+  """
+  optionItems: [AdminProductOptionItem!]!
+}
+
+"""
+옵션 그룹의 선택지 1개.
+"""
+type AdminProductOptionItem {
+  id: ID!
+  """
+  선택지 이름.
+  """
+  title: String!
+  """
+  선택지 설명. 미등록 시 null.
+  """
+  description: String
+  """
+  선택지 이미지 URL. 미등록 시 null.
+  """
+  imageUrl: String
+  """
+  이 선택지를 고를 때 더해지는 금액(원). 음수면 할인이다.
+  """
+  priceDelta: Int!
+  """
+  그룹 안에서의 노출 순서. 오름차순.
+  """
+  sortOrder: Int!
+  """
+  노출 여부. false면 구매자가 고를 수 없다.
+  """
+  isActive: Boolean!
+}
+
+"""
+커스텀 템플릿 요약. 바탕 이미지 위 문구 슬롯 구성이며 슬롯 좌표는 담지 않는다.
+"""
+type AdminProductCustomTemplate {
+  id: ID!
+  """
+  문구를 올릴 바탕 이미지 URL.
+  """
+  baseImageUrl: String!
+  """
+  활성 여부. false면 구매자 화면에 커스텀 입력이 열리지 않는다.
+  """
+  isActive: Boolean!
+  """
+  문구 슬롯. sortOrder 오름차순. 삭제된 슬롯은 뺀다.
+  """
+  textTokens: [AdminProductCustomTextToken!]!
+}
+
+"""
+커스텀 템플릿의 문구 슬롯 1개.
+"""
+type AdminProductCustomTextToken {
+  id: ID!
+  """
+  슬롯 식별 키.
+  """
+  tokenKey: String!
+  """
+  구매자가 입력하지 않았을 때 쓸 기본 문구.
+  """
+  defaultText: String!
+  """
+  입력 가능한 최대 글자 수.
+  """
+  maxLength: Int!
+  """
+  입력 화면에서의 노출 순서. 오름차순.
+  """
+  sortOrder: Int!
+  """
+  필수 입력 여부.
+  """
+  isRequired: Boolean!
 }
 
 """

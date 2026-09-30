@@ -2,6 +2,10 @@ import type {
   AdminProductDetailRow,
   AdminProductRow,
 } from '@/features/product/repositories/product-admin.repository';
+import {
+  toCustomTemplateOutput,
+  toOptionGroupOutput,
+} from '@/features/product/services/product-seller-mappers.helper';
 import type {
   AdminProductDetailOutput,
   AdminProductOutput,
@@ -38,5 +42,20 @@ export function toAdminProductDetailOutput(
       .map((i) => i.image_url),
     reviewCount: row._count.reviews,
     orderItemCount: row._count.order_items,
+    categories: row.product_categories.map(({ category }) => ({
+      id: category.id.toString(),
+      categoryType: category.category_type,
+      name: category.name,
+      isActive: category.is_active,
+    })),
+    tags: row.product_tags.map(({ tag }) => ({
+      id: tag.id.toString(),
+      name: tag.name,
+    })),
+    optionGroups: row.option_groups.map((g) => toOptionGroupOutput(g)),
+    customTemplate:
+      row.custom_template && row.custom_template.deleted_at === null
+        ? toCustomTemplateOutput(row.custom_template)
+        : null,
   };
 }

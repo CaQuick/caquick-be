@@ -1,4 +1,8 @@
 import type {
+  SellerCustomTemplateOutput,
+  SellerOptionGroupOutput,
+} from '@/features/product/types/product-seller-output.type';
+import type {
   BannerLinkType,
   BannerPlacement,
   CategoryType,
@@ -45,7 +49,27 @@ export interface AdminProductDetailOutput {
   imageUrls: string[];
   reviewCount: number;
   orderItemCount: number;
+  categories: AdminProductCategoryOutput[];
+  tags: AdminProductTagOutput[];
+  optionGroups: AdminProductOptionGroupOutput[];
+  customTemplate: AdminProductCustomTemplateOutput | null;
 }
+
+export interface AdminProductCategoryOutput {
+  id: string;
+  categoryType: CategoryType;
+  name: string;
+  isActive: boolean;
+}
+
+export interface AdminProductTagOutput {
+  id: string;
+  name: string;
+}
+
+// 판매자 출력과 구조가 같다. SDL에 없는 필드(productId·좌표 등)는 GraphQL이 버린다.
+export type AdminProductOptionGroupOutput = SellerOptionGroupOutput;
+export type AdminProductCustomTemplateOutput = SellerCustomTemplateOutput;
 
 export interface AdminCategoryOutput {
   id: string;
