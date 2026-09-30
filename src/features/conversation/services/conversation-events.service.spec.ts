@@ -2,10 +2,11 @@
 import { RedisPubSub } from 'graphql-redis-subscriptions';
 import type { PubSubEngine } from 'graphql-subscriptions';
 import Redis from 'ioredis';
-import { GenericContainer, type StartedTestContainer } from 'testcontainers';
+import type { StartedTestContainer } from 'testcontainers';
 
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import type { ConversationMessageOutput } from '@/features/conversation/types/conversation-output.type';
+import { redisTestContainer } from '@/test/containers';
 
 jest.setTimeout(180_000);
 
@@ -15,9 +16,7 @@ describe('ConversationEventsService (real Redis)', () => {
   let service: ConversationEventsService;
 
   beforeAll(async () => {
-    container = await new GenericContainer('redis:7-alpine')
-      .withExposedPorts(6379)
-      .start();
+    container = await redisTestContainer().start();
     const url = `redis://${container.getHost()}:${container.getMappedPort(6379)}`;
     pubSub = new RedisPubSub({
       publisher: new Redis(url),

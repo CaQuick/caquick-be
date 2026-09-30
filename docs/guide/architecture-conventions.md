@@ -121,6 +121,8 @@
 
 **정상 경로의 저장소 동작은 mock하지 않는다.** `jest.global-setup`이 testcontainers로 MySQL 8 + Redis 7을 띄우고 마이그레이션을 적용한다. 예외는 **장애 주입**이다 — 건강한 컨테이너로는 낼 수 없는 실패(Redis 명령 오류, 쓰기 거부, 브로커 blocked)를 검증할 때는 그 실패만 내는 stub을 목적 한정으로 쓴다(`token-blacklist.service.spec`의 실패하는 Redis 클라이언트, `blacklist-rebuild.service.spec`의 선택 명령 교체). 정상 동작을 stub으로 대신하는 것은 여전히 금지다. RabbitMQ는 소비자 호스트 spec이 자체 컨테이너로 검증한다. mock이 통과해도 운영 마이그레이션이 깨지는 케이스(제약·cascade·soft-delete 주입·트랜잭션 격리)를 실제 의미론으로 잡기 위해서다.
 
+**테스트 컨테이너.** 정의는 `src/test/containers.ts` 한 곳이다. 매 실행 새로 만들고 버리는 DB라 내구성(redo fsync·doublewrite·binlog)과 performance_schema를 끄고 datadir를 tmpfs에 두며, Redis는 영속화를 끈다. 운영 맥미니에서는 운영 컨테이너와 같은 Docker VM을 나눠 쓰므로 CPU·메모리 상한을 건다(tmpfs는 메모리 상한에 합산된다). 옵션이 조용히 무시되지 않았는지는 `containers.spec`이 실행 중인 서버 값(SHOW VARIABLES·CONFIG GET·docker inspect)으로 확인한다.
+
 **계층.** `*.service.spec`(분기·예외, 주력) / `*.resolver.spec`(전체 경로 1~2케이스, 상단에 `분기/집계 세부 검증은 service.spec.ts에서 담당` 한 줄) / `*.repository.spec`(repo에서만 도달 가능한 계약) / `*.input.spec`·`*.helper.spec`(순수 단위) / `src/test/*.spec`(소유권·경계 read·감사 경로·역할 인가 커버리지·모듈 배선 게이트) / `scripts/*.spec`(compose 렌더링·백업 복구·배포 워크플로·관측 설정·빌드 설정, `jest.scripts.config.js`).
 
 **DB spec 뼈대.** `describe` 제목에 `(real DB)`, `createTestingModuleWithRealDb({ providers })`, `afterAll`에 `closeTruncateConnection()`·`disconnectTestPrismaClient()`, `beforeEach`에 `truncateAll()`. 데이터는 `@/test/factories`의 팩토리로 **필요한 필드만 override**(나머지는 `nextSeq()` 기본값). 반복 셋업·검증은 `describe` 안 로컬 헬퍼로, 검증 헬퍼는 prisma로 직접 조회. `describe`는 클래스/메서드 단위, `it`은 한국어 평서형(`'soft-delete된 찜은 복원한다'`). 시간·랜덤·네트워크는 `ClockService`·`IdGeneratorService`·전송 함수 주입으로 통제한다.
