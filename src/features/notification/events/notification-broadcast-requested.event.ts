@@ -40,6 +40,8 @@ export function notificationBroadcastRequestedEvent(args: {
   eventId: string;
   actorAccountId: bigint;
   payload: NotificationBroadcastRequestedPayload;
+  /** 발송 이력의 요청 시각과 맞추려고 호출자가 준다. */
+  occurredAt?: Date;
 }): OutboxEventInput & { eventId: string } {
   return {
     eventId: args.eventId,
@@ -48,6 +50,7 @@ export function notificationBroadcastRequestedEvent(args: {
     eventType: NOTIFICATION_BROADCAST_REQUESTED,
     payload: { ...args.payload },
     actorAccountId: args.actorAccountId,
+    ...(args.occurredAt ? { occurredAt: args.occurredAt } : {}),
   };
 }
 

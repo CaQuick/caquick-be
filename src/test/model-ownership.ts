@@ -105,6 +105,7 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   },
 
   Notification: { service: 'notification', writers: ['notification'] },
+  NotificationBroadcast: { service: 'notification', writers: ['notification'] },
 
   AuditLog: { service: 'audit', writers: ['audit-log'] },
   // 발행 feature는 OutboxPublisher(같은 tx 적재)로만 쓴다 — 직접 write는 게이트가 막는다

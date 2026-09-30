@@ -1,3 +1,13 @@
+extend type Query {
+  """
+  관리자 알림 발송 이력. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  최신 요청이 먼저 오고, 커서 형식이 어긋나면 INVALID_CURSOR.
+  """
+  adminNotificationBroadcasts(
+    input: AdminNotificationBroadcastListInput
+  ): AdminNotificationBroadcastConnection!
+}
+
 extend type Mutation {
   """
   운영 공지(SYSTEM)·마케팅(MARKETING) 알림을 보낸다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
@@ -82,4 +92,133 @@ type AdminSendNotificationResult {
   대상에서 빠진 계정 ID(활성 USER가 아니거나 없음). ALL_USERS면 빈 배열.
   """
   skippedAccountIds: [ID!]!
+  """
+  이 발송 요청의 이력 ID(adminNotificationBroadcasts 항목의 id). 같은 키의 재요청은 처음 요청의 이력 ID를 돌려준다.
+  """
+  broadcastId: ID!
+}
+
+"""
+발송 진행 상태. 조회 시각 기준으로 계산한다.
+"""
+enum AdminNotificationBroadcastStatus {
+  """
+  저장 중. 요청 뒤 30분이 지나지 않았고 완료 기록이 없다.
+  """
+  IN_PROGRESS
+  """
+  대상 전원에 대한 저장을 마쳤다.
+  """
+  COMPLETED
+  """
+  요청 뒤 30분이 지나도 완료 기록이 없다(처리 실패 가능성, 운영 확인 필요).
+  """
+  DELAYED
+}
+
+"""
+알림 발송 이력 1건(발송 요청 1건).
+"""
+type AdminNotificationBroadcast {
+  id: ID!
+  """
+  알림 분류.
+  """
+  type: AdminNotificationType!
+  """
+  제목.
+  """
+  title: String!
+  """
+  본문.
+  """
+  body: String!
+  """
+  대상 지정 방식.
+  """
+  targetKind: AdminNotificationTargetKind!
+  """
+  요청 시점에 대상으로 확정된 활성 USER 수(발송 응답의 sentCount).
+  """
+  targetCount: Int!
+  """
+  대상에서 빠진 계정 수.
+  """
+  skippedCount: Int!
+  """
+  실제 저장된 알림 수. 진행 중이면 지금까지 저장된 수이고, 요청 뒤 정지·탈퇴한 계정은 빠지므로 targetCount보다 적을 수 있다.
+  """
+  deliveredCount: Int!
+  """
+  진행 상태.
+  """
+  status: AdminNotificationBroadcastStatus!
+  """
+  발송한 관리자 계정 ID.
+  """
+  actorAccountId: ID!
+  """
+  발송한 관리자 표시 라벨(발송 시점 스냅샷). 이름(아이디) 형식이고 한쪽만 있으면 그 값, 둘 다 없으면 null.
+  """
+  actorLabel: String
+  """
+  요청 시각.
+  """
+  requestedAt: DateTime!
+  """
+  저장을 마친 시각. 미완료면 null.
+  """
+  completedAt: DateTime
+  """
+  ACCOUNT_IDS 발송의 대상 계정 ID(최대 500). ALL_USERS면 빈 배열.
+  """
+  targetAccountIds: [ID!]!
+  """
+  대상에서 빠진 계정 ID(최대 500). ALL_USERS면 빈 배열.
+  """
+  skippedAccountIds: [ID!]!
+}
+
+"""
+알림 발송 이력 목록.
+"""
+type AdminNotificationBroadcastConnection {
+  """
+  발송 이력. 최신 요청이 먼저 온다.
+  """
+  items: [AdminNotificationBroadcast!]!
+  """
+  조건에 맞는 전체 건수.
+  """
+  totalCount: Int!
+  """
+  다음 페이지 존재 여부.
+  """
+  hasMore: Boolean!
+  """
+  다음 페이지 커서. null이면 마지막 페이지다.
+  """
+  nextCursor: String
+}
+
+"""
+알림 발송 이력 조회 조건. 모든 필터는 AND로 결합된다.
+"""
+input AdminNotificationBroadcastListInput {
+  """
+  한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT.
+  """
+  limit: Int = 20
+  """
+  이전 응답의 nextCursor. 첫 페이지는 생략한다.
+  """
+  cursor: String
+  """
+  알림 분류 필터.
+  """
+  type: AdminNotificationType
+  """
+  대상 지정 방식 필터.
+  """
+  targetKind: AdminNotificationTargetKind
 }

@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { NOTIFICATION_FANOUT_BATCH_SIZE } from '@/features/notification/constants/notification-admin.constants';
 import {
@@ -37,9 +38,12 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
   NOTIFICATION_BROADCAST_REQUESTED,
 )
 export class NotificationOutboxConsumer implements OutboxConsumer {
+  private readonly logger = new Logger(NotificationOutboxConsumer.name);
+
   constructor(
     private readonly repo: NotificationRepository,
     private readonly audience: NotificationAdminRepository,
+    private readonly clock: ClockService,
   ) {}
 
   async handle(event: OutboxEvent): Promise<void> {
@@ -96,6 +100,7 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
    * 두 경우 모두 **발송 시점에 활성 USER인 계정만** 저장한다 — 요청 이후 정지·탈퇴한 계정에 알림이 남지 않게 한다
    * (그래서 실제 저장 건수는 응답의 sentCount보다 적을 수 있다. SDL에 명시).
    * 재전달 시 이미 들어간 계정은 createFromEvent가 건너뛴다(청크 중간 실패 뒤 재시도도 안전).
+   * 청크를 전부 넣은 뒤에만 발송 이력에 완료를 기록한다 — 중간에 던지면 미완료로 남고 재전달이 이어서 채운다.
    */
   private async onBroadcastRequested(event: OutboxEvent): Promise<void> {
     const p = parseNotificationBroadcastRequestedPayload(event.payload);
@@ -115,20 +120,30 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
         const eligible = await this.audience.filterActiveUserAccountIds(chunk);
         await this.repo.createFromEvent(event.eventId, toRows(eligible));
       }
-      return;
+    } else {
+      const maxId = parseId(p.audience.maxAccountId);
+      let afterId: bigint | undefined;
+      for (;;) {
+        const ids = await this.audience.listActiveUserAccountIds({
+          afterId,
+          maxId,
+          limit: NOTIFICATION_FANOUT_BATCH_SIZE,
+        });
+        if (ids.length === 0) break;
+        await this.repo.createFromEvent(event.eventId, toRows(ids));
+        if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) break;
+        afterId = ids[ids.length - 1];
+      }
     }
-    const maxId = parseId(p.audience.maxAccountId);
-    let afterId: bigint | undefined;
-    for (;;) {
-      const ids = await this.audience.listActiveUserAccountIds({
-        afterId,
-        maxId,
-        limit: NOTIFICATION_FANOUT_BATCH_SIZE,
+    const recorded = await this.audience.markBroadcastCompleted(
+      event.eventId,
+      this.clock.now(),
+    );
+    if (!recorded) {
+      // 이력 도입 전 옛 형식 요청 등 — 알림 저장은 끝났으니 던지지 않는다
+      this.logger.warn('발송 이력이 없는 발송 요청', {
+        eventId: event.eventId,
       });
-      if (ids.length === 0) return;
-      await this.repo.createFromEvent(event.eventId, toRows(ids));
-      if (ids.length < NOTIFICATION_FANOUT_BATCH_SIZE) return;
-      afterId = ids[ids.length - 1];
     }
   }
 }
