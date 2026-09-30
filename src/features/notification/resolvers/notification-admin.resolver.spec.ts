@@ -6,6 +6,7 @@ import { AccountAdminRepository } from '@/features/auth/repositories/account-adm
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { AdminNotificationMutationResolver } from '@/features/notification/resolvers/notification-admin-mutation.resolver';
+import { AdminNotificationQueryResolver } from '@/features/notification/resolvers/notification-admin-query.resolver';
 import { AdminNotificationService } from '@/features/notification/services/notification-admin.service';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import { OutboxDispatcherService } from '@/features/outbox';
@@ -22,6 +23,7 @@ import {
 
 describe('Admin Notification Resolver (real DB)', () => {
   let resolver: AdminNotificationMutationResolver;
+  let queryResolver: AdminNotificationQueryResolver;
   let prisma: PrismaClient;
   let dispatcher: OutboxDispatcherService;
 
@@ -30,6 +32,7 @@ describe('Admin Notification Resolver (real DB)', () => {
       imports: OUTBOX_TEST_IMPORTS,
       providers: [
         AdminNotificationMutationResolver,
+        AdminNotificationQueryResolver,
         AdminNotificationService,
         NotificationAdminRepository,
         AccountAdminRepository,
@@ -40,6 +43,7 @@ describe('Admin Notification Resolver (real DB)', () => {
       ],
     });
     resolver = module.get(AdminNotificationMutationResolver);
+    queryResolver = module.get(AdminNotificationQueryResolver);
     dispatcher = module.get(OutboxDispatcherService);
     prisma = p;
   });
@@ -75,5 +79,17 @@ describe('Admin Notification Resolver (real DB)', () => {
     expect(
       await prisma.notification.count({ where: { account_id: target.id } }),
     ).toBe(1);
+
+    const history = await queryResolver.adminNotificationBroadcasts(
+      { accountId: actor.id.toString(), accountType: 'ADMIN' },
+      { limit: 20 },
+    );
+    expect(history).toMatchObject({ totalCount: 1, hasMore: false });
+    expect(history.items[0]).toMatchObject({
+      id: result.broadcastId,
+      status: 'COMPLETED',
+      deliveredCount: 1,
+      targetAccountIds: [target.id.toString()],
+    });
   });
 });

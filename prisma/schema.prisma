@@ -61,6 +61,11 @@ enum NotificationType {
   MARKETING
 }
 
+enum NotificationBroadcastTargetKind {
+  ALL_USERS
+  ACCOUNT_IDS
+}
+
 enum ConversationSenderType {
   USER
   STORE
@@ -1087,6 +1092,40 @@ model Notification {
   @@index([review_id], map: "idx_notification_review")
   @@index([deleted_at], map: "idx_notification_deleted_at")
   @@map("notification")
+}
+
+// 관리자 일괄 발송 이력. 발송 요청 1건(outbox 이벤트 1건)마다 1행이고, 요청 tx에서 outbox·감사 기록과 함께 쓴다.
+// 완료는 worker 소비자가 fan-out을 끝낸 뒤 기록한다. 계정 FK는 두지 않는다(감사 로그처럼 계정과 독립된 기록).
+model NotificationBroadcast {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  // outbox event_id = notification.source_event_id
+  event_id String @db.Char(36)
+
+  actor_account_id BigInt  @db.UnsignedBigInt
+  // 발송 시점 발송자 표시 라벨 스냅샷(이름(아이디))
+  actor_label      String? @db.VarChar(200)
+
+  type  NotificationType
+  title String           @db.VarChar(200)
+  body  String           @db.VarChar(2000)
+
+  target_kind         NotificationBroadcastTargetKind
+  // 요청 시점에 확정한 대상 수(발송 응답의 sentCount)
+  target_count        Int
+  skipped_count       Int
+  // ACCOUNT_IDS만 대상 ID 배열(최대 500), ALL_USERS는 null. 제외 ID는 ALL_USERS면 빈 배열
+  target_account_ids  Json?
+  skipped_account_ids Json
+
+  // 완료 때 소비자가 다시 센 실제 저장 수. 미완료 행은 조회 때 실시간으로 센다
+  delivered_count Int?
+  completed_at    DateTime? @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([event_id], map: "uk_notification_broadcast_event")
+  @@index([type, id], map: "idx_notification_broadcast_type")
+  @@map("notification_broadcast")
 }
 
 /**
