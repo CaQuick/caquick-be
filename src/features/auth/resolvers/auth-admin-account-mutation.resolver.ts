@@ -2,6 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { AdminCreateAdminInput } from '@/features/auth/dto/inputs/admin-create-admin.input';
+import { AdminResetAdminPasswordInput } from '@/features/auth/dto/inputs/admin-reset-admin-password.input';
 import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
 import type { AdminAccountOutput } from '@/features/auth/types/auth-admin-output.type';
 import {
@@ -25,5 +26,16 @@ export class AdminAccountMutationResolver {
     @Args('input') input: AdminCreateAdminInput,
   ): Promise<AdminAccountOutput> {
     return this.accountService.adminCreateAdmin(parseAccountId(user), input);
+  }
+
+  @Mutation('adminResetAdminPassword')
+  adminResetAdminPassword(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: AdminResetAdminPasswordInput,
+  ): Promise<boolean> {
+    return this.accountService.adminResetAdminPassword(
+      parseAccountId(user),
+      input,
+    );
   }
 }

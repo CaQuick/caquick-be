@@ -4,6 +4,7 @@ import argon2 from 'argon2';
 import type { CursorInput } from '@/common/dto/inputs/cursor.input';
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
+import { parseId } from '@/common/utils/id-parser';
 import { parseIdCursor } from '@/common/utils/keyset-cursor';
 import {
   normalizeCursorInput,
@@ -19,10 +20,13 @@ import {
   MAX_EMAIL_LENGTH,
 } from '@/features/auth/constants/auth-admin.constants';
 import type { AdminCreateAdminInput } from '@/features/auth/dto/inputs/admin-create-admin.input';
+import type { AdminResetAdminPasswordInput } from '@/features/auth/dto/inputs/admin-reset-admin-password.input';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { AdminBaseService } from '@/features/auth/services/auth-admin-base.service';
 import { toAdminAccountOutput } from '@/features/auth/services/auth-admin-mappers.helper';
 import type { AdminAccountOutput } from '@/features/auth/types/auth-admin-output.type';
+import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
+import { TokenBlacklistService } from '@/global/auth';
 
 @Injectable()
 export class AdminAccountService extends AdminBaseService {
@@ -30,6 +34,7 @@ export class AdminAccountService extends AdminBaseService {
     accounts: AccountAdminRepository,
     @Inject(AUDIT_LOG_REPOSITORY)
     auditLogs: IAuditLogRepository,
+    private readonly blacklist: TokenBlacklistService,
   ) {
     super(accounts, auditLogs);
   }
@@ -89,5 +94,41 @@ export class AdminAccountService extends AdminBaseService {
     });
 
     return toAdminAccountOutput(created);
+  }
+
+  async adminResetAdminPassword(
+    accountId: bigint,
+    input: AdminResetAdminPasswordInput,
+  ): Promise<boolean> {
+    const ctx = await this.requireAdminContext(accountId);
+    const targetId = parseId(input.accountId);
+    // 본인은 현재 비밀번호를 확인하는 변경 경로만 쓴다(탈취된 세션이 검증 없이 비밀번호를 바꾸지 못하게)
+    if (targetId === ctx.accountId) {
+      throw new DomainException('CANNOT_RESET_OWN_PASSWORD');
+    }
+    const target = await this.accounts.findAdminAccountById(targetId);
+    // 자격증명이 없거나 삭제된 계정은 초기화할 로그인 수단이 없다
+    if (!target?.credential || target.credential.deleted_at !== null) {
+      throw new DomainException('ACCOUNT_NOT_FOUND');
+    }
+
+    const passwordHash = await argon2.hash(input.newPassword, {
+      type: argon2.argon2id,
+    });
+    const changedAt = await this.accounts.resetCredentialPassword({
+      accountId: target.id,
+      passwordHash,
+      audit: {
+        actorAccountId: ctx.accountId,
+        storeId: null,
+        targetType: AuditTargetType.ACCOUNT,
+        targetId: target.id,
+        action: AuditActionType.UPDATE,
+        afterJson: { passwordReset: true, mustChangePassword: true },
+      },
+    });
+    // 커밋 뒤 — 초기화 전 발급된 액세스 토큰을 만료 전에도 막는다
+    await this.blacklist.blockCredentials(target.id, changedAt);
+    return true;
   }
 }
