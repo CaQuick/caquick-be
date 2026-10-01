@@ -62,6 +62,14 @@ describe('ProductSearchQueryResolver (real DB)', () => {
     });
   });
 
+  it('searchProducts: keyword를 생략하면 검색어 조건 없이 조회한다', async () => {
+    await createProduct(prisma, { name: '리졸버 케이크' });
+
+    const result = await resolver.searchProducts({}, undefined);
+
+    expect(result.totalCount).toBe(1);
+  });
+
   it('searchProducts: 로그인 사용자의 찜 여부를 채운다', async () => {
     const product = await createProduct(prisma, { name: '리졸버 케이크' });
     const account = await createAccount(prisma, { account_type: 'USER' });
