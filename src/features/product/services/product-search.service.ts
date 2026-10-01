@@ -129,7 +129,9 @@ export class ProductSearchService {
       | 'regionIds'
     >,
   ): ProductSearchFilter {
-    const { words } = parseSearchKeyword(input.keyword);
+    // 생략·null은 카테고리 더보기처럼 필터만으로 조회하는 진입이고, 빈 문자열은 검색창 입력이라 400
+    const words =
+      input.keyword != null ? parseSearchKeyword(input.keyword).words : [];
     if (
       input.minPrice !== undefined &&
       input.maxPrice !== undefined &&

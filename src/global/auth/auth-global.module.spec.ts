@@ -74,7 +74,7 @@ describe('AuthGlobalModule', () => {
     const header = JSON.parse(
       Buffer.from(rawHeader, 'base64url').toString('utf8'),
     ) as { alg: string; kid: string };
-    const payload = jwt.decode(token);
+    const payload = jwt.decode<{ exp: number; iat: number }>(token);
 
     expect(header).toMatchObject({ alg: 'RS256', kid: KEYS.kid });
     expect(payload).toMatchObject({

@@ -155,7 +155,26 @@ describe('ProductSearchService (real DB)', () => {
       expect(await names({ keyword: '케이크' })).toEqual(['케이크 활성']);
     });
 
+    it('keyword를 생략하거나 null로 넘기면 검색어 조건 없이 노출 상품 전체를 조회한다', async () => {
+      const store = await createStore(prisma);
+      const closed = await createStore(prisma, { is_active: false });
+      await makeCake(store, '딸기 케이크');
+      await makeCake(store, '타르트');
+      await makeCake(store, '비활성', { is_active: false });
+      await makeCake(closed, '휴업 매장 케이크');
+
+      for (const input of [{}, { keyword: null }]) {
+        expect(await names(input)).toEqual(
+          expect.arrayContaining(['딸기 케이크', '타르트']),
+        );
+        expect(await names(input)).toHaveLength(2);
+      }
+    });
+
     it('빈 검색어·길이 초과는 400', async () => {
+      await expect(
+        service.searchProducts({ keyword: '' }),
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
       await expect(
         service.searchProducts({ keyword: '  ' }),
       ).rejects.toThrowDomain(400);
@@ -204,6 +223,17 @@ describe('ProductSearchService (real DB)', () => {
           styleCategoryIds: [flowerId.toString()],
         }),
       ).toEqual(['케이크 생일 꽃']);
+    });
+
+    it('keyword 없이 상황별 카테고리만으로 조회하면 상품명과 무관하게 카테고리 연결 상품이 나온다', async () => {
+      const store = await createStore(prisma);
+      const linked = await makeCake(store, '딸기 생크림 케이크');
+      const birthdayId = await categorize(linked, 'EVENT', '생일');
+      await makeCake(store, '생일 축하 케이크');
+
+      expect(
+        await names({ eventCategoryIds: [birthdayId.toString()] }),
+      ).toEqual(['딸기 생크림 케이크']);
     });
 
     it('삭제된 카테고리 연결·비활성 카테고리는 필터에 걸리지 않는다', async () => {
@@ -478,6 +508,18 @@ describe('ProductSearchService (real DB)', () => {
       });
       expect(filtered.totalCount).toBe(1);
       expect(filtered.minPrice).toBe(20000);
+
+      const withoutKeyword = await service.searchProductFacets({
+        eventCategoryIds: [birthdayId.toString()],
+      });
+      expect(withoutKeyword).toMatchObject({
+        totalCount: 1,
+        minPrice: 20000,
+        maxPrice: 20000,
+      });
+      expect(
+        (await service.searchProductFacets({ keyword: null })).totalCount,
+      ).toBe(2);
 
       const empty = await service.searchProductFacets({ keyword: '없음' });
       expect(empty).toMatchObject({
