@@ -227,7 +227,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
         templateId,
         tokenIds,
       },
-      (created) => ({
+      () => ({
         actorAccountId: ctx.accountId,
         storeId: ctx.storeId,
         targetType: AuditTargetType.PRODUCT,
