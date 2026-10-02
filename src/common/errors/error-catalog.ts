@@ -196,6 +196,14 @@ export const ERROR_CATALOG = {
     status: HttpStatus.NOT_FOUND,
     message: '검색 기록을 찾을 수 없습니다.',
   },
+  SEARCH_KEYWORD_CHIP_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '검색 키워드 칩을 찾을 수 없습니다.',
+  },
+  SEARCH_KEYWORD_CHIP_TAKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이미 등록된 검색 키워드 칩입니다.',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '알림을 찾을 수 없습니다.',

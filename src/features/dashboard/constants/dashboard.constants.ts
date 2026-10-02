@@ -15,6 +15,7 @@ export const AUDIT_TARGET_TYPES = [
   'REVIEW_COMMENT',
   'REVIEW_REPORT',
   'NOTIFICATION',
+  'SEARCH_KEYWORD_CHIP',
 ] as const;
 export type AuditTargetTypeValue = (typeof AUDIT_TARGET_TYPES)[number];
 export const AUDIT_ACTION_TYPES = [

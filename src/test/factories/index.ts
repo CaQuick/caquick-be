@@ -12,6 +12,7 @@ export * from './review-report.factory';
 export * from './review.factory';
 export * from './search-event.factory';
 export * from './search-history.factory';
+export * from './search-keyword-chip.factory';
 export * from './search-keyword-rank-snapshot.factory';
 export * from './seller.factory';
 export * from './sequence';

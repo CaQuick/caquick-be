@@ -11,6 +11,7 @@ import {
   createAccount,
   createProduct,
   createSearchHistory,
+  createSearchKeywordChip,
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -230,6 +231,77 @@ describe('SearchEntryService (real DB)', () => {
         linkStoreId: store.id.toString(),
         linkProductStoreId: null,
       });
+    });
+  });
+
+  describe('searchKeywordChips', () => {
+    const NOW = new Date('2026-12-20T03:00:00.000Z');
+    const PAST = new Date(NOW.getTime() - 60 * 60 * 1000);
+    const FUTURE = new Date(NOW.getTime() + 60 * 60 * 1000);
+    const POINTS = { 없음: null, 과거: PAST, 지금: NOW, 미래: FUTURE };
+    type Point = keyof typeof POINTS;
+    // 시작은 포함(<= now), 종료는 제외(> now)
+    const startsOk = (p: Point) => p !== '미래';
+    const endsOk = (p: Point) => p === '없음' || p === '미래';
+    const CASES = (Object.keys(POINTS) as Point[]).flatMap((starts) =>
+      (Object.keys(POINTS) as Point[]).map(
+        (ends) => [starts, ends, startsOk(starts) && endsOk(ends)] as const,
+      ),
+    );
+
+    beforeEach(() => {
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+    });
+
+    it('표는 시작 4 × 종료 4 = 16가지를 모두 덮는다', () => {
+      expect(CASES).toHaveLength(16);
+    });
+
+    it.each(CASES)(
+      '시작 %s · 종료 %s → 노출 %s',
+      async (starts, ends, shown) => {
+        await createSearchKeywordChip(prisma, {
+          keyword: '크리스마스',
+          starts_at: POINTS[starts],
+          ends_at: POINTS[ends],
+        });
+
+        expect(await service.searchKeywordChips()).toEqual(
+          shown ? ['크리스마스'] : [],
+        );
+      },
+    );
+
+    it('비활성·삭제된 칩은 기간 안이어도 빠진다', async () => {
+      await createSearchKeywordChip(prisma, {
+        keyword: '꺼짐',
+        is_active: false,
+      });
+      await createSearchKeywordChip(prisma, {
+        keyword: '삭제',
+        deleted_at: PAST,
+      });
+      await createSearchKeywordChip(prisma, { keyword: '노출' });
+
+      expect(await service.searchKeywordChips()).toEqual(['노출']);
+    });
+
+    it('sort_order 오름차순, 같으면 id 오름차순으로 준다', async () => {
+      await createSearchKeywordChip(prisma, { keyword: '셋째', sort_order: 2 });
+      await createSearchKeywordChip(prisma, { keyword: '첫째', sort_order: 0 });
+      await createSearchKeywordChip(prisma, { keyword: '둘째', sort_order: 1 });
+      await createSearchKeywordChip(prisma, { keyword: '넷째', sort_order: 2 });
+
+      expect(await service.searchKeywordChips()).toEqual([
+        '첫째',
+        '둘째',
+        '셋째',
+        '넷째',
+      ]);
+    });
+
+    it('칩이 없으면 빈 목록', async () => {
+      expect(await service.searchKeywordChips()).toEqual([]);
     });
   });
 });
