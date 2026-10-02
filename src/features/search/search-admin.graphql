@@ -1,0 +1,126 @@
+extend type Query {
+  """
+  검색 키워드 바로가기 칩 전체(삭제 제외, 비활성·노출 기간 밖 포함)를 노출 순서(sortOrder·id)대로 조회한다.
+  adminReorderSearchKeywordChips는 이 목록 전체를 받는다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminSearchKeywordChips: [AdminSearchKeywordChip!]!
+}
+
+extend type Mutation {
+  """
+  검색 키워드 바로가기 칩을 만든다. 새 칩은 맨 뒤에 붙는다. keyword는 검색과 같은 규칙(앞뒤 공백 제거,
+  연속 공백 1칸)으로 정규화하며 비면 KEYWORD_EMPTY, 200자를 넘으면 KEYWORD_TOO_LONG. 삭제되지 않은 칩과
+  키워드가 같으면(대소문자 무시) SEARCH_KEYWORD_CHIP_TAKEN, startsAt이 endsAt보다 늦거나 같으면
+  INVALID_EXPOSURE_WINDOW(모두 BAD_USER_INPUT). 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminCreateSearchKeywordChip(
+    input: AdminCreateSearchKeywordChipInput!
+  ): AdminSearchKeywordChip!
+  """
+  검색 키워드 바로가기 칩을 수정한다. 전달한 필드만 바뀌며, 노출 기간은 현재 값과 병합한 최종 상태로 검증한다.
+  키워드·기간 규칙은 adminCreateSearchKeywordChip과 같다. 없거나 삭제됐으면 NOT_FOUND. 관리자 로그인 필수.
+  ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminUpdateSearchKeywordChip(
+    input: AdminUpdateSearchKeywordChipInput!
+  ): AdminSearchKeywordChip!
+  """
+  검색 키워드 바로가기 칩을 삭제(soft-delete)한다. 삭제한 키워드는 새 칩으로 다시 만들 수 있다. 없거나 이미
+  삭제됐으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminDeleteSearchKeywordChip(chipId: ID!): Boolean!
+  """
+  검색 키워드 바로가기 칩의 노출 순서를 바꾼다. chipIds 배열 순서가 곧 새 순서이며, 삭제되지 않은 칩
+  전부(adminSearchKeywordChips 결과)를 빠짐없이 보내야 한다. 중복 ID는 DUPLICATE_IDS, 개수가 다르면
+  IDS_LENGTH_MISMATCH, 없는 ID가 섞이면 INVALID_IDS(모두 BAD_USER_INPUT) — 화면을 연 사이 다른 관리자가
+  칩을 추가·삭제했으면 목록을 다시 불러와야 한다. 바뀐 순서의 전체 목록을 반환한다. 관리자 로그인 필수.
+  ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminReorderSearchKeywordChips(
+    input: AdminReorderSearchKeywordChipsInput!
+  ): [AdminSearchKeywordChip!]!
+}
+
+"""
+검색 키워드 바로가기 칩 1건(관리자용).
+"""
+type AdminSearchKeywordChip {
+  id: ID!
+  """
+  칩 문구이자 누르면 실행되는 검색어(정규화된 값).
+  """
+  keyword: String!
+  """
+  노출 순서. 오름차순.
+  """
+  sortOrder: Int!
+  """
+  노출 여부. false면 기간과 무관하게 노출하지 않는다.
+  """
+  isActive: Boolean!
+  """
+  노출 시작 시각(포함). null이면 시작 제한 없음.
+  """
+  startsAt: DateTime
+  """
+  노출 종료 시각(제외). null이면 종료 제한 없음.
+  """
+  endsAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""
+검색 키워드 바로가기 칩 생성 입력.
+"""
+input AdminCreateSearchKeywordChipInput {
+  """
+  칩 문구이자 검색어. 정규화 후 1~200자(코드 포인트 기준).
+  """
+  keyword: String!
+  """
+  노출 여부. 기본 true.
+  """
+  isActive: Boolean = true
+  """
+  노출 시작 시각(포함, ISO 8601 오프셋 포함). 생략하면 시작 제한 없음.
+  """
+  startsAt: DateTime
+  """
+  노출 종료 시각(제외, ISO 8601 오프셋 포함). 생략하면 종료 제한 없음.
+  """
+  endsAt: DateTime
+}
+
+"""
+검색 키워드 바로가기 칩 수정 입력. 전달한 필드만 변경된다.
+"""
+input AdminUpdateSearchKeywordChipInput {
+  chipId: ID!
+  """
+  칩 문구이자 검색어. null은 허용하지 않는다.
+  """
+  keyword: String
+  """
+  노출 여부. null은 허용하지 않는다.
+  """
+  isActive: Boolean
+  """
+  노출 시작 시각(포함). null이면 시작 제한을 없앤다.
+  """
+  startsAt: DateTime
+  """
+  노출 종료 시각(제외). null이면 종료 제한을 없앤다.
+  """
+  endsAt: DateTime
+}
+
+"""
+검색 키워드 바로가기 칩 순서 변경 입력.
+"""
+input AdminReorderSearchKeywordChipsInput {
+  """
+  새 노출 순서대로 나열한 칩 ID 전체(삭제되지 않은 칩 전부).
+  """
+  chipIds: [ID!]!
+}

@@ -23,6 +23,10 @@ export class SearchEntryService {
     return row ? toHomeBanner(row) : null;
   }
 
+  searchKeywordChips(): Promise<string[]> {
+    return this.repo.listExposedKeywordChips(this.clock.now());
+  }
+
   /** 정규화(trim·공백 축약)된 검색어를 저장해 최근 검색어·인기 검색어가 같은 키로 모이게 한다. */
   async recordSearch(rawKeyword: string, accountId?: bigint): Promise<boolean> {
     const { keyword } = parseSearchKeyword(rawKeyword);
