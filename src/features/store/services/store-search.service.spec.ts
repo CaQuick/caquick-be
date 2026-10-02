@@ -149,7 +149,7 @@ describe('StoreSearchService (real DB)', () => {
       );
       await expect(
         service.searchStores({ keyword: ' ' }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
       expect(await service.searchStores({ keyword: '없음' })).toEqual({
         items: [],
         totalCount: 0,

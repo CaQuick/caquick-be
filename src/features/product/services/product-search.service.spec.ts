@@ -177,10 +177,10 @@ describe('ProductSearchService (real DB)', () => {
       ).rejects.toThrowDomain('KEYWORD_EMPTY');
       await expect(
         service.searchProducts({ keyword: '  ' }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
       await expect(
         service.searchProducts({ keyword: 'a'.repeat(201) }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_TOO_LONG');
     });
 
     it('결과가 없으면 빈 커넥션', async () => {
@@ -288,7 +288,7 @@ describe('ProductSearchService (real DB)', () => {
           minPrice: 50000,
           maxPrice: 10000,
         }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('INVALID_PRICE_RANGE');
     });
 
     it('regionIds 지정 시 해당 지역 매장 상품만', async () => {

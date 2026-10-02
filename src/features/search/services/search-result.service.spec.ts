@@ -131,7 +131,7 @@ describe('SearchResultService (real DB)', () => {
       ).rejects.toThrowDomain('KEYWORD_EMPTY');
       await expect(
         service.searchSummary({ keyword: '  ' }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
     });
   });
 });

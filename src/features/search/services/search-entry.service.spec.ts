@@ -119,7 +119,9 @@ describe('SearchEntryService (real DB)', () => {
     });
 
     it('공백만 있는 검색어는 400', async () => {
-      await expect(service.recordSearch('   ')).rejects.toThrowDomain(400);
+      await expect(service.recordSearch('   ')).rejects.toThrowDomain(
+        'KEYWORD_EMPTY',
+      );
       expect(await searchEvents()).toHaveLength(0);
     });
 
