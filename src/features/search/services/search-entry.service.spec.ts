@@ -127,7 +127,7 @@ describe('SearchEntryService (real DB)', () => {
 
     it('200자를 넘는 검색어는 400', async () => {
       await expect(service.recordSearch('a'.repeat(201))).rejects.toThrowDomain(
-        400,
+        'KEYWORD_TOO_LONG',
       );
     });
   });
