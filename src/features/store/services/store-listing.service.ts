@@ -44,7 +44,7 @@ export class StoreListingService {
     return this.scoreStores(candidates, rankedAt);
   }
 
-  /** 키워드 매장 검색(후보를 검색어로 좁힌 뒤)도 같은 인기순을 쓴다. */
+  /** 매장 검색(후보를 검색어·지역으로 좁힌 뒤)도 같은 인기순을 쓴다. */
   async scoreStores<T extends StoreCandidateRow>(
     candidates: T[],
     rankedAt: Date,

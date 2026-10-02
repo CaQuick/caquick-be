@@ -11,8 +11,9 @@ import {
 import { MAX_SEARCH_PAGE_LIMIT } from '@/features/store/constants/store-search.constants';
 
 export class SearchStoresInput {
+  @IsOptional()
   @IsString()
-  keyword!: string;
+  keyword?: string | null;
 
   @IsOptional()
   @IsArray()

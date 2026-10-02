@@ -1,12 +1,14 @@
 extend type Query {
-  """키워드 매장 검색(검색 결과 매장 탭). 매장명에 단어별 AND 부분일치, 인기순 고정. 비로그인 접근 가능."""
+  """
+  매장 검색(검색 결과 매장 탭). 매장명에 단어별 AND 부분일치, 인기순 고정. keyword를 생략하면 지역 조건만 적용한다. 비로그인 접근 가능.
+  """
   searchStores(input: SearchStoresInput!): SearchStoreConnection!
 }
 
 """매장 검색 조건. 커서가 아니라 오프셋 방식이다."""
 input SearchStoresInput {
-  """검색어(정규화: trim·공백 축약, 빈값/200자 초과 400)."""
-  keyword: String!
+  """검색어. 규칙은 SearchProductsInput.keyword와 같다(생략·null이면 검색어 조건 없음, 빈 문자열·공백은 400)."""
+  keyword: String
   """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
   regionIds: [ID!]
   """건너뛸 개수. 기본 0."""

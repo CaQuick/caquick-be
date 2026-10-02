@@ -5,7 +5,7 @@ import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { parseSearchKeyword } from '@/common/utils/search-keyword';
+import { parseOptionalSearchWords } from '@/common/utils/search-keyword';
 import {
   DEFAULT_PRODUCT_SEARCH_SORT,
   DEFAULT_SEARCH_PAGE_LIMIT,
@@ -129,9 +129,7 @@ export class ProductSearchService {
       | 'regionIds'
     >,
   ): ProductSearchFilter {
-    // 생략·null은 카테고리 더보기처럼 필터만으로 조회하는 진입이고, 빈 문자열은 검색창 입력이라 400
-    const words =
-      input.keyword != null ? parseSearchKeyword(input.keyword).words : [];
+    const words = parseOptionalSearchWords(input.keyword);
     if (
       input.minPrice !== undefined &&
       input.maxPrice !== undefined &&
