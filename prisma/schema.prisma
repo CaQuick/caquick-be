@@ -122,6 +122,7 @@ enum AuditTargetType {
   REVIEW_COMMENT
   REVIEW_REPORT
   NOTIFICATION
+  SEARCH_KEYWORD_CHIP
 }
 
 enum AuditActionType {
@@ -1191,6 +1192,34 @@ model SearchKeywordRankSnapshot {
   @@unique([ranked_at, rank], map: "uk_search_keyword_rank_snapshot")
   @@index([ranked_at], map: "idx_search_keyword_rank_snapshot_ranked_at")
   @@map("search_keyword_rank_snapshot")
+}
+
+/**
+ * 검색 진입 화면 키워드 바로가기 칩. 누르면 그 키워드로 검색한다(관리자 등록).
+ * keyword는 검색과 같은 규칙으로 정규화해 저장한다 — 칩 문구를 그대로 검색·recordSearch에 넘긴다.
+ * active_key는 미삭제 동안만 keyword와 같고 삭제 시 NULL이다. unique를 여기에 걸어
+ * 활성 칩끼리만 중복을 막는다(keyword에 걸면 삭제 행이 같은 키워드 재사용을 막는다).
+ */
+model SearchKeywordChip {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  keyword    String  @db.VarChar(200)
+  active_key String? @db.VarChar(200)
+
+  sort_order Int     @default(0)
+  is_active  Boolean @default(true) @db.TinyInt
+
+  starts_at DateTime? @db.DateTime(3)
+  ends_at   DateTime? @db.DateTime(3)
+
+  created_at DateTime  @default(now()) @db.DateTime(3)
+  updated_at DateTime  @updatedAt @db.DateTime(3)
+  deleted_at DateTime? @db.DateTime(3)
+
+  @@unique([active_key], map: "uk_search_keyword_chip_active")
+  @@index([sort_order, id], map: "idx_search_keyword_chip_sort")
+  @@index([deleted_at], map: "idx_search_keyword_chip_deleted_at")
+  @@map("search_keyword_chip")
 }
 
 /**

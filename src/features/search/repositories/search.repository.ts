@@ -129,6 +129,20 @@ export class SearchRepository {
     });
   }
 
+  /** 배너와 같은 노출 규칙 — 노출 여부 켜짐, 시작 포함·종료 제외. now는 호출 측 ClockService 값. */
+  async listExposedKeywordChips(now: Date): Promise<string[]> {
+    const rows = await this.prisma.searchKeywordChip.findMany({
+      where: {
+        is_active: true,
+        OR: [{ starts_at: null }, { starts_at: { lte: now } }],
+        AND: [{ OR: [{ ends_at: null }, { ends_at: { gt: now } }] }],
+      },
+      orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+      select: { keyword: true },
+    });
+    return rows.map((row) => row.keyword);
+  }
+
   // ── 구매자 최근 검색어(목록·삭제) ──
 
   async listSearchHistories(args: {

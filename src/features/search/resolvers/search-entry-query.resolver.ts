@@ -48,4 +48,9 @@ export class SearchEntryQueryResolver {
   searchBanner(): Promise<HomeBanner | null> {
     return this.entryService.searchBanner();
   }
+
+  @Query('searchKeywordChips')
+  searchKeywordChips(): Promise<string[]> {
+    return this.entryService.searchKeywordChips();
+  }
 }

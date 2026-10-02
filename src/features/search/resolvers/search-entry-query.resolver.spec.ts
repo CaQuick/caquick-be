@@ -24,6 +24,7 @@ import {
   createOrder,
   createOrderItem,
   createProduct,
+  createSearchKeywordChip,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -122,5 +123,22 @@ describe('SearchEntry Resolvers (real DB)', () => {
 
   it('searchBanner: 등록된 SEARCH 배너가 없으면 null', async () => {
     expect(await queryResolver.searchBanner()).toBeNull();
+  });
+
+  it('searchKeywordChips: 노출 중인 칩의 키워드를 순서대로 반환한다', async () => {
+    await createSearchKeywordChip(prisma, { keyword: '신년', sort_order: 1 });
+    await createSearchKeywordChip(prisma, {
+      keyword: '크리스마스',
+      sort_order: 0,
+    });
+    await createSearchKeywordChip(prisma, {
+      keyword: '꺼짐',
+      is_active: false,
+    });
+
+    expect(await queryResolver.searchKeywordChips()).toEqual([
+      '크리스마스',
+      '신년',
+    ]);
   });
 });

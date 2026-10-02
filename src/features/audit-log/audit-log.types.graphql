@@ -58,6 +58,10 @@ enum AuditTargetType {
   관리자 알림 발송.
   """
   NOTIFICATION
+  """
+  검색 진입 화면 키워드 바로가기 칩. 순서 변경은 순서가 바뀐 칩마다 1건씩 남는다.
+  """
+  SEARCH_KEYWORD_CHIP
 }
 
 """

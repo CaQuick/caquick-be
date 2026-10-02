@@ -78,6 +78,7 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   SearchHistory: catalog(['search']),
   SearchEvent: catalog(['search']),
   SearchKeywordRankSnapshot: catalog(['search']),
+  SearchKeywordChip: catalog(['search']),
 
   Order: order(),
   // catalog capacity 복제본 — order가 소유, 소비자만 쓴다
