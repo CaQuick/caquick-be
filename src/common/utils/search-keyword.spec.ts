@@ -67,8 +67,10 @@ describe('search-keyword utils', () => {
     });
 
     it('빈 검색어·길이 초과는 400', () => {
-      expect(() => parseSearchKeyword(' ')).toThrowDomain(400);
-      expect(() => parseSearchKeyword('a'.repeat(201))).toThrowDomain(400);
+      expect(() => parseSearchKeyword(' ')).toThrowDomain('KEYWORD_EMPTY');
+      expect(() => parseSearchKeyword('a'.repeat(201))).toThrowDomain(
+        'KEYWORD_TOO_LONG',
+      );
     });
   });
 

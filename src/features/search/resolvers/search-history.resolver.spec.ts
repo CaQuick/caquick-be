@@ -84,6 +84,6 @@ describe('User Search Resolvers (real DB)', () => {
         { accountId: account.id.toString() },
         '999999',
       ),
-    ).rejects.toThrowDomain(404);
+    ).rejects.toThrowDomain('SEARCH_HISTORY_NOT_FOUND');
   });
 });
