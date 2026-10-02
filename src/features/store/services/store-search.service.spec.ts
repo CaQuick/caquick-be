@@ -105,8 +105,8 @@ describe('StoreSearchService (real DB)', () => {
     });
 
     it('인기 점수순(최근 주문 많은 매장 우선)으로 정렬한다', async () => {
-      const hot = await createStore(prisma, { store_name: '케이크 인기' });
       await createStore(prisma, { store_name: '케이크 보통' });
+      const hot = await createStore(prisma, { store_name: '케이크 인기' });
       await confirmOrders(hot, 3);
 
       expect(await names({ keyword: '케이크' })).toEqual([
@@ -131,10 +131,25 @@ describe('StoreSearchService (real DB)', () => {
       expect(page.hasMore).toBe(false);
     });
 
+    it('keyword를 생략하거나 null로 넘기면 검색어 조건 없이 노출 매장 전체를 인기순으로 조회한다', async () => {
+      // 인기 매장을 나중에 만들어 후보 조회 순서(id asc)와 인기순이 반대가 되게 한다
+      await createStore(prisma, { store_name: '케이크 하우스' });
+      const hot = await createStore(prisma, { store_name: '딸기 공방' });
+      await createStore(prisma, { store_name: '휴업 매장', is_active: false });
+      await confirmOrders(hot, 2);
+
+      for (const input of [{}, { keyword: null }]) {
+        expect(await names(input)).toEqual(['딸기 공방', '케이크 하우스']);
+      }
+    });
+
     it('빈 검색어는 400, 결과 없음은 빈 커넥션', async () => {
+      await expect(service.searchStores({ keyword: '' })).rejects.toThrowDomain(
+        'KEYWORD_EMPTY',
+      );
       await expect(
         service.searchStores({ keyword: ' ' }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
       expect(await service.searchStores({ keyword: '없음' })).toEqual({
         items: [],
         totalCount: 0,

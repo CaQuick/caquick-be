@@ -16,8 +16,9 @@ import {
 } from '@/features/product/constants/product-search.constants';
 
 export class SearchProductsInput {
+  @IsOptional()
   @IsString()
-  keyword!: string;
+  keyword?: string | null;
 
   @IsOptional()
   @IsArray()

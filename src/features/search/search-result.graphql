@@ -1,6 +1,6 @@
 extend type Query {
   """
-  검색 결과 '전체' 탭 카운트(상품/매장). 필터·정렬 없이 키워드(+지역)만 반영. '전체 N'은 FE가 합산. 비로그인 접근 가능.
+  검색 결과 '전체' 탭 카운트(상품/매장). 필터·정렬 없이 키워드(+지역)만 반영하며, keyword를 생략하면 지역만 반영한다. '전체 N'은 FE가 합산. 비로그인 접근 가능.
   """
   searchSummary(input: SearchSummaryInput!): SearchSummary!
 }
@@ -10,9 +10,9 @@ extend type Query {
 """
 input SearchSummaryInput {
   """
-  검색어(정규화: trim·공백 축약, 빈값/200자 초과 400).
+  검색어. 규칙은 SearchProductsInput.keyword와 같다(생략·null이면 검색어 조건 없음, 빈 문자열·공백은 400).
   """
-  keyword: String!
+  keyword: String
   """
   2차 시군구 ID 다중 선택. 비우면 전국 대상.
   """

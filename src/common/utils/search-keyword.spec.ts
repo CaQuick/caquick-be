@@ -1,5 +1,6 @@
 import {
   normalizeSearchKeyword,
+  parseOptionalSearchWords,
   parseSearchKeyword,
   SEARCH_KEYWORD_MAX_LENGTH,
   splitSearchWords,
@@ -66,8 +67,29 @@ describe('search-keyword utils', () => {
     });
 
     it('빈 검색어·길이 초과는 400', () => {
-      expect(() => parseSearchKeyword(' ')).toThrowDomain(400);
-      expect(() => parseSearchKeyword('a'.repeat(201))).toThrowDomain(400);
+      expect(() => parseSearchKeyword(' ')).toThrowDomain('KEYWORD_EMPTY');
+      expect(() => parseSearchKeyword('a'.repeat(201))).toThrowDomain(
+        'KEYWORD_TOO_LONG',
+      );
+    });
+  });
+
+  describe('parseOptionalSearchWords', () => {
+    it.each([
+      ['생략', undefined, []],
+      ['null', null, []],
+      ['단어 하나', '케이크', ['케이크']],
+      ['정규화 후 단어 분리', ' 딸기  케이크 ', ['딸기', '케이크']],
+    ])('%s → 단어 목록', (_label, raw, expected) => {
+      expect(parseOptionalSearchWords(raw)).toEqual(expected);
+    });
+
+    it.each([
+      ['빈 문자열', 'KEYWORD_EMPTY', ''],
+      ['공백만', 'KEYWORD_EMPTY', '   '],
+      ['길이 초과', 'KEYWORD_TOO_LONG', 'a'.repeat(201)],
+    ])('%s → 400(%s)', (_label, code, raw) => {
+      expect(() => parseOptionalSearchWords(raw)).toThrowDomain(code);
     });
   });
 });

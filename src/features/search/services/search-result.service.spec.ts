@@ -99,10 +99,39 @@ describe('SearchResultService (real DB)', () => {
       ).toEqual({ productCount: 1, storeCount: 1 });
     });
 
+    it('keyword를 생략하거나 null로 넘기면 지역 조건만으로 센다', async () => {
+      const region = await createRegion(prisma, { level: 2, slug: 'sgg-all' });
+      const inRegion = await createStore(prisma, {
+        store_name: '딸기 공방',
+        region_id: region.id,
+      });
+      const outRegion = await createStore(prisma, { store_name: '타지역' });
+      await createStore(prisma, { store_name: '휴업', is_active: false });
+      await createProduct(prisma, { store_id: inRegion.id, name: '케이크' });
+      await createProduct(prisma, { store_id: inRegion.id, name: '타르트' });
+      await createProduct(prisma, { store_id: outRegion.id, name: '쿠키' });
+
+      for (const keyword of [undefined, null]) {
+        expect(await service.searchSummary({ keyword })).toEqual({
+          productCount: 3,
+          storeCount: 2,
+        });
+        expect(
+          await service.searchSummary({
+            keyword,
+            regionIds: [region.id.toString()],
+          }),
+        ).toEqual({ productCount: 2, storeCount: 1 });
+      }
+    });
+
     it('빈 검색어는 400', async () => {
       await expect(
         service.searchSummary({ keyword: '' }),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
+      await expect(
+        service.searchSummary({ keyword: '  ' }),
+      ).rejects.toThrowDomain('KEYWORD_EMPTY');
     });
   });
 });

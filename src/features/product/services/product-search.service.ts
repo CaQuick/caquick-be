@@ -5,7 +5,7 @@ import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { DAY_MS } from '@/common/utils/kst-time';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { parseSearchKeyword } from '@/common/utils/search-keyword';
+import { parseOptionalSearchWords } from '@/common/utils/search-keyword';
 import {
   DEFAULT_PRODUCT_SEARCH_SORT,
   DEFAULT_SEARCH_PAGE_LIMIT,
@@ -129,7 +129,7 @@ export class ProductSearchService {
       | 'regionIds'
     >,
   ): ProductSearchFilter {
-    const { words } = parseSearchKeyword(input.keyword);
+    const words = parseOptionalSearchWords(input.keyword);
     if (
       input.minPrice !== undefined &&
       input.maxPrice !== undefined &&

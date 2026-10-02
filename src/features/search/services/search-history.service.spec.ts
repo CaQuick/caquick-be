@@ -125,14 +125,14 @@ describe('UserSearchService (real DB)', () => {
 
       await expect(
         service.deleteSearchHistory(account.id, history.id),
-      ).rejects.toThrowDomain(404);
+      ).rejects.toThrowDomain('SEARCH_HISTORY_NOT_FOUND');
     });
 
     it('존재하지 않는 id면 404', async () => {
       const account = await setupUser();
       await expect(
         service.deleteSearchHistory(account.id, BigInt(999999)),
-      ).rejects.toThrowDomain(404);
+      ).rejects.toThrowDomain('SEARCH_HISTORY_NOT_FOUND');
     });
 
     it('다른 계정의 기록은 접근 불가 (404)', async () => {
@@ -144,7 +144,7 @@ describe('UserSearchService (real DB)', () => {
 
       await expect(
         service.deleteSearchHistory(me.id, othersHistory.id),
-      ).rejects.toThrowDomain(404);
+      ).rejects.toThrowDomain('SEARCH_HISTORY_NOT_FOUND');
     });
   });
 
