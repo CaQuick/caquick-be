@@ -36,6 +36,13 @@ export interface ParsedSearchKeyword {
   words: string[];
 }
 
+/** 생략·null은 필터만으로 조회하는 진입(카테고리 더보기 등)이라 조건 없음, 빈 문자열·공백은 검색창 입력이라 400. */
+export function parseOptionalSearchWords(
+  raw: string | null | undefined,
+): string[] {
+  return raw != null ? parseSearchKeyword(raw).words : [];
+}
+
 export function parseSearchKeyword(raw: string): ParsedSearchKeyword {
   const result = normalizeSearchKeyword(raw);
   if (!result.ok) {

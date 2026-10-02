@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ClockService } from '@/common/providers/clock.service';
 import { parseId } from '@/common/utils/id-parser';
 import { hasMoreByOffset } from '@/common/utils/pagination';
-import { parseSearchKeyword } from '@/common/utils/search-keyword';
+import { parseOptionalSearchWords } from '@/common/utils/search-keyword';
 import {
   DEFAULT_SEARCH_PAGE_LIMIT,
   MAX_SEARCH_PAGE_LIMIT,
@@ -71,9 +71,8 @@ export class StoreSearchService {
   }
 
   private toFilter(input: SearchStoresInput): StoreSearchFilter {
-    const { words } = parseSearchKeyword(input.keyword);
     return {
-      words,
+      words: parseOptionalSearchWords(input.keyword),
       regionIds:
         input.regionIds && input.regionIds.length > 0
           ? input.regionIds.map((id) => parseId(id))

@@ -1,8 +1,9 @@
 import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class SearchSummaryInput {
+  @IsOptional()
   @IsString()
-  keyword!: string;
+  keyword?: string | null;
 
   @IsOptional()
   @IsArray()

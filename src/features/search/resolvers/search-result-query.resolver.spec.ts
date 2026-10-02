@@ -68,4 +68,13 @@ describe('SearchResultQueryResolver (real DB)', () => {
 
     expect(result).toEqual({ productCount: 1, storeCount: 1 });
   });
+
+  it('searchSummary: keyword를 생략하면 검색어 조건 없이 센다', async () => {
+    const store = await createStore(prisma, { store_name: '리졸버 매장' });
+    await createProduct(prisma, { store_id: store.id, name: '케이크' });
+
+    const result = await resolver.searchSummary({});
+
+    expect(result).toEqual({ productCount: 1, storeCount: 1 });
+  });
 });

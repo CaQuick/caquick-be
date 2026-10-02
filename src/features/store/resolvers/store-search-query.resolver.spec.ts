@@ -78,4 +78,12 @@ describe('StoreSearchQueryResolver (real DB)', () => {
 
     expect(result.items[0].isWishlisted).toBe(false);
   });
+
+  it('searchStores: keyword를 생략하면 검색어 조건 없이 조회한다', async () => {
+    await createStore(prisma, { store_name: '리졸버 매장' });
+
+    const result = await resolver.searchStores({}, undefined);
+
+    expect(result.totalCount).toBe(1);
+  });
 });
