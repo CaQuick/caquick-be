@@ -19,3 +19,8 @@ export interface RegionSearchResultOutput {
   parentName: string | null;
   level: number;
 }
+
+export interface RegionByLocationOutput {
+  group: RegionGroupOutput;
+  region: RegionOutput;
+}

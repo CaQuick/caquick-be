@@ -22,6 +22,32 @@ const PROTOCOL_CODES = new Set<unknown>([
   ApolloServerErrorCode.PERSISTED_QUERY_NOT_SUPPORTED,
 ]);
 
+// graphql-js 입력 오류 문구는 받은 값을 그대로 싣는다(예: 현재 위치 좌표) — 로그에는 값만 가리고 경로·형식 사유는 남긴다.
+// 값이 들어가는 템플릿 전부: 변수 강제 변환, 스칼라·열거형 사유, 리터럴 검증, 실행 인자, coerceInputValue 기본 문구, 파서 토큰
+const VALUE_REDACTIONS: readonly [RegExp, string][] = [
+  [
+    /^(Variable "\$[^"]+" got invalid value )[\s\S]*?((?: at "[^"]*")?(?:; [^;]*)?)$/,
+    '$1[redacted]$2',
+  ],
+  [/(cannot represent[^:]*): [\s\S]*$/, '$1: [redacted]'],
+  [/(, found )[\s\S]*$/, '$1[redacted]'],
+  [/(has invalid value )[\s\S]*$/, '$1[redacted]'],
+  [/Value "[\s\S]*" does not exist in /, 'Value [redacted] does not exist in '],
+  [/^(Invalid value )[\s\S]*$/, '$1[redacted]'],
+  [
+    /(Unexpected (?:Name|Int|Float|String|BlockString)) "[\s\S]*"/,
+    '$1 [redacted]',
+  ],
+];
+
+export function redactInputValues(message: string): string {
+  return VALUE_REDACTIONS.reduce(
+    (redacted, [pattern, replacement]) =>
+      redacted.replace(pattern, replacement),
+    message,
+  );
+}
+
 /**
  * Nest 필터를 거치지 않는 Apollo 자체 오류를 필터 응답과 같은 모양(code·classification·statusCode)으로 맞춘다.
  * 필터가 만든 오류는 classification이 있어 그대로 둔다. 원문은 영문·스키마 구조라 로그에만 남긴다.
@@ -33,7 +59,7 @@ export function formatGraphqlError(
   if (formatted.extensions?.classification) return formatted;
   if (PROTOCOL_CODES.has(formatted.extensions?.code)) return formatted;
 
-  const original = `${String(formatted.extensions?.code)}: ${formatted.message}`;
+  const original = `${String(formatted.extensions?.code)}: ${redactInputValues(formatted.message)}`;
   const code = CLIENT_ERROR_CODES.has(formatted.extensions?.code)
     ? 'VALIDATION_FAILED'
     : 'INTERNAL_ERROR';
