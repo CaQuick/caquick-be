@@ -103,6 +103,7 @@ describe('GraphQLExceptionFilter', () => {
       [HttpStatus.FORBIDDEN, 'FORBIDDEN'],
       [HttpStatus.NOT_FOUND, 'NOT_FOUND'],
       [HttpStatus.CONFLICT, 'CONFLICT'],
+      [HttpStatus.TOO_MANY_REQUESTS, 'TOO_MANY_REQUESTS'],
       [HttpStatus.INTERNAL_SERVER_ERROR, 'INTERNAL_SERVER_ERROR'],
       [418, 'INTERNAL_SERVER_ERROR'],
     ])('%i → %s', (status, expected) => {
