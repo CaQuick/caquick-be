@@ -38,25 +38,30 @@ WHERE r.`sort_order` <> o.`sort_order`;
 
 -- 옛 구에 연결된 매장(삭제 포함)을 승계 구로 옮긴다. 동구는 전부 제물포구로 갔다.
 -- 중구·서구는 둘로 갈라졌다 — 떨어져 나간 영종구·검단구의 동(법정동·행정동)이면 그쪽, 아니면 남은 쪽(제물포구·서해구).
--- 동 판정은 address_neighborhood 일치를 먼저 보고, 없으면 address_full에서 동 이름을 찾는다(도로명 주소의 괄호 표기 포함).
+-- 동은 address_neighborhood로 판정하고, 그 칸이 비었을 때만 address_full에서 동 이름을 찾는다(도로명 주소의 괄호 표기 포함).
 -- 시천동·오류동(행정동 오류왕길동)은 아라뱃길 남측 필지가 검암동·경서동(서해구)으로 넘어가 이름만으로 정할 수 없다 — 옮기지 않는다
 UPDATE `store` s
 JOIN `region` o ON o.`id` = s.`region_id` AND o.`slug` IN ('sgg-28110', 'sgg-28140', 'sgg-28260')
 JOIN `region` n ON n.`slug` = CASE
     WHEN o.`slug` = 'sgg-28140' THEN 'sgg-28125'
-    WHEN o.`slug` = 'sgg-28110' THEN
-        CASE WHEN TRIM(s.`address_neighborhood`) IN (
+    WHEN o.`slug` = 'sgg-28110' THEN CASE
+        WHEN NULLIF(TRIM(s.`address_neighborhood`), '') IS NOT NULL THEN
+            IF(TRIM(s.`address_neighborhood`) IN (
                 '중산동', '운남동', '운서동', '운북동', '을왕동', '남북동', '덕교동', '무의동',
                 '영종동', '영종1동', '영종2동', '운서1동', '운서2동', '용유동'
-            )
-            OR s.`address_full` REGEXP '(^|[ (])(중산동|운남동|운서동|운북동|을왕동|남북동|덕교동|무의동|영종동|영종1동|영종2동|운서1동|운서2동|용유동)([ ),]|$)'
-        THEN 'sgg-28155' ELSE 'sgg-28125' END
+            ), 'sgg-28155', 'sgg-28125')
+        WHEN s.`address_full` REGEXP '(^|[ (])(중산동|운남동|운서동|운북동|을왕동|남북동|덕교동|무의동|영종동|영종1동|영종2동|운서1동|운서2동|용유동)([ ),]|$)' THEN 'sgg-28155'
+        ELSE 'sgg-28125'
+    END
     ELSE CASE
-        WHEN TRIM(s.`address_neighborhood`) IN (
-            '백석동', '마전동', '당하동', '원당동', '대곡동', '금곡동', '왕길동', '불로동',
-            '검단동', '불로대곡동', '아라1동', '아라2동'
-        ) THEN 'sgg-28290'
-        WHEN TRIM(s.`address_neighborhood`) IN ('시천동', '오류동', '오류왕길동') THEN NULL
+        WHEN NULLIF(TRIM(s.`address_neighborhood`), '') IS NOT NULL THEN CASE
+            WHEN TRIM(s.`address_neighborhood`) IN (
+                '백석동', '마전동', '당하동', '원당동', '대곡동', '금곡동', '왕길동', '불로동',
+                '검단동', '불로대곡동', '아라1동', '아라2동'
+            ) THEN 'sgg-28290'
+            WHEN TRIM(s.`address_neighborhood`) IN ('시천동', '오류동', '오류왕길동') THEN NULL
+            ELSE 'sgg-28275'
+        END
         WHEN s.`address_full` REGEXP '(^|[ (])(백석동|마전동|당하동|원당동|대곡동|금곡동|왕길동|불로동|검단동|불로대곡동|아라1동|아라2동)([ ),]|$)' THEN 'sgg-28290'
         WHEN s.`address_full` REGEXP '(^|[ (])(시천동|오류동|오류왕길동)([ ),]|$)' THEN NULL
         ELSE 'sgg-28275'
