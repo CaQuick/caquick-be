@@ -1,11 +1,11 @@
 name: Deploy
 
-# 홈서버 자동 배포. Build Image가 main에서 성공하면 셀프호스트 러너(맥미니)가
+# 홈서버 자동 배포. main push의 CI(check·image)가 전부 성공하면 셀프호스트 러너(맥미니)가
 # .env(600) 생성 → compose pull → migrate → worker → api → ready 대기 → Discord 순서로 교체한다.
 # 롤백 = workflow_dispatch에 이전 sha를 넣어 같은 잡을 돌린다. main 밖의 실행은 environment 규칙과 if로 막는다.
 on:
   workflow_run:
-    workflows: [Build Image]
+    workflows: [CI]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -18,6 +18,7 @@ on:
 permissions:
   contents: read
   packages: read
+  actions: read
 
 concurrency:
   group: deploy-production
@@ -25,12 +26,12 @@ concurrency:
 
 jobs:
   deploy:
-    # workflow_run은 PR 빌드(포크의 main 브랜치 포함)도 보낸다. Build Image가 GHCR에 푸시하는 유일한 경로는
-    # CI 성공(workflow_run) 트리거이고 그 빌드는 이 레포 main push의 CI에서만 시작되므로, 여기서는 그 체인 이벤트만 받는다
+    # workflow_run은 PR의 CI(포크의 main 브랜치 포함)도 보낸다. 이미지를 GHCR에 푸시하는 건 이 레포 main push의 CI뿐이므로
+    # 그 이벤트만 받는다. 워크플로 결론이 success면 check(테스트)와 image(빌드·푸시)가 모두 성공한 것이다
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: [self-hosted, macmini]
@@ -65,9 +66,22 @@ jobs:
           else
             tag=$RUN_SHA
           fi
-          # build-image는 전체 sha(40 hex)만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
+          # CI image job은 전체 sha(40 hex)만 푸시한다 — 짧은 sha는 존재하지 않는 태그라 pull에서 실패한다
           [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag은 전체 커밋 sha(40 hex)만: $tag" >&2; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # 이미지는 CI의 image job이 check와 나란히 푸시해 테스트에 실패한 커밋에도 있다. 자동 배포는 CI 전체 성공으로 걸러지지만
+      # 수동 실행(재배포·롤백)은 CI를 거치지 않으므로, 그 sha의 main push CI가 성공했는지 확인한다(마이그레이션은 되돌릴 수 없다)
+      - name: Require CI success (수동 실행)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          n=$(gh api "repos/$REPO/actions/workflows/pr-check.yml/runs?head_sha=$TAG&event=push&branch=main&status=success" --jq .total_count)
+          [ "$n" -gt 0 ] || { echo "$TAG: main push CI 성공 기록이 없다 — 배포하지 않는다" >&2; exit 1; }
 
       # 빌드 완료 순서는 커밋 순서와 다를 수 있다 — 지금 main 끝이 아닌 커밋의 빌드는 배포하지 않는다(수동 실행은 그대로)
       - name: Skip if not the current main head

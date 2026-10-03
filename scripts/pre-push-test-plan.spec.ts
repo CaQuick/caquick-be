@@ -306,7 +306,7 @@ describe('scriptTestTrigger', () => {
     'infra/rabbitmq/20-prometheus.conf',
     'infra/deploy.sh',
     '.github/workflows/deploy.yml',
-    '.github/workflows/build-image.yml',
+    '.github/workflows/pr-check.yml',
     '.husky/pre-push',
     'docker/mysql/init.sql',
     'Dockerfile',
