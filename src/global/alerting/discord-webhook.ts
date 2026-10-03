@@ -52,20 +52,22 @@ export function buildDiscordPayload(
  * 실패해도 던지지 않는다 — 경보 실패는 호출자가 로그로만 남긴다.
  * 기한은 AbortSignal로 요청 자체를 끊는다 — 레이스로 거부만 하면 소켓이 남고, 늦게 전송되는 경보가 생긴다.
  */
-export const postDiscordAlert: AlertTransport = async (
-  webhookUrl,
-  message,
-  origin,
-) => {
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(buildDiscordPayload(message, origin, new Date())),
-      signal: AbortSignal.timeout(ALERT_POST_TIMEOUT_MS),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-};
+export function discordTransport(
+  timeoutMs: number = ALERT_POST_TIMEOUT_MS,
+): AlertTransport {
+  return async (webhookUrl, message, origin) => {
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(buildDiscordPayload(message, origin, new Date())),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+}
+
+export const postDiscordAlert: AlertTransport = discordTransport();
