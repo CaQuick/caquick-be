@@ -43,61 +43,44 @@ function usesOf(wf: Workflow): string[] {
     .filter((u): u is string => typeof u === 'string');
 }
 
-describe('build-image.yml', () => {
-  const wf = workflow('.github/workflows/build-image.yml');
-  const build = wf.jobs.build;
+describe('pr-check.yml image job', () => {
+  const wf = workflow('.github/workflows/pr-check.yml');
+  const image = wf.jobs.image;
 
-  it('main은 CI(pr-check) 성공(workflow_run, 같은 sha, 이 레포 push)에서만 GHCR에 푸시하고 PR(main·develop·develop-msa)은 arm64 빌드만 한다', () => {
-    expect(wf.on.push).toBeUndefined();
-    expect(wf.on.workflow_run?.workflows).toEqual(['CI']);
-    expect(wf.on.workflow_run?.branches).toEqual(['main']);
+  it('check와 나란히 돌고, PR은 arm64 빌드만·main push만 GHCR에 sha 태그로 푸시한다', () => {
+    expect(wf.on.push?.branches).toContain('main');
     expect(wf.on.pull_request?.branches).toEqual(
-      expect.arrayContaining(['main', 'develop-msa']),
+      expect.arrayContaining(['main', 'develop', 'develop-msa']),
     );
-    // 이미지 빌드는 lint·테스트를 돌리지 않는다 — CI가 같은 커밋에서 성공한 뒤에만
-    expect(build.if).toContain("conclusion == 'success'");
-    expect(build.if).toContain("workflow_run.event == 'push'");
-    expect(build.if).toContain(
-      'head_repository.full_name == github.repository',
+    // check를 기다리지 않는다 — 배포 게이트는 Deploy가 CI 전체의 결론으로 건다
+    expect(image).not.toHaveProperty('needs');
+    expect(image.if).toBe(
+      "github.event_name == 'pull_request' || github.ref == 'refs/heads/main'",
     );
-    expect(build.if).toContain('head_sha == github.sha');
-    const push = build.steps.find((s) =>
+    const push = image.steps.find((s) =>
       s.uses?.startsWith('docker/build-push-action'),
     );
-    expect(push?.with?.push).toBe("${{ github.event_name == 'workflow_run' }}");
+    expect(push?.with?.push).toBe("${{ github.event_name == 'push' }}");
     expect(push?.with?.platforms).toBe('linux/arm64');
-    const meta = build.steps.find((s) =>
+    const meta = image.steps.find((s) =>
       s.uses?.startsWith('docker/metadata-action'),
     );
-    expect(String(meta?.with?.tags)).toContain('workflow_run.head_sha');
+    expect(String(meta?.with?.tags)).toContain('value=${{ github.sha }}');
     // 가변 태그(main)는 늦게 끝난 옛 빌드가 덮어쓸 수 있다 — sha 태그만
     expect(String(meta?.with?.tags)).not.toContain('value=main');
-    const login = build.steps.find((s) =>
+    const login = image.steps.find((s) =>
       s.uses?.startsWith('docker/login-action'),
     );
-    expect(login?.if).toBe("github.event_name == 'workflow_run'");
-    const checkout = build.steps.find((s) =>
-      s.uses?.startsWith('actions/checkout'),
-    );
-    expect(String(checkout?.with?.ref)).toContain('workflow_run.head_sha');
-  });
-
-  it('반증: main 빌드의 concurrency 그룹은 sha별 — 옛 커밋의 늦은 CI 완료가 지금 main 끝의 빌드를 취소하지 않는다(순서는 head_sha == github.sha 검사가 맡는다)', () => {
-    expect(String(wf.concurrency?.group)).toContain(
-      "format('build-image-main-{0}', github.event.workflow_run.head_sha)",
-    );
-    expect(wf.concurrency?.['cancel-in-progress']).toBe(true);
-    expect(build.if).toContain('head_sha == github.sha');
+    expect(login?.if).toBe("github.event_name == 'push'");
   });
 
   it('반증: 셀프호스트 러너를 쓰지 않는다 — 공개 레포의 PR 코드가 홈서버에서 돌면 안 된다', () => {
-    expect(JSON.stringify(build['runs-on'])).not.toContain('self-hosted');
+    for (const job of Object.values(wf.jobs))
+      expect(JSON.stringify(job['runs-on'])).not.toContain('self-hosted');
   });
 
   it('액션은 커밋 SHA로 고정', () => {
-    const uses = usesOf(wf);
-    expect(uses.length).toBeGreaterThan(0);
-    for (const u of uses) expect(u).toMatch(PINNED);
+    for (const u of usesOf(wf)) expect(u).toMatch(PINNED);
   });
 });
 
@@ -105,19 +88,19 @@ describe('deploy.yml', () => {
   const wf = workflow('.github/workflows/deploy.yml');
   const job = wf.jobs.deploy;
 
-  it('Build Image 성공(main)·수동 실행만 받고, production Environment + 셀프호스트 macmini 러너에서 돈다', () => {
-    expect(wf.on.workflow_run?.workflows).toEqual(['Build Image']);
+  it('main push의 CI 성공·수동 실행만 받고, production Environment + 셀프호스트 macmini 러너에서 돈다', () => {
+    expect(wf.on.workflow_run?.workflows).toEqual(['CI']);
     expect(wf.on.workflow_run?.branches).toEqual(['main']);
     expect(wf.on.workflow_dispatch).toBeDefined();
     expect(wf.on.push).toBeUndefined();
     expect(wf.on.pull_request).toBeUndefined();
     expect(job.environment).toBe('production');
     expect(job['runs-on']).toEqual(['self-hosted', 'macmini']);
-    // workflow_run은 실패한 빌드·다른 브랜치에서도 온다 — if로 한 번 더 거른다
+    // workflow_run은 실패한 CI·다른 브랜치에서도 온다 — if로 한 번 더 거른다
     expect(job.if).toContain("conclusion == 'success'");
     expect(job.if).toContain("head_branch == 'main'");
-    // 포크 PR의 'main' 브랜치 빌드도 workflow_run으로 온다 — CI 체인(workflow_run) 이벤트 + 이 레포의 빌드만
-    expect(job.if).toContain("workflow_run.event == 'workflow_run'");
+    // 포크 PR의 'main' 브랜치 CI도 workflow_run으로 온다 — 이 레포의 push CI만
+    expect(job.if).toContain("workflow_run.event == 'push'");
     expect(job.if).toContain('head_repository.full_name == github.repository');
   });
 
@@ -177,7 +160,7 @@ describe('deploy.yml', () => {
     }
     const tag = job.steps.find((s) => s.id === 'tag');
     expect(tag?.env?.INPUT_TAG).toBe('${{ inputs.image_tag }}');
-    // build-image가 푸시하는 태그(전체 sha·main)만 — 짧은 sha·hex 아닌 접미사는 거절
+    // CI image job이 푸시하는 태그(전체 sha)만 — 짧은 sha·hex 아닌 접미사는 거절
     expect(tag?.run).toContain('^[0-9a-f]{40}$');
     expect(tag?.run).toContain('tag=$MAIN_SHA');
     expect(tag?.env?.MAIN_SHA).toBe('${{ github.sha }}');
@@ -208,6 +191,21 @@ describe('deploy.yml', () => {
     expect(config?.run).not.toContain('.docker/config.json');
   });
 
+  it('반증: 수동 실행은 그 sha의 main push CI가 성공했어야 배포한다 — 이미지는 check와 나란히 푸시돼 실패한 커밋에도 있다', () => {
+    const idx = (prefix: string) =>
+      job.steps.findIndex((s) => s.name?.startsWith(prefix));
+    const gate = job.steps[idx('Require CI success')];
+    expect(gate?.if).toBe("github.event_name == 'workflow_dispatch'");
+    expect(gate?.env?.TAG).toBe('${{ steps.tag.outputs.tag }}');
+    expect(gate?.run).toContain(
+      'workflows/pr-check.yml/runs?head_sha=$TAG&event=push&branch=main&status=success',
+    );
+    expect(gate?.run).toContain('exit 1');
+    // pull·migrate(deploy.sh) 전에 막는다
+    expect(idx('Require CI success')).toBeGreaterThan(idx('Resolve image tag'));
+    expect(idx('Require CI success')).toBeLessThan(idx('Deploy'));
+  });
+
   it('반증: workflow_run의 head_sha가 지금 main 끝이 아니면 배포 단계를 전부 건너뛴다', () => {
     const skip = job.steps.find((s) => s.name?.startsWith('Skip if not'));
     expect(skip?.if).toBe("github.event_name == 'workflow_run'");
@@ -228,8 +226,8 @@ describe('deploy.yml', () => {
   });
 });
 
-describe('build-image.yml run 블록', () => {
-  const wf = workflow('.github/workflows/build-image.yml');
+describe('pr-check.yml run 블록', () => {
+  const wf = workflow('.github/workflows/pr-check.yml');
   it('반증: run 블록에 식(${{ }})을 직접 넣지 않는다', () => {
     for (const job of Object.values(wf.jobs)) {
       for (const step of job.steps) expect(step.run ?? '').not.toContain('${{');
