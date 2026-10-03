@@ -35,7 +35,8 @@ const FULL_RULES: [RegExp, string][] = [
     'prisma 스키마·마이그레이션·시드는 실DB 스위트 전체의 전제다',
   ],
   [/^src\/test\/|^test\//, '테스트 인프라·팩토리·전역 게이트가 바뀌었다'],
-  [/^package\.json$/, 'jest 설정·의존성이 package.json에 있다'],
+  [/^jest\.config\.js$/, 'jest 설정이 바뀌었다'],
+  [/^package\.json$/, '의존성·스크립트가 package.json에 있다'],
   [/^yarn\.lock$|^\.yarnrc\.yml$|^\.yarn\//, '의존성이 바뀌었다'],
   [/^tsconfig[^/]*\.json$/, '컴파일 설정이 바뀌었다'],
   [

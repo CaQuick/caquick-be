@@ -31,6 +31,7 @@ describe('planTests', () => {
     [M('src/test/jest.global-setup.ts'), '테스트 인프라'],
     [M('src/test/model-ownership.spec.ts'), '테스트 인프라'],
     [M('test/jest-e2e.json'), '테스트 인프라'],
+    [M('jest.config.js'), 'jest 설정'],
     [M('package.json'), 'package.json'],
     [M('yarn.lock'), '의존성'],
     [M('.yarnrc.yml'), '의존성'],
