@@ -88,8 +88,9 @@ src/features/example/*
 
 .figma/
 
-# 지역 시드 원본 CSV (대용량 공공데이터, 파싱 산출 regions.generated.json 만 커밋)
+# 지역 시드 원본 (대용량 공공데이터, 파싱 산출 regions.generated.json 만 커밋)
 prisma/seed/data/*.csv
+prisma/seed/data/KIKcd_*
 
 # Prisma 7 생성 클라이언트 (postinstall이 생성)
 src/generated/
