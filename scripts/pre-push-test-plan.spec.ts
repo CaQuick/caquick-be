@@ -321,6 +321,7 @@ describe('scriptTestTrigger', () => {
     '.yarn/patches/x.patch',
     'tsconfig.json',
     'tsconfig.build.json',
+    'src/test/jest-host-lock.ts',
   ])('%s가 바뀌면 돌린다', (path) => {
     expect(scriptTestTrigger([M(SERVICE), M(path)])).toBe(path);
   });

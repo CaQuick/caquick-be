@@ -70,6 +70,8 @@ const SCRIPT_TEST_RULES: RegExp[] = [
   /^package\.json$/,
   /^yarn\.lock$|^\.yarnrc\.yml$|^\.yarn\//,
   /^tsconfig[^/]*\.json$/,
+  // scripts jest의 globalSetup·Teardown이 직접 import한다
+  /^src\/test\/jest-host-lock\.ts$/,
 ];
 
 /** test:scripts가 필요한 첫 변경 경로. 없으면 null. */
