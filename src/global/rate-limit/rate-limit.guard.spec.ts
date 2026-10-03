@@ -88,6 +88,13 @@ describe('RateLimitGuard (real Redis)', () => {
     ]);
   });
 
+  it('클래스에는 걸 수 없다(가드가 핸들러 정책만 읽어 조용히 빠지지 않게)', () => {
+    // @ts-expect-error RateLimit은 메서드 전용 데코레이터다
+    @RateLimit({ name: 'cls', limit: 1, windowSeconds: 1 })
+    class ClassLevel {}
+    expect(ClassLevel).toBeDefined();
+  });
+
   it('한도까지는 통과하고 넘으면 RATE_LIMITED', async () => {
     const ctx = gqlContext(proto.limited, '203.0.113.1');
 
