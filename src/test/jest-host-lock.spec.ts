@@ -3,6 +3,8 @@ import { createServer, type Server, type Socket } from 'node:net';
 
 import {
   acquireHostLock,
+  decideAfterProbe,
+  type Occupant,
   DEFAULT_JEST_HOST_LOCK_PORT,
   type HostLock,
   hostLockPort,
@@ -46,6 +48,52 @@ describe('shouldTakeHostLock', () => {
     [{}, ['--watchAll=true'], false],
   ])('env %j · argv %j → %s', (env, argv, expected) => {
     expect(shouldTakeHostLock(env, argv)).toBe(expected);
+  });
+});
+
+describe('decideAfterProbe', () => {
+  /** 확인 결과를 차례로 넣어 단계 목록을 얻는다. */
+  function steps(occupants: Occupant[]): string[] {
+    let streak = 0;
+    return occupants.map((occupant) => {
+      const decision = decideAfterProbe(occupant, streak);
+      streak = decision.streak;
+      return decision.step;
+    });
+  }
+
+  it.each([
+    [['jest'], ['wait']],
+    [['gone'], ['retry']],
+    [['other'], ['fail']],
+    [
+      ['ambiguous', 'ambiguous'],
+      ['retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'fail'],
+    ],
+    // 반증: 모호가 아닌 결과(풀림·jest)가 끼면 연속이 끊긴다
+    [
+      ['ambiguous', 'gone', 'ambiguous', 'gone', 'ambiguous'],
+      ['retry', 'retry', 'retry', 'retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'gone', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'retry', 'retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'jest', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'wait', 'retry', 'retry'],
+    ],
+  ] as [Occupant[], string[]][])('%j → %j', (occupants, expected) => {
+    expect(steps(occupants)).toEqual(expected);
+  });
+
+  it('모호하면 잠깐 뒤, 풀렸으면 바로 다시 잡는다', () => {
+    expect(decideAfterProbe('ambiguous', 0).delayMs).toBeGreaterThan(0);
+    expect(decideAfterProbe('gone', 0).delayMs).toBe(0);
   });
 });
 

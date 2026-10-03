@@ -34,8 +34,12 @@ const VALUE_REDACTIONS: readonly [RegExp, string][] = [
   [/(has invalid value )[\s\S]*$/, '$1[redacted]'],
   [/Value "[\s\S]*" does not exist in /, 'Value [redacted] does not exist in '],
   [/^(Invalid value )[\s\S]*$/, '$1[redacted]'],
-  // 변수 JSON의 키는 임의 문자열이라 모르는 필드 이름도 값처럼 다룬다(타입명·Did you mean 후보는 서버가 정한 이름)
-  [/(Field ")[\s\S]*?(" is not defined by type )/g, '$1[redacted]$2'],
+  // 변수 JSON의 키는 임의 문자열이라(따옴표·접미 문구도 그대로 들어온다) 모르는 필드 이름도 값처럼 다룬다 —
+  // 서버가 정한 타입명으로 끝나는 마지막 접미까지 통째로 가린다(Did you mean 후보는 남는다)
+  [
+    /(Field ")[\s\S]*(" is not defined by type "[_A-Za-z][_0-9A-Za-z]*"\.)/,
+    '$1[redacted]$2',
+  ],
   [
     /(Unexpected (?:Name|Int|Float|String|BlockString)) "[\s\S]*"/,
     '$1 [redacted]',

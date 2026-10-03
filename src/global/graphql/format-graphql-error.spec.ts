@@ -229,6 +229,24 @@ describe('redactInputValues', () => {
       () => at({ latitude: 1, longitude: 1, '37.5665': 1 }),
     ],
     [
+      '변수: 접미 문구를 심은 필드 이름',
+      () =>
+        at({
+          latitude: 1,
+          longitude: 1,
+          'x" is not defined by type "Loc". sneaky37.5665': 1,
+        }),
+    ],
+    [
+      '변수: 따옴표를 심은 필드 이름',
+      () =>
+        at({
+          latitude: 1,
+          longitude: 1,
+          'k" is not defined by type 37.5665': 1,
+        }),
+    ],
+    [
       '리터럴: 모르는 필드 이름',
       () =>
         'Field "lat37.5665" is not defined by type "Loc". Did you mean "latitude"?',
