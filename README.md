@@ -317,7 +317,7 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 
 | 명령                      | 용도                                                                                                                                                                                |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `yarn validate:push`      | pre-push 훅이 실행합니다. lint, tsc, dto:check, docs:check, arch:check, test:scripts는 전부, jest는 변경에 닿는 spec만(`test:push`) 실행합니다                                      |
+| `yarn validate:push`      | pre-push 훅이 실행합니다. lint, tsc, dto:check, docs:check, arch:check는 전부, test:scripts는 입력이 바뀌었을 때만, jest는 변경에 닿는 spec만(`test:push`) 실행합니다               |
 | `yarn validate`           | 위 정적 검사와 전체 test:cov를 차례로 실행합니다(수동 전체 검증용). 운영 맥미니에서는 무거운 테스트를 한 번에 하나만 돌립니다                                                       |
 | `yarn test [경로]`        | Jest 실 DB 통합 테스트를 실행합니다(Docker 필요)                                                                                                                                    |
 | `yarn test:scripts`       | 인프라와 워크플로 spec(`scripts/*.spec.ts`)을 실행합니다                                                                                                                            |
