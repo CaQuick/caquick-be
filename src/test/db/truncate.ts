@@ -15,11 +15,29 @@ async function getConnection(): Promise<mysql.Connection> {
       cachedConn = null;
     }
   }
-  cachedConn = await mysql.createConnection({
-    uri: getTestDatabaseUrl(),
-    multipleStatements: true,
-  });
+  cachedConn = await connectWithRetry();
   return cachedConn;
+}
+
+const CONNECT_ATTEMPTS = 3;
+const RETRYABLE = new Set(['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET']);
+
+/** 테스트 MySQL은 운영과 같은 VM에서 돈다 — 부하로 연결이 한 번 끊겨도 스펙 전체를 실패시키지 않는다. */
+async function connectWithRetry(): Promise<mysql.Connection> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await mysql.createConnection({
+        uri: getTestDatabaseUrl(),
+        multipleStatements: true,
+      });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (attempt >= CONNECT_ATTEMPTS || !code || !RETRYABLE.has(code)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
 }
 
 async function loadTableNames(conn: mysql.Connection): Promise<string[]> {
