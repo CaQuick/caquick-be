@@ -5,6 +5,24 @@ interface AppJestConfig {
     string,
     [string, { tsconfig: { isolatedModules: boolean } }]
   >;
+  maxWorkers?: number;
+}
+
+/** env.CI를 바꿔 jest.config.js를 새로 읽는다. */
+function maxWorkersFor(ci: string | undefined): number | undefined {
+  const saved = process.env.CI;
+  if (ci === undefined) delete process.env.CI;
+  else process.env.CI = ci;
+  try {
+    let config: AppJestConfig | undefined;
+    jest.isolateModules(() => {
+      config = require('../jest.config.js') as AppJestConfig;
+    });
+    return config!.maxWorkers;
+  } finally {
+    if (saved === undefined) delete process.env.CI;
+    else process.env.CI = saved;
+  }
 }
 
 /** argv를 바꿔 jest.config.js를 새로 읽는다(설정은 로드 시점의 process.argv로 모드를 정한다). */
@@ -47,5 +65,15 @@ describe('jest.config.js 변환 모드', () => {
     [['--maxWorkers=4', '--ci']],
   ])('%j면 transpile 모드', (args) => {
     expect(isolatedModulesFor(args)).toBe(true);
+  });
+});
+
+describe('jest.config.js 워커 수', () => {
+  it('로컬(운영 맥미니)은 4개로 제한한다', () => {
+    expect(maxWorkersFor(undefined)).toBe(4);
+  });
+
+  it('CI는 러너 기본값을 쓴다', () => {
+    expect(maxWorkersFor('true')).toBeUndefined();
   });
 });
