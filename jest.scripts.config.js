@@ -12,4 +12,7 @@ module.exports = {
     '^.+\\.ts$': ['ts-jest', { tsconfig: { rootDir: './scripts' } }],
   },
   testEnvironment: 'node',
+  // 앱 jest와 같은 호스트 락(src/test/jest-host-lock.ts) — scripts spec도 운영 VM에 컨테이너를 띄운다
+  globalSetup: '<rootDir>/jest-host-lock.global-setup.ts',
+  globalTeardown: '<rootDir>/jest-host-lock.global-teardown.ts',
 };

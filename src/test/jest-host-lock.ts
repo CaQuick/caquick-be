@@ -147,3 +147,18 @@ export async function acquireHostLock(
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 }
+
+type LockGlobals = { __JEST_HOST_LOCK__?: HostLock };
+
+/** jest globalSetup용 — 앱(jest.config.js)·scripts(jest.scripts.config.js) 실행이 같은 락을 쓴다. */
+export async function takeHostLockForRun(): Promise<void> {
+  if (!shouldTakeHostLock(process.env, process.argv)) return;
+  (globalThis as LockGlobals).__JEST_HOST_LOCK__ = await acquireHostLock();
+}
+
+/** jest globalTeardown용. */
+export async function releaseHostLockForRun(): Promise<void> {
+  const globals = globalThis as LockGlobals;
+  await globals.__JEST_HOST_LOCK__?.release();
+  globals.__JEST_HOST_LOCK__ = undefined;
+}

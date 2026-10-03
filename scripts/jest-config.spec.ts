@@ -1,6 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
+import {
+  releaseHostLockForRun,
+  takeHostLockForRun,
+} from '../src/test/jest-host-lock';
+
 // jest.config.js의 변환 모드 판정. 커버리지 실행만 LanguageService 모드(isolatedModules:false)여야 branches 임계가 맞는다.
 
 interface AppJestConfig {
@@ -95,5 +100,21 @@ describe('jest.config.js가 jest 설정 검증을 통과한다', () => {
 
     expect(result.stderr).not.toMatch(/Validation Error/);
     expect(result.status).toBe(0);
+  });
+});
+
+// scripts spec도 운영 VM에 컨테이너를 띄운다 — 앱 jest와 같은 호스트 락을 거는지 본다(빠지면 두 실행이 겹친다)
+describe('jest.scripts.config.js 호스트 락', () => {
+  it('scripts 실행도 앱과 같은 락 setup·teardown을 쓴다', () => {
+    const config = require('../jest.scripts.config.js') as {
+      globalSetup: string;
+      globalTeardown: string;
+    };
+    const load = (path: string) =>
+      (require(path.replace('<rootDir>', __dirname)) as { default: unknown })
+        .default;
+
+    expect(load(config.globalSetup)).toBe(takeHostLockForRun);
+    expect(load(config.globalTeardown)).toBe(releaseHostLockForRun);
   });
 });
