@@ -27,6 +27,10 @@ export const ERROR_CATALOG = {
     message:
       '주소 좌표 변환 서비스를 사용할 수 없습니다. 좌표를 직접 입력해 주세요.',
   },
+  RATE_LIMITED: {
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
   ROUTE_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '요청한 경로를 찾을 수 없습니다.',
@@ -221,6 +225,10 @@ export const ERROR_CATALOG = {
   REGION_GROUP_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '존재하지 않는 1차 지역입니다.',
+  },
+  LOCATION_LOOKUP_UNAVAILABLE: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '현재 위치로 지역을 찾을 수 없습니다. 지역을 직접 선택해 주세요.',
   },
   INVALID_PRICE_RANGE: {
     status: HttpStatus.BAD_REQUEST,

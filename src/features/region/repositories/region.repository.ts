@@ -24,6 +24,10 @@ export interface RegionSearchRow {
   parent: { name: string } | null;
 }
 
+export interface RegionDistrictRow extends RegionRow {
+  parent: { id: bigint; name: string; slug: string };
+}
+
 @Injectable()
 export class RegionRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -69,6 +73,30 @@ export class RegionRepository {
       select: { id: true },
     });
     return Boolean(found);
+  }
+
+  /** 고를 수 있는 2차 지역 — 자신과 상위 1차가 모두 활성·미삭제여야 한다. */
+  async findSelectableDistrictBySlug(
+    slug: string,
+  ): Promise<RegionDistrictRow | null> {
+    const row = await this.prisma.region.findFirst({
+      where: {
+        slug,
+        level: 2,
+        is_active: true,
+        parent: { is: { level: 1, ...visibleWhere } },
+      },
+      select: {
+        id: true,
+        parent_id: true,
+        level: true,
+        name: true,
+        slug: true,
+        parent: { select: { id: true, name: true, slug: true } },
+      },
+    });
+    // 관계 필터가 부모 존재를 보장하지만 Prisma 타입은 nullable이라 좁힌다
+    return row?.parent ? { ...row, parent: row.parent } : null;
   }
 
   async searchActiveByName(

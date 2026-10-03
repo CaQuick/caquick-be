@@ -22,6 +22,8 @@ import {
   shouldSendBootAlert,
 } from '@/global/alerting/boot-alert-throttle';
 
+const CONCURRENT_WINDOW_MS = 600_000;
+
 describe('shouldSendBootAlert', () => {
   let dir: string;
   beforeEach(() => {
@@ -48,8 +50,9 @@ describe('shouldSendBootAlert', () => {
     }).outputText;
     const modulePath = join(dir, 'throttle.js');
     writeFileSync(modulePath, js, 'utf8');
+    // 창은 넉넉하게 — 부하에서 자식 기동이 몇 초씩 벌어져도 '동시' 호출로 남아야 한다(5초 창이면 늦게 뜬 쪽이 정당하게 또 보낸다)
     const child = `const t = require(${JSON.stringify(modulePath)});
-      process.stdout.write(t.shouldSendBootAlert(Date.now(), 5000, ${JSON.stringify(stateDir)}) ? 'sent' : 'suppressed');`;
+      process.stdout.write(t.shouldSendBootAlert(Date.now(), ${CONCURRENT_WINDOW_MS}, ${JSON.stringify(stateDir)}) ? 'sent' : 'suppressed');`;
     return Promise.all(
       Array.from(
         { length: n },

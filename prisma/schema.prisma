@@ -356,6 +356,28 @@ model Region {
 }
 
 /**
+ * 위치정보 이용 확인자료(위치정보법 제16조②). 현재 위치 → 지역 조회 1회마다 1행.
+ * 좌표·지역 같은 위치 자체는 담지 않는다. 불변 로그라 soft-delete가 없고 보존 기간이 지나면 worker 크론이 지운다.
+ */
+model LocationAccessLog {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+
+  // 비로그인 이용은 null
+  account_id BigInt?               @db.UnsignedBigInt
+  purpose    LocationAccessPurpose
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  @@index([created_at], map: "idx_location_access_log_created_at")
+  @@index([account_id, created_at], map: "idx_location_access_log_account_created")
+  @@map("location_access_log")
+}
+
+enum LocationAccessPurpose {
+  REGION_BY_LOCATION
+}
+
+/**
  * =========================
  * 2) Store
  * =========================

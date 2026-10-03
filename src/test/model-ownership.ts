@@ -58,6 +58,7 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   AuthRefreshSession: identity(),
 
   Region: catalog(['region']),
+  LocationAccessLog: catalog(['region']),
   Store: catalog(['store']),
   StoreBusinessHour: catalog(['store']),
   StoreSpecialClosure: catalog(['store']),

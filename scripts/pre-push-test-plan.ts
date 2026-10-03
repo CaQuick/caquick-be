@@ -7,6 +7,7 @@
  *
  * 사용: yarn test:push  (yarn validate:push의 마지막 단계)
  *   --dry-run            계획과 jest 명령만 출력
+ *   --scripts            jest 본 스위트 대신 scripts/*.spec(test:scripts)을 입력이 바뀌었을 때만 돌린다(yarn test:scripts:push)
  *   PRE_PUSH_BASE=<ref>  기준 커밋 지정(기본: origin/develop, 없으면 origin/main과의 merge-base)
  */
 
@@ -35,7 +36,8 @@ const FULL_RULES: [RegExp, string][] = [
     'prisma 스키마·마이그레이션·시드는 실DB 스위트 전체의 전제다',
   ],
   [/^src\/test\/|^test\//, '테스트 인프라·팩토리·전역 게이트가 바뀌었다'],
-  [/^package\.json$/, 'jest 설정·의존성이 package.json에 있다'],
+  [/^jest\.config\.js$/, 'jest 설정이 바뀌었다'],
+  [/^package\.json$/, '의존성·스크립트가 package.json에 있다'],
   [/^yarn\.lock$|^\.yarnrc\.yml$|^\.yarn\//, '의존성이 바뀌었다'],
   [/^tsconfig[^/]*\.json$/, '컴파일 설정이 바뀌었다'],
   [
@@ -54,6 +56,30 @@ const NONE_RULES: RegExp[] = [
   /^(eslint\.config\.mjs|\.prettierrc|\.prettierignore|knip\.json|commitlint\.config\.mjs)$/,
   /^(\.coderabbit\.yaml|codecov\.yml|spectaql\.yml|\.dependency-cruiser\.cjs)$/,
 ];
+
+// scripts/*.spec이 읽는 입력 — 이것이 바뀔 때만 push 전에 test:scripts를 돌린다(CI check는 항상 돌린다).
+// 운영 VM에 Grafana·Alloy·MySQL 컨테이너를 띄우고 push마다 약 24초를 쓰는데, 대부분의 기능 변경은 여기에 닿지 않는다.
+const SCRIPT_TEST_RULES: RegExp[] = [
+  /^scripts\//,
+  /^infra\//,
+  /^\.github\//,
+  /^\.husky\//,
+  /^docker\//,
+  /^(Dockerfile|docker-compose[^/]*\.yml|\.dockerignore)$/,
+  /^jest(\.scripts)?\.config\.js$/,
+  /^package\.json$/,
+  /^yarn\.lock$|^\.yarnrc\.yml$|^\.yarn\//,
+  /^tsconfig[^/]*\.json$/,
+];
+
+/** test:scripts가 필요한 첫 변경 경로. 없으면 null. */
+export function scriptTestTrigger(changes: Change[]): string | null {
+  return (
+    changes.find((change) =>
+      SCRIPT_TEST_RULES.some((rule) => rule.test(change.path)),
+    )?.path ?? null
+  );
+}
 
 const SNAPSHOT = /^(src\/.+)\/__snapshots__\/(.+\.spec\.ts)\.snap$/;
 
@@ -186,43 +212,66 @@ export function pushedRefMismatch(
   return null;
 }
 
-/** 작업 트리 기준 diff — jest가 도는 것도 디스크의 파일이라 커밋 안 된 변경까지 같이 본다. */
-function computePlan(): { plan: TestPlan; base: string | null } {
+/** 작업 트리 기준 diff — jest가 도는 것도 디스크의 파일이라 커밋 안 된 변경까지 같이 본다. 판정할 수 없으면 사유를 돌려준다. */
+function computeChanges():
+  { changes: Change[]; base: string } | { reason: string } {
   const mismatch = pushedRefMismatch(
     process.env.PRE_PUSH_REFS ?? '',
     gitRunner(['rev-parse', 'HEAD']).trim(),
   );
-  if (mismatch)
-    return { base: null, plan: { mode: 'full', reasons: [mismatch] } };
+  if (mismatch) return { reason: mismatch };
   const override = process.env.PRE_PUSH_BASE || undefined;
   const base = resolveBase(gitRunner, override);
   if (base === null) {
     return {
-      base,
-      plan: {
-        mode: 'full',
-        reasons: [
-          `기준 커밋 없음(${override ?? BASE_REFS.join('·')} 해석 실패)`,
-        ],
-      },
+      reason: `기준 커밋 없음(${override ?? BASE_REFS.join('·')} 해석 실패)`,
     };
   }
-  let changes: Change[];
   try {
-    changes = parseNameStatus(gitRunner(['diff', '--name-status', '-M', base]));
-  } catch (error) {
     return {
       base,
-      plan: { mode: 'full', reasons: [`git diff 실패: ${String(error)}`] },
+      changes: parseNameStatus(
+        gitRunner(['diff', '--name-status', '-M', base]),
+      ),
     };
+  } catch (error) {
+    return { reason: `git diff 실패: ${String(error)}` };
+  }
+}
+
+function computePlan(): { plan: TestPlan; base: string | null } {
+  const diff = computeChanges();
+  if ('reason' in diff) {
+    return { base: null, plan: { mode: 'full', reasons: [diff.reason] } };
   }
   const gateSpecs = listSpecs(join(REPO_ROOT, 'src')).filter((path) =>
     isGateSpec(path, readFileSync(join(REPO_ROOT, path), 'utf8')),
   );
-  return { base, plan: planTests(changes, gateSpecs) };
+  return { base: diff.base, plan: planTests(diff.changes, gateSpecs) };
+}
+
+/** 판정할 수 없으면(기준 커밋·diff 실패) 보수적으로 돌린다. */
+function runScriptTests(): void {
+  const diff = computeChanges();
+  const trigger =
+    'reason' in diff ? diff.reason : scriptTestTrigger(diff.changes);
+  if (trigger === null) {
+    console.log(
+      '[pre-push-test-plan] test:scripts 건너뜀: scripts spec 입력이 바뀌지 않았다',
+    );
+    return;
+  }
+  console.log(`[pre-push-test-plan] test:scripts: ${trigger}`);
+  if (process.argv.includes('--dry-run')) return;
+  const result = spawnSync('yarn', ['test:scripts'], {
+    cwd: REPO_ROOT,
+    stdio: 'inherit',
+  });
+  process.exit(result.status ?? 1);
 }
 
 function main(): void {
+  if (process.argv.includes('--scripts')) return runScriptTests();
   const { plan, base } = computePlan();
   const from = base ? ` (기준 ${base.slice(0, 7)})` : '';
   let args: string[];

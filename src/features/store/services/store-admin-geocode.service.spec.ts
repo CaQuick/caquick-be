@@ -3,13 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
-import { KAKAO_LOCAL_TRANSPORT } from '@/features/store/adapters/kakao-local.transport';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import {
   AdminGeocodeService,
   GEOCODE_TIMEOUT_MS,
 } from '@/features/store/services/store-admin-geocode.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { KAKAO_LOCAL_TRANSPORT } from '@/global/kakao-local';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createRegion } from '@/test/factories';

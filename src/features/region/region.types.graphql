@@ -5,6 +5,27 @@ extend type Query {
   regions(parentId: ID!): [Region!]!
   """지역명 자동검색 (1·2차 모두 대상)"""
   searchRegions(input: SearchRegionsInput!): [RegionSearchResult!]!
+  """
+  현재 위치가 속한 2차 지역과 그 상위 1차 지역. 비로그인 허용. 선택 가능한 지역이 없으면 null(서비스 지역 밖·바다·해외 포함).
+  위치 변환(카카오)이 실패하면 LOCATION_LOOKUP_UNAVAILABLE, IP당 분당 30회를 넘으면 RATE_LIMITED. 좌표는 저장하지 않고 이용 사실만 기록한다.
+  """
+  regionByLocation(input: RegionByLocationInput!): RegionByLocation
+}
+
+"""현재 위치(WGS84)."""
+input RegionByLocationInput {
+  """위도. -90~90."""
+  latitude: Float!
+  """경도. -180~180."""
+  longitude: Float!
+}
+
+"""현재 위치가 속한 지역."""
+type RegionByLocation {
+  """상위 1차 지역."""
+  group: RegionGroup!
+  """현재 위치가 속한 2차 시군구."""
+  region: Region!
 }
 
 """지역 자동검색 입력."""
