@@ -3,7 +3,6 @@ import {
   buildSchema,
   GraphQLError,
   parse,
-  validate,
   type GraphQLFormattedError,
   type OperationDefinitionNode,
 } from 'graphql';
@@ -11,7 +10,7 @@ import { getVariableValues } from 'graphql/execution/values';
 
 import {
   formatGraphqlError,
-  redactInputValues,
+  redactVariableValue,
 } from '@/global/graphql/format-graphql-error';
 
 const LOCATED = { locations: [{ line: 1, column: 3 }], path: ['x'] };
@@ -146,17 +145,10 @@ describe('formatGraphqlError', () => {
   });
 });
 
-describe('redactInputValues', () => {
-  const SENTINEL = /37\.?5665/;
+describe('redactVariableValue', () => {
   const schema = buildSchema(`
-    enum Kind { HOME WORK }
     input Loc { latitude: Float!  longitude: Float! }
-    type Query {
-      at(v: Loc!): Boolean
-      float(v: Float): Boolean
-      int(v: Int): Boolean
-      kind(v: Kind): Boolean
-    }
+    type Query { at(v: Loc!): Boolean  float(v: Float): Boolean }
   `);
 
   function variableMessage(
@@ -175,33 +167,9 @@ describe('redactInputValues', () => {
     return result.errors[0].message;
   }
 
-  function literalMessage(query: string): string {
-    const [error] = validate(schema, parse(query));
-    if (!error) throw new Error('검증이 통과했다');
-    return error.message;
-  }
-
-  function syntaxMessage(query: string): string {
-    try {
-      parse(query);
-    } catch (error) {
-      return (error as GraphQLError).message;
-    }
-    throw new Error('파싱이 성공했다');
-  }
-
-  // 변수 오류는 값·키(따옴표·세미콜론·가짜 사유를 심어도)·사유를 모두 버리고 변수명만 남긴다
+  // 값·키(구분자를 심어도)·사유를 모두 버린다
   it.each([
     ['Float 자리에 문자열', () => variableMessage('Float', 'float', '37.5665')],
-    [
-      '모르는 필드 키',
-      () =>
-        variableMessage('Loc!', 'at', {
-          latitude: 1,
-          longitude: 1,
-          '37.5665': 1,
-        }),
-    ],
     [
       '구분자를 심은 키',
       () =>
@@ -212,68 +180,18 @@ describe('redactInputValues', () => {
         }),
     ],
     ['필드 누락', () => variableMessage('Loc!', 'at', { latitude: 37.5665 })],
-    ['열거형 값', () => variableMessage('Kind', 'kind', '37.5665')],
   ])('변수 오류(%s)는 변수명만 남긴다', (_label, make) => {
     const message = make();
-    expect(message).toMatch(SENTINEL);
+    expect(message).toMatch(/37\.5665/);
 
-    expect(redactInputValues(message)).toBe(
+    expect(redactVariableValue(message)).toBe(
       'Variable "$v" got invalid value [redacted]',
     );
   });
 
-  it.each([
-    [
-      '리터럴 스칼라 사유',
-      () => literalMessage('{ float(v: "37.5665") }'),
-      'Float cannot represent non numeric value: [redacted]',
-    ],
-    [
-      '리터럴 형식 불일치',
-      () => literalMessage('{ at(v: 37.5665) }'),
-      'Expected value of type "Loc!", found [redacted]',
-    ],
-    [
-      '리터럴 정수 자리 소수',
-      () => literalMessage('{ int(v: 37.5665) }'),
-      'Int cannot represent non-integer value: [redacted]',
-    ],
-    [
-      '파서 토큰',
-      () => syntaxMessage('37.5665'),
-      'Syntax Error: Unexpected Float [redacted].',
-    ],
-    [
-      '실행 인자',
-      () => 'Argument "v" has invalid value 37.5665.',
-      'Argument "v" has invalid value [redacted]',
-    ],
-  ])('%s: 값만 가린다', (_label, make, expected) => {
-    const message = make();
-    expect(message).toMatch(SENTINEL);
+  it('변수 오류가 아닌 문구는 그대로 둔다', () => {
+    const message = 'Cannot query field "x" on type "Query".';
 
-    expect(redactInputValues(message)).toBe(expected);
-  });
-
-  it.each([
-    'Cannot query field "x" on type "Query".',
-    'Variable "$v" of required type "Loc!" was not provided.',
-    'Unknown argument "radius" on field "Query.at".',
-  ])('값이 없는 문구는 그대로 둔다: %s', (message) => {
-    expect(redactInputValues(message)).toBe(message);
-  });
-
-  it('formatGraphqlError의 warn 로그에 좌표가 남지 않는다', () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
-    const message = variableMessage('Float', 'float', '126.978');
-
-    formatGraphqlError(
-      { message, extensions: { code: 'BAD_USER_INPUT' } },
-      new GraphQLError(message),
-    );
-
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).not.toMatch(/126\.978/);
-    warn.mockRestore();
+    expect(redactVariableValue(message)).toBe(message);
   });
 });

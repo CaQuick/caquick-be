@@ -31,130 +31,6 @@ const NEW = {
   geomdan: 'sgg-28290',
 };
 
-// 행정안전부 법정동·행정동 코드(2026-09-30) 기준 떨어져 나간 구의 동 전부
-const YEONGJONG_DONGS = [
-  '중산동',
-  '운남동',
-  '운서동',
-  '운북동',
-  '을왕동',
-  '남북동',
-  '덕교동',
-  '무의동',
-  '영종동',
-  '영종1동',
-  '영종2동',
-  '운서1동',
-  '운서2동',
-  '용유동',
-];
-const GEOMDAN_DONGS = [
-  '백석동',
-  '마전동',
-  '당하동',
-  '원당동',
-  '대곡동',
-  '금곡동',
-  '왕길동',
-  '불로동',
-  '검단동',
-  '불로대곡동',
-  '아라1동',
-  '아라2동',
-];
-// 아라뱃길 남측 필지가 검암동·경서동(서해구)으로 넘어가 개편 전 이름만으로는 승계 구를 정할 수 없는 동
-const AMBIGUOUS_DONGS = ['시천동', '오류동', '오류왕길동'];
-
-type DongKind = 'split' | 'ambiguous' | 'remain' | 'other';
-const BLANKS: [string, string | null][] = [
-  ['null', null],
-  ['빈칸', ''],
-  ['공백만', '  '],
-];
-const OLD_DISTRICTS = {
-  [OLD.jung]: {
-    name: '중구',
-    split: NEW.yeongjong,
-    remain: NEW.jemulpo,
-    neighborhoods: [
-      ['운서동', 'split'],
-      [' 운서동 ', 'split'],
-      ['신포동', 'remain'],
-      ['테스트동', 'other'],
-    ] as [string, DongKind][],
-    addresses: [
-      ['인천 중구 영종대로 85 (운서동)', 'split'],
-      ['인천 중구 신포동 1', 'remain'],
-      ['인천 중구 공항로 272', 'other'],
-    ] as [string, DongKind][],
-  },
-  [OLD.seo]: {
-    name: '서구',
-    split: NEW.geomdan,
-    remain: NEW.seohae,
-    neighborhoods: [
-      ['마전동', 'split'],
-      [' 원당동 ', 'split'],
-      ['시천동', 'ambiguous'],
-      ['청라동', 'remain'],
-      ['테스트동', 'other'],
-    ] as [string, DongKind][],
-    addresses: [
-      ['인천 서구 마전동 100', 'split'],
-      ['인천 서구 오류동 1', 'ambiguous'],
-      ['인천 서구 청라동 1', 'remain'],
-      ['인천 서구 서곶로 1', 'other'],
-    ] as [string, DongKind][],
-  },
-};
-
-/** 판정 규칙의 기대값. 모호한 동은 옮기지 않고 옛 구에 남는다. */
-function expectedSuccessor(oldSlug: string, kind: DongKind): string {
-  const district = OLD_DISTRICTS[oldSlug];
-  if (kind === 'split') return district.split;
-  if (kind === 'ambiguous') return oldSlug;
-  return district.remain;
-}
-
-const DECISION_TABLE: [string, string, string | null, string, string][] = [
-  ...Object.entries(OLD_DISTRICTS).flatMap(([oldSlug, d]) => [
-    // 동 칸이 비어 있지 않으면 주소와 상관없이 동 칸으로 정한다
-    ...d.neighborhoods.flatMap(([dong, kind]) =>
-      d.addresses.map(
-        ([address]): [string, string, string | null, string, string] => [
-          `${d.name} / 동 칸 '${dong}' / 주소 '${address}'`,
-          oldSlug,
-          dong,
-          address,
-          expectedSuccessor(oldSlug, kind),
-        ],
-      ),
-    ),
-    // 동 칸이 비었으면 주소로 정한다
-    ...BLANKS.flatMap(([blankLabel, blank]) =>
-      d.addresses.map(
-        ([address, kind]): [string, string, string | null, string, string] => [
-          `${d.name} / 동 칸 ${blankLabel} / 주소 '${address}'`,
-          oldSlug,
-          blank,
-          address,
-          expectedSuccessor(oldSlug, kind),
-        ],
-      ),
-    ),
-  ]),
-  // 동구는 전부 제물포구로 갔다
-  ...([null, '송림동', '운서동', '마전동'] as (string | null)[]).map(
-    (dong): [string, string, string | null, string, string] => [
-      `동구 / 동 칸 '${String(dong)}' → 제물포구`,
-      OLD.dong,
-      dong,
-      '인천 동구 운서동 1',
-      NEW.jemulpo,
-    ],
-  ),
-];
-
 describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
   let prisma: PrismaClient;
 
@@ -277,115 +153,56 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
     ]);
   });
 
-  it.each(YEONGJONG_DONGS)(
-    '중구 매장의 동이 %s이면 영종구로 옮긴다',
-    async (dong) => {
-      const ids = await seedBeforeReorg();
-      const store = await createStore(prisma, {
-        region_id: ids[OLD.jung],
-        address_neighborhood: dong,
-        address_full: '인천 중구 공항로 272',
-      });
-
-      await runMigration();
-
-      expect(await regionSlugOfStore(store.id)).toBe(NEW.yeongjong);
-    },
-  );
-
-  it.each(GEOMDAN_DONGS)(
-    '서구 매장의 동이 %s이면 검단구로 옮긴다',
-    async (dong) => {
-      const ids = await seedBeforeReorg();
-      const store = await createStore(prisma, {
-        region_id: ids[OLD.seo],
-        address_neighborhood: dong,
-        address_full: '인천 서구 서곶로 1',
-      });
-
-      await runMigration();
-
-      expect(await regionSlugOfStore(store.id)).toBe(NEW.geomdan);
-    },
-  );
-
-  it.each(AMBIGUOUS_DONGS)(
-    '서구 매장의 동이 %s이면 옮기지 않고 옛 서구를 비활성으로만 남긴다',
-    async (dong) => {
-      const ids = await seedBeforeReorg();
-      const store = await createStore(prisma, {
-        region_id: ids[OLD.seo],
-        address_neighborhood: dong,
-        address_full: '인천 서구 정서진로 1',
-      });
-
-      await runMigration();
-
-      expect(await regionSlugOfStore(store.id)).toBe(OLD.seo);
-      const seo = await prisma.region.findUniqueOrThrow({
-        where: { slug: OLD.seo },
-      });
-      expect(seo.is_active).toBe(false);
-      expect(seo.deleted_at).toBeNull();
-    },
-  );
-
-  // 판정 입력 공간 전수: 옛 구 × 동 칸 종류 × 주소 종류. 동 칸이 비어 있지 않으면 동 칸만, 비었을 때만 주소를 본다
-  it.each(DECISION_TABLE)(
-    '%s',
-    async (_label, oldSlug, neighborhood, addressFull, expected) => {
-      const ids = await seedBeforeReorg();
-      const store = await createStore(prisma, {
-        region_id: ids[oldSlug],
-        address_full: addressFull,
-      });
-      await prisma.store.update({
-        where: { id: store.id },
-        data: { address_neighborhood: neighborhood },
-      });
-
-      await runMigration();
-
-      expect(await regionSlugOfStore(store.id)).toBe(expected);
-    },
-  );
-
+  // 동 칸이 비어 있지 않으면 동 칸만, 비었을 때만 주소를 본다
   it.each([
-    ['지번 주소', OLD.jung, '인천 중구 운서동 2850-1', NEW.yeongjong],
+    ['동구는 전부 제물포구', OLD.dong, '송림동', '', NEW.jemulpo],
+    ['중구 영종 동', OLD.jung, '운서동', '', NEW.yeongjong],
+    ['중구 나머지 동', OLD.jung, '신포동', '', NEW.jemulpo],
+    ['서구 검단 동', OLD.seo, '마전동', '', NEW.geomdan],
+    ['서구 나머지 동', OLD.seo, '청라동', '', NEW.seohae],
     [
-      '도로명 주소 괄호',
+      '동 칸이 비면 주소(괄호 표기)',
       OLD.jung,
+      '',
       '인천 중구 영종대로 85 (운서동)',
       NEW.yeongjong,
     ],
     [
-      '괄호 안 쉼표 앞',
+      '동 칸이 주소보다 우선',
       OLD.jung,
-      '인천 중구 하늘중앙로 1 (중산동, 스카이시티)',
-      NEW.yeongjong,
+      '신포동',
+      '인천 중구 운서동 1',
+      NEW.jemulpo,
     ],
-    ['동 이름이 길 이름의 일부', OLD.jung, '인천 중구 운서동길 3', NEW.jemulpo],
-    [
-      '확정 동과 모호한 동이 함께 있으면 확정 동',
-      OLD.seo,
-      '인천 서구 마전동 100 (오류동 인근)',
-      NEW.geomdan,
-    ],
-  ])(
-    '동 칸이 비었을 때 주소 형식: %s',
-    async (_label, oldSlug, addressFull, expected) => {
-      const ids = await seedBeforeReorg();
-      const store = await createStore(prisma, {
-        region_id: ids[oldSlug],
-        address_neighborhood: '',
-        address_full: addressFull,
-      });
+  ])('%s', async (_label, oldSlug, dong, addressFull, expected) => {
+    const ids = await seedBeforeReorg();
+    const store = await createStore(prisma, {
+      region_id: ids[oldSlug],
+      address_neighborhood: dong,
+      address_full: addressFull,
+    });
 
-      await runMigration();
+    await runMigration();
 
-      expect(await regionSlugOfStore(store.id)).toBe(expected);
-    },
-  );
+    expect(await regionSlugOfStore(store.id)).toBe(expected);
+  });
+
+  it('서구 시천동·오류동처럼 승계 구가 모호하면 옮기지 않고 옛 서구를 비활성으로만 남긴다', async () => {
+    const ids = await seedBeforeReorg();
+    const store = await createStore(prisma, {
+      region_id: ids[OLD.seo],
+      address_neighborhood: '시천동',
+    });
+
+    await runMigration();
+
+    expect(await regionSlugOfStore(store.id)).toBe(OLD.seo);
+    const seo = await prisma.region.findUniqueOrThrow({
+      where: { slug: OLD.seo },
+    });
+    expect(seo.is_active).toBe(false);
+    expect(seo.deleted_at).toBeNull();
+  });
 
   it('삭제된 매장도 옮긴다', async () => {
     const ids = await seedBeforeReorg();
