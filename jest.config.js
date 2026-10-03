@@ -52,7 +52,8 @@ module.exports = {
   testTimeout: 60000,
   // 로컬(운영 맥미니)은 4개 — 같은 커밋 전체 실행 실측: 3개 51.6s·부하 정점 4.9 / 4개 46.1~46.9s·6.5~8.2 /
   // 5개 44.8s·7.3 / 7개(기본값) 54.8s·11.9에 경합으로 1건 실패. CI는 러너 기본값
-  maxWorkers: process.env.CI ? undefined : 4,
+  // CI면 키 자체를 넣지 않는다 — jest 설정 검증은 undefined 값을 거절한다
+  ...(process.env.CI ? {} : { maxWorkers: 4 }),
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
   setupFilesAfterEnv: ['<rootDir>/test/matchers/domain-error.matcher.ts'],
 };
