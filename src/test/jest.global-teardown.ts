@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import type { StartedTestContainer } from 'testcontainers';
 
+import type { HostLock } from './jest-host-lock';
+
 const TMP_DIR = join(process.cwd(), '.tmp');
 const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
 
@@ -10,6 +12,7 @@ export default async function globalTeardown(): Promise<void> {
   const globals = globalThis as unknown as {
     __TESTCONTAINER__?: StartedTestContainer;
     __REDIS_TESTCONTAINER__?: StartedTestContainer;
+    __JEST_HOST_LOCK__?: HostLock;
   };
   const container = globals.__TESTCONTAINER__;
   const redis = globals.__REDIS_TESTCONTAINER__;
@@ -33,5 +36,6 @@ export default async function globalTeardown(): Promise<void> {
         }
       }
     }
+    await globals.__JEST_HOST_LOCK__?.release();
   }
 }

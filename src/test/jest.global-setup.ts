@@ -10,11 +10,17 @@ import { dirname, join } from 'node:path';
 import type { StartedTestContainer } from 'testcontainers';
 
 import { mysqlTestContainer, redisTestContainer } from './containers';
+import { acquireHostLock, shouldTakeHostLock } from './jest-host-lock';
 
 const TMP_DIR = join(process.cwd(), '.tmp');
 const STATE_FILE = join(TMP_DIR, 'test-db-state.json');
 
 export default async function globalSetup(): Promise<void> {
+  if (shouldTakeHostLock(process.env, process.argv)) {
+    (globalThis as { __JEST_HOST_LOCK__?: unknown }).__JEST_HOST_LOCK__ =
+      await acquireHostLock();
+  }
+
   // 이전 실행이 Ctrl+C 등으로 중단되어 globalTeardown이 실행되지 않았다면 .tmp/schema-applied-*.marker가
   // stale 상태로 남는다. 새 MySQL 컨테이너를 기동하는 시점이므로 무조건 정리한다.
   if (existsSync(TMP_DIR)) {
