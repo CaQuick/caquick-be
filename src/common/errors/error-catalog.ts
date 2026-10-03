@@ -27,6 +27,10 @@ export const ERROR_CATALOG = {
     message:
       '주소 좌표 변환 서비스를 사용할 수 없습니다. 좌표를 직접 입력해 주세요.',
   },
+  RATE_LIMITED: {
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
   ROUTE_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '요청한 경로를 찾을 수 없습니다.',

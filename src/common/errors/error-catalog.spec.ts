@@ -15,6 +15,7 @@ const ALLOWED_STATUS = new Set<number>([
   HttpStatus.FORBIDDEN,
   HttpStatus.NOT_FOUND,
   HttpStatus.CONFLICT,
+  HttpStatus.TOO_MANY_REQUESTS,
   HttpStatus.INTERNAL_SERVER_ERROR,
   HttpStatus.SERVICE_UNAVAILABLE,
 ]);
