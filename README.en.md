@@ -264,7 +264,7 @@ caquick-be/
 ├── terraform/                   # GitHub repo/branch protection + AWS (S3, IAM) as code
 ├── scripts/                     # gate and ops scripts (dto:check · docs:check · outbox:requeue) + infra specs
 ├── docs/guide/                  # architecture conventions (source of truth)
-└── .github/workflows/           # pr-check · build-image · deploy · codeql · knip · nestjs-doctor · discord-notify
+└── .github/workflows/           # pr-check · deploy · codeql · knip · nestjs-doctor · discord-notify
 ```
 
 ## 🚀 Getting Started
@@ -405,14 +405,14 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### Workflows
 
-| Workflow                         | Trigger                                              | Role                                                                                                                                                                                                      |
-| -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                             | codegen, tsc, lint, docs/arch gates, dto:check (warning only; the hard gate is the pre-push hook), infrastructure specs, integration tests, coverage, and two consecutive builds (cache regression check) |
-| `codeql.yml`                     | PR · push · weekly                                   | CodeQL static security analysis                                                                                                                                                                           |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                                   | comments with unused-code and NestJS health reports (advisory)                                                                                                                                            |
-| `build-image.yml`                | PR (build only) · main **after CI succeeds** (push)  | builds an arm64 image and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                                                                     |
-| `deploy.yml`                     | `build-image` success (main) · manual (rollback sha) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord                          |
-| `discord-notify.yml`             | PR · push · issue                                    | Discord notifications                                                                                                                                                                                     |
+| Workflow                         | Trigger                                                            | Role                                                                                                                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                                           | codegen, tsc, lint, docs/arch gates, dto:check (warning only; the hard gate is the pre-push hook), infrastructure specs, integration tests, coverage, and two consecutive builds (cache regression check) |
+| `codeql.yml`                     | PR · push · weekly                                                 | CodeQL static security analysis                                                                                                                                                                           |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                                                 | comments with unused-code and NestJS health reports (advisory)                                                                                                                                            |
+| `pr-check.yml` `image` job       | PR (build only) · main push (push)                                 | builds an arm64 image alongside the tests and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                                                 |
+| `deploy.yml`                     | main **CI fully succeeds** · manual (rollback sha, CI-passed only) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord                          |
+| `discord-notify.yml`             | PR · push · issue                                                  | Discord notifications                                                                                                                                                                                     |
 
 ### Flow
 
@@ -424,13 +424,13 @@ flowchart LR
     Develop[🌿 develop]
     Release[🔀 Release PR<br/>develop → main]
     Main[🌲 main]
-    Image[📦 build-image → GHCR :sha]
+    Image[📦 image job → GHCR :sha]
     Deploy[🚀 deploy<br/>self-hosted macmini]
 
     Dev --> PR --> Checks
     Checks -->|✅ pass| Develop
     Develop --> Release --> Main
-    Main -->|CI ✅| Image --> Deploy
+    Main --> Image -->|CI all ✅| Deploy
 ```
 
 ### Branch Protection

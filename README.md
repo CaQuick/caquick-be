@@ -264,7 +264,7 @@ caquick-be/
 ├── terraform/                   # GitHub 레포/브랜치 보호 + AWS(S3 · IAM) IaC
 ├── scripts/                     # 게이트·운영 스크립트(dto:check · docs:check · outbox:requeue) + 인프라 spec
 ├── docs/guide/                  # 아키텍처 컨벤션(정본)
-└── .github/workflows/           # pr-check · build-image · deploy · codeql · knip · nestjs-doctor · discord-notify
+└── .github/workflows/           # pr-check · deploy · codeql · knip · nestjs-doctor · discord-notify
 ```
 
 ## 🚀 시작하기
@@ -405,14 +405,14 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### 워크플로우
 
-| Workflow                         | Trigger                                     | 역할                                                                                                                                                        |
-| -------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                    | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 전체 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
-| `codeql.yml`                     | PR · push · 주간                            | CodeQL 정적 보안 분석을 실행합니다                                                                                                                          |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                          | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                         |
-| `build-image.yml`                | PR(빌드만) · main **CI 성공 뒤**(GHCR 푸시) | arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                                            |
-| `deploy.yml`                     | `build-image` 성공(main) · 수동(롤백 sha)   | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다    |
-| `discord-notify.yml`             | PR · push · issue                           | Discord에 알림을 보냅니다                                                                                                                                   |
+| Workflow                         | Trigger                                             | 역할                                                                                                                                                        |
+| -------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                            | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 전체 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
+| `codeql.yml`                     | PR · push · 주간                                    | CodeQL 정적 보안 분석을 실행합니다                                                                                                                          |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                                  | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                         |
+| `pr-check.yml` `image` job       | PR(빌드만) · main push(GHCR 푸시)                   | 테스트와 나란히 arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                            |
+| `deploy.yml`                     | main **CI 전체 성공** · 수동(롤백 sha, CI 성공분만) | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다    |
+| `discord-notify.yml`             | PR · push · issue                                   | Discord에 알림을 보냅니다                                                                                                                                   |
 
 ### 흐름
 
@@ -424,13 +424,13 @@ flowchart LR
     Develop[🌿 develop]
     Release[🔀 Release PR<br/>develop → main]
     Main[🌲 main]
-    Image[📦 build-image → GHCR :sha]
+    Image[📦 image job → GHCR :sha]
     Deploy[🚀 deploy<br/>self-hosted macmini]
 
     Dev --> PR --> Checks
     Checks -->|✅ pass| Develop
     Develop --> Release --> Main
-    Main -->|CI ✅| Image --> Deploy
+    Main --> Image -->|CI 전체 ✅| Deploy
 ```
 
 ### 브랜치 보호
