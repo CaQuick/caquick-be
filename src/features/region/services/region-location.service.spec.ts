@@ -7,8 +7,7 @@ import { LocationAccessLogRepository } from '@/features/region/repositories/loca
 import { RegionRepository } from '@/features/region/repositories/region.repository';
 import { LocationAccessLogService } from '@/features/region/services/location-access-log.service';
 import {
-  LOCATION_CACHE_TTL_SECONDS,
-  locationCacheKey,
+  nextCacheExpiry,
   RegionLocationService,
 } from '@/features/region/services/region-location.service';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -37,6 +36,7 @@ describe('RegionLocationService (real DB)', () => {
   let prisma: PrismaClient;
   let redis: Redis;
   let apiKey: string | undefined;
+  let now = NOW;
   const transport = jest.fn<Promise<Response>, [string, RequestInit]>();
 
   /** 실제 클라이언트에서 get·set만 실패시킨다. */
@@ -60,7 +60,7 @@ describe('RegionLocationService (real DB)', () => {
         RegionRepository,
         LocationAccessLogService,
         LocationAccessLogRepository,
-        { provide: ClockService, useValue: { now: () => NOW } },
+        { provide: ClockService, useValue: { now: () => now } },
         {
           provide: ConfigService,
           useValue: {
@@ -89,6 +89,7 @@ describe('RegionLocationService (real DB)', () => {
     await truncateAll();
     await redis.flushdb();
     apiKey = 'rest-key';
+    now = NOW;
     transport.mockReset();
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   });
@@ -329,8 +330,64 @@ describe('RegionLocationService (real DB)', () => {
 
       expect(again?.region.id).toBe(district.id.toString());
       expect(transport).toHaveBeenCalledTimes(1);
-      const ttl = await redis.ttl(locationCacheKey(37.5662, 126.9781));
-      expect(ttl).toBeGreaterThan(LOCATION_CACHE_TTL_SECONDS - 5);
+    });
+
+    it('캐시 키에는 좌표가 없다(격자의 HMAC)', async () => {
+      kakaoReplies({ documents: [] });
+
+      await service.regionByLocation(SEOUL_CITY_HALL, null);
+
+      const keys = await redis.keys('region:loc:*');
+      expect(keys).toHaveLength(1);
+      // base64url 43자 — 소수점·구분자가 없어 격자 좌표가 들어갈 자리가 없다
+      expect(keys[0]).toMatch(/^region:loc:[A-Za-z0-9_-]{43}$/);
+    });
+
+    it('재기동(새 인스턴스)하면 같은 격자도 다른 키라 이전 캐시를 쓰지 않는다', async () => {
+      kakaoReplies({ documents: [] });
+      const restarted = await build(redis);
+
+      await service.regionByLocation(SEOUL_CITY_HALL, null);
+      await restarted.regionByLocation(SEOUL_CITY_HALL, null);
+
+      expect(await redis.keys('region:loc:*')).toHaveLength(2);
+      expect(transport).toHaveBeenCalledTimes(2);
+    });
+
+    it('만료 시각은 요청 시각과 무관하게 다음 04:00 KST로 같다', async () => {
+      kakaoReplies({ documents: [] });
+
+      now = new Date('2026-10-04T01:00:00.000Z');
+      await service.regionByLocation(SEOUL_CITY_HALL, null);
+      now = new Date('2026-10-04T11:30:00.000Z');
+      await service.regionByLocation(
+        { latitude: 37.5702, longitude: 126.9821 },
+        null,
+      );
+
+      const keys = await redis.keys('region:loc:*');
+      const expiries = await Promise.all(
+        keys.map((key) => redis.call('PEXPIRETIME', key)),
+      );
+      expect(keys).toHaveLength(2);
+      expect(expiries).toEqual([
+        Date.parse('2026-10-04T19:00:00.000Z'),
+        Date.parse('2026-10-04T19:00:00.000Z'),
+      ]);
+    });
+
+    it.each([
+      ['KST 오후', '2026-10-03T05:00:00.000Z', '2026-10-03T19:00:00.000Z'],
+      ['04시 1ms 전', '2026-10-03T18:59:59.999Z', '2026-10-03T19:00:00.000Z'],
+      [
+        '정확히 04시면 다음 날',
+        '2026-10-03T19:00:00.000Z',
+        '2026-10-04T19:00:00.000Z',
+      ],
+      ['KST 자정 넘김', '2026-10-03T15:30:00.000Z', '2026-10-03T19:00:00.000Z'],
+      ['월말', '2026-10-31T20:00:00.000Z', '2026-11-01T19:00:00.000Z'],
+    ])('nextCacheExpiry: %s', (_label, at, expected) => {
+      expect(nextCacheExpiry(new Date(at)).toISOString()).toBe(expected);
     });
 
     it('다른 격자는 다시 묻는다', async () => {

@@ -1,8 +1,11 @@
+import { createHmac, randomBytes } from 'node:crypto';
+
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type Redis from 'ioredis';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import { ClockService } from '@/common/providers/clock.service';
 import { districtSlugOf, sigunguCodeOf } from '@/common/utils/legal-dong-code';
 import type { KakaoLocalConfig } from '@/config/kakao-local.config';
 import type { RegionByLocationInput } from '@/features/region/dto/inputs/region-by-location.input';
@@ -23,16 +26,20 @@ export const LOCATION_LOOKUP_TIMEOUT_MS = 3_000;
 const KOREA_BOUNDS = { minLat: 33, maxLat: 39, minLng: 124, maxLng: 132 };
 /** 소수 3자리(약 100m) 격자로 카카오 결과(시군구 코드)를 캐시한다. 지역 활성 여부는 매번 DB에서 본다. */
 const CACHE_PRECISION = 3;
-export const LOCATION_CACHE_TTL_SECONDS = 24 * 60 * 60;
+/** 캐시는 매일 04:00 KST(19:00 UTC)에 일괄 만료한다 — 요청마다 TTL을 주면 남은 TTL로 요청 시각이 드러난다. */
+const CACHE_EXPIRES_AT_UTC_HOUR = 19;
 const NO_DISTRICT = '-';
+
+export function nextCacheExpiry(now: Date): Date {
+  const at = new Date(now);
+  at.setUTCHours(CACHE_EXPIRES_AT_UTC_HOUR, 0, 0, 0);
+  if (at <= now) at.setUTCDate(at.getUTCDate() + 1);
+  return at;
+}
 
 interface KakaoRegionDocument {
   region_type?: unknown;
   code?: unknown;
-}
-
-export function locationCacheKey(latitude: number, longitude: number): string {
-  return `region:loc:${latitude.toFixed(CACHE_PRECISION)}:${longitude.toFixed(CACHE_PRECISION)}`;
 }
 
 function inKorea({ latitude, longitude }: RegionByLocationInput): boolean {
@@ -64,17 +71,19 @@ function sigunguCodeFrom(documents: KakaoRegionDocument[]): string | null {
 }
 
 /**
- * 현재 위치 → 2차 지역. 좌표는 카카오 요청에만 쓰고 저장·로그하지 않는다(캐시 키는 약 100m 격자이고 이용자와 묶이지 않는다).
- * 이용 사실은 위치정보법 확인자료로 남긴다.
+ * 현재 위치 → 2차 지역. 좌표는 카카오 요청에만 쓰고 저장·로그하지 않는다. 이용 사실은 위치정보법 확인자료로 남긴다.
+ * 캐시 키는 격자 좌표의 HMAC이고 비밀값은 기동마다 새로 뽑아 메모리에만 둔다 — Redis만으로는 위치를 되돌릴 수 없다.
  */
 @Injectable()
 export class RegionLocationService {
   private readonly logger = new Logger(RegionLocationService.name);
+  private readonly cacheSecret = randomBytes(32);
 
   constructor(
     private readonly repo: RegionRepository,
     private readonly accessLogs: LocationAccessLogService,
     private readonly config: ConfigService,
+    private readonly clock: ClockService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(KAKAO_LOCAL_TRANSPORT)
     private readonly transport: KakaoLocalTransport,
@@ -98,7 +107,7 @@ export class RegionLocationService {
   private async sigunguCodeAt(
     input: RegionByLocationInput,
   ): Promise<string | null> {
-    const key = locationCacheKey(input.latitude, input.longitude);
+    const key = this.cacheKey(input);
     const cached = await this.redis.get(key).catch((error: unknown) => {
       this.logger.warn(`위치 캐시 조회 실패: ${String(error)}`);
       return null;
@@ -107,11 +116,21 @@ export class RegionLocationService {
 
     const code = await this.fetchSigunguCode(input);
     await this.redis
-      .set(key, code ?? NO_DISTRICT, 'EX', LOCATION_CACHE_TTL_SECONDS)
+      .set(
+        key,
+        code ?? NO_DISTRICT,
+        'PXAT',
+        nextCacheExpiry(this.clock.now()).getTime(),
+      )
       .catch((error: unknown) =>
         this.logger.warn(`위치 캐시 저장 실패: ${String(error)}`),
       );
     return code;
+  }
+
+  private cacheKey({ latitude, longitude }: RegionByLocationInput): string {
+    const cell = `${latitude.toFixed(CACHE_PRECISION)}:${longitude.toFixed(CACHE_PRECISION)}`;
+    return `region:loc:${createHmac('sha256', this.cacheSecret).update(cell).digest('base64url')}`;
   }
 
   private async fetchSigunguCode({
