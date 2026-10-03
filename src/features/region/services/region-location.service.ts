@@ -24,8 +24,11 @@ const KAKAO_COORD_TO_REGION_URL =
 export const LOCATION_LOOKUP_TIMEOUT_MS = 3_000;
 /** 국내(마라도·독도·백령도 포함) 밖이면 서비스 지역일 수 없어 카카오에 묻지 않는다. */
 const KOREA_BOUNDS = { minLat: 33, maxLat: 39, minLng: 124, maxLng: 132 };
-/** 소수 3자리(약 100m) 격자로 카카오 결과(시군구 코드)를 캐시한다. 지역 활성 여부는 매번 DB에서 본다. */
-const CACHE_PRECISION = 3;
+/**
+ * 소수 5자리(약 1m) 격자로 카카오 결과(시군구 코드)를 캐시한다 — 격자가 구 경계를 걸쳐도 오차가 측위 오차보다 작다.
+ * 지역 활성 여부는 매번 DB에서 본다.
+ */
+const CACHE_PRECISION = 5;
 /** 캐시는 매일 04:00 KST(19:00 UTC)에 일괄 만료한다 — 요청마다 TTL을 주면 남은 TTL로 요청 시각이 드러난다. */
 const CACHE_EXPIRES_AT_UTC_HOUR = 19;
 const NO_DISTRICT = '-';

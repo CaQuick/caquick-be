@@ -314,22 +314,46 @@ describe('RegionLocationService (real DB)', () => {
   });
 
   describe('캐시', () => {
-    it('같은 약 100m 격자는 카카오에 다시 묻지 않는다', async () => {
+    it('같은 약 1m 격자는 카카오에 다시 묻지 않는다', async () => {
       const { district } = await seedDistrict('sgg-11140');
       kakaoReplies(regionDocs('1114010300'));
 
-      // 둘 다 소수 3자리로 반올림하면 (37.566, 126.978)
+      // 둘 다 소수 5자리로 반올림하면 (37.56620, 126.97810)
       await service.regionByLocation(
-        { latitude: 37.5662, longitude: 126.9781 },
+        { latitude: 37.566201, longitude: 126.978101 },
         null,
       );
       const again = await service.regionByLocation(
-        { latitude: 37.5664, longitude: 126.9784 },
+        { latitude: 37.566204, longitude: 126.978104 },
         null,
       );
 
       expect(again?.region.id).toBe(district.id.toString());
       expect(transport).toHaveBeenCalledTimes(1);
+    });
+
+    it('약 10m 떨어진 점은 따로 물어 경계 건너편 구를 받는다', async () => {
+      const { district: north } = await seedDistrict('sgg-11110');
+      const { district: south } = await seedDistrict('sgg-11140');
+      transport
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(regionDocs('1114010300'))),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(regionDocs('1111010100'))),
+        );
+
+      const first = await service.regionByLocation(
+        { latitude: 37.5662, longitude: 126.9781 },
+        null,
+      );
+      const across = await service.regionByLocation(
+        { latitude: 37.5663, longitude: 126.9781 },
+        null,
+      );
+
+      expect(first?.region.id).toBe(south.id.toString());
+      expect(across?.region.id).toBe(north.id.toString());
     });
 
     it('캐시 키에는 좌표가 없다(격자의 HMAC)', async () => {
@@ -395,7 +419,7 @@ describe('RegionLocationService (real DB)', () => {
 
       await service.regionByLocation(SEOUL_CITY_HALL, null);
       await service.regionByLocation(
-        { latitude: 37.5675, longitude: 126.978 },
+        { latitude: 37.56651, longitude: 126.978 },
         null,
       );
 
