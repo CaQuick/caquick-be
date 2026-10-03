@@ -5,9 +5,9 @@
 //   메타데이터 가드식(`typeof X !== "undefined" && X`)이 분기로 잡혀 branches 임계가 깨진다(a93efac).
 // - 나머지(pre-push·경로 지정 실행): transpile 모드. LanguageService 모드는 파일마다 타입 검사를 하고 캐시 키에 전이 의존
 //   파일의 mtime을 넣어 콜드 실행이 3배 이상 느리다. 타입 검사는 validate:push·CI의 tsc --noEmit이 한다.
-const coverage = process.argv.some(
-  (arg) => arg === '--coverage' || arg === '--coverage=true',
-);
+// --coverage와 별칭 --collectCoverage·--collect-coverage(각각 =true 포함). =false·--no-coverage는 커버리지가 아니다
+const COVERAGE_ARG = /^--(coverage|collectCoverage|collect-coverage)(=true)?$/;
+const coverage = process.argv.some((arg) => COVERAGE_ARG.test(arg));
 
 module.exports = {
   moduleFileExtensions: ['js', 'json', 'ts'],
