@@ -9,6 +9,7 @@ import {
   pushedRefMismatch,
   RELATED_LIMIT,
   resolveBase,
+  scriptTestTrigger,
 } from './pre-push-test-plan';
 
 const M = (path: string): Change => ({ path, status: 'M' });
@@ -289,5 +290,68 @@ describe('pushedRefMismatch', () => {
     expect(hook.search(/^export PRE_PUSH_REFS$/m)).toBeLessThan(
       hook.search(/^yarn validate:push$/m),
     );
+  });
+});
+
+// scripts/*.spec의 입력이 바뀔 때만 push 전 test:scripts — 입력 경로 전수(spec이 읽는 파일·의존성·컴파일 설정)와 반증
+describe('scriptTestTrigger', () => {
+  it.each([
+    'scripts/pre-push-test-plan.ts',
+    'scripts/backup-restore.spec.ts',
+    'infra/backup/backup.sh',
+    'infra/compose.yml',
+    'infra/prometheus/prometheus.yml',
+    'infra/alloy/config.alloy',
+    'infra/grafana/dashboards/api.json',
+    'infra/rabbitmq/20-prometheus.conf',
+    'infra/deploy.sh',
+    '.github/workflows/deploy.yml',
+    '.github/workflows/build-image.yml',
+    '.husky/pre-push',
+    'docker/mysql/init.sql',
+    'Dockerfile',
+    'docker-compose.yml',
+    'docker-compose.test.yml',
+    '.dockerignore',
+    'jest.scripts.config.js',
+    'jest.config.js',
+    'package.json',
+    'yarn.lock',
+    '.yarnrc.yml',
+    '.yarn/patches/x.patch',
+    'tsconfig.json',
+    'tsconfig.build.json',
+  ])('%s가 바뀌면 돌린다', (path) => {
+    expect(scriptTestTrigger([M(SERVICE), M(path)])).toBe(path);
+  });
+
+  it.each([
+    SERVICE,
+    'src/features/order/order.graphql',
+    'src/global/alerting/alert.service.ts',
+    'src/test/model-ownership.ts',
+    'prisma/schema.prisma',
+    'prisma/migrations/20260930_x/migration.sql',
+    'docs/guide/architecture-conventions.md',
+    'README.md',
+    'CLAUDE.md',
+    'eslint.config.mjs',
+    'nest-cli.json',
+    '.gitignore',
+    'src/scripts/x.ts',
+    'my-infra/x.yml',
+    'notpackage.json',
+  ])('반증: %s만 바뀌면 건너뛴다', (path) => {
+    expect(scriptTestTrigger([M(path)])).toBeNull();
+  });
+
+  it('삭제도 변경으로 본다', () => {
+    expect(scriptTestTrigger([D('infra/compose.yml')])).toBe(
+      'infra/compose.yml',
+    );
+  });
+
+  it('변경이 없으면 건너뛴다', () => {
+    expect(scriptTestTrigger([])).toBeNull();
   });
 });
