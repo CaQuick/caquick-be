@@ -7,6 +7,7 @@ import {
   LONGITUDE_RANGE,
   type DecimalRange,
 } from '@/common/utils/decimal-parser';
+import { districtSlugOf, sigunguCodeOf } from '@/common/utils/legal-dong-code';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import type { KakaoLocalConfig } from '@/config/kakao-local.config';
 import {
@@ -14,13 +15,13 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
-import {
-  KAKAO_LOCAL_TRANSPORT,
-  type KakaoLocalTransport,
-} from '@/features/store/adapters/kakao-local.transport';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { AdminGeocodeResultOutput } from '@/features/store/types/store-admin-geocode-output.type';
 import { Prisma } from '@/generated/prisma/client';
+import {
+  KAKAO_LOCAL_TRANSPORT,
+  type KakaoLocalTransport,
+} from '@/global/kakao-local';
 
 const KAKAO_ADDRESS_SEARCH_URL =
   'https://dapi.kakao.com/v2/local/search/address.json';
@@ -65,23 +66,11 @@ function toCoordinate(raw: unknown, range: DecimalRange): number | null {
   }
 }
 
-/**
- * 법정동 코드(10자리)의 앞 5자리가 시군구 코드 — 지역 slug 'sgg-<시군구코드>'와 같은 체계다.
- * 법정동 코드가 형식에 맞지 않으면 행정동 코드로, 시·도 단위 결과(xx000)는 시군구가 아니라 null.
- */
+/** 법정동 코드가 형식에 맞지 않으면 행정동 코드로 본다. */
 function toSigunguCode(
   address: KakaoAddress | null | undefined,
 ): string | null {
-  for (const code of [address?.b_code, address?.h_code]) {
-    if (
-      typeof code === 'string' &&
-      /^\d{10}$/.test(code) &&
-      code.slice(2, 5) !== '000'
-    ) {
-      return code.slice(0, 5);
-    }
-  }
-  return null;
+  return sigunguCodeOf(address?.b_code) ?? sigunguCodeOf(address?.h_code);
 }
 
 function parseDocuments(body: string): KakaoAddressDocument[] | null {
@@ -138,7 +127,9 @@ export class AdminGeocodeService extends AdminBaseService {
     const { address, road_address: road } = document;
     const sigunguCode = toSigunguCode(address);
     const regionId = sigunguCode
-      ? await this.stores.findSelectableRegionIdBySlug(`sgg-${sigunguCode}`)
+      ? await this.stores.findSelectableRegionIdBySlug(
+          districtSlugOf(sigunguCode),
+        )
       : null;
     return {
       latitude,

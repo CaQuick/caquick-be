@@ -22,6 +22,14 @@ const PROTOCOL_CODES = new Set<unknown>([
   ApolloServerErrorCode.PERSISTED_QUERY_NOT_SUPPORTED,
 ]);
 
+// graphql-js 변수 강제 변환 오류는 원래 값을 그대로 싣는다(예: 현재 위치 좌표) — 로그에는 값만 가리고 경로·사유는 남긴다
+const INVALID_VARIABLE_VALUE =
+  /^(Variable "\$[^"]+" got invalid value )([\s\S]*?)((?: at "[^"]*")?(?:; [^;]*)?)$/;
+
+export function redactVariableValue(message: string): string {
+  return message.replace(INVALID_VARIABLE_VALUE, '$1[redacted]$3');
+}
+
 /**
  * Nest 필터를 거치지 않는 Apollo 자체 오류를 필터 응답과 같은 모양(code·classification·statusCode)으로 맞춘다.
  * 필터가 만든 오류는 classification이 있어 그대로 둔다. 원문은 영문·스키마 구조라 로그에만 남긴다.
@@ -33,7 +41,7 @@ export function formatGraphqlError(
   if (formatted.extensions?.classification) return formatted;
   if (PROTOCOL_CODES.has(formatted.extensions?.code)) return formatted;
 
-  const original = `${String(formatted.extensions?.code)}: ${formatted.message}`;
+  const original = `${String(formatted.extensions?.code)}: ${redactVariableValue(formatted.message)}`;
   const code = CLIENT_ERROR_CODES.has(formatted.extensions?.code)
     ? 'VALIDATION_FAILED'
     : 'INTERNAL_ERROR';

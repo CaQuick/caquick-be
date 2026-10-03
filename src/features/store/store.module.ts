@@ -4,10 +4,6 @@ import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { OutboxModule } from '@/features/outbox';
 import { ReviewModule } from '@/features/review';
-import {
-  fetchKakaoLocal,
-  KAKAO_LOCAL_TRANSPORT,
-} from '@/features/store/adapters/kakao-local.transport';
 import { BookedQuantityPort } from '@/features/store/repositories/booked-quantity.port';
 import { StoreAdminRepository } from '@/features/store/repositories/store-admin.repository';
 import { StoreCapacityRepository } from '@/features/store/repositories/store-capacity.repository';
@@ -46,6 +42,7 @@ import { SellerStorePolicyService } from '@/features/store/services/store-seller
 import { SellerStoreProfileService } from '@/features/store/services/store-seller-profile.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import { StoreWishlistService } from '@/features/store/services/store-wishlist.service';
+import { fetchKakaoLocal, KAKAO_LOCAL_TRANSPORT } from '@/global/kakao-local';
 
 @Module({
   // AuthModule: 관리자 컨텍스트·판매자 계정 생성 tx(AccountAdminRepository)

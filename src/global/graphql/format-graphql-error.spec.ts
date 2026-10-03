@@ -1,7 +1,17 @@
 import { Logger } from '@nestjs/common';
-import { GraphQLError, type GraphQLFormattedError } from 'graphql';
+import {
+  buildSchema,
+  GraphQLError,
+  parse,
+  type GraphQLFormattedError,
+  type OperationDefinitionNode,
+} from 'graphql';
+import { getVariableValues } from 'graphql/execution/values';
 
-import { formatGraphqlError } from '@/global/graphql/format-graphql-error';
+import {
+  formatGraphqlError,
+  redactVariableValue,
+} from '@/global/graphql/format-graphql-error';
 
 const LOCATED = { locations: [{ line: 1, column: 3 }], path: ['x'] };
 
@@ -67,7 +77,9 @@ describe('formatGraphqlError', () => {
           statusCode: 400,
         },
       });
-      expect(warn).toHaveBeenCalledWith(`${apolloCode}: ${raw}`);
+      expect(warn).toHaveBeenCalledWith(
+        `${apolloCode}: Variable "$input" got invalid value [redacted] at "input.sortOrder"`,
+      );
       expect(error).not.toHaveBeenCalled();
     },
   );
@@ -130,5 +142,90 @@ describe('formatGraphqlError', () => {
       statusCode: 500,
     });
     expect(error).toHaveBeenCalledWith('undefined: boom', undefined);
+  });
+});
+
+describe('redactVariableValue', () => {
+  const schema = buildSchema(`
+    input LocationInput { latitude: Float!  longitude: Float! }
+    type Query { at(input: LocationInput!): Boolean }
+  `);
+  const [operation] = parse(
+    'query Q($input: LocationInput!) { at(input: $input) }',
+  ).definitions as OperationDefinitionNode[];
+
+  /** graphql-js가 실제로 만드는 변수 강제 변환 오류 문구. */
+  function coercionMessage(input: unknown): string {
+    const result = getVariableValues(
+      schema,
+      operation.variableDefinitions ?? [],
+      { input },
+    );
+    if (!result.errors) throw new Error('강제 변환이 성공했다');
+    return result.errors[0].message;
+  }
+
+  it.each([
+    [
+      '모르는 필드',
+      { latitude: 37.5665, longitude: 126.978, foo: 1 },
+      '; Field "foo" is not defined by type "LocationInput".',
+    ],
+    [
+      '필드 누락',
+      { latitude: 37.5665 },
+      '; Field "longitude" of required type "Float!" was not provided.',
+    ],
+    [
+      '객체가 아닌 값',
+      '37.5665,126.978',
+      '; Expected type "LocationInput" to be an object.',
+    ],
+    [
+      '값 안의 세미콜론',
+      { latitude: 37.5665, longitude: 126.978, note: 'a; b' },
+      '; Field "note" is not defined by type "LocationInput".',
+    ],
+  ])('%s: 값은 가리고 사유는 남긴다', (_label, input, reason) => {
+    const message = coercionMessage(input);
+    expect(message).toContain('37.5665');
+
+    expect(redactVariableValue(message)).toBe(
+      `Variable "$input" got invalid value [redacted]${reason}`,
+    );
+  });
+
+  it('잘못된 값의 경로는 남긴다', () => {
+    const message = coercionMessage({ latitude: 37.5665, longitude: 'x' });
+
+    expect(redactVariableValue(message)).toBe(
+      'Variable "$input" got invalid value [redacted] at "input.longitude"; Float cannot represent non numeric value: "x"',
+    );
+  });
+
+  it.each([
+    'Cannot query field "x" on type "Query".',
+    'Variable "$input" of required type "LocationInput!" was not provided.',
+    'Syntax Error: Expected Name, found <EOF>.',
+  ])('변수 값이 없는 문구는 그대로 둔다: %s', (message) => {
+    expect(redactVariableValue(message)).toBe(message);
+  });
+
+  it('formatGraphqlError의 warn 로그에 좌표가 남지 않는다', () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const message = coercionMessage({
+      latitude: 37.5665,
+      longitude: 126.978,
+      foo: 1,
+    });
+
+    formatGraphqlError(
+      { message, extensions: { code: 'BAD_USER_INPUT' } },
+      new GraphQLError(message),
+    );
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).not.toMatch(/37\.5665|126\.978/);
+    warn.mockRestore();
   });
 });

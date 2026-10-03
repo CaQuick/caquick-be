@@ -226,6 +226,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.NOT_FOUND,
     message: '존재하지 않는 1차 지역입니다.',
   },
+  LOCATION_LOOKUP_UNAVAILABLE: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '현재 위치로 지역을 찾을 수 없습니다. 지역을 직접 선택해 주세요.',
+  },
   INVALID_PRICE_RANGE: {
     status: HttpStatus.BAD_REQUEST,
     message: '최저가는 최고가보다 클 수 없습니다.',
