@@ -124,60 +124,6 @@
     "typescript-eslint": "^8.67.0",
     "yaml": "^2.9.0"
   },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": [
-        "ts-jest",
-        {
-          "tsconfig": {
-            "isolatedModules": false
-          },
-          "diagnostics": {
-            "ignoreCodes": [
-              151002
-            ]
-          }
-        }
-      ]
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s",
-      "!**/index.ts",
-      "!**/main.ts",
-      "!**/*.module.ts",
-      "!**/*.d.ts",
-      "!**/graphql/graphql.types.ts",
-      "!**/generated/**",
-      "!**/config/**",
-      "!test/**"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "statements": 96,
-        "branches": 86,
-        "functions": 92,
-        "lines": 96
-      }
-    },
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node",
-    "globalSetup": "<rootDir>/test/jest.global-setup.ts",
-    "globalTeardown": "<rootDir>/test/jest.global-teardown.ts",
-    "testTimeout": 60000,
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/$1"
-    },
-    "setupFilesAfterEnv": [
-      "<rootDir>/test/matchers/domain-error.matcher.ts"
-    ]
-  },
   "lint-staged": {
     "*.ts": [
       "eslint --fix",
