@@ -1,8 +1,10 @@
-import { spawn } from 'node:child_process';
-import { createServer, type Socket } from 'node:net';
+import { type ChildProcess, spawn } from 'node:child_process';
+import { createServer, type Server, type Socket } from 'node:net';
 
 import {
   acquireHostLock,
+  decideAfterProbe,
+  type Occupant,
   DEFAULT_JEST_HOST_LOCK_PORT,
   type HostLock,
   hostLockPort,
@@ -49,6 +51,52 @@ describe('shouldTakeHostLock', () => {
   });
 });
 
+describe('decideAfterProbe', () => {
+  /** 확인 결과를 차례로 넣어 단계 목록을 얻는다. */
+  function steps(occupants: Occupant[]): string[] {
+    let streak = 0;
+    return occupants.map((occupant) => {
+      const decision = decideAfterProbe(occupant, streak);
+      streak = decision.streak;
+      return decision.step;
+    });
+  }
+
+  it.each([
+    [['jest'], ['wait']],
+    [['gone'], ['retry']],
+    [['other'], ['fail']],
+    [
+      ['ambiguous', 'ambiguous'],
+      ['retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'fail'],
+    ],
+    // 반증: 모호가 아닌 결과(풀림·jest)가 끼면 연속이 끊긴다
+    [
+      ['ambiguous', 'gone', 'ambiguous', 'gone', 'ambiguous'],
+      ['retry', 'retry', 'retry', 'retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'gone', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'retry', 'retry', 'retry'],
+    ],
+    [
+      ['ambiguous', 'ambiguous', 'jest', 'ambiguous', 'ambiguous'],
+      ['retry', 'retry', 'wait', 'retry', 'retry'],
+    ],
+  ] as [Occupant[], string[]][])('%j → %j', (occupants, expected) => {
+    expect(steps(occupants)).toEqual(expected);
+  });
+
+  it('모호하면 잠깐 뒤, 풀렸으면 바로 다시 잡는다', () => {
+    expect(decideAfterProbe('ambiguous', 0).delayMs).toBeGreaterThan(0);
+    expect(decideAfterProbe('gone', 0).delayMs).toBe(0);
+  });
+});
+
 describe('hostLockPort', () => {
   it.each([
     [{}, DEFAULT_JEST_HOST_LOCK_PORT],
@@ -64,6 +112,9 @@ describe('hostLockPort', () => {
 describe('acquireHostLock', () => {
   let port: number;
   const held: HostLock[] = [];
+  /** 테스트가 띄운 다른 서버 — 단언이 실패해도 닫아야 jest가 끝난다. */
+  const servers: Server[] = [];
+  const children: ChildProcess[] = [];
   const log = jest.fn();
 
   beforeEach(async () => {
@@ -71,7 +122,16 @@ describe('acquireHostLock', () => {
     log.mockClear();
   });
   afterEach(async () => {
+    children.splice(0).forEach((child) => child.kill('SIGKILL'));
     await Promise.all(held.splice(0).map((lock) => lock.release()));
+    await Promise.all(
+      servers
+        .splice(0)
+        .map(
+          (server) =>
+            new Promise<void>((resolve) => server.close(() => resolve())),
+        ),
+    );
   });
 
   async function take(): Promise<HostLock> {
@@ -127,6 +187,7 @@ describe('acquireHostLock', () => {
     '반증: jest가 아닌 %s가 포트를 쓰면 기다리지 않고 오류로 멈춘다',
     async (_label, onConnection) => {
       const other = createServer(onConnection);
+      servers.push(other);
       await new Promise<void>((resolve) =>
         other.listen(port, '127.0.0.1', resolve),
       );
@@ -135,15 +196,35 @@ describe('acquireHostLock', () => {
         settledWithin(acquireHostLock({ port, pollMs: 20, log }), 3_000),
       ).rejects.toThrow(/jest가 아닌 프로세스가 쓰고 있다/);
       expect(log).not.toHaveBeenCalled();
-      other.close();
     },
   );
+
+  it('락이 풀리는 순간의 끊김(RST·빈 응답)은 다른 프로세스로 오판하지 않고 재시도해 잡는다', async () => {
+    // 쥔 쪽이 닫히는 중 — 첫 접속은 RST, 둘째는 빈 응답으로 끊고 포트를 놓는다
+    let connections = 0;
+    const releasing = createServer((socket) => {
+      connections += 1;
+      if (connections === 1) socket.resetAndDestroy();
+      else {
+        socket.end();
+        releasing.close();
+      }
+    });
+    servers.push(releasing);
+    await new Promise<void>((resolve) =>
+      releasing.listen(port, '127.0.0.1', resolve),
+    );
+
+    await expect(settledWithin(take(), 3_000)).resolves.not.toBe('pending');
+    expect(connections).toBe(2);
+  });
 
   it('쥐고 있던 프로세스가 강제 종료되면(SIGKILL) OS가 포트를 풀어 바로 잡는다', async () => {
     const child = spawn(process.execPath, [
       '-e',
       `require('node:net').createServer((s) => s.end('${LOCK_BANNER} 1\\n')).listen({ port: ${port}, host: '127.0.0.1', exclusive: true }, () => console.log('ready')); setInterval(() => {}, 1000);`,
     ]);
+    children.push(child);
     await new Promise<void>((resolve) =>
       child.stdout.once('data', () => resolve()),
     );

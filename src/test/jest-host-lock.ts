@@ -9,6 +9,9 @@ export const DEFAULT_JEST_HOST_LOCK_PORT = 47391;
 export const LOCK_BANNER = 'caquick-be-jest-lock';
 const POLL_MS = 2_000;
 const PROBE_TIMEOUT_MS = 1_000;
+/** 락이 풀리는 순간 접속하면 RST나 빈 응답을 받는다 — 이만큼 연달아 모호해야 jest가 아닌 점유로 본다. */
+const AMBIGUOUS_LIMIT = 3;
+const AMBIGUOUS_RETRY_MS = 100;
 
 export interface HostLock {
   release(): Promise<void>;
@@ -53,7 +56,30 @@ function listen(port: number): Promise<Server | null> {
   });
 }
 
-type Occupant = 'jest' | 'other' | 'gone';
+export type Occupant = 'jest' | 'other' | 'gone' | 'ambiguous';
+
+export interface ProbeDecision {
+  /** wait: 다른 jest가 쥐고 있다 · retry: 바로(또는 잠깐 뒤) 다시 잡아 본다 · fail: jest가 아닌 점유 */
+  step: 'wait' | 'retry' | 'fail';
+  delayMs: number;
+  /** 연속 모호 횟수. 모호가 아닌 결과는 연속을 끊는다. */
+  streak: number;
+}
+
+export function decideAfterProbe(
+  occupant: Occupant,
+  ambiguousStreak: number,
+): ProbeDecision {
+  if (occupant === 'ambiguous') {
+    const streak = ambiguousStreak + 1;
+    return streak >= AMBIGUOUS_LIMIT
+      ? { step: 'fail', delayMs: 0, streak }
+      : { step: 'retry', delayMs: AMBIGUOUS_RETRY_MS, streak };
+  }
+  if (occupant === 'other') return { step: 'fail', delayMs: 0, streak: 0 };
+  if (occupant === 'gone') return { step: 'retry', delayMs: 0, streak: 0 };
+  return { step: 'wait', delayMs: 0, streak: 0 };
+}
 
 /** 포트를 쥔 쪽이 이 락인지 묻는다. 접속이 거절되면 그새 풀린 것이다. */
 function probe(port: number): Promise<Occupant> {
@@ -74,12 +100,14 @@ function probe(port: number): Promise<Occupant> {
         done(data.startsWith(LOCK_BANNER) ? 'jest' : 'other');
       }
     });
-    socket.on('end', () =>
-      done(data.startsWith(LOCK_BANNER) ? 'jest' : 'other'),
-    );
-    socket.on('error', (error: NodeJS.ErrnoException) =>
-      done(error.code === 'ECONNREFUSED' ? 'gone' : 'other'),
-    );
+    socket.on('end', () => {
+      if (data.startsWith(LOCK_BANNER)) done('jest');
+      else done(data === '' ? 'ambiguous' : 'other');
+    });
+    socket.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ECONNREFUSED') done('gone');
+      else done(error.code === 'ECONNRESET' ? 'ambiguous' : 'other');
+    });
   });
 }
 
@@ -90,6 +118,7 @@ export async function acquireHostLock(
   const pollMs = options.pollMs ?? POLL_MS;
   const log = options.log ?? ((message: string) => console.log(message));
   let waited = false;
+  let ambiguous = 0;
   for (;;) {
     const server = await listen(port);
     if (server) {
@@ -98,13 +127,17 @@ export async function acquireHostLock(
           new Promise<void>((resolve) => server.close(() => resolve())),
       };
     }
-    const occupant = await probe(port);
-    if (occupant === 'other') {
+    const decision = decideAfterProbe(await probe(port), ambiguous);
+    ambiguous = decision.streak;
+    if (decision.step === 'fail') {
       throw new Error(
         `[test] 127.0.0.1:${port}를 jest가 아닌 프로세스가 쓰고 있다 — JEST_HOST_LOCK_PORT로 다른 포트를 지정한다`,
       );
     }
-    if (occupant === 'gone') continue;
+    if (decision.step === 'retry') {
+      await new Promise((resolve) => setTimeout(resolve, decision.delayMs));
+      continue;
+    }
     if (!waited) {
       log(
         `[test] 다른 jest 실행이 끝나기를 기다린다(호스트 락 127.0.0.1:${port})`,
