@@ -9,6 +9,9 @@ export const DEFAULT_JEST_HOST_LOCK_PORT = 47391;
 export const LOCK_BANNER = 'caquick-be-jest-lock';
 const POLL_MS = 2_000;
 const PROBE_TIMEOUT_MS = 1_000;
+/** 락이 풀리는 순간 접속하면 RST나 빈 응답을 받는다 — 이만큼 연달아 모호해야 jest가 아닌 점유로 본다. */
+const AMBIGUOUS_LIMIT = 3;
+const AMBIGUOUS_RETRY_MS = 100;
 
 export interface HostLock {
   release(): Promise<void>;
@@ -53,7 +56,7 @@ function listen(port: number): Promise<Server | null> {
   });
 }
 
-type Occupant = 'jest' | 'other' | 'gone';
+type Occupant = 'jest' | 'other' | 'gone' | 'ambiguous';
 
 /** 포트를 쥔 쪽이 이 락인지 묻는다. 접속이 거절되면 그새 풀린 것이다. */
 function probe(port: number): Promise<Occupant> {
@@ -74,12 +77,14 @@ function probe(port: number): Promise<Occupant> {
         done(data.startsWith(LOCK_BANNER) ? 'jest' : 'other');
       }
     });
-    socket.on('end', () =>
-      done(data.startsWith(LOCK_BANNER) ? 'jest' : 'other'),
-    );
-    socket.on('error', (error: NodeJS.ErrnoException) =>
-      done(error.code === 'ECONNREFUSED' ? 'gone' : 'other'),
-    );
+    socket.on('end', () => {
+      if (data.startsWith(LOCK_BANNER)) done('jest');
+      else done(data === '' ? 'ambiguous' : 'other');
+    });
+    socket.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ECONNREFUSED') done('gone');
+      else done(error.code === 'ECONNRESET' ? 'ambiguous' : 'other');
+    });
   });
 }
 
@@ -90,6 +95,7 @@ export async function acquireHostLock(
   const pollMs = options.pollMs ?? POLL_MS;
   const log = options.log ?? ((message: string) => console.log(message));
   let waited = false;
+  let ambiguous = 0;
   for (;;) {
     const server = await listen(port);
     if (server) {
@@ -99,12 +105,17 @@ export async function acquireHostLock(
       };
     }
     const occupant = await probe(port);
-    if (occupant === 'other') {
+    if (occupant === 'ambiguous' && ++ambiguous < AMBIGUOUS_LIMIT) {
+      await new Promise((resolve) => setTimeout(resolve, AMBIGUOUS_RETRY_MS));
+      continue;
+    }
+    if (occupant === 'other' || occupant === 'ambiguous') {
       throw new Error(
         `[test] 127.0.0.1:${port}를 jest가 아닌 프로세스가 쓰고 있다 — JEST_HOST_LOCK_PORT로 다른 포트를 지정한다`,
       );
     }
     if (occupant === 'gone') continue;
+    ambiguous = 0;
     if (!waited) {
       log(
         `[test] 다른 jest 실행이 끝나기를 기다린다(호스트 락 127.0.0.1:${port})`,

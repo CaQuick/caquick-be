@@ -224,6 +224,15 @@ describe('redactInputValues', () => {
     ['변수: 필드 누락', () => at({ latitude: 37.5665 })],
     ['변수: 객체가 아닌 값', () => at('37.5665,126.978')],
     ['변수: 값 안의 세미콜론', () => at({ latitude: 37.5665, note: 'a; b' })],
+    [
+      '변수: 숫자 모양 필드 이름',
+      () => at({ latitude: 1, longitude: 1, '37.5665': 1 }),
+    ],
+    [
+      '리터럴: 모르는 필드 이름',
+      () =>
+        'Field "lat37.5665" is not defined by type "Loc". Did you mean "latitude"?',
+    ],
     ['리터럴: Float에 문자열', () => literalMessage('{ float(v: "37.5665") }')],
     ['리터럴: Float에 배열', () => literalMessage('{ float(v: [37.5665]) }')],
     [
@@ -274,7 +283,7 @@ describe('redactInputValues', () => {
     [
       '변수 모르는 필드',
       () => at({ latitude: 37.5665, longitude: 1, foo: 1 }),
-      'Variable "$input" got invalid value [redacted]; Field "foo" is not defined by type "Loc".',
+      'Variable "$input" got invalid value [redacted]; Field "[redacted]" is not defined by type "Loc".',
     ],
     [
       '리터럴 스칼라 사유',
@@ -286,6 +295,12 @@ describe('redactInputValues', () => {
       () => literalMessage('{ at(input: 37.5665) }'),
       'Expected value of type "Loc!", found [redacted]',
     ],
+    [
+      '모르는 필드 이름과 서버가 정한 후보',
+      () =>
+        'Field "lat37.5665" is not defined by type "Loc". Did you mean "latitude"?',
+      'Field "[redacted]" is not defined by type "Loc". Did you mean "latitude"?',
+    ],
   ])('%s: 경로·형식 사유는 남긴다', (_label, make, expected) => {
     expect(redactInputValues(make())).toBe(expected);
   });
@@ -293,7 +308,6 @@ describe('redactInputValues', () => {
   it.each([
     'Cannot query field "x" on type "Query".',
     'Variable "$input" of required type "Loc!" was not provided.',
-    'Field "foo" is not defined by type "Loc". Did you mean "latitude"?',
     'Unknown argument "radius" on field "Query.at".',
   ])('값이 없는 문구는 그대로 둔다: %s', (message) => {
     expect(redactInputValues(message)).toBe(message);

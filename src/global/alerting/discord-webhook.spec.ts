@@ -83,8 +83,8 @@ describe('postDiscordAlert (real http)', () => {
     let markClosed!: () => void;
     const closed = new Promise<void>((resolve) => (markClosed = resolve));
     const server = createServer((req) => {
-      // 응답하지 않는다. 클라이언트가 끊으면 close가 온다
-      req.on('close', () => markClosed());
+      // 응답하지 않는다. 요청의 close는 본문 수신이 끝나도 오므로, 클라이언트가 끊었는지는 소켓의 close로 본다
+      req.socket.once('close', () => markClosed());
     });
     const url = await listen(server);
 
