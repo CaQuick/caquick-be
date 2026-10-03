@@ -50,21 +50,20 @@ const YEONGJONG_DONGS = [
 ];
 const GEOMDAN_DONGS = [
   '백석동',
-  '시천동',
   '마전동',
   '당하동',
   '원당동',
   '대곡동',
   '금곡동',
-  '오류동',
   '왕길동',
   '불로동',
   '검단동',
   '불로대곡동',
-  '오류왕길동',
   '아라1동',
   '아라2동',
 ];
+// 아라뱃길 남측 필지가 검암동·경서동(서해구)으로 넘어가 개편 전 이름만으로는 승계 구를 정할 수 없는 동
+const AMBIGUOUS_DONGS = ['시천동', '오류동', '오류왕길동'];
 
 describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
   let prisma: PrismaClient;
@@ -82,7 +81,7 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
 
   async function runMigration(): Promise<void> {
     const stmts = statements();
-    expect(stmts).toHaveLength(4);
+    expect(stmts).toHaveLength(5);
     for (const stmt of stmts) await prisma.$executeRawUnsafe(stmt);
   }
 
@@ -220,6 +219,27 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
     },
   );
 
+  it.each(AMBIGUOUS_DONGS)(
+    '서구 매장의 동이 %s이면 옮기지 않고 옛 서구를 비활성으로만 남긴다',
+    async (dong) => {
+      const ids = await seedBeforeReorg();
+      const store = await createStore(prisma, {
+        region_id: ids[OLD.seo],
+        address_neighborhood: dong,
+        address_full: '인천 서구 정서진로 1',
+      });
+
+      await runMigration();
+
+      expect(await regionSlugOfStore(store.id)).toBe(OLD.seo);
+      const seo = await prisma.region.findUniqueOrThrow({
+        where: { slug: OLD.seo },
+      });
+      expect(seo.is_active).toBe(false);
+      expect(seo.deleted_at).toBeNull();
+    },
+  );
+
   it.each([
     [
       '동구 매장은 동과 상관없이 제물포구',
@@ -286,6 +306,27 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
       NEW.seohae,
     ],
     [
+      '서구, 동 칸이 비고 주소에 모호한 동이면 옮기지 않는다',
+      OLD.seo,
+      '',
+      '인천 서구 오류동 1',
+      OLD.seo,
+    ],
+    [
+      '서구, 동 칸의 확정 동이 주소의 모호한 동보다 먼저다',
+      OLD.seo,
+      '왕길동',
+      '인천 서구 오류동 1',
+      NEW.geomdan,
+    ],
+    [
+      '서구, 동 칸의 모호한 동은 주소의 확정 동보다 먼저다',
+      OLD.seo,
+      '시천동',
+      '인천 서구 마전동 100',
+      OLD.seo,
+    ],
+    [
       '동 칸 앞뒤 공백은 무시한다',
       OLD.seo,
       ' 원당동 ',
@@ -344,6 +385,7 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
   it("상위 'incheon'이 없으면 아무것도 만들거나 옮기거나 내리지 않는다", async () => {
     const orphan = await createRegion(prisma, { level: 2, slug: OLD.jung });
     const store = await createStore(prisma, { region_id: orphan.id });
+    await createRegion(prisma, { level: 2, slug: OLD.dong });
 
     await runMigration();
 
@@ -353,11 +395,11 @@ describe('region_incheon_reorg 마이그레이션 (real DB)', () => {
       }),
     ).toBe(0);
     expect(await regionSlugOfStore(store.id)).toBe(OLD.jung);
-    const kept = await prisma.region.findUniqueOrThrow({
-      where: { slug: OLD.jung },
-    });
-    expect(kept.is_active).toBe(true);
-    expect(kept.deleted_at).toBeNull();
+    for (const slug of [OLD.jung, OLD.dong]) {
+      const kept = await prisma.region.findUniqueOrThrow({ where: { slug } });
+      expect(kept.is_active).toBe(true);
+      expect(kept.deleted_at).toBeNull();
+    }
   });
 
   it('두 번 실행해도 결과가 같다', async () => {
