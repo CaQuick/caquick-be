@@ -36,6 +36,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { getTestRedisUrl } from '@/test/db/redis-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount } from '@/test/factories';
+import { listenOnLoopback } from '@/test/http-app';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 // 관리자 FE는 '전체' 필터를 필드 생략이 아니라 null로 보낸다. nullable 입력의 null이 Prisma where까지 내려가면
@@ -218,7 +219,7 @@ describe('관리자 Query nullable 입력 null 전수 (real DB)', () => {
         new GraphQLExceptionFilter(logger, app.get(MetricsService)),
       ),
     );
-    await app.init();
+    await listenOnLoopback(app);
   });
 
   afterAll(async () => {

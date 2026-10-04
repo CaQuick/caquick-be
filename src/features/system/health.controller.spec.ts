@@ -13,6 +13,7 @@ import {
   ApiResponseInterceptor,
   RAW_RESPONSE_PATHS,
 } from '@/global/interceptors/api-response.interceptor';
+import { listenOnLoopback } from '@/test/http-app';
 
 function controllerWith(result: ReadinessResult): HealthController {
   const service = { ready: () => Promise.resolve(result) } as HealthService;
@@ -126,7 +127,7 @@ describe('헬스 HTTP 응답 (real app)', () => {
     app = module.createNestApplication<INestApplication<App>>();
     // main.ts와 같은 배선(같은 상수)
     app.useGlobalInterceptors(new ApiResponseInterceptor(RAW_RESPONSE_PATHS));
-    await app.init();
+    await listenOnLoopback(app);
   });
   afterAll(async () => {
     await app.close();

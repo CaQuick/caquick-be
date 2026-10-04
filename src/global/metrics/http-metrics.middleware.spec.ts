@@ -25,6 +25,7 @@ import {
   UNMATCHED_ROUTE,
 } from '@/global/metrics/http-metrics.middleware';
 import { MetricsService } from '@/global/metrics/metrics.service';
+import { listenOnLoopback } from '@/test/http-app';
 
 @Controller('items')
 class ItemsController {
@@ -87,7 +88,7 @@ describe('HttpMetricsMiddleware (실제 Express 스택)', () => {
       imports: [TestAppModule],
     }).compile();
     app = module.createNestApplication<INestApplication<App>>();
-    await app.init();
+    await listenOnLoopback(app);
     metrics = app.get(MetricsService);
   });
   afterAll(() => app.close());
