@@ -523,6 +523,13 @@ describe('AdminNotificationService (real DB)', () => {
         targetAccountIds: [],
         skippedAccountIds: [],
       });
+
+      // GraphQL nullable 인자에 명시적 null이 오면 필터 없음과 같다
+      const nullFilters = await service.adminNotificationBroadcasts(actor, {
+        type: null,
+        targetKind: null,
+      });
+      expect(nullFilters.totalCount).toBe(5);
     });
 
     it.each(['abc', '-1', '1.5', '18446744073709551616'])(
