@@ -374,7 +374,7 @@ yarn test:scripts             # infrastructure specs
 yarn test:push --dry-run      # the Jest scope pre-push would run
 ```
 
-The pre-push hook runs every static check but only the Jest specs the change reaches. Changes the import graph cannot track (SDL, prisma, test infrastructure, dependencies, global wiring) fall back to the full suite. Full regression and the coverage thresholds belong to the required CI `check`. The development machine doubles as the production Mac mini and the test containers share its VM with production, so full test runs (`yarn validate`, `yarn test:cov`) go one at a time. The reasoning is in [architecture conventions §9](./docs/guide/architecture-conventions.md) (Korean).
+The pre-push hook runs every static check but only the Jest specs the change reaches. Changes the import graph cannot track (SDL, prisma, test infrastructure, dependencies, global wiring) fall back to the full suite. Full regression runs in the CI `test` shards, the coverage thresholds are checked by `coverage-report` on the merged shard results, and the required `check` collects both. The development machine doubles as the production Mac mini and the test containers share its VM with production, so full test runs (`yarn validate`, `yarn test:cov`) go one at a time. The reasoning is in [architecture conventions §9](./docs/guide/architecture-conventions.md) (Korean).
 
 When a checker or gate is added, the **refutation cases** (proving it actually blocks what it should) are the core of its tests. CI uses the same testcontainers setup, so there is little difference between local and CI environments.
 
@@ -405,14 +405,26 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### Workflows
 
-| Workflow                         | Trigger                                                            | Role                                                                                                                                                                                                      |
-| -------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                                           | codegen, tsc, lint, docs/arch gates, dto:check (warning only; the hard gate is the pre-push hook), infrastructure specs, integration tests, coverage, and two consecutive builds (cache regression check) |
-| `codeql.yml`                     | PR · push · weekly                                                 | CodeQL static security analysis                                                                                                                                                                           |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                                                 | comments with unused-code and NestJS health reports (advisory)                                                                                                                                            |
-| `pr-check.yml` `image` job       | PR (build only) · main push (push)                                 | builds an arm64 image alongside the tests and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                                                 |
-| `deploy.yml`                     | main **CI fully succeeds** · manual (rollback sha, CI-passed only) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord                          |
-| `discord-notify.yml`             | PR · push · issue                                                  | Discord notifications                                                                                                                                                                                     |
+| Workflow                         | Trigger                                                            | Role                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                                           | runs static checks, infrastructure specs, the build, the test shards and the coverage merge as parallel jobs; `check` collects the results (see job layout below)                |
+| `codeql.yml`                     | PR · push · weekly                                                 | CodeQL static security analysis                                                                                                                                                  |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                                                 | comments with unused-code and NestJS health reports (advisory)                                                                                                                   |
+| `pr-check.yml` `image` job       | PR (build only) · main push (push)                                 | builds an arm64 image alongside the tests and pushes `ghcr.io/caquick/caquick-be:<sha>` (no mutable tags)                                                                        |
+| `deploy.yml`                     | main **CI fully succeeds** · manual (rollback sha, CI-passed only) | the self-hosted runner (Mac mini) writes `.env` and `app.env` (mode 600) from secrets, then pull → migrate → worker → api → readiness wait → observability, and notifies Discord |
+| `discord-notify.yml`             | PR · push · issue                                                  | Discord notifications                                                                                                                                                            |
+
+### CI job layout (`pr-check.yml`)
+
+- Jobs run in parallel and the required `check` collects their results.
+  - `static`: codegen, tsc, lint, dto:check (warning only; the hard gate is the pre-push hook), docs:check, arch:check
+  - `scripts`: infrastructure specs (`test:scripts`)
+  - `build`: two consecutive builds (incremental-cache regression check)
+  - `test`: the full Jest suite split into 2 shards (per-shard thresholds off)
+  - `coverage-report`: merges the shard coverage, checks it against the `jest.config.js` thresholds (`scripts/merge-coverage.ts`) and uploads to Codecov. On a PR it also comments a comparison against the base branch
+- `check` treats skipped jobs as failures, because GitHub reports a skipped job as successful and that would satisfy a required check.
+- The comparison baseline is the artifact uploaded by develop/main push runs. It is only taken from successful push runs of the base branch in this repository; without one the comment shows no delta.
+- `node_modules` is cached by `yarn.lock`, `package.json`, OS and Node version. On a hit only `prisma generate` runs instead of the install.
 
 ### Flow
 
