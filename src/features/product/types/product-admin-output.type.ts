@@ -18,6 +18,7 @@ export interface AdminBannerOutput {
   linkProductId: string | null;
   linkStoreId: string | null;
   linkCategoryId: string | null;
+  linkTargetAvailable: boolean;
   startsAt: Date | null;
   endsAt: Date | null;
   sortOrder: number;
