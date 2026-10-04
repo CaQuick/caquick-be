@@ -9,6 +9,7 @@ import {
   RAW_RESPONSE_PATHS,
 } from '@/global/interceptors/api-response.interceptor';
 import { MetricsService } from '@/global/metrics';
+import { listenOnLoopback } from '@/test/http-app';
 
 /** 제외 목록 밖 경로가 실제로 봉투에 싸이는지 볼 대조군 */
 @Controller('envelope-probe')
@@ -31,7 +32,7 @@ describe('MetricsController (real app)', () => {
     }).compile();
     app = module.createNestApplication<INestApplication<App>>();
     app.useGlobalInterceptors(new ApiResponseInterceptor(RAW_RESPONSE_PATHS));
-    await app.init();
+    await listenOnLoopback(app);
     metrics = module.get(MetricsService);
   });
   afterAll(async () => {

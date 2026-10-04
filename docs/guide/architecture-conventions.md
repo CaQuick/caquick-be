@@ -139,7 +139,7 @@
 
 CI `check` 잡은 정적 검사를 개별 스텝으로 돌리되 `dto:check`는 `--warning`(이관 중이라 경고만)이라, `git push --no-verify`로 pre-push를 건너뛰면 SDL↔DTO 드리프트가 CI를 통과할 수 있다 — pre-push를 우회하지 않는 것이 규칙이다. `knip`(dead code)·`nestjs-doctor`는 PR 코멘트만(advisory, 오탐 있음).
 
-**운영 호스트 보호.** 개발 머신이 운영 맥미니를 겸하고, testcontainers(MySQL·Redis)가 운영 컨테이너와 같은 OrbStack VM(4CPU·8GB)을 나눠 쓴다. 전체 jest(330스위트, 실DB 145개)를 pre-push마다 돌리던 시절 한 번에 5.7~12.7분이 걸렸고, 그동안 운영 응답이 느려지고 부하성 간헐 실패가 났다. 그래서 pre-push는 위처럼 범위를 좁히고 전체는 CI에 맡긴다. 맥미니에서 전체 테스트(`yarn validate`·`yarn test:cov`·경로 없는 `yarn test`)를 돌려야 하면 **한 번에 하나만** 돌린다(여러 세션·에이전트가 동시에 띄우지 않는다). jest는 globalSetup에서 호스트 락(127.0.0.1:47391 포트를 여는 것, 프로세스가 죽으면 OS가 푼다)을 잡아 같은 호스트의 실행을 하나로 줄 세우고, 로컬 워커는 4개로 제한한다(`jest.config.js`, 실측 근거는 주석). CI와 watch 모드는 락을 잡지 않는다. 부하 중에 난 간헐 실패는 결함으로 단정하기 전에 단독 재실행으로 확인한다.
+**운영 호스트 보호.** 개발 머신이 운영 맥미니를 겸하고, testcontainers(MySQL·Redis)가 운영 컨테이너와 같은 OrbStack VM(4CPU·8GB)을 나눠 쓴다. 전체 jest(330스위트, 실DB 145개)를 pre-push마다 돌리던 시절 한 번에 5.7~12.7분이 걸렸고, 그동안 운영 응답이 느려지고 부하성 간헐 실패가 났다. 그래서 pre-push는 위처럼 범위를 좁히고 전체는 CI에 맡긴다. 맥미니에서 전체 테스트(`yarn validate`·`yarn test:cov`·경로 없는 `yarn test`)를 돌려야 하면 **한 번에 하나만** 돌린다(여러 세션·에이전트가 동시에 띄우지 않는다). jest는 globalSetup에서 호스트 락(127.0.0.1:47391 포트를 여는 것, 프로세스가 죽으면 OS가 푼다)을 잡아 같은 호스트의 실행을 하나로 줄 세우고, 로컬 워커는 4개로 제한한다(`jest.config.js`, 실측 근거는 주석). CI와 watch 모드는 락을 잡지 않는다. 부하 중에 난 간헐 실패는 결함으로 단정하기 전에 단독 재실행으로 확인한다. supertest로 부르는 앱은 `listenOnLoopback`(`src/test/http-app.ts`)으로 127.0.0.1에 먼저 연다 — 와일드카드로 열면 macOS에서 다른 프로세스가 같은 포트를 127.0.0.1로 잡아 응답을 가로챈다(`http-app.spec`이 반증과 사용처 전수를 고정).
 
 ---
 

@@ -10,6 +10,7 @@ import { ACCOUNT_REPOSITORY } from './../src/features/auth/repositories/account.
 import { PrismaService } from './../src/prisma';
 
 import { AccountType } from '@/generated/prisma/client';
+import { listenOnLoopback } from '@/test/http-app';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -63,7 +64,7 @@ describe('AppController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    await app.init();
+    await listenOnLoopback(app);
     jwt = moduleFixture.get(JwtService);
   });
 
