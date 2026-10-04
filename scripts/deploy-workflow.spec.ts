@@ -316,7 +316,7 @@ describe('pr-check.yml 잡 구성', () => {
     );
   });
 
-  it('의존성 캐시 키는 yarn.lock·package.json·OS·아키텍처·node 버전을 담고, 적중하면 설치 대신 prisma generate(postinstall)를 돈다', () => {
+  it('의존성 캐시 키는 yarn.lock·package.json·yarn 설정·릴리즈·OS·아키텍처·node 버전을 담고, 적중하면 설치 대신 prisma generate(postinstall)를 돈다', () => {
     const cached = Object.entries(wf.jobs).filter(([, job]) =>
       job.steps.some((s) => s.uses?.startsWith('actions/cache@')),
     );
@@ -330,7 +330,8 @@ describe('pr-check.yml 잡 구성', () => {
         '${{ runner.os }}',
         '${{ runner.arch }}',
         '${{ steps.node.outputs.node-version }}',
-        "${{ hashFiles('yarn.lock', 'package.json') }}",
+        // .yarnrc.yml(nodeLinker·yarnPath)·yarn 릴리즈만 바뀌어도 낡은 설치를 복원하지 않게
+        "${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}",
       ])
         expect(key).toContain(part);
       expect(

@@ -424,7 +424,7 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
   - `coverage-report`: 샤드 커버리지를 합쳐 `jest.config.js`의 임계로 검사하고(`scripts/merge-coverage.ts`) Codecov에 올림. PR이면 base 브랜치 기준과 비교한 댓글을 남김
 - `check`는 건너뛴 잡도 실패로 봅니다. GitHub는 건너뛴 잡을 성공으로 보고해 필수 체크를 통과시키기 때문입니다.
 - 커버리지 비교 기준은 develop·main push 실행이 올린 아티팩트입니다. 이 레포 base 브랜치의 성공한 push 실행에서만 받고, 없으면 차이 없이 표시합니다.
-- `node_modules`는 `yarn.lock`·`package.json`·OS·node 버전을 키로 캐시합니다. 적중하면 설치 대신 `prisma generate`만 실행합니다.
+- `node_modules`는 `yarn.lock`·`package.json`·yarn 설정과 릴리즈·OS·node 버전을 키로 캐시합니다. 적중하면 설치 대신 `prisma generate`만 실행합니다.
 
 ### 흐름
 

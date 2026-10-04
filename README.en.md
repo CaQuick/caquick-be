@@ -424,7 +424,7 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
   - `coverage-report`: merges the shard coverage, checks it against the `jest.config.js` thresholds (`scripts/merge-coverage.ts`) and uploads to Codecov. On a PR it also comments a comparison against the base branch
 - `check` treats skipped jobs as failures, because GitHub reports a skipped job as successful and that would satisfy a required check.
 - The comparison baseline is the artifact uploaded by develop/main push runs. It is only taken from successful push runs of the base branch in this repository; without one the comment shows no delta.
-- `node_modules` is cached by `yarn.lock`, `package.json`, OS and Node version. On a hit only `prisma generate` runs instead of the install.
+- `node_modules` is cached by `yarn.lock`, `package.json`, the Yarn config and release, OS and Node version. On a hit only `prisma generate` runs instead of the install.
 
 ### Flow
 

@@ -40,7 +40,7 @@ jobs:
           path: |
             node_modules
             .yarn/install-state.gz
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
@@ -99,7 +99,7 @@ jobs:
           path: |
             node_modules
             .yarn/install-state.gz
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
@@ -138,7 +138,7 @@ jobs:
           path: |
             node_modules
             .yarn/install-state.gz
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
@@ -195,7 +195,7 @@ jobs:
           path: |
             node_modules
             .yarn/install-state.gz
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
@@ -257,7 +257,7 @@ jobs:
           path: |
             node_modules
             .yarn/install-state.gz
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
