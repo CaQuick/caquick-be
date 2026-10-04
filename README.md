@@ -374,7 +374,7 @@ yarn test:scripts             # 인프라 spec 실행
 yarn test:push --dry-run      # pre-push가 돌릴 jest 범위 확인
 ```
 
-pre-push는 정적 검사를 모두 돌리고, jest는 변경에 닿는 spec만 실행합니다. SDL·prisma·테스트 인프라·의존성·전역 배선처럼 import 그래프로 추적할 수 없는 변경이면 전체를 돌립니다. 전체 회귀와 커버리지 임계는 CI `check`(필수 체크)가 맡습니다. 개발 머신이 운영 맥미니를 겸하고 테스트 컨테이너가 운영과 같은 VM을 나눠 쓰므로, 전체 테스트(`yarn validate`·`yarn test:cov`)는 한 번에 하나만 돌립니다. 근거는 [아키텍처 컨벤션 §9](./docs/guide/architecture-conventions.md#9-테스트-규약)에 있습니다.
+pre-push는 정적 검사를 모두 돌리고, jest는 변경에 닿는 spec만 실행합니다. SDL·prisma·테스트 인프라·의존성·전역 배선처럼 import 그래프로 추적할 수 없는 변경이면 전체를 돌립니다. 전체 회귀는 CI `test` 샤드가, 커버리지 임계는 샤드 결과를 합치는 `coverage-report`가 맡고, 필수 체크 `check`가 둘을 모읍니다. 개발 머신이 운영 맥미니를 겸하고 테스트 컨테이너가 운영과 같은 VM을 나눠 쓰므로, 전체 테스트(`yarn validate`·`yarn test:cov`)는 한 번에 하나만 돌립니다. 근거는 [아키텍처 컨벤션 §9](./docs/guide/architecture-conventions.md#9-테스트-규약)에 있습니다.
 
 검사기와 게이트를 만들 때는 "막아야 할 것을 실제로 막는지"를 확인하는 **반증 케이스**를 테스트의 본체로 둡니다. CI도 같은 testcontainers 구성으로 실행하므로 로컬과 환경 차이가 거의 없습니다.
 
@@ -405,14 +405,26 @@ docker compose --profile edge up -d                       # cloudflared (TUNNEL_
 
 ### 워크플로우
 
-| Workflow                         | Trigger                                             | 역할                                                                                                                                                        |
-| -------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pr-check.yml`                   | PR · push (main/develop)                            | codegen, tsc, lint, docs/arch 게이트, dto:check(경고만 — 하드 게이트는 pre-push), 인프라 spec, 전체 테스트, 커버리지, 빌드 2회(캐시 회귀 검출)를 실행합니다 |
-| `codeql.yml`                     | PR · push · 주간                                    | CodeQL 정적 보안 분석을 실행합니다                                                                                                                          |
-| `knip.yml` · `nestjs-doctor.yml` | PR                                                  | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                         |
-| `pr-check.yml` `image` job       | PR(빌드만) · main push(GHCR 푸시)                   | 테스트와 나란히 arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                            |
-| `deploy.yml`                     | main **CI 전체 성공** · 수동(롤백 sha, CI 성공분만) | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다    |
-| `discord-notify.yml`             | PR · push · issue                                   | Discord에 알림을 보냅니다                                                                                                                                   |
+| Workflow                         | Trigger                                             | 역할                                                                                                                                                     |
+| -------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-check.yml`                   | PR · push (main/develop)                            | 정적 검사, 인프라 spec, 빌드, 테스트 샤드, 커버리지 병합을 잡으로 나눠 나란히 실행하고 `check`가 결과를 모읍니다(아래 잡 구성)                           |
+| `codeql.yml`                     | PR · push · 주간                                    | CodeQL 정적 보안 분석을 실행합니다                                                                                                                       |
+| `knip.yml` · `nestjs-doctor.yml` | PR                                                  | 사용하지 않는 코드와 NestJS 점검 결과를 코멘트로 남깁니다(advisory)                                                                                      |
+| `pr-check.yml` `image` job       | PR(빌드만) · main push(GHCR 푸시)                   | 테스트와 나란히 arm64 이미지를 빌드해 `ghcr.io/caquick/caquick-be:<sha>`로 푸시합니다(가변 태그는 두지 않습니다)                                         |
+| `deploy.yml`                     | main **CI 전체 성공** · 수동(롤백 sha, CI 성공분만) | 셀프호스트 러너(맥미니)가 secrets로 `.env`·`app.env`(600)를 만들고 pull → migrate → worker → api → ready 대기 → 관측 순서로 배포한 뒤 Discord에 알립니다 |
+| `discord-notify.yml`             | PR · push · issue                                   | Discord에 알림을 보냅니다                                                                                                                                |
+
+### CI 잡 구성 (`pr-check.yml`)
+
+- 잡을 나눠 나란히 돌리고, 필수 체크 `check`가 결과를 모읍니다.
+  - `static`: codegen, tsc, lint, dto:check(경고만 — 하드 게이트는 pre-push), docs:check, arch:check
+  - `scripts`: 인프라 spec(`test:scripts`)
+  - `build`: 빌드 2회(증분 캐시 회귀 검출)
+  - `test`: jest 전체를 2개 샤드로 나눠 실행(샤드별 임계는 끔)
+  - `coverage-report`: 샤드 커버리지를 합쳐 `jest.config.js`의 임계로 검사하고(`scripts/merge-coverage.ts`) Codecov에 올림. PR이면 base 브랜치 기준과 비교한 댓글을 남김
+- `check`는 건너뛴 잡도 실패로 봅니다. GitHub는 건너뛴 잡을 성공으로 보고해 필수 체크를 통과시키기 때문입니다.
+- 커버리지 비교 기준은 develop·main push 실행이 올린 아티팩트입니다. 이 레포 base 브랜치의 성공한 push 실행에서만 받고, 없으면 차이 없이 표시합니다.
+- `node_modules`는 `yarn.lock`·`package.json`·OS·node 버전을 키로 캐시합니다. 적중하면 설치 대신 `prisma generate`만 실행합니다.
 
 ### 흐름
 
