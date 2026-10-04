@@ -175,6 +175,27 @@ describe('SellerProductQueryService (real DB)', () => {
       expect(result.images).toHaveLength(1);
     });
 
+    it('soft-delete된 상품이면 404', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const deleted = await createSellerProduct(store.id, {
+        deleted_at: new Date(),
+      });
+
+      await expect(
+        service.sellerProduct(account.id, deleted.id),
+      ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+    });
+
+    it('숨김(is_active=false) 본인 상품도 상세를 반환한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const hidden = await createSellerProduct(store.id, { is_active: false });
+
+      const result = await service.sellerProduct(account.id, hidden.id);
+
+      expect(result.id).toBe(hidden.id.toString());
+      expect(result.isActive).toBe(false);
+    });
+
     it('soft-delete된 이미지·옵션 그룹·옵션 아이템은 상세에서 제외한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
