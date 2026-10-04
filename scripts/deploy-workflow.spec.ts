@@ -249,13 +249,13 @@ describe('pr-check.yml run 블록', () => {
   });
 });
 
-/** GitHub 호스트 러너의 기본 셸(bash -eo pipefail)로 run 블록을 실제로 돌린다. */
+/** shell을 지정하지 않은 run 블록과 같은 셸(bash -e {0}, 실행 로그로 확인)로 실제로 돌린다. */
 function runStep(run: string, env: Record<string, string>, cwd?: string) {
-  return spawnSync(
-    'bash',
-    ['--noprofile', '--norc', '-eo', 'pipefail', '-c', run],
-    { cwd, env: { ...process.env, ...env }, encoding: 'utf8' },
-  );
+  return spawnSync('bash', ['-e', '-c', run], {
+    cwd,
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
+  });
 }
 
 describe('pr-check.yml 잡 구성', () => {
@@ -347,6 +347,19 @@ describe('pr-check.yml 잡 구성', () => {
         run: expect.stringContaining('yarn prisma:generate'),
       });
     }
+  });
+
+  it('반증: Codecov 업로드는 기준 받기·댓글 액션 뒤에 둔다 — codecov-action이 업로드 토큰을 GITHUB_ENV로 뒤 단계에 남긴다', () => {
+    const at = (prefix: string) =>
+      coverage.steps.findIndex((s) =>
+        (s.uses ?? s.name ?? '').startsWith(prefix),
+      );
+    expect(at('codecov/codecov-action@')).toBeGreaterThan(
+      at('ArtiomTr/jest-coverage-report-action@'),
+    );
+    expect(at('codecov/codecov-action@')).toBeGreaterThan(
+      at('Fetch base coverage'),
+    );
   });
 
   it('반증: actions: read는 기준 아티팩트를 받는 coverage-report에만 준다', () => {

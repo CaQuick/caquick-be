@@ -280,18 +280,6 @@ jobs:
       - name: Merge coverage (임계는 jest.config.js)
         run: yarn coverage:merge coverage/shards coverage
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          # disable_search: 지정한 파일만 업로드 (자동 탐색 결과와 섞이지 않도록)
-          disable_search: true
-          name: backend-lcov
-          # 업로드 실패 시 조용히 넘어가지 않고 CI 실패로 가시화 (진단/운영 모두 권장).
-          fail_ci_if_error: true
-          verbose: true
-
       # PR 비교의 기준. 업로드가 실패해도 배포(main CI 성공)를 막지 않는다 — 다음 push가 다시 올린다
       - name: Upload base coverage (push)
         if: github.event_name == 'push'
@@ -336,6 +324,19 @@ jobs:
           coverage-file: coverage/report.json
           base-coverage-file: coverage/base/report.json
           annotations: failed-tests
+
+      # 댓글 액션 뒤에 둔다 — codecov-action은 업로드 토큰(CC_TOKEN)을 GITHUB_ENV로 내보내 뒤 단계 env에 남긴다
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          # disable_search: 지정한 파일만 업로드 (자동 탐색 결과와 섞이지 않도록)
+          disable_search: true
+          name: backend-lcov
+          # 업로드 실패 시 조용히 넘어가지 않고 CI 실패로 가시화 (진단/운영 모두 권장).
+          fail_ci_if_error: true
+          verbose: true
 
   # 필수 체크 check. 건너뛴 잡은 GitHub에서 성공으로 보고되고(선행 잡이 실패하면 needs만 건 잡은 skipped), 그 성공이 필수 체크를
   # 통과시킨다 — 그래서 if: always()로 늘 돌고 선행 결과가 전부 success인지 직접 본다. 건너뜀·취소도 실패다.
