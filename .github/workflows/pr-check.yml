@@ -327,7 +327,7 @@ jobs:
 
       # 댓글 액션 뒤에 둔다 — codecov-action은 업로드 토큰(CC_TOKEN)을 GITHUB_ENV로 내보내 뒤 단계 env에 남긴다
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
