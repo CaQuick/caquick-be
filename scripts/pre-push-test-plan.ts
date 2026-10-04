@@ -2,7 +2,7 @@
  * pre-push 테스트 계획 — 기준 커밋 대비 변경으로 jest 범위(full·related·none)를 고른다.
  *
  * 왜: 전체 jest(실DB 스위트 포함)는 운영과 같은 맥미니에서 5.7~12.7분을 쓰고 운영 컨테이너와
- * CPU·메모리를 다툰다. 전체 회귀·커버리지는 CI `check`가 필수 체크로 이미 돌리므로, 로컬은
+ * CPU·메모리를 다툰다. 전체 회귀·커버리지는 CI(test 샤드·coverage-report, 필수 체크 check가 모음)가 이미 돌리므로, 로컬은
  * import 그래프로 닿는 spec만 돌리고 그래프가 못 보는 변경은 보수적으로 전체로 되돌린다.
  *
  * 사용: yarn test:push  (yarn validate:push의 마지막 단계)
@@ -57,7 +57,7 @@ const NONE_RULES: RegExp[] = [
   /^(\.coderabbit\.yaml|codecov\.yml|spectaql\.yml|\.dependency-cruiser\.cjs)$/,
 ];
 
-// scripts/*.spec이 읽는 입력 — 이것이 바뀔 때만 push 전에 test:scripts를 돌린다(CI check는 항상 돌린다).
+// scripts/*.spec이 읽는 입력 — 이것이 바뀔 때만 push 전에 test:scripts를 돌린다(CI scripts 잡은 항상 돌린다).
 // 운영 VM에 Grafana·Alloy·MySQL 컨테이너를 띄우고 push마다 약 24초를 쓰는데, 대부분의 기능 변경은 여기에 닿지 않는다.
 const SCRIPT_TEST_RULES: RegExp[] = [
   /^scripts\//,

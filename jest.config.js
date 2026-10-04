@@ -1,7 +1,7 @@
 // 앱(src) jest 설정. scripts/ spec은 jest.scripts.config.js가 따로 돈다.
 //
 // ts-jest 변환 모드를 커버리지 여부로 가른다.
-// - 커버리지 실행(CI test:cov·coverage-report): LanguageService 모드(isolatedModules:false). transpile 모드의 데코레이터
+// - 커버리지 실행(CI test 샤드·test:cov): LanguageService 모드(isolatedModules:false). transpile 모드의 데코레이터
 //   메타데이터 가드식(`typeof X !== "undefined" && X`)이 분기로 잡혀 branches 임계가 깨진다(a93efac).
 // - 나머지(pre-push·경로 지정 실행): transpile 모드. LanguageService 모드는 파일마다 타입 검사를 하고 캐시 키에 전이 의존
 //   파일의 mtime을 넣어 콜드 실행이 3배 이상 느리다. 타입 검사는 validate:push·CI의 tsc --noEmit이 한다.
@@ -43,7 +43,7 @@ module.exports = {
     '!test/**',
   ],
   coverageThreshold: {
-    global: { statements: 96, branches: 86, functions: 92, lines: 96 },
+    global: { statements: 97, branches: 92, functions: 97, lines: 98 },
   },
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
