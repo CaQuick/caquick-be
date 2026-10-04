@@ -29,7 +29,7 @@ import type {
 interface ListingArgs {
   photoOnly?: boolean;
   sort?: ReviewSort;
-  cursor?: string;
+  cursor?: string | null;
   limit?: number;
 }
 
@@ -115,7 +115,8 @@ export class ReviewListingService {
         photoOnly,
         sort,
         limit,
-        cursorRaw: input.cursor,
+        // 명시적 cursor: null도 첫 페이지 요청이다
+        cursorRaw: input.cursor ?? undefined,
       }),
       this.repo.countReviews({ scope, photoOnly: false }),
       this.repo.countReviews({ scope, photoOnly: true }),

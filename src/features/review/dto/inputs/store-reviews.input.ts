@@ -30,7 +30,7 @@ export class StoreReviewsInput {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  cursor?: string;
+  cursor?: string | null;
 
   @IsOptional()
   @IsInt()

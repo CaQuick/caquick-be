@@ -30,7 +30,7 @@ export class ProductReviewsInput {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  cursor?: string;
+  cursor?: string | null;
 
   @IsOptional()
   @IsInt()

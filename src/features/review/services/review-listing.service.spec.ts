@@ -106,7 +106,7 @@ describe('ReviewListingService (real DB)', () => {
     args: {
       photoOnly?: boolean;
       sort?: 'LATEST' | 'LIKES';
-      cursor?: string;
+      cursor?: string | null;
       limit?: number;
     } = {},
     accountId?: bigint,
@@ -269,6 +269,18 @@ describe('ReviewListingService (real DB)', () => {
         code,
       );
     });
+
+    it.each(['LATEST', 'LIKES'] as const)(
+      'cursor null은 첫 페이지로 처리한다 (%s)',
+      async (sort) => {
+        const target = await makeTarget();
+        const review = await makeReview(target);
+
+        const result = await list(kind, target, { sort, cursor: null });
+
+        expect(result.items.map((r) => r.id)).toEqual([review.id.toString()]);
+      },
+    );
 
     it('cursor "0"은 페이지를 리셋하지 않고 빈 결과를 반환한다', async () => {
       const target = await makeTarget();
