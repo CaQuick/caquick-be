@@ -11,9 +11,9 @@ import {
 export class AdminNotificationBroadcastListInput extends CursorInput {
   @IsOptional()
   @IsIn(ADMIN_NOTIFICATION_TYPES)
-  type?: AdminNotificationTypeValue;
+  type?: AdminNotificationTypeValue | null;
 
   @IsOptional()
   @IsIn(ADMIN_NOTIFICATION_TARGET_KINDS)
-  targetKind?: AdminNotificationTargetKindValue;
+  targetKind?: AdminNotificationTargetKindValue | null;
 }

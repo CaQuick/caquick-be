@@ -20,6 +20,7 @@ describe('AdminNotificationBroadcastListInput', () => {
       { limit: 100, cursor: '12', type: 'MARKETING', targetKind: 'ALL_USERS' },
     ],
     ['ACCOUNT_IDS 필터', { type: 'SYSTEM', targetKind: 'ACCOUNT_IDS' }],
+    ['null 필터(전체)', { type: null, targetKind: null }],
   ])('%s는 통과한다', async (_label, plain) => {
     expect(await invalidProps(plain)).toEqual([]);
   });
