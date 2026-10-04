@@ -7,6 +7,7 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { bannerLinkTargetVisibleWhere } from '@/features/product/repositories/banner-link-target.helper';
 import {
   type Banner,
   type BannerPlacement,
@@ -183,6 +184,18 @@ export class ProductAdminRepository {
 
   async findBannerById(bannerId: bigint): Promise<Banner | null> {
     return this.prisma.banner.findFirst({ where: { id: bannerId } });
+  }
+
+  /** 구매자 배너 선택과 같은 조각으로 거른다 — 규칙을 TS로 다시 쓰면 둘이 어긋난다. */
+  async findLinkTargetVisibleBannerIds(
+    bannerIds: bigint[],
+  ): Promise<Set<bigint>> {
+    if (bannerIds.length === 0) return new Set();
+    const rows = await this.prisma.banner.findMany({
+      where: { id: { in: bannerIds }, AND: [bannerLinkTargetVisibleWhere] },
+      select: { id: true },
+    });
+    return new Set(rows.map((row) => row.id));
   }
 
   // 조작과 감사 기록을 한 트랜잭션으로 — 조작만 커밋되고 기록이 빠지는 상태를 막는다.

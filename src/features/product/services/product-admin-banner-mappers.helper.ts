@@ -2,7 +2,10 @@ import type { AdminBannerOutput } from '@/features/product/types/product-admin-o
 import type { Banner } from '@/generated/prisma/client';
 
 /** 저장된 링크 값을 그대로 내린다 — 표시·이동 판단은 linkType 기준. */
-export function toAdminBannerOutput(row: Banner): AdminBannerOutput {
+export function toAdminBannerOutput(
+  row: Banner,
+  linkTargetAvailable: boolean,
+): AdminBannerOutput {
   return {
     id: row.id.toString(),
     placement: row.placement,
@@ -13,6 +16,7 @@ export function toAdminBannerOutput(row: Banner): AdminBannerOutput {
     linkProductId: row.link_product_id?.toString() ?? null,
     linkStoreId: row.link_store_id?.toString() ?? null,
     linkCategoryId: row.link_category_id?.toString() ?? null,
+    linkTargetAvailable,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     sortOrder: row.sort_order,

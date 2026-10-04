@@ -5,6 +5,7 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { bannerLinkTargetVisibleWhere } from '@/features/product/repositories/banner-link-target.helper';
 import {
   type BannerLinkType,
   type CategoryType,
@@ -1361,28 +1362,7 @@ export class ProductRepository {
         OR: [{ starts_at: null }, { starts_at: { lte: now } }],
         AND: [
           { OR: [{ ends_at: null }, { ends_at: { gt: now } }] },
-          {
-            // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
-            // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다
-            OR: [
-              { link_type: { in: ['NONE', 'URL'] } },
-              {
-                link_type: 'PRODUCT',
-                link_product: {
-                  ...visibleWhere,
-                  store: visibleWhere,
-                },
-              },
-              {
-                link_type: 'STORE',
-                link_store: visibleWhere,
-              },
-              {
-                link_type: 'CATEGORY',
-                link_category: visibleWhere,
-              },
-            ],
-          },
+          bannerLinkTargetVisibleWhere,
         ],
       },
       select: {
