@@ -19,6 +19,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
     userAgent?: string;
     ipAddress?: string;
     expiresAt: Date;
+    credentialVersion: Date | null;
   }): Promise<AuthRefreshSession> {
     return this.prisma.$transaction(async (tx) => {
       await this.assertAccountActiveForUpdate(tx, args.accountId);
@@ -29,6 +30,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
           user_agent: args.userAgent ?? null,
           ip_address: args.ipAddress ?? null,
           expires_at: args.expiresAt,
+          credential_version: args.credentialVersion,
         },
       });
     });
@@ -72,6 +74,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
     userAgent?: string;
     ipAddress?: string;
     newExpiresAt: Date;
+    credentialVersion: Date | null;
   }): Promise<AuthRefreshSession> {
     return this.prisma.$transaction(async (tx) => {
       const now = this.clock.now();
@@ -84,6 +87,7 @@ export class RefreshSessionRepository implements IRefreshSessionRepository {
           user_agent: args.userAgent ?? null,
           ip_address: args.ipAddress ?? null,
           expires_at: args.newExpiresAt,
+          credential_version: args.credentialVersion,
         },
       });
 

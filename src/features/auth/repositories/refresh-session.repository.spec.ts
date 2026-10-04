@@ -1,4 +1,7 @@
 import { ClockService } from '@/common/providers/clock.service';
+import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
+import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { RefreshSessionRepository } from '@/features/auth/repositories/refresh-session.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -8,6 +11,8 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('RefreshSessionRepository (real DB)', () => {
   let repo: RefreshSessionRepository;
+  let admins: AccountAdminRepository;
+  let auditLogs: AuditLogRepository;
   let prisma: PrismaClient;
   let clock: ClockService;
 
@@ -16,10 +21,14 @@ describe('RefreshSessionRepository (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         RefreshSessionRepository,
+        AccountAdminRepository,
+        { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         { provide: ClockService, useValue: clock },
       ],
     });
     repo = module.get(RefreshSessionRepository);
+    admins = module.get(AccountAdminRepository);
+    auditLogs = module.get(AUDIT_LOG_REPOSITORY);
     prisma = p;
   });
 
@@ -30,6 +39,10 @@ describe('RefreshSessionRepository (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('createRefreshSession', () => {
@@ -43,6 +56,7 @@ describe('RefreshSessionRepository (real DB)', () => {
         userAgent: 'test-agent',
         ipAddress: '1.2.3.4',
         expiresAt,
+        credentialVersion: null,
       });
 
       expect(session.account_id).toBe(account.id);
@@ -57,10 +71,25 @@ describe('RefreshSessionRepository (real DB)', () => {
         accountId: account.id,
         tokenHash: 'b'.repeat(64),
         expiresAt: new Date(Date.now() + 3600_000),
+        credentialVersion: null,
       });
 
       expect(session.user_agent).toBeNull();
       expect(session.ip_address).toBeNull();
+    });
+
+    it('넘겨받은 자격증명 버전을 저장한다', async () => {
+      const account = await createAccount(prisma);
+      const version = new Date('2026-10-04T00:00:00.123Z');
+
+      const session = await repo.createRefreshSession({
+        accountId: account.id,
+        tokenHash: 'v'.repeat(64),
+        expiresAt: new Date(Date.now() + 3600_000),
+        credentialVersion: version,
+      });
+
+      expect(session.credential_version).toEqual(version);
     });
   });
 
@@ -119,6 +148,7 @@ describe('RefreshSessionRepository (real DB)', () => {
         accountId: account.id,
         newTokenHash: 'f'.repeat(64),
         newExpiresAt: new Date(Date.now() + 3600_000),
+        credentialVersion: null,
       });
 
       expect(newSession.token_hash).toBe('f'.repeat(64));
@@ -142,10 +172,29 @@ describe('RefreshSessionRepository (real DB)', () => {
         accountId: account.id,
         newTokenHash: 'k'.repeat(64),
         newExpiresAt: new Date(Date.now() + 3600_000),
+        credentialVersion: null,
       });
 
       expect(newSession.user_agent).toBeNull();
       expect(newSession.ip_address).toBeNull();
+    });
+
+    it('새 세션에 넘겨받은 자격증명 버전을 저장한다', async () => {
+      const account = await createAccount(prisma);
+      const oldSession = await createRefreshSession(prisma, {
+        account_id: account.id,
+      });
+      const version = new Date('2026-10-04T00:00:00.123Z');
+
+      const newSession = await repo.rotateRefreshSession({
+        currentSessionId: oldSession.id,
+        accountId: account.id,
+        newTokenHash: 'w'.repeat(64),
+        newExpiresAt: new Date(Date.now() + 3600_000),
+        credentialVersion: version,
+      });
+
+      expect(newSession.credential_version).toEqual(version);
     });
   });
 
@@ -197,6 +246,7 @@ describe('RefreshSessionRepository (real DB)', () => {
             accountId: account.id,
             tokenHash: 'h'.repeat(64),
             expiresAt: new Date(Date.now() + 60_000),
+            credentialVersion: null,
           }),
         ).rejects.toThrowDomain(403);
         expect(
@@ -223,6 +273,7 @@ describe('RefreshSessionRepository (real DB)', () => {
           accountId: account.id,
           newTokenHash: 'n'.repeat(64),
           newExpiresAt: new Date(Date.now() + 60_000),
+          credentialVersion: null,
         }),
       ).rejects.toThrowDomain(403);
       expect(
@@ -234,6 +285,65 @@ describe('RefreshSessionRepository (real DB)', () => {
         where: { id: session.id },
       });
       expect(same.revoked_at).toBeNull();
+    });
+
+    /** 이 워커 DB에서 행 잠금을 기다리는 트랜잭션이 생길 때까지. */
+    async function waitForLockWait(): Promise<void> {
+      for (let i = 0; i < 250; i++) {
+        const [{ n }] = await prisma.$queryRaw<{ n: bigint }[]>`
+          SELECT COUNT(*) AS n FROM information_schema.innodb_trx t
+          JOIN information_schema.processlist p ON p.id = t.trx_mysql_thread_id
+          WHERE t.trx_state = 'LOCK WAIT' AND p.db = DATABASE()`;
+        if (n > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error('잠금 대기가 관측되지 않았다');
+    }
+
+    // 정지 트랜잭션이 계정 행을 잡은 채(전 세션 폐기 뒤, 커밋 전) 발급이 끼어든다
+    it('정지 트랜잭션과 겹친 발급은 잠금을 기다렸다가 거절된다 — 정지된 계정에 살아 있는 세션이 남지 않는다', async () => {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      let issuing: Promise<unknown> | undefined;
+      const recordAudit = auditLogs.recordAudit.bind(auditLogs);
+      jest
+        .spyOn(auditLogs, 'recordAudit')
+        .mockImplementationOnce(async (tx, entry) => {
+          issuing = repo
+            .createRefreshSession({
+              accountId: account.id,
+              tokenHash: 'r'.repeat(64),
+              expiresAt: new Date(Date.now() + 60_000),
+              credentialVersion: null,
+            })
+            .then(
+              () => null,
+              (error: unknown) => error,
+            );
+          await waitForLockWait();
+          return recordAudit(tx, entry);
+        });
+
+      await admins.updateAccountStatus({
+        accountId: account.id,
+        from: 'ACTIVE',
+        to: 'SUSPENDED',
+        revokeSessions: true,
+        invalidTransitionCode: 'ONLY_ACTIVE_CAN_BE_SUSPENDED',
+        audit: {
+          actorAccountId: account.id,
+          storeId: null,
+          targetType: 'ACCOUNT',
+          targetId: account.id,
+          action: 'STATUS_CHANGE',
+        },
+      });
+
+      expect(await issuing).toThrowDomain('ACCOUNT_NOT_ACTIVE');
+      expect(
+        await prisma.authRefreshSession.count({
+          where: { account_id: account.id, revoked_at: null },
+        }),
+      ).toBe(0);
     });
   });
 });

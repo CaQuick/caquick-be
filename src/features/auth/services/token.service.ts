@@ -21,6 +21,7 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
+import type { AuthRefreshSession } from '@/generated/prisma/client';
 import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import type {
   AccessTokenClaims,
@@ -38,22 +39,24 @@ export class TokenService {
     private readonly accounts: IAccountRepository,
   ) {}
 
-  /** iat·exp·iss·aud·kid는 서명 옵션(JwtModule)이 붙인다 — 여기서는 신원 클레임만 만든다. */
-  signAccessToken(account: AccountForJwt): string {
+  /**
+   * iat·exp·iss·aud·kid는 서명 옵션(JwtModule)이 붙인다 — 여기서는 신원 클레임만 만든다.
+   * credentialVersion(cv)은 계정 행에서 다시 꺼내지 않는다 — 자격을 확인한 시점의 값이어야 그 뒤 커밋된 변경이 이 토큰을 막는다.
+   */
+  signAccessToken(
+    account: AccountForJwt,
+    credentialVersion: Date | null,
+  ): string {
     const claims: AccessTokenClaims = {
       sub: account.id.toString(),
       typ: 'access',
       role: account.account_type,
       mustChangePassword: account.credential?.must_change_password ?? false,
       ...(account.store ? { storeId: account.store.id.toString() } : {}),
+      cv: versionMs(credentialVersion),
     };
 
     return this.jwt.sign(claims);
-  }
-
-  /** 발급 시점의 계정 상태를 클레임에 담기 위해 매번 조회한다(재발급 포함). */
-  async signAccessTokenFor(accountId: bigint): Promise<string> {
-    return this.signAccessToken(await this.requireActiveAccount(accountId));
   }
 
   private async requireActiveAccount(
@@ -75,13 +78,15 @@ export class TokenService {
     return this.config.getOrThrow<AuthConfig>('auth');
   }
 
+  /** credentialVersion = 호출자가 자격을 확인한 시점의 password_updated_at(로그인은 비밀번호 검증 때 읽은 값). 나머지 클레임은 다시 읽는다. */
   async issueAuthTokens(args: {
     accountId: bigint;
+    credentialVersion: Date | null;
     req: Request;
     res: Response;
   }): Promise<{ accessToken: string }> {
     const account = await this.requireActiveAccount(args.accountId);
-    const accessToken = this.signAccessToken(account);
+    const accessToken = this.signAccessToken(account, args.credentialVersion);
 
     const refreshToken = this.generateRefreshToken();
     const refreshHash = this.sha256Hex(refreshToken);
@@ -95,6 +100,7 @@ export class TokenService {
       userAgent: tryUserAgent(args.req),
       ipAddress: tryClientIp(args.req),
       expiresAt,
+      credentialVersion: args.credentialVersion,
     });
 
     AuthCookie.setRefreshCookie(args.res, account.account_type, {
@@ -119,8 +125,25 @@ export class TokenService {
     return !account || account.account_type === role;
   }
 
-  async assertSessionRole(role: AccountRole, accountId: bigint): Promise<void> {
-    if (!(await this.hasSessionRole(role, accountId))) {
+  /**
+   * 회전 전 확인. 역할이 다르면 세션을 건드리지 않고 거절한다. 자격증명 버전이 다르면 발급 뒤 비밀번호가 바뀐 것이다 —
+   * 변경 트랜잭션의 전 세션 폐기를 비껴간 세션(확인 뒤 커밋된 변경과 겹친 로그인·회전)이라 폐기하고 거절한다.
+   * 계정이 없으면(탈퇴) 회전의 상태 확인이 거절한다.
+   */
+  private async assertSessionUsable(
+    role: AccountRole,
+    session: AuthRefreshSession,
+  ): Promise<void> {
+    const account = await this.accounts.findAccountForJwt(session.account_id);
+    if (!account) return;
+    if (account.account_type !== role) {
+      throw new DomainException('INVALID_REFRESH_TOKEN');
+    }
+    if (
+      versionMs(session.credential_version) !==
+      versionMs(account.credential?.password_updated_at)
+    ) {
+      await this.refreshSessions.revokeRefreshSession(session.id);
       throw new DomainException('INVALID_REFRESH_TOKEN');
     }
   }
@@ -141,7 +164,7 @@ export class TokenService {
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new DomainException('INVALID_REFRESH_TOKEN');
 
-    await this.assertSessionRole(role, session.account_id);
+    await this.assertSessionUsable(role, session);
 
     const newRefreshToken = this.generateRefreshToken();
     const newTokenHash = this.sha256Hex(newRefreshToken);
@@ -156,9 +179,14 @@ export class TokenService {
       userAgent: tryUserAgent(req),
       ipAddress: tryClientIp(req),
       newExpiresAt,
+      credentialVersion: session.credential_version,
     });
 
-    const accessToken = await this.signAccessTokenFor(session.account_id);
+    // 버전은 확인한 세션의 것 — 확인 뒤 커밋된 변경이 있으면 이 토큰은 블랙리스트에, 새 세션은 다음 refresh에서 막힌다
+    const accessToken = this.signAccessToken(
+      await this.requireActiveAccount(session.account_id),
+      session.credential_version,
+    );
 
     AuthCookie.setRefreshCookie(res, role, {
       refreshToken: newRefreshToken,
@@ -195,4 +223,9 @@ export class TokenService {
   private getRefreshDays(): number {
     return this.authConfig().refreshExpiresInDays;
   }
+}
+
+/** 자격증명 버전의 비교·클레임 값. 변경 이력이 없으면(null) 0. */
+function versionMs(version: Date | null | undefined): number {
+  return version?.getTime() ?? 0;
 }

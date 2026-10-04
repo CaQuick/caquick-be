@@ -302,6 +302,9 @@ model AuthRefreshSession {
 
   replaced_by_session_id BigInt? @db.UnsignedBigInt
 
+  // 발급 근거가 된 자격증명 버전(account_credential.password_updated_at). 현재 값과 다르면 refresh를 거부한다.
+  credential_version DateTime? @db.DateTime(3)
+
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)

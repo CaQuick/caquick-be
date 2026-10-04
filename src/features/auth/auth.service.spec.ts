@@ -255,6 +255,7 @@ describe('AuthService', () => {
         typ: 'access',
         role: 'USER',
         mustChangePassword: false,
+        cv: 0,
       });
     });
 

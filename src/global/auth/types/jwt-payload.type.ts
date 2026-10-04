@@ -11,6 +11,9 @@ export interface AccessTokenClaims {
 
   /** 판매자만. 매장이 아직 없으면 없다. */
   storeId?: string;
+
+  /** 발급 근거가 된 자격증명 버전(password_updated_at, epoch ms, 없으면 0). 이 클레임 도입 전에 발급된 토큰에는 없다. */
+  cv?: number;
 }
 
 /** 검증 후 전략이 받는 payload — 서명 옵션이 채운 시간 클레임이 더해진다. */

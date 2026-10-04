@@ -16,26 +16,38 @@ export interface BlacklistLookup {
   /** 재구축 표식이 있는가. 없으면(Redis 초기화·flush·쓰기 실패 직후) 목록이 불완전하므로 호출자는 DB로 폴백해야 한다. */
   ready: boolean;
   status: StatusBlockReason | null;
-  /** 이 시각(초, JWT iat와 같은 정밀도) 전에 발급된 토큰은 무효. 없으면 null. */
-  credentialCutoffSec: number | null;
+  /** 마지막 자격증명 변경 시각(ms). 그보다 옛 버전으로 발급된 토큰은 무효(issuedBeforeCredentialChange). 없으면 null. */
+  credentialCutoffMs: number | null;
 }
 
 /** 두 축을 키로 나눈다 — 정지 등록·복구가 자격증명 cutoff를 덮거나 지우면 안 된다. */
 const STATUS_PREFIX = 'auth:blk:st:';
-const CREDENTIAL_PREFIX = 'auth:blk:cr:';
+/** 값은 ms — 초 단위였던 옛 키(`auth:blk:cr:`)와 이름을 달리해 배포 직후 옛 값을 ms로 읽지 않는다. */
+const CREDENTIAL_PREFIX = 'auth:blk:cv:';
 export const STATUS_KEY_PATTERN = `${STATUS_PREFIX}*`;
 /** SCAN 한 페이지 크기(힌트). spec이 이보다 많은 키로 커서 순회를 고정한다. */
 export const STATUS_SCAN_PAGE = 100;
-/** 목록이 완전하다는 표식. worker의 재구축이 임대처럼 갱신한다 — worker가 죽거나 Redis가 비면 만료돼 전략이 DB로 폴백한다. */
-export const BLACKLIST_READY_KEY = 'auth:blk:ready';
+/**
+ * 목록이 완전하다는 표식. worker의 재구축이 임대처럼 갱신한다 — worker가 죽거나 Redis가 비면 만료돼 전략이 DB로 폴백한다.
+ * 자격증명 키와 함께 이름이 바뀌었다 — 새 키가 재구축으로 채워지기 전에는 옛 표식이 남아 있어도 DB로 폴백한다.
+ */
+export const BLACKLIST_READY_KEY = 'auth:blk:ready:v2';
 /** 표식 임대 시간. 재구축 주기(60초)의 3배 — 재구축을 연속으로 놓쳐야 폴백으로 돌아간다(주기와의 관계는 재구축 spec이 고정). */
 export const BLACKLIST_READY_TTL_SECONDS = 180;
 /** 쓰기 실패 세대. 실패마다 올라가고, 재구축은 스냅샷 시점의 세대가 그대로일 때만 표식을 세운다(스냅샷 뒤 실패한 훅과의 경쟁). */
 const DIRTY_KEY = 'auth:blk:dirty';
 
-/** JWT iat는 초 단위다. 내림 + `iat < cutoff` 비교라 변경과 같은 초에 새로 받은 토큰은 통과한다(같은 초의 옛 토큰도 — 1초 창). */
-export function credentialCutoffSec(changedAt: Date): number {
-  return Math.floor(changedAt.getTime() / 1000);
+/**
+ * 토큰이 자격증명 변경(cutoffMs) 전 버전으로 발급됐는가. cv(발급 근거가 된 password_updated_at, ms)로 비교해
+ * 변경과 같은 초에 발급된 옛 토큰도 가른다. cv가 없는 토큰(도입 전 발급분)은 iat(초)로 — 같은 초의 옛 토큰은 통과한다.
+ */
+export function issuedBeforeCredentialChange(
+  token: { iat: number; cv?: number },
+  cutoffMs: number,
+): boolean {
+  return token.cv !== undefined
+    ? token.cv < cutoffMs
+    : token.iat < Math.floor(cutoffMs / 1000);
 }
 
 /**
@@ -92,9 +104,9 @@ export class TokenBlacklistService {
     return this.writeStatus(accountId, 'ACTIVE', changedAt);
   }
 
-  /** 비밀번호 변경·초기화. cutoff 전에 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과. false = 쓰기 실패. */
+  /** 비밀번호 변경·초기화. 변경 전 버전으로 발급된 토큰만 막는다 — 새 비밀번호로 받은 새 토큰은 통과. false = 쓰기 실패. */
   async blockCredentials(accountId: bigint, changedAt: Date): Promise<boolean> {
-    const cutoff = credentialCutoffSec(changedAt);
+    const cutoff = changedAt.getTime();
     return this.write('credentials', (ttl) =>
       this.redis.eval(
         SET_IF_NEWER,
@@ -118,7 +130,7 @@ export class TokenBlacklistService {
       if (await this.clearReady()) {
         this.degradedUntilMs = 0;
       } else {
-        return { ready: false, status: null, credentialCutoffSec: null };
+        return { ready: false, status: null, credentialCutoffMs: null };
       }
     }
     const [ready, status, cutoff] = await this.redis.mget(
@@ -129,7 +141,7 @@ export class TokenBlacklistService {
     return {
       ready: ready !== null,
       status: parseBlockedStatus(status),
-      credentialCutoffSec: cutoff === null ? null : Number(cutoff),
+      credentialCutoffMs: cutoff === null ? null : Number(cutoff),
     };
   }
 
