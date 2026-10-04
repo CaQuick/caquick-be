@@ -7,7 +7,7 @@ import { AlertService } from '@/global/alerting';
 import {
   BLACKLIST_READY_KEY,
   BLACKLIST_READY_TTL_SECONDS,
-  credentialCutoffSec,
+  issuedBeforeCredentialChange,
   STATUS_SCAN_PAGE,
   TokenBlacklistService,
 } from '@/global/auth/blacklist/token-blacklist.service';
@@ -75,10 +75,6 @@ describe('TokenBlacklistService (real Redis)', () => {
     alerts.notify.mockClear();
   });
 
-  it('credentialCutoffSec는 초 단위 내림 — iat와 같은 정밀도로 비교하기 위해', () => {
-    expect(credentialCutoffSec(T1)).toBe(1_790_337_600);
-  });
-
   // 쓰기는 전부 "버전(변경 시각)이 더 새로울 때만" — 훅·재구축·조정이 어떤 순서로 겹쳐도 최근 변경이 이긴다
   describe('상태 키(정지·탈퇴·복구)', () => {
     it('blockStatus하면 사유가 조회되고 더 새 버전의 clearStatus로 풀린다', async () => {
@@ -89,7 +85,7 @@ describe('TokenBlacklistService (real Redis)', () => {
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
         status: 'SUSPENDED',
-        credentialCutoffSec: null,
+        credentialCutoffMs: null,
       });
       await expect(service.lookup(BigInt(8))).resolves.toMatchObject({
         status: null,
@@ -137,7 +133,7 @@ describe('TokenBlacklistService (real Redis)', () => {
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
         status: null,
-        credentialCutoffSec: credentialCutoffSec(T1),
+        credentialCutoffMs: T1.getTime(),
       });
     });
 
@@ -163,13 +159,14 @@ describe('TokenBlacklistService (real Redis)', () => {
   });
 
   describe('자격증명 cutoff', () => {
-    it('변경 시각을 초 단위 cutoff로 저장한다', async () => {
+    it('변경 시각을 ms 그대로 cutoff로 저장한다', async () => {
       await service.blockCredentials(BigInt(7), T1);
       await expect(service.lookup(BigInt(7))).resolves.toEqual({
         ready: true,
         status: null,
-        credentialCutoffSec: credentialCutoffSec(T1),
+        credentialCutoffMs: T1.getTime(),
       });
+      expect(await redis.get('auth:blk:cv:7')).toBe(String(T1.getTime()));
     });
 
     it('반증: cutoff는 낮아지지 않는다 — 재구축의 옛 스냅샷이 최신 변경을 덮지 않게', async () => {
@@ -177,13 +174,52 @@ describe('TokenBlacklistService (real Redis)', () => {
       await service.blockCredentials(BigInt(7), T1);
 
       await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        credentialCutoffSec: credentialCutoffSec(T2),
+        credentialCutoffMs: T2.getTime(),
       });
 
       await service.blockCredentials(BigInt(7), T3);
       await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
-        credentialCutoffSec: credentialCutoffSec(T3),
+        credentialCutoffMs: T3.getTime(),
       });
+    });
+
+    it('같은 초 안의 더 늦은 변경도 cutoff를 올린다(ms 버전)', async () => {
+      await service.blockCredentials(BigInt(7), T1);
+      await service.blockCredentials(BigInt(7), new Date(T1.getTime() + 1));
+
+      await expect(service.lookup(BigInt(7))).resolves.toMatchObject({
+        credentialCutoffMs: T1.getTime() + 1,
+      });
+    });
+
+    // 배포 직후 Redis에는 옛 코드가 쓴 초 단위 키·표식이 남아 있다 — ms로 잘못 읽으면 모든 토큰이 통과한다
+    it('반증: 옛 초 단위 키(auth:blk:cr:)와 옛 표식(auth:blk:ready)은 읽지 않는다 — 재구축 전까지 DB 폴백', async () => {
+      await redis.flushdb();
+      await redis.set('auth:blk:ready', '1');
+      await redis.set('auth:blk:cr:7', String(Math.floor(T1.getTime() / 1000)));
+
+      await expect(service.lookup(BigInt(7))).resolves.toEqual({
+        ready: false,
+        status: null,
+        credentialCutoffMs: null,
+      });
+    });
+  });
+
+  describe('issuedBeforeCredentialChange', () => {
+    const X = T1.getTime(); // 초 안쪽(.500)의 변경 시각
+    const SEC = Math.floor(X / 1000);
+
+    it.each([
+      ['cv가 변경 1ms 전(같은 초)', { iat: SEC, cv: X - 1 }, true],
+      ['cv가 변경 시각', { iat: SEC, cv: X }, false],
+      ['cv가 변경 뒤', { iat: SEC, cv: X + 1 }, false],
+      ['cv 0(변경 이력 없이 발급)', { iat: SEC + 1, cv: 0 }, true],
+      ['cv 없는 옛 토큰 — 변경 전 초', { iat: SEC - 1 }, true],
+      ['cv 없는 옛 토큰 — 변경과 같은 초(1초 창)', { iat: SEC }, false],
+      ['cv 없는 옛 토큰 — 변경 뒤 초', { iat: SEC + 1 }, false],
+    ] as const)('%s %j → 막힘 %s', (_, token, blocked) => {
+      expect(issuedBeforeCredentialChange(token, X)).toBe(blocked);
     });
   });
 
@@ -275,7 +311,7 @@ describe('TokenBlacklistService (real Redis)', () => {
   it('두 키 다 액세스 토큰 수명만큼 산다 — 그 뒤엔 토큰 자체가 만료라 볼 필요가 없다', async () => {
     await service.blockStatus(BigInt(7), 'DELETED', T1);
     await service.blockCredentials(BigInt(7), T1);
-    for (const key of ['auth:blk:st:7', 'auth:blk:cr:7']) {
+    for (const key of ['auth:blk:st:7', 'auth:blk:cv:7']) {
       const ttl = await redis.ttl(key);
       expect(ttl).toBeGreaterThan(TTL - 5);
       expect(ttl).toBeLessThanOrEqual(TTL);
@@ -373,7 +409,7 @@ describe('TokenBlacklistService (real Redis)', () => {
       await expect(broken.lookup(BigInt(1))).resolves.toEqual({
         ready: false,
         status: null,
-        credentialCutoffSec: null,
+        credentialCutoffMs: null,
       });
       expect(mget).not.toHaveBeenCalled();
 

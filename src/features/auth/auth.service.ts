@@ -42,7 +42,10 @@ export class AuthService {
       throw new DomainException('ACCOUNT_NOT_ACTIVE');
     }
 
-    const accessToken = this.tokens.signAccessToken(account);
+    const accessToken = this.tokens.signAccessToken(
+      account,
+      account.credential?.password_updated_at ?? null,
+    );
     return {
       accessToken,
       tokenType: 'Bearer',

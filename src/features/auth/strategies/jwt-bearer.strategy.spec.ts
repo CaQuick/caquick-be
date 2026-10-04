@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
+import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { AccountRepository } from '@/features/auth/repositories/account.repository';
 import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
@@ -50,6 +51,33 @@ function buildStrategy(deps: {
 }
 
 const clock = new ClockService();
+
+/** 통과면 '통과', 거절이면 도메인 코드 — 표 한 줄을 단언 하나로. */
+function verdict(result: Promise<unknown>): Promise<string> {
+  return result.then(
+    () => '통과',
+    (e: unknown) => (e instanceof DomainException ? e.code : String(e)),
+  );
+}
+
+/** 자격증명 변경 시각(초 안쪽 ms)과 토큰 표 — Redis 경로와 DB 폴백이 같은 판정을 내야 한다. */
+const CHANGED_AT_MS = NOW * 1000 + 500;
+const CREDENTIAL_CASES = [
+  [
+    'cv가 변경 1ms 전(같은 초)',
+    { iat: NOW, cv: CHANGED_AT_MS - 1 },
+    'INVALID_ACCESS_TOKEN',
+  ],
+  ['cv가 변경 시각', { iat: NOW, cv: CHANGED_AT_MS }, '통과'],
+  [
+    'cv 0(변경 이력 없이 발급) — 변경 뒤 초',
+    { iat: NOW + 1, cv: 0 },
+    'INVALID_ACCESS_TOKEN',
+  ],
+  ['cv 없는 옛 토큰 — 변경 전 초', { iat: NOW - 1 }, 'INVALID_ACCESS_TOKEN'],
+  ['cv 없는 옛 토큰 — 변경과 같은 초(1초 창)', { iat: NOW }, '통과'],
+  ['cv 없는 옛 토큰 — 변경 뒤 초', { iat: NOW + 1 }, '통과'],
+] as const;
 
 describe('JwtBearerStrategy (real DB + real Redis)', () => {
   let strategy: JwtBearerStrategy;
@@ -164,20 +192,17 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
       });
     });
 
-    it('자격증명 변경은 cutoff 전에 발급된 토큰만 막는다 — 같은 초·그 뒤에 받은 새 토큰은 통과', async () => {
-      await blacklist.blockCredentials(BigInt(42), new Date(NOW * 1000 + 999));
+    // cv(발급 근거 버전, ms)로 같은 초 안의 변경 전·후 토큰을 가른다. cv 없는 옛 토큰만 iat(초) 비교
+    it.each(CREDENTIAL_CASES)(
+      '자격증명 변경 뒤 %s %j → %s',
+      async (_, token, expected) => {
+        await blacklist.blockCredentials(BigInt(42), new Date(CHANGED_AT_MS));
 
-      await expect(
-        strategy.validate(payload('42', { iat: NOW - 1 })),
-      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
-      // 변경과 같은 초에 발급된 토큰 — iat가 초 단위라 ms 비교로 밀어내면 새 토큰까지 막는다
-      await expect(
-        strategy.validate(payload('42', { iat: NOW })),
-      ).resolves.toMatchObject({ accountId: '42' });
-      await expect(
-        strategy.validate(payload('42', { iat: NOW + 1 })),
-      ).resolves.toMatchObject({ accountId: '42' });
-    });
+        expect(await verdict(strategy.validate(payload('42', token)))).toBe(
+          expected,
+        );
+      },
+    );
 
     it('반증: 정지 → 복구를 거쳐도 자격증명 cutoff는 살아 옛 토큰을 계속 막는다', async () => {
       await blacklist.blockCredentials(BigInt(42), AT);
@@ -185,10 +210,10 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
       await blacklist.clearStatus(BigInt(42), LATER);
 
       await expect(
-        strategy.validate(payload('42', { iat: NOW - 60 })),
+        strategy.validate(payload('42', { iat: NOW, cv: AT.getTime() - 1 })),
       ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
       await expect(
-        strategy.validate(payload('42', { iat: NOW })),
+        strategy.validate(payload('42', { iat: NOW, cv: AT.getTime() })),
       ).resolves.toMatchObject({ accountId: '42' });
     });
 
@@ -281,23 +306,24 @@ describe('JwtBearerStrategy (real DB + real Redis)', () => {
       );
     });
 
-    it('반증: 비밀번호 변경 전에 발급된 토큰은 DB의 password_updated_at으로도 막힌다 — Redis 없이도 자격증명 변경이 새지 않는다', async () => {
-      const credential = await createAccountCredential(prisma, {
-        account_type: 'SELLER',
-      });
-      await prisma.accountCredential.update({
-        where: { account_id: credential.account_id },
-        data: { password_updated_at: new Date(NOW * 1000) },
-      });
-      const sub = credential.account_id.toString();
+    // Redis 경로와 같은 표 — Redis 없이도 자격증명 변경이 새지 않고, 판정도 같다
+    it.each(CREDENTIAL_CASES)(
+      'DB의 password_updated_at으로 판정한다: %s %j → %s',
+      async (_, token, expected) => {
+        const credential = await createAccountCredential(prisma, {
+          account_type: 'SELLER',
+        });
+        await prisma.accountCredential.update({
+          where: { account_id: credential.account_id },
+          data: { password_updated_at: new Date(CHANGED_AT_MS) },
+        });
+        const sub = credential.account_id.toString();
 
-      await expect(
-        fallbackStrategy.validate(payload(sub, { iat: NOW - 60 })),
-      ).rejects.toThrowDomain('INVALID_ACCESS_TOKEN');
-      await expect(
-        fallbackStrategy.validate(payload(sub, { iat: NOW })),
-      ).resolves.toMatchObject({ accountId: sub });
-    });
+        expect(
+          await verdict(fallbackStrategy.validate(payload(sub, token))),
+        ).toBe(expected);
+      },
+    );
 
     // Redis 경로와 같은 입력 표 — 어느 경로를 타든 응답 코드가 같아야 한다
     it.each([

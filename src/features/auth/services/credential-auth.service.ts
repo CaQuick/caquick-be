@@ -87,8 +87,10 @@ export class CredentialAuthService {
     const now = this.clock.now();
     await this.credentials.updateLastLogin(credential.account_id, now);
 
+    // 버전은 검증한 행의 것 — 검증 뒤 커밋된 변경이 있으면 이 세션·토큰은 버전이 낡아 막힌다
     const { accessToken } = await this.tokens.issueAuthTokens({
       accountId: credential.account_id,
+      credentialVersion: credential.password_updated_at,
       req: args.req,
       res: args.res,
     });

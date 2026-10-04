@@ -109,7 +109,13 @@ describe('역할별 refresh 쿠키 (real DB)', () => {
         : (await createAccountCredential(prisma, { account_type: role }))
             .account_id;
     const { res, set } = jar();
-    await tokens.issueAuthTokens({ accountId, req: reqWith({}), res });
+    // 팩토리 자격증명은 변경 이력이 없다(버전 null)
+    await tokens.issueAuthTokens({
+      accountId,
+      credentialVersion: null,
+      req: reqWith({}),
+      res,
+    });
     const raw = Object.values(set)[0];
     const session = await prisma.authRefreshSession.findFirstOrThrow({
       where: { token_hash: sha256Hex(raw) },
