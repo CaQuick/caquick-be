@@ -43,7 +43,7 @@ module.exports = {
     '!test/**',
   ],
   coverageThreshold: {
-    global: { statements: 96, branches: 86, functions: 92, lines: 96 },
+    global: { statements: 97, branches: 92, functions: 97, lines: 98 },
   },
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

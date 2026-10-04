@@ -130,7 +130,7 @@
 - 정적 검사: **ESLint**(strict 규칙 + `boundaries` 플러그인으로 feature 경계 강제) · **Prettier**. **Husky**와 **lint-staged**가 커밋·push 전에 실행합니다.
 - 구조 검사: **dependency-cruiser**(레이어 방향·순환 의존 금지)가 게이트로 막고, **knip**은 사용하지 않는 코드를 리포트합니다.
 - 커밋 메시지: **commitlint**가 Conventional Commits 형식을 검사합니다.
-- 커버리지·보안·의존성: **Codecov**(patch 80%, 전역 statements 96% · branches 86%) · **CodeQL** · **Dependabot**
+- 커버리지·보안·의존성: **Codecov**(patch 80%, 전역 statements 97% · branches 92%) · **CodeQL** · **Dependabot**
 - 이 레포만의 게이트
   - `dto:check`: SDL input ↔ DTO class 동기화
   - `docs:check`: SDL description 커버리지
@@ -369,7 +369,7 @@ extend type Query {
 ```bash
 yarn test                     # 전체 실행 (Docker 필요)
 yarn test src/features/order  # 특정 도메인만 실행
-yarn test:cov                 # 커버리지 측정 (임계값: statements 96 / branches 86 / functions 92 / lines 96)
+yarn test:cov                 # 커버리지 측정 (임계값: statements 97 / branches 92 / functions 97 / lines 98)
 yarn test:scripts             # 인프라 spec 실행
 yarn test:push --dry-run      # pre-push가 돌릴 jest 범위 확인
 ```

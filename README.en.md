@@ -130,7 +130,7 @@ Customers end up hopping between platforms, combining screenshots, edits, and ex
 - Static checks: **ESLint** (strict rules plus the `boundaries` plugin enforcing feature boundaries) and **Prettier**, run by **Husky** and **lint-staged** before commit and push.
 - Structural checks: **dependency-cruiser** gates layer direction and forbids cycles; **knip** reports unused code.
 - Commit messages: **commitlint** enforces Conventional Commits.
-- Coverage, security, dependencies: **Codecov** (patch 80%; global thresholds statements 96%, branches 86%), **CodeQL**, **Dependabot**
+- Coverage, security, dependencies: **Codecov** (patch 80%; global thresholds statements 97%, branches 92%), **CodeQL**, **Dependabot**
 - Repo-specific gates
   - `dto:check`: SDL inputs ↔ DTO classes stay in sync
   - `docs:check`: SDL description coverage
@@ -369,7 +369,7 @@ extend type Query {
 ```bash
 yarn test                     # everything (Docker required)
 yarn test src/features/order  # a single domain
-yarn test:cov                 # coverage (thresholds: statements 96 / branches 86 / functions 92 / lines 96)
+yarn test:cov                 # coverage (thresholds: statements 97 / branches 92 / functions 97 / lines 98)
 yarn test:scripts             # infrastructure specs
 yarn test:push --dry-run      # the Jest scope pre-push would run
 ```
