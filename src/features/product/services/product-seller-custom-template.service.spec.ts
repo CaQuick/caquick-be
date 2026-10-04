@@ -63,6 +63,22 @@ describe('SellerCustomTemplateService (real DB)', () => {
     });
   }
 
+  /** 활성 슬롯 A + soft-delete된 슬롯 B. */
+  async function createTokensWithDeleted(templateId: bigint) {
+    const live = await prisma.productCustomTextToken.create({
+      data: { template_id: templateId, token_key: 'A', default_text: 'a' },
+    });
+    await prisma.productCustomTextToken.create({
+      data: {
+        template_id: templateId,
+        token_key: 'B',
+        default_text: 'b',
+        deleted_at: new Date(),
+      },
+    });
+    return live;
+  }
+
   describe('sellerUpsertProductCustomTemplate', () => {
     it('없는 productId면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
@@ -99,6 +115,22 @@ describe('SellerCustomTemplateService (real DB)', () => {
         where: { product_id: product.id },
       });
       expect(templates).toHaveLength(1);
+    });
+
+    it('응답 textTokens에서 soft-delete된 슬롯은 제외한다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const tpl = await createTemplate(product.id);
+      const live = await createTokensWithDeleted(tpl.id);
+
+      const result = await service.sellerUpsertProductCustomTemplate(
+        accountId,
+        {
+          productId: product.id.toString(),
+          baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+        },
+      );
+
+      expect(result.textTokens.map((t) => t.id)).toEqual([live.id.toString()]);
     });
   });
 
@@ -144,6 +176,19 @@ describe('SellerCustomTemplateService (real DB)', () => {
         where: { store_id: storeId, action: 'STATUS_CHANGE' },
       });
       expect(auditLogs).toHaveLength(1);
+    });
+
+    it('응답 textTokens에서 soft-delete된 슬롯은 제외한다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const tpl = await createTemplate(product.id);
+      const live = await createTokensWithDeleted(tpl.id);
+
+      const result = await service.sellerSetProductCustomTemplateActive(
+        accountId,
+        { templateId: tpl.id.toString(), isActive: false },
+      );
+
+      expect(result.textTokens.map((t) => t.id)).toEqual([live.id.toString()]);
     });
   });
 

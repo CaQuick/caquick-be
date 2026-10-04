@@ -882,6 +882,7 @@ export class ProductRepository {
           },
           include: {
             text_tokens: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -922,6 +923,7 @@ export class ProductRepository {
           },
           include: {
             text_tokens: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
