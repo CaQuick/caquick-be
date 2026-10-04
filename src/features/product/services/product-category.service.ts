@@ -9,7 +9,8 @@ export class ProductCategoryService {
   constructor(private readonly repo: ProductRepository) {}
 
   async categories(input?: CategoriesInput): Promise<CategoryItem[]> {
-    const rows = await this.repo.listCategories(input?.type);
+    // FE가 '전체'를 type: null로 보내도 Prisma where에 null이 닿지 않게
+    const rows = await this.repo.listCategories(input?.type ?? undefined);
     return rows.map((row) => ({
       id: row.id.toString(),
       name: row.name,

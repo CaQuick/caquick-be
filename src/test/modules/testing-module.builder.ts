@@ -9,6 +9,7 @@ import { getTestPrismaClient } from '@/test/db/prisma-test-client';
 /**
  * 실DB(Testcontainers) Prisma 클라이언트를 PrismaService 위치에 주입한다. RequestContextService(ALS)도 기본
  * 제공한다 — AuditLogRepository 등 요청 컨텍스트를 주입받는 provider가 어디서나 resolve 되도록(run() 밖이면 빈 컨텍스트).
+ * imports에 PrismaModule을 품은 모듈 트리(AppModule)가 와도 같은 클라이언트를 쓰도록 override도 건다.
  */
 export async function createTestingModuleWithRealDb(
   metadata: ModuleMetadata,
@@ -25,7 +26,10 @@ export async function createTestingModuleWithRealDb(
       },
       RequestContextService,
     ],
-  }).compile();
+  })
+    .overrideProvider(PrismaService)
+    .useValue(prisma)
+    .compile();
 
   return { module, prisma };
 }

@@ -65,6 +65,15 @@ describe('ProductCategoryService (real DB)', () => {
       ]);
     });
 
+    it('type이 null이면 미지정과 같이 전체를 반환한다', async () => {
+      await createCategory(prisma, { category_type: 'EVENT', name: '생일' });
+      await createCategory(prisma, { category_type: 'STYLE', name: '입체' });
+
+      const result = await service.categories({ type: null });
+
+      expect(result.map((c) => c.name)).toEqual(['생일', '입체']);
+    });
+
     it('type 지정 시 해당 타입만 반환한다', async () => {
       await createCategory(prisma, { category_type: 'EVENT', name: '생일' });
       await createCategory(prisma, { category_type: 'STYLE', name: '입체' });

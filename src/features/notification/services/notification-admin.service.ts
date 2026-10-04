@@ -142,7 +142,10 @@ export class AdminNotificationService extends AdminBaseService {
       limit: input?.limit ?? null,
       cursor: input?.cursor != null ? parseIdCursor(input.cursor) : null,
     });
-    const filter = { type: input?.type, targetKind: input?.targetKind };
+    const filter = {
+      type: input?.type ?? undefined,
+      targetKind: input?.targetKind ?? undefined,
+    };
     const [rows, totalCount] = await Promise.all([
       this.repo.listBroadcasts({ ...filter, ...normalized }),
       this.repo.countBroadcasts(filter),
