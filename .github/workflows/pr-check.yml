@@ -221,7 +221,7 @@ jobs:
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: coverage/report.json
-          retention-days: 1
+          retention-days: 7 # 하루 뒤 coverage-report만 재실행해도 샤드가 남아 있게
           overwrite: true # 잡 재실행 때 같은 이름 충돌 방지
 
   # 샤드 결과를 합쳐 임계를 검사하고(테스트 실패·샤드 누락·임계 미달이면 실패) Codecov에 올린다. 테스트가 실패해도 돌아
@@ -345,6 +345,7 @@ jobs:
     needs: [static, scripts, build, test, coverage-report]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions: {}
 
     steps:
       - name: Require every needed job to succeed
