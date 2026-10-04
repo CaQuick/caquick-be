@@ -11,6 +11,7 @@ import {
   RAW_RESPONSE_PATHS,
 } from '@/global/interceptors/api-response.interceptor';
 import { testAuthConfig } from '@/test/auth-config';
+import { listenOnLoopback } from '@/test/http-app';
 
 const KEYS = generateEphemeralKeyMaterial();
 
@@ -82,7 +83,7 @@ describe('JWKS HTTP 응답', () => {
     app = module.createNestApplication();
     // main.ts와 같은 배선(같은 상수)
     app.useGlobalInterceptors(new ApiResponseInterceptor(RAW_RESPONSE_PATHS));
-    await app.init();
+    await listenOnLoopback(app);
   });
 
   afterAll(async () => {

@@ -78,8 +78,10 @@ export class OidcLoginService {
 
     const account = await this.upsertAccountFromOidc(provider, userInfo);
 
+    // OIDC 계정은 구매자라 자격증명(비밀번호)이 없다
     const { accessToken } = await this.tokens.issueAuthTokens({
       accountId: account.id,
+      credentialVersion: null,
       req,
       res,
     });

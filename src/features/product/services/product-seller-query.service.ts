@@ -70,7 +70,8 @@ export class SellerProductQueryService extends SellerBaseService {
     productId: bigint,
   ): Promise<SellerProductOutput> {
     const ctx = await this.requireSellerContext(accountId);
-    const row = await this.productRepository.findProductById({
+    // 목록이 숨김 상품도 보여주므로 상세도 is_active와 무관하게 연다
+    const row = await this.productRepository.findProductByIdIncludingInactive({
       productId,
       storeId: ctx.storeId,
     });

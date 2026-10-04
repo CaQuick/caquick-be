@@ -88,7 +88,7 @@ export class AdminBannerService extends AdminBaseService {
 
     const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
-      items: paged.items.map(toAdminBannerOutput),
+      items: await this.toOutputs(paged.items),
       totalCount,
       hasMore: paged.hasMore,
       nextCursor: paged.nextCursor,
@@ -100,7 +100,7 @@ export class AdminBannerService extends AdminBaseService {
     bannerId: bigint,
   ): Promise<AdminBannerOutput> {
     await this.requireAdminContext(accountId);
-    return toAdminBannerOutput(await this.requireBanner(bannerId));
+    return this.toOutput(await this.requireBanner(bannerId));
   }
 
   async adminCreateBanner(
@@ -158,7 +158,7 @@ export class AdminBannerService extends AdminBaseService {
       }),
     );
 
-    return toAdminBannerOutput(row);
+    return this.toOutput(row);
   }
 
   async adminUpdateBanner(
@@ -217,7 +217,7 @@ export class AdminBannerService extends AdminBaseService {
     );
     if (!row) throw new DomainException('BANNER_NOT_FOUND');
 
-    return toAdminBannerOutput(row);
+    return this.toOutput(row);
   }
 
   async adminDeleteBanner(
@@ -237,6 +237,19 @@ export class AdminBannerService extends AdminBaseService {
     if (!deleted) throw new DomainException('BANNER_NOT_FOUND');
 
     return true;
+  }
+
+  /** 링크 대상 노출 가능 여부는 저장 후 대상이 내려가며 바뀌므로 응답마다 다시 판정한다. */
+  private async toOutputs(rows: Banner[]): Promise<AdminBannerOutput[]> {
+    const visible = await this.repo.findLinkTargetVisibleBannerIds(
+      rows.map((row) => row.id),
+    );
+    return rows.map((row) => toAdminBannerOutput(row, visible.has(row.id)));
+  }
+
+  private async toOutput(row: Banner): Promise<AdminBannerOutput> {
+    const [output] = await this.toOutputs([row]);
+    return output;
   }
 
   private async requireBanner(bannerId: bigint): Promise<Banner> {

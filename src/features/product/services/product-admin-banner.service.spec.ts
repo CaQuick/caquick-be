@@ -2,6 +2,7 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { ProductAdminRepository } from '@/features/product/repositories/product-admin.repository';
+import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { AdminBannerService } from '@/features/product/services/product-admin-banner.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -21,6 +22,7 @@ import {
 
 describe('AdminBannerService (real DB)', () => {
   let service: AdminBannerService;
+  let buyerRepo: ProductRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -29,11 +31,13 @@ describe('AdminBannerService (real DB)', () => {
         ...s3TestProviders(),
         AdminBannerService,
         ProductAdminRepository,
+        ProductRepository,
         AccountAdminRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     service = module.get(AdminBannerService);
+    buyerRepo = module.get(ProductRepository);
     prisma = p;
   });
 
@@ -60,8 +64,11 @@ describe('AdminBannerService (real DB)', () => {
       placement: 'HOME_MAIN' | 'HOME_SUB' | 'CATEGORY' | 'STORE' | 'SEARCH';
       is_active: boolean;
       link_type: 'NONE' | 'URL' | 'PRODUCT' | 'STORE' | 'CATEGORY';
+      link_product_id: bigint | null;
       link_store_id: bigint | null;
+      link_category_id: bigint | null;
       link_url: string | null;
+      sort_order: number;
     }> = {},
   ) {
     return prisma.banner.create({
@@ -69,8 +76,11 @@ describe('AdminBannerService (real DB)', () => {
         placement: overrides.placement ?? 'HOME_MAIN',
         image_url: 'https://i.example/b.png',
         link_type: overrides.link_type ?? 'NONE',
+        link_product_id: overrides.link_product_id ?? null,
         link_store_id: overrides.link_store_id ?? null,
+        link_category_id: overrides.link_category_id ?? null,
         link_url: overrides.link_url ?? null,
+        sort_order: overrides.sort_order ?? 0,
         is_active: overrides.is_active ?? true,
       },
     });
@@ -647,6 +657,117 @@ describe('AdminBannerService (real DB)', () => {
       await expect(
         service.adminDeleteBanner(actor, banner.id),
       ).rejects.toThrowDomain(404);
+    });
+  });
+
+  describe('linkTargetAvailable', () => {
+    // 저장 뒤 대상이 내려간 상황을 직접 만든다 — 저장 시점 검증은 숨겨진 대상을 받지 않는다
+    type TargetState = { is_active?: boolean; deleted_at?: Date };
+    const inactive: TargetState = { is_active: false };
+    const deleted: TargetState = { deleted_at: new Date() };
+    const productLink = async (
+      own: TargetState = {},
+      store: TargetState = {},
+    ) => ({
+      link_type: 'PRODUCT' as const,
+      link_product_id: (
+        await createProduct(prisma, {
+          ...own,
+          store_id: (await createStore(prisma, store)).id,
+        })
+      ).id,
+    });
+    const storeLink = async (own: TargetState = {}) => ({
+      link_type: 'STORE' as const,
+      link_store_id: (await createStore(prisma, own)).id,
+    });
+    const categoryLink = async (own: TargetState = {}) => ({
+      link_type: 'CATEGORY' as const,
+      link_category_id: (await createCategory(prisma, own)).id,
+    });
+
+    it.each([
+      ['NONE', true, () => Promise.resolve({ link_type: 'NONE' as const })],
+      [
+        'URL',
+        true,
+        () =>
+          Promise.resolve({
+            link_type: 'URL' as const,
+            link_url: 'https://caquick.example/e',
+          }),
+      ],
+      ['노출 중인 상품', true, () => productLink()],
+      ['비활성 상품', false, () => productLink(inactive)],
+      ['삭제된 상품', false, () => productLink(deleted)],
+      ['비활성 매장의 상품', false, () => productLink({}, inactive)],
+      ['삭제된 매장의 상품', false, () => productLink({}, deleted)],
+      ['노출 중인 매장', true, () => storeLink()],
+      ['비활성 매장', false, () => storeLink(inactive)],
+      ['삭제된 매장', false, () => storeLink(deleted)],
+      ['노출 중인 카테고리', true, () => categoryLink()],
+      ['비활성 카테고리', false, () => categoryLink(inactive)],
+      ['삭제된 카테고리', false, () => categoryLink(deleted)],
+    ])(
+      '%s 링크면 linkTargetAvailable=%s이고 구매자 조회의 노출 여부와 같다',
+      async (_label, expected, makeLink) => {
+        const banner = await makeBanner(await makeLink());
+
+        const list = await service.adminBanners(await admin());
+        const single = await service.adminBanner(await admin(), banner.id);
+        const shown = await buyerRepo.findHomeBanner({ now: new Date() });
+
+        expect(list.items[0].linkTargetAvailable).toBe(expected);
+        expect(single.linkTargetAvailable).toBe(expected);
+        expect(shown !== null).toBe(expected);
+      },
+    );
+
+    it('대상이 숨겨진 상위 배너는 구매자 조회가 건너뛰고 관리자 목록에는 false로 드러난다', async () => {
+      const hidden = await makeBanner({
+        ...(await productLink(inactive)),
+        sort_order: 0,
+      });
+      const next = await makeBanner({ sort_order: 1 });
+
+      const shown = await buyerRepo.findHomeBanner({ now: new Date() });
+      const { items } = await service.adminBanners(await admin());
+
+      expect(shown?.id).toBe(next.id);
+      expect(
+        Object.fromEntries(items.map((b) => [b.id, b.linkTargetAvailable])),
+      ).toEqual({
+        [hidden.id.toString()]: false,
+        [next.id.toString()]: true,
+      });
+    });
+
+    it('생성·수정 응답도 그 시점의 대상 상태로 판정한다', async () => {
+      const target = await createStore(prisma);
+      const created = await service.adminCreateBanner(await admin(), {
+        placement: 'HOME_MAIN',
+        imageUrl: ownedUploadUrl('BANNER_IMAGE', await admin(), 'x.png'),
+        linkType: 'STORE',
+        linkStoreId: target.id.toString(),
+      });
+      expect(created.linkTargetAvailable).toBe(true);
+
+      await prisma.store.update({
+        where: { id: target.id },
+        data: { is_active: false },
+      });
+      const stale = await service.adminBanner(
+        await admin(),
+        BigInt(created.id),
+      );
+      expect(stale.linkTargetAvailable).toBe(false);
+
+      // 대상이 내려간 배너는 링크를 바꿔야 저장된다 — 바뀐 링크로 다시 판정한다
+      const updated = await service.adminUpdateBanner(await admin(), {
+        bannerId: created.id,
+        linkType: 'NONE',
+      });
+      expect(updated.linkTargetAvailable).toBe(true);
     });
   });
 

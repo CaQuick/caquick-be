@@ -254,6 +254,10 @@ describe('OidcLoginService', () => {
         providerDisplayName: 'Test User',
         providerProfileImageUrl: 'https://example.com/photo.jpg',
       });
+      // 구매자는 자격증명이 없다 — 세션 버전 null
+      expect(mockRefreshSessions.createRefreshSession).toHaveBeenCalledWith(
+        expect.objectContaining({ credentialVersion: null }),
+      );
       expect(mockRes.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE.USER,
         expect.any(String),

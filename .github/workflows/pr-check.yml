@@ -16,7 +16,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  # check(필수 체크)는 아래 잡들을 모으는 집계 잡이다. 잡을 나눠 나란히 돌리고, 테스트는 샤드로 쪼갠다.
+  static:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -25,15 +26,34 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup Node.js (24.x) & Yarn cache
+        id: node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24.x"
           cache: "yarn"
 
+      # node_modules를 통째로 캐시한다 — 공개 레포 PR은 yarn hardened 모드라 설치가 약 49초(push 28초)다. 적중하면 설치를 건너뛴다
+      - name: node_modules cache
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
+
       - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
         run: |
           corepack enable
           yarn install --immutable
+
+      # 캐시 적중이면 postinstall(prisma generate)이 돌지 않는다 — 생성 클라이언트(src/generated)는 캐시 밖이다
+      - name: Prisma generate (node_modules 캐시 적중)
+        if: steps.modules.outputs.cache-hit == 'true'
+        run: |
+          corepack enable
+          yarn prisma:generate
 
       - name: GraphQL codegen
         run: yarn graphql:codegen
@@ -52,18 +72,260 @@ jobs:
       - name: SDL description coverage check
         run: yarn docs:check
 
-      - name: Script unit tests
-        run: yarn test:scripts
-
       # 아키텍처 의존 규칙 게이트(순환·Prisma-ban·레이어). 로컬 pre-push(validate:push)뿐 아니라
       # 보호된 check status에서도 강제해야 --no-verify/Husky 미설치 환경의 우회를 막는다.
       - name: Architecture check (dependency-cruiser)
         run: yarn arch:check
 
-      # 전체 회귀·커버리지 임계는 CI(check·coverage-report)가 맡는다 — 로컬 pre-push는 변경에 닿는 spec만 돌린다.
-      - name: Test with coverage
-        run: yarn test:cov
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        id: node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: node_modules cache
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
+
+      - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: Prisma generate (node_modules 캐시 적중)
+        if: steps.modules.outputs.cache-hit == 'true'
+        run: |
+          corepack enable
+          yarn prisma:generate
+
+      - name: Script unit tests
+        run: yarn test:scripts
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        id: node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: node_modules cache
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
+
+      - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: Prisma generate (node_modules 캐시 적중)
+        if: steps.modules.outputs.cache-hit == 'true'
+        run: |
+          corepack enable
+          yarn prisma:generate
+
+      - name: Build (연속 2회 — 증분 캐시 오염 회귀 검출)
+        run: |
+          yarn graphql:docs
+          yarn build
+          # 왜 2회인가: deleteOutDir이 dist를 지우는데 tsbuildinfo가 dist 밖에 있으면
+          # 캐시만 살아남아 tsc가 "전부 최신"으로 오판, emit을 건너뛰고 dist가 빈 채로
+          # 남는다. clean 체크아웃 1회 빌드로는 이 상태가 재현되지 않아 PR #259 회귀가
+          # 8일간 CI를 그대로 통과했다. 2회차가 그 상태를 만들어 준다.
+          yarn build
+          test -f dist/main.js
+
+  # 전체 회귀를 샤드로 나눠 돌린다. 임계는 샤드마다 끄고('--coverageThreshold={}') coverage-report가 합친 맵으로 검사한다 —
+  # 샤드 하나의 커버리지는 다른 샤드가 덮은 파일을 0으로 세서 늘 미달이다.
+  # --coverage는 남긴다: jest.config.js가 이 플래그로 LanguageService 모드를 고른다(빼면 branches 수가 달라진다).
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      SHARD: ${{ matrix.shard }}
+      SHARD_TOTAL: 2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        id: node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: node_modules cache
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
+
+      - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: Prisma generate (node_modules 캐시 적중)
+        if: steps.modules.outputs.cache-hit == 'true'
+        run: |
+          corepack enable
+          yarn prisma:generate
+
+      - name: Test shard (coverage)
+        run: |
+          mkdir -p coverage
+          yarn jest --ci --coverage --shard="$SHARD/$SHARD_TOTAL" --json --outputFile=coverage/report.json --testLocationInResults '--coverageThreshold={}' --coverageReporters=text-summary
+
+      # 테스트가 실패해도 올린다 — coverage-report가 실패 내역을 PR 댓글에 싣는다
+      - name: Upload shard result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage/report.json
+          retention-days: 7 # 하루 뒤 coverage-report만 재실행해도 샤드가 남아 있게
+          overwrite: true # 잡 재실행 때 같은 이름 충돌 방지
+
+  # 샤드 결과를 합쳐 임계를 검사하고(테스트 실패·샤드 누락·임계 미달이면 실패) Codecov에 올린다. 테스트가 실패해도 돌아
+  # PR 댓글에 실패를 보인다. push 실행은 합친 report.json을 기준 아티팩트로 남기고, PR 실행은 base 브랜치의 그 아티팩트와 비교한다.
+  coverage-report:
+    needs: test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # base 브랜치 push 실행의 기준 아티팩트 조회
+      pull-requests: write
+      checks: write
+    env:
+      SHARD_TOTAL: 2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js (24.x) & Yarn cache
+        id: node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.x"
+          cache: "yarn"
+
+      - name: node_modules cache
+        id: modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules
+            .yarn/install-state.gz
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}
+
+      - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: Prisma generate (node_modules 캐시 적중)
+        if: steps.modules.outputs.cache-hit == 'true'
+        run: |
+          corepack enable
+          yarn prisma:generate
+
+      - name: Download shard results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-shard-*
+          path: coverage/shards
+
+      - name: Merge coverage (임계는 jest.config.js)
+        run: yarn coverage:merge coverage/shards coverage
+
+      # PR 비교의 기준. 업로드가 실패해도 배포(main CI 성공)를 막지 않는다 — 다음 push가 다시 올린다
+      - name: Upload base coverage (push)
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-json
+          path: coverage/report.json
+          retention-days: 90
+          overwrite: true
+
+      # 기준은 이 레포 base 브랜치의 성공한 push 실행에서만 받는다 — PR 실행의 아티팩트는 PR 코드가 만든 것이라 믿지 않는다.
+      # base 커밋의 실행이 먼저, 없으면 그 브랜치의 최근 실행. 그래도 없으면 head를 기준 자리에 둔다(차이 0으로 표시).
+      # 기준 경로는 늘 같아야 한다 — 액션은 입력 경로로 댓글을 식별해 경로가 바뀌면 댓글을 새로 단다.
+      - name: Fetch base coverage
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && hashFiles('coverage/report.json') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          runs() {
+            gh api "repos/$REPO/actions/workflows/pr-check.yml/runs?event=push&status=success&branch=$BASE_REF$1" \
+              --jq '.workflow_runs[] | select(.head_repository.full_name == env.REPO) | .id' || true
+          }
+          mkdir -p coverage/base
+          for run in $( { runs "&head_sha=$BASE_SHA&per_page=1"; runs "&per_page=5"; } | awk '!seen[$0]++'); do
+            if gh run download "$run" -R "$REPO" -n coverage-report-json -D coverage/base; then
+              echo "기준: $BASE_REF push 실행 $run"
+              exit 0
+            fi
+          done
+          echo "::notice::$BASE_REF의 기준 커버리지 아티팩트가 없어 head를 기준으로 둔다(차이 0)"
+          cp coverage/report.json coverage/base/report.json
+
+      - name: Coverage Report (jest-coverage-report)
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && hashFiles('coverage/report.json') != '' }}
+        uses: ArtiomTr/jest-coverage-report-action@7f750dd50f5585533321eb7ebc482b936b49a5d4 # v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          coverage-file: coverage/report.json
+          base-coverage-file: coverage/base/report.json
+          annotations: failed-tests
+
+      # 댓글 액션 뒤에 둔다 — codecov-action은 업로드 토큰(CC_TOKEN)을 GITHUB_ENV로 내보내 뒤 단계 env에 남긴다
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
         with:
@@ -76,16 +338,22 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-      - name: Build (연속 2회 — 증분 캐시 오염 회귀 검출)
+  # 필수 체크 check. 건너뛴 잡은 GitHub에서 성공으로 보고되고(선행 잡이 실패하면 needs만 건 잡은 skipped), 그 성공이 필수 체크를
+  # 통과시킨다 — 그래서 if: always()로 늘 돌고 선행 결과가 전부 success인지 직접 본다. 건너뜀·취소도 실패다.
+  check:
+    if: always()
+    needs: [static, scripts, build, test, coverage-report]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+
+    steps:
+      - name: Require every needed job to succeed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          yarn graphql:docs
-          yarn build
-          # 왜 2회인가: deleteOutDir이 dist를 지우는데 tsbuildinfo가 dist 밖에 있으면
-          # 캐시만 살아남아 tsc가 "전부 최신"으로 오판, emit을 건너뛰고 dist가 빈 채로
-          # 남는다. clean 체크아웃 1회 빌드로는 이 상태가 재현되지 않아 PR #259 회귀가
-          # 8일간 CI를 그대로 통과했다. 2회차가 그 상태를 만들어 준다.
-          yarn build
-          test -f dist/main.js
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'length > 0 and all(.[]; .result == "success")' > /dev/null
 
   # arm64 앱 이미지(홈서버 맥미니). check와 나란히 돌려 배포까지 걸리는 시간을 줄인다 — Deploy는 이 워크플로(CI) 전체가
   # 성공해야 시작하므로, check가 실패한 커밋은 이미지가 올라가도 배포되지 않는다.
@@ -132,38 +400,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  coverage-report:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
-      checks: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Node.js (24.x) & Yarn cache
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: "24.x"
-          cache: "yarn"
-
-      - name: Install dependencies
-        run: |
-          corepack enable
-          yarn install --immutable
-
-      - name: Coverage Report (jest-coverage-report)
-        uses: ArtiomTr/jest-coverage-report-action@7f750dd50f5585533321eb7ebc482b936b49a5d4 # v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          test-script: yarn jest --coverage --ci
-          skip-step: install
-          annotations: failed-tests
 
   pr-title:
     if: github.event_name == 'pull_request'

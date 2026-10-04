@@ -4,13 +4,14 @@ import type { AuthRefreshSession } from '@/generated/prisma/client';
 export const REFRESH_SESSION_REPOSITORY = Symbol('REFRESH_SESSION_REPOSITORY');
 
 export interface IRefreshSessionRepository {
-  /** 토큰은 hash만 저장한다. */
+  /** 토큰은 hash만 저장한다. credentialVersion = 발급 근거가 된 password_updated_at(refresh가 현재 값과 비교한다). */
   createRefreshSession(args: {
     accountId: bigint;
     tokenHash: string;
     userAgent?: string;
     ipAddress?: string;
     expiresAt: Date;
+    credentialVersion: Date | null;
   }): Promise<AuthRefreshSession>;
 
   findActiveRefreshSessionByHash(
@@ -24,6 +25,7 @@ export interface IRefreshSessionRepository {
     userAgent?: string;
     ipAddress?: string;
     newExpiresAt: Date;
+    credentialVersion: Date | null;
   }): Promise<AuthRefreshSession>;
 
   revokeRefreshSession(sessionId: bigint): Promise<AuthRefreshSession>;

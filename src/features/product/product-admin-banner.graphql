@@ -69,6 +69,11 @@ type AdminBanner {
   """
   linkCategoryId: ID
   """
+  링크 대상이 지금 노출 가능한지. 구매자 앱과 같은 기준(상품·매장·카테고리가 활성·미삭제, 상품은 소속 매장까지)이며,
+  false면 구매자 앱이 이 배너를 건너뛰고 다음 배너를 노출한다. linkType이 NONE·URL이면 항상 true.
+  """
+  linkTargetAvailable: Boolean!
+  """
   노출 시작 일시. null이면 시작 제한 없음.
   """
   startsAt: DateTime

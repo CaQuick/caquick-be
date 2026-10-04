@@ -5,6 +5,7 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { bannerLinkTargetVisibleWhere } from '@/features/product/repositories/banner-link-target.helper';
 import {
   type BannerLinkType,
   type CategoryType,
@@ -262,55 +263,6 @@ export class ProductRepository {
       select: { id: true },
     });
     return Boolean(found);
-  }
-
-  async findProductById(args: { productId: bigint; storeId: bigint }) {
-    return this.prisma.product.findFirst({
-      where: {
-        id: args.productId,
-        store_id: args.storeId,
-        is_active: true,
-      },
-      // soft-delete extension은 root만 patch하므로 nested relation에 가드를 명시한다
-      include: {
-        images: {
-          where: activeWhere,
-          orderBy: { sort_order: 'asc' },
-        },
-        product_categories: {
-          // 링크·대상 카테고리의 soft-delete 가드. is_active는 셀러 화면에서
-          // 기존 지정을 계속 보여줘야 하므로 걸지 않는다.
-          where: { ...activeWhere, category: activeWhere },
-          include: {
-            category: true,
-          },
-        },
-        product_tags: {
-          where: { ...activeWhere, tag: activeWhere },
-          include: {
-            tag: true,
-          },
-        },
-        option_groups: {
-          where: activeWhere,
-          orderBy: { sort_order: 'asc' },
-          include: {
-            option_items: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-          },
-        },
-        custom_template: {
-          include: {
-            text_tokens: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-          },
-        },
-      },
-    });
   }
 
   async findProductByIdIncludingInactive(args: {
@@ -882,6 +834,7 @@ export class ProductRepository {
           },
           include: {
             text_tokens: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -922,6 +875,7 @@ export class ProductRepository {
           },
           include: {
             text_tokens: {
+              where: activeWhere,
               orderBy: { sort_order: 'asc' },
             },
           },
@@ -1361,28 +1315,7 @@ export class ProductRepository {
         OR: [{ starts_at: null }, { starts_at: { lte: now } }],
         AND: [
           { OR: [{ ends_at: null }, { ends_at: { gt: now } }] },
-          {
-            // 링크 대상이 내려간(비활성/삭제) 배너를 노출하면 클릭이 죽은 화면으로
-            // 떨어지므로 대상 활성까지 확인하고 다음 배너로 넘어간다
-            OR: [
-              { link_type: { in: ['NONE', 'URL'] } },
-              {
-                link_type: 'PRODUCT',
-                link_product: {
-                  ...visibleWhere,
-                  store: visibleWhere,
-                },
-              },
-              {
-                link_type: 'STORE',
-                link_store: visibleWhere,
-              },
-              {
-                link_type: 'CATEGORY',
-                link_category: visibleWhere,
-              },
-            ],
-          },
+          bannerLinkTargetVisibleWhere,
         ],
       },
       select: {

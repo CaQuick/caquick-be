@@ -77,14 +77,17 @@ describe('TokenService', () => {
   });
 
   describe('signAccessToken', () => {
-    it('신원 클레임(sub·typ·role·mustChangePassword)만 서명한다 — 시간·발급자는 서명 옵션 몫', () => {
-      const result = service.signAccessToken({
-        id: BigInt(42),
-        status: 'ACTIVE',
-        account_type: 'USER',
-        credential: null,
-        store: null,
-      });
+    it('신원 클레임(sub·typ·role·mustChangePassword·cv)만 서명한다 — 시간·발급자는 서명 옵션 몫', () => {
+      const result = service.signAccessToken(
+        {
+          id: BigInt(42),
+          status: 'ACTIVE',
+          account_type: 'USER',
+          credential: null,
+          store: null,
+        },
+        null,
+      );
 
       expect(result).toBe('signed-token');
       expect(jwt.sign).toHaveBeenCalledTimes(1);
@@ -93,17 +96,21 @@ describe('TokenService', () => {
         typ: 'access',
         role: 'USER',
         mustChangePassword: false,
+        cv: 0,
       });
     });
 
     it('판매자는 storeId를, 비밀번호 변경 대상은 플래그를 클레임에 담는다', () => {
-      service.signAccessToken({
-        id: BigInt(7),
-        status: 'ACTIVE',
-        account_type: 'SELLER',
-        credential: { must_change_password: true, password_updated_at: null },
-        store: { id: BigInt(3) },
-      });
+      service.signAccessToken(
+        {
+          id: BigInt(7),
+          status: 'ACTIVE',
+          account_type: 'SELLER',
+          credential: { must_change_password: true, password_updated_at: null },
+          store: { id: BigInt(3) },
+        },
+        null,
+      );
 
       expect(jwt.sign).toHaveBeenCalledWith({
         sub: '7',
@@ -111,7 +118,30 @@ describe('TokenService', () => {
         role: 'SELLER',
         mustChangePassword: true,
         storeId: '3',
+        cv: 0,
       });
+    });
+
+    it('cv는 넘겨받은 버전(ms)이다 — 계정 행의 password_updated_at을 다시 쓰지 않는다', () => {
+      const verified = new Date('2026-10-04T00:00:00.123Z');
+
+      service.signAccessToken(
+        {
+          id: BigInt(7),
+          status: 'ACTIVE',
+          account_type: 'SELLER',
+          credential: {
+            must_change_password: false,
+            password_updated_at: new Date('2026-10-04T00:00:01.000Z'),
+          },
+          store: null,
+        },
+        verified,
+      );
+
+      expect(jwt.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ cv: verified.getTime() }),
+      );
     });
   });
 
@@ -150,6 +180,7 @@ describe('TokenService', () => {
 
       const result = await service.issueAuthTokens({
         accountId: BigInt(1),
+        credentialVersion: null,
         req: mockReq,
         res: mockRes,
       });
@@ -160,6 +191,7 @@ describe('TokenService', () => {
           accountId: BigInt(1),
           userAgent: 'Mozilla/5.0 TokenSpec',
           ipAddress: '127.0.0.1',
+          credentialVersion: null,
         }),
       );
       expect(mockRes.cookie).toHaveBeenCalledTimes(1);
@@ -206,6 +238,7 @@ describe('TokenService', () => {
       refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
         id: BigInt(7),
         account_id: BigInt(10),
+        credential_version: null,
       } as never);
 
       refreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
@@ -222,6 +255,7 @@ describe('TokenService', () => {
         expect.objectContaining({
           currentSessionId: BigInt(7),
           accountId: BigInt(10),
+          credentialVersion: null,
         }),
       );
       expect(mockRes.cookie).toHaveBeenCalledTimes(1);

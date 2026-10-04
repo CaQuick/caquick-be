@@ -11,7 +11,6 @@ import type { PrismaClient } from '@/generated/prisma/client';
 import { AlertService } from '@/global/alerting';
 import {
   BLACKLIST_READY_TTL_SECONDS,
-  credentialCutoffSec,
   TokenBlacklistService,
 } from '@/global/auth/blacklist';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
@@ -137,7 +136,7 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     await expect(blacklist.lookup(suspended)).resolves.toEqual({
       ready: true,
       status: 'SUSPENDED',
-      credentialCutoffSec: null,
+      credentialCutoffMs: null,
     });
     // 탈퇴 버전도 status_changed_at(단조) — deleted_at이 아니다
     expect(await statusValue(deleted.id)).toBe(
@@ -145,11 +144,11 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     );
     await expect(blacklist.lookup(changed)).resolves.toMatchObject({
       status: null,
-      credentialCutoffSec: credentialCutoffSec(IN_WINDOW),
+      credentialCutoffMs: IN_WINDOW.getTime(),
     });
     expect(await statusOf(oldSuspended)).toBeNull();
     await expect(blacklist.lookup(oldChanged)).resolves.toMatchObject({
-      credentialCutoffSec: null,
+      credentialCutoffMs: null,
     });
   });
 
@@ -335,7 +334,7 @@ describe('BlacklistRebuildService (real DB + real Redis)', () => {
     await expect(blacklist.lookup(BigInt(1))).resolves.toEqual({
       ready: true,
       status: null,
-      credentialCutoffSec: null,
+      credentialCutoffMs: null,
     });
   });
 

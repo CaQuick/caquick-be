@@ -8,6 +8,7 @@ import type { App } from 'supertest/types';
 import { AppModule } from '@/app.module';
 import { PUB_SUB } from '@/global/pubsub';
 import { PrismaService } from '@/prisma';
+import { listenOnLoopback } from '@/test/http-app';
 
 // 역할별 리스너 게이트: 컨트롤러가 어느 모듈에 있든 worker에서는 /health·/metrics 밖이 전부 404여야 한다.
 // module-wiring.spec은 compile만 보므로 HTTP 노출은 실제 앱을 띄워 본다(DB·Redis는 대역, 디스패처·크론은 env로 끔).
@@ -63,7 +64,7 @@ describe('역할별 HTTP 노출 (real app)', () => {
       .useValue(Object.assign(new PubSub(), { close: () => Promise.resolve() }))
       .compile();
     const app = module.createNestApplication<INestApplication<App>>();
-    await app.init();
+    await listenOnLoopback(app);
     return app;
   }
 

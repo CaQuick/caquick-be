@@ -1,4 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parse } from 'yaml';
@@ -20,6 +29,10 @@ interface Job {
   'runs-on': string | string[];
   environment?: string;
   if?: string;
+  needs?: string | string[];
+  strategy?: { 'fail-fast'?: boolean; matrix: Record<string, unknown[]> };
+  env?: Record<string, string | number>;
+  permissions?: Record<string, string>;
   steps: Step[];
 }
 interface Triggers {
@@ -30,6 +43,7 @@ interface Triggers {
 }
 interface Workflow {
   on: Triggers;
+  permissions?: Record<string, string>;
   concurrency?: Record<string, unknown>;
   jobs: Record<string, Job>;
 }
@@ -232,6 +246,227 @@ describe('pr-check.yml run 블록', () => {
     for (const job of Object.values(wf.jobs)) {
       for (const step of job.steps) expect(step.run ?? '').not.toContain('${{');
     }
+  });
+});
+
+/** shell을 지정하지 않은 run 블록과 같은 셸(bash -e {0}, 실행 로그로 확인)로 실제로 돌린다. */
+function runStep(run: string, env: Record<string, string>, cwd?: string) {
+  return spawnSync('bash', ['-e', '-c', run], {
+    cwd,
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
+  });
+}
+
+describe('pr-check.yml 잡 구성', () => {
+  const wf = workflow('.github/workflows/pr-check.yml');
+  const { check, test, 'coverage-report': coverage } = wf.jobs;
+  const list = (needs?: string | string[]) => [needs ?? []].flat();
+  const step = (job: Job, name: string) => {
+    const found = job.steps.find((s) => s.name === name);
+    if (!found) throw new Error(`step 없음: ${name}`);
+    return found;
+  };
+
+  it('필수 체크 check는 if: always()로 늘 돌고, push·PR 모두에서 도는 잡(image·pr-title 제외)을 전부 기다린다', () => {
+    expect(check.if).toBe('always()');
+    const others = Object.keys(wf.jobs).filter(
+      (name) => !['check', 'image', 'pr-title'].includes(name),
+    );
+    expect(list(check.needs).sort()).toEqual(others.sort());
+  });
+
+  // 건너뛴 잡은 GitHub에서 성공으로 보고된다 — 선행 잡이 실패해 skipped가 된 잡이 필수 체크를 통과시키지 않게 결과를 직접 본다
+  it.each([
+    ['전부 success면 통과', 0, ['success', 'success', 'success']],
+    ['반증: failure가 하나라도 있으면 실패', 1, ['success', 'failure']],
+    ['반증: skipped도 실패', 1, ['success', 'skipped']],
+    ['반증: cancelled도 실패', 1, ['cancelled', 'success']],
+    ['반증: needs가 비면 실패', 1, []],
+  ])('check 집계: %s(종료 코드 %i)', (_label, status, results) => {
+    const gate = check.steps.find((s) => s.run)!;
+    expect(gate.env?.NEEDS).toBe('${{ toJSON(needs) }}');
+    const needs = Object.fromEntries(
+      results.map((result, i) => [`job${i}`, { result, outputs: {} }]),
+    );
+
+    expect(runStep(gate.run!, { NEEDS: JSON.stringify(needs) }).status).toBe(
+      status,
+    );
+  });
+
+  it('test는 fail-fast 없는 샤드 행렬이고, coverage-report는 테스트가 실패해도(취소만 제외) 같은 샤드 수로 합친다', () => {
+    expect(list(coverage.needs)).toEqual(['test']);
+    expect(coverage.if).toBe('${{ !cancelled() }}');
+    expect(test.strategy?.['fail-fast']).toBe(false);
+    const shards = test.strategy?.matrix.shard;
+    expect(shards).toEqual([1, 2]);
+    expect(Number(test.env?.SHARD_TOTAL)).toBe(shards?.length);
+    expect(Number(coverage.env?.SHARD_TOTAL)).toBe(shards?.length);
+    const run = test.steps.find((s) => s.run?.includes('jest'))?.run;
+    // --coverage는 LanguageService 모드 선택, 샤드별 임계는 끄고 합친 맵으로 검사, 액션 입력 형식(--json·위치)
+    expect(run).toContain(' --coverage ');
+    expect(run).toContain('--shard="$SHARD/$SHARD_TOTAL"');
+    expect(run).toContain("'--coverageThreshold={}'");
+    expect(run).toContain(
+      '--json --outputFile=coverage/report.json --testLocationInResults',
+    );
+    expect(step(coverage, 'Merge coverage (임계는 jest.config.js)').run).toBe(
+      'yarn coverage:merge coverage/shards coverage',
+    );
+  });
+
+  it('의존성 캐시 키는 yarn.lock·package.json·yarn 설정·릴리즈·OS·아키텍처·node 버전을 담고, 적중하면 설치 대신 prisma generate(postinstall)를 돈다', () => {
+    const cached = Object.entries(wf.jobs).filter(([, job]) =>
+      job.steps.some((s) => s.uses?.startsWith('actions/cache@')),
+    );
+    expect(cached.map(([name]) => name).sort()).toEqual(
+      ['build', 'coverage-report', 'scripts', 'static', 'test'].sort(),
+    );
+    for (const [, job] of cached) {
+      const cache = job.steps.find((s) => s.uses?.startsWith('actions/cache@'));
+      const key = String(cache?.with?.key);
+      for (const part of [
+        '${{ runner.os }}',
+        '${{ runner.arch }}',
+        '${{ steps.node.outputs.node-version }}',
+        // .yarnrc.yml(nodeLinker·yarnPath)·yarn 릴리즈만 바뀌어도 낡은 설치를 복원하지 않게
+        "${{ hashFiles('yarn.lock', 'package.json', '.yarnrc.yml', '.yarn/releases/**') }}",
+      ])
+        expect(key).toContain(part);
+      expect(
+        job.steps.find((s) => s.uses?.startsWith('actions/setup-node@'))?.id,
+      ).toBe('node');
+      expect(step(job, 'Install dependencies')).toMatchObject({
+        if: "steps.modules.outputs.cache-hit != 'true'",
+        run: expect.stringContaining('yarn install --immutable'),
+      });
+      expect(
+        step(job, 'Prisma generate (node_modules 캐시 적중)'),
+      ).toMatchObject({
+        if: "steps.modules.outputs.cache-hit == 'true'",
+        run: expect.stringContaining('yarn prisma:generate'),
+      });
+    }
+  });
+
+  it('반증: Codecov 업로드는 기준 받기·댓글 액션 뒤에 둔다 — codecov-action이 업로드 토큰을 GITHUB_ENV로 뒤 단계에 남긴다', () => {
+    const at = (prefix: string) =>
+      coverage.steps.findIndex((s) =>
+        (s.uses ?? s.name ?? '').startsWith(prefix),
+      );
+    expect(at('codecov/codecov-action@')).toBeGreaterThan(
+      at('ArtiomTr/jest-coverage-report-action@'),
+    );
+    expect(at('codecov/codecov-action@')).toBeGreaterThan(
+      at('Fetch base coverage'),
+    );
+  });
+
+  it('반증: actions: read는 기준 아티팩트를 받는 coverage-report에만 준다', () => {
+    expect(wf.permissions).toEqual({ contents: 'read' });
+    for (const [name, job] of Object.entries(wf.jobs)) {
+      expect({ name, actions: job.permissions?.actions }).toEqual({
+        name,
+        actions: name === 'coverage-report' ? 'read' : undefined,
+      });
+    }
+  });
+
+  describe('기준 커버리지 받기', () => {
+    const fetch = step(coverage, 'Fetch base coverage');
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'base-coverage-'));
+      mkdirSync(join(dir, 'coverage'));
+      writeFileSync(join(dir, 'coverage/report.json'), '{"head":true}');
+      mkdirSync(join(dir, 'bin'));
+      // gh 대역: api는 조회 종류별 run id를 내고, run download는 HAS에 든 run만 성공한다
+      writeFileSync(
+        join(dir, 'bin/gh'),
+        [
+          '#!/bin/bash',
+          'echo "$*" >> "$GH_LOG"',
+          '[ "$1" = api ] && { [ -n "$API_FAIL" ] && exit 1; case "$2" in *head_sha=*) printf "%s\\n" $EXACT;; *) printf "%s\\n" $LATEST;; esac; exit 0; }',
+          'for id in $HAS; do [ "$3" = "$id" ] && { echo "{\\"base\\":$id}" > "${@: -1}/report.json"; exit 0; }; done',
+          'exit 1',
+        ].join('\n'),
+      );
+      chmodSync(join(dir, 'bin/gh'), 0o755);
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('반증: 이 레포 base 브랜치의 성공한 push 실행만 조회한다 — PR 실행의 아티팩트는 PR 코드가 만든 것이다', () => {
+      expect(fetch.run).toContain(
+        'actions/workflows/pr-check.yml/runs?event=push&status=success&branch=$BASE_REF',
+      );
+      expect(fetch.run).toContain(
+        'select(.head_repository.full_name == env.REPO)',
+      );
+      expect(fetch.env).toMatchObject({
+        REPO: '${{ github.repository }}',
+        BASE_REF: '${{ github.base_ref }}',
+        BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+      });
+      // 기준 경로는 고정 — 액션은 입력 경로로 댓글을 식별해 경로가 바뀌면 댓글을 새로 단다
+      expect(
+        coverage.steps.find((s) => s.uses?.startsWith('ArtiomTr/'))?.with,
+      ).toMatchObject({
+        'coverage-file': 'coverage/report.json',
+        'base-coverage-file': 'coverage/base/report.json',
+      });
+    });
+
+    it.each([
+      [
+        'base 커밋의 실행이 먼저',
+        { EXACT: '11', LATEST: '13 12', HAS: '11 12' },
+        '{"base":11}',
+        ['11'],
+      ],
+      [
+        '그 실행에 아티팩트가 없으면 브랜치 최근 실행(중복은 한 번만)',
+        { EXACT: '11', LATEST: '11 12', HAS: '12' },
+        '{"base":12}',
+        ['11', '12'],
+      ],
+      [
+        '반증: 어디에도 없으면 head를 기준 자리에 둔다',
+        { EXACT: '', LATEST: '13', HAS: '' },
+        '{"head":true}',
+        ['13'],
+      ],
+      [
+        '반증: 조회가 실패해도 head로 이어간다',
+        { API_FAIL: '1', HAS: '' },
+        '{"head":true}',
+        [],
+      ],
+    ])('%s', (_label, gh, base, tried) => {
+      const log = join(dir, 'gh.log');
+      const result = runStep(
+        fetch.run!,
+        {
+          ...gh,
+          GH_LOG: log,
+          PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+          REPO: 'CaQuick/caquick-be',
+          BASE_REF: 'develop',
+          BASE_SHA: 'abc',
+        },
+        dir,
+      );
+
+      expect(result.status).toBe(0);
+      expect(
+        readFileSync(join(dir, 'coverage/base/report.json'), 'utf8').trim(),
+      ).toBe(base);
+      const downloads = readFileSync(log, 'utf8')
+        .split('\n')
+        .filter((line) => line.startsWith('run download'))
+        .map((line) => line.split(' ')[2]);
+      expect(downloads).toEqual(tried);
+    });
   });
 });
 
