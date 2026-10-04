@@ -235,18 +235,18 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
-  describe('findProductById (active만)', () => {
-    it('is_active: false면 반환 안함', async () => {
+  describe('findProductByIdIncludingInactive', () => {
+    it('inactive 상품도 반환', async () => {
       const store = await createStore(prisma);
       const inactive = await createProduct(prisma, {
         store_id: store.id,
         is_active: false,
       });
-      const result = await repo.findProductById({
+      const result = await repo.findProductByIdIncludingInactive({
         productId: inactive.id,
         storeId: store.id,
       });
-      expect(result).toBeNull();
+      expect(result?.id).toBe(inactive.id);
     });
 
     it('store_id 불일치면 null', async () => {
@@ -254,7 +254,7 @@ describe('ProductRepository (real DB)', () => {
       const storeB = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: storeA.id });
 
-      const result = await repo.findProductById({
+      const result = await repo.findProductByIdIncludingInactive({
         productId: product.id,
         storeId: storeB.id,
       });
@@ -303,7 +303,7 @@ describe('ProductRepository (real DB)', () => {
         data: { deleted_at: new Date() },
       });
 
-      const result = await repo.findProductById({
+      const result = await repo.findProductByIdIncludingInactive({
         productId: product.id,
         storeId: store.id,
       });
@@ -311,21 +311,6 @@ describe('ProductRepository (real DB)', () => {
         '생일',
       ]);
       expect(result?.product_tags.map((t) => t.tag.name)).toEqual(['레터링']);
-    });
-  });
-
-  describe('findProductByIdIncludingInactive', () => {
-    it('inactive 상품도 반환', async () => {
-      const store = await createStore(prisma);
-      const inactive = await createProduct(prisma, {
-        store_id: store.id,
-        is_active: false,
-      });
-      const result = await repo.findProductByIdIncludingInactive({
-        productId: inactive.id,
-        storeId: store.id,
-      });
-      expect(result?.id).toBe(inactive.id);
     });
   });
 
