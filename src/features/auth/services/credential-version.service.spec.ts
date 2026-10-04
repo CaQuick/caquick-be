@@ -367,4 +367,39 @@ describe('자격증명 버전 — 비밀번호 변경과 겹친 로그인·회�
       expect((await sessionOf(refreshToken)).credential_version).toBeNull();
     });
   });
+
+  // 마이그레이션은 버전을 백필하지 않는다 — 기존 세션은 null로 남는다
+  describe('버전 기록 전에 발급된 세션', () => {
+    it.each([
+      ['비밀번호를 바꾼 적 없는 계정은 이어진다', null, false],
+      [
+        '비밀번호를 바꾼 적 있는 계정은 폐기·거절된다',
+        new Date('2026-10-01T00:00:00.123Z'),
+        true,
+      ],
+    ])('%s', async (_, changedAt, rejected) => {
+      const credential = await makeCredential('SELLER');
+      const issued = await login('SELLER', credential.username);
+      await prisma.authRefreshSession.updateMany({
+        data: { credential_version: null },
+      });
+      await prisma.accountCredential.update({
+        where: { account_id: credential.account_id },
+        data: { password_updated_at: changedAt },
+      });
+
+      const result = refresh('SELLER', issued.refreshToken);
+
+      if (rejected) {
+        await expect(result).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
+        expect(
+          (await sessionOf(issued.refreshToken)).revoked_at,
+        ).not.toBeNull();
+      } else {
+        await expect(result).resolves.toMatchObject({
+          accessToken: expect.any(String),
+        });
+      }
+    });
+  });
 });

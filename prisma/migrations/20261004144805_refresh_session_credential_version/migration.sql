@@ -3,9 +3,5 @@
 -- AlterTable
 ALTER TABLE `auth_refresh_session` ADD COLUMN `credential_version` DATETIME(3) NULL;
 
--- backfill: 살아 있는 세션은 모두 마지막 변경 뒤에 발급됐다(변경이 전 세션을 폐기한다) — 현재 버전을 채워 배포 뒤에도 refresh가 이어지게
-UPDATE `auth_refresh_session` s
-JOIN `account_credential` c ON c.`account_id` = s.`account_id`
-SET s.`credential_version` = c.`password_updated_at`
-WHERE s.`revoked_at` IS NULL;
--- end backfill
+-- 백필하지 않는다: 이미 경쟁으로 살아남은 세션이 있어도 행만으로는 가를 수 없다. null 세션은 비밀번호를 바꾼 적이 있는
+-- 계정이면 다음 refresh에서 폐기되고(1회 재로그인), 바꾼 적이 없는 계정(경쟁 불가)은 null끼리 일치해 이어진다.
