@@ -14,6 +14,7 @@ export * from './search-event.factory';
 export * from './search-history.factory';
 export * from './search-keyword-chip.factory';
 export * from './search-keyword-rank-snapshot.factory';
+export * from './seller-push-device.factory';
 export * from './seller.factory';
 export * from './sequence';
 export * from './store-daily-capacity.factory';

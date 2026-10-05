@@ -1,0 +1,57 @@
+extend type Mutation {
+  """
+  판매자 앱 디바이스의 Expo 푸시 토큰을 등록한다. 판매자 로그인 필수(SELLER 아니면 FORBIDDEN, 매장 없으면 NOT_FOUND).
+  같은 토큰을 다시 보내면 마지막 확인 시각만 갱신되고, 다른 판매자가 쓰던 토큰이면 현재 로그인 판매자가 가져간다(앱 재설치·계정 전환).
+  해제됐던 토큰은 다시 활성화된다. 토큰이 Expo 형식이 아니면 BAD_REQUEST(INVALID_PUSH_TOKEN).
+  앱 시작·로그인마다 호출해도 된다(멱등).
+  """
+  sellerRegisterPushToken(input: SellerRegisterPushTokenInput!): Boolean!
+  """
+  푸시 토큰을 해제한다(로그아웃). 판매자 로그인 필수(SELLER 아니면 FORBIDDEN).
+  매장 컨텍스트를 보지 않으므로 매장이 없는 판매자도 해제할 수 있다.
+  본인이 등록한 토큰만 해제되며, 없거나 남의 토큰이면 아무 일도 하지 않고 true다.
+  """
+  sellerUnregisterPushToken(input: SellerUnregisterPushTokenInput!): Boolean!
+}
+
+"""
+푸시 토큰 등록 입력
+"""
+input SellerRegisterPushTokenInput {
+  """
+  Expo 푸시 토큰. ExponentPushToken[...] 또는 ExpoPushToken[...] 형식, 최대 200자
+  """
+  token: String!
+  """
+  디바이스 플랫폼
+  """
+  platform: PushPlatform!
+  """
+  앱이 부여한 디바이스 식별자(선택, 최대 128자). 같은 기기의 토큰 교체 추적용이며 서버 로직은 토큰만 본다
+  """
+  deviceId: String
+}
+
+"""
+푸시 토큰 해제 입력
+"""
+input SellerUnregisterPushTokenInput {
+  """
+  해제할 Expo 푸시 토큰
+  """
+  token: String!
+}
+
+"""
+푸시 디바이스 플랫폼
+"""
+enum PushPlatform {
+  """
+  iOS(APNs 경유)
+  """
+  IOS
+  """
+  Android(FCM 경유)
+  """
+  ANDROID
+}
