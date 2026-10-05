@@ -115,6 +115,43 @@ describe('expoPushTransport', () => {
       ).rejects.toBeInstanceOf(TimeoutError);
     });
 
+    it('기한을 넘기면 fetch에 넘긴 signal을 abort한다 — fetch가 AbortError로 끝나도 TimeoutError를 던진다', async () => {
+      fetchFn.mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+
+      await expect(
+        transport.send([message(1)], { ...OPTIONS, timeoutMs: 10 }),
+      ).rejects.toBeInstanceOf(TimeoutError);
+      expect(fetchFn.mock.calls[0][1].signal?.aborted).toBe(true);
+    });
+
+    it('헤더는 바로 와도 바디(JSON) 읽기가 기한을 넘기면 TimeoutError — 기한은 바디까지 덮는다', async () => {
+      fetchFn.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => new Promise<never>(() => undefined),
+      } as unknown as Response);
+
+      await expect(
+        transport.send([message(1)], { ...OPTIONS, timeoutMs: 10 }),
+      ).rejects.toBeInstanceOf(TimeoutError);
+      expect(fetchFn.mock.calls[0][1].signal?.aborted).toBe(true);
+    });
+
+    it('제때 끝난 요청의 signal은 abort하지 않는다', async () => {
+      fetchFn.mockResolvedValue(reply({ data: [{ status: 'ok', id: 't' }] }));
+
+      await transport.send([message(1)], OPTIONS);
+
+      expect(fetchFn.mock.calls[0][1].signal?.aborted).toBe(false);
+    });
+
     it('200이어도 errors가 있으면 요청 전체 거절로 던진다', async () => {
       fetchFn.mockResolvedValue(
         reply({ errors: [{ code: 'PUSH_TOO_MANY_EXPERIENCE_IDS' }] }),

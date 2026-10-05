@@ -130,12 +130,13 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
         if (errorCode === EXPO_ERROR_DEVICE_NOT_REGISTERED)
           notRegistered.push(row.push_device_id);
       });
-      await this.deliveries.markTickets(results);
+      // 비활성(멱등)이 먼저 — 행을 종료 상태로 바꾼 뒤 죽으면 재시도가 PENDING을 못 찾아 디바이스가 영영 남는다
       await this.devices.disableByIds(
         notRegistered,
         PUSH_DEVICE_DISABLED_REASON.DEVICE_NOT_REGISTERED,
         sentAt,
       );
+      await this.deliveries.markTickets(results);
       for (const result of results) {
         this.metrics.expoPushSends.inc({ result: result.status });
       }

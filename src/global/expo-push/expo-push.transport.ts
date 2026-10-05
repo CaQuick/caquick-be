@@ -1,4 +1,4 @@
-import { withTimeout } from '@/common/utils/with-timeout';
+import { TimeoutError, withTimeout } from '@/common/utils/with-timeout';
 
 export const EXPO_PUSH_SEND_URL = 'https://exp.host/--/api/v2/push/send';
 export const EXPO_PUSH_RECEIPTS_URL =
@@ -81,11 +81,33 @@ export function createExpoPushTransport(
     };
     if (options.accessToken)
       headers.authorization = `Bearer ${options.accessToken}`;
-    const response = await withTimeout(
-      fetchFn(url, { method: 'POST', headers, body: JSON.stringify(body) }),
-      options.timeoutMs,
-      label,
-    );
+    // 기한은 헤더가 아니라 바디(JSON)까지 덮고, 넘기면 진행 중인 POST를 끊는다 — 재시도와 겹쳐 중복 발송되지 않게
+    const controller = new AbortController();
+    try {
+      return await withTimeout(
+        read(url, headers, body, controller.signal, label),
+        options.timeoutMs,
+        label,
+      );
+    } catch (error) {
+      if (error instanceof TimeoutError) controller.abort();
+      throw error;
+    }
+  }
+
+  async function read(
+    url: string,
+    headers: Record<string, string>,
+    body: unknown,
+    signal: AbortSignal,
+    label: string,
+  ): Promise<unknown> {
+    const response = await fetchFn(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    });
     if (response.status === 401 || response.status === 403)
       throw new ExpoPushAuthError(response.status, label);
     if (!response.ok) throw new ExpoPushHttpError(response.status, label);

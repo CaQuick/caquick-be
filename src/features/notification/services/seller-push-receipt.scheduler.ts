@@ -108,11 +108,12 @@ export class SellerPushReceiptScheduler {
       if (errorCode === EXPO_ERROR_DEVICE_NOT_REGISTERED)
         notRegistered.push(row.push_device_id);
     }
-    await this.deliveries.markReceipts(results, now);
+    // 비활성(멱등)이 먼저 — 행을 닫은 뒤 죽으면 다음 틱이 그 행을 다시 보지 않아 디바이스가 영영 남는다
     await this.devices.disableByIds(
       notRegistered,
       PUSH_DEVICE_DISABLED_REASON.DEVICE_NOT_REGISTERED,
       now,
     );
+    await this.deliveries.markReceipts(results, now);
   }
 }

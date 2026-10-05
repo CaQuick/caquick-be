@@ -73,6 +73,7 @@ function okTickets(messages: ExpoPushMessage[]): ExpoPushTicket[] {
 // 판매자 푸시 전송 — 매장 디바이스 fan-out, 재전달 멱등(ticket 기록 행 제외), 배치 100, ticket 오류·인증 실패 처리.
 describe('SellerPushOutboxConsumer (real DB)', () => {
   let consumer: SellerPushOutboxConsumer;
+  let deliveryRepository: SellerPushDeliveryRepository;
   let metrics: MetricsService;
   let prisma: PrismaClient;
   let cfg: ExpoPushConfig;
@@ -100,6 +101,7 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
       ],
     });
     consumer = module.get(SellerPushOutboxConsumer);
+    deliveryRepository = module.get(SellerPushDeliveryRepository);
     metrics = module.get(MetricsService);
     prisma = p;
   });
@@ -264,6 +266,34 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
       expect(alive.disabled_at).toBeNull();
       expect(await sendsCounter()).toEqual({ TICKET_ERROR: 1, TICKET_OK: 1 });
       expect(Logger.prototype.warn).toHaveBeenCalled();
+    });
+
+    it('ticket 기록(markTickets)이 던져도 DeviceNotRegistered 디바이스는 이미 비활성이다', async () => {
+      const { storeId, devices } = await storeWithDevices(1);
+      send.mockResolvedValue([
+        {
+          status: 'error',
+          message: 'not registered',
+          details: { error: 'DeviceNotRegistered' },
+        },
+      ]);
+      jest
+        .spyOn(deliveryRepository, 'markTickets')
+        .mockRejectedValueOnce(new Error('db down'));
+
+      await expect(consumer.handle(orderSubmitted(storeId))).rejects.toThrow(
+        'db down',
+      );
+
+      expect(
+        await prisma.sellerPushDevice.findUniqueOrThrow({
+          where: { id: devices[0].id },
+        }),
+      ).toMatchObject({
+        disabled_at: NOW,
+        disabled_reason: 'DEVICE_NOT_REGISTERED',
+      });
+      expect((await deliveries())[0].status).toBe('PENDING');
     });
 
     it('오류 코드가 없는 ticket 오류는 UNKNOWN으로 남기고 디바이스는 살려 둔다', async () => {

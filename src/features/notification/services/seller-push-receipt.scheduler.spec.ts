@@ -30,6 +30,7 @@ const minutesAgo = (minutes: number) =>
 // 영수증 조회 — 15분 지난 TICKET_OK만, 오류면 디바이스 비활성, 24h 넘게 영수증이 없으면 UNKNOWN으로 닫는다. 실패는 경보만.
 describe('SellerPushReceiptScheduler (real DB)', () => {
   let scheduler: SellerPushReceiptScheduler;
+  let deliveryRepository: SellerPushDeliveryRepository;
   let prisma: PrismaClient;
   let cfg: ExpoPushConfig;
   const getReceipts = jest.fn<
@@ -53,6 +54,7 @@ describe('SellerPushReceiptScheduler (real DB)', () => {
       ],
     });
     scheduler = module.get(SellerPushReceiptScheduler);
+    deliveryRepository = module.get(SellerPushDeliveryRepository);
     prisma = p;
   });
   afterAll(async () => {
@@ -149,6 +151,34 @@ describe('SellerPushReceiptScheduler (real DB)', () => {
       error_code: 'MessageTooBig',
     });
     expect((await deviceOf(big.device.id)).disabled_at).toBeNull();
+  });
+
+  it('영수증 기록(markReceipts)이 던져도 DeviceNotRegistered 디바이스는 이미 비활성이고 행은 다음 틱에 다시 본다', async () => {
+    const gone = await ticketOk('t-gone', 20);
+    getReceipts.mockResolvedValue({
+      't-gone': {
+        status: 'error',
+        message: 'x',
+        details: { error: 'DeviceNotRegistered' },
+      },
+    });
+    jest
+      .spyOn(deliveryRepository, 'markReceipts')
+      .mockRejectedValueOnce(new Error('db down'));
+
+    await scheduler.checkReceipts();
+
+    expect(await deviceOf(gone.device.id)).toMatchObject({
+      disabled_at: NOW,
+      disabled_reason: 'DEVICE_NOT_REGISTERED',
+    });
+    expect(await deliveryOf(gone.delivery.id)).toMatchObject({
+      status: 'TICKET_OK',
+      receipt_checked_at: null,
+    });
+    expect(alerts.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'expo-push:receipts', detail: 'db down' }),
+    );
   });
 
   it('영수증이 없는 ticket은 24시간이 지나면 RECEIPT_UNKNOWN으로 닫고, 그 전에는 다음 틱에 다시 본다', async () => {
