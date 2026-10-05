@@ -1,5 +1,6 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { MAX_PRODUCT_IMAGES } from '@/features/product/constants/product-seller.constants';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { SellerProductImageService } from '@/features/product/services/product-seller-image.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
@@ -60,9 +61,10 @@ describe('SellerProductImageService (real DB)', () => {
   }
 
   describe('sellerAddProductImage', () => {
-    it('이미지가 이미 5개면 400 (PRODUCT_IMAGE_LIMIT_EXCEEDED)', async () => {
+    it('6장째까지 추가되고 7장째는 PRODUCT_IMAGE_LIMIT_EXCEEDED로 거절된다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
+      // 총 5장을 리터럴로 시드한다 — 상한 상수만 바뀌어도 6장째 추가에서 걸린다
       for (let i = 1; i <= 4; i++) {
         await prisma.productImage.create({
           data: {
@@ -72,13 +74,21 @@ describe('SellerProductImageService (real DB)', () => {
           },
         });
       }
-
-      await expect(
+      const add = (file: string) =>
         service.sellerAddProductImage(account.id, {
           productId: product.id.toString(),
-          imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, '6.png'),
-        }),
-      ).rejects.toThrowDomain(400);
+          imageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id, file),
+        });
+
+      await add('6.png');
+      const seventh = add('7.png');
+      await expect(seventh).rejects.toThrowDomain(
+        'PRODUCT_IMAGE_LIMIT_EXCEEDED',
+      );
+      await expect(seventh).rejects.toThrow(`최대 ${MAX_PRODUCT_IMAGES}장까지`);
+      expect(
+        await prisma.productImage.count({ where: { product_id: product.id } }),
+      ).toBe(MAX_PRODUCT_IMAGES);
     });
 
     it('정상 추가', async () => {
