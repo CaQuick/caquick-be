@@ -28,6 +28,8 @@ export function toAdminOrderSummaryOutput(
     buyerPhone: row.buyer_phone,
     totalPrice: row.total_price,
     createdAt: row.created_at,
+    firstItemName: row.items[0]?.product_name_snapshot ?? null,
+    firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
   };
 }
 

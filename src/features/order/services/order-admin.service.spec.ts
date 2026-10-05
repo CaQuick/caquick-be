@@ -173,15 +173,29 @@ describe('AdminOrderService (real DB)', () => {
       expect(page2.items.map((o) => o.id)).toEqual([ids[0].toString()]);
     });
 
-    it('매장명은 첫 활성 품목의 주문 시점 스냅샷이고 품목이 없으면 null', async () => {
+    it('매장명·첫 품목명·이미지는 첫 활성 품목의 주문 시점 스냅샷이고 품목이 없으면 null', async () => {
       const { order, item } = await orderWithItem();
       await prisma.orderItem.update({
         where: { id: item.id },
-        data: { store_name_snapshot: '주문 시점 매장' },
+        data: {
+          store_name_snapshot: '주문 시점 매장',
+          product_name_snapshot: '주문 시점 상품',
+          product_thumbnail_url_snapshot: 'https://img/old.jpg',
+        },
       });
       await prisma.store.update({
         where: { id: item.store_id },
         data: { store_name: '바뀐 매장' },
+      });
+      await prisma.product.update({
+        where: { id: item.product_id },
+        data: { name: '바뀐 상품' },
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: item.store_id,
+        product_name_snapshot: '삭제된 품목',
+        deleted_at: new Date(),
       });
       const empty = await createOrder(prisma);
 
@@ -191,10 +205,14 @@ describe('AdminOrderService (real DB)', () => {
       expect(byId.get(order.id.toString())).toMatchObject({
         storeId: item.store_id.toString(),
         storeName: '주문 시점 매장',
+        firstItemName: '주문 시점 상품',
+        firstItemImageUrl: 'https://img/old.jpg',
       });
       expect(byId.get(empty.id.toString())).toMatchObject({
         storeId: null,
         storeName: null,
+        firstItemName: null,
+        firstItemImageUrl: null,
       });
     });
   });
@@ -242,7 +260,11 @@ describe('AdminOrderService (real DB)', () => {
           note: '  가게 사정  ',
         });
 
-        expect(result.status).toBe('CANCELED');
+        expect(result).toMatchObject({
+          status: 'CANCELED',
+          firstItemName: 'Product snapshot',
+          firstItemImageUrl: null,
+        });
         const row = await prisma.order.findUniqueOrThrow({
           where: { id: order.id },
         });

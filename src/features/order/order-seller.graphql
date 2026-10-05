@@ -51,6 +51,14 @@ type SellerOrderSummary {
   주문 생성 시각. 목록 정렬 기준이다.
   """
   createdAt: DateTime!
+  """
+  내 매장 첫 품목의 상품명(주문 시점 스냅샷). 이후 상품명이 바뀌어도 유지된다. 활성 품목이 없으면 null.
+  """
+  firstItemName: String
+  """
+  내 매장 첫 품목의 상품 대표 이미지 URL(주문 시점 스냅샷). 주문 당시 이미지가 없었으면 null.
+  """
+  firstItemImageUrl: String
 }
 
 """

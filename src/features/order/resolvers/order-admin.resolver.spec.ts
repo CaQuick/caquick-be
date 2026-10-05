@@ -66,6 +66,10 @@ describe('Admin Order Resolvers (real DB)', () => {
 
     const list = await queryResolver.adminOrders(user);
     expect(list.totalCount).toBe(1);
+    expect(list.items[0]).toMatchObject({
+      firstItemName: 'Product snapshot',
+      firstItemImageUrl: null,
+    });
 
     const detail = await queryResolver.adminOrder(user, order.id.toString());
     expect(detail.items).toHaveLength(1);

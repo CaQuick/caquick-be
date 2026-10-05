@@ -74,6 +74,10 @@ describe('Seller Order Resolvers (real DB)', () => {
       accountId: me.account.id.toString(),
     });
     expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      firstItemName: 'Product snapshot',
+      firstItemImageUrl: null,
+    });
   });
 
   it('Mutation.sellerUpdateOrderStatus: 타 store 주문 접근은 404 전파', async () => {
