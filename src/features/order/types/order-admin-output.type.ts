@@ -16,6 +16,8 @@ export interface AdminOrderSummaryOutput {
   buyerPhone: string;
   totalPrice: number;
   createdAt: Date;
+  firstItemName: string | null;
+  firstItemImageUrl: string | null;
 }
 
 export interface AdminOrderDetailOutput {

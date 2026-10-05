@@ -11,6 +11,7 @@ import {
   createAccount,
   createOrder,
   createOrderItem,
+  createProduct,
   setupSellerWithStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -19,6 +20,7 @@ import { outboxPublisherProviders } from '@/test/outbox';
 describe('SellerOrderService (real DB)', () => {
   let service: SellerOrderService;
   let prisma: PrismaClient;
+  let repo: OrderRepository;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -36,6 +38,7 @@ describe('SellerOrderService (real DB)', () => {
       ],
     });
     service = module.get(SellerOrderService);
+    repo = module.get(OrderRepository);
     prisma = p;
   });
 
@@ -82,6 +85,85 @@ describe('SellerOrderService (real DB)', () => {
 
       const result = await service.sellerOrderList(me.account.id);
       expect(result.items).toHaveLength(1);
+    });
+
+    it('첫 품목 상품명·이미지는 주문 시점 스냅샷이라 상품을 바꿔도 유지된다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '주문 시점 상품',
+      });
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        product_id: product.id,
+        product_name_snapshot: '주문 시점 상품',
+        product_thumbnail_url_snapshot: 'https://img/old.jpg',
+      });
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { name: '바뀐 상품' },
+      });
+      await prisma.productImage.create({
+        data: { product_id: product.id, image_url: 'https://img/new.jpg' },
+      });
+
+      const result = await service.sellerOrderList(account.id);
+      expect(result.items[0]).toMatchObject({
+        firstItemName: '주문 시점 상품',
+        firstItemImageUrl: 'https://img/old.jpg',
+      });
+    });
+
+    it('다른 매장 품목의 id가 더 작아도 내 매장 품목이 첫 품목이다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: other.store.id,
+        product_name_snapshot: '남의 매장 품목',
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: me.store.id,
+        product_name_snapshot: '내 매장 품목',
+      });
+
+      const result = await service.sellerOrderList(me.account.id);
+      expect(result.items[0].firstItemName).toBe('내 매장 품목');
+    });
+
+    it('soft-delete된 품목은 첫 품목에서 제외한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        product_name_snapshot: '삭제된 품목',
+        deleted_at: new Date(),
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        product_name_snapshot: '활성 품목',
+      });
+
+      const result = await service.sellerOrderList(account.id);
+      expect(result.items[0].firstItemName).toBe('활성 품목');
+    });
+
+    it('썸네일 스냅샷이 없으면 firstItemImageUrl은 null', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        product_thumbnail_url_snapshot: null,
+      });
+
+      const result = await service.sellerOrderList(account.id);
+      expect(result.items[0].firstItemImageUrl).toBeNull();
     });
 
     it('status 필터링이 동작한다', async () => {
@@ -270,7 +352,13 @@ describe('SellerOrderService (real DB)', () => {
 
     it('정상 상태 전이: SUBMITTED → CONFIRMED, status_history row 생성 확인', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      const order = await createStoreOrder(store.id);
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        product_name_snapshot: '확정 품목',
+        product_thumbnail_url_snapshot: 'https://img/confirm.jpg',
+      });
 
       const result = await service.sellerUpdateOrderStatus(account.id, {
         orderId: order.id.toString(),
@@ -278,7 +366,11 @@ describe('SellerOrderService (real DB)', () => {
         note: null,
       });
 
-      expect(result.status).toBe('CONFIRMED');
+      expect(result).toMatchObject({
+        status: 'CONFIRMED',
+        firstItemName: '확정 품목',
+        firstItemImageUrl: 'https://img/confirm.jpg',
+      });
 
       const dbOrder = await prisma.order.findUniqueOrThrow({
         where: { id: order.id },
@@ -292,6 +384,35 @@ describe('SellerOrderService (real DB)', () => {
       expect(histories).toHaveLength(1);
       expect(histories[0].from_status).toBe('SUBMITTED');
       expect(histories[0].to_status).toBe('CONFIRMED');
+    });
+
+    it('사전 검사 뒤 품목이 삭제돼도 상태는 바뀌고 첫 품목 필드는 null이다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      // 사전 검사(findOrderDetailByStore)와 잠금 사이에 품목이 soft-delete되는 경합 — 잠금 SQL은 품목 deleted_at을 안 본다
+      const original = repo.findOrderDetailByStore.bind(repo);
+      jest
+        .spyOn(repo, 'findOrderDetailByStore')
+        .mockImplementationOnce(async (args) => {
+          const row = await original(args);
+          await prisma.orderItem.updateMany({
+            where: { order_id: order.id },
+            data: { deleted_at: new Date() },
+          });
+          return row;
+        });
+
+      const result = await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'CONFIRMED',
+        note: null,
+      });
+
+      expect(result).toMatchObject({
+        status: 'CONFIRMED',
+        firstItemName: null,
+        firstItemImageUrl: null,
+      });
     });
 
     it('CANCELED 전환 + note 제공 시 정상 처리', async () => {

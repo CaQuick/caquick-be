@@ -17,7 +17,10 @@ import {
 import type { SellerOrderListInput } from '@/features/order/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/order/dto/inputs/seller-update-order-status.input';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import {
+  OrderRepository,
+  type SellerOrderRow,
+} from '@/features/order/repositories/order.repository';
 import {
   toOrderItemDetail,
   toOrderStatusHistory,
@@ -133,16 +136,7 @@ export class SellerOrderService extends SellerBaseService {
     return this.toOrderSummaryOutput(updated);
   }
 
-  private toOrderSummaryOutput(row: {
-    id: bigint;
-    order_number: string;
-    status: OrderStatus;
-    pickup_at: Date;
-    buyer_name: string;
-    buyer_phone: string;
-    total_price: number;
-    created_at: Date;
-  }): SellerOrderSummaryOutput {
+  private toOrderSummaryOutput(row: SellerOrderRow): SellerOrderSummaryOutput {
     return {
       id: row.id.toString(),
       orderNumber: row.order_number,
@@ -152,6 +146,9 @@ export class SellerOrderService extends SellerBaseService {
       buyerPhone: row.buyer_phone,
       totalPrice: row.total_price,
       createdAt: row.created_at,
+      // 내 매장 첫 품목의 주문 시점 스냅샷 — 상품이 바뀌어도 카드 값은 유지된다
+      firstItemName: row.items[0]?.product_name_snapshot ?? null,
+      firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
     };
   }
 

@@ -21,15 +21,38 @@ export type AdminOrderRow = Prisma.OrderGetPayload<{
 export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
   include: typeof adminOrderDetailInclude;
 }>;
+export type SellerOrderRow = Prisma.OrderGetPayload<{
+  include: ReturnType<typeof sellerOrderSummaryInclude>;
+}>;
 
 const adminOrderInclude = {
   items: {
     where: activeWhere,
-    select: { store_id: true, store_name_snapshot: true },
+    select: {
+      store_id: true,
+      store_name_snapshot: true,
+      product_name_snapshot: true,
+      product_thumbnail_url_snapshot: true,
+    },
     orderBy: { id: 'asc' },
     take: 1,
   },
 } satisfies Prisma.OrderInclude;
+
+/** 목록 카드용 첫 품목 스냅샷 — 매장 필터가 들어가 상수로 둘 수 없다. */
+function sellerOrderSummaryInclude(storeId: bigint) {
+  return {
+    items: {
+      where: { store_id: storeId, ...activeWhere },
+      select: {
+        product_name_snapshot: true,
+        product_thumbnail_url_snapshot: true,
+      },
+      orderBy: { id: 'asc' },
+      take: 1,
+    },
+  } satisfies Prisma.OrderInclude;
+}
 
 const adminOrderDetailInclude = {
   account: {
@@ -652,12 +675,13 @@ export class OrderRepository {
     fromPickupAt?: Date;
     toPickupAt?: Date;
     search?: string;
-  }) {
+  }): Promise<SellerOrderRow[]> {
     return this.prisma.order.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
         ...this.storeOrderScopeWhere(args),
       },
+      include: sellerOrderSummaryInclude(args.storeId),
       orderBy: { id: 'desc' },
       take: args.limit + 1,
     });
@@ -761,6 +785,7 @@ export class OrderRepository {
             ? { canceled_at: args.now }
             : {}),
         },
+        include: sellerOrderSummaryInclude(args.storeId),
       });
 
       await tx.orderStatusHistory.create({
