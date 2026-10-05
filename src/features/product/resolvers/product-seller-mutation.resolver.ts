@@ -13,6 +13,7 @@ import { SellerReorderProductImagesInput } from '@/features/product/dto/inputs/s
 import { SellerSetProductActiveInput } from '@/features/product/dto/inputs/seller-set-product-active.input';
 import { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
 import { SellerSetProductCustomTemplateActiveInput } from '@/features/product/dto/inputs/seller-set-product-custom-template-active.input';
+import { SellerSetProductTagsByNameInput } from '@/features/product/dto/inputs/seller-set-product-tags-by-name.input';
 import { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
 import { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
 import { SellerUpdateOptionItemInput } from '@/features/product/dto/inputs/seller-update-option-item.input';
@@ -138,6 +139,15 @@ export class SellerProductMutationResolver {
   ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
     return this.productTaxonomy.sellerSetProductTags(accountId, input);
+  }
+
+  @Mutation('sellerSetProductTagsByName')
+  sellerSetProductTagsByName(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: SellerSetProductTagsByNameInput,
+  ): Promise<SellerProductOutput> {
+    const accountId = parseAccountId(user);
+    return this.productTaxonomy.sellerSetProductTagsByName(accountId, input);
   }
 
   @Mutation('sellerCreateOptionGroup')

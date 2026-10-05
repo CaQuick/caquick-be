@@ -31,3 +31,7 @@ export const DEFAULT_TOKEN_MAX_LENGTH = 30;
 
 export const DEFAULT_TAG_SUGGESTIONS = 10;
 export const MAX_TAG_SUGGESTIONS = 20;
+
+// ── 태그 연결 ──
+
+export const MAX_TAGS_PER_PRODUCT = 20;

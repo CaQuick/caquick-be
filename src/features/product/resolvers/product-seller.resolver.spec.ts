@@ -248,6 +248,15 @@ describe('Seller Product Resolvers (real DB)', () => {
       );
       expect(withTag.tags.map((t) => t.name)).toContain('레터링');
 
+      const withTagByName = await mutationResolver.sellerSetProductTagsByName(
+        auth,
+        { productId, names: ['#생일', '레터링'] },
+      );
+      expect(withTagByName.tags.map((t) => t.name).sort()).toEqual([
+        '레터링',
+        '생일',
+      ]);
+
       // 본인 product delete
       expect(await mutationResolver.sellerDeleteProduct(auth, productId)).toBe(
         true,

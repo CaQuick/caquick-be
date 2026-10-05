@@ -58,6 +58,17 @@ extend type Mutation {
   상품 태그 연결을 설정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerSetProductTags(input: SellerSetProductTagsInput!): SellerProduct!
+  """
+  상품 태그 연결을 이름 목록으로 통째로 교체한다. 각 이름은 앞뒤 공백·선행 '#' 제거, 연속 공백 1칸, 소문자로 정규화하고
+  정규화 후 같은 이름은 하나로 합친다(대소문자·악센트가 같은 이름도 DB 기준 하나로 저장되지만, 개수 검사는 정규화 문자열
+  기준이라 악센트만 다른 café·cafe는 각각 센다). 없는 이름은 새 태그로 만들고
+  (삭제된 같은 이름은 복구), 있으면 저장된 형태 그대로 재사용한다. 빈 목록이면 전체 해제.
+  정규화 후 빈 이름이 있거나 80자(코드 포인트, 정규화 전후 모두)를 넘는 이름이 있거나 합친 뒤 20개를 넘으면 BAD_USER_INPUT.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않거나 내 상품이 아니면 NOT_FOUND.
+  """
+  sellerSetProductTagsByName(
+    input: SellerSetProductTagsByNameInput!
+  ): SellerProduct!
 
   """
   상품 옵션 그룹을 생성한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
@@ -595,6 +606,18 @@ input SellerSetProductTagsInput {
   연결할 태그 ID 전체.
   """
   tagIds: [ID!]!
+}
+
+"""
+이름 기반 태그 연결 설정 입력. 전달한 목록으로 통째로 교체한다.
+"""
+input SellerSetProductTagsByNameInput {
+  productId: ID!
+  """
+  연결할 태그 이름 전체. 정규화·중복 제거 뒤 최대 20개(개수는 정규화 문자열 기준 — 악센트만 다른 이름은 저장 시 하나로
+  합쳐져도 각각 센다). 각 이름은 정규화 전후 모두 80자(코드 포인트) 이내. 빈 배열이면 전체 해제.
+  """
+  names: [String!]!
 }
 
 """

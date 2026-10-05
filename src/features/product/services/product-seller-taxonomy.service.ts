@@ -8,8 +8,12 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { MAX_TAG_NAME_LENGTH } from '@/features/product/constants/product-admin.constants';
-import { DEFAULT_TAG_SUGGESTIONS } from '@/features/product/constants/product-seller.constants';
+import {
+  DEFAULT_TAG_SUGGESTIONS,
+  MAX_TAGS_PER_PRODUCT,
+} from '@/features/product/constants/product-seller.constants';
 import type { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
+import type { SellerSetProductTagsByNameInput } from '@/features/product/dto/inputs/seller-set-product-tags-by-name.input';
 import type { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
 import type { SellerTagSearchInput } from '@/features/product/dto/inputs/seller-tag-search.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -139,6 +143,63 @@ export class SellerProductTaxonomyService extends SellerBaseService {
         targetId: productId,
         action: AuditActionType.UPDATE,
         afterJson: {
+          tagIds: tagIds.map((id) => id.toString()),
+        },
+      }),
+    );
+
+    const detail =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
+    if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
+
+    return toProductOutput(detail);
+  }
+
+  async sellerSetProductTagsByName(
+    accountId: bigint,
+    input: SellerSetProductTagsByNameInput,
+  ): Promise<SellerProductOutput> {
+    const ctx = await this.requireSellerContext(accountId);
+    const productId = parseId(input.productId);
+
+    const product =
+      await this.productRepository.findProductByIdIncludingInactive({
+        productId,
+        storeId: ctx.storeId,
+      });
+    if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
+
+    const names = [
+      ...new Set(
+        input.names.map((raw) => {
+          const name = normalizeTagName(
+            cleanRequiredText(raw, MAX_TAG_NAME_LENGTH),
+          );
+          if (name === null) throw new DomainException('TEXT_REQUIRED');
+          // 소문자화로 코드 포인트가 늘 수 있어('İ' → 'i̇') VARCHAR(80)에 맞게 다시 본다
+          return cleanRequiredText(name, MAX_TAG_NAME_LENGTH);
+        }),
+      ),
+    ];
+    if (names.length > MAX_TAGS_PER_PRODUCT) {
+      throw new DomainException('PRODUCT_TAG_LIMIT_EXCEEDED', {
+        max: MAX_TAGS_PER_PRODUCT,
+      });
+    }
+
+    await this.productRepository.replaceProductTagsByName(
+      { productId, names },
+      (tagIds) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.UPDATE,
+        afterJson: {
+          tagNames: names,
           tagIds: tagIds.map((id) => id.toString()),
         },
       }),
