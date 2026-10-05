@@ -596,10 +596,12 @@ export class ProductRepository {
         await this.replaceProductTagsInTx(tx, args.productId, []);
         return [];
       }
+      // 같은 기존 태그를 반대 순서로 잠그는 동시 호출이 교착하지 않게 unique(name) 잠금 순서 고정
+      const names = [...args.names].sort();
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO tag (name, created_at, updated_at)
         VALUES ${Prisma.join(
-          args.names.map((name) => Prisma.sql`(${name}, NOW(3), NOW(3))`),
+          names.map((name) => Prisma.sql`(${name}, NOW(3), NOW(3))`),
         )}
         ON DUPLICATE KEY UPDATE
           updated_at = IF(deleted_at IS NULL, updated_at, NOW(3)),

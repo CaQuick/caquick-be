@@ -359,6 +359,24 @@ describe('SellerProductTaxonomyService (real DB)', () => {
       expect(await activeLinks(productB.id)).toHaveLength(1);
     });
 
+    it('같은 기존 태그 2개를 반대 순서로 두 판매자가 동시에 보내면 둘 다 성공하고 tag 행이 늘지 않는다', async () => {
+      const a = await setupSellerWithStore(prisma);
+      const b = await setupSellerWithStore(prisma);
+      const productA = await createSellerProduct(a.store.id);
+      const productB = await createSellerProduct(b.store.id);
+      await createTag(prisma, { name: 'birthday' });
+      await createTag(prisma, { name: 'cake' });
+
+      const results = await Promise.allSettled([
+        setTags(a.account.id, productA.id, ['birthday', 'cake']),
+        setTags(b.account.id, productB.id, ['cake', 'birthday']),
+      ]);
+      expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+      expect(await prisma.tag.count()).toBe(2);
+      expect(await activeLinks(productA.id)).toHaveLength(2);
+      expect(await activeLinks(productB.id)).toHaveLength(2);
+    });
+
     it('같은 판매자가 같은 상품에 동시 2회 보내면 tag 행 1개·활성 연결 1건이고 둘 다 성공한다(현 동작 기록)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
