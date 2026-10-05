@@ -19,7 +19,7 @@ import {
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
 import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import { TEST_AUTH_CONFIG } from '@/test/auth-config';
+import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -134,12 +134,37 @@ describe('AuthService', () => {
         mockRefreshSessions.findActiveRefreshSessionByHash,
       ).toHaveBeenCalled();
       expect(mockRefreshSessions.rotateRefreshSession).toHaveBeenCalled();
-      expect(result).toEqual({ accessToken: 'new-access-token' });
+      expect(result).toEqual({
+        accessToken: 'new-access-token',
+        expiresInSeconds: 900,
+      });
       expect(mockRes.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE.USER,
         expect.any(String),
         expect.any(Object),
       );
+    });
+
+    it('expiresInSeconds는 authConfig의 jwtAccessExpiresSeconds를 그대로 싣는다', async () => {
+      const mockReq = {
+        cookies: { caquick_rt: 'old-refresh-token' },
+        headers: { 'user-agent': 'Mozilla/5.0' },
+        ip: '127.0.0.1',
+      } as unknown as Request;
+      const mockRes = { cookie: jest.fn() } as unknown as Response;
+      mockConfig.getOrThrow.mockReturnValue(
+        testAuthConfig({ jwtAccessExpiresSeconds: 60 }),
+      );
+      mockRefreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(1),
+        account_id: BigInt(1),
+      } as never);
+      mockRefreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
+      mockJwt.sign.mockReturnValue('new-access-token');
+
+      const result = await service.refresh(mockReq, mockRes);
+
+      expect(result.expiresInSeconds).toBe(60);
     });
 
     it('refresh 토큰이 없으면 UnauthorizedException을 던져야 한다', async () => {

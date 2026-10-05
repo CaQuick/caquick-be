@@ -101,11 +101,12 @@ describe('AuthController', () => {
     expect(res.redirect).toHaveBeenCalledWith('https://caquick.site/mypage');
   });
 
-  it('refresh는 200 + accessToken JSON으로 응답한다', async () => {
+  it('refresh는 200 + accessToken·expiresInSeconds JSON으로 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
     auth.refresh.mockResolvedValue({
       accessToken: 'new-access',
+      expiresInSeconds: 600,
     });
 
     await controller.refresh(req, res);
@@ -115,6 +116,7 @@ describe('AuthController', () => {
     expect(res.json).toHaveBeenCalledWith({
       accessToken: 'new-access',
       tokenType: 'Bearer',
+      expiresInSeconds: 600,
     });
   });
 
@@ -151,11 +153,12 @@ describe('AuthController', () => {
       }),
     },
   ])('$prefix 자격증명 엔드포인트', ({ role, prefix, pick }) => {
-    it(`${prefix}Login은 role=${role}로 위임하고 accessToken·accountStatus·mustChangePassword를 응답한다`, async () => {
+    it(`${prefix}Login은 role=${role}로 위임하고 accessToken·expiresInSeconds·accountStatus·mustChangePassword를 응답한다`, async () => {
       const res = mockRes();
       const req = {} as Request;
       credentialAuth.login.mockResolvedValue({
         accessToken: 'access',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: true,
       });
@@ -177,6 +180,7 @@ describe('AuthController', () => {
       expect(res.json).toHaveBeenCalledWith({
         accessToken: 'access',
         tokenType: 'Bearer',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: true,
       });
@@ -187,6 +191,7 @@ describe('AuthController', () => {
       const req = {} as Request;
       credentialAuth.refresh.mockResolvedValue({
         accessToken: 'rotated',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: false,
       });
@@ -198,6 +203,7 @@ describe('AuthController', () => {
       expect(res.json).toHaveBeenCalledWith({
         accessToken: 'rotated',
         tokenType: 'Bearer',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: false,
       });

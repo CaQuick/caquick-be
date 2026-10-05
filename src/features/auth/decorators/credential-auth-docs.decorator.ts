@@ -13,13 +13,20 @@ const CREDENTIAL_LOGIN_RESPONSE_SCHEMA = {
   properties: {
     accessToken: { type: 'string' },
     tokenType: { type: 'string', example: 'Bearer' },
+    expiresInSeconds: { type: 'number', example: 900 },
     accountStatus: {
       type: 'string',
       enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
     },
     mustChangePassword: { type: 'boolean' },
   },
-  required: ['accessToken', 'tokenType', 'accountStatus', 'mustChangePassword'],
+  required: [
+    'accessToken',
+    'tokenType',
+    'expiresInSeconds',
+    'accountStatus',
+    'mustChangePassword',
+  ],
 };
 
 export type CredentialRoleLabel = '판매자' | '관리자';
