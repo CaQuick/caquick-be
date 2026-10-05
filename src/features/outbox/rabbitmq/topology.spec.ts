@@ -1,4 +1,8 @@
+import type { ConfirmChannel } from 'amqplib';
+
 import {
+  assertTopology,
+  EVENTS_EXCHANGE,
   parseMessage,
   queuesFor,
   toEvent,
@@ -79,5 +83,31 @@ describe('rabbitmq topology', () => {
     ['id 없음', JSON.stringify({ eventId: 'e', eventType: 'a' })],
   ])('반증: %s → 던진다', (_label, body) => {
     expect(() => parseMessage(Buffer.from(body))).toThrow();
+  });
+
+  it('반증: 두 소비자가 같은 event_type을 구독하면 큐 2개에 각각 바인딩된다(fan-out은 바인딩으로)', async () => {
+    const bindQueue = jest.fn().mockResolvedValue(undefined);
+    const channel = {
+      assertExchange: jest.fn().mockResolvedValue(undefined),
+      assertQueue: jest.fn().mockResolvedValue(undefined),
+      bindQueue,
+    } as unknown as ConfirmChannel;
+
+    await assertTopology(channel, [
+      { queues: queuesFor('A'), eventTypes: ['order.submitted'] },
+      {
+        queues: queuesFor('B'),
+        eventTypes: ['order.submitted', 'order.status_changed'],
+      },
+    ]);
+
+    const eventBindings = bindQueue.mock.calls.filter(
+      ([, exchange]) => exchange === EVENTS_EXCHANGE,
+    );
+    expect(eventBindings).toEqual([
+      ['q.A', EVENTS_EXCHANGE, 'order.submitted'],
+      ['q.B', EVENTS_EXCHANGE, 'order.submitted'],
+      ['q.B', EVENTS_EXCHANGE, 'order.status_changed'],
+    ]);
   });
 });

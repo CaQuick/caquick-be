@@ -12,6 +12,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('SellerConversationService (real DB)', () => {
   let service: SellerConversationService;
@@ -24,6 +25,8 @@ describe('SellerConversationService (real DB)', () => {
         SellerConversationService,
         StoreSellerRepository,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         ConversationEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         {

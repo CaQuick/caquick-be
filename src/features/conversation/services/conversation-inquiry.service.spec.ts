@@ -3,6 +3,10 @@ import { PubSub } from 'graphql-subscriptions';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth';
+import {
+  CONVERSATION_BUYER_MESSAGE_SENT,
+  parseConversationBuyerMessageSentPayload,
+} from '@/features/conversation/events/conversation-buyer-message-sent.event';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
@@ -18,6 +22,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('ConversationInquiryService (real DB)', () => {
   let service: ConversationInquiryService;
@@ -29,6 +34,8 @@ describe('ConversationInquiryService (real DB)', () => {
       providers: [
         ConversationInquiryService,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         ConversationEventsService,
         AccountUserRepository,
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
@@ -449,6 +456,56 @@ describe('ConversationInquiryService (real DB)', () => {
           faqTopicId: othersFaq.id.toString(),
         }),
       ).rejects.toThrowDomain(404);
+    });
+  });
+
+  describe('구매자 메시지 이벤트(conversation.buyer_message_sent)', () => {
+    it('텍스트 전송은 USER 메시지 기준 1건을 남긴다(인사말 제외, 본문은 정리본)', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+
+      const result = await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '  픽업 시간 변경 가능한가요?  ',
+      });
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        event_type: CONVERSATION_BUYER_MESSAGE_SENT,
+        aggregate_id: result.conversationId,
+        actor_account_id: buyer.id,
+      });
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toEqual({
+        conversationId: result.conversationId,
+        storeId: store.id.toString(),
+        buyerAccountId: buyer.id.toString(),
+        messageId: result.messages[1].id,
+        preview: '픽업 시간 변경 가능한가요?',
+        messageCreatedAt: result.messages[1].createdAt.toISOString(),
+      });
+    });
+
+    it('FAQ 칩은 자동응답을 빼고 USER 질문 기준 1건을 남긴다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const faq = await createFaq(store.id, { title: '케이크 보관 방법' });
+
+      const result = await service.sendConversationFaqMessage(buyer.id, {
+        storeId: store.id.toString(),
+        faqTopicId: faq.id.toString(),
+      });
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toMatchObject({
+        messageId: result.messages[1].id,
+        preview: '케이크 보관 방법',
+      });
     });
   });
 });

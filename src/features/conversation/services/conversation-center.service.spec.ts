@@ -12,6 +12,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('ConversationCenterService (real DB)', () => {
   let service: ConversationCenterService;
@@ -22,6 +23,8 @@ describe('ConversationCenterService (real DB)', () => {
       providers: [
         ConversationCenterService,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         AccountUserRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
