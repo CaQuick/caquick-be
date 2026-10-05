@@ -32,6 +32,7 @@ import {
 import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
+import { RefreshTokenInput } from '@/features/auth/dto/inputs/refresh-token.input';
 import {
   CredentialAuthService,
   type CredentialLoginResult,
@@ -51,6 +52,8 @@ function toCredentialLoginResponse(result: CredentialLoginResult): {
   expiresInSeconds: number;
   accountStatus: CredentialLoginResult['accountStatus'];
   mustChangePassword: boolean;
+  refreshToken?: string;
+  refreshExpiresAt?: string;
 } {
   return {
     accessToken: result.accessToken,
@@ -58,6 +61,10 @@ function toCredentialLoginResponse(result: CredentialLoginResult): {
     expiresInSeconds: result.expiresInSeconds,
     accountStatus: result.accountStatus,
     mustChangePassword: result.mustChangePassword,
+    ...(result.refreshToken !== undefined && {
+      refreshToken: result.refreshToken,
+      refreshExpiresAt: result.refreshExpiresAt?.toISOString(),
+    }),
   };
 }
 
@@ -192,9 +199,11 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
+  // 바디는 ValidationPipe 통과용 — 토큰은 서비스가 req.body에서 읽는다(쿠키와 같은 입구)
   @ApiCredentialRefresh('판매자')
   @Post('seller/refresh')
   async sellerRefresh(
+    @Body() _body: RefreshTokenInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -208,7 +217,11 @@ export class AuthController {
 
   @ApiCredentialLogout('판매자')
   @Post('seller/logout')
-  async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
+  async sellerLogout(
+    @Body() _body: RefreshTokenInput,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     await this.credentialAuth.logout({ role: 'SELLER', req, res });
     res.status(204).send();
   }

@@ -1,13 +1,15 @@
 import { applyDecorators } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiCookieAuth,
+  ApiHeader,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
 } from '@nestjs/swagger';
 
-/** 판매자·관리자 로그인/재발급 응답 스키마(Swagger). 두 경로가 같은 모양을 쓴다. */
+/** 판매자·관리자 공통 로그인/재발급 응답 스키마(Swagger). */
 const CREDENTIAL_LOGIN_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -31,6 +33,45 @@ const CREDENTIAL_LOGIN_RESPONSE_SCHEMA = {
 
 export type CredentialRoleLabel = '판매자' | '관리자';
 
+/** 판매자만 바디 전달(앱)이 있어 refresh 토큰 필드가 붙는다. */
+const SELLER_LOGIN_RESPONSE_SCHEMA = {
+  ...CREDENTIAL_LOGIN_RESPONSE_SCHEMA,
+  properties: {
+    ...CREDENTIAL_LOGIN_RESPONSE_SCHEMA.properties,
+    refreshToken: {
+      type: 'string',
+      description: '바디 모드에서만. 재발급마다 바뀌므로 교체 저장한다.',
+    },
+    refreshExpiresAt: {
+      type: 'string',
+      format: 'date-time',
+      description: '바디 모드에서만. refresh 토큰 만료 시각.',
+    },
+  },
+};
+
+function loginResponseSchemaOf(role: CredentialRoleLabel) {
+  return role === '판매자'
+    ? SELLER_LOGIN_RESPONSE_SCHEMA
+    : CREDENTIAL_LOGIN_RESPONSE_SCHEMA;
+}
+
+const SELLER_MOBILE_LOGIN_NOTE =
+  ' `X-Client: mobile`이면 refresh 토큰을 쿠키 대신 응답 바디(`refreshToken`·`refreshExpiresAt`)로 돌려준다.';
+const SELLER_BODY_TOKEN_NOTE =
+  ' 바디 `refreshToken`이 있으면 그것을(쿠키는 읽지 않음), 없으면 쿠키를 쓴다.';
+
+const REFRESH_TOKEN_BODY = ApiBody({
+  required: false,
+  description: '판매자 앱 전용. 비우면 쿠키 모드.',
+  schema: {
+    type: 'object',
+    properties: {
+      refreshToken: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+    },
+  },
+});
+
 /** main.ts의 addCookieAuth 스킴 이름 — 역할마다 refresh 쿠키 이름이 다르다. */
 const REFRESH_COOKIE_SCHEME: Record<CredentialRoleLabel, string> = {
   판매자: 'seller-refresh-cookie',
@@ -48,11 +89,21 @@ export function ApiCredentialLogin(role: CredentialRoleLabel): MethodDecorator {
       description:
         role === '관리자'
           ? '관리자 username/password로 로그인한다. mustChangePassword=true면 비밀번호를 바꾸기 전까지 관리자 API가 FORBIDDEN이다.'
-          : '판매자 username/password로 로그인한다.',
+          : '판매자 username/password로 로그인한다.' + SELLER_MOBILE_LOGIN_NOTE,
     }),
+    ...(role === '판매자'
+      ? [
+          ApiHeader({
+            name: 'X-Client',
+            required: false,
+            enum: ['mobile'],
+            description: '앱은 mobile. 웹은 보내지 않는다(쿠키 모드).',
+          }),
+        ]
+      : []),
     ApiOkResponse({
       description: `${role} 로그인 결과`,
-      schema: CREDENTIAL_LOGIN_RESPONSE_SCHEMA,
+      schema: loginResponseSchemaOf(role),
     }),
   );
 }
@@ -63,12 +114,15 @@ export function ApiCredentialRefresh(
   return applyDecorators(
     ApiOperation({
       summary: `${role} Access/Refresh 재발급`,
-      description: `${role} refresh 쿠키를 사용해 access token을 재발급한다.`,
+      description:
+        `${role} refresh 쿠키를 사용해 access token을 재발급한다.` +
+        (role === '판매자' ? SELLER_BODY_TOKEN_NOTE : ''),
     }),
     ApiCookieAuth(REFRESH_COOKIE_SCHEME[role]),
+    ...(role === '판매자' ? [REFRESH_TOKEN_BODY] : []),
     ApiOkResponse({
       description: `${role} 재발급 결과`,
-      schema: CREDENTIAL_LOGIN_RESPONSE_SCHEMA,
+      schema: loginResponseSchemaOf(role),
     }),
   );
 }
@@ -79,9 +133,12 @@ export function ApiCredentialLogout(
   return applyDecorators(
     ApiOperation({
       summary: `${role} 로그아웃`,
-      description: `${role} refresh 세션을 폐기하고 쿠키를 제거한다.`,
+      description:
+        `${role} refresh 세션을 폐기하고 쿠키를 제거한다.` +
+        (role === '판매자' ? SELLER_BODY_TOKEN_NOTE : ''),
     }),
     ApiCookieAuth(REFRESH_COOKIE_SCHEME[role]),
+    ...(role === '판매자' ? [REFRESH_TOKEN_BODY] : []),
     ApiNoContentResponse({ description: `${role} 로그아웃 완료` }),
   );
 }
