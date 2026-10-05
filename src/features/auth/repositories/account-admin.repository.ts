@@ -92,6 +92,23 @@ const adminAccountInclude = {
   },
 } as const;
 
+/** 판매자 본인 조회(sellerMe)용 좁은 행. account_type·status 판정은 서비스가 한다. */
+export type SellerSelfRow = Prisma.AccountGetPayload<{
+  select: typeof sellerSelfSelect;
+}>;
+
+const sellerSelfSelect = {
+  id: true,
+  account_type: true,
+  status: true,
+  name: true,
+  credential: {
+    select: { username: true, must_change_password: true, deleted_at: true },
+  },
+  seller_profile: { select: { business_name: true, deleted_at: true } },
+  store: { select: { id: true, deleted_at: true } },
+} as const;
+
 /** 관리자가 다루는 계정(관리자·판매자·구매자)의 조회·생성·상태 변경. 자격증명·세션 write는 identity(auth)에만 있다. */
 @Injectable()
 export class AccountAdminRepository {
@@ -267,6 +284,14 @@ export class AccountAdminRepository {
     return this.prisma.account.findFirst({
       where: { id: accountId, account_type: AccountType.SELLER },
       include: sellerAccountInclude,
+    });
+  }
+
+  /** 타입 조건 없이 읽는다 — 비판매자 토큰을 SELLER_ONLY로 구분하기 위해. */
+  async findSellerSelfById(accountId: bigint): Promise<SellerSelfRow | null> {
+    return this.prisma.account.findFirst({
+      where: { id: accountId },
+      select: sellerSelfSelect,
     });
   }
 
