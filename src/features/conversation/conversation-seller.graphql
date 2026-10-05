@@ -19,6 +19,13 @@ extend type Mutation {
   sellerSendConversationMessage(
     input: SellerSendConversationMessageInput!
   ): SellerConversationMessage!
+  """
+  대화방을 판매자가 읽었다고 표시한다. 호출 시점에 존재하는 가장 최근 메시지의 작성 시각까지 sellerLastReadAt을
+  전진시키며 과거로 되돌리지 않는다(반복·동시 호출 안전). 메시지가 없으면 변경 없이 현재 상태를 돌려준다.
+  조회만으로는 읽음 처리되지 않으므로 앱이 상세 진입 시 호출한다. 판매자 답장은 서버가 마커를 함께 전진시킨다.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않거나 내 매장의 대화가 아니면 NOT_FOUND.
+  """
+  sellerMarkConversationRead(conversationId: ID!): SellerConversation!
 }
 
 """
@@ -32,13 +39,30 @@ type SellerConversation {
   accountId: ID!
   storeId: ID!
   """
+  대화 상대인 구매자의 표시명. 대화 생성 시점 스냅샷이라 이후 닉네임 변경·탈퇴가 반영되지 않는다.
+  스냅샷 도입 이전 대화 중 복원하지 못한 건은 null.
+  """
+  buyerNickname: String
+  """
+  마지막 메시지 미리보기(HTML은 태그 제거). 메시지가 없으면 null.
+  """
+  lastMessagePreview: String
+  """
   마지막 메시지 시각. 메시지가 없으면 null. 목록 정렬 기준은 이 값이 아니라 updated_at이다.
   """
   lastMessageAt: DateTime
   """
-  구매자가 이 대화방을 마지막으로 읽은 시각(구매자 조회 시 전진). 판매자 읽음 마커는 없다. 읽은 적이 없으면 null.
+  구매자가 이 대화방을 마지막으로 읽은 시각(구매자 조회 시 전진). 읽은 적이 없으면 null.
   """
   lastReadAt: DateTime
+  """
+  판매자가 마지막으로 읽은 시각. sellerMarkConversationRead 호출과 판매자 답장이 전진시킨다. 읽은 적이 없으면 null.
+  """
+  sellerLastReadAt: DateTime
+  """
+  판매자 기준 읽지 않은 구매자 메시지 수(senderType USER이고 sellerLastReadAt 이후 작성). 0이면 답변 필요 대상이 아니다.
+  """
+  unreadCount: Int!
   updatedAt: DateTime!
 }
 

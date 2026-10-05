@@ -157,7 +157,8 @@ export class ConversationInquiryService extends ConversationBaseService {
     const result = await this.repo.createBuyerMessages({
       accountId: args.accountId,
       storeId: args.storeId,
-      // 첫 전송으로 대화가 생성될 때만 repository가 사용한다(치환 완료본 저장)
+      // 닉네임 스냅샷·인사말(치환 완료본)은 첫 전송으로 대화가 생성될 때만 repository가 사용한다
+      buyerNickname: args.nickname,
       greetingBodyText: renderGreeting(args.greetingTemplate, {
         nickname: args.nickname,
         storeName: args.storeName,
@@ -242,8 +243,12 @@ export class ConversationInquiryService extends ConversationBaseService {
     await this.events.publishSellerListUpdate(args.storeId.toString(), {
       conversationId: args.conversationId.toString(),
       accountId: args.accountId.toString(),
+      buyerNickname: snapshot?.conversation.buyer_nickname_snapshot ?? null,
       lastMessagePreview: preview,
       lastMessageAt: lastMessageAtIso,
+      sellerLastReadAt:
+        snapshot?.conversation.seller_last_read_at?.toISOString() ?? null,
+      unreadCount: snapshot?.sellerUnreadCount ?? 0,
     });
   }
 

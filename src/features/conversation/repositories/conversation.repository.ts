@@ -10,7 +10,7 @@ import {
   ConversationSenderType,
   Prisma,
 } from '@/generated/prisma/client';
-import { PrismaService } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 export interface ConversationMessageEntry {
   senderType: ConversationSenderType;
@@ -32,15 +32,18 @@ export class ConversationRepository {
    * (updated_at, id) desc 키셋. 커서가 id 단독이면 정렬 순서와 무관한 행을 잘라내 목록에서 영영 빠지는
    * 대화가 생긴다 — 정렬 키를 그대로 커서에 담는다. schema.prisma의 [store_id, updated_at] 인덱스가 이 정렬을 받친다.
    */
-  async listConversationsByStore(args: {
-    storeId: bigint;
-    limit: number;
-    cursor?: { updatedAt: Date; id: bigint };
-  }) {
+  async listConversationsByStore(
+    args: {
+      storeId: bigint;
+      limit: number;
+      cursor?: { updatedAt: Date; id: bigint };
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const scope: Prisma.StoreConversationWhereInput = {
       store_id: args.storeId,
     };
-    return this.prisma.storeConversation.findMany({
+    return db.storeConversation.findMany({
       where: args.cursor
         ? {
             AND: [
@@ -62,10 +65,99 @@ export class ConversationRepository {
     });
   }
 
-  async countConversationsByStore(storeId: bigint): Promise<number> {
-    return this.prisma.storeConversation.count({
+  async countConversationsByStore(
+    storeId: bigint,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.storeConversation.count({
       where: { store_id: storeId },
     });
+  }
+
+  /** 판매자 목록도 구매자 목록(getConversationPageWithExtras)과 같은 이유로 단일 스냅샷에서 부가 정보까지 읽는다. */
+  async getStoreConversationPageWithExtras(args: {
+    storeId: bigint;
+    limit: number;
+    cursor?: { updatedAt: Date; id: bigint };
+  }) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [rows, totalCount] = await Promise.all([
+          this.listConversationsByStore(args, tx),
+          this.countConversationsByStore(args.storeId, tx),
+        ]);
+        const extras = await this.getConversationListExtras(
+          tx,
+          rows.slice(0, args.limit).map((row) => ({
+            id: row.id,
+            readAt: row.seller_last_read_at,
+          })),
+          ConversationSenderType.USER,
+        );
+        return { rows, totalCount, extras };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+  }
+
+  /**
+   * 구매자 읽음(listBuyerMessagesAndMarkRead)과 같은 잠금 규칙 — 잠금 아래에서 보이는 최신 메시지까지만 단조 전진한다.
+   * updated_at은 고정한다(읽음이 목록 정렬 키를 흔들면 안 된다). 소유 확인 뒤 삭제된 대화는 건드리지 않는다.
+   */
+  async markSellerRead(conversationId: bigint) {
+    return this.prisma.$transaction(async (tx) => {
+      const [locked] = await tx.$queryRaw<{ updated_at: Date }[]>`
+        SELECT updated_at FROM store_conversation WHERE id = ${conversationId} FOR UPDATE`;
+      const newest = await tx.storeConversationMessage.findFirst({
+        where: { conversation_id: conversationId },
+        orderBy: { id: 'desc' },
+        select: { created_at: true },
+      });
+      if (newest) {
+        await tx.storeConversation.updateMany({
+          where: {
+            id: conversationId,
+            ...activeWhere,
+            OR: [
+              { seller_last_read_at: null },
+              { seller_last_read_at: { lt: newest.created_at } },
+            ],
+          },
+          data: {
+            seller_last_read_at: newest.created_at,
+            updated_at: locked?.updated_at,
+          },
+        });
+      }
+
+      const conversation = await tx.storeConversation.findFirst({
+        where: { id: conversationId },
+      });
+      if (!conversation) return null;
+      const [extra] = await this.getConversationListExtras(
+        tx,
+        [{ id: conversation.id, readAt: conversation.seller_last_read_at }],
+        ConversationSenderType.USER,
+      );
+      return { conversation, extra };
+    });
+  }
+
+  /**
+   * 답변 필요 = 판매자 기준 미읽음 USER 메시지가 있는 활성 대화. 마지막 발신자 기준이 아니다 — FAQ 칩은 USER 질문과
+   * STORE 자동응답이 같은 시각으로 저장돼 "마지막 메시지"가 STORE가 된다. raw라 soft-delete를 수동 명시.
+   */
+  async countUnansweredConversationsByStore(storeId: bigint): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ c: bigint }[]>`
+      SELECT COUNT(*) AS c
+      FROM store_conversation c
+      WHERE c.store_id = ${storeId} AND c.deleted_at IS NULL
+        AND (c.seller_last_read_at IS NULL OR c.last_message_at > c.seller_last_read_at)
+        AND EXISTS (
+          SELECT 1 FROM store_conversation_message m
+          WHERE m.conversation_id = c.id AND m.deleted_at IS NULL AND m.sender_type = 'USER'
+            AND (c.seller_last_read_at IS NULL OR m.created_at > c.seller_last_read_at))`;
+    return Number(rows[0]?.c ?? 0n);
   }
 
   async findConversationByIdAndStore(args: {
@@ -131,8 +223,9 @@ export class ConversationRepository {
           tx,
           rows.slice(0, args.limit).map((row) => ({
             id: row.id,
-            last_read_at: row.last_read_at,
+            readAt: row.last_read_at,
           })),
+          { not: ConversationSenderType.USER },
         );
         return { rows, totalCount, extras };
       },
@@ -190,12 +283,13 @@ export class ConversationRepository {
   }
 
   /**
-   * 안읽음 = last_read_at 이후 도착한, 내가 보낸 것이 아닌 메시지. per-row 쿼리는 페이지 50건 기준
-   * 100쿼리로 풀을 압박한다 — 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의 고정 3쿼리.
+   * 안읽음 = readAt 이후 도착한 unreadSender 메시지(구매자: 내가 보낸 것이 아닌 것, 판매자: USER). per-row 쿼리는
+   * 페이지 50건 기준 100쿼리로 풀을 압박한다 — 최신 메시지 id 집계 → 본문 일괄 조회 → 안읽음 OR-분기 groupBy의 고정 3쿼리.
    */
   private async getConversationListExtras(
     tx: Prisma.TransactionClient,
-    rows: { id: bigint; last_read_at: Date | null }[],
+    rows: { id: bigint; readAt: Date | null }[],
+    unreadSender: Prisma.StoreConversationMessageWhereInput['sender_type'],
   ) {
     if (rows.length === 0) return [];
     const ids = rows.map((row) => row.id);
@@ -224,13 +318,11 @@ export class ConversationRepository {
       tx.storeConversationMessage.groupBy({
         by: ['conversation_id'],
         where: {
-          sender_type: { not: ConversationSenderType.USER },
-          // 대화별 last_read_at이 달라 조건을 OR 분기로 배치한다(페이지 ≤50)
+          sender_type: unreadSender,
+          // 대화별 readAt이 달라 조건을 OR 분기로 배치한다(페이지 ≤50)
           OR: rows.map((row) => ({
             conversation_id: row.id,
-            ...(row.last_read_at
-              ? { created_at: { gt: row.last_read_at } }
-              : {}),
+            ...(row.readAt ? { created_at: { gt: row.readAt } } : {}),
           })),
         },
         _count: { _all: true },
@@ -264,6 +356,7 @@ export class ConversationRepository {
    * 조회 + 읽음 마커 전진을 한 트랜잭션으로, 전송 경로와 같은 대화 row 잠금을 잡는다 — 미커밋 전송이 있으면
    * 커밋을 기다린 뒤 조회하므로 "아직 안 보이는 메시지"를 건너뛰고 마커가 전진하는 레이스가 없다. 마커는
    * 실제 내려준 최신 메시지의 created_at까지만, 과거 페이지 조회로 후퇴하지 않게 단조 증가 조건으로 갱신한다.
+   * updated_at은 고정한다 — 판매자 목록 정렬 키라 읽음만으로 떠오르면 안 된다.
    */
   async listBuyerMessagesAndMarkRead(args: {
     conversationId: bigint;
@@ -271,7 +364,8 @@ export class ConversationRepository {
     cursor?: bigint;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
+      const [locked] = await tx.$queryRaw<{ updated_at: Date }[]>`
+        SELECT updated_at FROM store_conversation WHERE id = ${args.conversationId} FOR UPDATE`;
 
       const [rows, totalCount] = await Promise.all([
         tx.storeConversationMessage.findMany({
@@ -297,7 +391,10 @@ export class ConversationRepository {
               { last_read_at: { lt: newest.created_at } },
             ],
           },
-          data: { last_read_at: newest.created_at },
+          data: {
+            last_read_at: newest.created_at,
+            updated_at: locked?.updated_at,
+          },
         });
       }
 
@@ -319,12 +416,14 @@ export class ConversationRepository {
           store_id: true,
           last_message_at: true,
           last_read_at: true,
+          seller_last_read_at: true,
+          buyer_nickname_snapshot: true,
           store: { select: { store_name: true } },
         },
       });
       if (!conversation) return null;
 
-      const [lastMessage, unreadCount] = await Promise.all([
+      const [lastMessage, unreadCount, sellerUnreadCount] = await Promise.all([
         tx.storeConversationMessage.findFirst({
           where: { conversation_id: conversationId },
           orderBy: { id: 'desc' },
@@ -339,9 +438,18 @@ export class ConversationRepository {
               : {}),
           },
         }),
+        tx.storeConversationMessage.count({
+          where: {
+            conversation_id: conversationId,
+            sender_type: ConversationSenderType.USER,
+            ...(conversation.seller_last_read_at
+              ? { created_at: { gt: conversation.seller_last_read_at } }
+              : {}),
+          },
+        }),
       ]);
 
-      return { conversation, lastMessage, unreadCount };
+      return { conversation, lastMessage, unreadCount, sellerUnreadCount };
     });
   }
 
@@ -360,6 +468,7 @@ export class ConversationRepository {
   async createBuyerMessages(args: {
     accountId: bigint;
     storeId: bigint;
+    buyerNickname: string;
     greetingBodyText: string;
     entries: ConversationMessageEntry[];
   }) {
@@ -453,7 +562,7 @@ export class ConversationRepository {
   }
 
   /**
-   * 인스턴스 간 단일 시계(DB NOW(3))를 쓰되 해당 대화의 기존 last_message_at/last_read_at보다 1ms 이상
+   * 인스턴스 간 단일 시계(DB NOW(3))를 쓰되 해당 대화의 기존 last_message_at·읽음 마커보다 1ms 이상
    * 뒤로 보정한다 — 앱 시계로 찍힌 과거 row(시계가 DB보다 앞섰던 노드)가 남아 있어도 새 메시지가 마커보다
    * 과거/동률 시각을 받아 안읽음 판정(created_at > last_read_at)에서 누락되지 않는다. 잠금 획득 후 호출 전제.
    */
@@ -467,7 +576,8 @@ export class ConversationRepository {
       SELECT GREATEST(
         NOW(3),
         COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_message_at), NOW(3)),
-        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_read_at), NOW(3))
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, last_read_at), NOW(3)),
+        COALESCE(TIMESTAMPADD(MICROSECOND, 1000, seller_last_read_at), NOW(3))
       ) AS now
       FROM store_conversation
       WHERE id = ${conversationId}
@@ -491,7 +601,7 @@ export class ConversationRepository {
    */
   private async lockOrCreateConversation(
     tx: Prisma.TransactionClient,
-    args: { accountId: bigint; storeId: bigint },
+    args: { accountId: bigint; storeId: bigint; buyerNickname: string },
   ): Promise<{ id: bigint; lastReadAt: Date | null }> {
     // 잠금 조회가 돌려준 last_read_at을 그대로 쓴다 — 잠금 대기 중 커밋된
     // 변경까지 반영된 최신 값이다(일반 조회의 스냅샷과 달리).
@@ -526,10 +636,12 @@ export class ConversationRepository {
     }
 
     try {
+      // 닉네임 스냅샷은 생성 시점에만 — 기존(soft-delete 재사용 포함) 대화는 갱신하지 않는다
       const created = await tx.storeConversation.create({
         data: {
           account_id: args.accountId,
           store_id: args.storeId,
+          buyer_nickname_snapshot: args.buyerNickname,
         },
         select: { id: true },
       });
@@ -579,6 +691,8 @@ export class ConversationRepository {
         data: {
           last_message_at: now,
           updated_at: now,
+          // 답장은 읽음을 함의한다 — 앱이 따로 읽음 처리하지 않아도 미읽음이 남지 않는다
+          seller_last_read_at: now,
         },
       });
 

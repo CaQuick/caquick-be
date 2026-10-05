@@ -81,6 +81,9 @@ export interface ConversationListUpdateEvent {
 export interface SellerConversationListUpdateEvent {
   conversationId: string;
   accountId: string;
+  buyerNickname: string | null;
   lastMessagePreview: string | null;
   lastMessageAt: string;
+  sellerLastReadAt: string | null;
+  unreadCount: number;
 }

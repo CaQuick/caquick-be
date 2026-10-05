@@ -126,8 +126,11 @@ describe('ConversationEventsService (real Redis)', () => {
     await service.publishSellerListUpdate('3', {
       conversationId: '10',
       accountId: '7',
+      buyerNickname: '현진',
       lastMessagePreview: '픽업 문의',
       lastMessageAt: '2026-08-01T12:00:00.000Z',
+      sellerLastReadAt: null,
+      unreadCount: 1,
     });
 
     await expect(pendingBuyer).resolves.toMatchObject({

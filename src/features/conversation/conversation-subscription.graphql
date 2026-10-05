@@ -36,13 +36,23 @@ type ConversationListUpdate {
   unreadCount: Int!
 }
 
-"""판매자 대화 목록 갱신 이벤트. 도착 순서 비보장 — lastMessageAt 기준 폐기 규칙 동일."""
+"""
+판매자 대화 목록 갱신 이벤트(구매자 메시지 도착·판매자 답장). 도착 순서 비보장 — (lastMessageAt, sellerLastReadAt)
+사전식 비교로 폐기한다. 읽음 mutation은 이벤트를 내지 않으므로 로컬 읽음 처리 뒤 도착한 이벤트의 unreadCount는
+로컬 sellerLastReadAt이 더 크면 0으로 본다.
+"""
 type SellerConversationListUpdate {
   conversationId: ID!
   """대화 상대인 구매자 계정 ID."""
   accountId: ID!
+  """대화 상대 구매자 표시명(대화 생성 시점 스냅샷). 복원 불가 건은 null."""
+  buyerNickname: String
   """마지막 메시지 미리보기(HTML은 태그 제거)"""
   lastMessagePreview: String
-  """마지막 메시지 시각. 폐기 규칙의 비교 키다."""
+  """마지막 메시지 시각. 폐기 규칙의 1차 비교 키다."""
   lastMessageAt: DateTime!
+  """이벤트 스냅샷 시점의 판매자 마지막 읽음 시각(폐기 규칙 비교용)."""
+  sellerLastReadAt: DateTime
+  """이벤트 시점의 판매자 기준 미읽음 구매자 메시지 수."""
+  unreadCount: Int!
 }

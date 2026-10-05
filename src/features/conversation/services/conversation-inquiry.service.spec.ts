@@ -21,6 +21,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('ConversationInquiryService (real DB)', () => {
   let service: ConversationInquiryService;
+  let events: ConversationEventsService;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -37,6 +38,7 @@ describe('ConversationInquiryService (real DB)', () => {
       ],
     });
     service = module.get(ConversationInquiryService);
+    events = module.get(ConversationEventsService);
     prisma = p;
   });
 
@@ -208,6 +210,52 @@ describe('ConversationInquiryService (real DB)', () => {
         conversation.last_message_at?.getTime(),
       );
       expect(await messagesOf(conversation.id)).toHaveLength(2);
+    });
+
+    it('첫 전송 시점 닉네임을 스냅샷으로 저장하고, 이후 닉네임이 바뀌어도 유지한다', async () => {
+      const buyer = await setupBuyer('첫닉네임');
+      const store = await createStore(prisma);
+
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '첫 문의',
+      });
+      await prisma.userProfile.update({
+        where: { account_id: buyer.id },
+        data: { nickname: '바뀐닉네임' },
+      });
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '두 번째 문의',
+      });
+
+      const conversation = await prisma.storeConversation.findFirstOrThrow({
+        where: { account_id: buyer.id, store_id: store.id },
+      });
+      expect(conversation.buyer_nickname_snapshot).toBe('첫닉네임');
+    });
+
+    it('판매자 이벤트에 닉네임 스냅샷과 판매자 기준 미읽음 수(USER만)를 싣는다', async () => {
+      const buyer = await setupBuyer('현진');
+      const store = await createStore(prisma);
+      const publishSeller = jest.spyOn(events, 'publishSellerListUpdate');
+
+      const result = await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '픽업 문의',
+      });
+
+      // 인사말(STORE)은 판매자 미읽음에 안 센다
+      expect(publishSeller).toHaveBeenCalledWith(store.id.toString(), {
+        conversationId: result.conversationId,
+        accountId: buyer.id.toString(),
+        buyerNickname: '현진',
+        lastMessagePreview: '픽업 문의',
+        lastMessageAt: result.messages[1].createdAt.toISOString(),
+        sellerLastReadAt: null,
+        unreadCount: 1,
+      });
+      publishSeller.mockRestore();
     });
 
     it('대화가 이미 있으면 인사말 없이 유저 메시지 1건만 저장한다', async () => {
