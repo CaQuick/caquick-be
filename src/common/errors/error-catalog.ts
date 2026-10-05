@@ -400,6 +400,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: ({ max }) => `상품 이미지는 최대 ${max}장까지 등록할 수 있습니다.`,
   },
+  PRODUCT_TAG_LIMIT_EXCEEDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) => `태그는 최대 ${max}개까지 등록할 수 있습니다.`,
+  },
   PRODUCT_IMAGE_MIN_REQUIRED: {
     status: HttpStatus.BAD_REQUEST,
     message: '상품 이미지는 1장 이상 필요합니다.',

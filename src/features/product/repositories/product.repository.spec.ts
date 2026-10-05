@@ -521,6 +521,51 @@ describe('ProductRepository (real DB)', () => {
     });
   });
 
+  describe('replaceProductTagsByName', () => {
+    it('이름으로 만들거나 재사용해 연결을 교체하고 연결한 tagIds를 돌려준다', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const existing = await createTag('a');
+
+      const tagIds = await repo.replaceProductTagsByName(
+        { productId: product.id, names: ['a', 'b'] },
+        () => AUDIT_ENTRY,
+      );
+      expect(tagIds).toContain(existing.id);
+      expect(tagIds).toHaveLength(2);
+      const rows = await prisma.productTag.findMany({
+        where: { product_id: product.id, deleted_at: null },
+      });
+      expect(rows.map((r) => r.tag_id).sort()).toEqual([...tagIds].sort());
+    });
+
+    it('감사 콜백이 던지면 새 태그 행도 연결도 남지 않는다(한 트랜잭션)', async () => {
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      const deleted = await prisma.tag.create({
+        data: { name: 'c', deleted_at: new Date() },
+      });
+
+      await expect(
+        repo.replaceProductTagsByName(
+          { productId: product.id, names: ['a', 'c'] },
+          () => {
+            throw new Error('audit failed');
+          },
+        ),
+      ).rejects.toThrow('audit failed');
+
+      expect(await prisma.tag.count()).toBe(0);
+      const row = await prisma.tag.findUniqueOrThrow({
+        where: { id: deleted.id },
+      });
+      expect(row.deleted_at).not.toBeNull();
+      expect(
+        await prisma.productTag.count({ where: { product_id: product.id } }),
+      ).toBe(0);
+    });
+  });
+
   describe('Option group/item', () => {
     it('createOptionGroup + findOptionGroupById(product.store_id 포함)', async () => {
       const store = await createStore(prisma);

@@ -575,44 +575,86 @@ export class ProductRepository {
     },
     audit: () => AuditEntry,
   ): Promise<void> {
-    const now = new Date();
-    await this.writeWithAudit(async (tx) => {
-      await tx.productTag.updateMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { notIn: args.tagIds },
-          ...activeWhere,
-        },
-        data: { deleted_at: now },
-      });
-      if (args.tagIds.length === 0) return;
-      await tx.productTag.updateMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { in: args.tagIds },
-          deleted_at: { not: null },
-        },
-        data: { deleted_at: null },
-      });
-      const existing = await tx.productTag.findMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { in: args.tagIds },
-          ...activeWhere,
-        },
-        select: { tag_id: true },
-      });
-      const present = new Set(existing.map((row) => row.tag_id));
-      const missing = args.tagIds.filter((id) => !present.has(id));
-      if (missing.length > 0) {
-        await tx.productTag.createMany({
-          data: missing.map((tagId) => ({
-            product_id: args.productId,
-            tag_id: tagId,
-          })),
-        });
+    await this.writeWithAudit(
+      (tx) => this.replaceProductTagsInTx(tx, args.productId, args.tagIds),
+      audit,
+    );
+  }
+
+  /**
+   * 이름으로 태그를 만들거나(삭제행은 복구) 재사용해 연결을 교체한다 — 전부 한 트랜잭션.
+   * upsert는 raw INSERT … ON DUPLICATE KEY UPDATE 한 문장으로, 동시에 같은 새 이름을 보내도 unique가 하나로 수렴한다.
+   * 할당은 왼쪽부터 평가되므로 updated_at 판정이 deleted_at 복구보다 앞에 와야 한다.
+   * collation(ci)이 동일성을 정하므로 findMany 결과를 그대로 쓴다('Cake'가 있으면 'cake'는 그 행).
+   */
+  async replaceProductTagsByName(
+    args: { productId: bigint; names: string[] },
+    audit: (tagIds: bigint[]) => AuditEntry,
+  ): Promise<bigint[]> {
+    return this.writeWithAudit(async (tx) => {
+      if (args.names.length === 0) {
+        await this.replaceProductTagsInTx(tx, args.productId, []);
+        return [];
       }
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO tag (name, created_at, updated_at)
+        VALUES ${Prisma.join(
+          args.names.map((name) => Prisma.sql`(${name}, NOW(3), NOW(3))`),
+        )}
+        ON DUPLICATE KEY UPDATE
+          updated_at = IF(deleted_at IS NULL, updated_at, NOW(3)),
+          deleted_at = NULL
+      `);
+      const tags = await tx.tag.findMany({
+        where: { name: { in: args.names }, ...activeWhere },
+        select: { id: true },
+      });
+      const tagIds = tags.map((row) => row.id);
+      await this.replaceProductTagsInTx(tx, args.productId, tagIds);
+      return tagIds;
     }, audit);
+  }
+
+  private async replaceProductTagsInTx(
+    tx: Prisma.TransactionClient,
+    productId: bigint,
+    tagIds: bigint[],
+  ): Promise<void> {
+    await tx.productTag.updateMany({
+      where: {
+        product_id: productId,
+        tag_id: { notIn: tagIds },
+        ...activeWhere,
+      },
+      data: { deleted_at: new Date() },
+    });
+    if (tagIds.length === 0) return;
+    await tx.productTag.updateMany({
+      where: {
+        product_id: productId,
+        tag_id: { in: tagIds },
+        deleted_at: { not: null },
+      },
+      data: { deleted_at: null },
+    });
+    const existing = await tx.productTag.findMany({
+      where: {
+        product_id: productId,
+        tag_id: { in: tagIds },
+        ...activeWhere,
+      },
+      select: { tag_id: true },
+    });
+    const present = new Set(existing.map((row) => row.tag_id));
+    const missing = tagIds.filter((id) => !present.has(id));
+    if (missing.length > 0) {
+      await tx.productTag.createMany({
+        data: missing.map((tagId) => ({
+          product_id: productId,
+          tag_id: tagId,
+        })),
+      });
+    }
   }
 
   async createOptionGroup(
