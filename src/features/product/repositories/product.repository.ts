@@ -575,10 +575,21 @@ export class ProductRepository {
     },
     audit: () => AuditEntry,
   ): Promise<void> {
-    await this.writeWithAudit(
-      (tx) => this.replaceProductTagsInTx(tx, args.productId, args.tagIds),
-      audit,
-    );
+    await this.writeWithAudit(async (tx) => {
+      await this.lockProductRow(tx, args.productId);
+      await this.replaceProductTagsInTx(tx, args.productId, args.tagIds);
+    }, audit);
+  }
+
+  /**
+   * 같은 상품의 태그 교체를 직렬화한다 — 잠금 없이는 updateMany→findMany→createMany가 교차해 합집합이 남거나 P2002가 난다.
+   * 태그 잠금(upsert·FK 검사)보다 먼저 잡아 두 교체 경로가 교차해도 교착하지 않는다.
+   */
+  private async lockProductRow(
+    tx: Prisma.TransactionClient,
+    productId: bigint,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM product WHERE id = ${productId} FOR UPDATE`;
   }
 
   /**
@@ -592,6 +603,7 @@ export class ProductRepository {
     audit: (tagIds: bigint[]) => AuditEntry,
   ): Promise<bigint[]> {
     return this.writeWithAudit(async (tx) => {
+      await this.lockProductRow(tx, args.productId);
       if (args.names.length === 0) {
         await this.replaceProductTagsInTx(tx, args.productId, []);
         return [];

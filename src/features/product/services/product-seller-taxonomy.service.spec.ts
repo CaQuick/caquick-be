@@ -377,7 +377,40 @@ describe('SellerProductTaxonomyService (real DB)', () => {
       expect(await activeLinks(productB.id)).toHaveLength(2);
     });
 
-    it('같은 판매자가 같은 상품에 동시 2회 보내면 tag 행 1개·활성 연결 1건이고 둘 다 성공한다(현 동작 기록)', async () => {
+    it('같은 상품에 서로 다른 이름 집합을 동시에 보내면 둘 다 성공하고 최종 연결은 두 집합 중 하나와 정확히 같다(합집합 아님)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+
+      await Promise.all([
+        setTags(account.id, product.id, ['생일', '레터링']),
+        setTags(account.id, product.id, ['기념일', '꽃']),
+      ]);
+      const links = await activeLinks(product.id);
+      const tags = await prisma.tag.findMany({
+        where: { id: { in: links.map((link) => link.tag_id) } },
+      });
+      expect([
+        ['레터링', '생일'],
+        ['기념일', '꽃'],
+      ]).toContainEqual(tags.map((tag) => tag.name).sort());
+    });
+
+    it('tagIds 경로와 이름 경로를 같은 상품에 동시에 보내도 교착 없이 둘 다 성공한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      const tag = await createTag(prisma, { name: '동시' });
+
+      await Promise.all([
+        service.sellerSetProductTags(account.id, {
+          productId: product.id.toString(),
+          tagIds: [tag.id.toString()],
+        }),
+        setTags(account.id, product.id, ['동시']),
+      ]);
+      expect(await activeLinks(product.id)).toHaveLength(1);
+    });
+
+    it('같은 판매자가 같은 상품에 동시 2회 보내면 tag 행 1개·활성 연결 1건이고 둘 다 성공한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);
 
