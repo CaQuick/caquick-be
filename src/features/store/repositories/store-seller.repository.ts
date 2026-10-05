@@ -220,6 +220,13 @@ export class StoreSellerRepository {
     });
   }
 
+  /** dateOnlyUtc는 kstDayBoundaries의 `@db.Date` 비교값. findFirst라 soft-delete 필터가 붙는다. */
+  async findStoreDailyCapacityByDate(storeId: bigint, dateOnlyUtc: Date) {
+    return this.prisma.storeDailyCapacity.findFirst({
+      where: { store_id: storeId, capacity_date: dateOnlyUtc },
+    });
+  }
+
   /** 목록과 카운트가 공유한다. */
   private dailyCapacityScopeWhere(args: {
     storeId: bigint;

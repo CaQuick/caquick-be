@@ -476,6 +476,99 @@ describe('OrderRepository (real DB)', () => {
     });
   });
 
+  describe('aggregateStoreOrdersInRange', () => {
+    const from = new Date('2026-10-04T15:00:00Z');
+    const to = new Date('2026-10-05T15:00:00Z');
+    const inside = new Date('2026-10-05T03:00:00Z');
+    const before = new Date('2026-10-04T14:59:59.999Z');
+
+    async function storeOrder(
+      storeId: bigint,
+      overrides: Parameters<typeof createOrder>[1] & { itemDeletedAt?: Date },
+    ) {
+      const { itemDeletedAt, ...orderOverrides } = overrides;
+      const order = await createOrder(prisma, orderOverrides);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: storeId,
+        ...(itemDeletedAt ? { deleted_at: itemDeletedAt } : {}),
+      });
+      return order;
+    }
+
+    it('basis가 기준 컬럼을 고르고 범위는 [from, to)다', async () => {
+      const store = await createStore(prisma);
+      // 픽업은 범위 안, 생성은 범위 밖
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        created_at: before,
+        total_price: 1_000,
+      });
+      // 경계: from은 포함, to는 제외
+      await storeOrder(store.id, {
+        pickup_at: from,
+        created_at: to,
+        total_price: 10,
+      });
+      await storeOrder(store.id, {
+        pickup_at: to,
+        created_at: from,
+        total_price: 100,
+      });
+
+      const base = { storeId: store.id, from, to };
+      expect(
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'pickup' }),
+      ).toEqual({ orderCount: 2, salesAmount: 1_010 });
+      expect(
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'created' }),
+      ).toEqual({ orderCount: 1, salesAmount: 100 });
+    });
+
+    it('CANCELED·soft-delete 주문·품목이 soft-delete된 주문·다른 매장은 제외한다', async () => {
+      const store = await createStore(prisma);
+      const other = await createStore(prisma);
+      await storeOrder(store.id, { pickup_at: inside, total_price: 1_000 });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        status: 'CANCELED',
+        total_price: 2_000,
+      });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        deleted_at: inside,
+        total_price: 4_000,
+      });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        itemDeletedAt: inside,
+        total_price: 8_000,
+      });
+      await storeOrder(other.id, { pickup_at: inside, total_price: 16_000 });
+
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'pickup',
+        }),
+      ).toEqual({ orderCount: 1, salesAmount: 1_000 });
+    });
+
+    it('해당 주문이 없으면 0·0이다', async () => {
+      const store = await createStore(prisma);
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'created',
+        }),
+      ).toEqual({ orderCount: 0, salesAmount: 0 });
+    });
+  });
+
   describe('findOrderDetailByStore', () => {
     it('해당 store item만 items로 포함 (다른 store item 제외)', async () => {
       const storeA = await createStore(prisma);
