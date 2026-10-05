@@ -16,3 +16,8 @@ export const PUSH_DEVICE_DISABLED_REASON = {
 } as const;
 export type PushDeviceDisabledReason =
   (typeof PUSH_DEVICE_DISABLED_REASON)[keyof typeof PUSH_DEVICE_DISABLED_REASON];
+
+/** Expo ticket·receipt 오류 코드. 토큰이 죽은 디바이스는 즉시 비활성한다. */
+export const EXPO_ERROR_DEVICE_NOT_REGISTERED = 'DeviceNotRegistered';
+/** Expo가 오류 코드를 안 준 오류 */
+export const EXPO_ERROR_UNKNOWN = 'UNKNOWN';

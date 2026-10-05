@@ -4,5 +4,6 @@ export { ConversationRepository } from '@/features/conversation/repositories/con
 // 구매자 메시지 전송 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 payload 스냅샷만 읽는다.
 export {
   CONVERSATION_BUYER_MESSAGE_SENT,
+  type ConversationBuyerMessageSentPayload,
   parseConversationBuyerMessageSentPayload,
 } from '@/features/conversation/events/conversation-buyer-message-sent.event';
