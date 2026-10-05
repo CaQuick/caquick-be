@@ -436,6 +436,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.NOT_FOUND,
     message: '커스텀 텍스트 토큰을 찾을 수 없습니다.',
   },
+  CUSTOM_TEXT_TOKEN_KEY_TAKEN: {
+    status: HttpStatus.CONFLICT,
+    message: '이 템플릿에 이미 같은 키의 커스텀 텍스트 토큰이 있습니다.',
+  },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,
     message: 'dayOfWeek는 0~6이어야 합니다.',

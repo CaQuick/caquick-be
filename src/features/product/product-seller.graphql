@@ -126,6 +126,8 @@ extend type Mutation {
   ): SellerCustomTemplate!
   """
   커스텀 텍스트 토큰을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  등록 시 같은 템플릿에 같은 tokenKey의 삭제된 슬롯이 있으면 그 슬롯(같은 id)을 복구해 입력값으로 갱신한다.
+  활성 슬롯과 tokenKey가 겹치면(수정으로 삭제된 슬롯의 키로 바꾸는 경우 포함) CUSTOM_TEXT_TOKEN_KEY_TAKEN.
   """
   sellerUpsertProductCustomTextToken(
     input: SellerUpsertProductCustomTextTokenInput!
@@ -309,19 +311,20 @@ type SellerCustomTextToken {
   """
   isRequired: Boolean!
   """
-  베이스 이미지 위에서 문구가 놓일 가로 위치. 미지정 시 null이고 배치는 클라이언트가 정한다.
+  문구 영역 왼쪽 위 모서리의 가로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000)이고 서버는 범위를 검사하지 않는다.
+  미지정 시 null이고 배치는 클라이언트가 정한다.
   """
   posX: Int
   """
-  베이스 이미지 위에서 문구가 놓일 세로 위치. 미지정 시 null.
+  문구 영역 왼쪽 위 모서리의 세로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000). 미지정 시 null.
   """
   posY: Int
   """
-  문구 영역 너비. 미지정 시 null.
+  문구 영역 너비. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000). 미지정 시 null.
   """
   width: Int
   """
-  문구 영역 높이. 미지정 시 null.
+  문구 영역 높이. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000). 미지정 시 null.
   """
   height: Int
 }
@@ -862,19 +865,20 @@ input SellerUpsertProductCustomTextTokenInput {
   """
   isRequired: Boolean = true
   """
-  베이스 이미지 위 가로 위치. 생략 시 배치를 클라이언트가 정한다.
+  문구 영역 왼쪽 위 모서리의 가로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000)이고 서버는 범위를 검사하지 않는다.
+  생략 시 배치를 클라이언트가 정한다.
   """
   posX: Int
   """
-  베이스 이미지 위 세로 위치.
+  문구 영역 왼쪽 위 모서리의 세로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000).
   """
   posY: Int
   """
-  문구 영역 너비.
+  문구 영역 너비. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000).
   """
   width: Int
   """
-  문구 영역 높이.
+  문구 영역 높이. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000).
   """
   height: Int
 }
