@@ -23,9 +23,15 @@ export class AuthService {
     private readonly refreshSessions: IRefreshSessionRepository,
   ) {}
 
-  async refresh(req: Request, res: Response): Promise<{ accessToken: string }> {
+  async refresh(
+    req: Request,
+    res: Response,
+  ): Promise<{ accessToken: string; expiresInSeconds: number }> {
     const { accessToken } = await this.tokens.rotateRefresh('USER', req, res);
-    return { accessToken };
+    return {
+      accessToken,
+      expiresInSeconds: this.tokens.getAccessExpiresSeconds(),
+    };
   }
 
   /** 시드 데이터의 accountId로 OIDC 흐름 없이 GraphQL API를 시험하기 위한 것. production은 controller 입구에서 차단된다. */

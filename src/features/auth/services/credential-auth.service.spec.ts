@@ -27,7 +27,7 @@ import { TokenService } from '@/features/auth/services/token.service';
 import { AccountType } from '@/generated/prisma/client';
 import { TokenBlacklistService } from '@/global/auth';
 import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
-import { TEST_AUTH_CONFIG } from '@/test/auth-config';
+import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 function makeCredential(
   overrides: Partial<AccountCredentialWithAccount> & {
@@ -180,7 +180,7 @@ describe('CredentialAuthService', () => {
       });
 
     it.each<CredentialRole>(['SELLER', 'ADMIN'])(
-      '%s 로그인 성공 시 accessToken·accountStatus·mustChangePassword를 반환한다',
+      '%s 로그인 성공 시 accessToken·expiresInSeconds·accountStatus·mustChangePassword를 반환한다',
       async (role) => {
         jest.spyOn(argon2, 'verify').mockResolvedValue(true);
         credentials.findCredentialByUsername.mockResolvedValue(
@@ -200,6 +200,7 @@ describe('CredentialAuthService', () => {
         const result = await login({ role });
 
         expect(result.accessToken).toBe('mock-access-token');
+        expect(result.expiresInSeconds).toBe(900);
         expect(result.accountStatus).toBe('ACTIVE');
         expect(result.mustChangePassword).toBe(true);
         expect(credentials.updateLastLogin).toHaveBeenCalledWith(
@@ -208,6 +209,18 @@ describe('CredentialAuthService', () => {
         );
       },
     );
+
+    it('expiresInSeconds는 authConfig의 jwtAccessExpiresSeconds를 그대로 싣는다', async () => {
+      jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+      credentials.findCredentialByUsername.mockResolvedValue(makeCredential());
+      mockConfig.getOrThrow.mockReturnValue(
+        testAuthConfig({ jwtAccessExpiresSeconds: 60 }),
+      );
+
+      const result = await login();
+
+      expect(result.expiresInSeconds).toBe(60);
+    });
 
     it.each([
       ['username 공백', { username: '   ' }],
@@ -296,9 +309,26 @@ describe('CredentialAuthService', () => {
       expect(rotate).toHaveBeenCalledWith('SELLER', reqWithCookie, mockRes);
       expect(result).toEqual({
         accessToken: 'rotated',
+        expiresInSeconds: 900,
         accountStatus: 'ACTIVE',
         mustChangePassword: true,
       });
+    });
+
+    it('expiresInSeconds는 authConfig의 jwtAccessExpiresSeconds를 그대로 싣는다', async () => {
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
+      credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
+      mockConfig.getOrThrow.mockReturnValue(
+        testAuthConfig({ jwtAccessExpiresSeconds: 60 }),
+      );
+
+      const result = await service.refresh({
+        role: 'SELLER',
+        req: reqWithCookie,
+        res: mockRes,
+      });
+
+      expect(result.expiresInSeconds).toBe(60);
     });
 
     it('refresh 쿠키가 없으면 회전 없이 MISSING_REFRESH_TOKEN', async () => {

@@ -48,12 +48,14 @@ import {
 function toCredentialLoginResponse(result: CredentialLoginResult): {
   accessToken: string;
   tokenType: 'Bearer';
+  expiresInSeconds: number;
   accountStatus: CredentialLoginResult['accountStatus'];
   mustChangePassword: boolean;
 } {
   return {
     accessToken: result.accessToken,
     tokenType: 'Bearer',
+    expiresInSeconds: result.expiresInSeconds,
     accountStatus: result.accountStatus,
     mustChangePassword: result.mustChangePassword,
   };
@@ -148,14 +150,17 @@ export class AuthController {
       properties: {
         accessToken: { type: 'string' },
         tokenType: { type: 'string', example: 'Bearer' },
+        expiresInSeconds: { type: 'number', example: 900 },
       },
-      required: ['accessToken', 'tokenType'],
+      required: ['accessToken', 'tokenType', 'expiresInSeconds'],
     },
   })
   @Post('refresh')
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const { accessToken } = await this.auth.refresh(req, res);
-    res.status(200).json({ accessToken, tokenType: 'Bearer' });
+    const { accessToken, expiresInSeconds } = await this.auth.refresh(req, res);
+    res
+      .status(200)
+      .json({ accessToken, tokenType: 'Bearer', expiresInSeconds });
   }
 
   @ApiOperation({

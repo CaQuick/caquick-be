@@ -30,6 +30,8 @@ export type CredentialRole = Exclude<AccountRole, 'USER'>;
 
 export interface CredentialLoginResult {
   accessToken: string;
+  /** 액세스 토큰 TTL(초) — 클라이언트가 JWT를 디코드하지 않고 선제 refresh 시점을 잡는다. */
+  expiresInSeconds: number;
   accountStatus: AccountStatus;
   /** 관리자가 지정한 초기/초기화 비밀번호 상태. true면 변경 전까지 다른 API가 거부된다. */
   mustChangePassword: boolean;
@@ -229,6 +231,7 @@ export class CredentialAuthService {
   ): CredentialLoginResult {
     return {
       accessToken,
+      expiresInSeconds: this.tokens.getAccessExpiresSeconds(),
       accountStatus: credential.account.status,
       mustChangePassword: credential.must_change_password,
     };
