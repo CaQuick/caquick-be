@@ -1348,7 +1348,11 @@ model StoreConversation {
   store_id   BigInt @db.UnsignedBigInt
 
   last_message_at DateTime? @db.DateTime(3)
-  last_read_at    DateTime? @db.DateTime(3)
+  // 구매자 읽음 마커(조회 시 전진). 판매자 마커는 명시 mutation·답장이 전진시킨다.
+  last_read_at        DateTime? @db.DateTime(3)
+  seller_last_read_at DateTime? @db.DateTime(3)
+  // 대화 생성 시점 구매자 닉네임(표시용 스냅샷). 도입 전 대화는 백필로 못 채우면 null.
+  buyer_nickname_snapshot String? @db.VarChar(50)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)

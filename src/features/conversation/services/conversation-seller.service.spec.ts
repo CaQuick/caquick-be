@@ -15,6 +15,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 
 describe('SellerConversationService (real DB)', () => {
   let service: SellerConversationService;
+  let events: ConversationEventsService;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -32,6 +33,7 @@ describe('SellerConversationService (real DB)', () => {
       ],
     });
     service = module.get(SellerConversationService);
+    events = module.get(ConversationEventsService);
     prisma = p;
   });
 
@@ -44,12 +46,37 @@ describe('SellerConversationService (real DB)', () => {
     await truncateAll();
   });
 
-  async function setupConversation(storeId: bigint) {
+  async function setupConversation(
+    storeId: bigint,
+    overrides: { buyerNickname?: string | null; sellerLastReadAt?: Date } = {},
+  ) {
     const customer = await createAccount(prisma, { account_type: 'USER' });
     return prisma.storeConversation.create({
       data: {
         account_id: customer.id,
         store_id: storeId,
+        buyer_nickname_snapshot: overrides.buyerNickname ?? null,
+        seller_last_read_at: overrides.sellerLastReadAt ?? null,
+      },
+    });
+  }
+
+  function hoursAgo(hours: number): Date {
+    return new Date(Date.now() - hours * 60 * 60 * 1000);
+  }
+
+  async function addUserMessage(
+    conv: { id: bigint; account_id: bigint },
+    args: { bodyText?: string; createdAt?: Date } = {},
+  ) {
+    return prisma.storeConversationMessage.create({
+      data: {
+        conversation_id: conv.id,
+        sender_type: 'USER',
+        sender_account_id: conv.account_id,
+        body_format: 'TEXT',
+        body_text: args.bodyText ?? '문의',
+        created_at: args.createdAt ?? new Date(),
       },
     });
   }
@@ -75,6 +102,105 @@ describe('SellerConversationService (real DB)', () => {
       });
       expect(result.items).toHaveLength(2);
       expect(result.nextCursor).not.toBeNull();
+    });
+
+    it('닉네임 스냅샷·미리보기·판매자 마커·미읽음 수를 매핑하고, 스냅샷 없는 대화는 null', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const marker = hoursAgo(3);
+      const named = await setupConversation(store.id, {
+        buyerNickname: '현진',
+        sellerLastReadAt: marker,
+      });
+      await addUserMessage(named, {
+        createdAt: hoursAgo(4),
+        bodyText: '읽은 문의',
+      });
+      await addUserMessage(named, {
+        createdAt: hoursAgo(2),
+        bodyText: '새 문의',
+      });
+      await prisma.storeConversationMessage.create({
+        data: {
+          conversation_id: named.id,
+          sender_type: 'STORE',
+          sender_account_id: account.id,
+          body_format: 'HTML',
+          body_html: '<p>답변 <b>드립니다</b></p>',
+          created_at: hoursAgo(1),
+        },
+      });
+      const anonymous = await setupConversation(store.id);
+
+      const result = await service.sellerConversations(account.id);
+
+      const byId = new Map(result.items.map((i) => [i.id, i]));
+      expect(byId.get(named.id.toString())).toMatchObject({
+        buyerNickname: '현진',
+        lastMessagePreview: '답변 드립니다',
+        unreadCount: 1,
+      });
+      expect(byId.get(named.id.toString())?.sellerLastReadAt?.getTime()).toBe(
+        marker.getTime(),
+      );
+      expect(byId.get(anonymous.id.toString())).toMatchObject({
+        buyerNickname: null,
+        lastMessagePreview: null,
+        sellerLastReadAt: null,
+        unreadCount: 0,
+      });
+    });
+  });
+
+  describe('sellerMarkConversationRead', () => {
+    it('내 매장 대화의 마커를 최신 메시지까지 전진시키고 unreadCount 0을 돌려준다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id, { buyerNickname: '현진' });
+      await addUserMessage(conv, { createdAt: hoursAgo(2) });
+      const newest = await addUserMessage(conv, { createdAt: hoursAgo(1) });
+      expect(
+        (await service.sellerConversations(account.id)).items[0].unreadCount,
+      ).toBe(2);
+
+      const result = await service.sellerMarkConversationRead(
+        account.id,
+        conv.id.toString(),
+      );
+
+      expect(result.sellerLastReadAt?.getTime()).toBe(
+        newest.created_at.getTime(),
+      );
+      expect(result).toMatchObject({ buyerNickname: '현진', unreadCount: 0 });
+      expect(
+        (await service.sellerConversations(account.id)).items[0].unreadCount,
+      ).toBe(0);
+    });
+
+    it('남의 매장 대화·없는 대화("0")는 CONVERSATION_NOT_FOUND', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const othersConv = await setupConversation(other.store.id);
+
+      await expect(
+        service.sellerMarkConversationRead(
+          me.account.id,
+          othersConv.id.toString(),
+        ),
+      ).rejects.toThrowDomain('CONVERSATION_NOT_FOUND');
+      await expect(
+        service.sellerMarkConversationRead(me.account.id, '0'),
+      ).rejects.toThrowDomain('CONVERSATION_NOT_FOUND');
+    });
+
+    it('형식이 잘못된 id는 INVALID_ID, USER 계정은 SELLER_ONLY', async () => {
+      const { account } = await setupSellerWithStore(prisma);
+      const user = await createAccount(prisma, { account_type: 'USER' });
+
+      await expect(
+        service.sellerMarkConversationRead(account.id, ''),
+      ).rejects.toThrowDomain('INVALID_ID');
+      await expect(
+        service.sellerMarkConversationRead(user.id, '1'),
+      ).rejects.toThrowDomain('SELLER_ONLY');
     });
   });
 
@@ -191,6 +317,36 @@ describe('SellerConversationService (real DB)', () => {
         where: { store_id: store.id, target_type: 'CONVERSATION' },
       });
       expect(auditLogs).toHaveLength(1);
+    });
+
+    it('답장 뒤 목록 미읽음은 0이고, 판매자 이벤트에 닉네임·마커·미읽음 0이 실린다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id, { buyerNickname: '현진' });
+      await addUserMessage(conv, { createdAt: hoursAgo(1) });
+      const publishSeller = jest.spyOn(events, 'publishSellerListUpdate');
+
+      const reply = await service.sellerSendConversationMessage(account.id, {
+        conversationId: conv.id.toString(),
+        bodyFormat: 'TEXT',
+        bodyText: '답장',
+      });
+
+      expect(
+        (await service.sellerConversations(account.id)).items[0],
+      ).toMatchObject({
+        unreadCount: 0,
+        lastMessagePreview: '답장',
+      });
+      expect(publishSeller).toHaveBeenCalledWith(store.id.toString(), {
+        conversationId: conv.id.toString(),
+        accountId: conv.account_id.toString(),
+        buyerNickname: '현진',
+        lastMessagePreview: '답장',
+        lastMessageAt: reply.createdAt.toISOString(),
+        sellerLastReadAt: reply.createdAt.toISOString(),
+        unreadCount: 0,
+      });
+      publishSeller.mockRestore();
     });
   });
 

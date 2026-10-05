@@ -85,4 +85,28 @@ describe('Seller Conversation Resolvers (real DB)', () => {
       ),
     ).rejects.toThrowDomain(404);
   });
+
+  it('Mutation.sellerMarkConversationRead: 내 매장 대화의 판매자 마커를 전진시킨 상태를 반환', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const conv = await createConv(me.store.id);
+    const message = await prisma.storeConversationMessage.create({
+      data: {
+        conversation_id: conv.id,
+        sender_type: 'USER',
+        sender_account_id: conv.account_id,
+        body_format: 'TEXT',
+        body_text: '문의',
+      },
+    });
+
+    const result = await mutationResolver.sellerMarkConversationRead(
+      { accountId: me.account.id.toString() },
+      conv.id.toString(),
+    );
+
+    expect(result.sellerLastReadAt?.getTime()).toBe(
+      message.created_at.getTime(),
+    );
+    expect(result.unreadCount).toBe(0);
+  });
 });
