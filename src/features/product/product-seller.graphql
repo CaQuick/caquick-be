@@ -126,6 +126,8 @@ extend type Mutation {
   ): SellerCustomTemplate!
   """
   커스텀 텍스트 토큰을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  등록 시 같은 템플릿에 같은 tokenKey의 삭제된 슬롯이 있으면 그 슬롯(같은 id)을 복구해 입력값으로 갱신한다.
+  활성 슬롯과 tokenKey가 겹치면(수정으로 삭제된 슬롯의 키로 바꾸는 경우 포함) CUSTOM_TEXT_TOKEN_KEY_TAKEN.
   """
   sellerUpsertProductCustomTextToken(
     input: SellerUpsertProductCustomTextTokenInput!

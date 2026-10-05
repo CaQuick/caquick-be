@@ -2,6 +2,7 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { SellerCustomTemplateService } from '@/features/product/services/product-seller-custom-template.service';
+import type { SellerCustomTextTokenOutput } from '@/features/product/types/product-seller-output.type';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -265,6 +266,224 @@ describe('SellerCustomTemplateService (real DB)', () => {
       );
       expect(result.id).toBe(token.id.toString());
       expect(result.tokenKey).toBe('B');
+    });
+
+    describe('같은 tokenKey 재사용', () => {
+      it('삭제한 슬롯과 같은 키로 등록하면 그 슬롯을 복구해 입력값으로 갱신한다', async () => {
+        const { accountId, storeId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        const first = await service.sellerUpsertProductCustomTextToken(
+          accountId,
+          {
+            templateId: tpl.id.toString(),
+            tokenKey: 'NAME',
+            defaultText: '가',
+          },
+        );
+        await service.sellerDeleteProductCustomTextToken(
+          accountId,
+          BigInt(first.id),
+        );
+
+        const result = await service.sellerUpsertProductCustomTextToken(
+          accountId,
+          {
+            templateId: tpl.id.toString(),
+            tokenKey: 'NAME',
+            defaultText: '나',
+            maxLength: 12,
+            sortOrder: 3,
+            isRequired: false,
+            posX: 1000,
+            posY: 2000,
+            width: 8000,
+            height: 1500,
+          },
+        );
+
+        expect(result).toEqual({
+          id: first.id,
+          templateId: tpl.id.toString(),
+          tokenKey: 'NAME',
+          defaultText: '나',
+          maxLength: 12,
+          sortOrder: 3,
+          isRequired: false,
+          posX: 1000,
+          posY: 2000,
+          width: 8000,
+          height: 1500,
+        });
+        const rows = await prisma.productCustomTextToken.findMany({
+          where: { template_id: tpl.id, deleted_at: undefined },
+        });
+        expect(rows).toHaveLength(1);
+        expect(rows[0].deleted_at).toBeNull();
+        const audits = await prisma.auditLog.findMany({
+          where: { store_id: storeId, action: 'CREATE' },
+          orderBy: { id: 'asc' },
+        });
+        expect(audits.map((a) => a.after_json)).toEqual([
+          { tokenId: first.id, tokenKey: 'NAME' },
+          { tokenId: first.id, tokenKey: 'NAME' },
+        ]);
+      });
+
+      it('활성 슬롯과 키가 겹치면 CUSTOM_TEXT_TOKEN_KEY_TAKEN이고 아무것도 바뀌지 않는다', async () => {
+        const { accountId, storeId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        const live = await prisma.productCustomTextToken.create({
+          data: { template_id: tpl.id, token_key: 'NAME', default_text: '가' },
+        });
+
+        await expect(
+          service.sellerUpsertProductCustomTextToken(accountId, {
+            templateId: tpl.id.toString(),
+            tokenKey: 'NAME',
+            defaultText: '나',
+          }),
+        ).rejects.toThrowDomain('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
+
+        const after = await prisma.productCustomTextToken.findUniqueOrThrow({
+          where: { id: live.id },
+        });
+        expect(after.default_text).toBe('가');
+        expect(
+          await prisma.auditLog.count({ where: { store_id: storeId } }),
+        ).toBe(0);
+      });
+
+      it.each([
+        ['활성 슬롯', null],
+        ['삭제된 슬롯', new Date()],
+      ])(
+        '수정으로 %s의 키로 바꾸면 CUSTOM_TEXT_TOKEN_KEY_TAKEN',
+        async (_label, deletedAt) => {
+          const { accountId, product } = await setupSellerWithProduct();
+          const tpl = await createTemplate(product.id);
+          await prisma.productCustomTextToken.create({
+            data: {
+              template_id: tpl.id,
+              token_key: 'TAKEN',
+              default_text: 'x',
+              deleted_at: deletedAt,
+            },
+          });
+          const mine = await prisma.productCustomTextToken.create({
+            data: { template_id: tpl.id, token_key: 'MINE', default_text: 'y' },
+          });
+
+          await expect(
+            service.sellerUpsertProductCustomTextToken(accountId, {
+              templateId: tpl.id.toString(),
+              tokenId: mine.id.toString(),
+              tokenKey: 'TAKEN',
+              defaultText: 'y',
+            }),
+          ).rejects.toThrowDomain('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
+        },
+      );
+
+      it('다른 템플릿의 같은 키는 활성이든 삭제든 무관하다', async () => {
+        const me = await setupSellerWithProduct();
+        const other = await setupSellerWithProduct();
+        const myTpl = await createTemplate(me.product.id);
+        const othersTpl = await createTemplate(other.product.id);
+        const othersLive = await prisma.productCustomTextToken.create({
+          data: {
+            template_id: othersTpl.id,
+            token_key: 'NAME',
+            default_text: 'a',
+          },
+        });
+        const othersDeleted = await prisma.productCustomTextToken.create({
+          data: {
+            template_id: othersTpl.id,
+            token_key: 'GONE',
+            default_text: 'b',
+            deleted_at: new Date(),
+          },
+        });
+
+        const created = await Promise.all(
+          ['NAME', 'GONE'].map((tokenKey) =>
+            service.sellerUpsertProductCustomTextToken(me.accountId, {
+              templateId: myTpl.id.toString(),
+              tokenKey,
+              defaultText: '내것',
+            }),
+          ),
+        );
+
+        expect(created.map((t) => t.templateId)).toEqual([
+          myTpl.id.toString(),
+          myTpl.id.toString(),
+        ]);
+        const createdIds = created.map((t) => t.id);
+        expect(createdIds).not.toContain(othersLive.id.toString());
+        expect(createdIds).not.toContain(othersDeleted.id.toString());
+        const stillDeleted =
+          await prisma.productCustomTextToken.findUniqueOrThrow({
+            where: { id: othersDeleted.id },
+          });
+        expect(stillDeleted.deleted_at).not.toBeNull();
+      });
+
+      it.each([
+        ['새 키', false],
+        ['삭제된 슬롯의 키', true],
+      ])(
+        '%s로 동시에 2건을 등록하면 1건만 성공하고 나머지는 CUSTOM_TEXT_TOKEN_KEY_TAKEN',
+        async (_label, withDeleted) => {
+          const { accountId, storeId, product } =
+            await setupSellerWithProduct();
+          const tpl = await createTemplate(product.id);
+          if (withDeleted) {
+            await prisma.productCustomTextToken.create({
+              data: {
+                template_id: tpl.id,
+                token_key: 'NAME',
+                default_text: 'old',
+                deleted_at: new Date(),
+              },
+            });
+          }
+
+          const results = await Promise.allSettled(
+            ['A', 'B'].map((defaultText) =>
+              service.sellerUpsertProductCustomTextToken(accountId, {
+                templateId: tpl.id.toString(),
+                tokenKey: 'NAME',
+                defaultText,
+              }),
+            ),
+          );
+
+          const fulfilled = results.filter(
+            (r): r is PromiseFulfilledResult<SellerCustomTextTokenOutput> =>
+              r.status === 'fulfilled',
+          );
+          const rejected = results.filter(
+            (r): r is PromiseRejectedResult => r.status === 'rejected',
+          );
+          expect(fulfilled).toHaveLength(1);
+          expect(rejected).toHaveLength(1);
+          expect(rejected[0].reason).toThrowDomain(
+            'CUSTOM_TEXT_TOKEN_KEY_TAKEN',
+          );
+          const rows = await prisma.productCustomTextToken.findMany({
+            where: { template_id: tpl.id, deleted_at: undefined },
+          });
+          expect(rows).toHaveLength(1);
+          expect(rows[0].deleted_at).toBeNull();
+          expect(rows[0].default_text).toBe(fulfilled[0].value.defaultText);
+          expect(
+            await prisma.auditLog.count({
+              where: { store_id: storeId, action: 'CREATE' },
+            }),
+          ).toBe(1);
+        },
+      );
     });
   });
 
