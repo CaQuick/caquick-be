@@ -311,6 +311,7 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 | **문서 · 메트릭**   | `DOCS_ACCESS_TOKEN`(`/gql-docs`와 `/rest-docs` 접근 토큰, 운영 필수), `METRICS_ACCESS_TOKEN`(`/metrics` Bearer 토큰, 운영 필수)                                                                                                                                            |
 | **경보 (선택)**     | `DISCORD_ALERT_WEBHOOK_URL`(없으면 로그로만 남깁니다), `ALERT_DEDUPE_WINDOW_MS`(기본 5분), `BOOT_ALERT_STATE_DIR`(부팅 실패 경보의 억제 파일 위치, 기본 `~/.caquick/boot-alert`)                                                                                           |
 | **Outbox (선택)**   | `OUTBOX_DISPATCH_ENABLED`(`false`로 끄는 용도만 있으며 켜는 것은 worker 역할이 결정), `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_PARTITION_CONCURRENCY`                                                                                |
+| **푸시 (선택)**     | `EXPO_PUSH_ENABLED`(`true`일 때만 worker가 판매자 앱 푸시를 보내고, 기본 `false`면 소비자가 전송 없이 ack합니다), `EXPO_PUSH_ACCESS_TOKEN`(Expo 액세스 토큰, 없으면 인증 헤더 없이 보냅니다), `EXPO_PUSH_TIMEOUT_MS`(기본 5000)                                            |
 | **시드 (선택)**     | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD`, `SELLER_SEED_PASSWORD`                                                                                                                                                                                                       |
 
 ### 자주 쓰는 스크립트

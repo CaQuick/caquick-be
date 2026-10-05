@@ -19,6 +19,7 @@ describe('MetricsService', () => {
       ['type', 'field', 'outcome'],
     ],
     ['caquick_outbox_consume_duration_seconds', ['consumer', 'result']],
+    ['caquick_expo_push_sends_total', ['result']],
     ['caquick_metrics_collect_errors_total', ['gauge']],
     ['caquick_process_cpu_seconds_total', []],
     ['caquick_nodejs_heap_size_used_bytes', []],
