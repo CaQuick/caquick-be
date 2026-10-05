@@ -1,11 +1,12 @@
 -- 판매자 앱 Expo 푸시 디바이스(토큰 unique, 소유 계정은 마지막 등록자)와 이벤트×디바이스 전달 추적 행. 계정·매장 FK 없음, 활성 판정은 disabled_at IS NULL.
+-- expo_push_token은 utf8mb4_bin: 대소문자만 다른 토큰이 같은 디바이스로 합쳐져 소유권이 넘어가지 않게.
 
 -- CreateTable
 CREATE TABLE `seller_push_device` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `account_id` BIGINT UNSIGNED NOT NULL,
     `store_id` BIGINT UNSIGNED NOT NULL,
-    `expo_push_token` VARCHAR(200) NOT NULL,
+    `expo_push_token` VARCHAR(200) COLLATE utf8mb4_bin NOT NULL,
     `platform` ENUM('IOS', 'ANDROID') NOT NULL,
     `client_device_id` VARCHAR(128) NULL,
     `last_seen_at` DATETIME(3) NOT NULL,

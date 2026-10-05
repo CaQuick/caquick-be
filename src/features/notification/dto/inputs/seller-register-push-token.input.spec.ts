@@ -16,19 +16,15 @@ async function propertiesOf(plain: object): Promise<string[]> {
 }
 
 describe('SellerRegisterPushTokenInput', () => {
+  // Expo 형식은 DTO가 검사하지 않는다(서비스가 INVALID_PUSH_TOKEN) — 여기서는 문자열·길이만
   it.each([
     ['ExponentPushToken[abc-123]', true],
-    ['ExpoPushToken[x]', true],
-    ['ExpoPushToken[a_B-9]', true],
-    ['abc', false],
-    ['', false],
-    ['ExponentPushToken[]', false],
-    ['ExponentPushToken[abc 123]', false],
-    [' ExponentPushToken[abc]', false],
-    ['ExponentPushToken[abc]\n', false],
-    ['expopushtoken[abc]', false],
+    ['not-a-token', true],
+    ['', true],
     [`ExpoPushToken[${'a'.repeat(185)}]`, true],
     [`ExpoPushToken[${'a'.repeat(186)}]`, false],
+    [undefined, false],
+    [123, false],
   ])('token %p → 통과 %s', async (token, ok) => {
     expect(await propertiesOf({ ...VALID, token })).toEqual(
       ok ? [] : ['token'],

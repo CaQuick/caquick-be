@@ -149,6 +149,21 @@ describe('SellerPushDeviceService (real DB)', () => {
       expect(await prisma.sellerPushDevice.count()).toBe(2);
     });
 
+    it('대소문자만 다른 토큰은 다른 디바이스다 — 행 2개, 각자 소유', async () => {
+      const upper = await setupSellerWithStore(prisma);
+      const lower = await setupSellerWithStore(prisma);
+      await register(upper.account.id, 'ExponentPushToken[AbC]');
+      await register(lower.account.id, 'ExponentPushToken[abc]');
+
+      const rows = await prisma.sellerPushDevice.findMany({
+        orderBy: { id: 'asc' },
+      });
+      expect(rows.map((r) => [r.expo_push_token, r.account_id])).toEqual([
+        ['ExponentPushToken[AbC]', upper.account.id],
+        ['ExponentPushToken[abc]', lower.account.id],
+      ]);
+    });
+
     it('USER 계정이면 SELLER_ONLY', async () => {
       const user = await createAccount(prisma, { account_type: 'USER' });
       await expect(register(user.id)).rejects.toThrowDomain('SELLER_ONLY');
@@ -169,13 +184,34 @@ describe('SellerPushDeviceService (real DB)', () => {
       expect(await prisma.sellerPushDevice.count()).toBe(0);
     });
 
-    it('Expo 형식이 아닌 토큰은 INVALID_PUSH_TOKEN이고 행을 만들지 않는다', async () => {
-      const seller = await setupSellerWithStore(prisma);
-      await expect(
-        register(seller.account.id, 'not-a-token'),
-      ).rejects.toThrowDomain('INVALID_PUSH_TOKEN');
-      expect(await prisma.sellerPushDevice.count()).toBe(0);
-    });
+    // 형식 검사는 DTO가 아니라 여기 — DTO에서 걸면 VALIDATION_FAILED가 돼 SDL 계약과 어긋난다
+    it.each(['ExpoPushToken[x]', 'ExpoPushToken[a_B-9]'])(
+      'Expo 형식 토큰 %p은 등록된다',
+      async (token) => {
+        const seller = await setupSellerWithStore(prisma);
+        await expect(register(seller.account.id, token)).resolves.toBe(true);
+        expect(await prisma.sellerPushDevice.count()).toBe(1);
+      },
+    );
+
+    it.each([
+      'not-a-token',
+      '',
+      'ExponentPushToken[]',
+      'ExponentPushToken[abc 123]',
+      ' ExponentPushToken[abc]',
+      'ExponentPushToken[abc]\n',
+      'expopushtoken[abc]',
+    ])(
+      'Expo 형식이 아닌 토큰 %p은 INVALID_PUSH_TOKEN이고 행을 만들지 않는다',
+      async (token) => {
+        const seller = await setupSellerWithStore(prisma);
+        await expect(register(seller.account.id, token)).rejects.toThrowDomain(
+          'INVALID_PUSH_TOKEN',
+        );
+        expect(await prisma.sellerPushDevice.count()).toBe(0);
+      },
+    );
   });
 
   describe('unregister', () => {
