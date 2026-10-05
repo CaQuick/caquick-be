@@ -8,6 +8,13 @@ export interface SellerTagOutput {
   name: string;
 }
 
+export interface SellerTagSuggestionOutput {
+  id: string;
+  name: string;
+  isExactMatch: boolean;
+  productCount: number;
+}
+
 export interface SellerProductImageOutput {
   id: string;
   imageUrl: string;

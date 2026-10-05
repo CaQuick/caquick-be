@@ -7,6 +7,12 @@ extend type Query {
   내 매장 상품 상세를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerProduct(productId: ID!): SellerProduct!
+  """
+  내 상품에 붙일 태그를 이름으로 검색한다(타이프어헤드). keyword를 정규화(앞뒤 공백·선행 '#' 제거, 연속 공백 1칸, 소문자)한 뒤
+  부분일치로 찾아 이름순(정확 일치가 맨 앞)으로 limit건까지 준다. 정확 일치 태그는 이름순 limit 밖이어도 항상 포함한다.
+  정규화 후 비면 빈 배열, 80자를 넘으면 BAD_USER_INPUT. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerSearchTags(input: SellerTagSearchInput!): [SellerTagSuggestion!]!
 }
 
 extend type Mutation {
@@ -145,6 +151,25 @@ type SellerTag {
   태그명.
   """
   name: String!
+}
+
+"""
+태그 제안 1건. 정확 일치 여부로 FE가 '새 태그 만들기' 행을 띄울지 판단한다.
+"""
+type SellerTagSuggestion {
+  id: ID!
+  """
+  태그명(저장된 형태).
+  """
+  name: String!
+  """
+  정규화한 keyword와 이름이 같으면 true(대소문자·악센트 무시). 목록에 true가 없으면 FE는 '새로 만들기'를 보여준다.
+  """
+  isExactMatch: Boolean!
+  """
+  이 태그가 붙은 활성 상품 수(전 매장). 표시용 근사치이며 정렬에는 쓰지 않는다.
+  """
+  productCount: Int!
 }
 
 """
@@ -570,6 +595,20 @@ input SellerSetProductTagsInput {
   연결할 태그 ID 전체.
   """
   tagIds: [ID!]!
+}
+
+"""
+태그 검색 입력.
+"""
+input SellerTagSearchInput {
+  """
+  검색어. 정규화 후 80자를 넘으면 BAD_USER_INPUT.
+  """
+  keyword: String!
+  """
+  최대 건수. 기본 10, 1~20만 허용하며 벗어나면 BAD_USER_INPUT.
+  """
+  limit: Int = 10
 }
 
 """

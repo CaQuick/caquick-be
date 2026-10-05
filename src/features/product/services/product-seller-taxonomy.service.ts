@@ -2,15 +2,23 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
+import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { MAX_TAG_NAME_LENGTH } from '@/features/product/constants/product-admin.constants';
+import { DEFAULT_TAG_SUGGESTIONS } from '@/features/product/constants/product-seller.constants';
 import type { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
 import type { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
+import type { SellerTagSearchInput } from '@/features/product/dto/inputs/seller-tag-search.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
 import { toProductOutput } from '@/features/product/services/product-seller-mappers.helper';
-import type { SellerProductOutput } from '@/features/product/types/product-seller-output.type';
+import { normalizeTagName } from '@/features/product/services/tag-name.helper';
+import type {
+  SellerProductOutput,
+  SellerTagSuggestionOutput,
+} from '@/features/product/types/product-seller-output.type';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 
@@ -72,6 +80,31 @@ export class SellerProductTaxonomyService extends SellerBaseService {
     if (!detail) throw new DomainException('PRODUCT_NOT_FOUND');
 
     return toProductOutput(detail);
+  }
+
+  async sellerSearchTags(
+    accountId: bigint,
+    input: SellerTagSearchInput,
+  ): Promise<SellerTagSuggestionOutput[]> {
+    await this.requireSellerContext(accountId);
+    const keyword = normalizeTagName(input.keyword);
+    if (keyword === null) return [];
+    cleanRequiredText(keyword, MAX_TAG_NAME_LENGTH);
+
+    const limit = input.limit ?? DEFAULT_TAG_SUGGESTIONS;
+    const { exact, rows } = await this.productRepository.searchTagsByName({
+      keyword,
+      limit,
+    });
+    const ordered = exact
+      ? [exact, ...rows.filter((row) => row.id !== exact.id)]
+      : rows;
+    return ordered.slice(0, limit).map((row) => ({
+      id: row.id.toString(),
+      name: row.name,
+      isExactMatch: row.id === exact?.id,
+      productCount: row._count.product_tags,
+    }));
   }
 
   async sellerSetProductTags(

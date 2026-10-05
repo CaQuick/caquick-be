@@ -17,6 +17,17 @@ import {
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
+const tagSuggestionInclude = {
+  _count: {
+    select: {
+      product_tags: { where: { ...activeWhere, product: visibleWhere } },
+    },
+  },
+} as const;
+export type TagSuggestionRow = Prisma.TagGetPayload<{
+  include: typeof tagSuggestionInclude;
+}>;
+
 export interface StoreProductRow {
   id: bigint;
   store_id: bigint;
@@ -480,6 +491,29 @@ export class ProductRepository {
       },
       select: { id: true },
     });
+  }
+
+  /**
+   * 정확 일치는 이름순 limit 밖으로 밀리면 안 되므로 별도로 찾는다 — contains 결과에 이미 있으면 서비스가 합친다.
+   * 정확 일치 판정은 DB collation(ci)에 맡긴다. 연결 수는 삭제 연결·비활성/삭제 상품을 뺀다.
+   */
+  async searchTagsByName(args: {
+    keyword: string;
+    limit: number;
+  }): Promise<{ exact: TagSuggestionRow | null; rows: TagSuggestionRow[] }> {
+    const [exact, rows] = await Promise.all([
+      this.prisma.tag.findFirst({
+        where: { name: args.keyword },
+        include: tagSuggestionInclude,
+      }),
+      this.prisma.tag.findMany({
+        where: { name: { contains: args.keyword } },
+        include: tagSuggestionInclude,
+        orderBy: { name: 'asc' },
+        take: args.limit,
+      }),
+    ]);
+    return { exact, rows };
   }
 
   /**
