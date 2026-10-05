@@ -320,6 +320,15 @@ describe('SellerProductTaxonomyService (real DB)', () => {
       ).rejects.toThrowDomain('TEXT_TOO_LONG');
     });
 
+    it("정규화 전 80자라도 소문자화로 늘어 80자를 넘으면('İ'×80 → 160) 400 TEXT_TOO_LONG", async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const product = await createSellerProduct(store.id);
+      await expect(
+        setTags(account.id, product.id, ['İ'.repeat(80)]),
+      ).rejects.toThrowDomain('TEXT_TOO_LONG');
+      expect(await prisma.tag.count()).toBe(0);
+    });
+
     it('같은 입력 2회는 멱등 — 결과·tag 행·활성 연결 수가 그대로', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id);

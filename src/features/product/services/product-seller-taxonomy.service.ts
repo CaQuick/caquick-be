@@ -179,7 +179,8 @@ export class SellerProductTaxonomyService extends SellerBaseService {
             cleanRequiredText(raw, MAX_TAG_NAME_LENGTH),
           );
           if (name === null) throw new DomainException('TEXT_REQUIRED');
-          return name;
+          // 소문자화로 코드 포인트가 늘 수 있어('İ' → 'i̇') VARCHAR(80)에 맞게 다시 본다
+          return cleanRequiredText(name, MAX_TAG_NAME_LENGTH);
         }),
       ),
     ];
