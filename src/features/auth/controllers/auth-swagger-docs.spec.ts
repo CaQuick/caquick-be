@@ -8,6 +8,7 @@ import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { JwksController } from '@/features/auth/controllers/jwks.controller';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
+import { RateLimitGuard } from '@/global/rate-limit';
 import { TEST_AUTH_CONFIG } from '@/test/auth-config';
 
 /** 공용 데코레이터 묶음이 operation의 summary·description·security·response 스키마를 바꾸지 않는지 스냅샷으로 고정한다(JWKS 포함 14개). */
@@ -26,7 +27,11 @@ describe('Auth REST Swagger 문서', () => {
           useValue: { getOrThrow: () => TEST_AUTH_CONFIG },
         },
       ],
-    }).compile();
+    })
+      // 문서만 본다 — 가드 동작은 auth-login-rate-limit.spec이 real Redis로 증명
+      .overrideGuard(RateLimitGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
     app = module.createNestApplication();
     await app.init();
   });

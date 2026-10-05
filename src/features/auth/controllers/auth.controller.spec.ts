@@ -1,3 +1,4 @@
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
@@ -6,6 +7,8 @@ import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import type { JwtUser } from '@/global/auth';
+import { RateLimitGuard } from '@/global/rate-limit';
+import { RATE_LIMIT_METADATA_KEY } from '@/global/rate-limit/rate-limit.guard';
 
 function mockRes(): Response {
   return {
@@ -48,10 +51,43 @@ describe('AuthController', () => {
         { provide: OidcLoginService, useValue: oidcLogin },
         { provide: CredentialAuthService, useValue: credentialAuth },
       ],
-    }).compile();
+    })
+      // 핸들러만 본다 — 가드 동작은 auth-login-rate-limit.spec이 real Redis로 증명
+      .overrideGuard(RateLimitGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
   });
+
+  it.each([
+    ['sellerLogin', 'seller'],
+    ['adminLogin', 'admin'],
+  ] as const)(
+    '%s에는 아이디+IP 5회·IP 30회/15분 정책과 가드가 걸려 있다',
+    (handlerName, role) => {
+      const handler = AuthController.prototype[handlerName];
+
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+        RateLimitGuard,
+      ]);
+      expect(Reflect.getMetadata(RATE_LIMIT_METADATA_KEY, handler)).toEqual([
+        {
+          name: `${role}-login`,
+          subject: 'ip+username',
+          limit: 5,
+          windowSeconds: 900,
+          code: 'LOGIN_RATE_LIMITED',
+        },
+        {
+          name: `${role}-login-ip`,
+          limit: 30,
+          windowSeconds: 900,
+          code: 'LOGIN_RATE_LIMITED',
+        },
+      ]);
+    },
+  );
 
   it('start는 OIDC 인증 URL로 리다이렉트해야 한다', async () => {
     const res = {

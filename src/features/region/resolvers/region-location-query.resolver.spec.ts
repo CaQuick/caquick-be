@@ -94,10 +94,8 @@ describe('RegionLocationQueryResolver (real DB)', () => {
       RateLimitGuard,
       OptionalJwtAuthGuard,
     ]);
-    expect(Reflect.getMetadata(RATE_LIMIT_METADATA_KEY, handler)).toEqual({
-      name: 'region-by-location',
-      limit: 30,
-      windowSeconds: 60,
-    });
+    expect(Reflect.getMetadata(RATE_LIMIT_METADATA_KEY, handler)).toEqual([
+      { name: 'region-by-location', limit: 30, windowSeconds: 60 },
+    ]);
   });
 });

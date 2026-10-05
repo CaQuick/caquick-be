@@ -45,6 +45,28 @@ import {
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+import { RateLimit } from '@/global/rate-limit';
+
+const LOGIN_WINDOW_SECONDS = 900;
+
+/** 같은 아이디를 한 곳에서 찍는 공격(아이디+IP)과 아이디를 바꿔 가며 찍는 공격(IP)을 따로 막는다. 성공 시도도 센다. */
+function LoginRateLimit(role: 'seller' | 'admin'): MethodDecorator {
+  return RateLimit(
+    {
+      name: `${role}-login`,
+      subject: 'ip+username',
+      limit: 5,
+      windowSeconds: LOGIN_WINDOW_SECONDS,
+      code: 'LOGIN_RATE_LIMITED',
+    },
+    {
+      name: `${role}-login-ip`,
+      limit: 30,
+      windowSeconds: LOGIN_WINDOW_SECONDS,
+      code: 'LOGIN_RATE_LIMITED',
+    },
+  );
+}
 
 function toCredentialLoginResponse(result: CredentialLoginResult): {
   accessToken: string;
@@ -183,6 +205,7 @@ export class AuthController {
   }
 
   @ApiCredentialLogin('판매자')
+  @LoginRateLimit('seller')
   @Post('seller/login')
   async sellerLogin(
     @Body() body: CredentialLoginInput,
@@ -279,6 +302,7 @@ export class AuthController {
   }
 
   @ApiCredentialLogin('관리자')
+  @LoginRateLimit('admin')
   @Post('admin/login')
   async adminLogin(
     @Body() body: CredentialLoginInput,
