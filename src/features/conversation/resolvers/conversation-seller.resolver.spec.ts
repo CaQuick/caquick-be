@@ -14,6 +14,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('Seller Conversation Resolvers (real DB)', () => {
   let queryResolver: SellerConversationQueryResolver;
@@ -28,6 +29,8 @@ describe('Seller Conversation Resolvers (real DB)', () => {
         SellerConversationService,
         StoreSellerRepository,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         ConversationEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         {
@@ -84,5 +87,29 @@ describe('Seller Conversation Resolvers (real DB)', () => {
         } as never,
       ),
     ).rejects.toThrowDomain(404);
+  });
+
+  it('Mutation.sellerMarkConversationRead: 내 매장 대화의 판매자 마커를 전진시킨 상태를 반환', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const conv = await createConv(me.store.id);
+    const message = await prisma.storeConversationMessage.create({
+      data: {
+        conversation_id: conv.id,
+        sender_type: 'USER',
+        sender_account_id: conv.account_id,
+        body_format: 'TEXT',
+        body_text: '문의',
+      },
+    });
+
+    const result = await mutationResolver.sellerMarkConversationRead(
+      { accountId: me.account.id.toString() },
+      conv.id.toString(),
+    );
+
+    expect(result.sellerLastReadAt?.getTime()).toBe(
+      message.created_at.getTime(),
+    );
+    expect(result.unreadCount).toBe(0);
   });
 });

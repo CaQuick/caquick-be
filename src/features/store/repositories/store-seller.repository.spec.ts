@@ -347,6 +347,51 @@ describe('StoreSellerRepository (real DB)', () => {
     });
   });
 
+  describe('findStoreDailyCapacityByDate', () => {
+    const date = new Date('2026-10-05');
+
+    it('본인 매장의 해당 날짜 설정만 돌려준다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      await createStoreDailyCapacity(prisma, {
+        store_id: me.store.id,
+        capacity_date: new Date('2026-10-04'),
+        capacity: 3,
+      });
+      await createStoreDailyCapacity(prisma, {
+        store_id: other.store.id,
+        capacity_date: date,
+        capacity: 5,
+      });
+      const mine = await createStoreDailyCapacity(prisma, {
+        store_id: me.store.id,
+        capacity_date: date,
+        capacity: 10,
+      });
+
+      const found = await repo.findStoreDailyCapacityByDate(me.store.id, date);
+      expect(found?.id).toBe(mine.id);
+      expect(found?.capacity).toBe(10);
+    });
+
+    it('soft-delete된 설정과 설정 없음은 null이다', async () => {
+      const { store } = await setupSellerWithStore(prisma);
+      expect(
+        await repo.findStoreDailyCapacityByDate(store.id, date),
+      ).toBeNull();
+
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: date,
+        capacity: 10,
+        deleted_at: new Date(),
+      });
+      expect(
+        await repo.findStoreDailyCapacityByDate(store.id, date),
+      ).toBeNull();
+    });
+  });
+
   describe('faqTopic (list/create/findById/update/softDelete)', () => {
     it('list: sort_order, id 오름차순', async () => {
       const { store } = await setupSellerWithStore(prisma);

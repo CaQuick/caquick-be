@@ -2,8 +2,12 @@ export interface SellerConversationOutput {
   id: string;
   accountId: string;
   storeId: string;
+  buyerNickname: string | null;
+  lastMessagePreview: string | null;
   lastMessageAt: Date | null;
   lastReadAt: Date | null;
+  sellerLastReadAt: Date | null;
+  unreadCount: number;
   updatedAt: Date;
 }
 

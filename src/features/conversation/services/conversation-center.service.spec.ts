@@ -12,6 +12,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('ConversationCenterService (real DB)', () => {
   let service: ConversationCenterService;
@@ -22,6 +23,8 @@ describe('ConversationCenterService (real DB)', () => {
       providers: [
         ConversationCenterService,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         AccountUserRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
@@ -174,6 +177,27 @@ describe('ConversationCenterService (real DB)', () => {
 
       // last_read_at이 null이면 수신 메시지 전부가 안읽음
       expect(result.items[0].unreadCount).toBe(1);
+    });
+
+    it('구매자 안읽음은 USER가 아닌 발신(STORE·SYSTEM) 전부를 센다(판매자 조건 USER만과 구분)', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const conv = await makeConversation({
+        accountId: buyer.id,
+        storeId: store.id,
+        lastReadAt: null,
+      });
+      await addMessage({
+        conversationId: conv.id,
+        senderType: 'USER',
+        senderAccountId: buyer.id,
+      });
+      await addMessage({ conversationId: conv.id, senderType: 'STORE' });
+      await addMessage({ conversationId: conv.id, senderType: 'SYSTEM' });
+
+      const result = await service.myConversations(buyer.id);
+
+      expect(result.items[0].unreadCount).toBe(2);
     });
 
     it('커서로 다음 페이지를 이어가고, 메시지 없는 대화는 제외한다', async () => {

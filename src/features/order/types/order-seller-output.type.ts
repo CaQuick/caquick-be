@@ -12,6 +12,8 @@ export interface SellerOrderSummaryOutput {
   buyerPhone: string;
   totalPrice: number;
   createdAt: Date;
+  firstItemName: string | null;
+  firstItemImageUrl: string | null;
 }
 
 export interface SellerOrderDetailOutput {
@@ -34,4 +36,16 @@ export interface SellerOrderDetailOutput {
   updatedAt: Date;
   items: OrderItemDetailOutput[];
   statusHistories: OrderStatusHistoryOutput[];
+}
+
+/** 구독 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO 문자열. */
+export interface SellerOrderUpdateEvent {
+  orderId: string;
+  orderNumber: string;
+  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  pickupAt: string;
+  buyerName: string;
+  totalPrice: number;
+  productName: string;
+  updatedAt: string;
 }

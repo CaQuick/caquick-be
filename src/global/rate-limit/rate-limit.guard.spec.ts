@@ -1,9 +1,10 @@
-import { type ExecutionContext } from '@nestjs/common';
+import { type ExecutionContext, SetMetadata } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import type Redis from 'ioredis';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { sha256Hex } from '@/common/utils/crypto';
 import { RateLimit } from '@/global/rate-limit/rate-limit.decorator';
 import {
   RATE_LIMIT_METADATA_KEY,
@@ -13,7 +14,9 @@ import { connectTestRedis } from '@/test/db/redis-test-client';
 
 const LIMIT = 3;
 const WINDOW_SECONDS = 60;
-const T0 = new Date('2026-10-03T12:00:00.000Z'); // 60초 창의 시작
+const LOGIN_WINDOW_SECONDS = 900;
+const T0 = new Date('2026-10-03T12:00:00.000Z'); // 60초·900초 창의 시작
+const LOGIN_WINDOW = Math.floor(T0.getTime() / 1000 / LOGIN_WINDOW_SECONDS);
 
 class Target {
   @RateLimit({ name: 'loc', limit: LIMIT, windowSeconds: WINDOW_SECONDS })
@@ -22,11 +25,47 @@ class Target {
   @RateLimit({ name: 'other', limit: LIMIT, windowSeconds: WINDOW_SECONDS })
   otherLimited(): void {}
 
+  @RateLimit({
+    name: 'login',
+    subject: 'ip+username',
+    limit: LIMIT,
+    windowSeconds: LOGIN_WINDOW_SECONDS,
+    code: 'LOGIN_RATE_LIMITED',
+  })
+  byUser(): void {}
+
+  @RateLimit({
+    name: 'login-default',
+    subject: 'ip+username',
+    limit: LIMIT,
+    windowSeconds: WINDOW_SECONDS,
+  })
+  byUserDefaultCode(): void {}
+
+  @RateLimit(
+    { name: 'dual-user', subject: 'ip+username', limit: 2, windowSeconds: 60 },
+    { name: 'dual-ip', limit: 3, windowSeconds: 60 },
+  )
+  dual(): void {}
+
+  @SetMetadata(RATE_LIMIT_METADATA_KEY, {
+    name: 'single',
+    limit: LIMIT,
+    windowSeconds: WINDOW_SECONDS,
+  })
+  singleObject(): void {}
+
   open(): void {}
 }
 
-function gqlContext(handler: object, ip: string): ExecutionContext {
-  const gqlArgs = [undefined, {}, { req: { ip, headers: {} } }, {}];
+type Body = Record<string, unknown>;
+
+function gqlContext(
+  handler: object,
+  ip: string,
+  body?: Body,
+): ExecutionContext {
+  const gqlArgs = [undefined, {}, { req: { ip, headers: {}, body } }, {}];
   return {
     getType: () => 'graphql',
     getArgs: () => gqlArgs,
@@ -36,10 +75,14 @@ function gqlContext(handler: object, ip: string): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function httpContext(handler: object, ip: string): ExecutionContext {
+function httpContext(
+  handler: object,
+  ip: string,
+  body?: Body,
+): ExecutionContext {
   return {
     getType: () => 'http',
-    switchToHttp: () => ({ getRequest: () => ({ ip, headers: {} }) }),
+    switchToHttp: () => ({ getRequest: () => ({ ip, headers: {}, body }) }),
     getHandler: () => handler,
     getClass: () => Target,
   } as unknown as ExecutionContext;
@@ -79,13 +122,20 @@ describe('RateLimitGuard (real Redis)', () => {
     for (let i = 0; i < times; i++) await guard.canActivate(ctx);
   }
 
-  it('@RateLimit은 정책과 가드를 함께 건다', () => {
+  it('@RateLimit은 정책(배열)과 가드를 함께 건다', () => {
     expect(Reflect.getMetadata(RATE_LIMIT_METADATA_KEY, proto.limited)).toEqual(
-      { name: 'loc', limit: LIMIT, windowSeconds: WINDOW_SECONDS },
+      [{ name: 'loc', limit: LIMIT, windowSeconds: WINDOW_SECONDS }],
     );
     expect(Reflect.getMetadata(GUARDS_METADATA, proto.limited)).toEqual([
       RateLimitGuard,
     ]);
+  });
+
+  it('정책이 배열 아닌 객체 하나로 저장돼 있어도 센다', async () => {
+    const ctx = httpContext(proto.singleObject, '203.0.113.1');
+    await callTimes(ctx, LIMIT);
+
+    await expect(guard.canActivate(ctx)).rejects.toThrowDomain('RATE_LIMITED');
   });
 
   it('클래스에는 걸 수 없다(가드가 핸들러 정책만 읽어 조용히 빠지지 않게)', () => {
@@ -155,6 +205,127 @@ describe('RateLimitGuard (real Redis)', () => {
     await callTimes(gqlContext(proto.open, '203.0.113.1'), LIMIT + 1);
 
     expect(await redis.keys('rl:*')).toEqual([]);
+  });
+
+  describe('subject ip+username', () => {
+    const IP = '203.0.113.1';
+    const login = (ip: string, username?: unknown) =>
+      httpContext(proto.byUser, ip, { username, password: 'x' });
+
+    it('같은 IP라도 username이 다르면 따로 센다', async () => {
+      await callTimes(login(IP, 'alice'), LIMIT);
+
+      await expect(guard.canActivate(login(IP, 'bob'))).resolves.toBe(true);
+      await expect(guard.canActivate(login(IP, 'alice'))).rejects.toThrowDomain(
+        'LOGIN_RATE_LIMITED',
+      );
+    });
+
+    it('같은 username이라도 IP가 다르면 따로 센다', async () => {
+      await callTimes(login(IP, 'alice'), LIMIT);
+
+      await expect(
+        guard.canActivate(login('203.0.113.2', 'alice')),
+      ).resolves.toBe(true);
+    });
+
+    it.each([
+      ['대소문자', 'Alice'],
+      ['앞뒤 공백', '  alice '],
+    ])('username의 %s 차이는 같은 키다', async (_label, variant) => {
+      await callTimes(login(IP, variant), LIMIT);
+
+      await expect(guard.canActivate(login(IP, 'alice'))).rejects.toThrowDomain(
+        'LOGIN_RATE_LIMITED',
+      );
+    });
+
+    it.each([
+      ['없음', undefined],
+      ['문자열 아님', 42],
+      ['공백뿐', '   '],
+    ])('username이 %s이면 IP 키로 센다', async (_label, username) => {
+      await callTimes(login(IP, username), LIMIT);
+
+      await expect(
+        guard.canActivate(httpContext(proto.byUser, IP)),
+      ).rejects.toThrowDomain('LOGIN_RATE_LIMITED');
+      expect(await redis.keys('rl:login:*')).toEqual([
+        `rl:login:${IP}:${LOGIN_WINDOW}`,
+      ]);
+    });
+
+    it('키에는 username 원문 대신 해시 16자가 들어간다', async () => {
+      await guard.canActivate(login(IP, 'Alice@Example.com'));
+
+      const keys = await redis.keys('rl:login:*');
+      expect(keys).toHaveLength(1);
+      expect(keys[0]).toBe(
+        `rl:login:${IP}:${sha256Hex('alice@example.com').slice(0, 16)}:${LOGIN_WINDOW}`,
+      );
+      expect(keys[0].toLowerCase()).not.toContain('alice');
+    });
+
+    it('GraphQL 컨텍스트에서도 바디 username을 읽는다', async () => {
+      const ctx = gqlContext(proto.byUser, IP, { username: 'alice' });
+      await callTimes(ctx, LIMIT);
+
+      await expect(
+        guard.canActivate(gqlContext(proto.byUser, IP, { username: 'bob' })),
+      ).resolves.toBe(true);
+      await expect(guard.canActivate(ctx)).rejects.toThrowDomain(
+        'LOGIN_RATE_LIMITED',
+      );
+    });
+
+    it('code 지정 시 그 코드와 창 길이(분)를 넣은 메시지로 던진다', async () => {
+      await callTimes(login(IP, 'alice'), LIMIT);
+
+      await expect(guard.canActivate(login(IP, 'alice'))).rejects.toMatchObject(
+        {
+          code: 'LOGIN_RATE_LIMITED',
+          response: { message: expect.stringContaining('15분') as string },
+        },
+      );
+    });
+
+    it('code 미지정이면 RATE_LIMITED다', async () => {
+      const ctx = httpContext(proto.byUserDefaultCode, IP, {
+        username: 'alice',
+      });
+      await callTimes(ctx, LIMIT);
+
+      await expect(guard.canActivate(ctx)).rejects.toThrowDomain(
+        'RATE_LIMITED',
+      );
+    });
+  });
+
+  describe('정책 2개', () => {
+    const IP = '203.0.113.1';
+    const dual = (username: string) =>
+      httpContext(proto.dual, IP, { username });
+
+    it('username 한도(2)만 넘어도 거절하고 IP 키도 함께 증가한다', async () => {
+      await callTimes(dual('alice'), 2);
+
+      await expect(guard.canActivate(dual('alice'))).rejects.toThrowDomain(
+        'RATE_LIMITED',
+      );
+      expect(await redis.get(`rl:dual-ip:${IP}:${T0.getTime() / 60000}`)).toBe(
+        '3',
+      );
+    });
+
+    it('username마다 한도 안이어도 IP 합계(3)가 넘으면 거절한다', async () => {
+      await guard.canActivate(dual('a'));
+      await guard.canActivate(dual('b'));
+      await guard.canActivate(dual('c'));
+
+      await expect(guard.canActivate(dual('d'))).rejects.toThrowDomain(
+        'RATE_LIMITED',
+      );
+    });
   });
 
   it('Redis 장애면 통과시킨다', async () => {

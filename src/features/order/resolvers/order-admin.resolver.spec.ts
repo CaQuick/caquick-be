@@ -1,5 +1,7 @@
 // 분기/검증 세부는 admin-order.service.spec.ts에서 담당. 여기서는 리졸버→서비스→DB 경로만 본다.
 
+import { PubSub } from 'graphql-subscriptions';
+
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
@@ -8,7 +10,9 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -33,6 +37,8 @@ describe('Admin Order Resolvers (real DB)', () => {
         AccountAdminRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),
@@ -66,6 +72,10 @@ describe('Admin Order Resolvers (real DB)', () => {
 
     const list = await queryResolver.adminOrders(user);
     expect(list.totalCount).toBe(1);
+    expect(list.items[0]).toMatchObject({
+      firstItemName: 'Product snapshot',
+      firstItemImageUrl: null,
+    });
 
     const detail = await queryResolver.adminOrder(user, order.id.toString());
     expect(detail.items).toHaveLength(1);

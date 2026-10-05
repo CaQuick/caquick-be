@@ -54,6 +54,13 @@ export class MetricsService {
     registers: [this.registry],
   });
 
+  readonly expoPushSends = new Counter({
+    name: 'caquick_expo_push_sends_total',
+    help: '판매자 푸시 전송 메시지 수. result = TICKET_OK | TICKET_ERROR | AUTH_ERROR(인증 실패로 전송되지 않은 메시지).',
+    labelNames: ['result'] as const,
+    registers: [this.registry],
+  });
+
   /** collect 실패는 /metrics를 죽이지 않고 여기에 쌓인다 — 장애 중에도 나머지 지표는 나가야 한다. */
   readonly collectErrors = new Counter({
     name: 'caquick_metrics_collect_errors_total',

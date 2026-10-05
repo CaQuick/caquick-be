@@ -1,3 +1,4 @@
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
@@ -6,6 +7,8 @@ import { AuthController } from '@/features/auth/controllers/auth.controller';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
 import { OidcLoginService } from '@/features/auth/services/oidc-login.service';
 import type { JwtUser } from '@/global/auth';
+import { RateLimitGuard } from '@/global/rate-limit';
+import { RATE_LIMIT_METADATA_KEY } from '@/global/rate-limit/rate-limit.guard';
 
 function mockRes(): Response {
   return {
@@ -48,10 +51,43 @@ describe('AuthController', () => {
         { provide: OidcLoginService, useValue: oidcLogin },
         { provide: CredentialAuthService, useValue: credentialAuth },
       ],
-    }).compile();
+    })
+      // 핸들러만 본다 — 가드 동작은 auth-login-rate-limit.spec이 real Redis로 증명
+      .overrideGuard(RateLimitGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
   });
+
+  it.each([
+    ['sellerLogin', 'seller'],
+    ['adminLogin', 'admin'],
+  ] as const)(
+    '%s에는 아이디+IP 5회·IP 30회/15분 정책과 가드가 걸려 있다',
+    (handlerName, role) => {
+      const handler = AuthController.prototype[handlerName];
+
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+        RateLimitGuard,
+      ]);
+      expect(Reflect.getMetadata(RATE_LIMIT_METADATA_KEY, handler)).toEqual([
+        {
+          name: `${role}-login`,
+          subject: 'ip+username',
+          limit: 5,
+          windowSeconds: 900,
+          code: 'LOGIN_RATE_LIMITED',
+        },
+        {
+          name: `${role}-login-ip`,
+          limit: 30,
+          windowSeconds: 900,
+          code: 'LOGIN_RATE_LIMITED',
+        },
+      ]);
+    },
+  );
 
   it('start는 OIDC 인증 URL로 리다이렉트해야 한다', async () => {
     const res = {
@@ -101,11 +137,12 @@ describe('AuthController', () => {
     expect(res.redirect).toHaveBeenCalledWith('https://caquick.site/mypage');
   });
 
-  it('refresh는 200 + accessToken JSON으로 응답한다', async () => {
+  it('refresh는 200 + accessToken·expiresInSeconds JSON으로 응답한다', async () => {
     const res = mockRes();
     const req = {} as Request;
     auth.refresh.mockResolvedValue({
       accessToken: 'new-access',
+      expiresInSeconds: 600,
     });
 
     await controller.refresh(req, res);
@@ -115,6 +152,7 @@ describe('AuthController', () => {
     expect(res.json).toHaveBeenCalledWith({
       accessToken: 'new-access',
       tokenType: 'Bearer',
+      expiresInSeconds: 600,
     });
   });
 
@@ -135,8 +173,8 @@ describe('AuthController', () => {
       prefix: 'seller',
       pick: (c: AuthController) => ({
         login: c.sellerLogin.bind(c),
-        refresh: c.sellerRefresh.bind(c),
-        logout: c.sellerLogout.bind(c),
+        refresh: (req: Request, res: Response) => c.sellerRefresh({}, req, res),
+        logout: (req: Request, res: Response) => c.sellerLogout({}, req, res),
         changePassword: c.sellerChangePassword.bind(c),
       }),
     },
@@ -151,11 +189,12 @@ describe('AuthController', () => {
       }),
     },
   ])('$prefix 자격증명 엔드포인트', ({ role, prefix, pick }) => {
-    it(`${prefix}Login은 role=${role}로 위임하고 accessToken·accountStatus·mustChangePassword를 응답한다`, async () => {
+    it(`${prefix}Login은 role=${role}로 위임하고 accessToken·expiresInSeconds·accountStatus·mustChangePassword를 응답한다`, async () => {
       const res = mockRes();
       const req = {} as Request;
       credentialAuth.login.mockResolvedValue({
         accessToken: 'access',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: true,
       });
@@ -177,6 +216,7 @@ describe('AuthController', () => {
       expect(res.json).toHaveBeenCalledWith({
         accessToken: 'access',
         tokenType: 'Bearer',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: true,
       });
@@ -187,6 +227,7 @@ describe('AuthController', () => {
       const req = {} as Request;
       credentialAuth.refresh.mockResolvedValue({
         accessToken: 'rotated',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: false,
       });
@@ -198,6 +239,7 @@ describe('AuthController', () => {
       expect(res.json).toHaveBeenCalledWith({
         accessToken: 'rotated',
         tokenType: 'Bearer',
+        expiresInSeconds: 600,
         accountStatus: 'ACTIVE',
         mustChangePassword: false,
       });
@@ -251,6 +293,96 @@ describe('AuthController', () => {
         ),
       ).rejects.toThrowDomain(400);
     });
+  });
+
+  describe('판매자 바디 모드', () => {
+    const issued = {
+      accessToken: 'access',
+      expiresInSeconds: 600,
+      accountStatus: 'ACTIVE' as const,
+      mustChangePassword: false,
+      refreshToken: 'a'.repeat(64),
+      refreshExpiresAt: new Date('2026-11-04T01:02:03.456Z'),
+    };
+
+    it('sellerLogin은 X-Client: mobile 요청을 그대로 위임하고 refreshToken·refreshExpiresAt(ISO)을 싣는다', async () => {
+      const res = mockRes();
+      const req = { headers: { 'x-client': 'mobile' } } as unknown as Request;
+      credentialAuth.login.mockResolvedValue(issued);
+
+      await controller.sellerLogin(
+        { username: 'who', password: 'pw1234!A' },
+        req,
+        res,
+      );
+
+      expect(credentialAuth.login).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'SELLER', req }),
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        accessToken: 'access',
+        tokenType: 'Bearer',
+        expiresInSeconds: 600,
+        accountStatus: 'ACTIVE',
+        mustChangePassword: false,
+        refreshToken: 'a'.repeat(64),
+        refreshExpiresAt: '2026-11-04T01:02:03.456Z',
+      });
+    });
+
+    it('sellerRefresh는 바디 토큰을 req로 넘기고 새 refreshToken·refreshExpiresAt을 싣는다', async () => {
+      const res = mockRes();
+      const body = { refreshToken: 'b'.repeat(64) };
+      const req = { body, cookies: {} } as unknown as Request;
+      credentialAuth.refresh.mockResolvedValue(issued);
+
+      await controller.sellerRefresh(body, req, res);
+
+      expect(credentialAuth.refresh).toHaveBeenCalledWith({
+        role: 'SELLER',
+        req,
+        res,
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refreshToken: 'a'.repeat(64),
+          refreshExpiresAt: '2026-11-04T01:02:03.456Z',
+        }),
+      );
+    });
+
+    it.each([
+      ['sellerLogin 헤더 없음', 'sellerLogin' as const, {}],
+      [
+        'adminLogin + X-Client: mobile',
+        'adminLogin' as const,
+        {
+          'x-client': 'mobile',
+        },
+      ],
+    ])(
+      '%s — 서비스가 토큰을 싣지 않으면 refreshToken·refreshExpiresAt 키가 없다',
+      async (_label, handler, headers) => {
+        const res = mockRes();
+        const req = { headers } as unknown as Request;
+        const {
+          refreshToken: _t,
+          refreshExpiresAt: _e,
+          ...cookieMode
+        } = issued;
+        credentialAuth.login.mockResolvedValue(cookieMode);
+
+        await controller[handler](
+          { username: 'who', password: 'pw1234!A' },
+          req,
+          res,
+        );
+
+        const json = (res.json as jest.Mock).mock.calls[0][0] as object;
+        expect(json).not.toHaveProperty('refreshToken');
+        expect(json).not.toHaveProperty('refreshExpiresAt');
+      },
+    );
   });
 
   describe('devIssueToken', () => {

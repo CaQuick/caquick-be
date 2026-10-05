@@ -32,6 +32,7 @@ import {
 import { ChangePasswordInput } from '@/features/auth/dto/inputs/change-password.input';
 import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 import { DevIssueTokenInput } from '@/features/auth/dto/inputs/dev-issue-token.input';
+import { RefreshTokenInput } from '@/features/auth/dto/inputs/refresh-token.input';
 import {
   CredentialAuthService,
   type CredentialLoginResult,
@@ -44,18 +45,48 @@ import {
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+import { RateLimit } from '@/global/rate-limit';
+
+const LOGIN_WINDOW_SECONDS = 900;
+
+/** 같은 아이디를 한 곳에서 찍는 공격(아이디+IP)과 아이디를 바꿔 가며 찍는 공격(IP)을 따로 막는다. 성공 시도도 센다. */
+function LoginRateLimit(role: 'seller' | 'admin'): MethodDecorator {
+  return RateLimit(
+    {
+      name: `${role}-login`,
+      subject: 'ip+username',
+      limit: 5,
+      windowSeconds: LOGIN_WINDOW_SECONDS,
+      code: 'LOGIN_RATE_LIMITED',
+    },
+    {
+      name: `${role}-login-ip`,
+      limit: 30,
+      windowSeconds: LOGIN_WINDOW_SECONDS,
+      code: 'LOGIN_RATE_LIMITED',
+    },
+  );
+}
 
 function toCredentialLoginResponse(result: CredentialLoginResult): {
   accessToken: string;
   tokenType: 'Bearer';
+  expiresInSeconds: number;
   accountStatus: CredentialLoginResult['accountStatus'];
   mustChangePassword: boolean;
+  refreshToken?: string;
+  refreshExpiresAt?: string;
 } {
   return {
     accessToken: result.accessToken,
     tokenType: 'Bearer',
+    expiresInSeconds: result.expiresInSeconds,
     accountStatus: result.accountStatus,
     mustChangePassword: result.mustChangePassword,
+    ...(result.refreshToken !== undefined && {
+      refreshToken: result.refreshToken,
+      refreshExpiresAt: result.refreshExpiresAt?.toISOString(),
+    }),
   };
 }
 
@@ -148,14 +179,17 @@ export class AuthController {
       properties: {
         accessToken: { type: 'string' },
         tokenType: { type: 'string', example: 'Bearer' },
+        expiresInSeconds: { type: 'number', example: 900 },
       },
-      required: ['accessToken', 'tokenType'],
+      required: ['accessToken', 'tokenType', 'expiresInSeconds'],
     },
   })
   @Post('refresh')
   async refresh(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const { accessToken } = await this.auth.refresh(req, res);
-    res.status(200).json({ accessToken, tokenType: 'Bearer' });
+    const { accessToken, expiresInSeconds } = await this.auth.refresh(req, res);
+    res
+      .status(200)
+      .json({ accessToken, tokenType: 'Bearer', expiresInSeconds });
   }
 
   @ApiOperation({
@@ -171,6 +205,7 @@ export class AuthController {
   }
 
   @ApiCredentialLogin('판매자')
+  @LoginRateLimit('seller')
   @Post('seller/login')
   async sellerLogin(
     @Body() body: CredentialLoginInput,
@@ -187,9 +222,11 @@ export class AuthController {
     res.status(200).json(toCredentialLoginResponse(result));
   }
 
+  // 바디는 ValidationPipe 통과용 — 토큰은 서비스가 req.body에서 읽는다(쿠키와 같은 입구)
   @ApiCredentialRefresh('판매자')
   @Post('seller/refresh')
   async sellerRefresh(
+    @Body() _body: RefreshTokenInput,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -203,7 +240,11 @@ export class AuthController {
 
   @ApiCredentialLogout('판매자')
   @Post('seller/logout')
-  async sellerLogout(@Req() req: Request, @Res() res: Response): Promise<void> {
+  async sellerLogout(
+    @Body() _body: RefreshTokenInput,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     await this.credentialAuth.logout({ role: 'SELLER', req, res });
     res.status(204).send();
   }
@@ -261,6 +302,7 @@ export class AuthController {
   }
 
   @ApiCredentialLogin('관리자')
+  @LoginRateLimit('admin')
   @Post('admin/login')
   async adminLogin(
     @Body() body: CredentialLoginInput,

@@ -10,6 +10,11 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
+  loginTransportOf,
+  readPresentedRefreshToken,
+  type RefreshTransport,
+} from '@/features/auth/helpers/refresh-transport.helper';
+import {
   ACCOUNT_CREDENTIAL_REPOSITORY,
   type AccountCredentialWithAccount,
   type IAccountCredentialRepository,
@@ -18,7 +23,10 @@ import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
-import { TokenService } from '@/features/auth/services/token.service';
+import {
+  type IssuedTokens,
+  TokenService,
+} from '@/features/auth/services/token.service';
 import {
   type AccountStatus,
   AuditActionType,
@@ -30,9 +38,14 @@ export type CredentialRole = Exclude<AccountRole, 'USER'>;
 
 export interface CredentialLoginResult {
   accessToken: string;
+  /** 액세스 토큰 TTL(초) — 클라이언트가 JWT를 디코드하지 않고 선제 refresh 시점을 잡는다. */
+  expiresInSeconds: number;
   accountStatus: AccountStatus;
   /** 관리자가 지정한 초기/초기화 비밀번호 상태. true면 변경 전까지 다른 API가 거부된다. */
   mustChangePassword: boolean;
+  /** 바디 전달(판매자 앱)일 때만. 쿠키 전달은 Set-Cookie로 나간다. */
+  refreshToken?: string;
+  refreshExpiresAt?: Date;
 }
 
 /**
@@ -88,14 +101,15 @@ export class CredentialAuthService {
     await this.credentials.updateLastLogin(credential.account_id, now);
 
     // 버전은 검증한 행의 것 — 검증 뒤 커밋된 변경이 있으면 이 세션·토큰은 버전이 낡아 막힌다
-    const { accessToken } = await this.tokens.issueAuthTokens({
+    const issued = await this.tokens.issueAuthTokens({
       accountId: credential.account_id,
       credentialVersion: credential.password_updated_at,
       req: args.req,
       res: args.res,
+      transport: loginTransportOf(args.role, args.req),
     });
 
-    return this.toResult(accessToken, credential);
+    return this.toResult(issued, credential);
   }
 
   async refresh(args: {
@@ -109,12 +123,12 @@ export class CredentialAuthService {
       args.role,
       args.req,
     );
-    const { accessToken } = await this.tokens.rotateRefresh(
+    const rotated = await this.tokens.rotateRefresh(
       args.role,
       args.req,
       args.res,
     );
-    return this.toResult(accessToken, credential);
+    return this.toResult(rotated, credential);
   }
 
   async logout(args: {
@@ -122,12 +136,15 @@ export class CredentialAuthService {
     req: Request;
     res: Response;
   }): Promise<void> {
-    const { session } = await this.requireSessionCredential(
+    const { session, transport } = await this.requireSessionCredential(
       args.role,
       args.req,
     );
     await this.refreshSessions.revokeRefreshSession(session.id);
-    this.tokens.clearRefreshCookie(args.role, args.res);
+    // 바디 모드는 Set-Cookie를 내지 않는다 — 앱 저장소의 토큰만 폐기한 것이다
+    if (transport === 'cookie') {
+      this.tokens.clearRefreshCookie(args.role, args.res);
+    }
   }
 
   async changePassword(args: {
@@ -201,14 +218,15 @@ export class CredentialAuthService {
   ): Promise<{
     session: { id: bigint; account_id: bigint };
     credential: AccountCredentialWithAccount;
+    transport: RefreshTransport;
   }> {
-    const refreshToken = this.tokens.readRefreshCookie(role, req);
-    if (!refreshToken) {
+    const presented = readPresentedRefreshToken(role, req);
+    if (!presented) {
       throw new DomainException('MISSING_REFRESH_TOKEN');
     }
 
     const session = await this.refreshSessions.findActiveRefreshSessionByHash(
-      this.tokens.sha256Hex(refreshToken),
+      this.tokens.sha256Hex(presented.token),
     );
     if (!session) {
       throw new DomainException('INVALID_REFRESH_TOKEN');
@@ -220,17 +238,22 @@ export class CredentialAuthService {
     if (!credential || credential.account.account_type !== role) {
       throw new DomainException('INVALID_REFRESH_TOKEN');
     }
-    return { session, credential };
+    return { session, credential, transport: presented.transport };
   }
 
   private toResult(
-    accessToken: string,
+    issued: IssuedTokens,
     credential: AccountCredentialWithAccount,
   ): CredentialLoginResult {
     return {
-      accessToken,
+      accessToken: issued.accessToken,
+      expiresInSeconds: this.tokens.getAccessExpiresSeconds(),
       accountStatus: credential.account.status,
       mustChangePassword: credential.must_change_password,
+      ...(issued.refreshToken !== undefined && {
+        refreshToken: issued.refreshToken,
+        refreshExpiresAt: issued.refreshExpiresAt,
+      }),
     };
   }
 }

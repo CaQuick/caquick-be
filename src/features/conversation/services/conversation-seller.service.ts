@@ -64,23 +64,44 @@ export class SellerConversationService extends SellerBaseService {
       ? parseTimestampIdCursor(input.cursor)
       : undefined;
 
-    const [rows, totalCount] = await Promise.all([
-      this.conversationRepository.listConversationsByStore({
+    const { rows, totalCount, extras } =
+      await this.conversationRepository.getStoreConversationPageWithExtras({
         storeId: ctx.storeId,
         limit,
         ...(cursor
           ? { cursor: { updatedAt: cursor.timestamp, id: cursor.id } }
           : {}),
-      }),
-      this.conversationRepository.countConversationsByStore(ctx.storeId),
-    ]);
+      });
 
     const page = sliceCursorPage(rows, limit, (last) =>
       buildTimestampIdCursor(last.updated_at, last.id),
     );
-    return toCursorConnection(page, totalCount, (row) =>
-      this.toConversationOutput(row),
+    const extraById = new Map(
+      extras.map((e) => [e.conversationId.toString(), e]),
     );
+    return toCursorConnection(page, totalCount, (row) =>
+      this.toConversationOutput(row, extraById.get(row.id.toString())),
+    );
+  }
+
+  /** 읽음은 앱이 명시 호출한다(조회 부수효과 없음). 이벤트는 내지 않는다. */
+  async sellerMarkConversationRead(
+    accountId: bigint,
+    conversationIdRaw: string,
+  ): Promise<SellerConversationOutput> {
+    const ctx = await this.requireSellerContext(accountId);
+    const conversationId = parseId(conversationIdRaw);
+    const conversation =
+      await this.conversationRepository.findConversationByIdAndStore({
+        conversationId,
+        storeId: ctx.storeId,
+      });
+    if (!conversation) throw new DomainException('CONVERSATION_NOT_FOUND');
+
+    const marked =
+      await this.conversationRepository.markSellerRead(conversationId);
+    if (!marked) throw new DomainException('CONVERSATION_NOT_FOUND');
+    return this.toConversationOutput(marked.conversation, marked.extra);
   }
 
   async sellerConversationMessages(
@@ -256,8 +277,12 @@ export class SellerConversationService extends SellerBaseService {
       {
         conversationId: args.conversation.id.toString(),
         accountId: args.conversation.account_id.toString(),
+        buyerNickname: snapshot?.conversation.buyer_nickname_snapshot ?? null,
         lastMessagePreview: preview,
         lastMessageAt: lastMessageAtIso,
+        sellerLastReadAt:
+          snapshot?.conversation.seller_last_read_at?.toISOString() ?? null,
+        unreadCount: snapshot?.sellerUnreadCount ?? 0,
       },
     );
   }
@@ -268,20 +293,32 @@ export class SellerConversationService extends SellerBaseService {
     throw new DomainException('INVALID_BODY_FORMAT');
   }
 
-  private toConversationOutput(row: {
-    id: bigint;
-    account_id: bigint;
-    store_id: bigint;
-    last_message_at: Date | null;
-    last_read_at: Date | null;
-    updated_at: Date;
-  }): SellerConversationOutput {
+  private toConversationOutput(
+    row: {
+      id: bigint;
+      account_id: bigint;
+      store_id: bigint;
+      buyer_nickname_snapshot: string | null;
+      last_message_at: Date | null;
+      last_read_at: Date | null;
+      seller_last_read_at: Date | null;
+      updated_at: Date;
+    },
+    extra?: {
+      lastMessage: Parameters<typeof toLastMessagePreview>[0];
+      unreadCount: number;
+    },
+  ): SellerConversationOutput {
     return {
       id: row.id.toString(),
       accountId: row.account_id.toString(),
       storeId: row.store_id.toString(),
+      buyerNickname: row.buyer_nickname_snapshot,
+      lastMessagePreview: toLastMessagePreview(extra?.lastMessage ?? null),
       lastMessageAt: row.last_message_at,
       lastReadAt: row.last_read_at,
+      sellerLastReadAt: row.seller_last_read_at,
+      unreadCount: extra?.unreadCount ?? 0,
       updatedAt: row.updated_at,
     };
   }

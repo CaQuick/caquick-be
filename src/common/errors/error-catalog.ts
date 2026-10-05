@@ -31,6 +31,11 @@ export const ERROR_CATALOG = {
     status: HttpStatus.TOO_MANY_REQUESTS,
     message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
   },
+  LOGIN_RATE_LIMITED: {
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    message: ({ minutes }) =>
+      `로그인 시도가 너무 많습니다. ${minutes}분 뒤 다시 시도해 주세요.`,
+  },
   ROUTE_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,
     message: '요청한 경로를 찾을 수 없습니다.',
@@ -212,6 +217,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.NOT_FOUND,
     message: '알림을 찾을 수 없습니다.',
   },
+  INVALID_PUSH_TOKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '푸시 토큰 형식이 올바르지 않습니다.',
+  },
 
   // ── 카탈로그(매장·상품·지역)
   STORE_NOT_FOUND: {
@@ -390,6 +399,10 @@ export const ERROR_CATALOG = {
   PRODUCT_IMAGE_LIMIT_EXCEEDED: {
     status: HttpStatus.BAD_REQUEST,
     message: ({ max }) => `상품 이미지는 최대 ${max}장까지 등록할 수 있습니다.`,
+  },
+  PRODUCT_TAG_LIMIT_EXCEEDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) => `태그는 최대 ${max}개까지 등록할 수 있습니다.`,
   },
   PRODUCT_IMAGE_MIN_REQUIRED: {
     status: HttpStatus.BAD_REQUEST,

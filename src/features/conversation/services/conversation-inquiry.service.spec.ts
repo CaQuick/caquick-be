@@ -3,6 +3,10 @@ import { PubSub } from 'graphql-subscriptions';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountUserRepository } from '@/features/auth';
+import {
+  CONVERSATION_BUYER_MESSAGE_SENT,
+  parseConversationBuyerMessageSentPayload,
+} from '@/features/conversation/events/conversation-buyer-message-sent.event';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
@@ -18,9 +22,11 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('ConversationInquiryService (real DB)', () => {
   let service: ConversationInquiryService;
+  let events: ConversationEventsService;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -28,6 +34,8 @@ describe('ConversationInquiryService (real DB)', () => {
       providers: [
         ConversationInquiryService,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         ConversationEventsService,
         AccountUserRepository,
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
@@ -37,6 +45,7 @@ describe('ConversationInquiryService (real DB)', () => {
       ],
     });
     service = module.get(ConversationInquiryService);
+    events = module.get(ConversationEventsService);
     prisma = p;
   });
 
@@ -208,6 +217,52 @@ describe('ConversationInquiryService (real DB)', () => {
         conversation.last_message_at?.getTime(),
       );
       expect(await messagesOf(conversation.id)).toHaveLength(2);
+    });
+
+    it('첫 전송 시점 닉네임을 스냅샷으로 저장하고, 이후 닉네임이 바뀌어도 유지한다', async () => {
+      const buyer = await setupBuyer('첫닉네임');
+      const store = await createStore(prisma);
+
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '첫 문의',
+      });
+      await prisma.userProfile.update({
+        where: { account_id: buyer.id },
+        data: { nickname: '바뀐닉네임' },
+      });
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '두 번째 문의',
+      });
+
+      const conversation = await prisma.storeConversation.findFirstOrThrow({
+        where: { account_id: buyer.id, store_id: store.id },
+      });
+      expect(conversation.buyer_nickname_snapshot).toBe('첫닉네임');
+    });
+
+    it('판매자 이벤트에 닉네임 스냅샷과 판매자 기준 미읽음 수(USER만)를 싣는다', async () => {
+      const buyer = await setupBuyer('현진');
+      const store = await createStore(prisma);
+      const publishSeller = jest.spyOn(events, 'publishSellerListUpdate');
+
+      const result = await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '픽업 문의',
+      });
+
+      // 인사말(STORE)은 판매자 미읽음에 안 센다
+      expect(publishSeller).toHaveBeenCalledWith(store.id.toString(), {
+        conversationId: result.conversationId,
+        accountId: buyer.id.toString(),
+        buyerNickname: '현진',
+        lastMessagePreview: '픽업 문의',
+        lastMessageAt: result.messages[1].createdAt.toISOString(),
+        sellerLastReadAt: null,
+        unreadCount: 1,
+      });
+      publishSeller.mockRestore();
     });
 
     it('대화가 이미 있으면 인사말 없이 유저 메시지 1건만 저장한다', async () => {
@@ -401,6 +456,56 @@ describe('ConversationInquiryService (real DB)', () => {
           faqTopicId: othersFaq.id.toString(),
         }),
       ).rejects.toThrowDomain(404);
+    });
+  });
+
+  describe('구매자 메시지 이벤트(conversation.buyer_message_sent)', () => {
+    it('텍스트 전송은 USER 메시지 기준 1건을 남긴다(인사말 제외, 본문은 정리본)', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+
+      const result = await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '  픽업 시간 변경 가능한가요?  ',
+      });
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        event_type: CONVERSATION_BUYER_MESSAGE_SENT,
+        aggregate_id: result.conversationId,
+        actor_account_id: buyer.id,
+      });
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toEqual({
+        conversationId: result.conversationId,
+        storeId: store.id.toString(),
+        buyerAccountId: buyer.id.toString(),
+        messageId: result.messages[1].id,
+        preview: '픽업 시간 변경 가능한가요?',
+        messageCreatedAt: result.messages[1].createdAt.toISOString(),
+      });
+    });
+
+    it('FAQ 칩은 자동응답을 빼고 USER 질문 기준 1건을 남긴다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const faq = await createFaq(store.id, { title: '케이크 보관 방법' });
+
+      const result = await service.sendConversationFaqMessage(buyer.id, {
+        storeId: store.id.toString(),
+        faqTopicId: faq.id.toString(),
+      });
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toMatchObject({
+        messageId: result.messages[1].id,
+        preview: '케이크 보관 방법',
+      });
     });
   });
 });

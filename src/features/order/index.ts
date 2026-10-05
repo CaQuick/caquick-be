@@ -7,3 +7,9 @@ export {
   ORDER_STATUS_CHANGED,
   parseOrderStatusChangedPayload,
 } from '@/features/order/events/order-status-changed.event';
+// 주문 접수 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
+export {
+  ORDER_SUBMITTED,
+  type OrderSubmittedPayload,
+  parseOrderSubmittedPayload,
+} from '@/features/order/events/order-submitted.event';

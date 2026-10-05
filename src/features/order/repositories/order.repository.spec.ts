@@ -3,7 +3,15 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import {
+  ORDER_SUBMITTED,
+  parseOrderSubmittedPayload,
+} from '@/features/order/events/order-submitted.event';
+import {
+  type CreateSubmittedOrderArgs,
+  type DailyCapacityGuard,
+  OrderRepository,
+} from '@/features/order/repositories/order.repository';
 import { OutboxDispatcherService } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { OrderStatus } from '@/generated/prisma/client';
@@ -16,6 +24,7 @@ import {
   createOrderItem,
   createProduct,
   createStore,
+  createStoreDailyCapacity,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import {
@@ -476,6 +485,99 @@ describe('OrderRepository (real DB)', () => {
     });
   });
 
+  describe('aggregateStoreOrdersInRange', () => {
+    const from = new Date('2026-10-04T15:00:00Z');
+    const to = new Date('2026-10-05T15:00:00Z');
+    const inside = new Date('2026-10-05T03:00:00Z');
+    const before = new Date('2026-10-04T14:59:59.999Z');
+
+    async function storeOrder(
+      storeId: bigint,
+      overrides: Parameters<typeof createOrder>[1] & { itemDeletedAt?: Date },
+    ) {
+      const { itemDeletedAt, ...orderOverrides } = overrides;
+      const order = await createOrder(prisma, orderOverrides);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: storeId,
+        ...(itemDeletedAt ? { deleted_at: itemDeletedAt } : {}),
+      });
+      return order;
+    }
+
+    it('basis가 기준 컬럼을 고르고 범위는 [from, to)다', async () => {
+      const store = await createStore(prisma);
+      // 픽업은 범위 안, 생성은 범위 밖
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        created_at: before,
+        total_price: 1_000,
+      });
+      // 경계: from은 포함, to는 제외
+      await storeOrder(store.id, {
+        pickup_at: from,
+        created_at: to,
+        total_price: 10,
+      });
+      await storeOrder(store.id, {
+        pickup_at: to,
+        created_at: from,
+        total_price: 100,
+      });
+
+      const base = { storeId: store.id, from, to };
+      expect(
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'pickup' }),
+      ).toEqual({ orderCount: 2, salesAmount: 1_010 });
+      expect(
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'created' }),
+      ).toEqual({ orderCount: 1, salesAmount: 100 });
+    });
+
+    it('CANCELED·soft-delete 주문·품목이 soft-delete된 주문·다른 매장은 제외한다', async () => {
+      const store = await createStore(prisma);
+      const other = await createStore(prisma);
+      await storeOrder(store.id, { pickup_at: inside, total_price: 1_000 });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        status: 'CANCELED',
+        total_price: 2_000,
+      });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        deleted_at: inside,
+        total_price: 4_000,
+      });
+      await storeOrder(store.id, {
+        pickup_at: inside,
+        itemDeletedAt: inside,
+        total_price: 8_000,
+      });
+      await storeOrder(other.id, { pickup_at: inside, total_price: 16_000 });
+
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'pickup',
+        }),
+      ).toEqual({ orderCount: 1, salesAmount: 1_000 });
+    });
+
+    it('해당 주문이 없으면 0·0이다', async () => {
+      const store = await createStore(prisma);
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'created',
+        }),
+      ).toEqual({ orderCount: 0, salesAmount: 0 });
+    });
+  });
+
   describe('findOrderDetailByStore', () => {
     it('해당 store item만 items로 포함 (다른 store item 제외)', async () => {
       const storeA = await createStore(prisma);
@@ -756,6 +858,133 @@ describe('OrderRepository (real DB)', () => {
         'ORDER_MADE',
         'ORDER_PICKED_UP',
       ]);
+    });
+  });
+
+  describe('createSubmittedOrder', () => {
+    const PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
+    const SUBMITTED_AT = new Date('2026-09-16T07:00:00.000Z');
+
+    function submitArgs(args: {
+      buyerId: bigint;
+      store: { id: bigint; store_name: string };
+      product: { id: bigint; name: string };
+      orderNumber?: string;
+      quantity?: number;
+      capacityGuard?: DailyCapacityGuard;
+    }): CreateSubmittedOrderArgs {
+      const quantity = args.quantity ?? 2;
+      return {
+        accountId: args.buyerId,
+        orderNumber: args.orderNumber ?? 'ORD-20260916-ABC234',
+        idempotencyKey: `idem-${args.orderNumber ?? 'base'}`,
+        pickupAt: PICKUP_AT,
+        buyerName: '차차',
+        buyerPhone: '010-0000-1111',
+        subtotalPrice: 30000 * quantity,
+        discountPrice: 5000 * quantity,
+        totalPrice: 25000 * quantity,
+        submittedAt: SUBMITTED_AT,
+        capacityGuard: args.capacityGuard ?? null,
+        item: {
+          storeId: args.store.id,
+          productId: args.product.id,
+          productNameSnapshot: args.product.name,
+          storeNameSnapshot: args.store.store_name,
+          productThumbnailUrlSnapshot: null,
+          regularPriceSnapshot: 30000,
+          salePriceSnapshot: 25000,
+          quantity,
+          itemSubtotalPrice: 25000 * quantity,
+          options: [],
+        },
+      };
+    }
+
+    it('접수 이벤트(order.submitted)를 같은 tx에 1건 남기고 payload는 생성 시점 스냅샷이다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma, { store_name: '해즈 케이크' });
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        name: '딸기 케이크',
+      });
+
+      const created = await repo.createSubmittedOrder(
+        submitArgs({ buyerId: buyer.id, store, product }),
+      );
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_type: 'order',
+        aggregate_id: created!.id.toString(),
+        event_type: ORDER_SUBMITTED,
+        occurred_at: SUBMITTED_AT,
+        actor_account_id: buyer.id,
+        status: 'PENDING',
+      });
+      expect(parseOrderSubmittedPayload(events[0].payload_json)).toEqual({
+        orderId: created!.id.toString(),
+        orderNumber: 'ORD-20260916-ABC234',
+        buyerAccountId: buyer.id.toString(),
+        storeId: store.id.toString(),
+        storeName: '해즈 케이크',
+        productId: product.id.toString(),
+        productName: '딸기 케이크',
+        quantity: 2,
+        pickupAt: PICKUP_AT.toISOString(),
+        totalPrice: 50000,
+      });
+    });
+
+    it('반증: capacity 재검사에서 거절되면 주문도 이벤트도 남지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+
+      const created = await repo.createSubmittedOrder(
+        submitArgs({
+          buyerId: buyer.id,
+          store,
+          product,
+          quantity: 2,
+          capacityGuard: {
+            storeId: store.id,
+            dateOnlyUtc: new Date(Date.UTC(2026, 8, 18)),
+            dayStartUtc: new Date('2026-09-17T15:00:00.000Z'),
+            dayEndUtc: new Date('2026-09-18T15:00:00.000Z'),
+          },
+        }),
+      );
+
+      expect(created).toBeNull();
+      expect(await prisma.order.count()).toBe(0);
+      expect(await prisma.outbox.count()).toBe(0);
+    });
+
+    it('반증: order_number 충돌로 tx가 롤백되면 이벤트도 남지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      await createOrder(prisma, { order_number: 'ORD-20260916-DUP000' });
+
+      await expect(
+        repo.createSubmittedOrder(
+          submitArgs({
+            buyerId: buyer.id,
+            store,
+            product,
+            orderNumber: 'ORD-20260916-DUP000',
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'P2002' });
+
+      expect(await prisma.outbox.count()).toBe(0);
     });
   });
 });

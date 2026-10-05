@@ -1,0 +1,79 @@
+extend type Query {
+  """
+  판매자 홈 지표를 요청 시점에 집계한다(스냅샷 테이블 없음). 날짜는 KST 달력일이며 생략하면 서버의 오늘(KST).
+  형식이 YYYY-MM-DD가 아니거나 존재하지 않는 날짜면 BAD_USER_INPUT. 판매자 로그인 필수.
+  SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerDashboard(input: SellerDashboardInput): SellerDashboard!
+}
+
+"""
+판매자 홈 집계 조건.
+"""
+input SellerDashboardInput {
+  """
+  집계 기준 날짜(KST, YYYY-MM-DD). 생략하면 오늘.
+  """
+  date: String
+}
+
+"""
+판매자 홈 지표. 금액은 원 단위 정수다.
+"""
+type SellerDashboard {
+  """
+  집계 기준 날짜(KST, YYYY-MM-DD).
+  """
+  date: String!
+  """
+  집계 시점(서버 시각). 화면의 'N시 기준' 표기용이며 date가 오늘이 아니어도 현재 시각이다.
+  """
+  asOf: DateTime!
+  """
+  접수(SUBMITTED) 상태로 남아 있는 주문 수. 날짜와 무관하게 전체를 센다.
+  """
+  newOrderCount: Int!
+  """
+  기준일에 픽업 예정인 주문의 건수·금액. 취소 주문은 제외. 시안의 '오늘 매출 / 정산예정'에 해당한다.
+  """
+  pickupDay: SellerDashboardOrderMetrics!
+  """
+  기준일에 생성된 주문의 건수·금액. 취소 주문은 제외. 접수 추세 표기('+N')용.
+  """
+  createdDay: SellerDashboardOrderMetrics!
+  """
+  기준일의 제작 수량 설정값. 설정이 없으면 null(무제한).
+  """
+  capacity: Int
+  """
+  기준일의 남은 제작 수량 = 설정값 − 기준일 픽업 주문의 수량 합(취소 제외). 음수가 되면 0으로 자른다.
+  설정이 없으면 null.
+  """
+  remainingCapacity: Int
+  """
+  기준일 픽업 주문의 제작 수량 합(취소 제외). capacity 유무와 무관하게 센다.
+  """
+  bookedQuantity: Int!
+  """
+  노출 중(is_active)인 내 상품 수. 매장 노출 여부와 무관하다.
+  """
+  activeProductCount: Int!
+  """
+  답변이 필요한 대화 수 = 판매자 기준 읽지 않은 구매자 메시지가 있는 대화 수.
+  """
+  unansweredConversationCount: Int!
+}
+
+"""
+기간 내 주문 건수와 결제 금액 합.
+"""
+type SellerDashboardOrderMetrics {
+  """
+  주문 건수.
+  """
+  orderCount: Int!
+  """
+  최종 결제 금액 합(원). Int(32비트)를 넘을 수 있어 Float로 내리지만 값은 항상 정수다.
+  """
+  salesAmount: Float!
+}

@@ -96,6 +96,10 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                     ],
                     "type": "string",
                   },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
                   "mustChangePassword": {
                     "type": "boolean",
                   },
@@ -107,6 +111,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                 "required": [
                   "accessToken",
                   "tokenType",
+                  "expiresInSeconds",
                   "accountStatus",
                   "mustChangePassword",
                 ],
@@ -115,6 +120,9 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
             },
           },
           "description": "관리자 로그인 결과",
+        },
+        "429": {
+          "description": "로그인 시도 초과(errorCode LOGIN_RATE_LIMITED). 같은 아이디+IP 5회/15분, IP 30회/15분 — 성공 시도도 센다.",
         },
       },
       "summary": "관리자 로그인",
@@ -166,6 +174,10 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                     ],
                     "type": "string",
                   },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
                   "mustChangePassword": {
                     "type": "boolean",
                   },
@@ -177,6 +189,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                 "required": [
                   "accessToken",
                   "tokenType",
+                  "expiresInSeconds",
                   "accountStatus",
                   "mustChangePassword",
                 ],
@@ -351,6 +364,10 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                   "accessToken": {
                     "type": "string",
                   },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
                   "tokenType": {
                     "example": "Bearer",
                     "type": "string",
@@ -359,6 +376,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                 "required": [
                   "accessToken",
                   "tokenType",
+                  "expiresInSeconds",
                 ],
                 "type": "object",
               },
@@ -426,9 +444,22 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
   },
   "/auth/seller/login": {
     "post": {
-      "description": "판매자 username/password로 로그인한다.",
+      "description": "판매자 username/password로 로그인한다. \`X-Client: mobile\`이면 refresh 토큰을 쿠키 대신 응답 바디(\`refreshToken\`·\`refreshExpiresAt\`)로 돌려준다.",
       "operationId": "AuthController_sellerLogin",
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "앱은 mobile. 웹은 보내지 않는다(쿠키 모드).",
+          "in": "header",
+          "name": "X-Client",
+          "required": false,
+          "schema": {
+            "enum": [
+              "mobile",
+            ],
+            "type": "string",
+          },
+        },
+      ],
       "requestBody": {
         "content": {
           "application/json": {
@@ -456,8 +487,21 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                     ],
                     "type": "string",
                   },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
                   "mustChangePassword": {
                     "type": "boolean",
+                  },
+                  "refreshExpiresAt": {
+                    "description": "바디 모드에서만. refresh 토큰 만료 시각.",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "refreshToken": {
+                    "description": "바디 모드에서만. 재발급마다 바뀌므로 교체 저장한다.",
+                    "type": "string",
                   },
                   "tokenType": {
                     "example": "Bearer",
@@ -467,6 +511,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                 "required": [
                   "accessToken",
                   "tokenType",
+                  "expiresInSeconds",
                   "accountStatus",
                   "mustChangePassword",
                 ],
@@ -475,6 +520,9 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
             },
           },
           "description": "판매자 로그인 결과",
+        },
+        "429": {
+          "description": "로그인 시도 초과(errorCode LOGIN_RATE_LIMITED). 같은 아이디+IP 5회/15분, IP 30회/15분 — 성공 시도도 센다.",
         },
       },
       "summary": "판매자 로그인",
@@ -485,9 +533,26 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
   },
   "/auth/seller/logout": {
     "post": {
-      "description": "판매자 refresh 세션을 폐기하고 쿠키를 제거한다.",
+      "description": "판매자 refresh 세션을 폐기하고 쿠키를 제거한다. 바디 \`refreshToken\`이 있으면 그것을(쿠키는 읽지 않음), 없으면 쿠키를 쓴다.",
       "operationId": "AuthController_sellerLogout",
       "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "refreshToken": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string",
+                },
+              },
+              "type": "object",
+            },
+          },
+        },
+        "description": "판매자 앱 전용. 비우면 쿠키 모드.",
+        "required": false,
+      },
       "responses": {
         "204": {
           "description": "판매자 로그아웃 완료",
@@ -506,9 +571,26 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
   },
   "/auth/seller/refresh": {
     "post": {
-      "description": "판매자 refresh 쿠키를 사용해 access token을 재발급한다.",
+      "description": "판매자 refresh 쿠키를 사용해 access token을 재발급한다. 바디 \`refreshToken\`이 있으면 그것을(쿠키는 읽지 않음), 없으면 쿠키를 쓴다.",
       "operationId": "AuthController_sellerRefresh",
       "parameters": [],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "refreshToken": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string",
+                },
+              },
+              "type": "object",
+            },
+          },
+        },
+        "description": "판매자 앱 전용. 비우면 쿠키 모드.",
+        "required": false,
+      },
       "responses": {
         "200": {
           "content": {
@@ -526,8 +608,21 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                     ],
                     "type": "string",
                   },
+                  "expiresInSeconds": {
+                    "example": 900,
+                    "type": "number",
+                  },
                   "mustChangePassword": {
                     "type": "boolean",
+                  },
+                  "refreshExpiresAt": {
+                    "description": "바디 모드에서만. refresh 토큰 만료 시각.",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "refreshToken": {
+                    "description": "바디 모드에서만. 재발급마다 바뀌므로 교체 저장한다.",
+                    "type": "string",
                   },
                   "tokenType": {
                     "example": "Bearer",
@@ -537,6 +632,7 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
                 "required": [
                   "accessToken",
                   "tokenType",
+                  "expiresInSeconds",
                   "accountStatus",
                   "mustChangePassword",
                 ],

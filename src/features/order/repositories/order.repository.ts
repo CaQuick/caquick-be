@@ -5,6 +5,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
+import { orderSubmittedEvent } from '@/features/order/events/order-submitted.event';
 import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
@@ -21,15 +22,38 @@ export type AdminOrderRow = Prisma.OrderGetPayload<{
 export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
   include: typeof adminOrderDetailInclude;
 }>;
+export type SellerOrderRow = Prisma.OrderGetPayload<{
+  include: ReturnType<typeof sellerOrderSummaryInclude>;
+}>;
 
 const adminOrderInclude = {
   items: {
     where: activeWhere,
-    select: { store_id: true, store_name_snapshot: true },
+    select: {
+      store_id: true,
+      store_name_snapshot: true,
+      product_name_snapshot: true,
+      product_thumbnail_url_snapshot: true,
+    },
     orderBy: { id: 'asc' },
     take: 1,
   },
 } satisfies Prisma.OrderInclude;
+
+/** 목록 카드용 첫 품목 스냅샷 — 매장 필터가 들어가 상수로 둘 수 없다. */
+function sellerOrderSummaryInclude(storeId: bigint) {
+  return {
+    items: {
+      where: { store_id: storeId, ...activeWhere },
+      select: {
+        product_name_snapshot: true,
+        product_thumbnail_url_snapshot: true,
+      },
+      orderBy: { id: 'asc' },
+      take: 1,
+    },
+  } satisfies Prisma.OrderInclude;
+}
 
 const adminOrderDetailInclude = {
   account: {
@@ -132,7 +156,9 @@ export interface CreatedOrderRow {
   order_number: string;
   status: OrderStatus;
   pickup_at: Date;
+  buyer_name: string;
   total_price: number;
+  updated_at: Date;
 }
 
 export interface ReviewableOrderItemRow {
@@ -258,7 +284,7 @@ export class OrderRepository {
     tx: Prisma.TransactionClient,
     args: CreateSubmittedOrderArgs,
   ): Promise<CreatedOrderRow> {
-    return tx.order.create({
+    const created = await tx.order.create({
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
@@ -307,9 +333,29 @@ export class OrderRepository {
         order_number: true,
         status: true,
         pickup_at: true,
+        buyer_name: true,
         total_price: true,
+        updated_at: true,
       },
     });
+    // 접수 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 구매자 알림은 없다(notification 소비자는 구독하지 않는다).
+    await this.outbox.publish(
+      tx,
+      orderSubmittedEvent({
+        orderId: created.id,
+        orderNumber: created.order_number,
+        buyerAccountId: args.accountId,
+        storeId: args.item.storeId,
+        storeName: args.item.storeNameSnapshot,
+        productId: args.item.productId,
+        productName: args.item.productNameSnapshot,
+        quantity: args.item.quantity,
+        pickupAt: args.pickupAt,
+        totalPrice: args.totalPrice,
+        occurredAt: args.submittedAt,
+      }),
+    );
+    return created;
   }
 
   /** 상태가 이후 변경됐어도 현재 row를 그대로 반환한다(replay 응답 재구성용). */
@@ -324,7 +370,9 @@ export class OrderRepository {
         order_number: true,
         status: true,
         pickup_at: true,
+        buyer_name: true,
         total_price: true,
+        updated_at: true,
       },
     });
   }
@@ -617,6 +665,31 @@ export class OrderRepository {
     });
   }
 
+  /** [from, to) 픽업 또는 생성 기준 건수·금액 합(CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
+  async aggregateStoreOrdersInRange(args: {
+    storeId: bigint;
+    from: Date;
+    to: Date;
+    basis: 'pickup' | 'created';
+  }): Promise<{ orderCount: number; salesAmount: number }> {
+    const result = await this.prisma.order.aggregate({
+      where: {
+        status: { not: 'CANCELED' },
+        [args.basis === 'pickup' ? 'pickup_at' : 'created_at']: {
+          gte: args.from,
+          lt: args.to,
+        },
+        items: { some: { store_id: args.storeId, ...activeWhere } },
+      },
+      _count: { _all: true },
+      _sum: { total_price: true },
+    });
+    return {
+      orderCount: result._count._all,
+      salesAmount: result._sum.total_price ?? 0,
+    };
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
@@ -627,12 +700,13 @@ export class OrderRepository {
     fromPickupAt?: Date;
     toPickupAt?: Date;
     search?: string;
-  }) {
+  }): Promise<SellerOrderRow[]> {
     return this.prisma.order.findMany({
       where: {
         ...(args.cursor ? { id: { lt: args.cursor } } : {}),
         ...this.storeOrderScopeWhere(args),
       },
+      include: sellerOrderSummaryInclude(args.storeId),
       orderBy: { id: 'desc' },
       take: args.limit + 1,
     });
@@ -736,6 +810,7 @@ export class OrderRepository {
             ? { canceled_at: args.now }
             : {}),
         },
+        include: sellerOrderSummaryInclude(args.storeId),
       });
 
       await tx.orderStatusHistory.create({

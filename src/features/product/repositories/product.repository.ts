@@ -17,6 +17,17 @@ import {
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
 
+const tagSuggestionInclude = {
+  _count: {
+    select: {
+      product_tags: { where: { ...activeWhere, product: visibleWhere } },
+    },
+  },
+} as const;
+export type TagSuggestionRow = Prisma.TagGetPayload<{
+  include: typeof tagSuggestionInclude;
+}>;
+
 export interface StoreProductRow {
   id: bigint;
   store_id: bigint;
@@ -483,6 +494,29 @@ export class ProductRepository {
   }
 
   /**
+   * 정확 일치는 이름순 limit 밖으로 밀리면 안 되므로 별도로 찾는다 — contains 결과에 이미 있으면 서비스가 합친다.
+   * 정확 일치 판정은 DB collation(ci)에 맡긴다. 연결 수는 삭제 연결·비활성/삭제 상품을 뺀다.
+   */
+  async searchTagsByName(args: {
+    keyword: string;
+    limit: number;
+  }): Promise<{ exact: TagSuggestionRow | null; rows: TagSuggestionRow[] }> {
+    const [exact, rows] = await Promise.all([
+      this.prisma.tag.findFirst({
+        where: { name: args.keyword },
+        include: tagSuggestionInclude,
+      }),
+      this.prisma.tag.findMany({
+        where: { name: { contains: args.keyword } },
+        include: tagSuggestionInclude,
+        orderBy: { name: 'asc' },
+        take: args.limit,
+      }),
+    ]);
+    return { exact, rows };
+  }
+
+  /**
    * 연결 교체는 soft-delete로 통일한다(관리자 카테고리 삭제 경로와 같은 방식) — 빠진 연결은 deleted_at을 찍고,
    * 같은 (product, category)의 삭제 행이 있으면 복원한다(unique 인덱스가 삭제 행도 세므로 새로 만들 수 없다).
    */
@@ -541,44 +575,100 @@ export class ProductRepository {
     },
     audit: () => AuditEntry,
   ): Promise<void> {
-    const now = new Date();
     await this.writeWithAudit(async (tx) => {
-      await tx.productTag.updateMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { notIn: args.tagIds },
-          ...activeWhere,
-        },
-        data: { deleted_at: now },
-      });
-      if (args.tagIds.length === 0) return;
-      await tx.productTag.updateMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { in: args.tagIds },
-          deleted_at: { not: null },
-        },
-        data: { deleted_at: null },
-      });
-      const existing = await tx.productTag.findMany({
-        where: {
-          product_id: args.productId,
-          tag_id: { in: args.tagIds },
-          ...activeWhere,
-        },
-        select: { tag_id: true },
-      });
-      const present = new Set(existing.map((row) => row.tag_id));
-      const missing = args.tagIds.filter((id) => !present.has(id));
-      if (missing.length > 0) {
-        await tx.productTag.createMany({
-          data: missing.map((tagId) => ({
-            product_id: args.productId,
-            tag_id: tagId,
-          })),
-        });
-      }
+      await this.lockProductRow(tx, args.productId);
+      await this.replaceProductTagsInTx(tx, args.productId, args.tagIds);
     }, audit);
+  }
+
+  /**
+   * 같은 상품의 태그 교체를 직렬화한다 — 잠금 없이는 updateMany→findMany→createMany가 교차해 합집합이 남거나 P2002가 난다.
+   * 태그 잠금(upsert·FK 검사)보다 먼저 잡아 두 교체 경로가 교차해도 교착하지 않는다.
+   */
+  private async lockProductRow(
+    tx: Prisma.TransactionClient,
+    productId: bigint,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM product WHERE id = ${productId} FOR UPDATE`;
+  }
+
+  /**
+   * 이름으로 태그를 만들거나(삭제행은 복구) 재사용해 연결을 교체한다 — 전부 한 트랜잭션.
+   * upsert는 raw INSERT … ON DUPLICATE KEY UPDATE 한 문장으로, 동시에 같은 새 이름을 보내도 unique가 하나로 수렴한다.
+   * 할당은 왼쪽부터 평가되므로 updated_at 판정이 deleted_at 복구보다 앞에 와야 한다.
+   * collation(ci)이 동일성을 정하므로 findMany 결과를 그대로 쓴다('Cake'가 있으면 'cake'는 그 행).
+   */
+  async replaceProductTagsByName(
+    args: { productId: bigint; names: string[] },
+    audit: (tagIds: bigint[]) => AuditEntry,
+  ): Promise<bigint[]> {
+    return this.writeWithAudit(async (tx) => {
+      await this.lockProductRow(tx, args.productId);
+      if (args.names.length === 0) {
+        await this.replaceProductTagsInTx(tx, args.productId, []);
+        return [];
+      }
+      // 같은 기존 태그를 반대 순서로 잠그는 동시 호출이 교착하지 않게 unique(name) 잠금 순서 고정
+      const names = [...args.names].sort();
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO tag (name, created_at, updated_at)
+        VALUES ${Prisma.join(
+          names.map((name) => Prisma.sql`(${name}, NOW(3), NOW(3))`),
+        )}
+        ON DUPLICATE KEY UPDATE
+          updated_at = IF(deleted_at IS NULL, updated_at, NOW(3)),
+          deleted_at = NULL
+      `);
+      const tags = await tx.tag.findMany({
+        where: { name: { in: args.names }, ...activeWhere },
+        select: { id: true },
+      });
+      const tagIds = tags.map((row) => row.id);
+      await this.replaceProductTagsInTx(tx, args.productId, tagIds);
+      return tagIds;
+    }, audit);
+  }
+
+  private async replaceProductTagsInTx(
+    tx: Prisma.TransactionClient,
+    productId: bigint,
+    tagIds: bigint[],
+  ): Promise<void> {
+    await tx.productTag.updateMany({
+      where: {
+        product_id: productId,
+        tag_id: { notIn: tagIds },
+        ...activeWhere,
+      },
+      data: { deleted_at: new Date() },
+    });
+    if (tagIds.length === 0) return;
+    await tx.productTag.updateMany({
+      where: {
+        product_id: productId,
+        tag_id: { in: tagIds },
+        deleted_at: { not: null },
+      },
+      data: { deleted_at: null },
+    });
+    const existing = await tx.productTag.findMany({
+      where: {
+        product_id: productId,
+        tag_id: { in: tagIds },
+        ...activeWhere,
+      },
+      select: { tag_id: true },
+    });
+    const present = new Set(existing.map((row) => row.tag_id));
+    const missing = tagIds.filter((id) => !present.has(id));
+    if (missing.length > 0) {
+      await tx.productTag.createMany({
+        data: missing.map((tagId) => ({
+          product_id: productId,
+          tag_id: tagId,
+        })),
+      });
+    }
   }
 
   async createOptionGroup(

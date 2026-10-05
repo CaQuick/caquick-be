@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
@@ -9,8 +10,10 @@ import { NotificationOutboxConsumer } from '@/features/notification/services/not
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { OutboxDispatcherService } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -26,12 +29,14 @@ import {
   OUTBOX_TEST_IMPORTS,
   outboxTestProviders,
 } from '@/test/outbox';
+import { collectTopic } from '@/test/pubsub';
 
 describe('AdminOrderService (real DB)', () => {
   let service: AdminOrderService;
   let orderRepo: OrderRepository;
   let prisma: PrismaClient;
   let dispatcher: OutboxDispatcherService;
+  let pubSub: PubSub;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -42,6 +47,9 @@ describe('AdminOrderService (real DB)', () => {
         OrderRepository,
         OrderStatusTransitionPolicy,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
+        OrderEventsService,
+        // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
+        { provide: PUB_SUB, useValue: new PubSub() },
         ...outboxTestProviders(),
         NotificationOutboxConsumer,
         NotificationRepository,
@@ -51,6 +59,7 @@ describe('AdminOrderService (real DB)', () => {
     service = module.get(AdminOrderService);
     orderRepo = module.get(OrderRepository);
     dispatcher = module.get(OutboxDispatcherService);
+    pubSub = module.get(PUB_SUB);
     prisma = p;
   });
 
@@ -173,15 +182,29 @@ describe('AdminOrderService (real DB)', () => {
       expect(page2.items.map((o) => o.id)).toEqual([ids[0].toString()]);
     });
 
-    it('매장명은 첫 활성 품목의 주문 시점 스냅샷이고 품목이 없으면 null', async () => {
+    it('매장명·첫 품목명·이미지는 첫 활성 품목의 주문 시점 스냅샷이고 품목이 없으면 null', async () => {
       const { order, item } = await orderWithItem();
       await prisma.orderItem.update({
         where: { id: item.id },
-        data: { store_name_snapshot: '주문 시점 매장' },
+        data: {
+          store_name_snapshot: '주문 시점 매장',
+          product_name_snapshot: '주문 시점 상품',
+          product_thumbnail_url_snapshot: 'https://img/old.jpg',
+        },
       });
       await prisma.store.update({
         where: { id: item.store_id },
         data: { store_name: '바뀐 매장' },
+      });
+      await prisma.product.update({
+        where: { id: item.product_id },
+        data: { name: '바뀐 상품' },
+      });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: item.store_id,
+        product_name_snapshot: '삭제된 품목',
+        deleted_at: new Date(),
       });
       const empty = await createOrder(prisma);
 
@@ -191,10 +214,14 @@ describe('AdminOrderService (real DB)', () => {
       expect(byId.get(order.id.toString())).toMatchObject({
         storeId: item.store_id.toString(),
         storeName: '주문 시점 매장',
+        firstItemName: '주문 시점 상품',
+        firstItemImageUrl: 'https://img/old.jpg',
       });
       expect(byId.get(empty.id.toString())).toMatchObject({
         storeId: null,
         storeName: null,
+        firstItemName: null,
+        firstItemImageUrl: null,
       });
     });
   });
@@ -242,7 +269,11 @@ describe('AdminOrderService (real DB)', () => {
           note: '  가게 사정  ',
         });
 
-        expect(result.status).toBe('CANCELED');
+        expect(result).toMatchObject({
+          status: 'CANCELED',
+          firstItemName: 'Product snapshot',
+          firstItemImageUrl: null,
+        });
         const row = await prisma.order.findUniqueOrThrow({
           where: { id: order.id },
         });
@@ -365,8 +396,9 @@ describe('AdminOrderService (real DB)', () => {
       );
     });
 
-    it('두 관리자가 동시에 취소해도 이력·알림·감사는 1건씩', async () => {
-      const { order } = await orderWithItem();
+    it('두 관리자가 동시에 취소해도 이력·알림·감사·구독 이벤트는 1건씩', async () => {
+      const { order, storeId } = await orderWithItem();
+      const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
       const [a, b] = [await admin(), await admin()];
       const results = await Promise.allSettled([
         service.adminCancelOrder(a, {
@@ -396,6 +428,70 @@ describe('AdminOrderService (real DB)', () => {
           where: { target_type: 'ORDER', target_id: order.id },
         }),
       ).toBe(1);
+      expect(topic.received).toHaveLength(1);
+      topic.stop();
+    });
+  });
+
+  describe('sellerOrderUpdated 발행', () => {
+    it('관리자 취소는 첫 품목 매장 토픽에 1건 — 취소된 주문 행의 스냅샷을 싣는다', async () => {
+      const { order, storeId } = await orderWithItem({ status: 'CONFIRMED' });
+      const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
+
+      await service.adminCancelOrder(await admin(), {
+        orderId: order.id.toString(),
+        note: '가게 사정',
+      });
+
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(topic.received).toEqual([
+        {
+          orderId: order.id.toString(),
+          orderNumber: order.order_number,
+          status: 'CANCELED',
+          pickupAt: order.pickup_at.toISOString(),
+          buyerName: order.buyer_name,
+          totalPrice: order.total_price,
+          productName: 'Product snapshot',
+          updatedAt: row.updated_at.toISOString(),
+        },
+      ]);
+      topic.stop();
+    });
+
+    it('반증: 취소 불가 주문(ORDER_NOT_CANCELLABLE)은 발행하지 않는다', async () => {
+      const { order, storeId } = await orderWithItem({ status: 'PICKED_UP' });
+      const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
+
+      await expect(
+        service.adminCancelOrder(await admin(), {
+          orderId: order.id.toString(),
+          note: 'x',
+        }),
+      ).rejects.toThrowDomain('ORDER_NOT_CANCELLABLE');
+
+      expect(topic.received).toHaveLength(0);
+      topic.stop();
+    });
+
+    it('활성 품목이 없으면 매장을 알 수 없어 발행을 생략한다', async () => {
+      const { order, item } = await orderWithItem();
+      await prisma.orderItem.update({
+        where: { id: item.id },
+        data: { deleted_at: new Date() },
+      });
+      const publish = jest.spyOn(pubSub, 'publish');
+
+      const result = await service.adminCancelOrder(await admin(), {
+        orderId: order.id.toString(),
+        note: 'x',
+      });
+
+      expect(result).toMatchObject({ status: 'CANCELED', storeId: null });
+      expect(publish).not.toHaveBeenCalled();
+      publish.mockRestore();
     });
   });
 });

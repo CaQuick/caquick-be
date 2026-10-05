@@ -1,0 +1,37 @@
+extend type Query {
+  """
+  내 판매자 계정을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN.
+  초기 비밀번호 상태(mustChangePassword=true)면 다른 판매자 API와 같이 FORBIDDEN이므로, 초기 비밀번호 여부는 refresh 응답의 mustChangePassword로 판단한다.
+  """
+  sellerMe: SellerAccount!
+}
+
+"""
+판매자 본인 계정. 로그인 자격증명·계정 상태·보유 매장 ID를 함께 보여준다. 매장명은 sellerMyStore로 받는다.
+"""
+type SellerAccount {
+  """
+  계정 ID.
+  """
+  accountId: ID!
+  """
+  로그인 username. 자격증명이 없는 개발용 계정이면 null.
+  """
+  username: String
+  """
+  표시 이름. 계정 이름이 있으면 그것, 없으면 사업자명, 둘 다 없으면 null.
+  """
+  displayName: String
+  """
+  보유 매장 ID. 매장이 없거나 삭제됐으면 null.
+  """
+  storeId: ID
+  """
+  초기 비밀번호 상태. true면 본인이 비밀번호를 바꾸기 전까지 판매자 API가 FORBIDDEN이다.
+  """
+  mustChangePassword: Boolean!
+  """
+  계정 상태.
+  """
+  accountStatus: AccountStatus!
+}

@@ -1,3 +1,5 @@
+import { PubSub } from 'graphql-subscriptions';
+
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -5,11 +7,13 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
+import { PUB_SUB } from '@/global/pubsub';
 import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -43,6 +47,8 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         StoreRepository,
         ClockService,
         RandomService,
+        OrderEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders({ clock: true }),
         ...bookedQuantityProviders(),

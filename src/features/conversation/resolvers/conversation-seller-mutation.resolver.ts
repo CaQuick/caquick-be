@@ -3,7 +3,10 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { SellerSendConversationMessageInput } from '@/features/conversation/dto/inputs/seller-send-conversation-message.input';
 import { SellerConversationService } from '@/features/conversation/services/conversation-seller.service';
-import type { SellerConversationMessageOutput } from '@/features/conversation/types/conversation-seller-output.type';
+import type {
+  SellerConversationMessageOutput,
+  SellerConversationOutput,
+} from '@/features/conversation/types/conversation-seller-output.type';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -30,6 +33,18 @@ export class SellerConversationMutationResolver {
     return this.conversationService.sellerSendConversationMessage(
       accountId,
       input,
+    );
+  }
+
+  @Mutation('sellerMarkConversationRead')
+  sellerMarkConversationRead(
+    @CurrentUser() user: JwtUser,
+    @Args('conversationId') conversationId: string,
+  ): Promise<SellerConversationOutput> {
+    const accountId = parseAccountId(user);
+    return this.conversationService.sellerMarkConversationRead(
+      accountId,
+      conversationId,
     );
   }
 }

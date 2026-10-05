@@ -106,6 +106,21 @@ enum NotificationEvent {
   ORDER_CANCELED
 }
 
+enum PushPlatform {
+  IOS
+  ANDROID
+}
+
+// Expo 푸시 전달 단계. send 응답(ticket) → 영수증(receipt) 순으로 전진한다.
+enum SellerPushDeliveryStatus {
+  PENDING
+  TICKET_OK
+  TICKET_ERROR
+  RECEIPT_OK
+  RECEIPT_ERROR
+  RECEIPT_UNKNOWN
+}
+
 enum AuditTargetType {
   STORE
   PRODUCT
@@ -1157,6 +1172,57 @@ model NotificationBroadcast {
   @@map("notification_broadcast")
 }
 
+// 판매자 앱 푸시 디바이스. 토큰이 기기·설치 단위 식별자라 토큰 unique, 소유 계정은 마지막 등록자다.
+// 계정·매장 FK는 두지 않는다(감사·이력 성격, NotificationBroadcast와 같은 선택). 활성 판정은 disabled_at IS NULL.
+model SellerPushDevice {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id BigInt @db.UnsignedBigInt
+  // 등록 시점 판매자 매장. 소비자가 이벤트 storeId로 바로 찾는다 — Store 조인 없음.
+  store_id   BigInt @db.UnsignedBigInt
+
+  /// 바이너리 collation(utf8mb4_bin) — 마이그레이션 SQL 참조
+  expo_push_token  String       @db.VarChar(200)
+  platform         PushPlatform
+  // 앱이 부여한 기기 식별자(표시·추적용). 서버 로직은 토큰만 본다.
+  client_device_id String?      @db.VarChar(128)
+
+  last_seen_at    DateTime  @db.DateTime(3)
+  disabled_at     DateTime? @db.DateTime(3)
+  // UNREGISTERED | DEVICE_NOT_REGISTERED
+  disabled_reason String?   @db.VarChar(32)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  deliveries SellerPushDelivery[]
+
+  @@unique([expo_push_token], map: "uk_seller_push_device_token")
+  @@index([store_id, disabled_at], map: "idx_seller_push_device_store_active")
+  @@index([account_id], map: "idx_seller_push_device_account")
+  @@map("seller_push_device")
+}
+
+// outbox 이벤트 1건 × 디바이스 1개 = 1행. at-least-once 재전달 dedupe 키이자 ticket → receipt 추적 행.
+model SellerPushDelivery {
+  id              BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  source_event_id String @db.Char(36)
+  push_device_id  BigInt @db.UnsignedBigInt
+
+  status     SellerPushDeliveryStatus @default(PENDING)
+  ticket_id  String?                  @db.VarChar(64)
+  error_code String?                  @db.VarChar(64)
+
+  sent_at            DateTime? @db.DateTime(3)
+  receipt_checked_at DateTime? @db.DateTime(3)
+  created_at         DateTime  @default(now()) @db.DateTime(3)
+
+  device SellerPushDevice @relation(fields: [push_device_id], references: [id])
+
+  @@unique([source_event_id, push_device_id], map: "uk_seller_push_delivery_event_device")
+  @@index([status, sent_at], map: "idx_seller_push_delivery_receipt")
+  @@map("seller_push_delivery")
+}
+
 /**
  * =========================
  * 11) Search
@@ -1348,7 +1414,11 @@ model StoreConversation {
   store_id   BigInt @db.UnsignedBigInt
 
   last_message_at DateTime? @db.DateTime(3)
-  last_read_at    DateTime? @db.DateTime(3)
+  // 구매자 읽음 마커(조회 시 전진). 판매자 마커는 명시 mutation·답장이 전진시킨다.
+  last_read_at        DateTime? @db.DateTime(3)
+  seller_last_read_at DateTime? @db.DateTime(3)
+  // 대화 생성 시점 구매자 닉네임(표시용 스냅샷). 도입 전 대화는 백필로 못 채우면 null.
+  buyer_nickname_snapshot String? @db.VarChar(50)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
