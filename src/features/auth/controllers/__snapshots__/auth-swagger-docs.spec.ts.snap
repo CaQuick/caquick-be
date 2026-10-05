@@ -121,6 +121,9 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
           },
           "description": "관리자 로그인 결과",
         },
+        "429": {
+          "description": "로그인 시도 초과(errorCode LOGIN_RATE_LIMITED). 같은 아이디+IP 5회/15분, IP 30회/15분 — 성공 시도도 센다.",
+        },
       },
       "summary": "관리자 로그인",
       "tags": [
@@ -517,6 +520,9 @@ exports[`Auth REST Swagger 문서 auth REST operation 14개(JWKS 포함)의 문�
             },
           },
           "description": "판매자 로그인 결과",
+        },
+        "429": {
+          "description": "로그인 시도 초과(errorCode LOGIN_RATE_LIMITED). 같은 아이디+IP 5회/15분, IP 30회/15분 — 성공 시도도 센다.",
         },
       },
       "summary": "판매자 로그인",

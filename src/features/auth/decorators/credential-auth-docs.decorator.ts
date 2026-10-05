@@ -7,6 +7,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 
 /** 판매자·관리자 공통 로그인/재발급 응답 스키마(Swagger). */
@@ -104,6 +105,10 @@ export function ApiCredentialLogin(role: CredentialRoleLabel): MethodDecorator {
     ApiOkResponse({
       description: `${role} 로그인 결과`,
       schema: loginResponseSchemaOf(role),
+    }),
+    ApiTooManyRequestsResponse({
+      description:
+        '로그인 시도 초과(errorCode LOGIN_RATE_LIMITED). 같은 아이디+IP 5회/15분, IP 30회/15분 — 성공 시도도 센다.',
     }),
   );
 }
