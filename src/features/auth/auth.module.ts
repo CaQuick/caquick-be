@@ -17,10 +17,12 @@ import { AdminAccountMutationResolver } from '@/features/auth/resolvers/auth-adm
 import { AdminAccountQueryResolver } from '@/features/auth/resolvers/auth-admin-account-query.resolver';
 import { AdminUserMutationResolver } from '@/features/auth/resolvers/auth-admin-user-mutation.resolver';
 import { AdminUserQueryResolver } from '@/features/auth/resolvers/auth-admin-user-query.resolver';
+import { SellerAccountQueryResolver } from '@/features/auth/resolvers/auth-seller-account-query.resolver';
 import { UserProfileMutationResolver } from '@/features/auth/resolvers/auth-user-profile-mutation.resolver';
 import { UserProfileQueryResolver } from '@/features/auth/resolvers/auth-user-profile-query.resolver';
 import { AdminAccountService } from '@/features/auth/services/auth-admin-account.service';
 import { AdminUserService } from '@/features/auth/services/auth-admin-user.service';
+import { SellerAccountService } from '@/features/auth/services/auth-seller-account.service';
 import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
 import { BlacklistRebuildService } from '@/features/auth/services/blacklist-rebuild.service';
 import { CredentialAuthService } from '@/features/auth/services/credential-auth.service';
@@ -63,6 +65,9 @@ import { AuthGlobalModule } from '@/global/auth/auth-global.module';
     AdminAccountMutationResolver,
     AdminUserQueryResolver,
     AdminUserMutationResolver,
+    // 판매자 본인 계정(sellerMe) — identity가 소유한다
+    SellerAccountService,
+    SellerAccountQueryResolver,
     // 구매자 계정·프로필(me·온보딩·수정·탈퇴) — identity가 소유한다
     AccountUserRepository,
     UserProfileService,
