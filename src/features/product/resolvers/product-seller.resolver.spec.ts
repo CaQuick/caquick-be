@@ -30,7 +30,11 @@ import { StoreSellerRepository } from '@/features/store/repositories/store-selle
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createProduct, setupSellerWithStore } from '@/test/factories';
+import {
+  createProduct,
+  createTag,
+  setupSellerWithStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { ownedUploadUrl, s3TestProviders } from '@/test/storage/s3-test.helper';
 
@@ -91,6 +95,19 @@ describe('Seller Product Resolvers (real DB)', () => {
       accountId: account.id.toString(),
     });
     expect(list.items).toHaveLength(1);
+  });
+
+  it('Query.sellerSearchTags: 태그 제안 배선', async () => {
+    const { account } = await setupSellerWithStore(prisma);
+    await createTag(prisma, { name: '레터링' });
+
+    const result = await queryResolver.sellerSearchTags(
+      { accountId: account.id.toString() },
+      { keyword: '#레터링' },
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ name: '레터링', isExactMatch: true }),
+    ]);
   });
 
   it('Mutation.sellerDeleteProduct: 타 store 상품 접근은 404 전파', async () => {

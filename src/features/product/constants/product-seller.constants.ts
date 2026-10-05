@@ -26,3 +26,8 @@ export const MAX_OPTION_ITEM_DESCRIPTION_LENGTH = 500;
 export const MAX_TOKEN_KEY_LENGTH = 60;
 export const MAX_TOKEN_DEFAULT_TEXT_LENGTH = 200;
 export const DEFAULT_TOKEN_MAX_LENGTH = 30;
+
+// ── 태그 검색 ──
+
+export const DEFAULT_TAG_SUGGESTIONS = 10;
+export const MAX_TAG_SUGGESTIONS = 20;
