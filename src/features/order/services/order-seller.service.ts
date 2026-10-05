@@ -21,6 +21,8 @@ import {
   OrderRepository,
   type SellerOrderRow,
 } from '@/features/order/repositories/order.repository';
+import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import {
   toOrderItemDetail,
   toOrderStatusHistory,
@@ -42,6 +44,7 @@ export class SellerOrderService extends SellerBaseService {
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly statusPolicy: OrderStatusTransitionPolicy,
+    private readonly events: OrderEventsService,
   ) {
     super(repo, auditLogs);
   }
@@ -133,6 +136,13 @@ export class SellerOrderService extends SellerBaseService {
 
     if (!updated) throw new DomainException('ORDER_NOT_FOUND');
 
+    await this.events.publishSellerOrderUpdate(
+      ctx.storeId,
+      toSellerOrderUpdateEvent(
+        updated,
+        updated.items[0]?.product_name_snapshot ?? '',
+      ),
+    );
     return this.toOrderSummaryOutput(updated);
   }
 

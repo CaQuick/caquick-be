@@ -1,0 +1,32 @@
+extend type Subscription {
+  """
+  내 매장 주문 생성·상태 변경 이벤트. 판매자 로그인 필수(SELLER 아니면 FORBIDDEN).
+  삭제되지 않은 매장을 보유한 판매자만 구독할 수 있다 — 매장이 없거나 삭제됐으면 NOT_FOUND.
+  비활성(is_active=false) 매장도 구독은 유지된다. 인증은 graphql-ws connectionParams.authorization.
+  구매자 주문 생성(SUBMITTED)·판매자 상태 변경·관리자 강제 취소가 모두 여기로 온다.
+  """
+  sellerOrderUpdated: SellerOrderUpdate!
+}
+
+"""
+판매자 주문 갱신 이벤트. 발행 시점 주문 행의 스냅샷이다.
+이벤트 간 도착 순서는 보장되지 않는다 — 구독자는 같은 orderId의 더 오래된 updatedAt 이벤트는 폐기한다.
+전달 누락 가능(Redis 장애 시 발행 생략)하므로 폴백은 sellerOrderList 재조회다.
+"""
+type SellerOrderUpdate {
+  orderId: ID!
+  """주문번호."""
+  orderNumber: String!
+  """이벤트 시점의 주문 상태."""
+  status: OrderStatusType!
+  """픽업 예정 일시."""
+  pickupAt: DateTime!
+  """주문자 이름(주문 시점 값)."""
+  buyerName: String!
+  """할인 반영 후 최종 결제 금액(원)."""
+  totalPrice: Int!
+  """첫 품목의 상품명(주문 시점 스냅샷). 주문은 단일 상품 구조다."""
+  productName: String!
+  """주문 행의 updated_at. 폐기 규칙의 비교 키다."""
+  updatedAt: DateTime!
+}

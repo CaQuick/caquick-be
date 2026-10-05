@@ -9,6 +9,8 @@ import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import { evaluateActiveUserAccount } from '@/features/auth';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
@@ -40,6 +42,7 @@ export class OrderCheckoutService {
     private readonly pickupSchedule: StorePickupScheduleService,
     private readonly clock: ClockService,
     private readonly random: RandomService,
+    private readonly events: OrderEventsService,
   ) {}
 
   /** 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다. 커스텀 입력은 스펙 확정 후 확장. */
@@ -284,6 +287,11 @@ export class OrderCheckoutService {
             args.idempotencyKey,
           );
         }
+        // 커밋된 새 주문만 발행한다 — replay(멱등 키·capacity·P2002)는 이미 발행된 주문이다
+        await this.events.publishSellerOrderUpdate(
+          args.item.storeId,
+          toSellerOrderUpdateEvent(created, args.item.productNameSnapshot),
+        );
         return created;
       } catch (error) {
         const isUniqueViolation =

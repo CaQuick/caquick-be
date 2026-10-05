@@ -1,12 +1,16 @@
+import { PubSub } from 'graphql-subscriptions';
+
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -32,6 +36,8 @@ describe('Seller Order Resolvers (real DB)', () => {
         StoreSellerRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,

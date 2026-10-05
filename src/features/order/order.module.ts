@@ -13,11 +13,14 @@ import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-
 import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
+import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subscription.resolver';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
+import { OrderSubscriptionService } from '@/features/order/services/order-subscription.service';
 import { OutboxModule } from '@/features/outbox';
 import { ProductModule } from '@/features/product';
 import { StoreModule } from '@/features/store';
@@ -40,6 +43,10 @@ import { StoreModule } from '@/features/store';
     OrderStoreDailyLimitRepository,
     OrderStoreDailyLimitConsumer,
     OrderStatusTransitionPolicy,
+    // 판매자 주문 구독(Redis PubSub) — 발행은 체크아웃·판매자 상태 변경·관리자 취소 서비스가 커밋 뒤 직접
+    OrderEventsService,
+    OrderSubscriptionService,
+    OrderSubscriptionResolver,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
     // 판매자 주문 관리(목록·상세·상태 변경) — 주문 도메인이 소유한다

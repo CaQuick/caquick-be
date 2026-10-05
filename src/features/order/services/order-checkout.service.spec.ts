@@ -1,3 +1,5 @@
+import { PubSub } from 'graphql-subscriptions';
+
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
@@ -9,6 +11,7 @@ import {
 } from '@/features/order/events/order-submitted.event';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -18,6 +21,7 @@ import type {
   Product,
   Store,
 } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -32,6 +36,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import { collectTopic } from '@/test/pubsub';
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -43,6 +48,7 @@ describe('OrderCheckoutService (real DB)', () => {
   let orderRepo: OrderRepository;
   let clock: ClockService;
   let random: RandomService;
+  let pubSub: PubSub;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -56,6 +62,9 @@ describe('OrderCheckoutService (real DB)', () => {
         StoreRepository,
         ClockService,
         RandomService,
+        OrderEventsService,
+        // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
+        { provide: PUB_SUB, useValue: new PubSub() },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders({ clock: true }),
         ...bookedQuantityProviders(),
@@ -65,6 +74,7 @@ describe('OrderCheckoutService (real DB)', () => {
     orderRepo = module.get(OrderRepository);
     clock = module.get(ClockService);
     random = module.get(RandomService);
+    pubSub = module.get(PUB_SUB);
     prisma = p;
   });
 
@@ -1050,6 +1060,116 @@ describe('OrderCheckoutService (real DB)', () => {
       const events = await submittedEvents();
       expect(events).toHaveLength(1);
       expect(events[0].aggregate_id).toBe(first.orderId);
+    });
+  });
+
+  describe('sellerOrderUpdated 발행', () => {
+    it('주문 생성 시 매장 토픽에 1건 — 커밋된 주문 행(updated_at)의 스냅샷을 싣는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString(), buyerName: '차차' }),
+      );
+
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(result.orderId) },
+      });
+      expect(topic.received).toEqual([
+        {
+          orderId: result.orderId,
+          orderNumber: result.orderNumber,
+          status: 'SUBMITTED',
+          pickupAt: VALID_PICKUP_AT.toISOString(),
+          buyerName: '차차',
+          totalPrice: result.totalPrice,
+          productName: product.name,
+          updatedAt: saved.updated_at.toISOString(),
+        },
+      ]);
+      topic.stop();
+    });
+
+    it('반증: 멱등 replay(사전 조회·P2002 경합)는 발행하지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+      const input = baseInput({
+        idempotencyKey: 'replay-no-event',
+        productId: product.id.toString(),
+      });
+
+      await service.createOrder(buyer.id, input);
+      await service.createOrder(buyer.id, input);
+      // 사전 조회를 놓친 동시 제출 — 멱등 키 unique 충돌 뒤 기존 주문을 replay한다
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      await service.createOrder(buyer.id, input);
+
+      expect(await prisma.order.count()).toBe(1);
+      expect(topic.received).toHaveLength(1);
+      topic.stop();
+    });
+
+    it('반증: capacity 거절·tx 안 capacity replay는 발행하지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+      const input = baseInput({
+        idempotencyKey: 'capacity-replay-no-event',
+        productId: product.id.toString(),
+      });
+
+      await service.createOrder(buyer.id, input);
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+      // 사전 조회·사전 capacity 검사를 모두 놓친 동시 재시도 — 잠금 재검사가 거절하고 내 주문을 replay한다
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      jest
+        .spyOn(orderRepo, 'isDailyCapacityExceeded')
+        .mockResolvedValueOnce(false);
+      await service.createOrder(buyer.id, input);
+
+      expect(await prisma.order.count()).toBe(1);
+      expect(topic.received).toHaveLength(1);
+      topic.stop();
+    });
+
+    it('PubSub 발행이 실패해도 주문은 성공하고 이벤트만 빠진다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+      jest
+        .spyOn(pubSub, 'publish')
+        .mockRejectedValueOnce(new Error('redis down'));
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+
+      expect(result.status).toBe('SUBMITTED');
+      expect(await prisma.order.count()).toBe(1);
+      expect(topic.received).toHaveLength(0);
+      topic.stop();
     });
   });
 });
