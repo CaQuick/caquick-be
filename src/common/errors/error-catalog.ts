@@ -217,6 +217,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.NOT_FOUND,
     message: '알림을 찾을 수 없습니다.',
   },
+  INVALID_PUSH_TOKEN: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '푸시 토큰 형식이 올바르지 않습니다.',
+  },
 
   // ── 카탈로그(매장·상품·지역)
   STORE_NOT_FOUND: {
