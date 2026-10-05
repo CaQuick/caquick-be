@@ -11,7 +11,7 @@ export const DEFAULT_PREPARATION_TIME_MINUTES = 180;
 export const MIN_PRODUCT_PRICE = 1;
 export const MIN_SALE_PRICE = 0;
 export const MAX_PRODUCT_PRICE = 1_000_000_000;
-export const MAX_PRODUCT_IMAGES = 5;
+export const MAX_PRODUCT_IMAGES = 6;
 export const MIN_PRODUCT_IMAGES = 1;
 
 // ── 옵션 ──
