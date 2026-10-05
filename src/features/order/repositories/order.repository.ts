@@ -617,6 +617,31 @@ export class OrderRepository {
     });
   }
 
+  /** [from, to) 픽업 또는 생성 기준 건수·금액 합(CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
+  async aggregateStoreOrdersInRange(args: {
+    storeId: bigint;
+    from: Date;
+    to: Date;
+    basis: 'pickup' | 'created';
+  }): Promise<{ orderCount: number; salesAmount: number }> {
+    const result = await this.prisma.order.aggregate({
+      where: {
+        status: { not: 'CANCELED' },
+        [args.basis === 'pickup' ? 'pickup_at' : 'created_at']: {
+          gte: args.from,
+          lt: args.to,
+        },
+        items: { some: { store_id: args.storeId, ...activeWhere } },
+      },
+      _count: { _all: true },
+      _sum: { total_price: true },
+    });
+    return {
+      orderCount: result._count._all,
+      salesAmount: result._sum.total_price ?? 0,
+    };
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
