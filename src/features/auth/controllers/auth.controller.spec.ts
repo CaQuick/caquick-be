@@ -137,8 +137,8 @@ describe('AuthController', () => {
       prefix: 'seller',
       pick: (c: AuthController) => ({
         login: c.sellerLogin.bind(c),
-        refresh: c.sellerRefresh.bind(c),
-        logout: c.sellerLogout.bind(c),
+        refresh: (req: Request, res: Response) => c.sellerRefresh({}, req, res),
+        logout: (req: Request, res: Response) => c.sellerLogout({}, req, res),
         changePassword: c.sellerChangePassword.bind(c),
       }),
     },
@@ -257,6 +257,96 @@ describe('AuthController', () => {
         ),
       ).rejects.toThrowDomain(400);
     });
+  });
+
+  describe('판매자 바디 모드', () => {
+    const issued = {
+      accessToken: 'access',
+      expiresInSeconds: 600,
+      accountStatus: 'ACTIVE' as const,
+      mustChangePassword: false,
+      refreshToken: 'a'.repeat(64),
+      refreshExpiresAt: new Date('2026-11-04T01:02:03.456Z'),
+    };
+
+    it('sellerLogin은 X-Client: mobile 요청을 그대로 위임하고 refreshToken·refreshExpiresAt(ISO)을 싣는다', async () => {
+      const res = mockRes();
+      const req = { headers: { 'x-client': 'mobile' } } as unknown as Request;
+      credentialAuth.login.mockResolvedValue(issued);
+
+      await controller.sellerLogin(
+        { username: 'who', password: 'pw1234!A' },
+        req,
+        res,
+      );
+
+      expect(credentialAuth.login).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'SELLER', req }),
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        accessToken: 'access',
+        tokenType: 'Bearer',
+        expiresInSeconds: 600,
+        accountStatus: 'ACTIVE',
+        mustChangePassword: false,
+        refreshToken: 'a'.repeat(64),
+        refreshExpiresAt: '2026-11-04T01:02:03.456Z',
+      });
+    });
+
+    it('sellerRefresh는 바디 토큰을 req로 넘기고 새 refreshToken·refreshExpiresAt을 싣는다', async () => {
+      const res = mockRes();
+      const body = { refreshToken: 'b'.repeat(64) };
+      const req = { body, cookies: {} } as unknown as Request;
+      credentialAuth.refresh.mockResolvedValue(issued);
+
+      await controller.sellerRefresh(body, req, res);
+
+      expect(credentialAuth.refresh).toHaveBeenCalledWith({
+        role: 'SELLER',
+        req,
+        res,
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refreshToken: 'a'.repeat(64),
+          refreshExpiresAt: '2026-11-04T01:02:03.456Z',
+        }),
+      );
+    });
+
+    it.each([
+      ['sellerLogin 헤더 없음', 'sellerLogin' as const, {}],
+      [
+        'adminLogin + X-Client: mobile',
+        'adminLogin' as const,
+        {
+          'x-client': 'mobile',
+        },
+      ],
+    ])(
+      '%s — 서비스가 토큰을 싣지 않으면 refreshToken·refreshExpiresAt 키가 없다',
+      async (_label, handler, headers) => {
+        const res = mockRes();
+        const req = { headers } as unknown as Request;
+        const {
+          refreshToken: _t,
+          refreshExpiresAt: _e,
+          ...cookieMode
+        } = issued;
+        credentialAuth.login.mockResolvedValue(cookieMode);
+
+        await controller[handler](
+          { username: 'who', password: 'pw1234!A' },
+          req,
+          res,
+        );
+
+        const json = (res.json as jest.Mock).mock.calls[0][0] as object;
+        expect(json).not.toHaveProperty('refreshToken');
+        expect(json).not.toHaveProperty('refreshExpiresAt');
+      },
+    );
   });
 
   describe('devIssueToken', () => {

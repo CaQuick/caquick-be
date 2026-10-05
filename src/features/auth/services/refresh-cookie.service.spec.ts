@@ -240,6 +240,130 @@ describe('역할별 refresh 쿠키 (real DB)', () => {
     });
   });
 
+  describe('판매자 바디 전달(앱)', () => {
+    function reqWithBody(
+      refreshToken: string,
+      cookies: Record<string, string> = {},
+    ): Request {
+      return {
+        body: { refreshToken },
+        cookies,
+        headers: {},
+        ip: '127.0.0.1',
+      } as unknown as Request;
+    }
+
+    async function mobileLogin() {
+      const { account_id } = await createAccountCredential(prisma, {
+        account_type: 'SELLER',
+      });
+      const { res, set } = jar();
+      const issued = await tokens.issueAuthTokens({
+        accountId: account_id,
+        credentialVersion: null,
+        req: reqWith({}),
+        res,
+        transport: 'body',
+      });
+      expect(set).toEqual({});
+      return { accountId: account_id, refreshToken: issued.refreshToken! };
+    }
+
+    async function sessionIdOf(raw: string): Promise<bigint> {
+      const session = await prisma.authRefreshSession.findFirstOrThrow({
+        where: { token_hash: sha256Hex(raw) },
+      });
+      return session.id;
+    }
+
+    it('바디 로그인 → 바디 재발급 → 구 토큰 거절 → 바디 로그아웃까지 쿠키를 굽지도 지우지도 않는다', async () => {
+      const { refreshToken: first } = await mobileLogin();
+      const firstId = await sessionIdOf(first);
+
+      const refreshed = jar();
+      const result = await credentialAuth.refresh({
+        role: 'SELLER',
+        req: reqWithBody(first),
+        res: refreshed.res,
+      });
+      expect(refreshed.set).toEqual({});
+      expect(result.refreshToken).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.refreshToken).not.toBe(first);
+      expect(await isRevoked(firstId)).toBe(true);
+      const secondId = await sessionIdOf(result.refreshToken!);
+      const second = await prisma.authRefreshSession.findUniqueOrThrow({
+        where: { id: secondId },
+      });
+      expect(result.refreshExpiresAt).toEqual(second.expires_at);
+
+      await expect(
+        credentialAuth.refresh({
+          role: 'SELLER',
+          req: reqWithBody(first),
+          res: jar().res,
+        }),
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
+      expect(await isRevoked(secondId)).toBe(false);
+
+      const loggedOut = jar();
+      await credentialAuth.logout({
+        role: 'SELLER',
+        req: reqWithBody(result.refreshToken!),
+        res: loggedOut.res,
+      });
+      expect(loggedOut.cleared).toEqual([]);
+      expect(await isRevoked(secondId)).toBe(true);
+
+      await expect(
+        credentialAuth.logout({
+          role: 'SELLER',
+          req: reqWithBody(result.refreshToken!),
+          res: jar().res,
+        }),
+      ).rejects.toThrowDomain('INVALID_REFRESH_TOKEN');
+    });
+
+    it('같은 계정의 웹(쿠키)·앱(바디) 세션은 각자 자기 세션만 회전한다', async () => {
+      const { accountId, refreshToken: appToken } = await mobileLogin();
+      const web = jar();
+      await tokens.issueAuthTokens({
+        accountId,
+        credentialVersion: null,
+        req: reqWith({}),
+        res: web.res,
+      });
+      const webToken = web.set[COOKIE.SELLER];
+      const appId = await sessionIdOf(appToken);
+      const webId = await sessionIdOf(webToken);
+
+      // 바디 + 쿠키 동시 — 바디 세션만 회전
+      const appRefresh = jar();
+      const rotatedApp = await credentialAuth.refresh({
+        role: 'SELLER',
+        req: reqWithBody(appToken, { [COOKIE.SELLER]: webToken }),
+        res: appRefresh.res,
+      });
+      expect(appRefresh.set).toEqual({});
+      expect(rotatedApp.refreshToken).toBeDefined();
+      expect(await isRevoked(appId)).toBe(true);
+      expect(await isRevoked(webId)).toBe(false);
+
+      // 쿠키만 — 웹 세션 회전, 응답은 쿠키
+      const webRefresh = jar();
+      const rotatedWeb = await credentialAuth.refresh({
+        role: 'SELLER',
+        req: reqWith({ [COOKIE.SELLER]: webToken }),
+        res: webRefresh.res,
+      });
+      expect(Object.keys(webRefresh.set)).toEqual([COOKIE.SELLER]);
+      expect(rotatedWeb).not.toHaveProperty('refreshToken');
+      expect(await isRevoked(webId)).toBe(true);
+      expect(await isRevoked(await sessionIdOf(rotatedApp.refreshToken!))).toBe(
+        false,
+      );
+    });
+  });
+
   it('세 역할 쿠키가 함께 있어도 각자 자기 세션만 회전한다', async () => {
     const sessions = {
       USER: await login('USER'),

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import { readPresentedRefreshToken } from '@/features/auth/helpers/refresh-transport.helper';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -60,10 +61,10 @@ export class AuthService {
   }
 
   async logout(req: Request, res: Response): Promise<void> {
-    const refreshToken = this.tokens.readRefreshCookie('USER', req);
+    const presented = readPresentedRefreshToken('USER', req);
 
-    if (refreshToken) {
-      const tokenHash = this.tokens.sha256Hex(refreshToken);
+    if (presented) {
+      const tokenHash = this.tokens.sha256Hex(presented.token);
       const session =
         await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
       // 쿠키 분리 전 caquick_rt에 남은 판매자·관리자 세션은 폐기하지 않고 쿠키만 지운다

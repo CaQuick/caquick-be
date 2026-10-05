@@ -5,6 +5,7 @@ import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 
 import { ClockService } from '@/common/providers/clock.service';
+import { sha256Hex } from '@/common/utils/crypto';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -412,6 +413,176 @@ describe('CredentialAuthService', () => {
       ).rejects.toThrowDomain(401);
       expect(refreshSessions.revokeRefreshSession).not.toHaveBeenCalled();
     });
+  });
+
+  describe('바디 전달(판매자 앱)', () => {
+    const BODY_TOKEN = 'b'.repeat(64);
+    const COOKIE_TOKEN = 'c'.repeat(64);
+    const session = { id: BigInt(77), account_id: BigInt(10) } as never;
+    const reqOf = (args: {
+      header?: string;
+      body?: string;
+      cookie?: CredentialRole;
+    }) =>
+      ({
+        headers: {
+          'user-agent': 'app',
+          ...(args.header && { 'x-client': args.header }),
+        },
+        ip: '127.0.0.1',
+        body: args.body === undefined ? {} : { refreshToken: args.body },
+        cookies: args.cookie
+          ? { [REFRESH_COOKIE[args.cookie]]: COOKIE_TOKEN }
+          : {},
+      }) as unknown as Request;
+
+    beforeEach(() => {
+      (mockRes.cookie as jest.Mock).mockClear();
+      (mockRes.clearCookie as jest.Mock).mockClear();
+    });
+
+    it('판매자 로그인에 X-Client: mobile이면 쿠키 없이 refreshToken·refreshExpiresAt을 돌려준다', async () => {
+      jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+      credentials.findCredentialByUsername.mockResolvedValue(makeCredential());
+
+      const result = await service.login({
+        role: 'SELLER',
+        username: 'seller01',
+        password: 'Password!123',
+        req: reqOf({ header: 'mobile' }),
+        res: mockRes,
+      });
+
+      expect(mockRes.cookie).not.toHaveBeenCalled();
+      expect(result.refreshToken).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.refreshExpiresAt).toBeInstanceOf(Date);
+      expect(refreshSessions.createRefreshSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokenHash: sha256Hex(result.refreshToken!),
+        }),
+      );
+    });
+
+    it.each([
+      ['판매자 헤더 없음', 'SELLER' as const, undefined],
+      ['판매자 X-Client: web', 'SELLER' as const, 'web'],
+      ['관리자 X-Client: mobile', 'ADMIN' as const, 'mobile'],
+    ])(
+      '%s — 쿠키를 굽고 refreshToken 키가 없다',
+      async (_label, role, header) => {
+        jest.spyOn(argon2, 'verify').mockResolvedValue(true);
+        credentials.findCredentialByUsername.mockResolvedValue(
+          makeCredential({ accountType: role }),
+        );
+
+        const result = await service.login({
+          role,
+          username: 'seller01',
+          password: 'Password!123',
+          req: reqOf({ header }),
+          res: mockRes,
+        });
+
+        expect(mockRes.cookie).toHaveBeenCalledTimes(1);
+        expect(result).not.toHaveProperty('refreshToken');
+        expect(result).not.toHaveProperty('refreshExpiresAt');
+      },
+    );
+
+    it('바디 토큰으로 재발급하면 회전 결과의 refreshToken·refreshExpiresAt을 싣는다', async () => {
+      const expiresAt = new Date('2026-11-04T00:00:00Z');
+      const rotate = jest
+        .spyOn(TokenService.prototype, 'rotateRefresh')
+        .mockResolvedValue({
+          accessToken: 'rotated',
+          accountId: BigInt(10),
+          refreshToken: 'n'.repeat(64),
+          refreshExpiresAt: expiresAt,
+        });
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
+      credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
+      const req = reqOf({ body: BODY_TOKEN });
+
+      const result = await service.refresh({
+        role: 'SELLER',
+        req,
+        res: mockRes,
+      });
+
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledWith(sha256Hex(BODY_TOKEN));
+      expect(rotate).toHaveBeenCalledWith('SELLER', req, mockRes);
+      expect(result).toEqual({
+        accessToken: 'rotated',
+        expiresInSeconds: 900,
+        accountStatus: 'ACTIVE',
+        mustChangePassword: false,
+        refreshToken: 'n'.repeat(64),
+        refreshExpiresAt: expiresAt,
+      });
+    });
+
+    it('바디와 쿠키가 함께 오면 바디 토큰의 세션을 확인한다', async () => {
+      jest
+        .spyOn(TokenService.prototype, 'rotateRefresh')
+        .mockResolvedValue({ accessToken: 'rotated', accountId: BigInt(10) });
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
+      credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
+
+      await service.refresh({
+        role: 'SELLER',
+        req: reqOf({ body: BODY_TOKEN, cookie: 'SELLER' }),
+        res: mockRes,
+      });
+
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledWith(sha256Hex(BODY_TOKEN));
+    });
+
+    it('바디 토큰으로 로그아웃하면 세션만 폐기하고 쿠키는 지우지 않는다', async () => {
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue(session);
+      credentials.findCredentialByAccountId.mockResolvedValue(makeCredential());
+
+      await service.logout({
+        role: 'SELLER',
+        req: reqOf({ body: BODY_TOKEN }),
+        res: mockRes,
+      });
+
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledWith(sha256Hex(BODY_TOKEN));
+      expect(refreshSessions.revokeRefreshSession).toHaveBeenCalledWith(
+        BigInt(77),
+      );
+      expect(mockRes.clearCookie).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'refresh',
+        (req: Request) => service.refresh({ role: 'ADMIN', req, res: mockRes }),
+      ],
+      [
+        'logout',
+        (req: Request) => service.logout({ role: 'ADMIN', req, res: mockRes }),
+      ],
+    ])(
+      '관리자 %s는 바디 토큰을 무시한다 — 쿠키가 없으면 MISSING_REFRESH_TOKEN',
+      async (_label, call) => {
+        await expect(call(reqOf({ body: BODY_TOKEN }))).rejects.toThrowDomain(
+          'MISSING_REFRESH_TOKEN',
+        );
+        expect(
+          refreshSessions.findActiveRefreshSessionByHash,
+        ).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('changePassword', () => {

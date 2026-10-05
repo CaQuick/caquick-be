@@ -13,6 +13,10 @@ import type { AuthConfig } from '@/config/auth.config';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
 import {
+  readPresentedRefreshToken,
+  type RefreshTransport,
+} from '@/features/auth/helpers/refresh-transport.helper';
+import {
   ACCOUNT_REPOSITORY,
   type AccountForJwt,
   type IAccountRepository,
@@ -22,11 +26,17 @@ import {
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import type { AuthRefreshSession } from '@/generated/prisma/client';
-import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import type {
   AccessTokenClaims,
   AccountRole,
 } from '@/global/auth/types/jwt-payload.type';
+
+export interface IssuedTokens {
+  accessToken: string;
+  /** 바디 전달일 때만 — 쿠키 전달은 Set-Cookie로 나간다. */
+  refreshToken?: string;
+  refreshExpiresAt?: Date;
+}
 
 @Injectable()
 export class TokenService {
@@ -84,7 +94,8 @@ export class TokenService {
     credentialVersion: Date | null;
     req: Request;
     res: Response;
-  }): Promise<{ accessToken: string }> {
+    transport?: RefreshTransport;
+  }): Promise<IssuedTokens> {
     const account = await this.requireActiveAccount(args.accountId);
     const accessToken = this.signAccessToken(account, args.credentialVersion);
 
@@ -103,19 +114,42 @@ export class TokenService {
       credentialVersion: args.credentialVersion,
     });
 
-    AuthCookie.setRefreshCookie(args.res, account.account_type, {
-      refreshToken,
-      refreshMaxAgeMs: refreshDays * 86400 * 1000,
+    return {
+      accessToken,
+      ...this.deliverRefresh(args.res, account.account_type, {
+        transport: args.transport ?? 'cookie',
+        refreshToken,
+        expiresAt,
+        refreshDays,
+      }),
+    };
+  }
+
+  /** 전달 방식은 세션 커밋 뒤 응답 조립에서만 갈린다 — 쿠키면 Set-Cookie, 바디면 반환값. */
+  private deliverRefresh(
+    res: Response,
+    role: AccountRole,
+    args: {
+      transport: RefreshTransport;
+      refreshToken: string;
+      expiresAt: Date;
+      refreshDays: number;
+    },
+  ): Pick<IssuedTokens, 'refreshToken' | 'refreshExpiresAt'> {
+    if (args.transport === 'body') {
+      return {
+        refreshToken: args.refreshToken,
+        refreshExpiresAt: args.expiresAt,
+      };
+    }
+    AuthCookie.setRefreshCookie(res, role, {
+      refreshToken: args.refreshToken,
+      refreshMaxAgeMs: args.refreshDays * 86400 * 1000,
       cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
       secure: AuthCookieOptions.isCookieSecure(this.config),
       sameSite: AuthCookieOptions.getCookieSameSite(this.config),
     });
-
-    return { accessToken };
-  }
-
-  readRefreshCookie(role: AccountRole, req: Request): string | undefined {
-    return req.cookies?.[REFRESH_COOKIE[role]] as string | undefined;
+    return {};
   }
 
   /** 이름이 나뉘기 전에 구운 쿠키에는 다른 역할의 세션이 들어 있다 — 그 세션은 회전·폐기하지 않는다. */
@@ -152,14 +186,14 @@ export class TokenService {
     role: AccountRole,
     req: Request,
     res: Response,
-  ): Promise<{ accessToken: string; accountId: bigint }> {
-    const refreshToken = this.readRefreshCookie(role, req);
+  ): Promise<IssuedTokens & { accountId: bigint }> {
+    const presented = readPresentedRefreshToken(role, req);
 
-    if (!refreshToken) {
+    if (!presented) {
       throw new DomainException('MISSING_REFRESH_TOKEN');
     }
 
-    const tokenHash = this.sha256Hex(refreshToken);
+    const tokenHash = this.sha256Hex(presented.token);
     const session =
       await this.refreshSessions.findActiveRefreshSessionByHash(tokenHash);
     if (!session) throw new DomainException('INVALID_REFRESH_TOKEN');
@@ -188,17 +222,15 @@ export class TokenService {
       session.credential_version,
     );
 
-    AuthCookie.setRefreshCookie(res, role, {
-      refreshToken: newRefreshToken,
-      refreshMaxAgeMs: refreshDays * 86400 * 1000,
-      cookieDomain: AuthCookieOptions.getCookieDomain(this.config),
-      secure: AuthCookieOptions.isCookieSecure(this.config),
-      sameSite: AuthCookieOptions.getCookieSameSite(this.config),
-    });
-
     return {
       accessToken,
       accountId: session.account_id,
+      ...this.deliverRefresh(res, role, {
+        transport: presented.transport,
+        refreshToken: newRefreshToken,
+        expiresAt: newExpiresAt,
+        refreshDays,
+      }),
     };
   }
 

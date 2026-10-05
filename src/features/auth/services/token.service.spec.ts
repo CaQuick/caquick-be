@@ -3,12 +3,17 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Request, Response } from 'express';
 
-import { ACCOUNT_REPOSITORY } from '@/features/auth/repositories/account.repository.interface';
+import { sha256Hex } from '@/common/utils/crypto';
+import {
+  ACCOUNT_REPOSITORY,
+  type IAccountRepository,
+} from '@/features/auth/repositories/account.repository.interface';
 import {
   REFRESH_SESSION_REPOSITORY,
   type IRefreshSessionRepository,
 } from '@/features/auth/repositories/refresh-session.repository.interface';
 import { TokenService } from '@/features/auth/services/token.service';
+import { REFRESH_COOKIE } from '@/global/auth/constants/auth-cookie.constants';
 import { TEST_AUTH_CONFIG, testAuthConfig } from '@/test/auth-config';
 
 describe('TokenService', () => {
@@ -16,6 +21,7 @@ describe('TokenService', () => {
   let config: jest.Mocked<ConfigService>;
   let jwt: jest.Mocked<JwtService>;
   let refreshSessions: jest.Mocked<IRefreshSessionRepository>;
+  let accounts: jest.Mocked<Pick<IAccountRepository, 'findAccountForJwt'>>;
 
   const mockReq = {
     headers: { 'user-agent': 'Mozilla/5.0 TokenSpec' },
@@ -47,6 +53,16 @@ describe('TokenService', () => {
       revokeAllRefreshSessions: jest.fn(),
     };
 
+    accounts = {
+      findAccountForJwt: jest.fn().mockResolvedValue({
+        id: BigInt(1),
+        status: 'ACTIVE',
+        account_type: 'USER',
+        credential: null,
+        store: null,
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TokenService,
@@ -56,18 +72,7 @@ describe('TokenService', () => {
           provide: REFRESH_SESSION_REPOSITORY,
           useValue: refreshSessions,
         },
-        {
-          provide: ACCOUNT_REPOSITORY,
-          useValue: {
-            findAccountForJwt: jest.fn().mockResolvedValue({
-              id: BigInt(1),
-              status: 'ACTIVE',
-              account_type: 'USER',
-              credential: null,
-              store: null,
-            }),
-          },
-        },
+        { provide: ACCOUNT_REPOSITORY, useValue: accounts },
       ],
     }).compile();
 
@@ -196,6 +201,37 @@ describe('TokenService', () => {
       );
       expect(mockRes.cookie).toHaveBeenCalledTimes(1);
     });
+
+    it('쿠키 전달(기본)은 반환에 refreshToken·refreshExpiresAt 키가 없다', async () => {
+      const result = await service.issueAuthTokens({
+        accountId: BigInt(1),
+        credentialVersion: null,
+        req: mockReq,
+        res: mockRes,
+        transport: 'cookie',
+      });
+
+      expect(result).not.toHaveProperty('refreshToken');
+      expect(result).not.toHaveProperty('refreshExpiresAt');
+      expect(mockRes.cookie).toHaveBeenCalledTimes(1);
+    });
+
+    it('바디 전달은 쿠키를 굽지 않고 저장 해시와 맞는 refreshToken·세션 만료와 같은 refreshExpiresAt을 반환한다', async () => {
+      const result = await service.issueAuthTokens({
+        accountId: BigInt(1),
+        credentialVersion: null,
+        req: mockReq,
+        res: mockRes,
+        transport: 'body',
+      });
+
+      expect(mockRes.cookie).not.toHaveBeenCalled();
+      expect(result.accessToken).toBe('signed-token');
+      expect(result.refreshToken).toMatch(/^[0-9a-f]{64}$/);
+      const created = refreshSessions.createRefreshSession.mock.calls[0][0];
+      expect(created.tokenHash).toBe(sha256Hex(result.refreshToken!));
+      expect(result.refreshExpiresAt).toEqual(created.expiresAt);
+    });
   });
 
   describe('rotateRefresh', () => {
@@ -260,6 +296,98 @@ describe('TokenService', () => {
       );
       expect(mockRes.cookie).toHaveBeenCalledTimes(1);
     });
+  });
+
+  describe('rotateRefresh — 바디 모드', () => {
+    const BODY_TOKEN = 'b'.repeat(64);
+    const COOKIE_TOKEN = 'c'.repeat(64);
+    const sellerAccount = {
+      id: BigInt(10),
+      status: 'ACTIVE',
+      account_type: 'SELLER',
+      credential: { must_change_password: false, password_updated_at: null },
+      store: null,
+    } as never;
+
+    beforeEach(() => {
+      accounts.findAccountForJwt.mockResolvedValue(sellerAccount);
+      refreshSessions.findActiveRefreshSessionByHash.mockResolvedValue({
+        id: BigInt(7),
+        account_id: BigInt(10),
+        credential_version: null,
+      } as never);
+      refreshSessions.rotateRefreshSession.mockResolvedValue({} as never);
+    });
+
+    it('바디 토큰으로 회전하면 쿠키를 굽지 않고 새 refreshToken·refreshExpiresAt을 반환한다', async () => {
+      const req = {
+        body: { refreshToken: BODY_TOKEN },
+        cookies: {},
+        headers: {},
+      } as unknown as Request;
+
+      const result = await service.rotateRefresh('SELLER', req, mockRes);
+
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledWith(sha256Hex(BODY_TOKEN));
+      expect(mockRes.cookie).not.toHaveBeenCalled();
+      expect(result.accountId).toBe(BigInt(10));
+      expect(result.refreshToken).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.refreshToken).not.toBe(BODY_TOKEN);
+      const rotated = refreshSessions.rotateRefreshSession.mock.calls[0][0];
+      expect(rotated.newTokenHash).toBe(sha256Hex(result.refreshToken!));
+      expect(result.refreshExpiresAt).toEqual(rotated.newExpiresAt);
+    });
+
+    it('바디와 쿠키가 함께 오면 바디 세션만 회전한다 — 쿠키는 읽지도 굽지도 않는다', async () => {
+      const req = {
+        body: { refreshToken: BODY_TOKEN },
+        cookies: { [REFRESH_COOKIE.SELLER]: COOKIE_TOKEN },
+        headers: {},
+      } as unknown as Request;
+
+      await service.rotateRefresh('SELLER', req, mockRes);
+
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        refreshSessions.findActiveRefreshSessionByHash,
+      ).toHaveBeenCalledWith(sha256Hex(BODY_TOKEN));
+      expect(mockRes.cookie).not.toHaveBeenCalled();
+    });
+
+    it('쿠키 모드 회전은 반환에 refreshToken 키가 없다', async () => {
+      const req = {
+        body: {},
+        cookies: { [REFRESH_COOKIE.SELLER]: COOKIE_TOKEN },
+        headers: {},
+      } as unknown as Request;
+
+      const result = await service.rotateRefresh('SELLER', req, mockRes);
+
+      expect(result).not.toHaveProperty('refreshToken');
+      expect(mockRes.cookie).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['USER', 'ADMIN'] as const)(
+      '%s는 바디 토큰을 무시한다 — 쿠키가 없으면 MISSING_REFRESH_TOKEN',
+      async (role) => {
+        const req = {
+          body: { refreshToken: BODY_TOKEN },
+          cookies: {},
+          headers: {},
+        } as unknown as Request;
+
+        await expect(
+          service.rotateRefresh(role, req, mockRes),
+        ).rejects.toThrowDomain('MISSING_REFRESH_TOKEN');
+        expect(
+          refreshSessions.findActiveRefreshSessionByHash,
+        ).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('clearRefreshCookie', () => {
