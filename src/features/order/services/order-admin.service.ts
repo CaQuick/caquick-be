@@ -26,6 +26,8 @@ import {
   toAdminOrderDetailOutput,
   toAdminOrderSummaryOutput,
 } from '@/features/order/services/order-admin-mappers.helper';
+import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import type {
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
@@ -41,6 +43,7 @@ export class AdminOrderService extends AdminBaseService {
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly statusPolicy: OrderStatusTransitionPolicy,
+    private readonly events: OrderEventsService,
   ) {
     super(accounts, auditLogs);
   }
@@ -131,6 +134,15 @@ export class AdminOrderService extends AdminBaseService {
         OrderStatus.CANCELED,
       );
       throw new DomainException('ORDER_NOT_CANCELLABLE');
+    }
+
+    // 활성 품목이 없으면 매장을 알 수 없어 발행을 생략한다
+    const [firstItem] = updated.items;
+    if (firstItem) {
+      await this.events.publishSellerOrderUpdate(
+        firstItem.store_id,
+        toSellerOrderUpdateEvent(updated, firstItem.product_name_snapshot),
+      );
     }
     return toAdminOrderSummaryOutput(updated);
   }

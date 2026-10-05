@@ -1,10 +1,14 @@
+import { PubSub } from 'graphql-subscriptions';
+
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import { OrderStatus, type PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -16,11 +20,13 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import { collectTopic } from '@/test/pubsub';
 
 describe('SellerOrderService (real DB)', () => {
   let service: SellerOrderService;
   let prisma: PrismaClient;
   let repo: OrderRepository;
+  let pubSub: PubSub;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -33,12 +39,16 @@ describe('SellerOrderService (real DB)', () => {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
         },
+        OrderEventsService,
+        // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
+        { provide: PUB_SUB, useValue: new PubSub() },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),
       ],
     });
     service = module.get(SellerOrderService);
     repo = module.get(OrderRepository);
+    pubSub = module.get(PUB_SUB);
     prisma = p;
   });
 
@@ -430,6 +440,62 @@ describe('SellerOrderService (real DB)', () => {
         where: { order_id: order.id },
       });
       expect(histories[0].note).toBe('재고 부족');
+    });
+  });
+
+  describe('sellerOrderUpdated 발행', () => {
+    it('상태 변경 시 매장 토픽에 1건 — 첫 품목 상품명과 갱신된 updated_at을 싣는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createOrder(prisma);
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        product_name_snapshot: '확정 품목',
+      });
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+
+      await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'CONFIRMED',
+        note: null,
+      });
+
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(topic.received).toEqual([
+        {
+          orderId: order.id.toString(),
+          orderNumber: order.order_number,
+          status: 'CONFIRMED',
+          pickupAt: order.pickup_at.toISOString(),
+          buyerName: order.buyer_name,
+          totalPrice: order.total_price,
+          productName: '확정 품목',
+          updatedAt: row.updated_at.toISOString(),
+        },
+      ]);
+      expect(row.updated_at.getTime()).toBeGreaterThan(
+        order.updated_at.getTime(),
+      );
+      topic.stop();
+    });
+
+    it('반증: 전이 거절(INVALID_ORDER_STATUS_TRANSITION)은 발행하지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'MADE',
+          note: null,
+        }),
+      ).rejects.toThrowDomain('INVALID_ORDER_STATUS_TRANSITION');
+
+      expect(topic.received).toHaveLength(0);
+      topic.stop();
     });
   });
 });

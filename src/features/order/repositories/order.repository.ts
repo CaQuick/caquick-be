@@ -156,7 +156,9 @@ export interface CreatedOrderRow {
   order_number: string;
   status: OrderStatus;
   pickup_at: Date;
+  buyer_name: string;
   total_price: number;
+  updated_at: Date;
 }
 
 export interface ReviewableOrderItemRow {
@@ -331,7 +333,9 @@ export class OrderRepository {
         order_number: true,
         status: true,
         pickup_at: true,
+        buyer_name: true,
         total_price: true,
+        updated_at: true,
       },
     });
     // 접수 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 구매자 알림은 없다(notification 소비자는 구독하지 않는다).
@@ -366,7 +370,9 @@ export class OrderRepository {
         order_number: true,
         status: true,
         pickup_at: true,
+        buyer_name: true,
         total_price: true,
+        updated_at: true,
       },
     });
   }
