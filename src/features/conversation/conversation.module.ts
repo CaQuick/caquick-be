@@ -14,11 +14,13 @@ import { ConversationEventsService } from '@/features/conversation/services/conv
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
 import { SellerConversationService } from '@/features/conversation/services/conversation-seller.service';
 import { ConversationSubscriptionService } from '@/features/conversation/services/conversation-subscription.service';
+import { OutboxModule } from '@/features/outbox';
 import { StoreModule } from '@/features/store';
 
 @Module({
-  // 판매자 컨텍스트·catalog 읽기 포트(StoreModule), 감사 기록(AuditLogModule), 구매자 상태 판정(AuthModule)
-  imports: [StoreModule, AuditLogModule, AuthModule],
+  // 판매자 컨텍스트·catalog 읽기 포트(StoreModule), 감사 기록(AuditLogModule), 구매자 상태 판정(AuthModule),
+  // 구매자 메시지 이벤트 발행(OutboxModule)
+  imports: [StoreModule, AuditLogModule, AuthModule, OutboxModule],
   providers: [
     ConversationRepository,
     ConversationEventsService,

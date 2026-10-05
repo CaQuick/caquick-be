@@ -19,6 +19,7 @@ import {
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('ConversationSubscriptionService (real DB)', () => {
   let service: ConversationSubscriptionService;
@@ -32,6 +33,8 @@ describe('ConversationSubscriptionService (real DB)', () => {
         ConversationInquiryService,
         ConversationEventsService,
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         AccountUserRepository,
         StoreSellerRepository,
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },

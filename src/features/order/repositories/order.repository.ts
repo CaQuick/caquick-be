@@ -5,6 +5,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
+import { orderSubmittedEvent } from '@/features/order/events/order-submitted.event';
 import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
@@ -281,7 +282,7 @@ export class OrderRepository {
     tx: Prisma.TransactionClient,
     args: CreateSubmittedOrderArgs,
   ): Promise<CreatedOrderRow> {
-    return tx.order.create({
+    const created = await tx.order.create({
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
@@ -333,6 +334,24 @@ export class OrderRepository {
         total_price: true,
       },
     });
+    // 접수 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 구매자 알림은 없다(notification 소비자는 구독하지 않는다).
+    await this.outbox.publish(
+      tx,
+      orderSubmittedEvent({
+        orderId: created.id,
+        orderNumber: created.order_number,
+        buyerAccountId: args.accountId,
+        storeId: args.item.storeId,
+        storeName: args.item.storeNameSnapshot,
+        productId: args.item.productId,
+        productName: args.item.productNameSnapshot,
+        quantity: args.item.quantity,
+        pickupAt: args.pickupAt,
+        totalPrice: args.totalPrice,
+        occurredAt: args.submittedAt,
+      }),
+    );
+    return created;
   }
 
   /** 상태가 이후 변경됐어도 현재 row를 그대로 반환한다(replay 응답 재구성용). */

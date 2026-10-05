@@ -1,12 +1,18 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import {
+  CONVERSATION_BUYER_MESSAGE_SENT,
+  parseConversationBuyerMessageSentPayload,
+} from '@/features/conversation/events/conversation-buyer-message-sent.event';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { OutboxPublisher } from '@/features/outbox';
 import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 /** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
 const AUDIT_ENTRY = {
@@ -19,16 +25,20 @@ const AUDIT_ENTRY = {
 
 describe('ConversationRepository (real DB)', () => {
   let repo: ConversationRepository;
+  let outbox: OutboxPublisher;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         ConversationRepository,
+        // 발행 repository가 OutboxPublisher를 주입받는다
+        ...outboxPublisherProviders(),
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
       ],
     });
     repo = module.get(ConversationRepository);
+    outbox = module.get(OutboxPublisher);
     prisma = p;
   });
 
@@ -39,6 +49,10 @@ describe('ConversationRepository (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   async function setupConversation(
@@ -784,6 +798,124 @@ describe('ConversationRepository (real DB)', () => {
       expect((await conversationRow(existing.id)).buyer_nickname_snapshot).toBe(
         '옛닉네임',
       );
+    });
+  });
+
+  describe('createBuyerMessages — 구매자 메시지 이벤트', () => {
+    const USER_ENTRY = {
+      senderType: 'USER',
+      bodyFormat: 'TEXT',
+      bodyText: '  픽업 시간 변경 가능한가요?',
+      bodyHtml: null,
+    } as const;
+
+    it('USER 메시지를 기준으로 같은 tx에 이벤트 1건을 남긴다(인사말 제외)', async () => {
+      const customer = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+
+      const { conversationId, messages } = await repo.createBuyerMessages({
+        accountId: customer.id,
+        storeId: store.id,
+        buyerNickname: '현진',
+        greetingBodyText: '안녕하세요',
+        entries: [{ ...USER_ENTRY, senderAccountId: customer.id }],
+      });
+
+      expect(messages.map((m) => m.sender_type)).toEqual(['STORE', 'USER']);
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_type: 'conversation',
+        aggregate_id: conversationId.toString(),
+        event_type: CONVERSATION_BUYER_MESSAGE_SENT,
+        occurred_at: messages[1].created_at,
+        actor_account_id: customer.id,
+      });
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toEqual({
+        conversationId: conversationId.toString(),
+        storeId: store.id.toString(),
+        buyerAccountId: customer.id.toString(),
+        messageId: messages[1].id.toString(),
+        preview: USER_ENTRY.bodyText,
+        messageCreatedAt: messages[1].created_at.toISOString(),
+      });
+    });
+
+    it('FAQ 쌍(USER 질문 + STORE 자동응답)도 USER 메시지 기준 1건이다', async () => {
+      const { customer, store, conversation } = await setupConversation();
+
+      const { messages } = await repo.createBuyerMessages({
+        accountId: customer.id,
+        storeId: store.id,
+        buyerNickname: '현진',
+        greetingBodyText: '안녕하세요',
+        entries: [
+          {
+            ...USER_ENTRY,
+            bodyText: '케이크 보관 방법',
+            senderAccountId: customer.id,
+          },
+          {
+            senderType: 'STORE',
+            senderAccountId: null,
+            bodyFormat: 'HTML',
+            bodyText: null,
+            bodyHtml: '<p>냉장보관시 최대 3일</p>',
+          },
+        ],
+      });
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0].aggregate_id).toBe(conversation.id.toString());
+      expect(
+        parseConversationBuyerMessageSentPayload(events[0].payload_json),
+      ).toMatchObject({
+        messageId: messages[1].id.toString(),
+        preview: '케이크 보관 방법',
+      });
+    });
+
+    it('반증: 발행이 실패하면 대화·메시지도 함께 롤백된다(같은 tx)', async () => {
+      const customer = await createAccount(prisma, { account_type: 'USER' });
+      const store = await createStore(prisma);
+      jest
+        .spyOn(outbox, 'publish')
+        .mockRejectedValueOnce(new Error('outbox down'));
+
+      await expect(
+        repo.createBuyerMessages({
+          accountId: customer.id,
+          storeId: store.id,
+          buyerNickname: '현진',
+          greetingBodyText: '안녕하세요',
+          entries: [{ ...USER_ENTRY, senderAccountId: customer.id }],
+        }),
+      ).rejects.toThrow('outbox down');
+
+      expect(await prisma.storeConversation.count()).toBe(0);
+      expect(await prisma.storeConversationMessage.count()).toBe(0);
+      expect(await prisma.outbox.count()).toBe(0);
+    });
+
+    it('반증: 판매자 답장은 이벤트를 남기지 않는다', async () => {
+      const { conversation } = await setupConversation();
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+
+      await repo.createSellerConversationMessage(
+        {
+          conversationId: conversation.id,
+          sellerAccountId: seller.id,
+          bodyFormat: 'TEXT',
+          bodyText: '판매자 응답',
+          bodyHtml: null,
+        },
+        () => AUDIT_ENTRY,
+      );
+
+      expect(await prisma.outbox.count()).toBe(0);
     });
   });
 });

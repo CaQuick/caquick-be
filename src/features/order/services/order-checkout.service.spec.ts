@@ -3,6 +3,10 @@ import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
+import {
+  ORDER_SUBMITTED,
+  parseOrderSubmittedPayload,
+} from '@/features/order/events/order-submitted.event';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { ProductRepository } from '@/features/product';
@@ -953,6 +957,99 @@ describe('OrderCheckoutService (real DB)', () => {
       );
       expect(retried.status).toBe('SUBMITTED');
       expect(await prisma.order.count()).toBe(1);
+    });
+  });
+
+  describe('createOrder — 접수 이벤트(order.submitted)', () => {
+    async function submittedEvents() {
+      return prisma.outbox.findMany({
+        where: { event_type: ORDER_SUBMITTED },
+        orderBy: { id: 'asc' },
+      });
+    }
+
+    it('생성과 같은 tx에 1건 남기고 payload는 생성 시점 스냅샷이다', async () => {
+      const store = await makeOpenStore();
+      const { product, sizeSmallId } = await makeProductWithOptions(store.id);
+      const buyer = await makeBuyer();
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({
+          productId: product.id.toString(),
+          optionItemIds: [sizeSmallId.toString()],
+          quantity: 2,
+        }),
+      );
+
+      const events = await submittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_type: 'order',
+        aggregate_id: result.orderId,
+        occurred_at: NOW,
+        actor_account_id: buyer.id,
+      });
+      expect(parseOrderSubmittedPayload(events[0].payload_json)).toEqual({
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        buyerAccountId: buyer.id.toString(),
+        storeId: store.id.toString(),
+        storeName: store.store_name,
+        productId: product.id.toString(),
+        productName: product.name,
+        quantity: 2,
+        pickupAt: VALID_PICKUP_AT.toISOString(),
+        // (25000 + 2000) × 2
+        totalPrice: 54000,
+      });
+    });
+
+    it('반증: capacity 거절은 이벤트를 남기지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString(), quantity: 2 }),
+        ),
+      ).rejects.toThrowDomain(400);
+
+      expect(await submittedEvents()).toHaveLength(0);
+    });
+
+    it('반증: 같은 키 replay(재요청·capacity race)는 이벤트를 추가하지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+      const input = baseInput({
+        idempotencyKey: 'replay-idem-key',
+        productId: product.id.toString(),
+      });
+
+      const first = await service.createOrder(buyer.id, input);
+      expect(await service.createOrder(buyer.id, input)).toEqual(first);
+      // 사전 조회 miss → tx 안 capacity 거절 → replay 경로
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      expect(await service.createOrder(buyer.id, input)).toEqual(first);
+
+      const events = await submittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0].aggregate_id).toBe(first.orderId);
     });
   });
 });

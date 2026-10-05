@@ -5,6 +5,8 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { conversationBuyerMessageSentEvent } from '@/features/conversation/events/conversation-buyer-message-sent.event';
+import { OutboxPublisher } from '@/features/outbox';
 import {
   ConversationBodyFormat,
   ConversationSenderType,
@@ -24,6 +26,7 @@ export interface ConversationMessageEntry {
 export class ConversationRepository {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly outbox: OutboxPublisher,
     @Inject(AUDIT_LOG_REPOSITORY)
     private readonly auditLogs: IAuditLogRepository,
   ) {}
@@ -556,6 +559,22 @@ export class ConversationRepository {
           deleted_at: null,
         },
       });
+
+      // 구매자 메시지 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 호출 1회당 1건, 인사말·FAQ 자동응답(STORE)은 제외.
+      const buyerMessage = messages.findLast(
+        (m) => m.sender_type === ConversationSenderType.USER,
+      );
+      if (buyerMessage) {
+        await this.outbox.publish(
+          tx,
+          conversationBuyerMessageSentEvent({
+            conversationId,
+            storeId: args.storeId,
+            buyerAccountId: args.accountId,
+            message: buyerMessage,
+          }),
+        );
+      }
 
       return { conversationId, messages };
     });
