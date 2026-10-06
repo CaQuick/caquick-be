@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { DomainException } from '@/common/errors/error-catalog';
+import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import {
   AUDIT_LOG_REPOSITORY,
   type AuditEntry,
@@ -16,6 +18,17 @@ import {
   type ProductImage,
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
+
+/** 활성 슬롯과의 키 중복(경쟁 포함)·삭제 슬롯 키로의 변경은 unique 충돌로만 드러나 도메인 예외로 좁힌다. */
+function rethrowTokenKeyTaken(error: unknown): never {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    uniqueConstraintName(error) === 'uk_product_custom_text_token'
+  ) {
+    throw new DomainException('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
+  }
+  throw error;
+}
 
 const tagSuggestionInclude = {
   _count: {
@@ -1002,15 +1015,32 @@ export class ProductRepository {
       height: args.height,
     };
     const tokenId = args.tokenId;
-    return this.writeWithAudit(
-      (tx) =>
-        tokenId
-          ? tx.productCustomTextToken.update({ where: { id: tokenId }, data })
-          : tx.productCustomTextToken.create({
-              data: { template_id: args.templateId, ...data },
-            }),
-      audit,
-    );
+    return this.writeWithAudit(async (tx) => {
+      if (tokenId) {
+        return tx.productCustomTextToken
+          .update({ where: { id: tokenId }, data })
+          .catch(rethrowTokenKeyTaken);
+      }
+      // 같은 템플릿의 슬롯 생성을 직렬화한다 — 잠금 없이는 같은 삭제 슬롯을 동시에 복구한 둘이 모두 성공한다
+      await tx.$queryRaw`SELECT id FROM product_custom_template WHERE id = ${args.templateId} FOR UPDATE`;
+      // unique가 삭제 행도 세므로 같은 키의 삭제 슬롯은 새로 만들지 않고 복구한다
+      const deleted = await tx.productCustomTextToken.findFirst({
+        where: {
+          template_id: args.templateId,
+          token_key: args.tokenKey,
+          deleted_at: { not: null },
+        },
+        select: { id: true },
+      });
+      return deleted
+        ? tx.productCustomTextToken.update({
+            where: { id: deleted.id },
+            data: { ...data, deleted_at: null },
+          })
+        : tx.productCustomTextToken
+            .create({ data: { template_id: args.templateId, ...data } })
+            .catch(rethrowTokenKeyTaken);
+    }, audit);
   }
 
   async findCustomTextTokenById(id: bigint) {
