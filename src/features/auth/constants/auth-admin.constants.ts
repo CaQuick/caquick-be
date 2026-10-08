@@ -2,8 +2,8 @@
 
 export const MIN_USERNAME_LENGTH = 4;
 export const MAX_USERNAME_LENGTH = 80;
-/** 정책: 소문자·숫자·`.`·`_`·`-`만. 대소문자 혼용 username 충돌을 원천 차단한다. */
-export const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
+/** 정책: 영문 대소문자·숫자·`.`·`_`·`-`만. 대소문자만 다른 username은 컬럼 정렬(ci)이 같은 값으로 봐 중복으로 막는다. */
+export const USERNAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 export const MAX_EMAIL_LENGTH = 320;
 export const MAX_ACCOUNT_NAME_LENGTH = 100;

@@ -19,10 +19,15 @@ describe('AdminCreateAdminInput', () => {
     ).toHaveLength(0);
   });
 
+  it('username에 영문 대문자를 허용한다', async () => {
+    expect(
+      await validate(build({ ...valid, username: 'Ops.Admin_1' })),
+    ).toHaveLength(0);
+  });
+
   it.each([
     ['길이 4 미만', 'abc'],
     ['길이 80 초과', 'a'.repeat(81)],
-    ['대문자 포함', 'Admin1'],
     ['공백 포함', 'ad min'],
     ['허용 외 문자(@)', 'ad@min'],
     ['한글', '관리자계정'],

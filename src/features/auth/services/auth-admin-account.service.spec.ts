@@ -270,6 +270,23 @@ describe('AdminAccountService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
+    it('대문자 username은 입력 그대로 저장하고, 대소문자만 다른 username은 충돌한다', async () => {
+      const actor = await makeAdmin();
+
+      const created = await service.adminCreateAdmin(actor, {
+        ...validInput,
+        username: 'Ops.Admin',
+      });
+      expect(created.username).toBe('Ops.Admin');
+
+      await expect(
+        service.adminCreateAdmin(actor, {
+          ...validInput,
+          username: 'ops.admin',
+        }),
+      ).rejects.toThrowDomain('USERNAME_TAKEN');
+    });
+
     it('판매자가 쓰는 username도 충돌한다(자격증명 테이블 공용)', async () => {
       const actor = await makeAdmin();
       await createAccountCredential(prisma, {
