@@ -27,6 +27,12 @@ describe('AdminCreateSellerInput', () => {
     expect(await validate(build(valid))).toHaveLength(0);
   });
 
+  it('username에 영문 대문자를 허용한다', async () => {
+    expect(
+      await validate(build({ ...valid, username: 'Shop.Owner' })),
+    ).toHaveLength(0);
+  });
+
   it('store 누락 거절', async () => {
     const { store: _store, ...withoutStore } = valid;
     const errors = await validate(build(withoutStore));
@@ -69,7 +75,7 @@ describe('AdminCreateSellerInput', () => {
   });
 
   it.each([
-    ['username 대문자', { username: 'Shop' }],
+    ['username 허용 외 문자', { username: 'shop@owner' }],
     ['email 형식', { email: 'nope' }],
     ['businessName 누락', { businessName: undefined }],
   ])('%s 거절', async (_label, overrides) => {

@@ -360,6 +360,21 @@ describe('AdminSellerService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
+    it('대소문자만 다른 username도 충돌한다', async () => {
+      const actor = await admin();
+      await createAccountCredential(prisma, {
+        account_type: 'SELLER',
+        username: 'Cake.Shop',
+      });
+
+      await expect(
+        service.adminCreateSeller(actor, {
+          ...validInput,
+          username: 'cake.shop',
+        }),
+      ).rejects.toThrowDomain('USERNAME_TAKEN');
+    });
+
     it('감사 기록이 실패하면 계정·매장도 롤백된다(같은 트랜잭션)', async () => {
       const actor = await admin();
       const auditLogs = service['auditLogs'];

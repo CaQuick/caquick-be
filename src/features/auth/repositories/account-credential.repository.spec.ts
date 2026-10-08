@@ -77,6 +77,18 @@ describe('AccountCredentialRepository (real DB)', () => {
       const found = await repo.findCredentialByUsername('nonexistent');
       expect(found).toBeNull();
     });
+
+    // 로그인은 대소문자를 구분하지 않는다 — username 컬럼 정렬(ci)이 보장하는 계약
+    it.each(['ops.admin', 'OPS.ADMIN', 'Ops.Admin'])(
+      '대소문자가 달라도 같은 자격증명을 찾는다: %s',
+      async (input) => {
+        await createAccountCredential(prisma, { username: 'Ops.Admin' });
+
+        const found = await repo.findCredentialByUsername(input);
+
+        expect(found!.username).toBe('Ops.Admin');
+      },
+    );
   });
 
   describe('findCredentialByAccountId', () => {
