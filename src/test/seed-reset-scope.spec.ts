@@ -9,7 +9,12 @@ import { seedUsers, type SeededUser } from '../../prisma/seed/users';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, createOrderItem, createReview } from '@/test/factories';
+import {
+  createAccount,
+  createOrderItem,
+  createReview,
+  createReviewReport,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 // 로컬에서 시드 데이터에 붙여 둔 행이 있어도 재시드(정리 → 재삽입)가 FK에 막히면 안 된다
@@ -63,6 +68,24 @@ describe('resetSeedScope (real DB)', () => {
     expect(
       await prisma.account.findUnique({ where: { id: outsider.id } }),
     ).not.toBeNull();
+  });
+
+  it('시드 리뷰에 달린 외부 댓글의 외부 신고도 지워 대상 없는 신고가 남지 않는다', async () => {
+    const users = await seedThroughReviews();
+    const seedReview = await prisma.review.findFirstOrThrow({
+      where: { account_id: { in: users.map((u) => u.id) } },
+    });
+    const outsider = await createAccount(prisma, { account_type: 'USER' });
+    const comment = await writeComment(seedReview.id, outsider.id);
+    const report = await createReviewReport(prisma, {
+      review_comment_id: comment.id,
+    });
+
+    await resetSeedScope(prisma);
+
+    expect(
+      await prisma.reviewReport.findUnique({ where: { id: report.id } }),
+    ).toBeNull();
   });
 
   it('시드 사용자가 시드 밖 리뷰에 단 댓글은 지우고 그 리뷰는 남긴다', async () => {

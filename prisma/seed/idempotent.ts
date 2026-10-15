@@ -51,6 +51,17 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
             },
           },
           { review_comment: { account_id: { in: userIds } } },
+          // 아래에서 지울 시드 리뷰의 댓글 신고 — 남기면 SET NULL로 대상 없는 PENDING이 된다
+          {
+            review_comment: {
+              review: {
+                OR: [
+                  { account_id: { in: userIds } },
+                  { store_id: { in: storeIds } },
+                ],
+              },
+            },
+          },
         ],
       },
     });
