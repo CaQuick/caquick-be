@@ -21,6 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe('StoreListingService (real DB)', () => {
   let service: StoreListingService;
+  let repo: StoreRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -35,6 +36,7 @@ describe('StoreListingService (real DB)', () => {
       ],
     });
     service = module.get(StoreListingService);
+    repo = module.get(StoreRepository);
     prisma = p;
   });
 
@@ -198,6 +200,107 @@ describe('StoreListingService (real DB)', () => {
       const result = await service.popularStores();
 
       expect(result.totalCount).toBe(0);
+    });
+  });
+
+  describe('sortStores', () => {
+    async function sold(storeId: bigint, quantity: number, daysAgo = 0) {
+      const order = await createOrder(prisma, { status: 'CONFIRMED' });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: storeId,
+        quantity,
+      });
+      if (daysAgo > 0) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { created_at: new Date(Date.now() - daysAgo * DAY_MS) },
+        });
+      }
+    }
+
+    async function sortedNames(sort: Parameters<typeof service.sortStores>[1]) {
+      const candidates = await repo.findActiveStoresForRanking();
+      const { ordered } = await service.sortStores(
+        candidates,
+        sort,
+        new Date(),
+      );
+      return ordered.map((c) => c.store_name);
+    }
+
+    it('LATEST는 등록일 최신순, 같은 등록일은 id desc로 정렬한다', async () => {
+      const old = await createStore(prisma, { store_name: '오래된' });
+      const tieA = await createStore(prisma, { store_name: '동률A' });
+      const tieB = await createStore(prisma, { store_name: '동률B' });
+      await createStore(prisma, { store_name: '최신' });
+      const at = (daysAgo: number) => new Date(Date.now() - daysAgo * DAY_MS);
+      await prisma.store.update({
+        where: { id: old.id },
+        data: { created_at: at(10) },
+      });
+      for (const id of [tieA.id, tieB.id]) {
+        await prisma.store.update({
+          where: { id },
+          data: { created_at: at(5) },
+        });
+      }
+
+      expect(await sortedNames('LATEST')).toEqual([
+        '최신',
+        '동률B',
+        '동률A',
+        '오래된',
+      ]);
+    });
+
+    it('BEST_SELLING은 최근 30일 판매 수량 합순, 판매 0건도 뒤에 남기고 동률은 id desc', async () => {
+      const few = await createStore(prisma, { store_name: '주문많고수량적음' });
+      const many = await createStore(prisma, { store_name: '수량많음' });
+      const stale = await createStore(prisma, { store_name: '오래된판매' });
+      await createStore(prisma, { store_name: '판매없음A' });
+      await createStore(prisma, { store_name: '판매없음B' });
+      await sold(few.id, 1);
+      await sold(few.id, 1);
+      await sold(many.id, 5);
+      await sold(stale.id, 10, 40);
+
+      expect(await sortedNames('BEST_SELLING')).toEqual([
+        '수량많음',
+        '주문많고수량적음',
+        '판매없음B',
+        '판매없음A',
+        '오래된판매',
+      ]);
+    });
+
+    it('POPULAR는 인기 점수순이고 카드용 통계를 함께 돌려준다', async () => {
+      await createStore(prisma, { store_name: '보통' });
+      const hot = await createStore(prisma, { store_name: '인기' });
+      await reviewStore(hot.id, 5);
+
+      const candidates = await repo.findActiveStoresForRanking();
+      const result = await service.sortStores(
+        candidates,
+        'POPULAR',
+        new Date(),
+      );
+
+      expect(result.ordered.map((c) => c.store_name)).toEqual(['인기', '보통']);
+      expect(result.stats?.get(hot.id)).toMatchObject({
+        ratingAverage: 5,
+        reviewCount: 1,
+      });
+    });
+
+    it('LATEST·BEST_SELLING은 통계를 채우지 않는다(카드가 직접 집계)', async () => {
+      await createStore(prisma);
+      const candidates = await repo.findActiveStoresForRanking();
+
+      for (const sort of ['LATEST', 'BEST_SELLING'] as const) {
+        const result = await service.sortStores(candidates, sort, new Date());
+        expect(result.stats).toBeUndefined();
+      }
     });
   });
 });
