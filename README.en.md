@@ -284,7 +284,7 @@ corepack enable && yarn install          # postinstall generates the Prisma clie
 docker compose up -d                     # MySQL 3306 · Redis 6379 · RabbitMQ 5672
 touch .env                               # fill it in using the "Environment Variables" table below
 yarn prisma:migrate:dev                  # apply migrations
-yarn prisma:seed                         # (optional) seed data
+yarn prisma:seed                         # (optional) seed data. Test accounts admin (admin) and seed-seller-a/b (sellers), password caquick1234!
 yarn start:dev                           # api role, http://localhost:4000/graphql
 APP_ROLE=worker PORT=4001 yarn start:dev # (optional) run a worker too if you want to see events consumed
 ```
@@ -311,7 +311,6 @@ Operational endpoints
 | **Docs · Metrics**      | `DOCS_ACCESS_TOKEN` (access token for `/gql-docs` and `/rest-docs`, required in production), `METRICS_ACCESS_TOKEN` (Bearer token for `/metrics`, required in production)                                                                                                                          |
 | **Alerts (optional)**   | `DISCORD_ALERT_WEBHOOK_URL` (log-only when unset), `ALERT_DEDUPE_WINDOW_MS` (default 5 minutes), `BOOT_ALERT_STATE_DIR` (suppression files for boot-failure alerts, default `~/.caquick/boot-alert`)                                                                                               |
 | **Outbox (optional)**   | `OUTBOX_DISPATCH_ENABLED` (only `false` has an effect; enabling is decided by the worker role), `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_BATCH_SIZE`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_PARTITION_CONCURRENCY`                                                                                              |
-| **Seed (optional)**     | `ADMIN_SEED_USERNAME`, `ADMIN_SEED_PASSWORD`, `SELLER_SEED_PASSWORD`                                                                                                                                                                                                                               |
 
 ### Common Scripts
 

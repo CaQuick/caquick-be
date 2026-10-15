@@ -1,4 +1,11 @@
+import argon2 from 'argon2';
+
+import { seedAdmins } from '../../prisma/seed/admins';
 import { seedCategories } from '../../prisma/seed/categories';
+import {
+  SEED_ADMIN_USERNAME,
+  SEED_PASSWORD,
+} from '../../prisma/seed/credential-policy';
 import {
   SEED_STORE_NAME_PREFIX,
   resetSeedScope,
@@ -55,6 +62,27 @@ describe('resetSeedScope (real DB)', () => {
       data: { review_id: reviewId, account_id: accountId, content: '댓글' },
     });
   }
+
+  it('기본 테스트 계정(관리자·판매자)을 만들고 재시드해도 아이디가 겹치지 않는다', async () => {
+    const usernames = [SEED_ADMIN_USERNAME, 'seed-seller-a', 'seed-seller-b'];
+    await seedThroughReviews();
+    await seedAdmins(prisma);
+
+    await resetSeedScope(prisma);
+    await seedThroughReviews();
+    await seedAdmins(prisma);
+
+    const credentials = await prisma.accountCredential.findMany({
+      where: { username: { in: usernames } },
+    });
+    expect(credentials.map((c) => c.username).sort()).toEqual(
+      [...usernames].sort(),
+    );
+    for (const c of credentials) {
+      expect(await argon2.verify(c.password_hash, SEED_PASSWORD)).toBe(true);
+      expect(c.must_change_password).toBe(false);
+    }
+  });
 
   /** 시드 밖 계정의 주문 1건(품목 1개)을 만든다. productId를 안 주면 시드 밖 매장 상품으로 */
   async function outsiderOrder(productId?: bigint) {
