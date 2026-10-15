@@ -1,6 +1,6 @@
 extend type Query {
   """
-  매장 검색(검색 결과 매장 탭). 매장명에 단어별 AND 부분일치, 인기순 고정. keyword를 생략하면 지역 조건만 적용한다. 비로그인 접근 가능.
+  매장 검색(검색 결과 매장 탭). 매장명에 단어별 AND 부분일치. keyword를 생략하면 지역 조건만 적용한다. 비로그인 접근 가능.
   """
   searchStores(input: SearchStoresInput!): SearchStoreConnection!
 }
@@ -11,6 +11,8 @@ input SearchStoresInput {
   keyword: String
   """2차 시군구 ID 다중 선택. 비우면 전국 대상."""
   regionIds: [ID!]
+  """정렬 기준. 기본 인기순."""
+  sort: StoreSort = POPULAR
   """건너뛸 개수. 기본 0."""
   offset: Int = 0
   """조회 개수(최대 50)."""
@@ -19,7 +21,7 @@ input SearchStoresInput {
 
 """매장 검색 결과 목록."""
 type SearchStoreConnection {
-  """매장 카드. 인기순으로 온다 — 찜 수·리뷰 통계·최근 주문 수로 산출하며 검색어 관련도는 반영하지 않는다."""
+  """매장 카드. 요청한 sort 순서로 온다. 검색어 관련도는 반영하지 않는다."""
   items: [StoreCard!]!
   """조건에 맞는 전체 매장 수. 탭 카운트에 쓴다."""
   totalCount: Int!

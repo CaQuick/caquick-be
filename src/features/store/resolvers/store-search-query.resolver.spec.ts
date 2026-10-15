@@ -86,4 +86,23 @@ describe('StoreSearchQueryResolver (real DB)', () => {
 
     expect(result.totalCount).toBe(1);
   });
+
+  it('searchStores: sort를 서비스로 전달한다', async () => {
+    const old = await createStore(prisma, { store_name: '리졸버 이전' });
+    await createStore(prisma, { store_name: '리졸버 최신' });
+    await prisma.store.update({
+      where: { id: old.id },
+      data: { created_at: new Date('2026-01-01T00:00:00Z') },
+    });
+
+    const result = await resolver.searchStores(
+      { keyword: '리졸버', sort: 'LATEST' },
+      undefined,
+    );
+
+    expect(result.items.map((i) => i.storeName)).toEqual([
+      '리졸버 최신',
+      '리졸버 이전',
+    ]);
+  });
 });

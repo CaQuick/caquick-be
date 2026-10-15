@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -9,6 +10,10 @@ import {
 } from 'class-validator';
 
 import { MAX_SEARCH_PAGE_LIMIT } from '@/features/store/constants/store-search.constants';
+import {
+  STORE_SORTS,
+  type StoreSort,
+} from '@/features/store/constants/store-sort.constants';
 
 export class SearchStoresInput {
   @IsOptional()
@@ -20,6 +25,10 @@ export class SearchStoresInput {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   regionIds?: string[];
+
+  @IsOptional()
+  @IsIn(STORE_SORTS)
+  sort?: StoreSort | null;
 
   @IsOptional()
   @IsInt()

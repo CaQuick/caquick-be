@@ -10,13 +10,17 @@ import {
   DEFAULT_POPULAR_STORES_LIMIT,
   RANKING_RECENT_ORDER_DAYS,
 } from '@/features/store/constants/store-ranking.constants';
+import type { StoreSort } from '@/features/store/constants/store-sort.constants';
 import type { PopularStoresInput } from '@/features/store/dto/inputs/popular-stores.input';
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
 import {
   StoreRepository,
   type StoreCandidateRow,
 } from '@/features/store/repositories/store.repository';
-import { StoreCardService } from '@/features/store/services/store-card.service';
+import {
+  StoreCardService,
+  type StoreCardStats,
+} from '@/features/store/services/store-card.service';
 import {
   scoreAndSortByPopularity,
   type ScoredCandidate,
@@ -24,6 +28,12 @@ import {
 import type { PopularStoreConnection } from '@/features/store/types/store-output.type';
 
 export type ScoredStore = ScoredCandidate<StoreCandidateRow>;
+
+export interface SortedStores<T> {
+  ordered: T[];
+  /** 인기순만 채운다 — 점수에 쓴 리뷰 통계를 카드가 다시 집계하지 않도록. */
+  stats?: Map<bigint, StoreCardStats>;
+}
 
 @Injectable()
 export class StoreListingService {
@@ -72,6 +82,47 @@ export class StoreListingService {
     );
   }
 
+  /** 동률은 id desc로 고정한다(인기순은 리뷰 수 desc가 먼저). */
+  async sortStores<T extends StoreCandidateRow>(
+    candidates: T[],
+    sort: StoreSort,
+    at: Date,
+  ): Promise<SortedStores<T>> {
+    switch (sort) {
+      case 'POPULAR': {
+        const scored = await this.scoreStores(candidates, at);
+        return {
+          ordered: scored.map((entry) => entry.candidate),
+          stats: new Map(
+            scored.map((entry) => [entry.candidate.id, entry.metrics]),
+          ),
+        };
+      }
+      case 'BEST_SELLING': {
+        const sold = await this.stats.aggregateSoldQuantities(
+          'store_id',
+          candidates.map((c) => c.id),
+          new Date(at.getTime() - RANKING_RECENT_ORDER_DAYS * DAY_MS),
+        );
+        return {
+          ordered: [...candidates].sort(
+            (a, b) =>
+              (sold.get(b.id) ?? 0) - (sold.get(a.id) ?? 0) ||
+              compareIdDesc(a, b),
+          ),
+        };
+      }
+      case 'LATEST':
+        return {
+          ordered: [...candidates].sort(
+            (a, b) =>
+              b.created_at.getTime() - a.created_at.getTime() ||
+              compareIdDesc(a, b),
+          ),
+        };
+    }
+  }
+
   async popularStores(
     input?: PopularStoresInput,
     accountId?: bigint,
@@ -109,4 +160,9 @@ export class StoreListingService {
       rankedAt,
     };
   }
+}
+
+function compareIdDesc(a: { id: bigint }, b: { id: bigint }): number {
+  if (a.id === b.id) return 0;
+  return b.id > a.id ? 1 : -1;
 }
