@@ -1,5 +1,8 @@
 import { seedCategories } from '../../prisma/seed/categories';
-import { resetSeedScope } from '../../prisma/seed/idempotent';
+import {
+  SEED_STORE_NAME_PREFIX,
+  resetSeedScope,
+} from '../../prisma/seed/idempotent';
 import { seedOrders } from '../../prisma/seed/orders';
 import { seedRegions } from '../../prisma/seed/regions';
 import { seedReviews } from '../../prisma/seed/reviews';
@@ -11,6 +14,8 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createNotification,
+  createOrder,
   createOrderItem,
   createReview,
   createReviewReport,
@@ -50,6 +55,86 @@ describe('resetSeedScope (real DB)', () => {
       data: { review_id: reviewId, account_id: accountId, content: '댓글' },
     });
   }
+
+  /** 시드 밖 계정의 주문 1건(품목 1개)을 만든다. productId를 안 주면 시드 밖 매장 상품으로 */
+  async function outsiderOrder(productId?: bigint) {
+    const outsider = await createAccount(prisma, { account_type: 'USER' });
+    const order = await createOrder(prisma, { account_id: outsider.id });
+    const item = await createOrderItem(prisma, {
+      order_id: order.id,
+      ...(productId ? { product_id: productId } : {}),
+    });
+    return { outsider, order, item };
+  }
+
+  it('시드 사용자 없이 시드 매장과 시드 밖 주문만 남은 상태(이전 재시드 실패)도 정리한다', async () => {
+    // 이전 재시드가 상품 삭제에서 실패하면 시드 사용자는 이미 지워져 이 상태가 남는다
+    await seedRegions(prisma);
+    const categories = await seedCategories(prisma);
+    const { products } = await seedStores(prisma, { categories });
+    const { order } = await outsiderOrder(products[0].id);
+
+    await resetSeedScope(prisma);
+
+    expect(
+      await prisma.order.findUnique({ where: { id: order.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.store.count({
+        where: { store_name: { startsWith: SEED_STORE_NAME_PREFIX } },
+      }),
+    ).toBe(0);
+  });
+
+  it('시드 밖 계정이 시드 상품을 주문하고 리뷰를 남겨도 정리하고 다시 시드한다', async () => {
+    await seedThroughReviews();
+    const seedProduct = await prisma.product.findFirstOrThrow({
+      where: { store: { store_name: { startsWith: SEED_STORE_NAME_PREFIX } } },
+    });
+    const { outsider, order, item } = await outsiderOrder(seedProduct.id);
+    const review = await createReview(prisma, { order_item_id: item.id });
+    const notification = await createNotification(prisma, {
+      account_id: outsider.id,
+      order_id: order.id,
+      order_item_id: item.id,
+      review_id: review.id,
+    });
+
+    await resetSeedScope(prisma);
+    await seedThroughReviews();
+
+    expect(
+      await prisma.order.findUnique({ where: { id: order.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.review.findUnique({ where: { id: review.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.notification.findUnique({ where: { id: notification.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.account.findUnique({ where: { id: outsider.id } }),
+    ).not.toBeNull();
+  });
+
+  it('시드 밖 계정이 시드 밖 매장에 넣은 주문은 남긴다', async () => {
+    await seedThroughReviews();
+    const { order, item } = await outsiderOrder();
+    const notification = await createNotification(prisma, {
+      account_id: order.account_id,
+      order_id: order.id,
+      order_item_id: item.id,
+    });
+
+    await resetSeedScope(prisma);
+
+    expect(
+      await prisma.order.findUnique({ where: { id: order.id } }),
+    ).not.toBeNull();
+    expect(
+      await prisma.notification.findUnique({ where: { id: notification.id } }),
+    ).not.toBeNull();
+  });
 
   it('시드 리뷰에 다른 계정이 단 댓글이 있어도 정리하고 다시 시드한다', async () => {
     const users = await seedThroughReviews();
