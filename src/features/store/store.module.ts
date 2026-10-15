@@ -19,6 +19,7 @@ import { AdminSellerMutationResolver } from '@/features/store/resolvers/store-ad
 import { AdminSellerQueryResolver } from '@/features/store/resolvers/store-admin-seller-query.resolver';
 import { StoreDetailQueryResolver } from '@/features/store/resolvers/store-detail-query.resolver';
 import { StorePickupScheduleQueryResolver } from '@/features/store/resolvers/store-pickup-schedule-query.resolver';
+import { StorePickupStoresQueryResolver } from '@/features/store/resolvers/store-pickup-stores-query.resolver';
 import { StoreQueryResolver } from '@/features/store/resolvers/store-query.resolver';
 import { StoreSearchQueryResolver } from '@/features/store/resolvers/store-search-query.resolver';
 import { SellerAuditQueryResolver } from '@/features/store/resolvers/store-seller-audit-query.resolver';
@@ -33,7 +34,9 @@ import { AdminStoreService } from '@/features/store/services/store-admin.service
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreDetailService } from '@/features/store/services/store-detail.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import { StorePickupAvailabilityService } from '@/features/store/services/store-pickup-availability.service';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
+import { StorePickupStoresService } from '@/features/store/services/store-pickup-stores.service';
 import { StoreSearchService } from '@/features/store/services/store-search.service';
 import { SellerAuditService } from '@/features/store/services/store-seller-audit.service';
 import { SellerFaqService } from '@/features/store/services/store-seller-faq.service';
@@ -62,8 +65,11 @@ import { fetchKakaoLocal, KAKAO_LOCAL_TRANSPORT } from '@/global/kakao-local';
     StoreWishlistMutationResolver,
     StoreWishlistQueryResolver,
     StoreDetailQueryResolver,
+    StorePickupAvailabilityService,
     StoreTodayPickupService,
     StoreTodayPickupQueryResolver,
+    StorePickupStoresService,
+    StorePickupStoresQueryResolver,
     StorePickupScheduleService,
     StorePickupScheduleQueryResolver,
     StoreSearchService,

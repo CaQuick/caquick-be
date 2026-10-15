@@ -15,6 +15,8 @@ export interface StoreCandidateRow {
   min_lead_time_minutes: number;
   max_days_ahead: number;
   created_at: Date;
+  latitude: Prisma.Decimal | null;
+  longitude: Prisma.Decimal | null;
 }
 
 const STORE_CANDIDATE_SELECT = {
@@ -28,6 +30,8 @@ const STORE_CANDIDATE_SELECT = {
   min_lead_time_minutes: true,
   max_days_ahead: true,
   created_at: true,
+  latitude: true,
+  longitude: true,
 } satisfies Prisma.StoreSelect;
 
 export type StoreSearchCandidateRow = StoreCandidateRow;

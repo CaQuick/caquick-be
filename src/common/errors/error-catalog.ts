@@ -251,6 +251,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '유효하지 않은 날짜 형식입니다. (YYYY-MM-DD)',
   },
+  PICKUP_DATE_PAST: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '지난 날짜는 조회할 수 없습니다.',
+  },
 
   // ── 리뷰·좋아요·신고
   REVIEW_NOT_FOUND: {
