@@ -51,6 +51,17 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
             },
           },
           { review_comment: { account_id: { in: userIds } } },
+          // 아래에서 지울 시드 리뷰의 댓글 신고 — 남기면 SET NULL로 대상 없는 PENDING이 된다
+          {
+            review_comment: {
+              review: {
+                OR: [
+                  { account_id: { in: userIds } },
+                  { store_id: { in: storeIds } },
+                ],
+              },
+            },
+          },
         ],
       },
     });
@@ -98,6 +109,10 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
         await prisma.reviewMedia.deleteMany({
           where: { review: { order_item_id: { in: orderItemIds } } },
         });
+        // 댓글은 작성자가 시드 밖 계정이어도 리뷰 FK(RESTRICT)에 걸린다
+        await prisma.reviewComment.deleteMany({
+          where: { review: { order_item_id: { in: orderItemIds } } },
+        });
         await prisma.review.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });
@@ -117,6 +132,15 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     });
     await prisma.reviewMedia.deleteMany({
       where: { review: { account_id: { in: userIds } } },
+    });
+    // 시드 유저 리뷰의 댓글(리뷰 FK)과 시드 유저가 남의 리뷰에 단 댓글(계정 FK) — 둘 다 RESTRICT
+    await prisma.reviewComment.deleteMany({
+      where: {
+        OR: [
+          { account_id: { in: userIds } },
+          { review: { account_id: { in: userIds } } },
+        ],
+      },
     });
     await prisma.review.deleteMany({ where: { account_id: { in: userIds } } });
 
