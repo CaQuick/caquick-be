@@ -3,9 +3,14 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
-import { assertSeedCredential } from '../../prisma/seed/credential-policy';
+import {
+  SEED_ADMIN_USERNAME,
+  SEED_PASSWORD,
+  assertSeedCredential,
+} from '../../prisma/seed/credential-policy';
 
 import { AdminCreateAdminInput } from '@/features/auth/dto/inputs/admin-create-admin.input';
+import { CredentialLoginInput } from '@/features/auth/dto/inputs/credential-login.input';
 
 const PASSWORD = 'Strong!Pass1';
 
@@ -58,4 +63,18 @@ describe('시드 자격증명 username 정책', () => {
       assertSeedCredential({ username: 'ops.admin', password: 'weak' }),
     ).toThrow(/^시드 password 정책 위반/);
   });
+
+  it.each([SEED_ADMIN_USERNAME, 'seed-seller-a', 'seed-seller-b'])(
+    '기본 시드 계정 %s는 시드 정책과 로그인 DTO를 통과한다',
+    async (username) => {
+      expect(() =>
+        assertSeedCredential({ username, password: SEED_PASSWORD }),
+      ).not.toThrow();
+      const input = plainToInstance(CredentialLoginInput, {
+        username,
+        password: SEED_PASSWORD,
+      });
+      expect(await validate(input)).toHaveLength(0);
+    },
+  );
 });

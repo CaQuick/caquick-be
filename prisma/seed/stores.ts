@@ -11,15 +11,14 @@
 import argon2 from 'argon2';
 
 import type { SeededCategories } from './categories';
-import { assertSeedCredential } from './credential-policy';
+import { SEED_PASSWORD, assertSeedCredential } from './credential-policy';
 import { SEED_STORE_NAME_PREFIX } from './idempotent';
 
 import { formatAccountLabel } from '@/common/utils/account-label';
 import type { PrismaClient, Product, Store } from '@/generated/prisma/client';
 
 /**
- * 시드 판매자 로그인용 자격증명. SELLER_SEED_PASSWORD가 없으면 만들지 않는다
- * (dev 토큰 발급 경로 /auth/dev/issue-token 로도 충분하다).
+ * 시드 판매자 로그인용 자격증명(비밀번호 SEED_PASSWORD).
  * 매장 생성 뒤에 호출한다 — resetSeedScope가 [SEED] 매장을 통해 판매자를 찾으므로,
  * 매장 없이 자격증명만 남으면 고정 username이 다음 시드를 막는다.
  */
@@ -28,24 +27,16 @@ async function seedSellerCredential(
   accountId: bigint,
   username: string,
 ): Promise<void> {
-  const password = process.env.SELLER_SEED_PASSWORD;
-  if (!password) return;
-  assertSeedCredential({ username, password });
+  assertSeedCredential({ username, password: SEED_PASSWORD });
   await prisma.accountCredential.create({
     data: {
       account_id: accountId,
       username,
-      password_hash: await argon2.hash(password, { type: argon2.argon2id }),
+      password_hash: await argon2.hash(SEED_PASSWORD, {
+        type: argon2.argon2id,
+      }),
     },
   });
-}
-
-/** 판매자 생성 경로와 같은 라벨. 자격증명은 비밀번호가 있을 때만 만들어지므로 아이디도 그때만 붙는다. */
-function seedSellerLabel(name: string, username: string): string | null {
-  return formatAccountLabel(
-    name,
-    process.env.SELLER_SEED_PASSWORD ? username : null,
-  );
 }
 
 export interface SeededStores {
@@ -80,7 +71,7 @@ export async function seedStores(
   const storeA = await prisma.store.create({
     data: {
       seller_account_id: sellerA.id,
-      seller_label_snapshot: seedSellerLabel(sellerA.name!, 'seed-seller-a'),
+      seller_label_snapshot: formatAccountLabel(sellerA.name, 'seed-seller-a'),
       store_name: `${SEED_STORE_NAME_PREFIX}케이크샵 A`,
       store_phone: '02-1111-2222',
       address_full: '서울특별시 강남구 테헤란로 1길 10',
@@ -138,7 +129,7 @@ export async function seedStores(
   const storeB = await prisma.store.create({
     data: {
       seller_account_id: sellerB.id,
-      seller_label_snapshot: seedSellerLabel(sellerB.name!, 'seed-seller-b'),
+      seller_label_snapshot: formatAccountLabel(sellerB.name, 'seed-seller-b'),
       store_name: `${SEED_STORE_NAME_PREFIX}도넛샵 B`,
       store_phone: '02-3333-4444',
       address_full: '서울특별시 마포구 와우산로 5',

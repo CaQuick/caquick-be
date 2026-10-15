@@ -9,6 +9,13 @@ import {
   USERNAME_PATTERN,
 } from '@/features/auth/constants/auth-admin.constants';
 
+/**
+ * 로컬 테스트 계정(관리자 admin, 판매자 seed-seller-a·b)의 공통 비밀번호.
+ * 시드는 NODE_ENV=production에서 막히고 운영 DB는 외부에 열려 있지 않아, 공개 레포에 있어도 운영 계정이 되지 않는다.
+ */
+export const SEED_PASSWORD = 'caquick1234!';
+export const SEED_ADMIN_USERNAME = 'admin';
+
 export function assertSeedCredential(args: {
   username: string;
   password: string;
@@ -19,7 +26,7 @@ export function assertSeedCredential(args: {
     username.length > MAX_USERNAME_LENGTH ||
     !USERNAME_PATTERN.test(username)
   ) {
-    // 값은 메시지에 싣지 않는다 — env에서 온 자격증명이 오류 로그로 새는 경로(CodeQL clear-text-logging)
+    // 값은 메시지에 싣지 않는다(CodeQL clear-text-logging)
     throw new Error(
       `시드 username 정책 위반: ${MIN_USERNAME_LENGTH}~${MAX_USERNAME_LENGTH}자, 영문 대소문자·숫자·._- 만 허용`,
     );
