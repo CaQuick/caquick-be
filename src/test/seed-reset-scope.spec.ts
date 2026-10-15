@@ -67,6 +67,25 @@ describe('resetSeedScope (real DB)', () => {
     return { outsider, order, item };
   }
 
+  it('시드 사용자 없이 시드 매장과 시드 밖 주문만 남은 상태(이전 재시드 실패)도 정리한다', async () => {
+    // 이전 재시드가 상품 삭제에서 실패하면 시드 사용자는 이미 지워져 이 상태가 남는다
+    await seedRegions(prisma);
+    const categories = await seedCategories(prisma);
+    const { products } = await seedStores(prisma, { categories });
+    const { order } = await outsiderOrder(products[0].id);
+
+    await resetSeedScope(prisma);
+
+    expect(
+      await prisma.order.findUnique({ where: { id: order.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.store.count({
+        where: { store_name: { startsWith: SEED_STORE_NAME_PREFIX } },
+      }),
+    ).toBe(0);
+  });
+
   it('시드 밖 계정이 시드 상품을 주문하고 리뷰를 남겨도 정리하고 다시 시드한다', async () => {
     await seedThroughReviews();
     const seedProduct = await prisma.product.findFirstOrThrow({
