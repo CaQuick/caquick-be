@@ -51,25 +51,54 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
             },
           },
           { review_comment: { account_id: { in: userIds } } },
+          // 아래에서 지울 시드 리뷰의 댓글 신고 — 남기면 SET NULL로 대상 없는 PENDING이 된다
+          {
+            review_comment: {
+              review: {
+                OR: [
+                  { account_id: { in: userIds } },
+                  { store_id: { in: storeIds } },
+                ],
+              },
+            },
+          },
         ],
       },
     });
   }
 
-  // 1) 유저 종속 (주문, 리뷰, 찜, 최근본, 알림, 드래프트, 검색기록, 카트, 인증세션)
-  if (userIds.length > 0) {
+  // 1) 주문 — 사용자 조건과 분리한다. 재시드가 2) 상품 삭제에서 실패하면 시드 사용자는 이미 지워져
+  //    시드 매장과 막는 주문만 남으므로, 그 상태에서 다시 돌려도 복구돼야 한다
+  if (userIds.length > 0 || storeIds.length > 0) {
     // 주문 종속들 → 주문 본체 (FK depth가 깊으므로 안에서 다시 처리)
-    const userOrders = await prisma.order.findMany({
-      where: { account_id: { in: userIds } },
+    // 시드 밖 계정이 시드 매장 상품으로 넣은 주문도 지운다 — 품목·리뷰가 시드 상품·매장 FK(RESTRICT)에 걸린다.
+    // 주문은 상품 하나로 만들어져 매장도 하나라, 시드 밖 매장 품목이 함께 지워지지 않는다
+    const seedOrders = await prisma.order.findMany({
+      where: {
+        OR: [
+          { account_id: { in: userIds } },
+          { items: { some: { store_id: { in: storeIds } } } },
+        ],
+      },
       select: { id: true },
     });
-    const orderIds = userOrders.map((o) => o.id);
+    const orderIds = seedOrders.map((o) => o.id);
     if (orderIds.length > 0) {
       const orderItems = await prisma.orderItem.findMany({
         where: { order_id: { in: orderIds } },
         select: { id: true },
       });
       const orderItemIds = orderItems.map((i) => i.id);
+      // 시드 밖 계정이 받은 이 주문·리뷰 알림 — 남기면 SET NULL로 대상 없는 알림이 된다
+      await prisma.notification.deleteMany({
+        where: {
+          OR: [
+            { order_id: { in: orderIds } },
+            { order_item_id: { in: orderItemIds } },
+            { review: { order_item_id: { in: orderItemIds } } },
+          ],
+        },
+      });
       if (orderItemIds.length > 0) {
         // OrderItemCustomFreeEdit -> attachments -> deletes
         const freeEdits = await prisma.orderItemCustomFreeEdit.findMany({
@@ -98,6 +127,10 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
         await prisma.reviewMedia.deleteMany({
           where: { review: { order_item_id: { in: orderItemIds } } },
         });
+        // 댓글은 작성자가 시드 밖 계정이어도 리뷰 FK(RESTRICT)에 걸린다
+        await prisma.reviewComment.deleteMany({
+          where: { review: { order_item_id: { in: orderItemIds } } },
+        });
         await prisma.review.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });
@@ -110,13 +143,25 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       });
       await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
     }
+  }
 
+  // 1-2) 유저 종속 (리뷰, 찜, 최근본, 알림, 드래프트, 검색기록, 카트, 인증세션)
+  if (userIds.length > 0) {
     // 리뷰: 주문 종속에서 이미 처리되었지만, 다른 리뷰가 있을 수 있음 → 사용자 기준으로도 한 번 더
     await prisma.reviewLike.deleteMany({
       where: { account_id: { in: userIds } },
     });
     await prisma.reviewMedia.deleteMany({
       where: { review: { account_id: { in: userIds } } },
+    });
+    // 시드 유저 리뷰의 댓글(리뷰 FK)과 시드 유저가 남의 리뷰에 단 댓글(계정 FK) — 둘 다 RESTRICT
+    await prisma.reviewComment.deleteMany({
+      where: {
+        OR: [
+          { account_id: { in: userIds } },
+          { review: { account_id: { in: userIds } } },
+        ],
+      },
     });
     await prisma.review.deleteMany({ where: { account_id: { in: userIds } } });
 
