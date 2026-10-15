@@ -6,6 +6,7 @@ import { StoreRepository } from '@/features/store/repositories/store.repository'
 import { StoreTodayPickupQueryResolver } from '@/features/store/resolvers/store-today-pickup-query.resolver';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
+import { StorePickupAvailabilityService } from '@/features/store/services/store-pickup-availability.service';
 import { StoreTodayPickupService } from '@/features/store/services/store-today-pickup.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { bookedQuantityProviders } from '@/test/booked-quantity';
@@ -32,6 +33,7 @@ describe('StoreTodayPickup Query Resolver (real DB)', () => {
         StoreStatsRepository,
         StoreTodayPickupQueryResolver,
         StoreTodayPickupService,
+        StorePickupAvailabilityService,
         StoreListingService,
         StoreRepository,
         StoreWishlistRepository,

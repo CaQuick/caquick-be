@@ -8,6 +8,7 @@ import {
   DEFAULT_SEARCH_PAGE_LIMIT,
   MAX_SEARCH_PAGE_LIMIT,
 } from '@/features/store/constants/store-search.constants';
+import { DEFAULT_STORE_SORT } from '@/features/store/constants/store-sort.constants';
 import type { SearchStoresInput } from '@/features/store/dto/inputs/search-stores.input';
 import {
   StoreRepository,
@@ -31,7 +32,6 @@ export class StoreSearchService {
     private readonly clock: ClockService,
   ) {}
 
-  /** 정렬 옵션 없음 — 시안에 매장용 정렬 시트가 없어 인기순 고정. */
   async searchStores(
     input: SearchStoresInput,
     accountId?: bigint,
@@ -47,16 +47,15 @@ export class StoreSearchService {
     const totalCount = candidates.length;
     if (totalCount === 0) return { items: [], totalCount: 0, hasMore: false };
 
-    const scored = await this.listing.scoreStores(candidates, this.clock.now());
-    const page = scored.slice(offset, offset + limit);
+    const { ordered, stats } = await this.listing.sortStores(
+      candidates,
+      input.sort ?? DEFAULT_STORE_SORT,
+      this.clock.now(),
+    );
     const items = await this.cards.buildCards(
-      page.map((entry) => entry.candidate),
+      ordered.slice(offset, offset + limit),
       accountId,
-      {
-        stats: new Map(
-          page.map((entry) => [entry.candidate.id, entry.metrics]),
-        ),
-      },
+      { stats },
     );
 
     return {

@@ -14,7 +14,25 @@ export interface StoreCandidateRow {
   pickup_slot_interval_minutes: number;
   min_lead_time_minutes: number;
   max_days_ahead: number;
+  created_at: Date;
+  latitude: Prisma.Decimal | null;
+  longitude: Prisma.Decimal | null;
 }
+
+const STORE_CANDIDATE_SELECT = {
+  id: true,
+  store_name: true,
+  profile_image_url: true,
+  address_city: true,
+  address_neighborhood: true,
+  region: { select: { name: true } },
+  pickup_slot_interval_minutes: true,
+  min_lead_time_minutes: true,
+  max_days_ahead: true,
+  created_at: true,
+  latitude: true,
+  longitude: true,
+} satisfies Prisma.StoreSelect;
 
 export type StoreSearchCandidateRow = StoreCandidateRow;
 
@@ -76,17 +94,7 @@ export class StoreRepository {
           ? { region_id: { in: regionIds } }
           : {}),
       },
-      select: {
-        id: true,
-        store_name: true,
-        profile_image_url: true,
-        address_city: true,
-        address_neighborhood: true,
-        region: { select: { name: true } },
-        pickup_slot_interval_minutes: true,
-        min_lead_time_minutes: true,
-        max_days_ahead: true,
-      },
+      select: STORE_CANDIDATE_SELECT,
     });
   }
 
@@ -96,17 +104,7 @@ export class StoreRepository {
   ): Promise<StoreSearchCandidateRow[]> {
     return this.prisma.store.findMany({
       where: buildStoreSearchWhere(filter),
-      select: {
-        id: true,
-        store_name: true,
-        address_city: true,
-        address_neighborhood: true,
-        region: { select: { name: true } },
-        pickup_slot_interval_minutes: true,
-        min_lead_time_minutes: true,
-        max_days_ahead: true,
-        profile_image_url: true,
-      },
+      select: STORE_CANDIDATE_SELECT,
       orderBy: { id: 'asc' },
     });
   }

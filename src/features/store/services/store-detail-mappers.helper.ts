@@ -9,7 +9,9 @@ function toRatingAverage(stat: ReviewStat | undefined): number {
   return roundRatingAverage(stat.average);
 }
 
-function toCoordinate(value: { toString(): string } | null): number | null {
+export function toCoordinate(
+  value: { toString(): string } | null,
+): number | null {
   return value !== null ? Number(value) : null;
 }
 

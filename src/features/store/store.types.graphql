@@ -52,6 +52,16 @@ type StoreCard {
   isWishlisted: Boolean!
 }
 
+"""매장 목록 정렬. 시안 '추천순' 라벨은 POPULAR(기본)로 해석한다."""
+enum StoreSort {
+  """인기순(최근 30일 주문 수·찜 수·베이지안 평점 — 인기 매장과 동일 산식)."""
+  POPULAR
+  """등록순(최신 등록 매장 우선)."""
+  LATEST
+  """판매순(최근 30일 유효 주문 수량 합)."""
+  BEST_SELLING
+}
+
 """매장 지도 연동 provider. 구매자·판매자 API가 공용으로 쓴다."""
 enum StoreMapProvider {
   """네이버 지도 딥링크를 쓴다."""

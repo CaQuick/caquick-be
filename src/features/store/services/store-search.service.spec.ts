@@ -115,6 +115,41 @@ describe('StoreSearchService (real DB)', () => {
       ]);
     });
 
+    it('sort를 지정하면 그 순서로 정렬하고 페이지는 정렬 뒤에 자른다', async () => {
+      const first = await createStore(prisma, { store_name: '케이크 먼저' });
+      await createStore(prisma, { store_name: '케이크 나중' });
+      await prisma.store.update({
+        where: { id: first.id },
+        data: { created_at: new Date('2026-01-01T00:00:00Z') },
+      });
+      await confirmOrders(first, 2);
+
+      expect(await names({ keyword: '케이크', sort: 'LATEST' })).toEqual([
+        '케이크 나중',
+        '케이크 먼저',
+      ]);
+      expect(await names({ keyword: '케이크', sort: 'BEST_SELLING' })).toEqual([
+        '케이크 먼저',
+        '케이크 나중',
+      ]);
+      expect(
+        await names({ keyword: '케이크', sort: 'LATEST', offset: 1, limit: 1 }),
+      ).toEqual(['케이크 먼저']);
+    });
+
+    it('sort를 생략하거나 null로 넘기면 인기순이다', async () => {
+      const hot = await createStore(prisma, { store_name: '케이크 인기' });
+      await createStore(prisma, { store_name: '케이크 신규' });
+      await confirmOrders(hot, 2);
+
+      for (const sort of [undefined, null]) {
+        expect(await names({ keyword: '케이크', sort })).toEqual([
+          '케이크 인기',
+          '케이크 신규',
+        ]);
+      }
+    });
+
     it('offset/limit·totalCount·hasMore', async () => {
       for (let i = 0; i < 3; i += 1) {
         await createStore(prisma, { store_name: `케이크 ${i}` });
