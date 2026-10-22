@@ -7,4 +7,13 @@ export interface PickupStoreItem {
   longitude: number | null;
 }
 
-export type PickupStoreConnection = OffsetConnection<PickupStoreItem>;
+export interface MapBounds {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
+export type PickupStoreConnection = OffsetConnection<PickupStoreItem> & {
+  regionBounds: MapBounds | null;
+};

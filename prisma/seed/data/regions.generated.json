@@ -39,581 +39,747 @@
       "name": "종로구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11110",
-      "sortOrder": 0
+      "sortOrder": 0,
+      "centerLat": "37.5747730",
+      "centerLng": "126.9796145"
     },
     {
       "slug": "sgg-11140",
       "name": "중구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11140",
-      "sortOrder": 1
+      "sortOrder": 1,
+      "centerLat": "37.5638078",
+      "centerLng": "126.9975552"
     },
     {
       "slug": "sgg-11170",
       "name": "용산구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11170",
-      "sortOrder": 2
+      "sortOrder": 2,
+      "centerLat": "37.5324274",
+      "centerLng": "126.9905778"
     },
     {
       "slug": "sgg-11200",
       "name": "성동구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11200",
-      "sortOrder": 3
+      "sortOrder": 3,
+      "centerLat": "37.5634272",
+      "centerLng": "127.0369301"
     },
     {
       "slug": "sgg-11215",
       "name": "광진구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11215",
-      "sortOrder": 4
+      "sortOrder": 4,
+      "centerLat": "37.5362839",
+      "centerLng": "127.0877548"
     },
     {
       "slug": "sgg-11230",
       "name": "동대문구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11230",
-      "sortOrder": 5
+      "sortOrder": 5,
+      "centerLat": "37.5744184",
+      "centerLng": "127.0397475"
     },
     {
       "slug": "sgg-11260",
       "name": "중랑구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11260",
-      "sortOrder": 6
+      "sortOrder": 6,
+      "centerLat": "37.6065432",
+      "centerLng": "127.0928203"
     },
     {
       "slug": "sgg-11290",
       "name": "성북구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11290",
-      "sortOrder": 7
+      "sortOrder": 7,
+      "centerLat": "37.5893588",
+      "centerLng": "127.0167029"
     },
     {
       "slug": "sgg-11305",
       "name": "강북구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11305",
-      "sortOrder": 8
+      "sortOrder": 8,
+      "centerLat": "37.6371279",
+      "centerLng": "127.0242048"
     },
     {
       "slug": "sgg-11320",
       "name": "도봉구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11320",
-      "sortOrder": 9
+      "sortOrder": 9,
+      "centerLat": "37.6686914",
+      "centerLng": "127.0472105"
     },
     {
       "slug": "sgg-11350",
       "name": "노원구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11350",
-      "sortOrder": 10
+      "sortOrder": 10,
+      "centerLat": "37.6543618",
+      "centerLng": "127.0564305"
     },
     {
       "slug": "sgg-11380",
       "name": "은평구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11380",
-      "sortOrder": 11
+      "sortOrder": 11,
+      "centerLat": "37.6028174",
+      "centerLng": "126.9289410"
     },
     {
       "slug": "sgg-11410",
       "name": "서대문구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11410",
-      "sortOrder": 12
+      "sortOrder": 12,
+      "centerLat": "37.5791619",
+      "centerLng": "126.9368157"
     },
     {
       "slug": "sgg-11440",
       "name": "마포구",
       "parentSlug": "seoul-north",
       "sigunguCode": "11440",
-      "sortOrder": 13
+      "sortOrder": 13,
+      "centerLat": "37.5662142",
+      "centerLng": "126.9019551"
     },
     {
       "slug": "sgg-11470",
       "name": "양천구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11470",
-      "sortOrder": 14
+      "sortOrder": 14,
+      "centerLat": "37.5169885",
+      "centerLng": "126.8665014"
     },
     {
       "slug": "sgg-11500",
       "name": "강서구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11500",
-      "sortOrder": 15
+      "sortOrder": 15,
+      "centerLat": "37.5509646",
+      "centerLng": "126.8495338"
     },
     {
       "slug": "sgg-11530",
       "name": "구로구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11530",
-      "sortOrder": 16
+      "sortOrder": 16,
+      "centerLat": "37.4954331",
+      "centerLng": "126.8875053"
     },
     {
       "slug": "sgg-11545",
       "name": "금천구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11545",
-      "sortOrder": 17
+      "sortOrder": 17,
+      "centerLat": "37.4568411",
+      "centerLng": "126.8954568"
     },
     {
       "slug": "sgg-11560",
       "name": "영등포구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11560",
-      "sortOrder": 18
+      "sortOrder": 18,
+      "centerLat": "37.5263636",
+      "centerLng": "126.8962739"
     },
     {
       "slug": "sgg-11590",
       "name": "동작구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11590",
-      "sortOrder": 19
+      "sortOrder": 19,
+      "centerLat": "37.5042365",
+      "centerLng": "126.9402717"
     },
     {
       "slug": "sgg-11620",
       "name": "관악구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11620",
-      "sortOrder": 20
+      "sortOrder": 20,
+      "centerLat": "37.4782566",
+      "centerLng": "126.9515212"
     },
     {
       "slug": "sgg-11650",
       "name": "서초구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11650",
-      "sortOrder": 21
+      "sortOrder": 21,
+      "centerLat": "37.4835888",
+      "centerLng": "127.0327345"
     },
     {
       "slug": "sgg-11680",
       "name": "강남구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11680",
-      "sortOrder": 22
+      "sortOrder": 22,
+      "centerLat": "37.5173319",
+      "centerLng": "127.0473774"
     },
     {
       "slug": "sgg-11710",
       "name": "송파구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11710",
-      "sortOrder": 23
+      "sortOrder": 23,
+      "centerLat": "37.5145837",
+      "centerLng": "127.1059177"
     },
     {
       "slug": "sgg-11740",
       "name": "강동구",
       "parentSlug": "seoul-south",
       "sigunguCode": "11740",
-      "sortOrder": 24
+      "sortOrder": 24,
+      "centerLat": "37.5301933",
+      "centerLng": "127.1237925"
     },
     {
       "slug": "sgg-28125",
       "name": "제물포구",
       "parentSlug": "incheon",
       "sigunguCode": "28125",
-      "sortOrder": 25
+      "sortOrder": 25,
+      "centerLat": "37.4738610",
+      "centerLng": "126.6432819"
     },
     {
       "slug": "sgg-28155",
       "name": "영종구",
       "parentSlug": "incheon",
       "sigunguCode": "28155",
-      "sortOrder": 26
+      "sortOrder": 26,
+      "centerLat": "37.4897692",
+      "centerLng": "126.5599390"
     },
     {
       "slug": "sgg-28177",
       "name": "미추홀구",
       "parentSlug": "incheon",
       "sigunguCode": "28177",
-      "sortOrder": 27
+      "sortOrder": 27,
+      "centerLat": "37.4635861",
+      "centerLng": "126.6505649"
     },
     {
       "slug": "sgg-28185",
       "name": "연수구",
       "parentSlug": "incheon",
       "sigunguCode": "28185",
-      "sortOrder": 28
+      "sortOrder": 28,
+      "centerLat": "37.4101014",
+      "centerLng": "126.6782749"
     },
     {
       "slug": "sgg-28200",
       "name": "남동구",
       "parentSlug": "incheon",
       "sigunguCode": "28200",
-      "sortOrder": 29
+      "sortOrder": 29,
+      "centerLat": "37.4473488",
+      "centerLng": "126.7314877"
     },
     {
       "slug": "sgg-28237",
       "name": "부평구",
       "parentSlug": "incheon",
       "sigunguCode": "28237",
-      "sortOrder": 30
+      "sortOrder": 30,
+      "centerLat": "37.5070417",
+      "centerLng": "126.7218642"
     },
     {
       "slug": "sgg-28245",
       "name": "계양구",
       "parentSlug": "incheon",
       "sigunguCode": "28245",
-      "sortOrder": 31
+      "sortOrder": 31,
+      "centerLat": "37.5374957",
+      "centerLng": "126.7377047"
     },
     {
       "slug": "sgg-28275",
       "name": "서해구",
       "parentSlug": "incheon",
       "sigunguCode": "28275",
-      "sortOrder": 32
+      "sortOrder": 32,
+      "centerLat": "37.5454335",
+      "centerLng": "126.6760285"
     },
     {
       "slug": "sgg-28290",
       "name": "검단구",
       "parentSlug": "incheon",
       "sigunguCode": "28290",
-      "sortOrder": 33
+      "sortOrder": 33,
+      "centerLat": "37.5915361",
+      "centerLng": "126.6815716"
     },
     {
       "slug": "sgg-28710",
       "name": "강화군",
       "parentSlug": "incheon",
       "sigunguCode": "28710",
-      "sortOrder": 34
+      "sortOrder": 34,
+      "centerLat": "37.7465178",
+      "centerLng": "126.4880127"
     },
     {
       "slug": "sgg-28720",
       "name": "옹진군",
       "parentSlug": "incheon",
       "sigunguCode": "28720",
-      "sortOrder": 35
+      "sortOrder": 35,
+      "centerLat": "37.9490282",
+      "centerLng": "124.6727424"
     },
     {
       "slug": "sgg-41111",
       "name": "수원시장안구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41111",
-      "sortOrder": 36
+      "sortOrder": 36,
+      "centerLat": "37.3039218",
+      "centerLng": "127.0102734"
     },
     {
       "slug": "sgg-41113",
       "name": "수원시권선구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41113",
-      "sortOrder": 37
+      "sortOrder": 37,
+      "centerLat": "37.2576307",
+      "centerLng": "126.9718725"
     },
     {
       "slug": "sgg-41115",
       "name": "수원시팔달구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41115",
-      "sortOrder": 38
+      "sortOrder": 38,
+      "centerLat": "37.2825588",
+      "centerLng": "127.0201215"
     },
     {
       "slug": "sgg-41117",
       "name": "수원시영통구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41117",
-      "sortOrder": 39
+      "sortOrder": 39,
+      "centerLat": "37.2596036",
+      "centerLng": "127.0466248"
     },
     {
       "slug": "sgg-41131",
       "name": "성남시수정구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41131",
-      "sortOrder": 40
+      "sortOrder": 40,
+      "centerLat": "37.4503897",
+      "centerLng": "127.1456174"
     },
     {
       "slug": "sgg-41133",
       "name": "성남시중원구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41133",
-      "sortOrder": 41
+      "sortOrder": 41,
+      "centerLat": "37.4305990",
+      "centerLng": "127.1372317"
     },
     {
       "slug": "sgg-41135",
       "name": "성남시분당구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41135",
-      "sortOrder": 42
+      "sortOrder": 42,
+      "centerLat": "37.3827460",
+      "centerLng": "127.1188299"
     },
     {
       "slug": "sgg-41150",
       "name": "의정부시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41150",
-      "sortOrder": 43
+      "sortOrder": 43,
+      "centerLat": "37.7380566",
+      "centerLng": "127.0338991"
     },
     {
       "slug": "sgg-41171",
       "name": "안양시만안구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41171",
-      "sortOrder": 44
+      "sortOrder": 44,
+      "centerLat": "37.3867041",
+      "centerLng": "126.9325104"
     },
     {
       "slug": "sgg-41173",
       "name": "안양시동안구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41173",
-      "sortOrder": 45
+      "sortOrder": 45,
+      "centerLat": "37.3926060",
+      "centerLng": "126.9514229"
     },
     {
       "slug": "sgg-41192",
       "name": "부천시원미구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41192",
-      "sortOrder": 46
+      "sortOrder": 46,
+      "centerLat": "37.4965957",
+      "centerLng": "126.7870168"
     },
     {
       "slug": "sgg-41194",
       "name": "부천시소사구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41194",
-      "sortOrder": 47
+      "sortOrder": 47,
+      "centerLat": "37.4800578",
+      "centerLng": "126.7999525"
     },
     {
       "slug": "sgg-41196",
       "name": "부천시오정구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41196",
-      "sortOrder": 48
+      "sortOrder": 48,
+      "centerLat": "37.5283805",
+      "centerLng": "126.7957553"
     },
     {
       "slug": "sgg-41210",
       "name": "광명시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41210",
-      "sortOrder": 49
+      "sortOrder": 49,
+      "centerLat": "37.4785675",
+      "centerLng": "126.8646478"
     },
     {
       "slug": "sgg-41220",
       "name": "평택시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41220",
-      "sortOrder": 50
+      "sortOrder": 50,
+      "centerLat": "36.9922607",
+      "centerLng": "127.1126884"
     },
     {
       "slug": "sgg-41250",
       "name": "동두천시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41250",
-      "sortOrder": 51
+      "sortOrder": 51,
+      "centerLat": "37.9035986",
+      "centerLng": "127.0604407"
     },
     {
       "slug": "sgg-41271",
       "name": "안산시상록구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41271",
-      "sortOrder": 52
+      "sortOrder": 52,
+      "centerLat": "37.3009718",
+      "centerLng": "126.8464826"
     },
     {
       "slug": "sgg-41273",
       "name": "안산시단원구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41273",
-      "sortOrder": 53
+      "sortOrder": 53,
+      "centerLat": "37.3211465",
+      "centerLng": "126.8153255"
     },
     {
       "slug": "sgg-41281",
       "name": "고양시덕양구",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41281",
-      "sortOrder": 54
+      "sortOrder": 54,
+      "centerLat": "37.6374796",
+      "centerLng": "126.8321881"
     },
     {
       "slug": "sgg-41285",
       "name": "고양시일산동구",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41285",
-      "sortOrder": 55
+      "sortOrder": 55,
+      "centerLat": "37.6588746",
+      "centerLng": "126.7750080"
     },
     {
       "slug": "sgg-41287",
       "name": "고양시일산서구",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41287",
-      "sortOrder": 56
+      "sortOrder": 56,
+      "centerLat": "37.6779514",
+      "centerLng": "126.7454771"
     },
     {
       "slug": "sgg-41290",
       "name": "과천시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41290",
-      "sortOrder": 57
+      "sortOrder": 57,
+      "centerLat": "37.4292328",
+      "centerLng": "126.9877210"
     },
     {
       "slug": "sgg-41310",
       "name": "구리시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41310",
-      "sortOrder": 58
+      "sortOrder": 58,
+      "centerLat": "37.5943524",
+      "centerLng": "127.1296418"
     },
     {
       "slug": "sgg-41360",
       "name": "남양주시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41360",
-      "sortOrder": 59
+      "sortOrder": 59,
+      "centerLat": "37.6360236",
+      "centerLng": "127.2164758"
     },
     {
       "slug": "sgg-41370",
       "name": "오산시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41370",
-      "sortOrder": 60
+      "sortOrder": 60,
+      "centerLat": "37.1498790",
+      "centerLng": "127.0775265"
     },
     {
       "slug": "sgg-41390",
       "name": "시흥시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41390",
-      "sortOrder": 61
+      "sortOrder": 61,
+      "centerLat": "37.3801151",
+      "centerLng": "126.8029778"
     },
     {
       "slug": "sgg-41410",
       "name": "군포시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41410",
-      "sortOrder": 62
+      "sortOrder": 62,
+      "centerLat": "37.3616318",
+      "centerLng": "126.9352059"
     },
     {
       "slug": "sgg-41430",
       "name": "의왕시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41430",
-      "sortOrder": 63
+      "sortOrder": 63,
+      "centerLat": "37.3447600",
+      "centerLng": "126.9682738"
     },
     {
       "slug": "sgg-41450",
       "name": "하남시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41450",
-      "sortOrder": 64
+      "sortOrder": 64,
+      "centerLat": "37.5392746",
+      "centerLng": "127.2148606"
     },
     {
       "slug": "sgg-41461",
       "name": "용인시처인구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41461",
-      "sortOrder": 65
+      "sortOrder": 65,
+      "centerLat": "37.2343060",
+      "centerLng": "127.2013571"
     },
     {
       "slug": "sgg-41463",
       "name": "용인시기흥구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41463",
-      "sortOrder": 66
+      "sortOrder": 66,
+      "centerLat": "37.2804109",
+      "centerLng": "127.1147132"
     },
     {
       "slug": "sgg-41465",
       "name": "용인시수지구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41465",
-      "sortOrder": 67
+      "sortOrder": 67,
+      "centerLat": "37.3221153",
+      "centerLng": "127.0976817"
     },
     {
       "slug": "sgg-41480",
       "name": "파주시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41480",
-      "sortOrder": 68
+      "sortOrder": 68,
+      "centerLat": "37.7600450",
+      "centerLng": "126.7798814"
     },
     {
       "slug": "sgg-41500",
       "name": "이천시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41500",
-      "sortOrder": 69
+      "sortOrder": 69,
+      "centerLat": "37.2722676",
+      "centerLng": "127.4350893"
     },
     {
       "slug": "sgg-41550",
       "name": "안성시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41550",
-      "sortOrder": 70
+      "sortOrder": 70,
+      "centerLat": "37.0080705",
+      "centerLng": "127.2797903"
     },
     {
       "slug": "sgg-41570",
       "name": "김포시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41570",
-      "sortOrder": 71
+      "sortOrder": 71,
+      "centerLat": "37.6152687",
+      "centerLng": "126.7156579"
     },
     {
       "slug": "sgg-41591",
       "name": "화성시만세구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41591",
-      "sortOrder": 72
+      "sortOrder": 72,
+      "centerLat": "37.1377095",
+      "centerLng": "126.9256732"
     },
     {
       "slug": "sgg-41593",
       "name": "화성시효행구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41593",
-      "sortOrder": 73
+      "sortOrder": 73,
+      "centerLat": "37.2091796",
+      "centerLng": "126.9591831"
     },
     {
       "slug": "sgg-41595",
       "name": "화성시병점구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41595",
-      "sortOrder": 74
+      "sortOrder": 74,
+      "centerLat": "37.2087486",
+      "centerLng": "127.0360897"
     },
     {
       "slug": "sgg-41597",
       "name": "화성시동탄구",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41597",
-      "sortOrder": 75
+      "sortOrder": 75,
+      "centerLat": "37.1972782",
+      "centerLng": "127.0970070"
     },
     {
       "slug": "sgg-41610",
       "name": "광주시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41610",
-      "sortOrder": 76
+      "sortOrder": 76,
+      "centerLat": "37.4293942",
+      "centerLng": "127.2551387"
     },
     {
       "slug": "sgg-41630",
       "name": "양주시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41630",
-      "sortOrder": 77
+      "sortOrder": 77,
+      "centerLat": "37.7853137",
+      "centerLng": "127.0457861"
     },
     {
       "slug": "sgg-41650",
       "name": "포천시",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41650",
-      "sortOrder": 78
+      "sortOrder": 78,
+      "centerLat": "37.8949928",
+      "centerLng": "127.2003329"
     },
     {
       "slug": "sgg-41670",
       "name": "여주시",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41670",
-      "sortOrder": 79
+      "sortOrder": 79,
+      "centerLat": "37.2984234",
+      "centerLng": "127.6370588"
     },
     {
       "slug": "sgg-41800",
       "name": "연천군",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41800",
-      "sortOrder": 80
+      "sortOrder": 80,
+      "centerLat": "38.0965223",
+      "centerLng": "127.0753558"
     },
     {
       "slug": "sgg-41820",
       "name": "가평군",
       "parentSlug": "gyeonggi-north",
       "sigunguCode": "41820",
-      "sortOrder": 81
+      "sortOrder": 81,
+      "centerLat": "37.8314413",
+      "centerLng": "127.5095702"
     },
     {
       "slug": "sgg-41830",
       "name": "양평군",
       "parentSlug": "gyeonggi-south",
       "sigunguCode": "41830",
-      "sortOrder": 82
+      "sortOrder": 82,
+      "centerLat": "37.4917883",
+      "centerLng": "127.4875785"
     }
   ]
 }

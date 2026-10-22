@@ -15,6 +15,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createRegion,
   createStore,
   createStoreWishlist,
 } from '@/test/factories';
@@ -107,5 +108,25 @@ describe('StorePickupStoresQueryResolver (real DB)', () => {
     const result = await resolver.pickupStores(undefined, { date: DATE });
 
     expect(result.items[0].store.isWishlisted).toBe(false);
+  });
+
+  it('pickupStores: 선택 지역의 지도 범위를 싣는다', async () => {
+    const region = await createRegion(prisma, {
+      level: 2,
+      center_lat: 37.574773,
+      center_lng: 126.9796145,
+    });
+
+    const result = await resolver.pickupStores(undefined, {
+      date: DATE,
+      regionIds: [region.id.toString()],
+    });
+
+    expect(result.regionBounds).toEqual({
+      south: 37.574773,
+      west: 126.9796145,
+      north: 37.574773,
+      east: 126.9796145,
+    });
   });
 });

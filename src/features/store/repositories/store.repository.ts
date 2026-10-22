@@ -36,6 +36,11 @@ const STORE_CANDIDATE_SELECT = {
 
 export type StoreSearchCandidateRow = StoreCandidateRow;
 
+export interface RegionCenterRow {
+  center_lat: Prisma.Decimal | null;
+  center_lng: Prisma.Decimal | null;
+}
+
 export interface StoreSearchFilter {
   words: string[];
   regionIds?: bigint[];
@@ -95,6 +100,14 @@ export class StoreRepository {
           : {}),
       },
       select: STORE_CANDIDATE_SELECT,
+    });
+  }
+
+  /** 매장 후보의 지역 조건과 같게 지역 활성 여부는 보지 않는다. */
+  async findRegionCenters(regionIds: bigint[]): Promise<RegionCenterRow[]> {
+    return this.prisma.region.findMany({
+      where: { id: { in: regionIds }, level: 2 },
+      select: { center_lat: true, center_lng: true },
     });
   }
 
