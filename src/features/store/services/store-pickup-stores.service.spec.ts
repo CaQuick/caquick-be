@@ -168,6 +168,7 @@ describe('StorePickupStoresService (real DB)', () => {
         items: [],
         totalCount: 0,
         hasMore: false,
+        regionBounds: null,
       });
     });
   });
@@ -277,6 +278,105 @@ describe('StorePickupStoresService (real DB)', () => {
         expect.objectContaining({ latitude: null, longitude: null }),
         expect.objectContaining({ latitude: 37.5735, longitude: 126.986 }),
       ]);
+    });
+  });
+
+  describe('지도 범위(regionBounds)', () => {
+    const point = (lat: number, lng: number) => ({
+      south: lat,
+      west: lng,
+      north: lat,
+      east: lng,
+    });
+
+    async function district(
+      lat: number | null,
+      lng: number | null,
+      overrides = {},
+    ): Promise<string> {
+      const region = await createRegion(prisma, {
+        level: 2,
+        center_lat: lat,
+        center_lng: lng,
+        ...overrides,
+      });
+      return region.id.toString();
+    }
+
+    async function boundsOf(
+      regionIds: string[] | undefined,
+      input: Partial<Parameters<typeof service.pickupStores>[0]> = {},
+    ) {
+      const result = await service.pickupStores({
+        date: DATE,
+        regionIds,
+        ...input,
+      });
+      return result.regionBounds;
+    }
+
+    it('지역이 하나면 그 중심 좌표 한 점이다', async () => {
+      const id = await district(37.574773, 126.9796145);
+
+      expect(await boundsOf([id])).toEqual(point(37.574773, 126.9796145));
+    });
+
+    it('여러 지역이면 위도·경도 각각의 최소·최대로 모두 담는다', async () => {
+      // 남쪽 끝과 서쪽 끝이 서로 다른 지역에 있다
+      const ids = [
+        await district(37.5, 127.1),
+        await district(37.7, 126.9),
+        await district(37.6, 127.0),
+      ];
+
+      expect(await boundsOf(ids)).toEqual({
+        south: 37.5,
+        west: 126.9,
+        north: 37.7,
+        east: 127.1,
+      });
+    });
+
+    it('좌표 없는 지역은 빼고 계산하고, 전부 없으면 null이다', async () => {
+      const withCenter = await district(37.5, 127.0);
+      const without = await district(null, null);
+
+      expect(await boundsOf([withCenter, without])).toEqual(point(37.5, 127.0));
+      expect(await boundsOf([without])).toBeNull();
+    });
+
+    it('regionIds를 비우거나 생략하면(전국) null이다', async () => {
+      await district(37.5, 127.0);
+
+      expect(await boundsOf([])).toBeNull();
+      expect(await boundsOf(undefined)).toBeNull();
+    });
+
+    it('비활성 지역은 담고, 1차 지역 ID와 삭제된 지역은 뺀다', async () => {
+      const inactive = await district(37.5, 127.0, { is_active: false });
+      const group = await createRegion(prisma, {
+        level: 1,
+        center_lat: 38.0,
+        center_lng: 126.0,
+      });
+      const deleted = await district(36.0, 128.0);
+      await prisma.region.update({
+        where: { id: BigInt(deleted) },
+        data: { deleted_at: NOW },
+      });
+
+      expect(await boundsOf([inactive, group.id.toString(), deleted])).toEqual(
+        point(37.5, 127.0),
+      );
+    });
+
+    it('매장이 0건이거나 예약 가능 기간 상한을 넘는 날짜여도 범위가 온다', async () => {
+      const id = await district(37.5, 127.0);
+
+      expect(await boundsOf([id])).toEqual(point(37.5, 127.0));
+      expect(await boundsOf([id], { date: '2027-08-20' })).toEqual(
+        point(37.5, 127.0),
+      );
     });
   });
 });

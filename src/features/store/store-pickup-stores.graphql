@@ -27,6 +27,23 @@ type PickupStoreConnection {
   totalCount: Int!
   """다음 페이지 존재 여부."""
   hasMore: Boolean!
+  """
+  선택한 지역들의 중심 좌표를 모두 담는 범위(지도 카메라용). 매장이 0건이어도 온다. 지역이 하나면 한 점(south=north, west=east)이다.
+  regionIds를 비웠거나(전국) 좌표가 등록된 2차 지역이 없으면 null.
+  """
+  regionBounds: MapBounds
+}
+
+"""지도 범위(WGS84)."""
+type MapBounds {
+  """남쪽 끝 위도."""
+  south: Float!
+  """서쪽 끝 경도."""
+  west: Float!
+  """북쪽 끝 위도."""
+  north: Float!
+  """동쪽 끝 경도."""
+  east: Float!
 }
 
 """매장 선택 항목. 매장 카드와 지도 마커 좌표."""

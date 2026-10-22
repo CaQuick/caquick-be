@@ -8,6 +8,8 @@ export interface RegionOverrides {
   slug?: string;
   sort_order?: number;
   is_active?: boolean;
+  center_lat?: number | null;
+  center_lng?: number | null;
 }
 
 export async function createRegion(
@@ -23,6 +25,8 @@ export async function createRegion(
       slug: overrides.slug ?? `region-${seq}`,
       sort_order: overrides.sort_order ?? 0,
       is_active: overrides.is_active ?? true,
+      center_lat: overrides.center_lat ?? null,
+      center_lng: overrides.center_lng ?? null,
     },
   });
 }

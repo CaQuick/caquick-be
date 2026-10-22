@@ -14,10 +14,11 @@
  * 1차 그룹 경계는 운영 정의이므로, 변경 시 이 파일의 SEOUL_NORTH / GYEONGGI_NORTH_CITY 를
  * 고치고 재실행한다. (figma spec에 2차 생활권 큐레이션이 확정되면 별도 반영)
  * 행정구역 개편으로 2차가 바뀌면 이미 데이터가 있는 DB를 위한 데이터 마이그레이션도 함께 낸다(예: region_incheon_reorg).
+ * 중심 좌표는 fill-region-centers.ts가 채운다. 다시 만들 때 기존 좌표를 slug로 이어받으므로 새 지역만 비게 된다.
  *
  * 실행: npx ts-node scripts/generate-region-seed.ts
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const INPUT_FILE = 'KIKcd_B.20260930';
@@ -80,6 +81,8 @@ interface Level2 {
   parentSlug: string;
   sigunguCode: string;
   sortOrder: number;
+  centerLat?: string;
+  centerLng?: string;
 }
 
 // figma spec 순서: 전국 / 서울 북부 / 서울 남부 / 경기 북부 / 경기 남부 / 인천
@@ -150,6 +153,21 @@ function splitLines(buf: Buffer): Buffer[] {
   return lines;
 }
 
+function previousCenters(): Map<
+  string,
+  Pick<Level2, 'centerLat' | 'centerLng'>
+> {
+  if (!existsSync(OUT_PATH)) return new Map();
+  const { level2 } = JSON.parse(readFileSync(OUT_PATH, 'utf8')) as {
+    level2: Level2[];
+  };
+  return new Map(
+    level2
+      .filter((r) => r.centerLat !== undefined && r.centerLng !== undefined)
+      .map((r) => [r.slug, { centerLat: r.centerLat, centerLng: r.centerLng }]),
+  );
+}
+
 function main(): void {
   // code5(시도2+시군구3) 기준 distinct. "동을 직접 보유한 시군구"만 채택.
   const seen = new Map<string, Sigungu>();
@@ -181,12 +199,14 @@ function main(): void {
     a.code5.localeCompare(b.code5),
   );
 
+  const centers = previousCenters();
   const level2: Level2[] = sigungus.map((s, idx) => ({
     slug: `sgg-${s.code5}`,
     name: s.sigungu,
     parentSlug: parentSlugOf(s.sido, s.sigungu),
     sigunguCode: s.code5,
     sortOrder: idx,
+    ...centers.get(`sgg-${s.code5}`),
   }));
 
   const out = {

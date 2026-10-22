@@ -18,6 +18,8 @@ interface RegionSeedFile {
     parentSlug: string;
     sigunguCode: string;
     sortOrder: number;
+    centerLat?: string;
+    centerLng?: string;
   }[];
 }
 
@@ -57,6 +59,11 @@ export async function seedRegions(prisma: PrismaClient): Promise<void> {
         `[seed] region parent not found: ${child.parentSlug} (child ${child.slug})`,
       );
     }
+    // 좌표가 아직 없는 지역은 DB 값을 건드리지 않는다
+    const center =
+      child.centerLat !== undefined && child.centerLng !== undefined
+        ? { center_lat: child.centerLat, center_lng: child.centerLng }
+        : {};
     await prisma.region.upsert({
       where: { slug: child.slug },
       create: {
@@ -65,6 +72,7 @@ export async function seedRegions(prisma: PrismaClient): Promise<void> {
         slug: child.slug,
         sort_order: child.sortOrder,
         parent_id: parentId,
+        ...center,
       },
       update: {
         level: 2,
@@ -73,6 +81,7 @@ export async function seedRegions(prisma: PrismaClient): Promise<void> {
         parent_id: parentId,
         is_active: true,
         deleted_at: null,
+        ...center,
       },
     });
   }
