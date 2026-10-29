@@ -9,14 +9,37 @@ import { DEFAULT_SEARCH_PAGE_LIMIT } from '@/features/store/constants/store-sear
 import { MAX_DAYS_AHEAD } from '@/features/store/constants/store-seller.constants';
 import { DEFAULT_STORE_SORT } from '@/features/store/constants/store-sort.constants';
 import type { PickupStoresInput } from '@/features/store/dto/inputs/pickup-stores.input';
-import { StoreRepository } from '@/features/store/repositories/store.repository';
+import {
+  StoreRepository,
+  type RegionCenterRow,
+} from '@/features/store/repositories/store.repository';
 import { StoreCardService } from '@/features/store/services/store-card.service';
 import { toCoordinate } from '@/features/store/services/store-detail-mappers.helper';
 import { StoreListingService } from '@/features/store/services/store-listing.service';
 import { StorePickupAvailabilityService } from '@/features/store/services/store-pickup-availability.service';
-import type { PickupStoreConnection } from '@/features/store/types/store-pickup-stores-output.type';
+import type {
+  MapBounds,
+  PickupStoreConnection,
+} from '@/features/store/types/store-pickup-stores-output.type';
 
 const PICKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function toRegionBounds(centers: RegionCenterRow[]): MapBounds | null {
+  const points = centers.flatMap((center) => {
+    const lat = toCoordinate(center.center_lat);
+    const lng = toCoordinate(center.center_lng);
+    return lat !== null && lng !== null ? [{ lat, lng }] : [];
+  });
+  if (points.length === 0) return null;
+  const lats = points.map((p) => p.lat);
+  const lngs = points.map((p) => p.lng);
+  return {
+    south: Math.min(...lats),
+    west: Math.min(...lngs),
+    north: Math.max(...lats),
+    east: Math.max(...lngs),
+  };
+}
 
 @Injectable()
 export class StorePickupStoresService {
@@ -44,14 +67,16 @@ export class StorePickupStoresService {
 
     const offset = input.offset ?? 0;
     const limit = input.limit ?? DEFAULT_SEARCH_PAGE_LIMIT;
+    const regionIds = input.regionIds?.map((id) => parseId(id));
+    const regionBounds = regionIds?.length
+      ? toRegionBounds(await this.repo.findRegionCenters(regionIds))
+      : null;
     // 예약 가능 기간 상한을 넘으면 어느 매장도 열리지 않는다
     if (daysAhead > MAX_DAYS_AHEAD) {
-      return { items: [], totalCount: 0, hasMore: false };
+      return { items: [], totalCount: 0, hasMore: false, regionBounds };
     }
 
-    const candidates = await this.repo.findActiveStoresForRanking(
-      input.regionIds?.map((id) => parseId(id)),
-    );
+    const candidates = await this.repo.findActiveStoresForRanking(regionIds);
     const slotsByStore = await this.availability.openSlotsOn(
       candidates,
       day,
@@ -82,6 +107,7 @@ export class StorePickupStoresService {
       })),
       totalCount: matched.length,
       hasMore: hasMoreByOffset(offset, limit, matched.length),
+      regionBounds,
     };
   }
 }
