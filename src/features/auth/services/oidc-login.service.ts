@@ -7,6 +7,7 @@ import type { AuthConfig } from '@/config/auth.config';
 import { ALLOWED_RETURN_TO_DOMAINS } from '@/features/auth/constants/auth.constants';
 import { AuthCookieOptions } from '@/features/auth/helpers/auth-cookie-options.helper';
 import { AuthCookie } from '@/features/auth/helpers/auth-cookie.helper';
+import { resolveReturnTo } from '@/features/auth/helpers/return-to.helper';
 import {
   ACCOUNT_REPOSITORY,
   type IAccountRepository,
@@ -202,12 +203,7 @@ export class OidcLoginService {
   /** 오픈 리다이렉트 방지. */
   private normalizeReturnTo(raw: string | undefined): string {
     const frontend = this.config.getOrThrow<AuthConfig>('auth').frontendBaseUrl;
-
-    if (!raw || raw.trim().length === 0) return frontend;
-
-    const allowed = [frontend, ...ALLOWED_RETURN_TO_DOMAINS];
-    const ok = allowed.some((prefix) => raw.startsWith(prefix));
-    return ok ? raw : frontend;
+    return resolveReturnTo(raw, frontend, ALLOWED_RETURN_TO_DOMAINS);
   }
 
   private pickCallbackParams(req: Request): Record<string, string | string[]> {
