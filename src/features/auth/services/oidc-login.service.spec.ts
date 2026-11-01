@@ -140,6 +140,26 @@ describe('OidcLoginService', () => {
       expect(returnToCookie![1]).toBe('http://localhost:3000');
     });
 
+    it.each(['https://caquick.com/mypage', 'https://caquick.site/mypage'])(
+      '운영 프론트 도메인 returnTo(%s)는 그대로 쓴다',
+      async (returnTo) => {
+        const mockRes = { cookie: jest.fn() } as unknown as Response;
+        mockOidc.buildAuthorizationUrl.mockResolvedValue({
+          authorizationUrl: 'https://a',
+          state: 's',
+          nonce: 'n',
+          codeVerifier: 'v',
+        });
+
+        await service.startOidcLogin('google', returnTo, mockRes);
+
+        const returnToCookie = (mockRes.cookie as jest.Mock).mock.calls.find(
+          (c) => c[0] === 'caquick_oidc_return_to',
+        );
+        expect(returnToCookie![1]).toBe(returnTo);
+      },
+    );
+
     it('returnTo가 undefined이면 기본 프론트 URL을 사용한다', async () => {
       const mockRes = { cookie: jest.fn() } as unknown as Response;
       mockConfig.getOrThrow.mockReturnValue(

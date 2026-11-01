@@ -150,7 +150,7 @@
 
 - **홈서버(맥미니, OrbStack)** 가 운영 환경입니다.
   - [`infra/`](./infra/)의 compose 파일이 api·worker·MySQL·Redis·RabbitMQ·백업 컨테이너와 관측 스택을 함께 띄웁니다.
-  - 인바운드 포트는 열지 않으며, 외부 요청은 **Cloudflare Tunnel**(`api.caquick.site`)로만 들어옵니다.
+  - 인바운드 포트는 열지 않으며, 외부 요청은 **Cloudflare Tunnel**(`api.caquick.com`)로만 들어옵니다.
 - **AWS S3**: 미디어 저장(Presigned URL 업로드)과 일일 DB 백업(14일 보존)
 - **Terraform**: S3 버킷, 최소 권한 IAM 사용자 2개, GitHub 레포·브랜치 보호 설정
 - 관측 스택

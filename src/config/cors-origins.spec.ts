@@ -12,6 +12,13 @@ describe('resolveAllowedOrigins', () => {
     expect(origins).not.toContain('http://evil.example');
   });
 
+  it.each(['https://caquick.com', 'https://admin.caquick.com'])(
+    '운영 목록은 새 도메인 오리진(%s)을 포함한다',
+    (origin) => {
+      expect(resolveAllowedOrigins(true, [])).toContain(origin);
+    },
+  );
+
   it.each([
     [['http://localhost:5173'], ['http://localhost:5173']],
     [
