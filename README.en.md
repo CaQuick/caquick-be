@@ -150,7 +150,7 @@ Customers end up hopping between platforms, combining screenshots, edits, and ex
 
 - Production runs on a **home server (Mac mini, OrbStack)**.
   - The compose file in [`infra/`](./infra/) brings up api, worker, MySQL, Redis, RabbitMQ, the backup container, and the observability stack together.
-  - No inbound ports are opened; external traffic arrives only through a **Cloudflare Tunnel** (`api.caquick.site`).
+  - No inbound ports are opened; external traffic arrives only through a **Cloudflare Tunnel** (`api.caquick.com`).
 - **AWS S3**: media storage (presigned URL uploads) and daily database backups (14-day retention)
 - **Terraform**: S3 buckets, two least-privilege IAM users, and the GitHub repository and branch protection settings
 - Observability stack
