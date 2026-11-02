@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 
+import { calcDiscountRate } from '@/common/utils/discount-rate';
 import { roundRatingAverage } from '@/common/utils/rating';
 import { buildRegionLabel } from '@/common/utils/region-label';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
-import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type { ProductCardOutput } from '@/features/product/types/product-card-output.type';
 import {
   ReviewReadRepository,

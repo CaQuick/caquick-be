@@ -1,6 +1,6 @@
+import { calcDiscountRate } from '@/common/utils/discount-rate';
 import { buildRegionLabel } from '@/common/utils/region-label';
 import { anonymizeReviewAuthor } from '@/common/utils/review-author';
-import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type {
   ReviewCommentItem,
   ReviewDetailProduct,
