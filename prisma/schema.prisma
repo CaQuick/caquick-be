@@ -884,6 +884,8 @@ model OrderItem {
   sale_price_snapshot    Int?   @db.UnsignedInt
   // 주문 시점 표시 스냅샷. 목록·상세·리뷰 가능 목록이 store·product_image를 조인하지 않게 한다.
   store_name_snapshot            String  @db.VarChar(200)
+  // 매장 지역 표기(buildRegionLabel). 매장에 주소·지역이 모두 없으면 null.
+  store_region_label_snapshot    String? @db.VarChar(200)
   product_thumbnail_url_snapshot String? @db.VarChar(2048)
 
   quantity            Int @default(1) @db.UnsignedSmallInt

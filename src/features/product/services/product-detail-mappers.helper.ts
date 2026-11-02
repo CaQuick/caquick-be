@@ -1,5 +1,5 @@
+import { calcDiscountRate } from '@/common/utils/discount-rate';
 import type { ProductDetailRow } from '@/features/product/repositories/product.repository';
-import { calcDiscountRate } from '@/features/product/services/product-storefront-mappers.helper';
 import type { ProductDetail } from '@/features/product/types/product-detail-output.type';
 
 export function toProductDetail(

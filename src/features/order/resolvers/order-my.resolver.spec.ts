@@ -48,11 +48,17 @@ describe('User Order Resolver (real DB)', () => {
   it('Query.myOrders: DB에서 본인 주문 목록을 반환한다', async () => {
     const account = await createAccount(prisma, { account_type: 'USER' });
     await createUserProfile(prisma, { account_id: account.id });
-    const store = await createStore(prisma);
+    const store = await createStore(prisma, {
+      address_city: '인천',
+      address_neighborhood: '청라동',
+    });
     const product = await createProduct(prisma, { store_id: store.id });
     const order = await createOrder(prisma, {
       account_id: account.id,
       status: 'SUBMITTED',
+      subtotal_price: 40000,
+      discount_price: 5000,
+      total_price: 35000,
     });
     await createOrderItem(prisma, {
       order_id: order.id,
@@ -65,7 +71,11 @@ describe('User Order Resolver (real DB)', () => {
     );
 
     expect(result.totalCount).toBe(1);
-    expect(result.items[0].orderId).toBe(order.id.toString());
+    expect(result.items[0]).toMatchObject({
+      orderId: order.id.toString(),
+      discountRate: 13,
+      regionLabel: '인천 청라동',
+    });
   });
 
   it('Query.myOrder: 타 계정 주문 접근은 404가 전파된다', async () => {

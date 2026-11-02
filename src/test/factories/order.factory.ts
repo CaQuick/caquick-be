@@ -1,4 +1,5 @@
 import { DAY_MS } from '@/common/utils/kst-time';
+import { buildRegionLabel } from '@/common/utils/region-label';
 import type {
   Order,
   OrderItem,
@@ -59,8 +60,9 @@ export interface OrderItemOverrides {
   store_id?: bigint;
   product_id?: bigint;
   product_name_snapshot?: string;
-  /** 미지정 시 주문 생성 경로와 같은 규칙(현재 매장명·활성 첫 이미지)으로 채운다. */
+  /** 미지정 시 주문 생성 경로와 같은 규칙(현재 매장명·지역 표기·활성 첫 이미지)으로 채운다. */
   store_name_snapshot?: string;
+  store_region_label_snapshot?: string | null;
   product_thumbnail_url_snapshot?: string | null;
   regular_price_snapshot?: number;
   sale_price_snapshot?: number | null;
@@ -90,10 +92,14 @@ export async function createOrderItem(
   }
 
   const orderId = overrides.order_id ?? (await createOrder(prisma)).id;
-  const storeName =
-    overrides.store_name_snapshot ??
-    (await prisma.store.findUniqueOrThrow({ where: { id: storeId! } }))
-      .store_name;
+  const store = await prisma.store.findUniqueOrThrow({
+    where: { id: storeId! },
+    include: { region: { select: { name: true } } },
+  });
+  const regionLabel =
+    overrides.store_region_label_snapshot === undefined
+      ? buildRegionLabel(store)
+      : overrides.store_region_label_snapshot;
   const thumbnail =
     overrides.product_thumbnail_url_snapshot === undefined
       ? ((
@@ -111,7 +117,8 @@ export async function createOrderItem(
       product_id: productId,
       product_name_snapshot:
         overrides.product_name_snapshot ?? 'Product snapshot',
-      store_name_snapshot: storeName,
+      store_name_snapshot: overrides.store_name_snapshot ?? store.store_name,
+      store_region_label_snapshot: regionLabel,
       product_thumbnail_url_snapshot: thumbnail,
       regular_price_snapshot: overrides.regular_price_snapshot ?? 10000,
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
