@@ -15,7 +15,8 @@
 
 - 레포 머지 옵션 (`delete_branch_on_merge`, `allow_auto_merge` 등)
 - `main` 브랜치 Ruleset (삭제/force push 차단, PR 필수, CI 통과 필수)
-- `develop` 브랜치 Ruleset (동일 수준)
+- `develop` 브랜치 Ruleset (동일 수준, 릴리즈 뒤 fast-forward 동기화용 Admin 우회)
+- `develop` 삭제 금지 Ruleset (우회자 없음 — 릴리즈 PR 머지 때 `delete_branch_on_merge`가 develop을 지우지 못하게 분리)
 - `develop-msa` 브랜치 Ruleset (MSA 전환 통합 브랜치, develop과 동일 수준 — 전환 완료 시 제거)
 
 > **관리 밖**: 레포 이름/가시성/이슈 탭 등 이미 설정된 값은 `lifecycle.ignore_changes`로 제외 — UI에서 편하게 바꿔도 Terraform이 되돌리지 않는다.
@@ -50,13 +51,14 @@ terraform import github_repository.caquick_be caquick-be
 # gh api repos/CaQuick/caquick-be/rulesets --jq '.[] | {id, name}'
 terraform import github_repository_ruleset.main_protection caquick-be:<ruleset_id>
 terraform import github_repository_ruleset.develop_protection caquick-be:<ruleset_id>
+terraform import github_repository_ruleset.develop_no_deletion caquick-be:<ruleset_id>
 terraform import github_repository_ruleset.develop_msa_protection caquick-be:<ruleset_id>
 
 # import 후 plan 돌려서 drift 없는지 확인
 terraform plan
 ```
 
-AWS 리소스(미디어 버킷 2개·백업 버킷·IAM 사용자·정책·연결)는 전부 `aws.tf`의 `import` 블록이 apply 때 자동으로 연결한다(이미 state에 있으면 no-op) — 별도 import 명령이 없다. state를 잃었을 때 빈 state로 plan하면 AWS 쪽은 전부 `to import`(add 0)로 잡힌다 — `to add`로 남는 4개(레포·Ruleset 3)는 위 GitHub import 명령으로 먼저 연결한다(실측 2026-09-25: `16 to import, 4 to add`).
+AWS 리소스(미디어 버킷 2개·백업 버킷·IAM 사용자·정책·연결)는 전부 `aws.tf`의 `import` 블록이 apply 때 자동으로 연결한다(이미 state에 있으면 no-op) — 별도 import 명령이 없다. state를 잃었을 때 빈 state로 plan하면 AWS 쪽은 전부 `to import`(add 0)로 잡힌다 — `to add`로 남는 레포·Ruleset은 위 GitHub import 명령으로 먼저 연결한다(실측 2026-09-25: `16 to import, 4 to add`).
 
 > owner는 provider 인증(`GITHUB_TOKEN`)에서 자동 결정되므로 import 시 별도 지정 불필요.
 
