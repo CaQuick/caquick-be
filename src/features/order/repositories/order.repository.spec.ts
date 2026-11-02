@@ -891,6 +891,7 @@ describe('OrderRepository (real DB)', () => {
           productId: args.product.id,
           productNameSnapshot: args.product.name,
           storeNameSnapshot: args.store.store_name,
+          storeRegionLabelSnapshot: '서울 성수동',
           productThumbnailUrlSnapshot: null,
           regularPriceSnapshot: 30000,
           salePriceSnapshot: 25000,

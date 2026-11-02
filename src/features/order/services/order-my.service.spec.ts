@@ -102,8 +102,63 @@ describe('UserOrderService (real DB)', () => {
         representativeProductName: '상품 정보 없음',
         representativeProductImageUrl: null,
         storeName: '매장 정보 없음',
+        regionLabel: null,
         additionalItemCount: 0,
       });
+    });
+
+    it.each<[string, number, number, number]>([
+      ['할인이 없으면 0', 10000, 0, 0],
+      ['할인 금액 ÷ 할인 전 합계를 반올림한다', 40000, 2000, 5],
+      // 정가 40,000·판매가 35,000(상품 카드 13%) + 옵션 5,000 — 옵션은 할인 대상이 아니다
+      ['옵션 추가금이 붙으면 상품 할인율보다 낮다', 45000, 5000, 11],
+      ['할인 전 합계가 0이면 0(0으로 나누지 않는다)', 0, 0, 0],
+    ])(
+      'discountRate는 주문 기준이다 — %s',
+      async (_case, subtotal, discount, expected) => {
+        const account = await setupUser();
+        await createOrder(prisma, {
+          account_id: account.id,
+          subtotal_price: subtotal,
+          discount_price: discount,
+          total_price: subtotal - discount,
+        });
+
+        const result = await service.listMyOrders(account.id);
+
+        expect(result.items[0].discountRate).toBe(expected);
+      },
+    );
+
+    it('regionLabel은 주문 시점 스냅샷이라 이후 매장 주소가 바뀌어도 그대로다', async () => {
+      const account = await setupUser();
+      const store = await createStore(prisma, {
+        address_city: '인천',
+        address_neighborhood: '청라동',
+      });
+      const order = await createOrder(prisma, { account_id: account.id });
+      await createOrderItem(prisma, { order_id: order.id, store_id: store.id });
+      await prisma.store.update({
+        where: { id: store.id },
+        data: { address_city: '서울특별시', address_neighborhood: '역삼동' },
+      });
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.items[0].regionLabel).toBe('인천 청라동');
+    });
+
+    it('대표 품목의 지역 스냅샷이 null이면 regionLabel도 null이다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, { account_id: account.id });
+      await createOrderItem(prisma, {
+        order_id: order.id,
+        store_region_label_snapshot: null,
+      });
+
+      const result = await service.listMyOrders(account.id);
+
+      expect(result.items[0].regionLabel).toBeNull();
     });
 
     it('status 필터를 전달하면 해당 상태의 주문만 포함한다', async () => {

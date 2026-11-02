@@ -6,6 +6,7 @@ import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
 import { uniqueConstraintName } from '@/common/utils/prisma-error';
+import { buildRegionLabel } from '@/common/utils/region-label';
 import { evaluateActiveUserAccount } from '@/features/auth';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -143,6 +144,7 @@ export class OrderCheckoutService {
         productNameSnapshot: product.name,
         // 주문 시점 표시값 — 이후 매장명·이미지가 바뀌어도 주문 화면은 이 값을 유지한다
         storeNameSnapshot: product.store.store_name,
+        storeRegionLabelSnapshot: buildRegionLabel(product.store),
         productThumbnailUrlSnapshot: product.images[0]?.image_url ?? null,
         regularPriceSnapshot: product.regular_price,
         salePriceSnapshot: product.sale_price,

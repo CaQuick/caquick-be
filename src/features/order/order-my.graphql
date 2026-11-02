@@ -79,6 +79,11 @@ type MyOrderSummary {
   """
   additionalItemCount: Int!
   """
+  주문 할인율(0~100, 반올림) = 할인 금액 ÷ 할인 전 합계. 할인이 없으면 0.
+  옵션 추가금은 할인 대상이 아니라서, 옵션이 붙은 주문은 상품 카드의 할인율보다 낮을 수 있다.
+  """
+  discountRate: Int!
+  """
   총 가격
   """
   totalPrice: Int!
@@ -86,6 +91,10 @@ type MyOrderSummary {
   매장명
   """
   storeName: String!
+  """
+  매장 위치 표기(예: 인천 청라동). 주문 시점 스냅샷이며, 그때 매장 주소·지역이 없었으면 null.
+  """
+  regionLabel: String
   """
   주문 내 OrderItem 중 리뷰 작성 가능한 것이 1건이라도 있는지 (PICKED_UP + 활성 리뷰 미존재)
   """

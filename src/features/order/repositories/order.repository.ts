@@ -88,10 +88,13 @@ export interface MyOrderRow {
   status: OrderStatus;
   created_at: Date;
   pickup_at: Date;
+  subtotal_price: number;
+  discount_price: number;
   total_price: number;
   items: {
     product_name_snapshot: string;
     store_name_snapshot: string;
+    store_region_label_snapshot: string | null;
     product_thumbnail_url_snapshot: string | null;
   }[];
   _count: { items: number };
@@ -136,6 +139,7 @@ export interface CreateSubmittedOrderArgs {
     productId: bigint;
     productNameSnapshot: string;
     storeNameSnapshot: string;
+    storeRegionLabelSnapshot: string | null;
     productThumbnailUrlSnapshot: string | null;
     regularPriceSnapshot: number;
     salePriceSnapshot: number | null;
@@ -303,6 +307,7 @@ export class OrderRepository {
             product_id: args.item.productId,
             product_name_snapshot: args.item.productNameSnapshot,
             store_name_snapshot: args.item.storeNameSnapshot,
+            store_region_label_snapshot: args.item.storeRegionLabelSnapshot,
             product_thumbnail_url_snapshot:
               args.item.productThumbnailUrlSnapshot,
             regular_price_snapshot: args.item.regularPriceSnapshot,

@@ -12,6 +12,7 @@
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
 
+import { buildRegionLabel } from '@/common/utils/region-label';
 import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
 
@@ -25,6 +26,18 @@ async function firstImageUrl(
     orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
   });
   return image?.image_url ?? null;
+}
+
+/** 주문 시점 지역 표기 스냅샷 — 주문 생성 경로와 같은 규칙(buildRegionLabel). */
+async function regionLabelOf(
+  prisma: PrismaClient,
+  storeId: bigint,
+): Promise<string | null> {
+  const store = await prisma.store.findUniqueOrThrow({
+    where: { id: storeId },
+    include: { region: { select: { name: true } } },
+  });
+  return buildRegionLabel(store);
 }
 
 export interface SeededOrders {
@@ -45,6 +58,8 @@ export async function seedOrders(
   if (!user1) throw new Error('seedUsers must run before seedOrders');
   const [storeA, storeB] = ctx.stores.stores;
   const [p1, p2, p3, p4] = ctx.stores.products;
+  const regionA = await regionLabelOf(prisma, storeA.id);
+  const regionB = await regionLabelOf(prisma, storeB.id);
   const { p2GroupId, p2OptionItemId } = ctx.stores.optionGroupIds;
 
   const day = 24 * 60 * 60 * 1000;
@@ -61,8 +76,8 @@ export async function seedOrders(
       pickup_at: new Date(now.getTime() + 3 * day),
       buyer_name: buyerName,
       buyer_phone: buyerPhone,
-      subtotal_price: 35000,
-      discount_price: 0,
+      subtotal_price: 40000,
+      discount_price: 5000,
       total_price: 35000,
       submitted_at: now,
       items: {
@@ -72,6 +87,7 @@ export async function seedOrders(
             product_id: p1.id,
             product_name_snapshot: p1.name,
             store_name_snapshot: storeA.store_name,
+            store_region_label_snapshot: regionA,
             product_thumbnail_url_snapshot: await firstImageUrl(prisma, p1.id),
             regular_price_snapshot: p1.regular_price,
             sale_price_snapshot: p1.sale_price,
@@ -127,6 +143,7 @@ export async function seedOrders(
       product_id: p2.id,
       product_name_snapshot: p2.name,
       store_name_snapshot: storeA.store_name,
+      store_region_label_snapshot: regionA,
       product_thumbnail_url_snapshot: await firstImageUrl(prisma, p2.id),
       regular_price_snapshot: p2.regular_price,
       sale_price_snapshot: p2.sale_price,
@@ -195,6 +212,7 @@ export async function seedOrders(
             product_id: p3.id,
             product_name_snapshot: p3.name,
             store_name_snapshot: storeA.store_name,
+            store_region_label_snapshot: regionA,
             product_thumbnail_url_snapshot: await firstImageUrl(prisma, p3.id),
             regular_price_snapshot: p3.regular_price,
             sale_price_snapshot: p3.sale_price,
@@ -234,8 +252,8 @@ export async function seedOrders(
       pickup_at: o4Picked,
       buyer_name: buyerName,
       buyer_phone: buyerPhone,
-      subtotal_price: 35000,
-      discount_price: 0,
+      subtotal_price: 40000,
+      discount_price: 5000,
       total_price: 35000,
       submitted_at: o4Sub,
       confirmed_at: o4Conf,
@@ -262,6 +280,7 @@ export async function seedOrders(
       product_id: p1.id,
       product_name_snapshot: p1.name,
       store_name_snapshot: storeA.store_name,
+      store_region_label_snapshot: regionA,
       product_thumbnail_url_snapshot: await firstImageUrl(prisma, p1.id),
       regular_price_snapshot: p1.regular_price,
       sale_price_snapshot: p1.sale_price,
@@ -304,6 +323,7 @@ export async function seedOrders(
             product_id: p4.id,
             product_name_snapshot: p4.name,
             store_name_snapshot: storeB.store_name,
+            store_region_label_snapshot: regionB,
             product_thumbnail_url_snapshot: await firstImageUrl(prisma, p4.id),
             regular_price_snapshot: p4.regular_price,
             sale_price_snapshot: null,
@@ -361,6 +381,7 @@ export async function seedOrders(
             product_id: p2.id,
             product_name_snapshot: p2.name,
             store_name_snapshot: storeA.store_name,
+            store_region_label_snapshot: regionA,
             product_thumbnail_url_snapshot: await firstImageUrl(prisma, p2.id),
             regular_price_snapshot: p2.regular_price,
             sale_price_snapshot: null,
