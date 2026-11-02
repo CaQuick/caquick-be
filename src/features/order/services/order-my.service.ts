@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import { calcDiscountRate } from '@/common/utils/discount-rate';
 import { sliceOverfetched } from '@/common/utils/pagination';
 import type { MyOrdersInput } from '@/features/order/dto/inputs/my-orders.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -65,8 +66,14 @@ export class UserOrderService {
           representativeProductImageUrl:
             firstItem?.product_thumbnail_url_snapshot ?? null,
           additionalItemCount: Math.max(0, itemCount - 1),
+          // 주문 기준: 할인 전 합계를 정가, 할인 뒤 금액을 판매가로 본다(옵션 추가금은 할인 대상 아님)
+          discountRate: calcDiscountRate(
+            order.subtotal_price,
+            order.subtotal_price - order.discount_price,
+          ),
           totalPrice: order.total_price,
           storeName: firstItem?.store_name_snapshot ?? '매장 정보 없음',
+          regionLabel: firstItem?.store_region_label_snapshot ?? null,
           hasReviewableItem: reviewableOrderIds.has(order.id.toString()),
         };
       }),

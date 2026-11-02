@@ -14,8 +14,10 @@ export interface MyOrderSummary {
   representativeProductName: string;
   representativeProductImageUrl: string | null;
   additionalItemCount: number;
+  discountRate: number;
   totalPrice: number;
   storeName: string;
+  regionLabel: string | null;
   hasReviewableItem: boolean;
 }
 

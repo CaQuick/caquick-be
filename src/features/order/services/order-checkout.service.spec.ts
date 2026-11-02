@@ -30,6 +30,7 @@ import {
   createOrder as createOrderRow,
   createOrderItem,
   createProduct,
+  createRegion,
   createStore,
   createStoreDailyCapacity,
   createUserProfile,
@@ -290,6 +291,54 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(saved.subtotal_price).toBe(20000);
       expect(saved.discount_price).toBe(0);
     });
+
+    it.each<
+      [
+        string,
+        { city: string | null; dong: string | null; regionName?: string },
+        string | null,
+      ]
+    >([
+      [
+        '시·동이 있으면 "시 동"',
+        { city: '인천', dong: '청라동' },
+        '인천 청라동',
+      ],
+      [
+        '시·동이 비어 있으면 2차 지역명',
+        { city: '', dong: null, regionName: '서구' },
+        '서구',
+      ],
+      ['주소·지역이 모두 없으면 null', { city: null, dong: null }, null],
+    ])(
+      '매장 지역 표기를 품목에 스냅샷한다 — %s',
+      async (_case, { city, dong, regionName }, expected) => {
+        const store = await makeOpenStore();
+        const region = regionName
+          ? await createRegion(prisma, { name: regionName, level: 2 })
+          : null;
+        await prisma.store.update({
+          where: { id: store.id },
+          data: {
+            address_city: city,
+            address_neighborhood: dong,
+            region_id: region?.id ?? null,
+          },
+        });
+        const product = await createProduct(prisma, { store_id: store.id });
+        const buyer = await makeBuyer();
+
+        const result = await service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        );
+
+        const item = await prisma.orderItem.findFirstOrThrow({
+          where: { order_id: BigInt(result.orderId) },
+        });
+        expect(item.store_region_label_snapshot).toBe(expected);
+      },
+    );
 
     it('필수 그룹 누락·max 초과는 그룹 규칙 위반으로 거절한다', async () => {
       const store = await makeOpenStore();

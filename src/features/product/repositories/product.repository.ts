@@ -119,8 +119,13 @@ export interface ProductDetailRow {
   sale_price: number | null;
   currency: string;
   preparation_time_minutes: number;
-  /** 주문 생성 시 매장명 스냅샷용 */
-  store: { store_name: string };
+  /** 주문 생성 시 매장명·지역 표기 스냅샷용 */
+  store: {
+    store_name: string;
+    address_city: string | null;
+    address_neighborhood: string | null;
+    region: { name: string } | null;
+  };
   images: { image_url: string }[];
   option_groups: {
     id: bigint;
@@ -1256,7 +1261,15 @@ export class ProductRepository {
         sale_price: true,
         currency: true,
         preparation_time_minutes: true,
-        store: { select: { store_name: true } },
+        store: {
+          select: {
+            store_name: true,
+            // 주문 품목 지역 스냅샷(buildRegionLabel) 원천
+            address_city: true,
+            address_neighborhood: true,
+            region: { select: { name: true } },
+          },
+        },
         images: {
           where: activeWhere,
           orderBy: { sort_order: 'asc' },
