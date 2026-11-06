@@ -217,7 +217,7 @@ jobs:
       # 테스트가 실패해도 올린다 — coverage-report가 실패 내역을 PR 댓글에 싣는다
       - name: Upload shard result
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: coverage/report.json
@@ -272,7 +272,7 @@ jobs:
           yarn prisma:generate
 
       - name: Download shard results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: coverage-shard-*
           path: coverage/shards
@@ -284,7 +284,7 @@ jobs:
       - name: Upload base coverage (push)
         if: github.event_name == 'push'
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report-json
           path: coverage/report.json
@@ -327,7 +327,7 @@ jobs:
 
       # 댓글 액션 뒤에 둔다 — codecov-action은 업로드 토큰(CC_TOKEN)을 GITHUB_ENV로 내보내 뒤 단계 env에 남긴다
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
@@ -376,7 +376,7 @@ jobs:
 
       - name: Login to GHCR (main만)
         if: github.event_name == 'push'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
