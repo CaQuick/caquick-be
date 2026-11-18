@@ -18,6 +18,12 @@ export {
 } from '@/features/product/services/three-d-design.helper';
 // 주문 상세가 저장된 3D 디자인을 읽을 때 지원하는 JSON 버전.
 export { THREE_D_DESIGN_SCHEMA_VERSION } from '@/features/product/constants/custom-3d-catalog.constants';
+// 주문 생성의 커스텀 입력 구조·입력 해시 정규형과 문구 자리·자유 편집 영역 좌표계.
+export {
+  canonicalizeCustomOrderInput,
+  type CustomOrderInputSource,
+} from '@/features/product/services/custom-order-input.helper';
+export { CUSTOM_AREA_SCALE } from '@/features/product/constants/product-seller.constants';
 // 상품 카드 1벌. 찜·최근 본 상품(user feature)이 같은 카드를 쓴다.
 export { ProductCardService } from '@/features/product/services/product-card.service';
 export type { ProductCardOutput } from '@/features/product/types/product-card-output.type';

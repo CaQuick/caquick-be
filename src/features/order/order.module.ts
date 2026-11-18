@@ -32,6 +32,7 @@ import { OrderAdminAlertConsumer } from '@/features/order/services/order-admin-a
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { OrderCustomUploadCleanupScheduler } from '@/features/order/services/order-custom-upload-cleanup.scheduler';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
@@ -70,6 +71,8 @@ import { StoreModule } from '@/features/store';
     OrderSubscriptionResolver,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
+    // 주문 생성의 커스텀 입력 검증·스냅샷(상품 설정 대조, 업로드 소유)
+    OrderCustomizationService,
     // 커스텀 이미지 선업로드 기록과 미사용분 정리(worker 크론)
     OrderCustomUploadRepository,
     OrderCustomUploadCleanupScheduler,

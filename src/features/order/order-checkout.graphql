@@ -4,7 +4,8 @@ extend type Mutation {
   결과의 payment로 입금을 안내하고, 1시간 안에 입금이 확인되지 않으면 자동 취소된다. 판매자에게는 입금 확인 뒤에 보인다.
   입금 계좌가 설정되지 않았으면 PAYMENT_ACCOUNT_NOT_CONFIGURED(SERVICE_UNAVAILABLE), 입금 대기 주문이 이미 2건이면
   PENDING_PAYMENT_LIMIT_EXCEEDED(CONFLICT), 같은 계정의 다른 주문 요청이 처리 중이라 3초 안에 차례가 오지 않으면
-  CONCURRENT_REQUEST(CONFLICT)다. 로그인 필수.
+  CONCURRENT_REQUEST(CONFLICT)다. 커스텀 상품이면 custom 입력을 검증해 주문 시점 스냅샷으로 저장하고 수량은 1이다
+  (CreateOrderCustomInput 참고). 로그인 필수.
   """
   createOrder(input: CreateOrderInput!): CreateOrderOutput!
   """
@@ -33,7 +34,7 @@ enum OrderCustomUploadPurpose {
   REFERENCE
 }
 
-"""주문 생성 입력. 커스텀 필드는 커스텀 스펙 확정 후 optional로 확장 예정."""
+"""주문 생성 입력."""
 input CreateOrderInput {
   """
   클라이언트 생성 멱등 키(8~64자). 체크아웃 진입 시 새로 만들고 재시도에는
@@ -63,6 +64,151 @@ input CreateOrderInput {
   expectedTotalPrice: Int!
   """판매자에게 전할 요청 사항(최대 500자). 공백만 보내면 없음으로 저장한다."""
   requestNote: String
+  """
+  커스텀 입력. 상품의 커스텀 방식(ProductDetail.customMode)이 SLOT이면 slot, THREE_D면 threeD 하나만 보낸다.
+  커스텀 상품인데 없으면 CUSTOM_INPUT_REQUIRED, 방식이 다르거나 커스텀 상품이 아닌데 보내면 CUSTOM_INPUT_MISMATCH,
+  수량이 1이 아니면 CUSTOM_QUANTITY_FIXED, 판매자 설정이 끝나지 않은 상품이면 CUSTOM_PRODUCT_NOT_READY다.
+  커스텀은 추가 금액이 없다(3D 모양·크기 등의 가격은 옵션 추가금으로만 들어온다).
+  """
+  custom: CreateOrderCustomInput
+}
+
+"""
+주문 커스텀 입력. 이미지 URL은 모두 createOrderCustomUploadUrl로 올린 본인 파일의 publicUrl이어야 하고(용도가 맞아야 한다),
+한 주문 안에서 같은 파일을 두 번 쓸 수 없다. 아니면 CUSTOM_UPLOAD_INVALID, 발급 뒤 오래돼 정리 중인 파일이면
+CUSTOM_UPLOAD_EXPIRED다. 다른 주문에 이미 쓴 파일도 CUSTOM_UPLOAD_INVALID다.
+"""
+input CreateOrderCustomInput {
+  """슬롯형(바탕 이미지 + 문구 자리) 입력. 슬롯형 상품에서만 보낸다."""
+  slot: CreateOrderSlotCustomInput
+  """3D 입력. 3D 상품에서만 보낸다."""
+  threeD: CreateOrderThreeDCustomInput
+}
+
+"""
+슬롯형 커스텀 입력. 좌표는 바탕 이미지 한 변을 10000으로 본 정수 비율이고 원점은 왼쪽 위다.
+"""
+input CreateOrderSlotCustomInput {
+  """
+  꾸미기를 시작할 때 본 ProductDetail.customTemplate.revision. 그 사이 판매자가 설정을 바꿨으면
+  CUSTOM_TEMPLATE_CHANGED(CONFLICT)이고 다시 꾸며야 한다.
+  """
+  templateRevision: Int!
+  """
+  문구 자리마다 1건(customTemplate.slots 전부, 중복 없이). 빠지거나 남는 자리가 있으면 CUSTOM_SLOT_TEXTS_MISMATCH다.
+  """
+  texts: [CreateOrderSlotTextInput!]!
+  """구매자가 본 그대로의 합성 이미지 URL(바탕 + 문구, 용도 COMPOSITE). 대표 이미지로 저장된다."""
+  compositeImageUrl: String!
+  """
+  자유 편집 요청(customTemplate.freeEditEnabled일 때만, 최대 5건). 규칙을 벗어나면 CUSTOM_FREE_EDIT_INVALID다.
+  """
+  freeEdits: [CreateOrderFreeEditInput!] = []
+}
+
+"""문구 자리 1개의 입력."""
+input CreateOrderSlotTextInput {
+  tokenId: ID!
+  """
+  넣을 문구. 손대지 않았으면 기본 문구를 그대로 보낸다. 줄바꿈(CRLF는 LF로 바꾼다)·이모지를 쓸 수 있고 앞뒤 공백은 지운다.
+  지운 뒤 비었거나 null이면 '문구 없음'이다(필수 자리면 CUSTOM_SLOT_TEXT_REQUIRED). 자리의 maxLength(코드 포인트)를
+  넘으면 CUSTOM_SLOT_TEXT_TOO_LONG이다.
+  """
+  valueText: String
+}
+
+"""자유 편집 요청 1건. 바탕 이미지 위 영역과 설명, 참고 사진이다."""
+input CreateOrderFreeEditInput {
+  """영역 왼쪽 위 x(0~10000)."""
+  posX: Int!
+  """영역 왼쪽 위 y(0~10000)."""
+  posY: Int!
+  """영역 너비(1 이상, posX + width ≤ 10000)."""
+  width: Int!
+  """영역 높이(1 이상, posY + height ≤ 10000)."""
+  height: Int!
+  """요청 설명(앞뒤 공백을 지운 뒤 1~2000자, 줄바꿈 허용)."""
+  descriptionText: String!
+  """참고 사진 URL(용도 REFERENCE, 최대 3장)."""
+  referenceImageUrls: [String!] = []
+}
+
+"""3D 커스텀 입력."""
+input CreateOrderThreeDCustomInput {
+  """
+  3D 디자인(JSON v1). 모양·크기·디자인·맛은 고른 옵션의 threeDKey와 같아야 한다(아니면 CUSTOM_3D_OPTIONS_CHANGED).
+  카탈로그·한도 검증은 customThreeDCatalog를 따른다.
+  """
+  design: ThreeDDesignInput!
+  """
+  렌더 이미지(용도 RENDER). THREE_D_TOP·FRONT·BACK·LEFT·RIGHT 정확히 1장씩이고, 아니면 CUSTOM_RENDER_IMAGES_INVALID다.
+  윗면이 대표 이미지로 저장된다.
+  """
+  renderImages: [CreateOrderRenderImageInput!]!
+}
+
+"""3D 렌더 이미지 1장."""
+input CreateOrderRenderImageInput {
+  """렌더 자세."""
+  kind: CustomImageKindType!
+  """이미지 URL."""
+  imageUrl: String!
+}
+
+"""
+3D 디자인 입력(JSON v1). 저장 형태는 ThreeDDesign이고 같은 좌표계·규칙을 쓴다. 배열 순서가 그리는 순서다.
+"""
+input ThreeDDesignInput {
+  """디자인 JSON 버전. 지금은 1만 받는다(아니면 CUSTOM_3D_SCHEMA_UNSUPPORTED)."""
+  schemaVersion: Int!
+  """모양·크기·디자인·맛·시트 색."""
+  basic: ThreeDDesignBasicInput!
+  """윗면 항목(글자·꾸미기 각 10개까지)."""
+  top: [ThreeDDesignItemInput!]!
+  """옆면 항목(글자·꾸미기 각 10개까지)."""
+  side: [ThreeDDesignItemInput!]!
+}
+
+"""3D 디자인의 케이크 기본값."""
+input ThreeDDesignBasicInput {
+  """모양 선택지 value(고른 모양 옵션의 값)."""
+  shape: String!
+  """크기 선택지 value(고른 크기 옵션의 값)."""
+  size: String!
+  """디자인 선택지 value. 디자인 옵션을 고르지 않았으면 null(장식 없는 시트)."""
+  design: String
+  """맛 선택지 value. 맛 옵션을 고르지 않았으면 null."""
+  flavor: String
+  """시트 색 key(카탈로그 sheetColors)."""
+  sheetColor: String!
+}
+
+"""3D 디자인 항목(글자 또는 꾸미기) 1개."""
+input ThreeDDesignItemInput {
+  """항목 종류."""
+  kind: ThreeDItemKindType!
+  """가로 위치(0~1, ThreeDDesign.top·side 좌표계)."""
+  x: Float!
+  """세로 위치(0~1, ThreeDDesign.top·side 좌표계)."""
+  y: Float!
+  """크기(cqw). 글자 4~30, 꾸미기 8~50."""
+  size: Float!
+  """효과."""
+  effect: ThreeDDesignEffectInput!
+  """글자 내용(TEXT만, 1~30 코드 포인트, 줄바꿈·이모지 허용). DECO는 null."""
+  text: String
+  """글자색(TEXT만, #RRGGBB). DECO는 null."""
+  color: String
+  """꾸미기 key(DECO만, 카탈로그 decos). TEXT는 null."""
+  decoId: String
+}
+
+"""3D 디자인 항목에 건 효과."""
+input ThreeDDesignEffectInput {
+  """효과 key(카탈로그 effects)."""
+  type: String!
+  """효과 강도(0~100 정수)."""
+  intensity: Int!
 }
 
 """주문 생성 결과 요약. 상세는 myOrder로 재조회."""

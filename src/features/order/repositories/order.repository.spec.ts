@@ -975,6 +975,7 @@ describe('OrderRepository (real DB)', () => {
           quantity,
           itemSubtotalPrice: 25000 * quantity,
           options: [],
+          custom: null,
         },
       };
     }
