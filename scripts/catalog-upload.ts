@@ -82,6 +82,7 @@ async function main(): Promise<void> {
         Body: readFileSync(file.path),
         ContentType: file.contentType,
         CacheControl: 'public, max-age=31536000, immutable',
+        IfNoneMatch: '*', // 이미 있으면 412 — Head가 403으로 못 본 객체·동시 업로드도 덮어쓰지 않는다
       }),
     );
     process.stdout.write(`  ${file.key}\n`);
