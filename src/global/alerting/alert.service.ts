@@ -23,6 +23,8 @@ export const ALERT_RETRY_DELAY_MS = 5_000;
 @Injectable()
 export class AlertService {
   private readonly lastSentAt = new Map<string, number>();
+  /** key별 대기 중인 재전송. 억제 창 정리와 따로 두어야 key가 지워져도 묵은 재전송이 되살아나지 않는다 */
+  private readonly pendingRetries = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly config: ConfigService,
@@ -40,6 +42,9 @@ export class AlertService {
     const last = this.lastSentAt.get(key);
     if (last !== undefined && now - last < dedupeWindowMs) return 'suppressed';
 
+    // 같은 key의 새 시도가 묵은 재전송을 대신한다(억제 창이 재전송 간격보다 짧을 때)
+    clearTimeout(this.pendingRetries.get(key));
+    this.pendingRetries.delete(key);
     // 억제 기준은 "보내려 한 시각" — 전송 실패가 폭주로 이어지지 않게 한다
     this.lastSentAt.set(key, now);
     const line = `[alert:${message.level}] ${message.title}`;
@@ -60,7 +65,7 @@ export class AlertService {
           detail: message.detail,
         },
       );
-      this.scheduleRetry(discordWebhookUrl, message, origin, line, key, now);
+      this.scheduleRetry(discordWebhookUrl, message, origin, line, key);
       return 'failed';
     }
     return 'sent';
@@ -83,13 +88,9 @@ export class AlertService {
     origin: Parameters<AlertTransport>[2],
     line: string,
     key: string,
-    attemptedAt: number,
   ): void {
     const timer = setTimeout(() => {
-      // 그 사이 같은 키로 더 새 시도가 있었으면(억제 창이 재전송 간격보다 짧을 때) 묵은 경보는 보내지 않는다.
-      // 창이 지나 key가 지워졌을 뿐이면 새 시도가 없었던 것이다
-      const latest = this.lastSentAt.get(key);
-      if (latest !== undefined && latest !== attemptedAt) return;
+      this.pendingRetries.delete(key);
       void this.transport(url, message, origin).then((ok) => {
         if (!ok) {
           this.logger.warn(`${line} — 재전송도 실패`, {
@@ -99,5 +100,6 @@ export class AlertService {
       });
     }, ALERT_RETRY_DELAY_MS);
     timer.unref();
+    this.pendingRetries.set(key, timer);
   }
 }

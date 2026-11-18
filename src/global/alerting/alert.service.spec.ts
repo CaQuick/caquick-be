@@ -207,6 +207,29 @@ describe('AlertService', () => {
     }
   });
 
+  it('반증: 새 시도가 성공한 뒤 다른 key 알림이 억제 창 정리로 key를 지워도 묵은 경보를 재전송하지 않는다', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        { dedupeWindowMs: 1_000 },
+        jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      );
+      await service.notify({ level: 'error', title: 't', key: 'a' }); // t=0 실패
+      nowMs += 2_000;
+      await jest.advanceTimersByTimeAsync(2_000);
+      await service.notify({ level: 'error', title: 't', key: 'a' }); // t=2s 성공
+      nowMs += 2_000;
+      await jest.advanceTimersByTimeAsync(2_000);
+      await service.notify({ level: 'error', title: 'u', key: 'b' }); // t=4s a 정리
+      expect(trackedKeys(service)).toEqual(['b']);
+
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('반증: 재전송도 실패하면 경고 로그만 남기고 끝난다(억제 창이 지난 다음 발생 때 다시)', async () => {
     jest.useFakeTimers();
     try {
