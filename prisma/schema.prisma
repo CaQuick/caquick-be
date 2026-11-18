@@ -68,6 +68,20 @@ enum CustomImageKind {
   SLOT_COMPOSITE
 }
 
+// 구매자 커스텀 이미지 선업로드 용도(3D 렌더·슬롯형 합성·자유 편집 참고 사진)
+enum OrderCustomUploadPurpose {
+  RENDER
+  COMPOSITE
+  REFERENCE
+}
+
+// 발급(PENDING) → 주문에 쓰임(ATTACHED, 보관) 또는 정리 중(PURGING, 주문에 붙일 수 없다)
+enum OrderCustomUploadStatus {
+  PENDING
+  ATTACHED
+  PURGING
+}
+
 enum OrderStatus {
   SUBMITTED
   CONFIRMED
@@ -1186,6 +1200,27 @@ model OrderItemCustomImage {
 
   @@unique([order_item_id, kind], map: "uk_order_item_custom_image_kind")
   @@map("order_item_custom_image")
+}
+
+// 커스텀 이미지 presign 발급 기록. 주문에 쓰이지 않은 객체는 정리 크론이 S3에서 지우고 행도 지운다(주문된 파일은 보관)
+model OrderCustomUpload {
+  id               BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id       BigInt                   @db.UnsignedBigInt
+  purpose          OrderCustomUploadPurpose
+  object_key       String                   @unique(map: "uk_order_custom_upload_key") @db.VarChar(512)
+  content_type     String                   @db.VarChar(50)
+  content_length   Int                      @db.UnsignedInt
+  status           OrderCustomUploadStatus  @default(PENDING)
+  attached_at      DateTime?                @db.DateTime(3)
+  purge_started_at DateTime?                @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  @@index([status, created_at], map: "idx_order_custom_upload_status_created")
+  @@index([status, purge_started_at], map: "idx_order_custom_upload_status_purge")
+  @@index([account_id], map: "idx_order_custom_upload_account")
+  @@map("order_custom_upload")
 }
 
 // 주문 1건의 결제. 계좌이체는 PENDING으로 만들고 입금 확인(관리자, 후속 연동은 AUTO) 때 CONFIRMED가 된다.

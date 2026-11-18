@@ -6,6 +6,7 @@ import { AuthModule } from '@/features/auth';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -30,6 +31,7 @@ import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subs
 import { OrderAdminAlertConsumer } from '@/features/order/services/order-admin-alert.consumer';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderCustomUploadCleanupScheduler } from '@/features/order/services/order-custom-upload-cleanup.scheduler';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
@@ -68,6 +70,9 @@ import { StoreModule } from '@/features/store';
     OrderSubscriptionResolver,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
+    // 커스텀 이미지 선업로드 기록과 미사용분 정리(worker 크론)
+    OrderCustomUploadRepository,
+    OrderCustomUploadCleanupScheduler,
     // 판매자 주문 관리(목록·상세·상태 변경·거절·취소) — 주문 도메인이 소유한다
     SellerOrderService,
     SellerOrderQueryResolver,

@@ -185,6 +185,13 @@ data "aws_iam_policy_document" "app" {
     actions   = ["s3:PutObject", "s3:GetObject"]
     resources = [for b in aws_s3_bucket.media : "${b.arn}/*"]
   }
+  # 주문에 쓰이지 않은 커스텀 이미지 정리(worker 크론). 다른 접두는 지우지 못한다
+  statement {
+    sid       = "OrderCustomUploadCleanup"
+    effect    = "Allow"
+    actions   = ["s3:DeleteObject"]
+    resources = [for b in aws_s3_bucket.media : "${b.arn}/order-custom/*"]
+  }
 }
 
 resource "aws_iam_policy" "app" {

@@ -2,6 +2,7 @@ import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
@@ -23,6 +24,11 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import { s3TestProviders } from '@/test/storage/s3-test.helper';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
+}));
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -39,6 +45,8 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         OrderCheckoutMutationResolver,
         OrderCheckoutService,
         OrderRepository,
+        OrderCustomUploadRepository,
+        ...s3TestProviders(),
         PaymentSettingRepository,
         ProductRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -113,5 +121,27 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
     });
     expect(saved.account_id).toBe(account.id);
     expect(saved.request_note).toBe('초는 빼 주세요');
+  });
+
+  it('createOrderCustomUploadUrl: 구매자에게 용도별 업로드 URL을 발급하고 기록한다', async () => {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const user = { accountId: account.id.toString() } as JwtUser;
+
+    const result = await resolver.createOrderCustomUploadUrl(
+      user,
+      'COMPOSITE',
+      'image/png',
+      1024,
+    );
+
+    expect(result.key).toMatch(
+      new RegExp(`^order-custom/composites/${account.id}/`),
+    );
+    await expect(
+      prisma.orderCustomUpload.findUniqueOrThrow({
+        where: { object_key: result.key },
+      }),
+    ).resolves.toMatchObject({ account_id: account.id, purpose: 'COMPOSITE' });
   });
 });

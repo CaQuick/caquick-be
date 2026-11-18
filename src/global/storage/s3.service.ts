@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -34,6 +35,13 @@ const CONTENT_TYPE_TO_EXT: Record<string, string> = {
 const IMAGE_HEADER_BYTES = 64 * 1024;
 /** 객체가 없거나(404) 0바이트라 범위를 못 읽는(416) 경우는 장애가 아니라 읽을 수 없는 이미지다. */
 const UNREADABLE_OBJECT_STATUS = new Set([404, 416]);
+/** DeleteObjects 요청 1건의 키 상한. */
+const DELETE_OBJECTS_MAX_KEYS = 1000;
+
+export interface DeleteObjectsFailure {
+  key: string;
+  code: string;
+}
 
 @Injectable()
 export class S3Service {
@@ -168,6 +176,45 @@ export class S3Service {
 
     const full = await this.readObject(key);
     return full === null ? null : measureImage(full.bytes);
+  }
+
+  /**
+   * 이 버킷의 객체를 지운다(요청당 1000개). 없는 객체는 S3가 지운 것으로 답한다. 키별 실패와 요청 자체의 실패를
+   * 모두 실패 목록으로 돌려주고 던지지 않는다 — 호출부가 지워진 키만 골라 기록을 정리한다.
+   */
+  async deleteObjects(
+    keys: readonly string[],
+  ): Promise<DeleteObjectsFailure[]> {
+    const failures: DeleteObjectsFailure[] = [];
+    for (let i = 0; i < keys.length; i += DELETE_OBJECTS_MAX_KEYS) {
+      const chunk = keys.slice(i, i + DELETE_OBJECTS_MAX_KEYS);
+      try {
+        const res = await this.client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        for (const error of res.Errors ?? []) {
+          failures.push({
+            key: error.Key ?? '',
+            code: error.Code ?? 'Unknown',
+          });
+        }
+      } catch (error) {
+        const code = error instanceof Error ? error.name : 'Unknown';
+        this.logger.error('S3 객체 삭제 실패', {
+          bucket: this.bucket,
+          keys: chunk.length,
+          cause:
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error),
+        });
+        failures.push(...chunk.map((key) => ({ key, code })));
+      }
+    }
+    return failures;
   }
 
   private keyOfPublicUrl(url: string): string | null {
