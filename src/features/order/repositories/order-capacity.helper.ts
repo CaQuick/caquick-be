@@ -11,7 +11,8 @@ export interface DailyCapacityGuard {
 /**
  * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다.
  * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
- * forUpdate는 같은 매장·날짜의 동시 주문 생성·픽업 변경을 직렬화한다. excludeOrderId는 픽업을 옮기는 주문 자신의 점유를 뺀다.
+ * forUpdate는 READ COMMITTED tx에서만 같은 매장·날짜의 동시 주문 생성·픽업 변경을 직렬화한다(REPEATABLE READ면 재집계가 잠금 전 스냅샷을 읽는다).
+ * excludeOrderId는 픽업을 옮기는 주문 자신의 점유를 뺀다.
  */
 export async function isDailyCapacityExceeded(
   db: Prisma.TransactionClient,

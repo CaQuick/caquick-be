@@ -309,6 +309,55 @@ describe('SellerOrderPickupService (real DB)', () => {
       expect((await orderRow(order.id)).pickup_at).toEqual(sameDay);
     });
 
+    /**
+     * 이 워커 DB에서 행 잠금을 기다리는 트랜잭션이 생길 때까지.
+     * innodb_trx는 직전 읽기 뒤 100ms가 지나야 캐시를 다시 채우므로 그보다 길게 쉬며 읽는다.
+     */
+    async function waitForLockWait(): Promise<void> {
+      for (let i = 0; i < 50; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const [{ n }] = await prisma.$queryRaw<{ n: bigint }[]>`
+          SELECT COUNT(*) AS n FROM information_schema.innodb_trx t
+          JOIN information_schema.processlist p ON p.id = t.trx_mysql_thread_id
+          WHERE t.trx_state = 'LOCK WAIT' AND p.db = DATABASE()`;
+        if (n > 0) return;
+      }
+      throw new Error('잠금 대기가 관측되지 않았다');
+    }
+
+    it('capacity 잠금을 기다린 픽업 변경은 그사이 커밋된 같은 날 점유까지 세어 초과를 거절한다', async () => {
+      const { account, store } = await openStore();
+      const bookingDate = new Date(Date.UTC(2026, 8, 17));
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: bookingDate,
+        capacity: 2,
+      });
+      await storeOrder(store.id, { pickupAt: NEW_PICKUP_AT });
+      const moving = await storeOrder(store.id);
+      const order = await storeOrder(store.id);
+
+      // 다른 픽업 변경이 9/17 capacity 행을 잡고 주문 하나를 9/17로 옮긴 채(커밋 전) 이 변경이 끼어든다
+      let racing: Promise<unknown> | undefined;
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          SELECT capacity FROM order_store_daily_limit
+          WHERE store_id = ${store.id} AND booking_date = ${bookingDate}
+          FOR UPDATE`;
+        await tx.order.update({
+          where: { id: moving.id },
+          data: { pickup_at: NEW_PICKUP_AT },
+        });
+        racing = reschedule(account.id, order.id);
+        racing.catch(() => undefined);
+        await waitForLockWait();
+      });
+
+      await expect(racing).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+      expect((await orderRow(order.id)).pickup_at).toEqual(PICKUP_AT);
+      expect(await prisma.orderPickupChange.count()).toBe(0);
+    });
+
     it('새 날짜의 제작 수량이 모자라면 PICKUP_NOT_AVAILABLE이다(다른 주문 점유 + 내 수량)', async () => {
       const { account, store } = await openStore();
       await createStoreDailyCapacity(prisma, {
