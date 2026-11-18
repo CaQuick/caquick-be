@@ -15,8 +15,9 @@ extend type Mutation {
   """
   플랫폼 결제 설정을 바꾼다. 보낸 필드만 바꾸고 생략·null인 필드는 그대로 둔다. 수수료율은 바꾼 뒤 생성되는 주문부터 적용된다.
   수수료율이 0~10000bp 밖이면 INVALID_COMMISSION_RATE, 은행 코드가 paymentBanks에 없으면 INVALID_BANK_CODE,
-  계좌번호가 하이픈을 뺀 숫자 8~20자리가 아니면 INVALID_ACCOUNT_NUMBER, 예금주·사유가 비었거나 길면 TEXT_REQUIRED·TEXT_TOO_LONG
-  (모두 BAD_USER_INPUT). 감사 로그(PAYMENT_SETTING)를 남긴다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  계좌번호가 하이픈을 뺀 숫자 8~20자리가 아니면 INVALID_ACCOUNT_NUMBER, 예금주가 비었거나 50자를 넘으면 TEXT_REQUIRED·TEXT_TOO_LONG,
+  사유가 비면 TEXT_REQUIRED, 500자를 넘으면 VALIDATION_FAILED(모두 BAD_USER_INPUT). 감사 로그(PAYMENT_SETTING)를 남긴다.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminUpdatePaymentSetting(
     input: AdminUpdatePaymentSettingInput!
