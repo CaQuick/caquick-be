@@ -1,19 +1,32 @@
 /**
  * 시드 주문 + 아이템 + 상태 히스토리.
  *
- * user1 기준 6건:
+ * user1 기준 11건. o1~o6은 결제 도입 전 주문(결제 기록 없음), o7~o11은 입금 흐름을 거친 주문이다
+ * (결제·환불·입금 기록은 seedPayments가 붙인다):
  *   o1 SUBMITTED  - p1×1
  *   o2 CONFIRMED  - p2×1 + selectedOptions(레귤러)
  *   o3 MADE       - p3×2
  *   o4 PICKED_UP  - p1×1 (리뷰 작성됨 → hasReviewableItem=false, hasMyReview=true)
  *   o5 PICKED_UP  - p4×1 (리뷰 미작성 → hasReviewableItem=true)
  *   o6 CANCELED   - p2×1
+ *   o7 PENDING_PAYMENT - p1×1 (입금 대기, 판매자 비노출)
+ *   o8 NO_SHOW    - p3×1 (정산 확정)
+ *   o9 CANCELED   - p2×1 (확정 뒤 구매자 사정 취소, 부분 환불 20,000원 + 잔액 정산 확정)
+ *   o10 CANCELED  - p1×1 (미입금 자동 취소 뒤 늦은 입금 → 반환 대상)
+ *   o11 SUBMITTED - p1×1 (입금 확인으로 접수, 확정 마감 있음)
  */
 import type { SeededStores } from './stores';
 import type { SeededUser } from './users';
 
 import { buildRegionLabel } from '@/common/utils/region-label';
-import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
+import type {
+  OrderActor,
+  OrderCancelFault,
+  OrderCancelReason,
+  OrderStatus,
+  PrismaClient,
+  Product,
+} from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
 
 /** 주문 시점 썸네일 스냅샷 — 주문 생성 경로와 같은 규칙(활성 첫 이미지). */
@@ -48,6 +61,22 @@ export interface SeededOrders {
   o4OrderItemId: bigint;
   o5PickedUpReviewable: bigint;
   o6Canceled: bigint;
+  o7PendingPayment: bigint;
+  o8NoShow: bigint;
+  o9PartialRefund: bigint;
+  o10UnpaidCanceled: bigint;
+  o11PaidSubmitted: bigint;
+}
+
+interface FlowStep {
+  to: OrderStatus;
+  at: Date;
+  actor: OrderActor;
+  cancel?: {
+    reason: OrderCancelReason;
+    fault?: OrderCancelFault;
+    refundAmount: number;
+  };
 }
 
 export async function seedOrders(
@@ -98,7 +127,12 @@ export async function seedOrders(
       },
       status_histories: {
         create: [
-          { from_status: null, to_status: 'SUBMITTED', changed_at: now },
+          {
+            from_status: null,
+            to_status: 'SUBMITTED',
+            changed_at: now,
+            actor_type: 'BUYER',
+          },
         ],
       },
     },
@@ -126,11 +160,13 @@ export async function seedOrders(
             from_status: null,
             to_status: 'SUBMITTED',
             changed_at: o2SubmittedAt,
+            actor_type: 'BUYER',
           },
           {
             from_status: 'SUBMITTED',
             to_status: 'CONFIRMED',
             changed_at: o2ConfirmedAt,
+            actor_type: 'SELLER',
           },
         ],
       },
@@ -223,16 +259,22 @@ export async function seedOrders(
       },
       status_histories: {
         create: [
-          { to_status: 'SUBMITTED', changed_at: o3Submitted },
+          {
+            to_status: 'SUBMITTED',
+            changed_at: o3Submitted,
+            actor_type: 'BUYER',
+          },
           {
             from_status: 'SUBMITTED',
             to_status: 'CONFIRMED',
             changed_at: o3Confirmed,
+            actor_type: 'SELLER',
           },
           {
             from_status: 'CONFIRMED',
             to_status: 'MADE',
             changed_at: o3Made,
+            actor_type: 'SELLER',
           },
         ],
       },
@@ -261,14 +303,29 @@ export async function seedOrders(
       picked_up_at: o4Picked,
       status_histories: {
         create: [
-          { to_status: 'SUBMITTED', changed_at: o4Sub },
+          {
+            to_status: 'SUBMITTED',
+            changed_at: o4Sub,
+            actor_type: 'BUYER',
+          },
           {
             from_status: 'SUBMITTED',
             to_status: 'CONFIRMED',
             changed_at: o4Conf,
+            actor_type: 'SELLER',
           },
-          { from_status: 'CONFIRMED', to_status: 'MADE', changed_at: o4Made },
-          { from_status: 'MADE', to_status: 'PICKED_UP', changed_at: o4Picked },
+          {
+            from_status: 'CONFIRMED',
+            to_status: 'MADE',
+            changed_at: o4Made,
+            actor_type: 'SELLER',
+          },
+          {
+            from_status: 'MADE',
+            to_status: 'PICKED_UP',
+            changed_at: o4Picked,
+            actor_type: 'SELLER',
+          },
         ],
       },
     },
@@ -337,21 +394,25 @@ export async function seedOrders(
           {
             to_status: 'SUBMITTED',
             changed_at: new Date(now.getTime() - 8 * day),
+            actor_type: 'BUYER',
           },
           {
             from_status: 'SUBMITTED',
             to_status: 'CONFIRMED',
             changed_at: new Date(now.getTime() - 7 * day),
+            actor_type: 'SELLER',
           },
           {
             from_status: 'CONFIRMED',
             to_status: 'MADE',
             changed_at: new Date(now.getTime() - 6 * day),
+            actor_type: 'SELLER',
           },
           {
             from_status: 'MADE',
             to_status: 'PICKED_UP',
             changed_at: o5Picked,
+            actor_type: 'SELLER',
           },
         ],
       },
@@ -392,16 +453,117 @@ export async function seedOrders(
       },
       status_histories: {
         create: [
-          { to_status: 'SUBMITTED', changed_at: o6Sub },
+          {
+            to_status: 'SUBMITTED',
+            changed_at: o6Sub,
+            actor_type: 'BUYER',
+          },
           {
             from_status: 'SUBMITTED',
             to_status: 'CANCELED',
             changed_at: o6Cancel,
+            actor_type: 'SELLER',
+            cancel_reason: 'OTHER',
+            refund_amount: 0,
             note: '재료 수급 불가',
           },
         ],
       },
     },
+  });
+
+  // ── o7~o11: 입금 흐름(입금 대기 → 관리자 입금 확인 → 접수)을 거친 주문 ──
+  const storeAContext = {
+    accountId: user1.id,
+    buyerName,
+    buyerPhone,
+    storeId: storeA.id,
+    storeName: storeA.store_name,
+    regionLabel: regionA,
+  };
+  const hour = 60 * 60 * 1000;
+  const o7 = await createFlowOrder(prisma, {
+    ...storeAContext,
+    orderNumber: 'SEED-O7-PENDING',
+    product: p1,
+    pickupAt: new Date(now.getTime() + 5 * day),
+    steps: [{ to: 'PENDING_PAYMENT', at: now, actor: 'BUYER' }],
+  });
+
+  const o8At = (h: number) => new Date(now.getTime() - 4 * day + h * hour);
+  const o8 = await createFlowOrder(prisma, {
+    ...storeAContext,
+    orderNumber: 'SEED-O8-NOSHOW',
+    product: p3,
+    pickupAt: o8At(72),
+    steps: [
+      { to: 'PENDING_PAYMENT', at: o8At(0), actor: 'BUYER' },
+      { to: 'SUBMITTED', at: o8At(0.5), actor: 'ADMIN' },
+      { to: 'CONFIRMED', at: o8At(2), actor: 'SELLER' },
+      { to: 'MADE', at: o8At(70), actor: 'SELLER' },
+      { to: 'NO_SHOW', at: o8At(74), actor: 'SELLER' },
+    ],
+    // 노쇼는 픽업 완료와 같이 결제액 전체로 정산 확정
+    settlement: { baseAmount: p3.regular_price, at: o8At(74) },
+  });
+
+  const o9At = (h: number) => new Date(now.getTime() - 3 * day + h * hour);
+  const o9Refund = 20000;
+  const o9 = await createFlowOrder(prisma, {
+    ...storeAContext,
+    orderNumber: 'SEED-O9-PARTIAL',
+    product: p2,
+    pickupAt: new Date(now.getTime() + 2 * day),
+    steps: [
+      { to: 'PENDING_PAYMENT', at: o9At(0), actor: 'BUYER' },
+      { to: 'SUBMITTED', at: o9At(0.5), actor: 'ADMIN' },
+      { to: 'CONFIRMED', at: o9At(3), actor: 'SELLER' },
+      {
+        to: 'CANCELED',
+        at: o9At(30),
+        actor: 'SELLER',
+        cancel: {
+          reason: 'BUYER_REQUEST',
+          fault: 'BUYER',
+          refundAmount: o9Refund,
+        },
+      },
+    ],
+    // 구매자 사정 부분 환불은 남은 금액을 취소 시각에 정산 확정
+    settlement: { baseAmount: p2.regular_price - o9Refund, at: o9At(30) },
+  });
+
+  const o10At = (h: number) => new Date(now.getTime() - 2 * day + h * hour);
+  const o10 = await createFlowOrder(prisma, {
+    ...storeAContext,
+    orderNumber: 'SEED-O10-UNPAID',
+    product: p1,
+    pickupAt: new Date(now.getTime() + 1 * day),
+    steps: [
+      { to: 'PENDING_PAYMENT', at: o10At(0), actor: 'BUYER' },
+      {
+        to: 'CANCELED',
+        at: o10At(1),
+        actor: 'SYSTEM',
+        cancel: { reason: 'PAYMENT_NOT_RECEIVED', refundAmount: 0 },
+      },
+    ],
+  });
+
+  const o11At = (h: number) => new Date(now.getTime() - 2 * hour + h * hour);
+  const o11PickupAt = new Date(now.getTime() + 3 * day);
+  const o11 = await createFlowOrder(prisma, {
+    ...storeAContext,
+    orderNumber: 'SEED-O11-PAID',
+    product: p1,
+    pickupAt: o11PickupAt,
+    steps: [
+      { to: 'PENDING_PAYMENT', at: o11At(0), actor: 'BUYER' },
+      { to: 'SUBMITTED', at: o11At(0.5), actor: 'ADMIN' },
+    ],
+    confirmDeadlineAt: new Date(
+      Math.min(o11At(0.5).getTime() + day, o11PickupAt.getTime()),
+    ),
   });
 
   return {
@@ -412,5 +574,107 @@ export async function seedOrders(
     o4OrderItemId: o4Item.id,
     o5PickedUpReviewable: o5.id,
     o6Canceled: o6.id,
+    o7PendingPayment: o7.id,
+    o8NoShow: o8.id,
+    o9PartialRefund: o9.id,
+    o10UnpaidCanceled: o10.id,
+    o11PaidSubmitted: o11.id,
   };
+}
+
+const TIMESTAMP_BY_STATUS: Partial<
+  Record<
+    OrderStatus,
+    'submitted_at' | 'confirmed_at' | 'made_at' | 'canceled_at' | 'no_show_at'
+  >
+> = {
+  SUBMITTED: 'submitted_at',
+  CONFIRMED: 'confirmed_at',
+  MADE: 'made_at',
+  CANCELED: 'canceled_at',
+  NO_SHOW: 'no_show_at',
+};
+
+/** 단일 품목(정가, 수량 1) 주문을 전이 단계대로 만든다. 마지막 단계가 현재 상태다. */
+async function createFlowOrder(
+  prisma: PrismaClient,
+  args: {
+    accountId: bigint;
+    buyerName: string;
+    buyerPhone: string;
+    storeId: bigint;
+    storeName: string;
+    regionLabel: string | null;
+    orderNumber: string;
+    product: Product;
+    pickupAt: Date;
+    steps: FlowStep[];
+    settlement?: { baseAmount: number; at: Date };
+    confirmDeadlineAt?: Date;
+  },
+) {
+  const price = args.product.regular_price;
+  const timestamps = Object.fromEntries(
+    args.steps.flatMap((step) => {
+      const column = TIMESTAMP_BY_STATUS[step.to];
+      return column ? [[column, step.at]] : [];
+    }),
+  );
+  return prisma.order.create({
+    data: {
+      order_number: args.orderNumber,
+      account_id: args.accountId,
+      status: args.steps[args.steps.length - 1].to,
+      pickup_at: args.pickupAt,
+      buyer_name: args.buyerName,
+      buyer_phone: args.buyerPhone,
+      subtotal_price: price,
+      discount_price: 0,
+      total_price: price,
+      created_at: args.steps[0].at,
+      ...timestamps,
+      confirm_deadline_at: args.confirmDeadlineAt ?? null,
+      ...(args.settlement
+        ? {
+            settlement_base_amount: args.settlement.baseAmount,
+            commission_amount: 0,
+            settlement_finalized_at: args.settlement.at,
+          }
+        : {}),
+      items: {
+        create: [
+          {
+            store_id: args.storeId,
+            product_id: args.product.id,
+            product_name_snapshot: args.product.name,
+            store_name_snapshot: args.storeName,
+            store_region_label_snapshot: args.regionLabel,
+            product_thumbnail_url_snapshot: await firstImageUrl(
+              prisma,
+              args.product.id,
+            ),
+            regular_price_snapshot: price,
+            sale_price_snapshot: null,
+            quantity: 1,
+            item_subtotal_price: price,
+          },
+        ],
+      },
+      status_histories: {
+        create: args.steps.map((step, i) => ({
+          from_status: i === 0 ? null : args.steps[i - 1].to,
+          to_status: step.to,
+          changed_at: step.at,
+          actor_type: step.actor,
+          ...(step.cancel
+            ? {
+                cancel_reason: step.cancel.reason,
+                cancel_fault: step.cancel.fault ?? null,
+                refund_amount: step.cancel.refundAmount,
+              }
+            : {}),
+        })),
+      },
+    },
+  });
 }

@@ -273,6 +273,7 @@ describe('SellerOrderService (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date('2026-04-15T10:00:00Z'),
+          actor_type: 'SELLER',
           note: '접수 확정',
         },
       });
@@ -299,6 +300,7 @@ describe('SellerOrderService (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date('2026-04-15T10:00:00Z'),
+          actor_type: 'SELLER',
           deleted_at: new Date(),
         },
       });
@@ -392,8 +394,12 @@ describe('SellerOrderService (real DB)', () => {
         where: { order_id: order.id },
       });
       expect(histories).toHaveLength(1);
-      expect(histories[0].from_status).toBe('SUBMITTED');
-      expect(histories[0].to_status).toBe('CONFIRMED');
+      expect(histories[0]).toMatchObject({
+        from_status: 'SUBMITTED',
+        to_status: 'CONFIRMED',
+        actor_type: 'SELLER',
+        actor_account_id: account.id,
+      });
     });
 
     it('사전 검사 뒤 품목이 삭제돼도 상태는 바뀌고 첫 품목 필드는 null이다', async () => {

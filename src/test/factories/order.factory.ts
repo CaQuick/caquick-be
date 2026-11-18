@@ -4,6 +4,7 @@ import type {
   Order,
   OrderItem,
   OrderStatus,
+  PaymentSetting,
   PrismaClient,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
@@ -24,6 +25,8 @@ export interface OrderOverrides {
   deleted_at?: Date;
   idempotency_key?: string;
   created_at?: Date;
+  /** 미지정 시 PENDING_PAYMENT면 null, 그 밖의 상태는 생성 시각(입금 확인 = 판매자 노출) */
+  submitted_at?: Date | null;
 }
 
 export async function createOrder(
@@ -34,12 +37,13 @@ export async function createOrder(
   const accountId =
     overrides.account_id ??
     (await createAccount(prisma, { account_type: 'USER' })).id;
+  const status = overrides.status ?? 'SUBMITTED';
 
   return prisma.order.create({
     data: {
       account_id: accountId,
       order_number: overrides.order_number ?? `ORD-${Date.now()}-${seq}`,
-      status: overrides.status ?? 'SUBMITTED',
+      status,
       pickup_at: overrides.pickup_at ?? new Date(Date.now() + DAY_MS),
       buyer_name: overrides.buyer_name ?? `Buyer ${seq}`,
       buyer_phone: overrides.buyer_phone ?? '010-0000-0000',
@@ -51,7 +55,42 @@ export async function createOrder(
         : {}),
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
       ...(overrides.created_at ? { created_at: overrides.created_at } : {}),
+      submitted_at:
+        overrides.submitted_at !== undefined
+          ? overrides.submitted_at
+          : status === 'PENDING_PAYMENT'
+            ? null
+            : (overrides.created_at ?? new Date()),
     },
+  });
+}
+
+export type PaymentSettingOverrides = Partial<
+  Pick<
+    PaymentSetting,
+    | 'commission_rate_bps'
+    | 'deposit_bank_code'
+    | 'deposit_account_number'
+    | 'deposit_account_holder'
+  >
+>;
+
+/** 결제 설정 단일 행(id=1). truncateAll이 마이그레이션이 넣은 행까지 지우므로 필요한 spec이 다시 만든다. */
+export async function createPaymentSetting(
+  prisma: PrismaClient,
+  overrides: PaymentSettingOverrides = {},
+): Promise<PaymentSetting> {
+  const data = {
+    commission_rate_bps: 0,
+    deposit_bank_code: '004',
+    deposit_account_number: '12345678901234',
+    deposit_account_holder: '케이퀵',
+    ...overrides,
+  };
+  return prisma.paymentSetting.upsert({
+    where: { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
   });
 }
 

@@ -230,7 +230,12 @@ describe('AdminOrderService (real DB)', () => {
     it('구매자 요약·전체 품목·상태 이력을 준다', async () => {
       const { order, item, buyer } = await orderWithItem();
       await prisma.orderStatusHistory.create({
-        data: { order_id: order.id, from_status: null, to_status: 'SUBMITTED' },
+        data: {
+          order_id: order.id,
+          from_status: null,
+          to_status: 'SUBMITTED',
+          actor_type: 'BUYER',
+        },
       });
 
       const result = await service.adminOrder(await admin(), order.id);
@@ -281,8 +286,12 @@ describe('AdminOrderService (real DB)', () => {
         const history = await prisma.orderStatusHistory.findFirstOrThrow({
           where: { order_id: order.id, to_status: 'CANCELED' },
         });
-        expect(history.from_status).toBe(status);
-        expect(history.note).toBe('[관리자] 가게 사정');
+        expect(history).toMatchObject({
+          from_status: status,
+          actor_type: 'ADMIN',
+          actor_account_id: actor,
+          note: '[관리자] 가게 사정',
+        });
         await drainOutbox(dispatcher);
         const notification = await prisma.notification.findFirstOrThrow({
           where: { order_id: order.id },

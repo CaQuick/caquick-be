@@ -287,6 +287,7 @@ describe('OrderRepository (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date(),
+          actor_type: 'SELLER',
           note: '확정',
         },
       });
@@ -913,6 +914,16 @@ describe('OrderRepository (real DB)', () => {
       const created = await repo.createSubmittedOrder(
         submitArgs({ buyerId: buyer.id, store, product }),
       );
+
+      const history = await prisma.orderStatusHistory.findFirstOrThrow({
+        where: { order_id: created!.id },
+      });
+      expect(history).toMatchObject({
+        from_status: null,
+        to_status: 'SUBMITTED',
+        actor_type: 'BUYER',
+        actor_account_id: buyer.id,
+      });
 
       const events = await prisma.outbox.findMany();
       expect(events).toHaveLength(1);

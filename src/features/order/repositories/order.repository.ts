@@ -10,6 +10,7 @@ import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
   AuditTargetType,
+  OrderActor,
   OrderStatus,
   Prisma,
   type AccountType,
@@ -330,6 +331,8 @@ export class OrderRepository {
             from_status: null,
             to_status: OrderStatus.SUBMITTED,
             changed_at: args.submittedAt,
+            actor_type: OrderActor.BUYER,
+            actor_account_id: args.accountId,
           },
         },
       },
@@ -824,6 +827,8 @@ export class OrderRepository {
           from_status: fromStatus,
           to_status: args.toStatus,
           changed_at: args.now,
+          actor_type: OrderActor.SELLER,
+          actor_account_id: args.actorAccountId,
           note: args.note,
         },
       });
@@ -988,6 +993,8 @@ export class OrderRepository {
           from_status: current.status,
           to_status: OrderStatus.CANCELED,
           changed_at: args.now,
+          actor_type: OrderActor.ADMIN,
+          actor_account_id: args.actorAccountId,
           note: args.note,
         },
       });

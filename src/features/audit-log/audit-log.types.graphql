@@ -62,6 +62,26 @@ enum AuditTargetType {
   검색 진입 화면 키워드 바로가기 칩. 순서 변경은 순서가 바뀐 칩마다 1건씩 남는다.
   """
   SEARCH_KEYWORD_CHIP
+  """
+  플랫폼 결제 설정(수수료율·입금 계좌).
+  """
+  PAYMENT_SETTING
+  """
+  매장 정산 계좌. 기록에는 계좌번호 마스킹 값만 남는다.
+  """
+  SETTLEMENT_ACCOUNT
+  """
+  주간 정산(송금 완료 처리).
+  """
+  SETTLEMENT
+  """
+  환불(완료 처리).
+  """
+  REFUND
+  """
+  입금 기록(반환 연결·주인 모를 입금 종결).
+  """
+  DEPOSIT_RECORD
 }
 
 """

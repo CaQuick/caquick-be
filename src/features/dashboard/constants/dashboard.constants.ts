@@ -16,6 +16,11 @@ export const AUDIT_TARGET_TYPES = [
   'REVIEW_REPORT',
   'NOTIFICATION',
   'SEARCH_KEYWORD_CHIP',
+  'PAYMENT_SETTING',
+  'SETTLEMENT_ACCOUNT',
+  'SETTLEMENT',
+  'REFUND',
+  'DEPOSIT_RECORD',
 ] as const;
 export type AuditTargetTypeValue = (typeof AUDIT_TARGET_TYPES)[number];
 export const AUDIT_ACTION_TYPES = [
