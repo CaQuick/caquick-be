@@ -92,7 +92,7 @@ describe('상품 커스텀 설정 백필 (real DB)', () => {
   }
 
   async function runBackfill(conn: mysql.Connection): Promise<void> {
-    expect(BACKFILL).toHaveLength(8);
+    expect(BACKFILL).toHaveLength(9);
     for (const stmt of BACKFILL) await conn.query(stmt);
   }
 
@@ -220,7 +220,7 @@ describe('상품 커스텀 설정 백필 (real DB)', () => {
     });
   });
 
-  it('좌표가 하나라도 없는 자리는 판매자 앱 기본 배치(템플릿별 활성 순번)로, 있는 자리는 0~10000으로 자른다', async () => {
+  it('좌표가 하나라도 없는 자리는 판매자 앱 기본 배치(템플릿별 활성 순번)로, 있는 자리는 바탕 안으로 자른다', async () => {
     const [p1, p2] = await Promise.all([
       createProduct(prisma),
       createProduct(prisma),
@@ -251,21 +251,61 @@ describe('상품 커스텀 설정 백필 (real DB)', () => {
         templateId: other,
         sortOrder: 9,
       });
+      // 좌표가 다 있는 자리: [입력, 기대]
+      const bounded: Array<
+        [[number, number, number, number], [number, number, number, number]]
+      > = [
+        [
+          [9000, 500, 3000, 0],
+          [9000, 500, 1000, 1],
+        ],
+        [
+          [10000, 10000, 5, 5],
+          [9999, 9999, 1, 1],
+        ],
+        [
+          [100, 200, -3, 400],
+          [100, 200, 1, 400],
+        ],
+        [
+          [0, 0, 10000, 10000],
+          [0, 0, 10000, 10000],
+        ],
+        [
+          [100, 200, 300, 400],
+          [100, 200, 300, 400],
+        ],
+      ];
+      const boundedIds: number[] = [];
+      for (const [area] of bounded) {
+        boundedIds.push(
+          await insertToken(conn, { templateId: other, sortOrder: 10, area }),
+        );
+      }
 
       await runBackfill(conn);
 
       const byId = new Map(
         (await tokens(conn)).map((t) => [
           Number(t.id),
-          [t.pos_x, t.pos_y, t.width, t.height],
+          [t.pos_x, t.pos_y, t.width, t.height] as number[],
         ]),
       );
       expect(byId.get(first)).toEqual([1000, 1000, 8000, 1500]);
-      expect(byId.get(clamped)).toEqual([0, 10000, 300, 10000]);
+      expect(byId.get(clamped)).toEqual([0, 9999, 300, 1]);
       expect(byId.get(partial)).toEqual([1000, 5000, 8000, 1500]);
       expect(byId.get(fourth)).toEqual([1000, 7000, 8000, 1500]);
       expect(byId.get(deleted)).toEqual([1000, 8500, 8000, 1500]);
       expect(byId.get(otherFirst)).toEqual([1000, 1000, 8000, 1500]);
+      expect(boundedIds.map((id) => byId.get(id))).toEqual(
+        bounded.map(([, expected]) => expected),
+      );
+      // 판매자가 좌표를 그대로 두고 저장해도 서버 좌표 검증을 통과한다
+      for (const [x, y, w, h] of byId.values()) {
+        expect(Math.min(x, y)).toBeGreaterThanOrEqual(0);
+        expect(Math.min(w, h)).toBeGreaterThanOrEqual(1);
+        expect(Math.max(x + w, y + h)).toBeLessThanOrEqual(10000);
+      }
       await conn.query(NOT_NULL_AFTER_BACKFILL);
     });
   });

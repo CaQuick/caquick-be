@@ -28,7 +28,9 @@ UPDATE `product_custom_text_token` t JOIN `_custom_text_token_rank` r ON r.`id` 
 SET t.`pos_x` = 1000, t.`pos_y` = LEAST(1000 + r.`idx` * 2000, 8500), t.`width` = 8000, t.`height` = 1500
 WHERE t.`pos_x` IS NULL OR t.`pos_y` IS NULL OR t.`width` IS NULL OR t.`height` IS NULL;
 DROP TEMPORARY TABLE `_custom_text_token_rank`;
-UPDATE `product_custom_text_token` SET `pos_x` = LEAST(GREATEST(`pos_x`, 0), 10000), `pos_y` = LEAST(GREATEST(`pos_y`, 0), 10000), `width` = LEAST(GREATEST(`width`, 0), 10000), `height` = LEAST(GREATEST(`height`, 0), 10000);
+-- 자리는 바탕 안에 둔다(서버 좌표 검증과 같은 범위): 좌표 0~9999, 너비·높이 1 이상, x+w·y+h ≤ 10000
+UPDATE `product_custom_text_token` SET `pos_x` = LEAST(GREATEST(`pos_x`, 0), 9999), `pos_y` = LEAST(GREATEST(`pos_y`, 0), 9999);
+UPDATE `product_custom_text_token` SET `width` = LEAST(GREATEST(`width`, 1), 10000 - `pos_x`), `height` = LEAST(GREATEST(`height`, 1), 10000 - `pos_y`);
 -- end backfill
 
 -- AlterTable
