@@ -6,6 +6,7 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { ORDER_SUBMITTED } from '@/features/order/events/order-submitted.event';
+import { pendingPaymentLockName } from '@/features/order/repositories/order-pending-payment-lock.helper';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
@@ -1534,7 +1535,7 @@ describe('OrderCheckoutService (real DB)', () => {
       const gate = new Promise<void>((resolve) => (release = resolve));
       let locked!: () => void;
       const lockedSignal = new Promise<void>((resolve) => (locked = resolve));
-      const name = `pending-payment:${buyer.id}`;
+      const name = pendingPaymentLockName(buyer.id);
       const holder = prisma.$transaction(
         async (tx) => {
           await tx.$queryRaw`SELECT GET_LOCK(${name}, 0)`;

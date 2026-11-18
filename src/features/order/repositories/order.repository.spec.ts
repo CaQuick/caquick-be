@@ -4,6 +4,10 @@ import { NotificationAdminRepository } from '@/features/notification/repositorie
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import {
+  pendingPaymentLockName,
+  withPendingPaymentLock,
+} from '@/features/order/repositories/order-pending-payment-lock.helper';
+import {
   type CreatePendingPaymentOrderArgs,
   type DailyCapacityGuard,
   OrderRepository,
@@ -1097,9 +1101,40 @@ describe('OrderRepository (real DB)', () => {
         ),
       ).rejects.toMatchObject({ code: 'P2002' });
 
-      const [row] = await prisma.$queryRaw<{ used: unknown }[]>`
-        SELECT IS_USED_LOCK(${`pending-payment:${buyer.id}`}) AS used`;
-      expect(row.used).toBeNull();
+      expect(await lockHolder(buyer.id)).toBeNull();
     });
+
+    it('tx가 timeout으로 만료돼 해제를 보내지 못해도 그 세션을 끊어 계정 잠금이 남지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+
+      await expect(
+        prisma.$transaction(
+          (tx) =>
+            withPendingPaymentLock(tx, prisma, buyer.id, async () => {
+              await tx.$queryRaw`SELECT SLEEP(2)`;
+            }),
+          { timeout: 1_000 },
+        ),
+      ).rejects.toThrow();
+
+      // 끊긴 세션의 잠금 해제는 KILL 응답 직후 비동기로 끝난다.
+      for (let i = 0; i < 20 && (await lockHolder(buyer.id)) !== null; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(await lockHolder(buyer.id)).toBeNull();
+      await expect(
+        repo.createPendingPaymentOrder(
+          createArgs({ buyerId: buyer.id, store, product }),
+        ),
+      ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
+    });
+
+    async function lockHolder(accountId: bigint): Promise<unknown> {
+      const [row] = await prisma.$queryRaw<{ holder: unknown }[]>`
+        SELECT IS_USED_LOCK(${pendingPaymentLockName(accountId)}) AS holder`;
+      return row.holder;
+    }
   });
 });

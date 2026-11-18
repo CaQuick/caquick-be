@@ -283,7 +283,7 @@ export class OrderRepository {
   ): Promise<CreatePendingPaymentOrderResult> {
     return this.prisma.$transaction(
       (tx) =>
-        withPendingPaymentLock(tx, args.accountId, async () => {
+        withPendingPaymentLock(tx, this.prisma, args.accountId, async () => {
           const pending = await countPendingPaymentOrdersLocked(
             tx,
             args.accountId,
