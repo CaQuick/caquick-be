@@ -9,8 +9,9 @@ extend type Mutation {
   createOrder(input: CreateOrderInput!): CreateOrderOutput!
   """
   커스텀 이미지 업로드용 Presigned URL 발급(구매자). uploadUrl로 PUT한 뒤 publicUrl을 주문 생성의 커스텀 입력에 넣는다.
-  JPEG·PNG·WebP, 장당 10MB 이하(아니면 INVALID_CONTENT_TYPE·FILE_TOO_LARGE). 주문에 쓰이지 않은 파일은 발급 하루 뒤 지워진다.
-  구매자 계정만 쓸 수 있다(아니면 USER_ONLY). 로그인 필수.
+  JPEG·PNG·WebP, 장당 1바이트 이상 10MB 이하(아니면 INVALID_CONTENT_TYPE·INVALID_CONTENT_LENGTH·FILE_TOO_LARGE).
+  주문에 쓰이지 않은 파일은 발급 하루 뒤 지워진다. 구매자 계정만 쓸 수 있고(아니면 USER_ONLY), 정지·탈퇴 등으로
+  이용할 수 없는 계정이면 BUYER_ACCOUNT_NOT_ACTIVE다. 로그인 필수.
   """
   createOrderCustomUploadUrl(
     """이미지 용도. 주문 생성 때 이 용도의 자리에만 쓸 수 있다."""
@@ -22,9 +23,7 @@ extend type Mutation {
   ): UploadUrl!
 }
 
-"""
-구매자 커스텀 이미지 업로드 용도. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
-"""
+"""구매자 커스텀 이미지 업로드 용도."""
 enum OrderCustomUploadPurpose {
   """3D 렌더 이미지(윗면·옆면 앞·뒤·좌·우)."""
   RENDER

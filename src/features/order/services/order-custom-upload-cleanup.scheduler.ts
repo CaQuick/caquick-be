@@ -74,7 +74,8 @@ export class OrderCustomUploadCleanupScheduler {
           .map((row) => row.id),
       );
       if (failures.length > 0) {
-        // 남은 행은 PURGING이라 1시간 뒤 정리에서 다시 시도한다. S3 장애면 더 묶음을 잡지 않는다
+        // 남은 행은 PURGING이라 1시간이 지난 뒤의 정리(매시 크론이라 1~2시간 뒤)에서 다시 지운다.
+        // S3 장애일 수 있어 이 틱에서는 더 잡지 않는다
         const codes = [...new Set(failures.map((f) => f.code))].join(', ');
         await this.alerts.notify({
           level: 'error',
