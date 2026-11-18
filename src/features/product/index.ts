@@ -16,6 +16,8 @@ export {
   type ThreeDDesignSource,
   type ThreeDDesignV1,
 } from '@/features/product/services/three-d-design.helper';
+// 주문 상세가 저장된 3D 디자인을 읽을 때 지원하는 JSON 버전.
+export { THREE_D_DESIGN_SCHEMA_VERSION } from '@/features/product/constants/custom-3d-catalog.constants';
 // 상품 카드 1벌. 찜·최근 본 상품(user feature)이 같은 카드를 쓴다.
 export { ProductCardService } from '@/features/product/services/product-card.service';
 export type { ProductCardOutput } from '@/features/product/types/product-card-output.type';

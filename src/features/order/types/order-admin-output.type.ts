@@ -26,6 +26,8 @@ export interface AdminOrderSummaryOutput {
   createdAt: Date;
   firstItemName: string | null;
   firstItemImageUrl: string | null;
+  hasCustom: boolean;
+  firstItemCustomImageUrl: string | null;
 }
 
 export interface AdminStoreInProgressOrderSummaryOutput {

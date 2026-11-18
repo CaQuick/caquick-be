@@ -7,6 +7,7 @@ import { CANCEL_REFUND_RULES } from '@/features/order/policies/order-cancel.poli
 import { THREE_D_OPTION_CATEGORIES } from '@/features/product/constants/custom-3d-catalog.constants';
 import {
   ConversationBodyFormat,
+  CustomImageKind,
   CustomMode,
   CustomTextAlign,
   NotificationEvent,
@@ -90,6 +91,12 @@ const PAIRS: Array<
     Object.values(CustomTextAlign),
     'src/features/product/product.types.graphql',
     'CustomTextAlignType',
+  ],
+  [
+    'CustomImageKind',
+    Object.values(CustomImageKind),
+    'src/features/order/order.types.graphql',
+    'CustomImageKindType',
   ],
   [
     'ThreeDOptionCategory',

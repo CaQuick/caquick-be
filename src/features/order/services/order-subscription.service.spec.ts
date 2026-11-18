@@ -61,6 +61,7 @@ describe('OrderSubscriptionService (real DB)', () => {
     buyerName: '차차',
     totalPrice: 10000,
     productName: '케이크',
+    hasCustom: false,
     updatedAt: '2026-09-16T07:00:00.000Z',
   };
 

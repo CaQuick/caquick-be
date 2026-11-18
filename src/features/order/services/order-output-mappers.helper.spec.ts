@@ -2,12 +2,15 @@ import {
   toOrderCancellation,
   toOrderItemDetail,
   toOrderItemFreeEdit,
+  toOrderListCustomBadge,
   toOrderRefund,
   toOrderStatusHistory,
   type OrderItemDetailRow,
   type OrderStatusHistoryRow,
 } from '@/features/order/services/order-output-mappers.helper';
 import type { Refund } from '@/generated/prisma/client';
+
+const AREA = { pos_x: 1000, pos_y: 2000, width: 8000, height: 1500 };
 
 function itemRow(o: Partial<OrderItemDetailRow> = {}): OrderItemDetailRow {
   return {
@@ -27,19 +30,31 @@ function itemRow(o: Partial<OrderItemDetailRow> = {}): OrderItemDetailRow {
         option_price_delta_snapshot: 1000,
       },
     ],
+    custom_mode_snapshot: 'SLOT',
+    custom_base_image_url_snapshot: 'base.png',
+    custom_preview_image_url: 'composite.png',
+    custom_design: null,
+    custom_images: [
+      { id: 500n, kind: 'SLOT_COMPOSITE', image_url: 'composite.png' },
+    ],
     custom_texts: [
       {
         id: 200n,
-        token_key_snapshot: 'TOP',
+        token_id: 7n,
+        token_key_snapshot: 'top',
+        label_snapshot: '윗줄',
         default_text_snapshot: '축하해',
         value_text: '생일 축하해',
+        ...AREA,
+        text_color: '#1D1D1D',
+        text_align: 'LEFT',
         sort_order: 0,
       },
     ],
     free_edits: [
       {
         id: 300n,
-        crop_image_url: 'crop.png',
+        ...AREA,
         description_text: '여기 하트',
         sort_order: 0,
         attachments: [{ id: 400n, image_url: 'ref.png', sort_order: 0 }],
@@ -63,19 +78,37 @@ describe('order-output-mappers', () => {
       optionItems: [
         { id: '100', groupName: '크기', optionTitle: '2호', priceDelta: 1000 },
       ],
+      customMode: 'SLOT',
+      customPreviewImageUrl: 'composite.png',
+      customBaseImageUrl: 'base.png',
+      customImages: [
+        { id: '500', kind: 'SLOT_COMPOSITE', imageUrl: 'composite.png' },
+      ],
+      threeDDesign: null,
       customTexts: [
         {
           id: '200',
-          tokenKey: 'TOP',
+          tokenId: '7',
+          tokenKey: 'top',
+          label: '윗줄',
           defaultText: '축하해',
           valueText: '생일 축하해',
+          posX: 1000,
+          posY: 2000,
+          width: 8000,
+          height: 1500,
+          textColor: '#1D1D1D',
+          textAlign: 'LEFT',
           sortOrder: 0,
         },
       ],
       freeEdits: [
         {
           id: '300',
-          cropImageUrl: 'crop.png',
+          posX: 1000,
+          posY: 2000,
+          width: 8000,
+          height: 1500,
           descriptionText: '여기 하트',
           sortOrder: 0,
           attachments: [{ id: '400', imageUrl: 'ref.png', sortOrder: 0 }],
@@ -99,18 +132,114 @@ describe('order-output-mappers', () => {
     expect(result.freeEdits).toEqual([]);
   });
 
+  it('커스텀이 없는 품목은 NONE·이미지 없음·디자인 null이다', () => {
+    const result = toOrderItemDetail(
+      itemRow({
+        custom_mode_snapshot: 'NONE',
+        custom_base_image_url_snapshot: null,
+        custom_preview_image_url: null,
+        custom_images: [],
+        custom_texts: [],
+        free_edits: [],
+      }),
+    );
+    expect(result).toMatchObject({
+      customMode: 'NONE',
+      customPreviewImageUrl: null,
+      customBaseImageUrl: null,
+      customImages: [],
+      threeDDesign: null,
+    });
+  });
+
+  it('문구 자리 지정 전 문구는 tokenId null, 지운 선택 자리는 valueText null로 내린다', () => {
+    const [text] = toOrderItemDetail(
+      itemRow({
+        custom_texts: [
+          {
+            ...itemRow().custom_texts[0],
+            token_id: null,
+            value_text: null,
+          },
+        ],
+      }),
+    ).customTexts;
+    expect(text).toMatchObject({ tokenId: null, valueText: null });
+  });
+
+  it('3D 디자인은 저장된 JSON을 출력 형태로 읽는다', () => {
+    const design = {
+      schemaVersion: 1,
+      basic: {
+        shape: 'heart',
+        size: 'mini',
+        design: null,
+        flavor: 'choco',
+        sheetColor: 'white',
+      },
+      top: [
+        {
+          kind: 'TEXT',
+          x: 0.5,
+          y: 0.5,
+          size: 10,
+          effect: { type: 'none', intensity: 50 },
+          text: '축하',
+          color: '#FFFFFF',
+        },
+      ],
+      side: [],
+    };
+    const result = toOrderItemDetail(
+      itemRow({
+        custom_mode_snapshot: 'THREE_D',
+        custom_design: { schema_version: 1, design_json: design },
+      }),
+    );
+    expect(result.threeDDesign).toEqual({
+      ...design,
+      top: [{ ...design.top[0], decoId: null }],
+    });
+  });
+
+  it.each([
+    ['NONE', null, { hasCustom: false, firstItemCustomImageUrl: null }],
+    ['SLOT', 'c.png', { hasCustom: true, firstItemCustomImageUrl: 'c.png' }],
+    ['THREE_D', 't.png', { hasCustom: true, firstItemCustomImageUrl: 't.png' }],
+  ] as const)('toOrderListCustomBadge: %s 품목 → %o', (mode, url, expected) => {
+    expect(
+      toOrderListCustomBadge({
+        custom_mode_snapshot: mode,
+        custom_preview_image_url: url,
+      }),
+    ).toEqual(expected);
+  });
+
+  it('toOrderListCustomBadge: 품목이 없으면 배지 없음', () => {
+    expect(toOrderListCustomBadge(undefined)).toEqual({
+      hasCustom: false,
+      firstItemCustomImageUrl: null,
+    });
+  });
+
   it('toOrderItemFreeEdit: 첨부가 없으면 빈 배열', () => {
     expect(
       toOrderItemFreeEdit({
         id: 1n,
-        crop_image_url: 'c.png',
+        pos_x: 0,
+        pos_y: 0,
+        width: 10000,
+        height: 10000,
         description_text: 'd',
         sort_order: 1,
         attachments: [],
       }),
     ).toEqual({
       id: '1',
-      cropImageUrl: 'c.png',
+      posX: 0,
+      posY: 0,
+      width: 10000,
+      height: 10000,
       descriptionText: 'd',
       sortOrder: 1,
       attachments: [],

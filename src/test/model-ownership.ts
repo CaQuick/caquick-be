@@ -90,6 +90,8 @@ export const MODEL_OWNERSHIP: Readonly<Record<string, ModelOwnership>> = {
   OrderItemCustomText: order([]),
   OrderItemCustomFreeEdit: order([]),
   OrderItemCustomFreeEditAttachment: order([]),
+  OrderItemCustomDesign: order([]),
+  OrderItemCustomImage: order([]),
   Payment: order(),
   Refund: order(),
   DepositRecord: order(),

@@ -46,11 +46,7 @@ export class OrderEventsService {
     if (!firstItem || !row.submitted_at) return;
     await this.publishSellerOrderUpdate(
       firstItem.store_id,
-      toSellerOrderUpdateEvent(
-        'STATUS_CHANGED',
-        row,
-        firstItem.product_name_snapshot,
-      ),
+      toSellerOrderUpdateEvent('STATUS_CHANGED', row),
     );
   }
 

@@ -1,5 +1,8 @@
 import type { BankOutput } from '@/features/order/types/order-payment-output.type';
 import type {
+  CustomImageKind,
+  CustomMode,
+  CustomTextAlign,
   OrderActor,
   OrderCancelFault,
   OrderCancelReason,
@@ -15,11 +18,22 @@ export interface OrderItemOptionOutput {
   priceDelta: number;
 }
 
-export interface OrderItemCustomTextOutput {
+export interface OrderCustomAreaOutput {
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+}
+
+export interface OrderItemCustomTextOutput extends OrderCustomAreaOutput {
   id: string;
+  tokenId: string | null;
   tokenKey: string;
+  label: string;
   defaultText: string;
-  valueText: string;
+  valueText: string | null;
+  textColor: string;
+  textAlign: CustomTextAlign;
   sortOrder: number;
 }
 
@@ -29,12 +43,41 @@ export interface OrderItemFreeEditAttachmentOutput {
   sortOrder: number;
 }
 
-export interface OrderItemFreeEditOutput {
+export interface OrderItemFreeEditOutput extends OrderCustomAreaOutput {
   id: string;
-  cropImageUrl: string;
   descriptionText: string;
   sortOrder: number;
   attachments: OrderItemFreeEditAttachmentOutput[];
+}
+
+export interface OrderItemCustomImageOutput {
+  id: string;
+  kind: CustomImageKind;
+  imageUrl: string;
+}
+
+export interface ThreeDDesignItemOutput {
+  kind: 'TEXT' | 'DECO';
+  x: number;
+  y: number;
+  size: number;
+  effect: { type: string; intensity: number };
+  text: string | null;
+  color: string | null;
+  decoId: string | null;
+}
+
+export interface ThreeDDesignOutput {
+  schemaVersion: number;
+  basic: {
+    shape: string;
+    size: string;
+    design: string | null;
+    flavor: string | null;
+    sheetColor: string;
+  };
+  top: ThreeDDesignItemOutput[];
+  side: ThreeDDesignItemOutput[];
 }
 
 export interface OrderItemDetailOutput {
@@ -47,6 +90,11 @@ export interface OrderItemDetailOutput {
   quantity: number;
   itemSubtotalPrice: number;
   optionItems: OrderItemOptionOutput[];
+  customMode: CustomMode;
+  customPreviewImageUrl: string | null;
+  customBaseImageUrl: string | null;
+  customImages: OrderItemCustomImageOutput[];
+  threeDDesign: ThreeDDesignOutput | null;
   customTexts: OrderItemCustomTextOutput[];
   freeEdits: OrderItemFreeEditOutput[];
 }

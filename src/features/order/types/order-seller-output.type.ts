@@ -16,6 +16,8 @@ export interface SellerOrderSummaryOutput {
   createdAt: Date;
   firstItemName: string | null;
   firstItemImageUrl: string | null;
+  hasCustom: boolean;
+  firstItemCustomImageUrl: string | null;
 }
 
 export interface SellerOrderDetailOutput {
@@ -57,5 +59,6 @@ export interface SellerOrderUpdateEvent {
   buyerName: string;
   totalPrice: number;
   productName: string;
+  hasCustom: boolean;
   updatedAt: string;
 }

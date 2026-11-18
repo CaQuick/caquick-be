@@ -151,6 +151,37 @@ describe('resetSeedScope (real DB)', () => {
     ).not.toBeNull();
   });
 
+  it('시드 주문과 시드 상품을 산 외부 주문에 커스텀 디자인·이미지가 붙어도 정리하고 다시 시드한다', async () => {
+    await seedThroughReviews();
+    const seedProduct = await prisma.product.findFirstOrThrow({
+      where: { store: { store_name: { startsWith: SEED_STORE_NAME_PREFIX } } },
+    });
+    const { item } = await outsiderOrder(seedProduct.id);
+    await prisma.orderItemCustomDesign.create({
+      data: { order_item_id: item.id, schema_version: 1, design_json: {} },
+    });
+    await prisma.orderItemCustomImage.create({
+      data: {
+        order_item_id: item.id,
+        kind: 'THREE_D_TOP',
+        image_url: 'https://img/top.png',
+      },
+    });
+    const counts = () =>
+      Promise.all([
+        prisma.orderItemCustomDesign.count(),
+        prisma.orderItemCustomImage.count(),
+      ]);
+    // 시드도 슬롯형 합성 이미지를 2장 넣는다
+    expect(await counts()).toEqual([1, 3]);
+
+    await resetSeedScope(prisma);
+    expect(await counts()).toEqual([0, 0]);
+
+    await seedThroughReviews();
+    expect(await counts()).toEqual([0, 2]);
+  });
+
   it('시드 밖 계정이 시드 밖 매장에 넣은 주문은 남긴다', async () => {
     await seedThroughReviews();
     const { order, item } = await outsiderOrder();

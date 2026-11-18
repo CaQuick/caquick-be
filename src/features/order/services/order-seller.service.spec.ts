@@ -21,6 +21,7 @@ import {
   createOrderItem,
   createPayment,
   createProduct,
+  createThreeDOrderItemCustom,
   setupSellerWithStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -191,6 +192,30 @@ describe('SellerOrderService (real DB)', () => {
       const result = await service.sellerOrderList(account.id);
       expect(result.items[0].firstItemName).toBe('활성 품목');
     });
+
+    it.each([
+      ['3D', 'THREE_D', 'https://img/top.png', true],
+      ['슬롯형', 'SLOT', 'https://img/composite.png', true],
+      ['커스텀 없음', 'NONE', null, false],
+    ] as const)(
+      '%s 첫 품목이면 커스텀 배지·대표 이미지를 싣는다',
+      async (_case, mode, url, hasCustom) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createOrder(prisma);
+        await createOrderItem(prisma, {
+          order_id: order.id,
+          store_id: store.id,
+          custom_mode_snapshot: mode,
+          custom_preview_image_url: url,
+        });
+
+        const result = await service.sellerOrderList(account.id);
+        expect(result.items[0]).toMatchObject({
+          hasCustom,
+          firstItemCustomImageUrl: url,
+        });
+      },
+    );
 
     it('썸네일 스냅샷이 없으면 firstItemImageUrl은 null', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
@@ -400,6 +425,28 @@ describe('SellerOrderService (real DB)', () => {
         refundAmount: 0,
         refundStatus: null,
       });
+    });
+
+    it('상세 품목에 렌더 이미지(종류 순)·3D 디자인을 싣는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createOrder(prisma);
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        store_id: store.id,
+        custom_mode_snapshot: 'THREE_D',
+      });
+      await createThreeDOrderItemCustom(prisma, item.id);
+
+      const [detail] = (await service.sellerOrder(account.id, order.id)).items;
+      expect(detail.customMode).toBe('THREE_D');
+      expect(detail.threeDDesign?.basic.shape).toBe('heart');
+      expect(detail.customImages.map((i) => i.imageUrl)).toEqual([
+        'https://img/THREE_D_TOP.png',
+        'https://img/THREE_D_FRONT.png',
+        'https://img/THREE_D_BACK.png',
+        'https://img/THREE_D_LEFT.png',
+        'https://img/THREE_D_RIGHT.png',
+      ]);
     });
 
     it('결제가 있으면 결제 수단을 준다', async () => {
@@ -884,13 +931,14 @@ describe('SellerOrderService (real DB)', () => {
   });
 
   describe('sellerOrderUpdated 발행', () => {
-    it('상태 변경 시 매장 토픽에 1건 — 첫 품목 상품명과 갱신된 updated_at을 싣는다', async () => {
+    it('상태 변경 시 매장 토픽에 1건 — 첫 품목 상품명·커스텀 여부와 갱신된 updated_at을 싣는다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createOrder(prisma);
       await createOrderItem(prisma, {
         order_id: order.id,
         store_id: store.id,
         product_name_snapshot: '확정 품목',
+        custom_mode_snapshot: 'THREE_D',
       });
       const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
 
@@ -913,6 +961,7 @@ describe('SellerOrderService (real DB)', () => {
           buyerName: order.buyer_name,
           totalPrice: order.total_price,
           productName: '확정 품목',
+          hasCustom: true,
           updatedAt: row.updated_at.toISOString(),
         },
       ]);

@@ -25,6 +25,7 @@ import {
   createOrderItem,
   createPayment,
   createStore,
+  createThreeDOrderItemCustom,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -247,7 +248,42 @@ describe('AdminOrderService (real DB)', () => {
         storeName: null,
         firstItemName: null,
         firstItemImageUrl: null,
+        hasCustom: false,
+        firstItemCustomImageUrl: null,
       });
+    });
+
+    it('커스텀 첫 품목이면 목록에 배지·대표 이미지를, 상세에 렌더·디자인을 싣는다', async () => {
+      const order = await createOrder(prisma);
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        custom_mode_snapshot: 'THREE_D',
+        custom_preview_image_url: 'https://img/THREE_D_TOP.png',
+      });
+      await createThreeDOrderItemCustom(prisma, item.id);
+      const plain = await createOrder(prisma);
+      await createOrderItem(prisma, { order_id: plain.id });
+      const adminId = await admin();
+
+      const list = await service.adminOrders(adminId);
+      const byId = new Map(list.items.map((o) => [o.id, o]));
+      expect(byId.get(order.id.toString())).toMatchObject({
+        hasCustom: true,
+        firstItemCustomImageUrl: 'https://img/THREE_D_TOP.png',
+      });
+      expect(byId.get(plain.id.toString())).toMatchObject({
+        hasCustom: false,
+        firstItemCustomImageUrl: null,
+      });
+      const [detail] = (await service.adminOrder(adminId, order.id)).items;
+      expect(detail.customImages.map((i) => i.kind)).toEqual([
+        'THREE_D_TOP',
+        'THREE_D_FRONT',
+        'THREE_D_BACK',
+        'THREE_D_LEFT',
+        'THREE_D_RIGHT',
+      ]);
+      expect(detail.threeDDesign?.schemaVersion).toBe(1);
     });
   });
 
@@ -861,6 +897,7 @@ describe('AdminOrderService (real DB)', () => {
           buyerName: order.buyer_name,
           totalPrice: order.total_price,
           productName: 'Product snapshot',
+          hasCustom: false,
           updatedAt: row.updated_at.toISOString(),
         },
       ]);

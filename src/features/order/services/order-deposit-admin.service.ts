@@ -126,11 +126,7 @@ export class AdminDepositService extends AdminBaseService {
     if (firstItem) {
       await this.events.publishSellerOrderUpdate(
         firstItem.store_id,
-        toSellerOrderUpdateEvent(
-          'SUBMITTED',
-          updated,
-          firstItem.product_name_snapshot,
-        ),
+        toSellerOrderUpdateEvent('SUBMITTED', updated),
       );
     }
     return toAdminOrderSummaryOutput(updated);
