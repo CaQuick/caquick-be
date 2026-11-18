@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  S3ServiceException,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { imageSize } from 'image-size';
 
 import { DomainException } from '@/common/errors/error-catalog';
 import type { S3Config } from '@/config/s3.config';
@@ -12,6 +18,7 @@ import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 import type {
   CreateUploadUrlInput,
   CreateUploadUrlOutput,
+  ImageDimensions,
   UploadPurpose,
 } from '@/global/storage/types/storage.types';
 
@@ -22,6 +29,11 @@ const CONTENT_TYPE_TO_EXT: Record<string, string> = {
   'video/mp4': '.mp4',
   'video/quicktime': '.mov',
 };
+
+/** 크기 헤더는 대개 앞부분에 있다. JPEG은 EXIF·ICC 세그먼트가 길면 SOF가 이보다 뒤에 올 수 있어 전체를 다시 읽는다. */
+const IMAGE_HEADER_BYTES = 64 * 1024;
+/** 객체가 없거나(404) 0바이트라 범위를 못 읽는(416) 경우는 장애가 아니라 읽을 수 없는 이미지다. */
+const UNREADABLE_OBJECT_STATUS = new Set([404, 416]);
 
 @Injectable()
 export class S3Service {
@@ -138,6 +150,80 @@ export class S3Service {
     );
   }
 
+  /**
+   * 이 버킷의 공개 URL이 가리키는 이미지의 가로·세로(px)를 헤더만 읽어 구한다. 이미지가 아니거나 객체가 없으면 null,
+   * S3 호출 자체가 실패하면 S3_READ_FAILED다. 호출부가 URL 소유를 먼저 검증한다(403을 없는 객체로 보는 전제).
+   */
+  async readImageSize(url: string): Promise<ImageDimensions | null> {
+    const key = this.keyOfPublicUrl(url);
+    if (key === null) return null;
+
+    const head = await this.readObject(
+      key,
+      `bytes=0-${IMAGE_HEADER_BYTES - 1}`,
+    );
+    if (head === null) return null;
+    const size = measureImage(head.bytes);
+    if (size !== null || head.bytes.length >= head.totalBytes) return size;
+
+    const full = await this.readObject(key);
+    return full === null ? null : measureImage(full.bytes);
+  }
+
+  private keyOfPublicUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const expectedHost = `${this.bucket}.s3.${this.region}.amazonaws.com`;
+      return parsed.host === expectedHost
+        ? decodeURIComponent(parsed.pathname.slice(1))
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readObject(
+    key: string,
+    range?: string,
+  ): Promise<{ bytes: Uint8Array; totalBytes: number } | null> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: range }),
+      );
+      const bytes =
+        (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+      // ContentRange: "bytes 0-65535/1234567" — 범위 요청이 아니면 받은 바이트가 전체다
+      const total = Number(res.ContentRange?.split('/')[1]);
+      return {
+        bytes,
+        totalBytes: Number.isFinite(total) ? total : bytes.length,
+      };
+    } catch (error) {
+      if (error instanceof S3ServiceException) {
+        const status = error.$metadata.httpStatusCode ?? 0;
+        if (UNREADABLE_OBJECT_STATUS.has(status)) return null;
+        // 앱에 ListBucket 권한이 없어 S3는 없는 키를 404 대신 403 AccessDenied로 준다.
+        // 권한이 빠진 경우와 구별할 수 없어 경고는 남긴다.
+        if (status === 403 && error.name === 'AccessDenied') {
+          this.logger.warn('S3 객체 접근 거부 — 없는 객체로 본다', {
+            bucket: this.bucket,
+            key,
+          });
+          return null;
+        }
+      }
+      this.logger.error('S3 객체 읽기 실패', {
+        bucket: this.bucket,
+        key,
+        cause:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error),
+      });
+      throw new DomainException('S3_READ_FAILED');
+    }
+  }
+
   private validateContentType(
     contentType: string,
     allowedTypes: readonly string[],
@@ -175,5 +261,14 @@ export class S3Service {
 
   private buildPublicUrl(key: string): string {
     return `https://${this.bucket}.s3.${this.region}.amazonaws.com/${key}`;
+  }
+}
+
+function measureImage(bytes: Uint8Array): ImageDimensions | null {
+  try {
+    const { width, height } = imageSize(bytes);
+    return width > 0 && height > 0 ? { width, height } : null;
+  } catch {
+    return null;
   }
 }

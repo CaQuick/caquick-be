@@ -138,6 +138,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '업로드 URL 생성에 실패했습니다.',
   },
+  S3_READ_FAILED: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '이미지를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+  },
   INVALID_PROFILE_IMAGE_URL: {
     status: HttpStatus.BAD_REQUEST,
     message: '업로드 URL로 발급된 프로필 이미지 URL만 저장할 수 있습니다.',
@@ -482,6 +486,14 @@ export const ERROR_CATALOG = {
   INVALID_COLOR_FORMAT: {
     status: HttpStatus.BAD_REQUEST,
     message: '글자색은 #RRGGBB 형식으로 입력해 주세요.',
+  },
+  CUSTOM_BASE_IMAGE_NOT_SQUARE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '바탕 이미지는 정사각형(1:1)이어야 해요.',
+  },
+  CUSTOM_BASE_IMAGE_UNREADABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '바탕 이미지를 읽을 수 없어요. 이미지를 다시 올려 주세요.',
   },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,

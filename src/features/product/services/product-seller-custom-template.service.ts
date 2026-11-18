@@ -8,6 +8,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
+  BASE_IMAGE_SQUARE_TOLERANCE_PX,
   CUSTOM_AREA_SCALE,
   DEFAULT_TOKEN_MAX_LENGTH,
   MAX_TOKEN_DEFAULT_TEXT_LENGTH,
@@ -90,7 +91,7 @@ export class SellerCustomTemplateService extends SellerBaseService {
   ): Promise<SellerCustomTemplateOutput> {
     const ctx = await this.requireSellerContext(accountId);
     const productId = parseId(input.productId);
-    await this.requireOwnProduct(productId, ctx.storeId);
+    const product = await this.requireOwnProduct(productId, ctx.storeId);
 
     const baseImageUrl = cleanRequiredText(input.baseImageUrl, MAX_URL_LENGTH);
     assertOwnedUploadUrl(
@@ -100,6 +101,10 @@ export class SellerCustomTemplateService extends SellerBaseService {
       ctx.accountId,
       'INVALID_IMAGE_URL',
     );
+    // 검증해 저장한 바탕은 다시 읽지 않는다 — 자유 편집만 바꿀 때 S3를 타지 않게
+    if (product.custom_template?.base_image_url !== baseImageUrl) {
+      await this.assertSquareBaseImage(baseImageUrl);
+    }
 
     const row = await this.productRepository.upsertProductCustomTemplate(
       {
@@ -290,6 +295,15 @@ export class SellerCustomTemplateService extends SellerBaseService {
       });
     if (!product) throw new DomainException('PRODUCT_NOT_FOUND');
     return product;
+  }
+
+  /** 문구 자리 좌표는 정사각 바탕을 전제로 한 비율이라 1:1을 서버가 강제한다. */
+  private async assertSquareBaseImage(url: string): Promise<void> {
+    const size = await this.s3.readImageSize(url);
+    if (!size) throw new DomainException('CUSTOM_BASE_IMAGE_UNREADABLE');
+    if (Math.abs(size.width - size.height) > BASE_IMAGE_SQUARE_TOLERANCE_PX) {
+      throw new DomainException('CUSTOM_BASE_IMAGE_NOT_SQUARE');
+    }
   }
 }
 

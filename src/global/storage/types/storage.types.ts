@@ -25,3 +25,8 @@ export interface UploadPolicy {
   maxSizeBytes: number;
   allowedContentTypes: readonly string[];
 }
+
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}

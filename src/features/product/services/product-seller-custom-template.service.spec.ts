@@ -1,3 +1,4 @@
+import { DomainException } from '@/common/errors/error-catalog';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -5,6 +6,7 @@ import { SellerCustomTemplateService } from '@/features/product/services/product
 import type { SellerCustomTextTokenOutput } from '@/features/product/types/product-seller-output.type';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -23,6 +25,7 @@ import {
 describe('SellerCustomTemplateService (real DB)', () => {
   let service: SellerCustomTemplateService;
   let prisma: PrismaClient;
+  let readImageSize: jest.SpyInstance;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -39,6 +42,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
     });
     service = module.get(SellerCustomTemplateService);
     prisma = p;
+    // 바탕 이미지 읽기는 S3 네트워크 호출이라 결과만 주입한다(읽기 자체는 S3Service spec이 본다)
+    readImageSize = jest.spyOn(module.get(S3Service), 'readImageSize');
   });
 
   afterAll(async () => {
@@ -48,6 +53,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    readImageSize.mockReset();
+    readImageSize.mockResolvedValue({ width: 1000, height: 1000 });
   });
 
   async function setupSellerWithProduct(): Promise<{
@@ -310,6 +317,83 @@ describe('SellerCustomTemplateService (real DB)', () => {
       );
 
       expect(result.textTokens.map((t) => t.id)).toEqual([live.id.toString()]);
+    });
+
+    describe('바탕 이미지 1:1', () => {
+      it.each([
+        ['정사각', 1000, 1000, null],
+        ['가로가 1px 길다', 1001, 1000, null],
+        ['세로가 1px 길다', 1000, 1001, null],
+        ['가로가 2px 길다', 1002, 1000, 'CUSTOM_BASE_IMAGE_NOT_SQUARE'],
+        ['세로로 길다', 800, 1000, 'CUSTOM_BASE_IMAGE_NOT_SQUARE'],
+      ] as const)('%s(%i×%i)', async (_label, width, height, error) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockResolvedValue({ width, height });
+        const upsert = service.sellerUpsertProductCustomTemplate(accountId, {
+          productId: product.id.toString(),
+          baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+        });
+
+        if (error) await expect(upsert).rejects.toThrowDomain(error);
+        else await expect(upsert).resolves.toBeDefined();
+        expect(
+          await prisma.productCustomTemplate.count({
+            where: { product_id: product.id },
+          }),
+        ).toBe(error ? 0 : 1);
+      });
+
+      it('이미지로 읽을 수 없으면 CUSTOM_BASE_IMAGE_UNREADABLE', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockResolvedValue(null);
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+          }),
+        ).rejects.toThrowDomain('CUSTOM_BASE_IMAGE_UNREADABLE');
+      });
+
+      it('저장소를 읽지 못하면 503(S3_READ_FAILED)을 그대로 낸다', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockRejectedValue(new DomainException('S3_READ_FAILED'));
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+          }),
+        ).rejects.toThrowDomain(503);
+      });
+
+      it('바탕 URL이 그대로면 다시 읽지 않고, 바뀔 때만 읽는다', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const kept = ownedUploadUrl('PRODUCT_IMAGE', accountId, 'kept.png');
+        await createCustomTemplate(prisma, {
+          product_id: product.id,
+          base_image_url: kept,
+        });
+        readImageSize.mockResolvedValue({ width: 300, height: 1000 });
+
+        const result = await service.sellerUpsertProductCustomTemplate(
+          accountId,
+          {
+            productId: product.id.toString(),
+            baseImageUrl: kept,
+            freeEditEnabled: true,
+          },
+        );
+        expect(result.freeEditEnabled).toBe(true);
+        expect(readImageSize).not.toHaveBeenCalled();
+
+        const changed = ownedUploadUrl('PRODUCT_IMAGE', accountId, 'new.png');
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: changed,
+          }),
+        ).rejects.toThrowDomain('CUSTOM_BASE_IMAGE_NOT_SQUARE');
+        expect(readImageSize).toHaveBeenCalledWith(changed);
+      });
     });
   });
 
@@ -843,6 +927,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
             baseImageUrl: url(accountId),
           }),
         ).rejects.toThrowDomain('INVALID_IMAGE_URL');
+        expect(readImageSize).not.toHaveBeenCalled();
       },
     );
   });

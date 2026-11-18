@@ -31,6 +31,8 @@ export const TOKEN_MAX_LENGTH_RANGE = { min: 1, max: 50 } as const;
 export const DEFAULT_TEXT_COLOR = '#000000';
 /** 바탕 이미지 한 변을 이 값으로 본 정수 비율이 문구 자리 좌표다(원점 왼쪽 위). */
 export const CUSTOM_AREA_SCALE = 10_000;
+/** 바탕 이미지 가로·세로 차이 허용치(px). 크롭·축소 반올림 오차만 받는다. */
+export const BASE_IMAGE_SQUARE_TOLERANCE_PX = 1;
 
 // ── 태그 검색 ──
 

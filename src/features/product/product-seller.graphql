@@ -126,6 +126,8 @@ extend type Mutation {
   ): SellerProduct!
   """
   상품 커스텀 템플릿(슬롯형 바탕)을 등록 또는 수정한다. 수정하면 revision이 1 오른다.
+  바탕 이미지가 바뀔 때만 서버가 이미지를 읽어 정사각(가로·세로 차이 1px 이하)인지 확인한다:
+  아니면 CUSTOM_BASE_IMAGE_NOT_SQUARE, 이미지로 읽을 수 없으면 CUSTOM_BASE_IMAGE_UNREADABLE, 저장소를 읽지 못하면 S3_READ_FAILED(503).
   판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerUpsertProductCustomTemplate(
