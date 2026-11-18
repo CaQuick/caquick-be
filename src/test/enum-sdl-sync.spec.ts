@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { Kind, parse, print, visit } from 'graphql';
 
+import { CANCEL_REFUND_RULES } from '@/features/order/policies/order-cancel.policy';
 import { THREE_D_OPTION_CATEGORIES } from '@/features/product/constants/custom-3d-catalog.constants';
 import {
   ConversationBodyFormat,
@@ -10,7 +11,11 @@ import {
   CustomTextAlign,
   NotificationEvent,
   OrderActor,
+  OrderCancelFault,
+  OrderCancelReason,
   OrderStatus,
+  RefundKind,
+  RefundStatus,
 } from '@/generated/prisma/client';
 
 /**
@@ -43,6 +48,36 @@ const PAIRS: Array<
     Object.values(OrderActor),
     'src/features/order/order.types.graphql',
     'OrderActorType',
+  ],
+  [
+    'OrderCancelReason',
+    Object.values(OrderCancelReason),
+    'src/features/order/order.types.graphql',
+    'OrderCancelReasonType',
+  ],
+  [
+    'OrderCancelFault',
+    Object.values(OrderCancelFault),
+    'src/features/order/order.types.graphql',
+    'OrderCancelFaultType',
+  ],
+  [
+    'CancelRefundRule',
+    [...CANCEL_REFUND_RULES],
+    'src/features/order/order.types.graphql',
+    'CancelRefundRuleType',
+  ],
+  [
+    'RefundKind',
+    Object.values(RefundKind),
+    'src/features/order/order.types.graphql',
+    'RefundKindType',
+  ],
+  [
+    'RefundStatus',
+    Object.values(RefundStatus),
+    'src/features/order/order.types.graphql',
+    'RefundStatusType',
   ],
   [
     'CustomMode',

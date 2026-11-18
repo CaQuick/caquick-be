@@ -27,6 +27,7 @@ export interface OrderOverrides {
   deleted_at?: Date;
   idempotency_key?: string;
   created_at?: Date;
+  commission_rate_bps?: number;
   /** 미지정 시 PENDING_PAYMENT면 null, 그 밖의 상태는 생성 시각(입금 확인 = 판매자 노출) */
   submitted_at?: Date | null;
 }
@@ -57,6 +58,9 @@ export async function createOrder(
         : {}),
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
       ...(overrides.created_at ? { created_at: overrides.created_at } : {}),
+      ...(overrides.commission_rate_bps !== undefined
+        ? { commission_rate_bps: overrides.commission_rate_bps }
+        : {}),
       submitted_at:
         overrides.submitted_at !== undefined
           ? overrides.submitted_at

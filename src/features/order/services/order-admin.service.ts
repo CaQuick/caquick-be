@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
+import { ClockService } from '@/common/providers/clock.service';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -8,34 +10,36 @@ import {
   normalizeCursorInput,
   sliceIdCursorPage,
 } from '@/common/utils/pagination';
-import { cleanRequiredText } from '@/common/utils/text-cleaner';
+import { cleanNullableText } from '@/common/utils/text-cleaner';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
-import {
-  ADMIN_CANCEL_NOTE_PREFIX,
-  MAX_ADMIN_CANCEL_NOTE_LENGTH,
-} from '@/features/order/constants/order-admin.constants';
 import type { AdminCancelOrderInput } from '@/features/order/dto/inputs/admin-cancel-order.input';
 import type { AdminOrderListInput } from '@/features/order/dto/inputs/admin-order-list.input';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { confirmedPaidAmount } from '@/features/order/repositories/order-settlement-finalizer.helper';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
+import {
+  OrderRepository,
+  type AdminOrderDetailRow,
+} from '@/features/order/repositories/order.repository';
 import {
   toAdminOrderDetailOutput,
   toAdminOrderSummaryOutput,
 } from '@/features/order/services/order-admin-mappers.helper';
-import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import type {
+  AdminOrderCancelOptionsOutput,
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
   AdminStoreInProgressOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
-import { OrderStatus } from '@/generated/prisma/client';
+import { OrderActor } from '@/generated/prisma/client';
 
-/** 전이 규칙은 판매자와 같은 OrderStatusTransitionPolicy가 단일 소스이고, 저장·이력·알림·감사는 order feature의 repository가 한 트랜잭션에서 처리한다. */
+/** 취소 규칙은 OrderCancelPolicy가 단일 소스이고, 저장·이력·환불·알림·감사는 OrderTransitionRepository가 한 트랜잭션에서 처리한다. */
 @Injectable()
 export class AdminOrderService extends AdminBaseService {
   constructor(
@@ -44,7 +48,10 @@ export class AdminOrderService extends AdminBaseService {
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly statusPolicy: OrderStatusTransitionPolicy,
+    private readonly cancelPolicy: OrderCancelPolicy,
+    private readonly transitions: OrderTransitionRepository,
     private readonly events: OrderEventsService,
+    private readonly clock: ClockService,
   ) {
     super(accounts, auditLogs);
   }
@@ -88,7 +95,21 @@ export class AdminOrderService extends AdminBaseService {
     await this.requireAdminContext(accountId);
     const row = await this.orderRepository.findOrderDetailForAdmin(orderId);
     if (!row) throw new DomainException('ORDER_NOT_FOUND');
-    return toAdminOrderDetailOutput(row);
+    return toAdminOrderDetailOutput(row, this.cancelOptionsOf(row));
+  }
+
+  /** 관리자 FE 취소 다이얼로그가 규칙을 복제하지 않도록 지금 상태의 선택지를 내려 준다. */
+  private cancelOptionsOf(
+    row: AdminOrderDetailRow,
+  ): AdminOrderCancelOptionsOutput {
+    const reasons = this.cancelPolicy.reasonsFor(OrderActor.ADMIN, row.status);
+    return {
+      cancelable: reasons.length > 0,
+      reasons: [...reasons],
+      refundRule:
+        reasons.length > 0 ? this.cancelPolicy.refundRule(row.status) : null,
+      paidAmount: confirmedPaidAmount(row.payment),
+    };
   }
 
   /** 정지·숨김 전 경고용. 매장 존재는 보지 않는다(없는 매장은 0건). */
@@ -111,60 +132,26 @@ export class AdminOrderService extends AdminBaseService {
     input: AdminCancelOrderInput,
   ): Promise<AdminOrderSummaryOutput> {
     const ctx = await this.requireAdminContext(accountId);
-    const note = cleanRequiredText(input.note, MAX_ADMIN_CANCEL_NOTE_LENGTH);
-    // 사전 검사는 빠른 거절용 — 최종 판정은 repository가 잠금 뒤 트랜잭션 안에서 다시 한다
-    const current = await this.orderRepository.findOrderDetailForAdmin(
-      parseId(input.orderId),
-    );
-    if (!current) throw new DomainException('ORDER_NOT_FOUND');
-    this.statusPolicy.assertSellerTransition(
-      current.status,
-      OrderStatus.CANCELED,
-    );
-
-    const updated = await this.orderRepository.cancelOrderByAdmin({
-      orderId: current.id,
+    const updated = await this.transitions.cancel({
+      orderId: parseId(input.orderId),
+      actor: OrderActor.ADMIN,
       actorAccountId: ctx.accountId,
-      note: `${ADMIN_CANCEL_NOTE_PREFIX}${note}`,
-      now: new Date(),
-      // 잠금 뒤 현재 상태가 취소 가능한지 repository가 이 함수로 다시 판정한다
-      canCancelFrom: (status) => {
-        try {
-          this.statusPolicy.assertSellerTransition(
-            status,
-            OrderStatus.CANCELED,
-          );
-          return true;
-        } catch {
-          return false;
-        }
-      },
-    });
-    if (updated === 'not-found') throw new DomainException('ORDER_NOT_FOUND');
-    if (updated === 'not-cancellable') {
-      // 사전 검사 뒤 상태가 바뀐 경쟁 — 같은 규칙으로 다시 던진다
-      const latest = await this.orderRepository.findOrderDetailForAdmin(
-        current.id,
-      );
-      this.statusPolicy.assertSellerTransition(
-        latest?.status ?? OrderStatus.CANCELED,
-        OrderStatus.CANCELED,
-      );
-      throw new DomainException('ORDER_NOT_CANCELLABLE');
-    }
-
-    // 활성 품목이 없으면 매장을 알 수 없고, 입금 확인 전 주문은 판매자에게 보이지 않아 발행을 생략한다
-    const [firstItem] = updated.items;
-    if (firstItem && updated.submitted_at) {
-      await this.events.publishSellerOrderUpdate(
-        firstItem.store_id,
-        toSellerOrderUpdateEvent(
-          'STATUS_CHANGED',
-          updated,
-          firstItem.product_name_snapshot,
+      scope: { kind: 'any' },
+      note: cleanNullableText(input.note, MAX_REASON_LENGTH),
+      now: this.clock.now(),
+      decide: (state) =>
+        this.cancelPolicy.decide(
+          {
+            actor: OrderActor.ADMIN,
+            reason: input.reason,
+            fault: input.fault,
+            refundAmount: input.refundAmount,
+          },
+          state,
         ),
-      );
-    }
+    });
+    if (!updated) throw new DomainException('ORDER_NOT_FOUND');
+    await this.events.publishSellerStatusChanged(updated);
     return toAdminOrderSummaryOutput(updated);
   }
 }

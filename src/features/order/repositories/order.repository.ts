@@ -13,6 +13,11 @@ import {
   withPendingPaymentLock,
 } from '@/features/order/repositories/order-pending-payment-lock.helper';
 import {
+  confirmedPaidAmount,
+  finalizeSettlementLocked,
+  lockPayment,
+} from '@/features/order/repositories/order-settlement-finalizer.helper';
+import {
   orderPaymentSelect,
   type OrderPaymentRow,
 } from '@/features/order/repositories/payment.repository';
@@ -24,6 +29,7 @@ import {
   OrderStatus,
   PaymentMethod,
   Prisma,
+  RefundKind,
   type AccountType,
   type PaymentStatus,
 } from '@/generated/prisma/client';
@@ -83,6 +89,7 @@ const adminOrderDetailInclude = {
     },
   },
   payment: true,
+  refunds: { orderBy: { id: 'asc' } },
   status_histories: { where: activeWhere, orderBy: { changed_at: 'desc' } },
   items: {
     where: activeWhere,
@@ -628,6 +635,7 @@ export class OrderRepository {
       },
       include: {
         payment: { select: orderPaymentSelect },
+        refunds: { orderBy: { id: 'asc' } },
         status_histories: {
           where: activeWhere,
           orderBy: { changed_at: 'asc' },
@@ -837,6 +845,8 @@ export class OrderRepository {
       // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
         payment: { select: { method: true } },
+        // 입금 반환은 구매자와 플랫폼 사이 일이라 취소 환불만 본다
+        refunds: { where: { kind: RefundKind.CANCEL } },
         // 입금 대기 이력은 판매자에게 보이지 않는다
         status_histories: {
           where: {
@@ -876,8 +886,8 @@ export class OrderRepository {
 
   /**
    * 판매자 상태 변경. 주문 행을 잠근(FOR UPDATE) 뒤 잠금 시점 상태로 전이를 다시 판정한다 —
-   * 관리자 강제 취소(cancelOrderByAdmin)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
-   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다).
+   * 취소(OrderTransitionRepository.cancelLocked)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
+   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다). 픽업 완료는 정산을 함께 확정한다.
    * assertTransition이 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
    */
   async updateOrderStatusBySeller(args: {
@@ -892,8 +902,10 @@ export class OrderRepository {
     userAgent?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
-        SELECT o.id, o.status FROM \`order\` o
+      const locked = await tx.$queryRaw<
+        { id: bigint; status: OrderStatus; commission_rate_bps: number }[]
+      >`
+        SELECT o.id, o.status, o.commission_rate_bps FROM \`order\` o
         WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
           AND o.submitted_at IS NOT NULL
           AND EXISTS (
@@ -923,12 +935,18 @@ export class OrderRepository {
           ...(args.toStatus === OrderStatus.PICKED_UP
             ? { picked_up_at: args.now }
             : {}),
-          ...(args.toStatus === OrderStatus.CANCELED
-            ? { canceled_at: args.now }
-            : {}),
         },
         include: sellerOrderSummaryInclude(args.storeId),
       });
+      if (args.toStatus === OrderStatus.PICKED_UP) {
+        const payment = await lockPayment(tx, order.id);
+        await finalizeSettlementLocked(
+          tx,
+          order,
+          confirmedPaidAmount(payment),
+          args.now,
+        );
+      }
 
       await tx.orderStatusHistory.create({
         data: {
@@ -965,6 +983,8 @@ export class OrderRepository {
           storeName: firstItem?.store_name_snapshot ?? null,
           productId: firstItem?.product_id ?? null,
           productName: firstItem?.product_name_snapshot ?? null,
+          actorType: OrderActor.SELLER,
+          pickupAt: updatedOrder.pickup_at,
           occurredAt: args.now,
           actorAccountId: args.actorAccountId,
         }),
@@ -1076,90 +1096,6 @@ export class OrderRepository {
     return this.prisma.order.findFirst({
       where: { id: orderId },
       include: adminOrderDetailInclude,
-    });
-  }
-
-  /**
-   * 관리자 강제 취소. 주문 행을 잠근(FOR UPDATE) 뒤 트랜잭션 안에서 현재 상태로 취소 가능 여부를
-   * 다시 판정한다 — 판매자 상태 변경과 교차해도 둘 다 커밋되지 않게. 이력·알림(ORDER_CANCELED)·
-   * 감사(store_id는 첫 품목 매장)는 판매자 취소와 같은 규칙으로 같은 트랜잭션에 남긴다.
-   */
-  async cancelOrderByAdmin(args: {
-    orderId: bigint;
-    actorAccountId: bigint;
-    note: string;
-    now: Date;
-    canCancelFrom: (status: OrderStatus) => boolean;
-  }): Promise<AdminOrderRow | 'not-found' | 'not-cancellable'> {
-    return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
-        SELECT id, status FROM \`order\`
-        WHERE id = ${args.orderId} AND deleted_at IS NULL
-        FOR UPDATE`;
-      const current = locked[0];
-      if (!current) return 'not-found';
-      if (!args.canCancelFrom(current.status)) return 'not-cancellable';
-
-      const updated = await tx.order.update({
-        where: { id: current.id },
-        data: { status: OrderStatus.CANCELED, canceled_at: args.now },
-        include: adminOrderInclude,
-      });
-      await tx.orderStatusHistory.create({
-        data: {
-          order_id: current.id,
-          from_status: current.status,
-          to_status: OrderStatus.CANCELED,
-          changed_at: args.now,
-          actor_type: OrderActor.ADMIN,
-          actor_account_id: args.actorAccountId,
-          note: args.note,
-        },
-      });
-
-      const firstItem = await tx.orderItem.findFirst({
-        where: { order_id: current.id, ...activeWhere },
-        orderBy: { id: 'asc' },
-        select: {
-          product_id: true,
-          store_id: true,
-          product_name_snapshot: true,
-          store_name_snapshot: true,
-        },
-      });
-      // 상태 전이 이벤트(outbox, 같은 tx) — 판매자 취소와 같은 계약
-      await this.outbox.publish(
-        tx,
-        orderStatusChangedEvent({
-          orderId: current.id,
-          orderNumber: updated.order_number,
-          buyerAccountId: updated.account_id,
-          fromStatus: current.status,
-          toStatus: OrderStatus.CANCELED,
-          storeId: firstItem?.store_id ?? null,
-          storeName: firstItem?.store_name_snapshot ?? null,
-          productId: firstItem?.product_id ?? null,
-          productName: firstItem?.product_name_snapshot ?? null,
-          occurredAt: args.now,
-          actorAccountId: args.actorAccountId,
-        }),
-      );
-
-      await this.auditLogs.recordAudit(tx, {
-        actorAccountId: args.actorAccountId,
-        storeId: firstItem?.store_id ?? null,
-        targetType: AuditTargetType.ORDER,
-        targetId: current.id,
-        action: AuditActionType.STATUS_CHANGE,
-        beforeJson: { status: current.status },
-        afterJson: {
-          status: OrderStatus.CANCELED,
-          note: args.note,
-          byAdmin: true,
-        },
-      });
-
-      return updated;
     });
   }
 

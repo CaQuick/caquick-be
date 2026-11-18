@@ -1,4 +1,5 @@
 import type {
+  OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
@@ -39,6 +40,7 @@ export interface SellerOrderDetailOutput {
   updatedAt: Date;
   items: OrderItemDetailOutput[];
   statusHistories: OrderStatusHistoryOutput[];
+  cancellation: OrderCancellationOutput | null;
 }
 
 /** SDL SellerOrderUpdateKind. PICKUP_RESCHEDULED는 판매자 픽업 일시 변경이 발행한다. */

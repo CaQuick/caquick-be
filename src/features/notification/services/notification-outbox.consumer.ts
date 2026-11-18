@@ -14,11 +14,14 @@ import {
 } from '@/features/notification/repositories/notification.repository';
 import {
   buildOrderStatusNotification,
+  buildRefundAccountRequestedNotification,
   buildReviewLikedNotification,
 } from '@/features/notification/services/notification-payloads.helper';
 import {
   ORDER_STATUS_CHANGED,
   parseOrderStatusChangedPayload,
+  parseRefundRequestedPayload,
+  REFUND_REQUESTED,
 } from '@/features/order';
 import {
   type OutboxConsumer,
@@ -34,6 +37,7 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
 @Injectable()
 @SubscribeOutbox(
   ORDER_STATUS_CHANGED,
+  REFUND_REQUESTED,
   REVIEW_LIKED,
   NOTIFICATION_BROADCAST_REQUESTED,
 )
@@ -50,6 +54,8 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
     switch (event.eventType) {
       case ORDER_STATUS_CHANGED:
         return this.onOrderStatusChanged(event);
+      case REFUND_REQUESTED:
+        return this.onRefundRequested(event);
       case REVIEW_LIKED:
         return this.onReviewLiked(event);
       case NOTIFICATION_BROADCAST_REQUESTED:
@@ -62,12 +68,29 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
   private async onOrderStatusChanged(event: OutboxEvent): Promise<void> {
     const p = parseOrderStatusChangedPayload(event.payload);
     // 알림 대상이 아닌 전이는 payload가 null — 이벤트는 정상 소비된다
-    const payload = buildOrderStatusNotification(p.orderNumber, p.toStatus);
+    const payload = buildOrderStatusNotification(p);
     if (!payload) return;
     await this.repo.createFromEvent(event.eventId, [
       {
         account_id: parseId(p.buyerAccountId),
         ...payload,
+        order_id: parseId(p.orderId),
+        store_id: p.storeId === null ? null : parseId(p.storeId),
+        product_id: p.productId === null ? null : parseId(p.productId),
+        order_number: p.orderNumber,
+        store_name: p.storeName,
+        product_name: p.productName,
+        created_at: event.occurredAt,
+      },
+    ]);
+  }
+
+  private async onRefundRequested(event: OutboxEvent): Promise<void> {
+    const p = parseRefundRequestedPayload(event.payload);
+    await this.repo.createFromEvent(event.eventId, [
+      {
+        account_id: parseId(p.buyerAccountId),
+        ...buildRefundAccountRequestedNotification(p.orderNumber, p.amount),
         order_id: parseId(p.orderId),
         store_id: p.storeId === null ? null : parseId(p.storeId),
         product_id: p.productId === null ? null : parseId(p.productId),

@@ -158,6 +158,89 @@ describe('NotificationOutboxConsumer (real DB)', () => {
     });
   });
 
+  describe('취소·환불', () => {
+    it('구매자 본인 취소는 알림 없이 소비되고, 운영자 취소는 사유 라벨을 붙여 알린다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const base = {
+        orderId: order.id.toString(),
+        orderNumber: 'ORD-3',
+        buyerAccountId: buyer.id.toString(),
+        fromStatus: 'SUBMITTED',
+        toStatus: 'CANCELED',
+        storeId: null,
+        storeName: null,
+        productId: null,
+        productName: null,
+        cancelReason: 'BUYER_REQUEST',
+        refundAmount: 10_000,
+        pickupAt: '2026-09-20T03:00:00.000Z',
+      };
+
+      await consumer.handle(
+        event('order.status_changed', { ...base, actorType: 'BUYER' }),
+      );
+      expect(await prisma.notification.count()).toBe(0);
+
+      await consumer.handle(
+        event(
+          'order.status_changed',
+          { ...base, actorType: 'ADMIN', cancelReason: 'OUT_OF_MATERIALS' },
+          '22222222-2222-4222-8222-222222222222',
+        ),
+      );
+      await expect(
+        prisma.notification.findFirstOrThrow(),
+      ).resolves.toMatchObject({
+        event: 'ORDER_CANCELED',
+        body: 'ORD-3 주문이 취소되었어요. 사유: 재료 소진',
+      });
+    });
+
+    it('refund.requested는 구매자에게 환불 계좌 입력 요청을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const item = await createOrderItem(prisma, { order_id: order.id });
+      const requested = event('refund.requested', {
+        refundId: '5',
+        orderId: order.id.toString(),
+        orderNumber: 'ORD-4',
+        buyerAccountId: buyer.id.toString(),
+        kind: 'CANCEL',
+        amount: 12_500,
+        storeId: item.store_id.toString(),
+        storeName: '케이크샵',
+        productId: item.product_id.toString(),
+        productName: '레터링 케이크',
+      });
+
+      await consumer.handle(requested);
+      await consumer.handle(requested);
+
+      const rows = await prisma.notification.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'REFUND_ACCOUNT_REQUESTED',
+        title: '환불계좌입력',
+        body: 'ORD-4 12,500원을 돌려받을 계좌를 입력해 주세요.',
+        order_id: order.id,
+        store_id: item.store_id,
+        product_id: item.product_id,
+        order_number: 'ORD-4',
+        store_name: '케이크샵',
+        created_at: OCCURRED_AT,
+      });
+    });
+
+    it('반증: 형식이 어긋난 refund.requested는 던진다', async () => {
+      await expect(
+        consumer.handle(event('refund.requested', { refundId: 5 })),
+      ).rejects.toThrow('payload 형식 오류');
+    });
+  });
+
   it('review.liked는 작성자에게 좋아요 알림을 만든다', async () => {
     const review = await createReview(prisma);
     await consumer.handle(

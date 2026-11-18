@@ -323,6 +323,23 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '현재 상태에서는 주문을 취소할 수 없습니다.',
   },
+  CANCEL_REASON_NOT_ALLOWED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이 주문에는 선택할 수 없는 취소 사유입니다.',
+  },
+  CANCEL_FAULT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '확정된 주문은 판매자 사정인지 구매자 사정인지 선택해야 취소할 수 있습니다.',
+  },
+  REFUND_AMOUNT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '구매자 사정으로 취소하려면 환불 금액을 입력해 주세요.',
+  },
+  REFUND_AMOUNT_OUT_OF_RANGE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) => `환불 금액은 0원 이상 ${max}원 이하로 입력해 주세요.`,
+  },
   DUPLICATE_OPTION_ITEM: {
     status: HttpStatus.BAD_REQUEST,
     message: '중복된 옵션 선택입니다.',
@@ -596,10 +613,6 @@ export const ERROR_CATALOG = {
   INVALID_BODY_FORMAT: {
     status: HttpStatus.BAD_REQUEST,
     message: '본문 형식이 올바르지 않습니다.',
-  },
-  CANCELLATION_NOTE_REQUIRED: {
-    status: HttpStatus.BAD_REQUEST,
-    message: '취소 사유가 필요합니다.',
   },
   // ── 관리자
   ADMIN_ONLY: {

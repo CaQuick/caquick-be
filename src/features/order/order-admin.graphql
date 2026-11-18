@@ -18,9 +18,13 @@ extend type Query {
 
 extend type Mutation {
   """
-  주문을 강제 취소한다. 전이 규칙은 판매자 취소와 같다 — SUBMITTED·CONFIRMED·MADE에서만 가능하고
-  PICKED_UP·CANCELED면 BAD_USER_INPUT. 사유(note)는 필수이며 상태 이력에 '[관리자]' 접두로 기록된다.
-  구매자에게 ORDER_CANCELED 알림이 간다. 없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  주문을 강제 취소한다. 입금 대기·접수·확정·제작 완료 주문만 되고(그 밖은 ORDER_NOT_CANCELLABLE), 규칙은 adminOrder의
+  cancelOptions가 그대로 알려 준다. 입금 대기는 환불 없이(미입금이면 reason PAYMENT_NOT_RECEIVED), 접수는 결제액 전액,
+  확정·제작 완료는 fault(사정)에 따라 환불한다(판매자 사정 = 전액, 구매자 사정 = refundAmount, 남는 금액은 수수료를 뺀 뒤 정산에 포함).
+  고를 수 없는 사유면 CANCEL_REASON_NOT_ALLOWED, 사정이 없으면 CANCEL_FAULT_REQUIRED, 구매자 사정인데 금액이 없으면
+  REFUND_AMOUNT_REQUIRED, 금액이 0~결제액 밖이면 REFUND_AMOUNT_OUT_OF_RANGE(모두 BAD_USER_INPUT).
+  구매자에게 취소 알림(미입금이면 입금 기한 만료 알림)이, 입금 확인 뒤 주문이면 판매자에게 취소 푸시가 간다.
+  없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminCancelOrder(input: AdminCancelOrderInput!): AdminOrderSummary!
 }
@@ -203,6 +207,40 @@ type AdminOrderDetail {
   상태 변경 이력. 최신순.
   """
   statusHistories: [OrderStatusHistory!]!
+  """
+  이 주문의 환불(취소 환불·입금 반환). 오래된 순, 없으면 빈 배열.
+  """
+  refunds: [OrderRefund!]!
+  """
+  취소 정보(주체·사유·사정·환불액·환불 진행). 취소되지 않은 주문이면 null.
+  """
+  cancellation: OrderCancellation
+  """
+  강제 취소 다이얼로그의 선택지. 지금 상태 기준이다.
+  """
+  cancelOptions: AdminOrderCancelOptions!
+}
+
+"""
+관리자 강제 취소 선택지. 화면은 이 값으로 다이얼로그를 그리고 규칙을 복제하지 않는다.
+"""
+type AdminOrderCancelOptions {
+  """
+  지금 취소할 수 있는지.
+  """
+  cancelable: Boolean!
+  """
+  고를 수 있는 취소 사유. 취소할 수 없으면 빈 배열.
+  """
+  reasons: [OrderCancelReasonType!]!
+  """
+  환불 규칙. BY_FAULT면 사정을 고르게 하고, 구매자 사정이면 환불 금액(0~paidAmount)을 입력받는다. 취소할 수 없으면 null.
+  """
+  refundRule: CancelRefundRuleType
+  """
+  확인된 결제액(원). 입금 전이거나 결제 도입 전 주문이면 0.
+  """
+  paidAmount: Int!
 }
 
 """
@@ -277,12 +315,24 @@ input AdminOrderListInput {
 }
 
 """
-주문 강제 취소 입력.
+주문 강제 취소 입력. 허용 범위는 adminOrder.cancelOptions를 따른다.
 """
 input AdminCancelOrderInput {
   orderId: ID!
   """
-  취소 사유. 필수. 최대 494자('[관리자] ' 접두를 붙여 500자 이내로 이력에 남는다). 감사 로그에도 기록된다.
+  취소 사유. 필수. cancelOptions.reasons 중 하나여야 한다.
   """
-  note: String!
+  reason: OrderCancelReasonType!
+  """
+  취소 메모. 선택, 최대 500자. 상태 이력과 감사 로그에 남는다.
+  """
+  note: String
+  """
+  취소 사정. cancelOptions.refundRule이 BY_FAULT면 필수이고, 그 밖에는 무시한다.
+  """
+  fault: OrderCancelFaultType
+  """
+  돌려줄 금액(원, 0~cancelOptions.paidAmount). fault가 BUYER일 때 필수이고, 그 밖에는 무시한다.
+  """
+  refundAmount: Int
 }

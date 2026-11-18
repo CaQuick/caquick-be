@@ -16,6 +16,24 @@ extend type Mutation {
   기한이 지났으면 PAYMENT_DEADLINE_PASSED(BAD_USER_INPUT). 로그인 필수. 본인 주문이 아니면 NOT_FOUND.
   """
   markMyOrderDepositSent(orderId: ID!): MyOrderDetail!
+  """
+  내 주문을 취소한다. 판매자 확정 전(입금 대기·접수)까지만 되고 사유는 구매자 요청으로 기록된다.
+  입금 대기는 환불 없이, 접수는 결제액 전액 환불로 취소되고 환불이 생기면 환불 계좌 입력 요청 알림이 간다.
+  '입금했어요'를 누른 주문도 취소할 수 있다. 그 밖의 상태면 ORDER_NOT_CANCELLABLE(BAD_USER_INPUT).
+  로그인 필수. 본인 주문이 아니면 NOT_FOUND.
+  """
+  cancelMyOrder(input: CancelMyOrderInput!): MyOrderDetail!
+}
+
+"""
+내 주문 취소 입력.
+"""
+input CancelMyOrderInput {
+  orderId: ID!
+  """
+  취소 메모. 선택, 최대 500자. 상태 이력에 남고 판매자도 본다.
+  """
+  note: String
 }
 
 """
@@ -186,6 +204,14 @@ type MyOrderDetail {
   CANCELED 도달 시각. 취소되지 않았으면 null.
   """
   canceledAt: DateTime
+  """
+  취소 정보(주체·사유·환불액·환불 진행). 취소되지 않은 주문이면 null.
+  """
+  cancellation: OrderCancellation
+  """
+  지금 cancelMyOrder로 취소할 수 있는지. 입금 대기·접수 상태일 때 true.
+  """
+  canCancel: Boolean!
 
   """
   상태 변경 이력. 오래된 순이다(판매자 주문 상세는 최신순 — 방향이 반대다).

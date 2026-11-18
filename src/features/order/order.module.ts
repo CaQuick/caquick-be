@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { BOOKED_QUANTITY_QUERY } from '@/common/ports/booked-quantity.port';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
@@ -59,13 +60,15 @@ import { StoreModule } from '@/features/store';
     OrderStoreDailyLimitRepository,
     OrderStoreDailyLimitConsumer,
     OrderStatusTransitionPolicy,
-    // 판매자 주문 구독(Redis PubSub) — 발행은 입금 확인·판매자 상태 변경·관리자 취소 서비스가 커밋 뒤 직접
+    // 주체별 취소 사유·사정·환불액 판정(구매자·판매자·관리자 취소가 공유)
+    OrderCancelPolicy,
+    // 판매자 주문 구독(Redis PubSub) — 발행은 입금 확인·판매자 상태 변경·취소 서비스가 커밋 뒤 직접
     OrderEventsService,
     OrderSubscriptionService,
     OrderSubscriptionResolver,
     OrderCheckoutService,
     OrderCheckoutMutationResolver,
-    // 판매자 주문 관리(목록·상세·상태 변경) — 주문 도메인이 소유한다
+    // 판매자 주문 관리(목록·상세·상태 변경·거절·취소) — 주문 도메인이 소유한다
     SellerOrderService,
     SellerOrderQueryResolver,
     SellerOrderMutationResolver,
@@ -73,7 +76,7 @@ import { StoreModule } from '@/features/store';
     AdminOrderService,
     AdminOrderQueryResolver,
     AdminOrderMutationResolver,
-    // 구매자 주문 목록·상세·'입금했어요'
+    // 구매자 주문 목록·상세·'입금했어요'·취소
     UserOrderService,
     UserOrderQueryResolver,
     UserOrderMutationResolver,

@@ -5,7 +5,9 @@ import { PubSub } from 'graphql-subscriptions';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
@@ -37,6 +39,8 @@ describe('Admin Order Resolvers (real DB)', () => {
         AccountAdminRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderCancelPolicy,
+        OrderTransitionRepository,
         OrderEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -80,8 +84,14 @@ describe('Admin Order Resolvers (real DB)', () => {
     const detail = await queryResolver.adminOrder(user, order.id.toString());
     expect(detail.items).toHaveLength(1);
 
+    expect(detail.cancelOptions).toMatchObject({
+      cancelable: true,
+      refundRule: 'FULL_REFUND',
+    });
+
     const canceled = await mutationResolver.adminCancelOrder(user, {
       orderId: order.id.toString(),
+      reason: 'OTHER',
       note: '운영 판단',
     });
     expect(canceled.status).toBe('CANCELED');

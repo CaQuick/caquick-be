@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { calcDiscountRate } from '@/common/utils/discount-rate';
+import { parseId } from '@/common/utils/id-parser';
 import { sliceOverfetched } from '@/common/utils/pagination';
+import { cleanNullableText } from '@/common/utils/text-cleaner';
+import type { CancelMyOrderInput } from '@/features/order/dto/inputs/cancel-my-order.input';
 import type { MyOrdersInput } from '@/features/order/dto/inputs/my-orders.input';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import {
+  toOrderCancellation,
   toOrderItemDetail,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
@@ -17,15 +25,50 @@ import type {
   MyOrderDetail,
 } from '@/features/order/types/order-my-output.type';
 import { formatBusinessHours } from '@/features/store';
-import { OrderStatus, PaymentStatus } from '@/generated/prisma/client';
+import {
+  OrderActor,
+  OrderCancelReason,
+  OrderStatus,
+  PaymentStatus,
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class UserOrderService {
   constructor(
     private readonly orderRepository: OrderRepository,
     private readonly payments: PaymentRepository,
+    private readonly transitions: OrderTransitionRepository,
+    private readonly cancelPolicy: OrderCancelPolicy,
+    private readonly events: OrderEventsService,
     private readonly clock: ClockService,
   ) {}
+
+  /** 판매자 확정 전까지만. 입금 대기면 환불 없이, 접수면 전액 환불로 취소한다('입금했어요'를 눌렀어도 허용). */
+  async cancelMyOrder(
+    accountId: bigint,
+    input: CancelMyOrderInput,
+  ): Promise<MyOrderDetail> {
+    const orderId = parseId(input.orderId);
+    const updated = await this.transitions.cancel({
+      orderId,
+      actor: OrderActor.BUYER,
+      actorAccountId: accountId,
+      scope: { kind: 'buyer', accountId },
+      note: cleanNullableText(input.note, MAX_REASON_LENGTH),
+      now: this.clock.now(),
+      decide: (state) =>
+        this.cancelPolicy.decide(
+          {
+            actor: OrderActor.BUYER,
+            reason: OrderCancelReason.BUYER_REQUEST,
+          },
+          state,
+        ),
+    });
+    if (!updated) throw new DomainException('ORDER_NOT_FOUND');
+    await this.events.publishSellerStatusChanged(updated);
+    return this.getMyOrder(accountId, orderId);
+  }
 
   /** '입금했어요'. 마감 전 첫 누름만 기록해 미입금 자동 취소에서 빼고, 다시 누르면 그대로 돌려준다. */
   async markMyOrderDepositSent(
@@ -145,6 +188,8 @@ export class UserOrderService {
       madeAt: order.made_at,
       pickedUpAt: order.picked_up_at,
       canceledAt: order.canceled_at,
+      cancellation: toOrderCancellation(order),
+      canCancel: this.cancelPolicy.canCancel(OrderActor.BUYER, order.status),
       statusHistories: order.status_histories.map(toOrderStatusHistory),
       items: order.items.map((item) => ({
         item: toOrderItemDetail(item),

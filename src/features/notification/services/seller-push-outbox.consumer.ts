@@ -20,11 +20,17 @@ import {
 import { SellerPushDeviceRepository } from '@/features/notification/repositories/seller-push-device.repository';
 import {
   buildBuyerMessagePush,
+  buildOrderCanceledPush,
   buildOrderSubmittedPush,
   SELLER_PUSH_CHANNEL_ID,
   type SellerPushContent,
 } from '@/features/notification/services/seller-push-messages.helper';
-import { ORDER_SUBMITTED, parseOrderSubmittedPayload } from '@/features/order';
+import {
+  ORDER_STATUS_CHANGED,
+  ORDER_SUBMITTED,
+  parseOrderStatusChangedPayload,
+  parseOrderSubmittedPayload,
+} from '@/features/order';
 import {
   type OutboxConsumer,
   type OutboxEvent,
@@ -46,7 +52,11 @@ import { MetricsService } from '@/global/metrics';
  * 전송 실패(네트워크·5xx·429)는 던져 호스트의 retry/DLQ에 맡기고, 인증 실패는 경보를 낸 뒤 던진다.
  */
 @Injectable()
-@SubscribeOutbox(ORDER_SUBMITTED, CONVERSATION_BUYER_MESSAGE_SENT)
+@SubscribeOutbox(
+  ORDER_SUBMITTED,
+  ORDER_STATUS_CHANGED,
+  CONVERSATION_BUYER_MESSAGE_SENT,
+)
 export class SellerPushOutboxConsumer implements OutboxConsumer {
   private readonly logger = new Logger(SellerPushOutboxConsumer.name);
 
@@ -69,7 +79,10 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
       );
       return;
     }
-    const { storeId, content } = this.contentOf(event);
+    const target = this.contentOf(event);
+    // 푸시 대상이 아닌 상태 전이 — 이벤트는 정상 소비된다
+    if (!target) return;
+    const { storeId, content } = target;
     const devices = await this.devices.listActiveByStore(storeId);
     if (devices.length === 0) return;
 
@@ -149,10 +162,9 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
     }
   }
 
-  private contentOf(event: OutboxEvent): {
-    storeId: bigint;
-    content: SellerPushContent;
-  } {
+  private contentOf(
+    event: OutboxEvent,
+  ): { storeId: bigint; content: SellerPushContent } | null {
     switch (event.eventType) {
       case ORDER_SUBMITTED: {
         const p = parseOrderSubmittedPayload(event.payload);
@@ -160,6 +172,14 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
           storeId: parseId(p.storeId),
           content: buildOrderSubmittedPush(p, event.occurredAt),
         };
+      }
+      case ORDER_STATUS_CHANGED: {
+        const push = buildOrderCanceledPush(
+          parseOrderStatusChangedPayload(event.payload),
+        );
+        return push
+          ? { storeId: parseId(push.storeId), content: push.content }
+          : null;
       }
       case CONVERSATION_BUYER_MESSAGE_SENT: {
         const p = parseConversationBuyerMessageSentPayload(event.payload);
