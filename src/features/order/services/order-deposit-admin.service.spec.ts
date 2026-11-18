@@ -282,7 +282,7 @@ describe('AdminDepositService (real DB)', () => {
       const adminId = await admin();
       const { order } = await pendingOrder();
 
-      for (const depositedAmount of [29_999, 30_001]) {
+      for (const depositedAmount of [0, 29_999, 30_001]) {
         await expect(
           service.adminConfirmPayment(adminId, {
             orderId: order.id.toString(),
@@ -297,7 +297,19 @@ describe('AdminDepositService (real DB)', () => {
       expect(await prisma.auditLog.count()).toBe(0);
     });
 
-    it.each([0, -1])(
+    it('결제 금액이 0원인 주문은 입금액 0으로 접수한다', async () => {
+      const adminId = await admin();
+      const { order } = await pendingOrder({ totalPrice: 0 });
+
+      await expect(
+        service.adminConfirmPayment(adminId, {
+          orderId: order.id.toString(),
+          depositedAmount: 0,
+        }),
+      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+    });
+
+    it.each([-1, 1.5])(
       '입금액 %s는 DEPOSIT_AMOUNT_INVALID다',
       async (depositedAmount) => {
         const adminId = await admin();

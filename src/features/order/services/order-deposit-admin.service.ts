@@ -103,7 +103,7 @@ export class AdminDepositService extends AdminBaseService {
     const ctx = await this.requireAdminContext(accountId);
     const orderId = parseId(input.orderId);
     const { depositedAmount } = input;
-    if (!Number.isSafeInteger(depositedAmount) || depositedAmount < 1) {
+    if (!Number.isSafeInteger(depositedAmount) || depositedAmount < 0) {
       throw new DomainException('DEPOSIT_AMOUNT_INVALID');
     }
     const note = cleanNullableText(input.note, MAX_CONFIRM_NOTE_LENGTH);

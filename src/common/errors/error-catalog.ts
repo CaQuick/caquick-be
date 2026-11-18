@@ -420,7 +420,7 @@ export const ERROR_CATALOG = {
   },
   DEPOSIT_AMOUNT_INVALID: {
     status: HttpStatus.BAD_REQUEST,
-    message: '입금액은 1원 이상의 정수로 입력해 주세요.',
+    message: '입금액은 0원 이상의 정수로 입력해 주세요.',
   },
   DEPOSIT_AMOUNT_MISMATCH: {
     status: HttpStatus.BAD_REQUEST,

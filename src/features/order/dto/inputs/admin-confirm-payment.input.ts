@@ -4,7 +4,7 @@ export class AdminConfirmPaymentInput {
   @IsString()
   orderId!: string;
 
-  // 1원 미만은 서비스가 DEPOSIT_AMOUNT_INVALID로 거절한다
+  // 음수는 서비스가 DEPOSIT_AMOUNT_INVALID로 거절한다(0원 주문은 0으로 확인)
   @IsInt()
   depositedAmount!: number;
 

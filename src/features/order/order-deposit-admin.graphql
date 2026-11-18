@@ -140,7 +140,7 @@ type AdminTaskCounts {
 input AdminConfirmPaymentInput {
   orderId: ID!
   """
-  은행 앱에서 본 입금액(원, 1 이상 정수). 결제 금액과 같아야 확인된다.
+  은행 앱에서 본 입금액(원, 0 이상 정수). 결제 금액과 같아야 확인된다(0원 주문은 0).
   """
   depositedAmount: Int!
   """
