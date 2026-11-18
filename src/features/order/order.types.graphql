@@ -194,10 +194,117 @@ type OrderItemDetail {
   itemSubtotalPrice: Int!
   """선택한 옵션(주문 시점 스냅샷)."""
   optionItems: [OrderItemOption!]!
+  """커스텀 방식(주문 시점 스냅샷). 커스텀이 없는 품목은 NONE."""
+  customMode: CustomModeType!
+  """
+  커스텀 대표 이미지 URL. 3D는 윗면 렌더, 슬롯형은 합성 이미지이고 목록 썸네일·리뷰 Before에 쓰인다. 없으면 null.
+  """
+  customPreviewImageUrl: String
+  """
+  슬롯형 바탕 이미지 URL(주문 시점 스냅샷, 정사각). 문구 자리·자유 편집 영역 좌표의 기준이다. 슬롯형이 아니거나 바탕을 저장하기 전 주문이면 null.
+  """
+  customBaseImageUrl: String
+  """커스텀 이미지(3D 렌더 5장 또는 슬롯형 합성 1장). kind 선언 순서다. 없으면 빈 배열."""
+  customImages: [OrderItemCustomImage!]!
+  """3D 디자인(JSON v1). 3D가 아니거나 저장된 값을 읽을 수 없으면 null."""
+  threeDDesign: ThreeDDesign
   """입력한 커스텀 문구(주문 시점 스냅샷)."""
   customTexts: [OrderItemCustomText!]!
   """자유 편집 요청(주문 시점 스냅샷)."""
   freeEdits: [OrderItemFreeEdit!]!
+}
+
+"""
+주문 커스텀 이미지 종류. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+3D 옆면은 옆면 고도 asin(0.4) 정사영이고 좌·우는 정면을 보는 사람 기준이다.
+"""
+enum CustomImageKindType {
+  """3D 윗면(위에서 내려다본 정사각). 대표 이미지다."""
+  THREE_D_TOP
+  """3D 옆면 정면(yaw 0)."""
+  THREE_D_FRONT
+  """3D 옆면 뒤(정면 반대)."""
+  THREE_D_BACK
+  """3D 옆면 왼쪽."""
+  THREE_D_LEFT
+  """3D 옆면 오른쪽."""
+  THREE_D_RIGHT
+  """슬롯형 합성 이미지(바탕 + 문구, 구매자가 본 그대로). 대표 이미지다."""
+  SLOT_COMPOSITE
+}
+
+"""주문 커스텀 이미지 1장."""
+type OrderItemCustomImage {
+  id: ID!
+  """이미지 종류. 품목마다 종류당 1장이다."""
+  kind: CustomImageKindType!
+  """이미지 URL."""
+  imageUrl: String!
+}
+
+"""
+주문에 저장된 3D 디자인(JSON v1). 배열 순서가 그리는 순서다. 그리는 규칙은 판매자 앱 렌더러와 구매자 편집기가 공유한다.
+선택지·시트 색·효과·꾸미기 키는 customThreeDCatalog의 key이고, 퇴역한 항목도 과거 주문을 그릴 수 있게 카탈로그에 남는다.
+"""
+type ThreeDDesign {
+  """디자인 JSON 버전. 지금은 1."""
+  schemaVersion: Int!
+  """모양·크기·디자인·맛·시트 색."""
+  basic: ThreeDDesignBasic!
+  """윗면 항목. x·y는 케이크 판 정사각 기준 중심 0~1(왼쪽 위 원점)."""
+  top: [ThreeDDesignItem!]!
+  """옆면 항목. x는 정면(yaw 0)에서 잰 둘레 비율 0~1, y는 윗면 0~바닥 1."""
+  side: [ThreeDDesignItem!]!
+}
+
+"""3D 디자인의 케이크 기본값."""
+type ThreeDDesignBasic {
+  """모양 선택지 key."""
+  shape: String!
+  """크기 선택지 key."""
+  size: String!
+  """디자인 선택지 key. 고르지 않았으면 null(장식 없는 시트)."""
+  design: String
+  """맛 선택지 key. 고르지 않았으면 null."""
+  flavor: String
+  """시트 색 key."""
+  sheetColor: String!
+}
+
+"""3D 디자인 항목 종류. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다."""
+enum ThreeDItemKindType {
+  """글자."""
+  TEXT
+  """꾸미기 이미지."""
+  DECO
+}
+
+"""3D 디자인 항목(글자 또는 꾸미기) 1개."""
+type ThreeDDesignItem {
+  """항목 종류."""
+  kind: ThreeDItemKindType!
+  """가로 위치(면별 좌표계, ThreeDDesign.top·side 참고)."""
+  x: Float!
+  """세로 위치(면별 좌표계, ThreeDDesign.top·side 참고)."""
+  y: Float!
+  """크기(케이크 판 너비 대비 cqw)."""
+  size: Float!
+  """효과."""
+  effect: ThreeDDesignEffect!
+  """글자 내용(줄바꿈·이모지 포함). TEXT만 값이 있다."""
+  text: String
+  """글자색(#RRGGBB 대문자). TEXT만 값이 있다."""
+  color: String
+  """꾸미기 key. DECO만 값이 있다."""
+  decoId: String
+}
+
+"""3D 디자인 항목에 건 효과."""
+type ThreeDDesignEffect {
+  """효과 key(카탈로그 effects)."""
+  type: String!
+  """효과 강도(0~100 정수)."""
+  intensity: Int!
 }
 
 """주문 시점의 옵션 스냅샷. 판매자가 이후 옵션을 수정·삭제해도 주문 내용은 변하지 않는다."""
@@ -211,24 +318,52 @@ type OrderItemOption {
   priceDelta: Int!
 }
 
-"""주문 시점의 커스텀 문구 스냅샷."""
+"""
+주문 시점의 커스텀 문구 스냅샷. 좌표는 바탕 이미지 한 변을 10000으로 본 정수 비율이고 원점은 왼쪽 위다.
+글꼴은 플랫폼 공통 1종(Pretendard Bold)이고 크기는 영역에 맞춰 자동이다.
+"""
 type OrderItemCustomText {
   id: ID!
-  """문구 슬롯 식별 키(주문 시점)."""
+  """원본 문구 자리 ID. 자리가 이후 바뀌거나 지워져도 스냅샷은 그대로다. 문구 자리를 지정하기 전 주문이면 null."""
+  tokenId: ID
+  """문구 자리 식별 키(주문 시점)."""
   tokenKey: String!
-  """슬롯의 기본 문구(주문 시점)."""
+  """문구 자리 표시 이름(주문 시점)."""
+  label: String!
+  """문구 자리의 기본 문구(주문 시점)."""
   defaultText: String!
-  """구매자가 실제로 입력한 문구."""
-  valueText: String!
+  """구매자가 넣은 문구(줄바꿈·이모지 포함). 선택 자리를 지웠으면 null('문구 없음')."""
+  valueText: String
+  """영역 왼쪽 위 x(0~10000)."""
+  posX: Int!
+  """영역 왼쪽 위 y(0~10000)."""
+  posY: Int!
+  """영역 너비(posX + width ≤ 10000)."""
+  width: Int!
+  """영역 높이(posY + height ≤ 10000)."""
+  height: Int!
+  """글자색(#RRGGBB 대문자)."""
+  textColor: String!
+  """영역 안 글자 정렬."""
+  textAlign: CustomTextAlignType!
   """입력 화면 노출 순서. 오름차순."""
   sortOrder: Int!
 }
 
-"""주문 시점의 자유 편집 요청 스냅샷. 구매자가 이미지 위에 영역을 지정해 남긴 요청이다."""
+"""
+주문 시점의 자유 편집 요청 스냅샷. 구매자가 슬롯형 바탕 이미지 위에 영역을 지정해 남긴 요청이다.
+좌표계는 OrderItemCustomText와 같다(바탕 한 변 10000, 왼쪽 위 원점).
+"""
 type OrderItemFreeEdit {
   id: ID!
-  """지정한 편집 영역을 잘라낸 이미지 URL."""
-  cropImageUrl: String!
+  """영역 왼쪽 위 x(0~10000)."""
+  posX: Int!
+  """영역 왼쪽 위 y(0~10000)."""
+  posY: Int!
+  """영역 너비(posX + width ≤ 10000)."""
+  width: Int!
+  """영역 높이(posY + height ≤ 10000)."""
+  height: Int!
   """해당 영역에 대한 요청 문구."""
   descriptionText: String!
   """요청 순서. 오름차순."""

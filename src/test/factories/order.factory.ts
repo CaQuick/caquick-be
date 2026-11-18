@@ -1,12 +1,15 @@
 import { DAY_MS } from '@/common/utils/kst-time';
 import { buildRegionLabel } from '@/common/utils/region-label';
 import type {
+  CustomImageKind,
+  CustomMode,
   Order,
   OrderItem,
   OrderStatus,
   Payment,
   PaymentSetting,
   PaymentStatus,
+  Prisma,
   PrismaClient,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
@@ -154,6 +157,9 @@ export interface OrderItemOverrides {
   sale_price_snapshot?: number | null;
   quantity?: number;
   item_subtotal_price?: number;
+  custom_mode_snapshot?: CustomMode;
+  custom_base_image_url_snapshot?: string | null;
+  custom_preview_image_url?: string | null;
   deleted_at?: Date;
 }
 
@@ -210,7 +216,56 @@ export async function createOrderItem(
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
       quantity: overrides.quantity ?? 1,
       item_subtotal_price: overrides.item_subtotal_price ?? 10000,
+      custom_mode_snapshot: overrides.custom_mode_snapshot ?? 'NONE',
+      custom_base_image_url_snapshot:
+        overrides.custom_base_image_url_snapshot ?? null,
+      custom_preview_image_url: overrides.custom_preview_image_url ?? null,
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
     },
   });
+}
+
+const THREE_D_RENDER_KINDS = [
+  'THREE_D_TOP',
+  'THREE_D_FRONT',
+  'THREE_D_BACK',
+  'THREE_D_LEFT',
+  'THREE_D_RIGHT',
+] as const satisfies readonly CustomImageKind[];
+
+export const MINIMAL_THREE_D_DESIGN = {
+  schemaVersion: 1,
+  basic: {
+    shape: 'heart',
+    size: 'mini',
+    design: null,
+    flavor: null,
+    sheetColor: 'white',
+  },
+  top: [],
+  side: [],
+};
+
+/** 3D 품목 스냅샷: 디자인 JSON과 렌더 5장(`https://img/<kind>.png`). 정렬이 드러나게 종류 역순으로 넣는다. */
+export async function createThreeDOrderItemCustom(
+  prisma: PrismaClient,
+  orderItemId: bigint,
+  designJson: Prisma.InputJsonValue = MINIMAL_THREE_D_DESIGN,
+): Promise<void> {
+  await prisma.orderItemCustomDesign.create({
+    data: {
+      order_item_id: orderItemId,
+      schema_version: 1,
+      design_json: designJson,
+    },
+  });
+  for (const kind of [...THREE_D_RENDER_KINDS].reverse()) {
+    await prisma.orderItemCustomImage.create({
+      data: {
+        order_item_id: orderItemId,
+        kind,
+        image_url: `https://img/${kind}.png`,
+      },
+    });
+  }
 }

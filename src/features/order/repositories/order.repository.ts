@@ -50,6 +50,21 @@ const sellerVisibleWhere = {
   submitted_at: { not: null },
 } satisfies Prisma.OrderWhereInput;
 
+/** 주문 상세 3곳(구매자·판매자·관리자)의 커스텀 스냅샷. 디자인·이미지는 deleted_at이 없어 부모 품목 가시성을 따른다 */
+const orderItemCustomInclude = {
+  custom_design: { select: { schema_version: true, design_json: true } },
+  // enum 선언 순서(3D 윗면·앞·뒤·좌·우, 슬롯형 합성)
+  custom_images: { orderBy: { kind: 'asc' } },
+  custom_texts: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+  free_edits: {
+    where: activeWhere,
+    orderBy: { sort_order: 'asc' },
+    include: {
+      attachments: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+    },
+  },
+} satisfies Prisma.OrderItemInclude;
+
 export const adminOrderInclude = {
   items: {
     where: activeWhere,
@@ -58,6 +73,8 @@ export const adminOrderInclude = {
       store_name_snapshot: true,
       product_name_snapshot: true,
       product_thumbnail_url_snapshot: true,
+      custom_mode_snapshot: true,
+      custom_preview_image_url: true,
     },
     orderBy: { id: 'asc' },
     take: 1,
@@ -72,6 +89,8 @@ function sellerOrderSummaryInclude(storeId: bigint) {
       select: {
         product_name_snapshot: true,
         product_thumbnail_url_snapshot: true,
+        custom_mode_snapshot: true,
+        custom_preview_image_url: true,
       },
       orderBy: { id: 'asc' },
       take: 1,
@@ -96,14 +115,7 @@ const adminOrderDetailInclude = {
     orderBy: { id: 'asc' },
     include: {
       option_items: { where: activeWhere },
-      custom_texts: { where: activeWhere, orderBy: { sort_order: 'asc' } },
-      free_edits: {
-        where: activeWhere,
-        orderBy: { sort_order: 'asc' },
-        include: {
-          attachments: { where: activeWhere, orderBy: { sort_order: 'asc' } },
-        },
-      },
+      ...orderItemCustomInclude,
     },
   },
 } satisfies Prisma.OrderInclude;
@@ -667,20 +679,7 @@ export class OrderRepository {
               where: activeWhere,
               orderBy: { id: 'asc' },
             },
-            custom_texts: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-            free_edits: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              include: {
-                attachments: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                },
-              },
-            },
+            ...orderItemCustomInclude,
             review: {
               select: { id: true, deleted_at: true },
             },
@@ -864,20 +863,7 @@ export class OrderRepository {
           },
           include: {
             option_items: { where: activeWhere },
-            custom_texts: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-            free_edits: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              include: {
-                attachments: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                },
-              },
-            },
+            ...orderItemCustomInclude,
           },
         },
       },

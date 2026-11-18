@@ -58,6 +58,16 @@ enum CustomTextAlign {
   RIGHT
 }
 
+// 주문 커스텀 이미지 종류. 3D는 윗면 + 옆면 앞·뒤·좌·우 렌더, 슬롯형은 '본 그대로' 합성 1장
+enum CustomImageKind {
+  THREE_D_TOP
+  THREE_D_FRONT
+  THREE_D_BACK
+  THREE_D_LEFT
+  THREE_D_RIGHT
+  SLOT_COMPOSITE
+}
+
 enum OrderStatus {
   SUBMITTED
   CONFIRMED
@@ -1022,6 +1032,11 @@ model OrderItem {
   quantity            Int @default(1) @db.UnsignedSmallInt
   item_subtotal_price Int @default(0) @db.UnsignedInt
 
+  custom_mode_snapshot           CustomMode @default(NONE)
+  // 슬롯형 바탕 이미지. 문구 자리·자유 편집 영역 좌표의 기준이다
+  custom_base_image_url_snapshot String?    @db.VarChar(2048)
+  // 커스텀 대표 이미지(3D 윗면 렌더·슬롯형 합성). 목록 썸네일과 리뷰 Before의 원천이다
+  custom_preview_image_url       String?    @db.VarChar(2048)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -1034,6 +1049,8 @@ model OrderItem {
   option_items  OrderItemOptionItem[]
   custom_texts  OrderItemCustomText[]
   free_edits    OrderItemCustomFreeEdit[]
+  custom_design OrderItemCustomDesign?
+  custom_images OrderItemCustomImage[]
   notifications Notification[]
 
   review Review?
@@ -1072,10 +1089,22 @@ model OrderItemCustomText {
   id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
-  token_key_snapshot    String @db.VarChar(60)
-  default_text_snapshot String @db.VarChar(200)
-  value_text            String @db.VarChar(200)
-  sort_order            Int    @default(0)
+  // 원본 문구 자리. 자리가 바뀌거나 지워져도 스냅샷은 그대로라 FK를 두지 않는다. 자리 지정 전 주문은 null
+  token_id              BigInt? @db.UnsignedBigInt
+  token_key_snapshot    String  @db.VarChar(60)
+  label_snapshot        String  @db.VarChar(30)
+  default_text_snapshot String  @db.VarChar(200)
+  // 선택 자리를 지운 '문구 없음'은 null
+  value_text            String? @db.VarChar(200)
+  sort_order            Int     @default(0)
+
+  // 바탕 이미지 한 변을 10000으로 본 정수 비율, 원점은 왼쪽 위
+  pos_x      Int
+  pos_y      Int
+  width      Int
+  height     Int
+  text_color String          @db.Char(7)
+  text_align CustomTextAlign
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -1092,7 +1121,11 @@ model OrderItemCustomFreeEdit {
   id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
-  crop_image_url   String @db.VarChar(2048)
+  // 바탕 이미지 위 요청 영역(문구 자리와 같은 좌표계)
+  pos_x            Int
+  pos_y            Int
+  width            Int
+  height           Int
   description_text String @db.VarChar(2000)
   sort_order       Int    @default(0)
 
@@ -1124,6 +1157,35 @@ model OrderItemCustomFreeEditAttachment {
   @@index([free_edit_id, sort_order], map: "idx_order_item_custom_free_edit_attachment")
   @@index([deleted_at], map: "idx_order_item_custom_free_edit_attachment_deleted_at")
   @@map("order_item_custom_free_edit_attachment")
+}
+
+// 3D 디자인 JSON(스키마 버전 동반). 주문과 함께 한 번만 쓰고 단독 삭제 경로가 없어 deleted_at을 두지 않는다 — 가시성은 order_item을 따른다
+model OrderItemCustomDesign {
+  id             BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id  BigInt @unique(map: "uk_order_item_custom_design_item") @db.UnsignedBigInt
+  schema_version Int    @db.UnsignedSmallInt
+  design_json    Json
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+
+  @@map("order_item_custom_design")
+}
+
+// 커스텀 이미지(3D 렌더 5장·슬롯형 합성). 종류당 1장이고 디자인과 같은 이유로 deleted_at이 없다
+model OrderItemCustomImage {
+  id            BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt          @db.UnsignedBigInt
+  kind          CustomImageKind
+  image_url     String          @db.VarChar(2048)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+
+  @@unique([order_item_id, kind], map: "uk_order_item_custom_image_kind")
+  @@map("order_item_custom_image")
 }
 
 // 주문 1건의 결제. 계좌이체는 PENDING으로 만들고 입금 확인(관리자, 후속 연동은 AUTO) 때 CONFIRMED가 된다.

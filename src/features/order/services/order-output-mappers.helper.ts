@@ -3,6 +3,7 @@ import {
   maskAccountNumber,
   toBank,
 } from '@/features/order/services/order-bank-account.helper';
+import { readStoredThreeDDesign } from '@/features/order/services/order-custom-design.helper';
 import type {
   OrderCancellationOutput,
   OrderItemDetailOutput,
@@ -14,15 +15,25 @@ import {
   OrderCancelReason,
   OrderStatus,
   RefundKind,
+  type CustomImageKind,
+  type CustomMode,
+  type CustomTextAlign,
   type OrderActor,
   type OrderCancelFault,
+  type Prisma,
   type Refund,
 } from '@/generated/prisma/client';
 
+interface CustomAreaRow {
+  pos_x: number;
+  pos_y: number;
+  width: number;
+  height: number;
+}
+
 /** 판매자·관리자·구매자 조회 row가 모두 만족하는 구조적 부분집합. */
-export interface OrderItemFreeEditRow {
+export interface OrderItemFreeEditRow extends CustomAreaRow {
   id: bigint;
-  crop_image_url: string;
   description_text: string;
   sort_order: number;
   attachments: { id: bigint; image_url: string; sort_order: number }[];
@@ -43,15 +54,34 @@ export interface OrderItemDetailRow {
     option_title_snapshot: string;
     option_price_delta_snapshot: number;
   }[];
-  custom_texts: {
+  custom_mode_snapshot: CustomMode;
+  custom_base_image_url_snapshot: string | null;
+  custom_preview_image_url: string | null;
+  custom_design: {
+    schema_version: number;
+    design_json: Prisma.JsonValue;
+  } | null;
+  custom_images: { id: bigint; kind: CustomImageKind; image_url: string }[];
+  custom_texts: (CustomAreaRow & {
     id: bigint;
+    token_id: bigint | null;
     token_key_snapshot: string;
+    label_snapshot: string;
     default_text_snapshot: string;
-    value_text: string;
+    value_text: string | null;
+    text_color: string;
+    text_align: CustomTextAlign;
     sort_order: number;
-  }[];
+  })[];
   free_edits: OrderItemFreeEditRow[];
 }
+
+const toArea = (row: CustomAreaRow) => ({
+  posX: row.pos_x,
+  posY: row.pos_y,
+  width: row.width,
+  height: row.height,
+});
 
 export interface OrderStatusHistoryRow {
   id: bigint;
@@ -83,11 +113,25 @@ export function toOrderItemDetail(
       optionTitle: opt.option_title_snapshot,
       priceDelta: opt.option_price_delta_snapshot,
     })),
+    customMode: item.custom_mode_snapshot,
+    customPreviewImageUrl: item.custom_preview_image_url,
+    customBaseImageUrl: item.custom_base_image_url_snapshot,
+    customImages: item.custom_images.map((image) => ({
+      id: image.id.toString(),
+      kind: image.kind,
+      imageUrl: image.image_url,
+    })),
+    threeDDesign: readStoredThreeDDesign(item.id, item.custom_design),
     customTexts: item.custom_texts.map((text) => ({
       id: text.id.toString(),
+      tokenId: text.token_id?.toString() ?? null,
       tokenKey: text.token_key_snapshot,
+      label: text.label_snapshot,
       defaultText: text.default_text_snapshot,
       valueText: text.value_text,
+      ...toArea(text),
+      textColor: text.text_color,
+      textAlign: text.text_align,
       sortOrder: text.sort_order,
     })),
     freeEdits: item.free_edits.map(toOrderItemFreeEdit),
@@ -99,7 +143,7 @@ export function toOrderItemFreeEdit(
 ): OrderItemFreeEditOutput {
   return {
     id: edit.id.toString(),
-    cropImageUrl: edit.crop_image_url,
+    ...toArea(edit),
     descriptionText: edit.description_text,
     sortOrder: edit.sort_order,
     attachments: edit.attachments.map((a) => ({
@@ -107,6 +151,25 @@ export function toOrderItemFreeEdit(
       imageUrl: a.image_url,
       sortOrder: a.sort_order,
     })),
+  };
+}
+
+/** 판매자·관리자 목록과 판매자 구독의 '커스텀' 배지. 주문은 단일 상품이라 첫 품목이 정한다 */
+export const isCustomOrderItem = (
+  item: { custom_mode_snapshot: CustomMode } | undefined,
+): boolean => item !== undefined && item.custom_mode_snapshot !== 'NONE';
+
+export function toOrderListCustomBadge(
+  item:
+    | {
+        custom_mode_snapshot: CustomMode;
+        custom_preview_image_url: string | null;
+      }
+    | undefined,
+): { hasCustom: boolean; firstItemCustomImageUrl: string | null } {
+  return {
+    hasCustom: isCustomOrderItem(item),
+    firstItemCustomImageUrl: item?.custom_preview_image_url ?? null,
   };
 }
 

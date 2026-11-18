@@ -23,6 +23,7 @@ import {
   createStore,
   createUserProfile,
   linkProductCategory,
+  nextSeq,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
@@ -424,7 +425,7 @@ describe('ProductHomeService (real DB)', () => {
   });
 
   describe('customCakeShowcase', () => {
-    /** Before(주문 커스텀 크롭)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰. */
+    /** Before(주문 커스텀 대표 이미지)/After(리뷰 이미지)가 모두 있는 쇼케이스 후보 리뷰. */
     async function makeShowcaseReview(args?: {
       storeId?: bigint;
       nickname?: string;
@@ -432,19 +433,15 @@ describe('ProductHomeService (real DB)', () => {
       before?: boolean;
       after?: boolean;
     }): Promise<bigint> {
-      const orderItem = await createOrderItem(
-        prisma,
-        args?.storeId !== undefined ? { store_id: args.storeId } : {},
-      );
-      if (args?.before !== false) {
-        await prisma.orderItemCustomFreeEdit.create({
-          data: {
-            order_item_id: orderItem.id,
-            crop_image_url: `https://img/before-${orderItem.id}.png`,
-            description_text: '요청 디자인',
-          },
-        });
-      }
+      const orderItem = await createOrderItem(prisma, {
+        ...(args?.storeId !== undefined ? { store_id: args.storeId } : {}),
+        ...(args?.before !== false
+          ? {
+              custom_mode_snapshot: 'SLOT',
+              custom_preview_image_url: `https://img/before-${nextSeq()}.png`,
+            }
+          : {}),
+      });
       const review = await createReview(prisma, {
         order_item_id: orderItem.id,
         content: args?.content ?? '후기 본문',
@@ -583,28 +580,19 @@ describe('ProductHomeService (real DB)', () => {
       expect(limited).toHaveLength(2);
     });
 
-    it('beforeImageUrl은 sort_order가 앞선 커스텀 크롭을 사용한다', async () => {
+    it('beforeImageUrl은 주문 품목의 커스텀 대표 이미지를 사용한다', async () => {
       const review = await makeShowcaseReview({ before: false });
       const row = await prisma.review.findUniqueOrThrow({
         where: { id: review },
       });
-      await prisma.orderItemCustomFreeEdit.create({
+      await prisma.orderItem.update({
+        where: { id: row.order_item_id },
         data: {
-          order_item_id: row.order_item_id,
-          crop_image_url: 'https://img/second-crop.png',
-          description_text: '두 번째',
-          sort_order: 1,
+          custom_mode_snapshot: 'THREE_D',
+          custom_preview_image_url: 'https://img/top-render.png',
         },
       });
-      await prisma.orderItemCustomFreeEdit.create({
-        data: {
-          order_item_id: row.order_item_id,
-          crop_image_url: 'https://img/first-crop.png',
-          description_text: '첫 번째',
-          sort_order: 0,
-        },
-      });
-      // before 이미지는 작성 시점 스냅샷(07b) — 크롭을 만든 뒤 작성 경로와 같은 규칙으로 다시 찍는다
+      // before 이미지는 작성 시점 스냅샷 — 대표 이미지를 채운 뒤 작성 경로와 같은 규칙으로 다시 찍는다
       await prisma.review.update({
         where: { id: review },
         data: await snapshotReviewOrderItem(prisma, row.order_item_id),
@@ -612,7 +600,7 @@ describe('ProductHomeService (real DB)', () => {
 
       const result = await service.customCakeShowcase();
 
-      expect(result[0].beforeImageUrl).toBe('https://img/first-crop.png');
+      expect(result[0].beforeImageUrl).toBe('https://img/top-render.png');
     });
   });
 

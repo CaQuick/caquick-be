@@ -59,6 +59,7 @@ export interface SeededOrders {
   o3Made: bigint;
   o4PickedUpReviewed: bigint;
   o4OrderItemId: bigint;
+  o4PreviewImageUrl: string;
   o5PickedUpReviewable: bigint;
   o6Canceled: bigint;
   o7PendingPayment: bigint;
@@ -185,6 +186,17 @@ export async function seedOrders(
       sale_price_snapshot: p2.sale_price,
       quantity: 1,
       item_subtotal_price: 60000,
+      custom_mode_snapshot: 'SLOT',
+      custom_base_image_url_snapshot:
+        'https://placehold.co/600x600/png?text=Custom+Base',
+      custom_preview_image_url:
+        'https://placehold.co/600x600/png?text=Custom+Composite',
+      custom_images: {
+        create: {
+          kind: 'SLOT_COMPOSITE',
+          image_url: 'https://placehold.co/600x600/png?text=Custom+Composite',
+        },
+      },
     },
   });
   await prisma.orderItemOptionItem.create({
@@ -202,15 +214,25 @@ export async function seedOrders(
     data: {
       order_item_id: o2Item.id,
       token_key_snapshot: 'message',
+      label_snapshot: '메시지',
       default_text_snapshot: '메시지를 입력하세요',
       value_text: '생일 축하해 :)',
       sort_order: 0,
+      pos_x: 1000,
+      pos_y: 1000,
+      width: 8000,
+      height: 1500,
+      text_color: '#1D1D1D',
+      text_align: 'CENTER',
     },
   });
   const o2FreeEdit = await prisma.orderItemCustomFreeEdit.create({
     data: {
       order_item_id: o2Item.id,
-      crop_image_url: 'https://placehold.co/300x300/png?text=Custom+Crop',
+      pos_x: 2000,
+      pos_y: 4000,
+      width: 6000,
+      height: 4000,
       description_text: '이 사진을 케이크 위에 그려주세요',
       sort_order: 0,
     },
@@ -330,6 +352,9 @@ export async function seedOrders(
       },
     },
   });
+  // o4에는 리뷰가 달리므로(seedReviews) 커스텀 대표 이미지를 함께 둬
+  // 홈 제작 후기 쇼케이스(Before/After 페어)가 로컬에서 동작하게 한다
+  const o4Preview = 'https://placehold.co/600x600/png?text=Requested+Design';
   const o4Item = await prisma.orderItem.create({
     data: {
       order_id: o4.id,
@@ -343,16 +368,11 @@ export async function seedOrders(
       sale_price_snapshot: p1.sale_price,
       quantity: 1,
       item_subtotal_price: 35000,
-    },
-  });
-  // o4에는 리뷰가 달리므로(seedReviews) 커스텀 크롭을 함께 둬
-  // 홈 제작 후기 쇼케이스(Before/After 페어)가 로컬에서 동작하게 한다
-  await prisma.orderItemCustomFreeEdit.create({
-    data: {
-      order_item_id: o4Item.id,
-      crop_image_url: 'https://placehold.co/300x300/png?text=Requested+Design',
-      description_text: '이 그림처럼 레터링해 주세요',
-      sort_order: 0,
+      custom_mode_snapshot: 'SLOT',
+      custom_preview_image_url: o4Preview,
+      custom_images: {
+        create: { kind: 'SLOT_COMPOSITE', image_url: o4Preview },
+      },
     },
   });
 
@@ -572,6 +592,7 @@ export async function seedOrders(
     o3Made: o3.id,
     o4PickedUpReviewed: o4.id,
     o4OrderItemId: o4Item.id,
+    o4PreviewImageUrl: o4Preview,
     o5PickedUpReviewable: o5.id,
     o6Canceled: o6.id,
     o7PendingPayment: o7.id,

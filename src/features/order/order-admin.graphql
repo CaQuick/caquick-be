@@ -82,6 +82,14 @@ type AdminOrderSummary {
   첫 품목의 상품 대표 이미지 URL(주문 시점 스냅샷). 주문 당시 이미지가 없었거나 품목이 없으면 null.
   """
   firstItemImageUrl: String
+  """
+  커스텀 주문 여부(첫 품목의 커스텀 방식이 NONE이 아니면 true). 목록 '커스텀' 배지용이다.
+  """
+  hasCustom: Boolean!
+  """
+  첫 품목의 커스텀 대표 이미지 URL(3D 윗면 렌더 또는 슬롯형 합성). 없으면 null.
+  """
+  firstItemCustomImageUrl: String
 }
 
 """

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
 import { ClockService } from '@/common/providers/clock.service';
@@ -27,7 +28,9 @@ import {
   createProduct,
   createReview,
   createStore,
+  createThreeDOrderItemCustom,
   createUserProfile,
+  MINIMAL_THREE_D_DESIGN,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
@@ -439,6 +442,113 @@ describe('UserOrderService (real DB)', () => {
         storeName: '매장B',
         storePhone: '02-1234-5678',
       });
+    });
+
+    it('커스텀 스냅샷(방식·대표·바탕 이미지·렌더 종류 순·3D 디자인·문구·자유 편집 영역)을 상세에 싣는다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, { account_id: account.id });
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        custom_mode_snapshot: 'THREE_D',
+        custom_preview_image_url: 'https://img/THREE_D_TOP.png',
+      });
+      await createThreeDOrderItemCustom(prisma, item.id);
+      const slot = await createOrderItem(prisma, {
+        order_id: order.id,
+        custom_mode_snapshot: 'SLOT',
+        custom_base_image_url_snapshot: 'https://img/base.png',
+        custom_preview_image_url: 'https://img/composite.png',
+      });
+      await prisma.orderItemCustomText.create({
+        data: {
+          order_item_id: slot.id,
+          token_id: 77n,
+          token_key_snapshot: 'top',
+          label_snapshot: '윗줄',
+          default_text_snapshot: '축하해',
+          value_text: null,
+          pos_x: 1000,
+          pos_y: 1000,
+          width: 8000,
+          height: 1500,
+          text_color: '#1D1D1D',
+          text_align: 'RIGHT',
+        },
+      });
+      await prisma.orderItemCustomFreeEdit.create({
+        data: {
+          order_item_id: slot.id,
+          pos_x: 2000,
+          pos_y: 4000,
+          width: 6000,
+          height: 4000,
+          description_text: '여기에 그림',
+        },
+      });
+
+      const result = await service.getMyOrder(account.id, order.id);
+
+      const [threeD, slotItem] = result.items.map((i) => i.item);
+      expect(threeD).toMatchObject({
+        customMode: 'THREE_D',
+        customPreviewImageUrl: 'https://img/THREE_D_TOP.png',
+        customBaseImageUrl: null,
+        threeDDesign: MINIMAL_THREE_D_DESIGN,
+        customTexts: [],
+        freeEdits: [],
+      });
+      expect(threeD.customImages.map((i) => i.kind)).toEqual([
+        'THREE_D_TOP',
+        'THREE_D_FRONT',
+        'THREE_D_BACK',
+        'THREE_D_LEFT',
+        'THREE_D_RIGHT',
+      ]);
+      expect(slotItem).toMatchObject({
+        customMode: 'SLOT',
+        customPreviewImageUrl: 'https://img/composite.png',
+        customBaseImageUrl: 'https://img/base.png',
+        customImages: [],
+        threeDDesign: null,
+        customTexts: [
+          {
+            tokenId: '77',
+            label: '윗줄',
+            valueText: null,
+            posX: 1000,
+            posY: 1000,
+            width: 8000,
+            height: 1500,
+            textColor: '#1D1D1D',
+            textAlign: 'RIGHT',
+          },
+        ],
+        freeEdits: [
+          {
+            posX: 2000,
+            posY: 4000,
+            width: 6000,
+            height: 4000,
+            descriptionText: '여기에 그림',
+          },
+        ],
+      });
+    });
+
+    it('저장된 3D 디자인을 읽을 수 없으면 디자인만 null이고 상세는 내려간다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, { account_id: account.id });
+      const item = await createOrderItem(prisma, {
+        order_id: order.id,
+        custom_mode_snapshot: 'THREE_D',
+      });
+      await createThreeDOrderItemCustom(prisma, item.id, { schemaVersion: 1 });
+      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      const result = await service.getMyOrder(account.id, order.id);
+
+      expect(result.items[0].item.threeDDesign).toBeNull();
+      expect(result.items[0].item.customImages).toHaveLength(5);
     });
 
     it('존재하지 않는 orderId면 404', async () => {

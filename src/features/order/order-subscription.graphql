@@ -31,6 +31,8 @@ type SellerOrderUpdate {
   totalPrice: Int!
   """첫 품목의 상품명(주문 시점 스냅샷). 주문은 단일 상품 구조다."""
   productName: String!
+  """커스텀 주문 여부(첫 품목의 커스텀 방식이 NONE이 아니면 true)."""
+  hasCustom: Boolean!
   """주문 행의 updated_at. 폐기 규칙의 비교 키다."""
   updatedAt: DateTime!
 }

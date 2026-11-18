@@ -60,7 +60,9 @@ describe('UserReviewService (real DB)', () => {
   });
 
   /** 리뷰 작성 가능한 상태(PICKED_UP 주문 + 본인 아이템)를 세팅 */
-  async function setupReviewableOrderItem(): Promise<{
+  async function setupReviewableOrderItem(
+    itemOverrides: Parameters<typeof createOrderItem>[1] = {},
+  ): Promise<{
     accountId: bigint;
     storeId: bigint;
     productId: bigint;
@@ -81,6 +83,7 @@ describe('UserReviewService (real DB)', () => {
       order_id: order.id,
       product_id: product.id,
       product_name_snapshot: '상품R 스냅샷',
+      ...itemOverrides,
     });
     return {
       accountId: account.id,
@@ -127,8 +130,11 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.media.some((m) => m.media_type === 'VIDEO')).toBe(true);
     });
 
-    it('작성 시점에 주문 품목의 상품명·활성 옵션(id 순)·커스텀 크롭 첫 장을 리뷰에 복사한다', async () => {
-      const ctx = await setupReviewableOrderItem();
+    it('작성 시점에 주문 품목의 상품명·활성 옵션(id 순)·커스텀 대표 이미지를 리뷰에 복사한다', async () => {
+      const ctx = await setupReviewableOrderItem({
+        custom_mode_snapshot: 'SLOT',
+        custom_preview_image_url: 'https://img/composite.png',
+      });
       const group = await prisma.productOptionGroup.create({
         data: { product_id: ctx.productId, name: '모양' },
       });
@@ -151,20 +157,6 @@ describe('UserReviewService (real DB)', () => {
           },
         });
       }
-      for (const [url, sortOrder] of [
-        ['https://img/second.png', 1],
-        ['https://img/first.png', 0],
-      ] as const) {
-        await prisma.orderItemCustomFreeEdit.create({
-          data: {
-            order_item_id: ctx.orderItemId,
-            crop_image_url: url,
-            description_text: '요청',
-            sort_order: sortOrder,
-          },
-        });
-      }
-
       const result = await service.writeReview(ctx.accountId, {
         orderItemId: ctx.orderItemId.toString(),
         rating: 5,
@@ -180,10 +172,42 @@ describe('UserReviewService (real DB)', () => {
         { groupName: '모양', optionTitle: '동그라미' },
         { groupName: '모양', optionTitle: '하트' },
       ]);
-      expect(saved.before_image_url).toBe('https://img/first.png');
+      expect(saved.before_image_url).toBe('https://img/composite.png');
     });
 
-    it('옵션·크롭이 없는 품목이면 option_summary·before_image_url은 null', async () => {
+    it.each([
+      ['3D 윗면 렌더', 'THREE_D', 'https://img/top.png'],
+      ['슬롯형 합성', 'SLOT', 'https://img/composite.png'],
+      ['커스텀 없음', 'NONE', null],
+    ] as const)(
+      'Before 이미지는 품목 커스텀 대표 이미지다(%s)',
+      async (_case, mode, url) => {
+        const ctx = await setupReviewableOrderItem({
+          custom_mode_snapshot: mode,
+          custom_preview_image_url: url,
+        });
+        // 대표 이미지가 아닌 커스텀 이미지·자유 편집 참고 사진은 Before 원천이 아니다
+        await prisma.orderItemCustomImage.create({
+          data: {
+            order_item_id: ctx.orderItemId,
+            kind: 'THREE_D_FRONT',
+            image_url: 'https://img/front.png',
+          },
+        });
+        const result = await service.writeReview(ctx.accountId, {
+          orderItemId: ctx.orderItemId.toString(),
+          rating: 5,
+          content: VALID_CONTENT,
+          media: [],
+        });
+        const saved = await prisma.review.findUniqueOrThrow({
+          where: { id: BigInt(result.reviewId) },
+        });
+        expect(saved.before_image_url).toBe(url);
+      },
+    );
+
+    it('옵션·커스텀 대표 이미지가 없는 품목이면 option_summary·before_image_url은 null', async () => {
       const ctx = await setupReviewableOrderItem();
       const result = await service.writeReview(ctx.accountId, {
         orderItemId: ctx.orderItemId.toString(),
@@ -467,13 +491,10 @@ describe('UserReviewService (real DB)', () => {
         ],
       });
       await service.deleteMyReview(ctx.accountId, first.reviewId);
-      // 복원도 작성 시점 규칙으로 스냅샷을 다시 찍는지 — 삭제 후 생긴 크롭이 반영돼야 한다
-      await prisma.orderItemCustomFreeEdit.create({
-        data: {
-          order_item_id: ctx.orderItemId,
-          crop_image_url: 'https://img/late-crop.png',
-          description_text: '요청',
-        },
+      // 복원도 작성 시점 규칙으로 스냅샷을 다시 찍는지 — 삭제 후 바뀐 대표 이미지가 반영돼야 한다
+      await prisma.orderItem.update({
+        where: { id: ctx.orderItemId },
+        data: { custom_preview_image_url: 'https://img/late-preview.png' },
       });
 
       // 다시 작성 → 같은 row 복원, rating/content/media 모두 새 값으로 교체되어야 함
@@ -502,7 +523,7 @@ describe('UserReviewService (real DB)', () => {
       expect(saved.deleted_at).toBeNull();
       expect(Number(saved.rating)).toBe(5);
       expect(saved.content).toBe(NEW_CONTENT);
-      expect(saved.before_image_url).toBe('https://img/late-crop.png');
+      expect(saved.before_image_url).toBe('https://img/late-preview.png');
 
       // media: 새 값 2건만 남고 stale 1건은 정리됐는지 확인
       const mediaRows = await prisma.reviewMedia.findMany({

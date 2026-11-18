@@ -7,6 +7,7 @@ import {
   toOrderCancellation,
   toOrderItemDetail,
   toOrderRefund,
+  toOrderListCustomBadge,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
 import { toAdminOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
@@ -34,6 +35,7 @@ export function toAdminOrderSummaryOutput(
     createdAt: row.created_at,
     firstItemName: row.items[0]?.product_name_snapshot ?? null,
     firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
+    ...toOrderListCustomBadge(row.items[0]),
   };
 }
 

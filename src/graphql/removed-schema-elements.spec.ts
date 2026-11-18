@@ -29,6 +29,8 @@ const REMOVED_OUTPUT_FIELDS: Array<[type: string, field: string, pr: string]> =
     ['AdminProductOptionGroup', 'optionRequiresImage', '커스텀 방식'],
     ['SellerCustomTemplate', 'isActive', '커스텀 방식'],
     ['AdminProductCustomTemplate', 'isActive', '커스텀 방식'],
+    // 자유 편집은 크롭 이미지 대신 바탕 위 영역 좌표를 저장한다
+    ['OrderItemFreeEdit', 'cropImageUrl', '커스텀 주문 스냅샷'],
   ];
 const REMOVED_INPUT_FIELDS: Array<[input: string, field: string, pr: string]> =
   [

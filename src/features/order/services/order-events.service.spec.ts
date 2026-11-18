@@ -19,6 +19,7 @@ const EVENT: SellerOrderUpdateEvent = {
   buyerName: '차차',
   totalPrice: 56000,
   productName: '딸기 케이크',
+  hasCustom: false,
   updatedAt: '2026-09-16T07:00:00.000Z',
 };
 

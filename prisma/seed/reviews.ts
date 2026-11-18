@@ -26,9 +26,10 @@ export async function seedReviews(
       account_id: user1.id,
       store_id: storeA.id,
       product_id: p1.id,
-      // 작성 시점 주문 품목 스냅샷(07b) — 시드 주문 품목의 상품명·옵션과 같게
+      // 작성 시점 주문 품목 스냅샷 — 시드 주문 품목의 상품명·옵션·대표 이미지와 같게
       product_name_snapshot: p1.name,
       store_name_snapshot: storeA.store_name,
+      before_image_url: ctx.orders.o4PreviewImageUrl,
       rating: new Prisma.Decimal('4.5'),
       content:
         '레터링이 정말 예쁘게 나왔어요. 케이크 맛도 좋고 다음에 또 주문할게요!',

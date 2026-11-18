@@ -249,6 +249,7 @@ describe('AdminDepositService (real DB)', () => {
           orderId: order.id.toString(),
           status: 'SUBMITTED',
           productName: '딸기 케이크',
+          hasCustom: false,
         }),
       ]);
       topic.stop();

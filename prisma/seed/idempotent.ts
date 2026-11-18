@@ -118,6 +118,12 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
         await prisma.orderItemCustomText.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });
+        await prisma.orderItemCustomDesign.deleteMany({
+          where: { order_item_id: { in: orderItemIds } },
+        });
+        await prisma.orderItemCustomImage.deleteMany({
+          where: { order_item_id: { in: orderItemIds } },
+        });
         await prisma.orderItemOptionItem.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });

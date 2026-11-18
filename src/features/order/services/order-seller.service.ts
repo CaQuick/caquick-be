@@ -31,6 +31,7 @@ import { OrderEventsService } from '@/features/order/services/order-events.servi
 import {
   toOrderCancellation,
   toOrderItemDetail,
+  toOrderListCustomBadge,
   toOrderStatusHistory,
   type OrderItemDetailRow,
   type OrderStatusHistoryRow,
@@ -147,11 +148,7 @@ export class SellerOrderService extends SellerBaseService {
 
     await this.events.publishSellerOrderUpdate(
       ctx.storeId,
-      toSellerOrderUpdateEvent(
-        'STATUS_CHANGED',
-        updated,
-        updated.items[0]?.product_name_snapshot ?? '',
-      ),
+      toSellerOrderUpdateEvent('STATUS_CHANGED', updated),
     );
     return this.toOrderSummaryOutput(updated);
   }
@@ -198,6 +195,7 @@ export class SellerOrderService extends SellerBaseService {
       // 내 매장 첫 품목의 주문 시점 스냅샷 — 상품이 바뀌어도 카드 값은 유지된다
       firstItemName: row.items[0]?.product_name_snapshot ?? null,
       firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
+      ...toOrderListCustomBadge(row.items[0]),
     };
   }
 
