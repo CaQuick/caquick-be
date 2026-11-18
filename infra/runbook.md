@@ -87,3 +87,10 @@ Actions → `Deploy` → Run workflow → `image_tag`에 이전 sha. 마이그�
   1. 새 키를 만들어 백업하고, APP_ENV의 `ACCOUNT_ENCRYPTION_KEYS` 맨 앞에 넣어(`k2:<새 키>,k1:<옛 키>`) 배포한다. 이때부터 새로 쓰는 계좌번호는 새 키로 암호화된다.
   2. `docker compose exec worker yarn accounts:reencrypt --dry-run`으로 대상 수를 보고, `docker compose exec worker yarn accounts:reencrypt`로 다시 암호화한다. 읽은 뒤 바뀐 행은 건너뛰므로 `--dry-run`이 0이 될 때까지 반복한다.
   3. 대상이 0이면 옛 키를 env에서 빼고 배포한다. 옛 키 백업은 DB 백업 보관 기간(14일)이 지날 때까지 남긴다 — 그 전 덤프를 복구하면 옛 키로 암호화된 행이 돌아온다(복구 뒤 1단계부터 다시).
+
+## 3D 카탈로그 에셋
+
+판매자 앱 3D 렌더러와 옵션 칩이 쓰는 이미지(`assets/custom-3d-catalog/v1`)는 미디어 버킷의 같은 경로에서 공개 URL로 열린다(`customThreeDCatalog`). 에셋이 더해진 릴리즈를 배포한 뒤 올린다. 빠지면 렌더러·옵션 칩 이미지가 404다.
+
+- `docker compose exec worker yarn catalog:upload --bucket <미디어 버킷> --dry-run`으로 올릴 개수를 보고, `--dry-run`을 빼고 올린다. 같은 내용은 건너뛴다.
+- 에셋은 `immutable`로 캐시되고 과거 주문이 같은 모습으로 그려져야 해서 덮어쓰지 않는다. 같은 경로에 다른 내용이 있으면 아무것도 올리지 않고 실패한다. 그림을 바꾸려면 새 파일과 새 key를 더하고 옛 key를 `selectable: false`로 퇴역시킨다.

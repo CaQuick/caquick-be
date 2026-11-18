@@ -331,6 +331,7 @@ APP_ROLE=worker PORT=4001 yarn start:dev # (선택) 이벤트 소비까지 보�
 | `yarn graphql:docs`       | SpectaQL HTML 문서를 `public/`에 빌드합니다                                                                                                                                         |
 | `yarn outbox:requeue`     | 운영에서 FAILED 상태의 outbox 이벤트를 PENDING으로 되돌립니다(`--id=<n>`, `--event-type=<type>`, `--all`). 소비 DLQ에 빠진 이벤트는 `--event-id=<uuid> --republish`로 다시 싣습니다 |
 | `yarn accounts:reencrypt` | 계좌번호 암호화 키를 회전한 뒤 첫 키가 아닌 키로 암호화된 환불·정산 계좌번호를 첫 키로 다시 암호화합니다. 대상 수를 먼저 출력하고, `--dry-run`은 대상 수만 출력합니다               |
+| `yarn catalog:upload`     | 3D 카탈로그 에셋(`assets/custom-3d-catalog`)을 미디어 버킷에 올립니다(`--bucket <버킷>`, `--dry-run`). 같은 내용은 건너뛰고 같은 경로의 다른 내용은 덮어쓰지 않습니다               |
 
 ## 🧬 GraphQL
 

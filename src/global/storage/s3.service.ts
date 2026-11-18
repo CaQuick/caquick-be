@@ -98,7 +98,7 @@ export class S3Service {
 
       return {
         uploadUrl,
-        publicUrl: this.buildPublicUrl(key),
+        publicUrl: this.publicUrlFor(key),
         key,
         expiresInSeconds: this.presignExpiresSeconds,
       };
@@ -259,7 +259,8 @@ export class S3Service {
     return `${prefix}/${accountId.toString()}/${date}/${uuid}${ext}`;
   }
 
-  private buildPublicUrl(key: string): string {
+  /** 이 버킷 객체의 공개 URL. 버킷 정책이 전체 공개 읽기라 업로드 외 고정 에셋(3D 카탈로그)도 이 주소로 연다. */
+  publicUrlFor(key: string): string {
     return `https://${this.bucket}.s3.${this.region}.amazonaws.com/${key}`;
   }
 }
