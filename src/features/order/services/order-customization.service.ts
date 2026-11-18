@@ -158,6 +158,21 @@ function resolveSlot(
     throw new DomainException('CUSTOM_SLOT_TEXTS_MISMATCH');
   }
 
+  const texts = tokens.map((token) => ({
+    tokenId: token.id,
+    tokenKey: token.token_key,
+    label: token.label,
+    defaultText: token.default_text,
+    valueText: slotValue(token, valueByTokenId.get(token.id)),
+    sortOrder: token.sort_order,
+    posX: token.pos_x,
+    posY: token.pos_y,
+    width: token.width,
+    height: token.height,
+    textColor: token.text_color,
+    textAlign: token.text_align,
+  }));
+
   const freeEdits = slot.freeEdits ?? [];
   if (
     (freeEdits.length > 0 && !template.free_edit_enabled) ||
@@ -170,20 +185,7 @@ function resolveSlot(
     mode: CustomMode.SLOT,
     baseImageUrl: template.base_image_url,
     previewImageUrl: slot.compositeImageUrl,
-    texts: tokens.map((token) => ({
-      tokenId: token.id,
-      tokenKey: token.token_key,
-      label: token.label,
-      defaultText: token.default_text,
-      valueText: slotValue(token, valueByTokenId.get(token.id)),
-      sortOrder: token.sort_order,
-      posX: token.pos_x,
-      posY: token.pos_y,
-      width: token.width,
-      height: token.height,
-      textColor: token.text_color,
-      textAlign: token.text_align,
-    })),
+    texts,
     freeEdits: freeEdits.map((edit, index) => {
       const field = `freeEdits[${index}]`;
       if (!fits(edit.posX, edit.width) || !fits(edit.posY, edit.height)) {

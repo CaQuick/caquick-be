@@ -529,6 +529,27 @@ describe('OrderCustomizationService', () => {
         expect(edits([], off)).toEqual([]);
       });
 
+      it.each<[string, number, boolean]>([
+        ['꺼진 상품에 1건', 1, false],
+        ['켜진 상품에 6건', 6, true],
+      ])(
+        '문구 값을 먼저 본다 — 필수 자리를 지우고 %s을 보내면 CUSTOM_SLOT_TEXT_REQUIRED다',
+        (_case, count, enabled) => {
+          expect(() =>
+            slot(
+              {
+                texts: [
+                  { tokenId: '11', valueText: '' },
+                  { tokenId: '12', valueText: '민지' },
+                ],
+                freeEdits: Array.from({ length: count }, () => freeEdit()),
+              },
+              template({ free_edit_enabled: enabled }),
+            ),
+          ).toThrowDomain('CUSTOM_SLOT_TEXT_REQUIRED');
+        },
+      );
+
       it.each<[string, Partial<CreateOrderFreeEditInput>]>([
         ['바탕 전체', { posX: 0, posY: 0, width: 10000, height: 10000 }],
         ['오른쪽 아래 1칸', { posX: 9999, posY: 9999, width: 1, height: 1 }],
