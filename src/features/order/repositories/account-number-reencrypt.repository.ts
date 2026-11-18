@@ -13,11 +13,13 @@ export interface ReencryptCounts {
 interface EncryptedRow {
   id: bigint;
   token: string;
+  updatedAt: Date;
 }
 
 /**
  * 키 회전용(`yarn accounts:reencrypt`). 첫 키가 아닌 키로 암호화된 계좌번호를 첫 키로 다시 암호화한다.
- * 행마다 읽은 토큰이 그대로일 때만 바꿔, 그사이 사용자가 새로 입력한 계좌를 옛 값으로 덮지 않는다.
+ * 행마다 읽은 토큰·updated_at이 그대로일 때만 바꿔, 그사이 바뀐 행(새로 입력한 계좌 등)을 덮지 않는다.
+ * updated_at은 읽은 값으로 다시 써서 화면의 '마지막 변경 시각'이 키 회전으로 움직이지 않게 한다.
  */
 export class AccountNumberReencryptRepository {
   constructor(
@@ -43,25 +45,42 @@ export class AccountNumberReencryptRepository {
     };
     for (const row of rows.refund) {
       const { count } = await this.prisma.refund.updateMany({
-        where: { id: row.id, account_number_enc: row.token },
-        data: { account_number_enc: this.rotate(row.token, 'refund-account') },
+        where: {
+          id: row.id,
+          account_number_enc: row.token,
+          updated_at: row.updatedAt,
+        },
+        data: {
+          account_number_enc: this.rotate(row.token, 'refund-account'),
+          updated_at: row.updatedAt,
+        },
       });
       counts.refund += count;
     }
     for (const row of rows.storeSettlementAccount) {
       const { count } = await this.prisma.storeSettlementAccount.updateMany({
-        where: { id: row.id, account_number_enc: row.token },
+        where: {
+          id: row.id,
+          account_number_enc: row.token,
+          updated_at: row.updatedAt,
+        },
         data: {
           account_number_enc: this.rotate(row.token, 'settlement-account'),
+          updated_at: row.updatedAt,
         },
       });
       counts.storeSettlementAccount += count;
     }
     for (const row of rows.settlement) {
       const { count } = await this.prisma.settlement.updateMany({
-        where: { id: row.id, paid_account_number_enc: row.token },
+        where: {
+          id: row.id,
+          paid_account_number_enc: row.token,
+          updated_at: row.updatedAt,
+        },
         data: {
           paid_account_number_enc: this.rotate(row.token, 'settlement-account'),
+          updated_at: row.updatedAt,
         },
       });
       counts.settlement += count;
@@ -79,35 +98,46 @@ export class AccountNumberReencryptRepository {
     const [refunds, accounts, settlements] = await Promise.all([
       this.prisma.refund.findMany({
         where: { account_number_enc: { not: null } },
-        select: { id: true, account_number_enc: true },
+        select: { id: true, account_number_enc: true, updated_at: true },
         orderBy: { id: 'asc' },
       }),
       this.prisma.storeSettlementAccount.findMany({
-        select: { id: true, account_number_enc: true },
+        select: { id: true, account_number_enc: true, updated_at: true },
         orderBy: { id: 'asc' },
       }),
       this.prisma.settlement.findMany({
         where: { paid_account_number_enc: { not: null } },
-        select: { id: true, paid_account_number_enc: true },
+        select: { id: true, paid_account_number_enc: true, updated_at: true },
         orderBy: { id: 'asc' },
       }),
     ]);
-    const stale = (rows: { id: bigint; token: string | null }[]) =>
+    const stale = (
+      rows: { id: bigint; token: string | null; updatedAt: Date }[],
+    ) =>
       rows.filter(
         (row): row is EncryptedRow =>
           row.token !== null && this.cipher.isStale(row.token),
       );
     return {
       refund: stale(
-        refunds.map((r) => ({ id: r.id, token: r.account_number_enc })),
+        refunds.map((r) => ({
+          id: r.id,
+          token: r.account_number_enc,
+          updatedAt: r.updated_at,
+        })),
       ),
       storeSettlementAccount: stale(
-        accounts.map((r) => ({ id: r.id, token: r.account_number_enc })),
+        accounts.map((r) => ({
+          id: r.id,
+          token: r.account_number_enc,
+          updatedAt: r.updated_at,
+        })),
       ),
       settlement: stale(
         settlements.map((r) => ({
           id: r.id,
           token: r.paid_account_number_enc,
+          updatedAt: r.updated_at,
         })),
       ),
     };

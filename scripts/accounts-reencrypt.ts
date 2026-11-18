@@ -6,6 +6,11 @@
  */
 import '@/config/preload-env';
 
+import {
+  assertRotatableConfig,
+  parseReencryptArgs,
+} from './accounts-reencrypt-args';
+
 import { readAccountCryptoConfig } from '@/config/account-crypto.config';
 import { AccountNumberReencryptRepository } from '@/features/order/repositories/account-number-reencrypt.repository';
 import { AccountCipher } from '@/global/crypto/account-cipher.service';
@@ -15,17 +20,9 @@ import { createExtendedPrismaClient } from '@/prisma/prisma.service';
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL이 필요합니다');
-  const argv = process.argv.slice(2);
-  const unknown = argv.filter((arg) => arg !== '--dry-run');
-  if (unknown.length > 0)
-    throw new Error(`알 수 없는 인자: ${unknown.join(' ')}`);
-
+  const { dryRun } = parseReencryptArgs(process.argv.slice(2));
   const config = readAccountCryptoConfig();
-  if (config.devKeyReason) {
-    throw new Error(
-      `고정 개발 키로는 재암호화하지 않습니다: ${config.devKeyReason}`,
-    );
-  }
+  assertRotatableConfig(config);
   const cipher = new AccountCipher(config);
   const prisma = createExtendedPrismaClient(databaseUrl);
   try {
@@ -38,7 +35,7 @@ async function main(): Promise<void> {
     process.stdout.write(
       `primary key ${cipher.primaryKeyId}, 대상 ${JSON.stringify(stale)}\n`,
     );
-    if (argv.includes('--dry-run')) return;
+    if (dryRun) return;
     const done = await repo.reencryptStale();
     process.stdout.write(`재암호화 ${JSON.stringify(done)}\n`);
   } finally {
