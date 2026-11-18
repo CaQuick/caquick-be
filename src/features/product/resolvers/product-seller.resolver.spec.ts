@@ -27,6 +27,7 @@ import { SellerProductQueryService } from '@/features/product/services/product-s
 import { SellerProductTaxonomyService } from '@/features/product/services/product-seller-taxonomy.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -65,6 +66,10 @@ describe('Seller Product Resolvers (real DB)', () => {
     queryResolver = module.get(SellerProductQueryResolver);
     mutationResolver = module.get(SellerProductMutationResolver);
     prisma = p;
+    // 바탕 이미지 1:1 확인은 S3를 읽는다 — 배선 검증이라 정사각 결과만 준다
+    jest
+      .spyOn(module.get(S3Service), 'readImageSize')
+      .mockResolvedValue({ width: 1000, height: 1000 });
   });
 
   afterAll(async () => {

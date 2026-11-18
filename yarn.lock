@@ -8089,6 +8089,7 @@ __metadata:
     graphql-subscriptions: "npm:^3.0.0"
     graphql-ws: "npm:^6.2.1"
     husky: "npm:^9.1.7"
+    image-size: "npm:2.0.4"
     ioredis: "npm:^5.3.2"
     istanbul-lib-coverage: "npm:3.2.2"
     istanbul-lib-report: "npm:3.0.1"
@@ -11935,6 +11936,15 @@ __metadata:
   version: 5.3.2
   resolution: "ignore@npm:5.3.2"
   checksum: 10c0/f9f652c957983634ded1e7f02da3b559a0d4cc210fca3792cb67f1b153623c9c42efdc1c4121af171e295444459fc4a9201101fb041b1104a3c000bccb188337
+  languageName: node
+  linkType: hard
+
+"image-size@npm:2.0.4":
+  version: 2.0.4
+  resolution: "image-size@npm:2.0.4"
+  bin:
+    image-size: bin/image-size.js
+  checksum: 10c0/af01b8c2b7c536df1b866fc6daaa7e58ee909cde42fcae27562612ea77181f473445bc8acf0dfb5b9e8590e966a7a1f3f0fbf4c87ec6d1d4d60d68d87d529d76
   languageName: node
   linkType: hard
 
