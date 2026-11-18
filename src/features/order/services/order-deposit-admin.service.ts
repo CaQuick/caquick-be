@@ -26,6 +26,7 @@ import { assertPaymentConfirmable } from '@/features/order/policies/payment-conf
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { RefundRepository } from '@/features/order/repositories/refund.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { toAdminOrderSummaryOutput } from '@/features/order/services/order-admin-mappers.helper';
 import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
@@ -51,6 +52,7 @@ export class AdminDepositService extends AdminBaseService {
     private readonly clock: ClockService,
     private readonly events: OrderEventsService,
     private readonly refunds: RefundRepository,
+    private readonly settlements: SettlementRepository,
   ) {
     super(accounts, auditLogs);
   }
@@ -96,17 +98,20 @@ export class AdminDepositService extends AdminBaseService {
       pendingPayments,
       refundsAwaitingAccount,
       refundsAwaitingTransfer,
+      pendingSettlements,
     ] = await Promise.all([
       this.payments.countPendingPayments({ claimedOnly: true }),
       this.payments.countPendingPayments({ claimedOnly: false }),
       this.refunds.countRefunds({ status: RefundStatus.AWAITING_ACCOUNT }),
       this.refunds.countRefunds({ status: RefundStatus.AWAITING_TRANSFER }),
+      this.settlements.countPending(),
     ]);
     return {
       claimedPayments,
       pendingPayments,
       refundsAwaitingAccount,
       refundsAwaitingTransfer,
+      pendingSettlements,
     };
   }
 

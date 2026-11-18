@@ -19,6 +19,7 @@ import {
   OrderStatus,
   RefundKind,
   RefundStatus,
+  SettlementStatus,
 } from '@/generated/prisma/client';
 import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 
@@ -88,6 +89,12 @@ const PAIRS: Array<
     Object.values(DepositRecordKind),
     'src/features/order/order-refund-admin.graphql',
     'DepositRecordKindType',
+  ],
+  [
+    'SettlementStatus',
+    Object.values(SettlementStatus),
+    'src/features/order/order.types.graphql',
+    'SettlementStatusType',
   ],
   [
     'CustomMode',

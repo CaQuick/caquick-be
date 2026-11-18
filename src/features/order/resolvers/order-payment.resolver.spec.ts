@@ -5,6 +5,7 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { PAYMENT_BANKS } from '@/features/order/constants/payment-banks';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { AdminPaymentMutationResolver } from '@/features/order/resolvers/order-payment-admin-mutation.resolver';
 import { AdminPaymentQueryResolver } from '@/features/order/resolvers/order-payment-admin-query.resolver';
@@ -22,6 +23,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('결제 설정·정산 계좌 Resolvers (real DB)', () => {
   let banks: PaymentQueryResolver;
@@ -46,6 +48,8 @@ describe('결제 설정·정산 계좌 Resolvers (real DB)', () => {
         StoreSellerRepository,
         PaymentSettingRepository,
         StoreSettlementAccountRepository,
+        SettlementRepository,
+        ...outboxPublisherProviders(),
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         { provide: AccountCipher, useValue: createTestAccountCipher() },
       ],

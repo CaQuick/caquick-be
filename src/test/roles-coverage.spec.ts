@@ -13,8 +13,8 @@ describe('접두 루트 필드 인가 커버리지', () => {
   const handlerAuth = collectHandlerAuth(collectFeatureResolverClasses());
 
   describe.each([
-    ['seller', 'SELLER', 63],
-    ['admin', 'ADMIN', 75],
+    ['seller', 'SELLER', 65],
+    ['admin', 'ADMIN', 79],
   ] as const)('%s 접두 → @Roles(%s)', (prefix, role, count) => {
     const fields = collectRootFieldsWithPrefix(prefix);
 

@@ -515,6 +515,45 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.paymentMethod).toBe('BANK_TRANSFER');
     });
 
+    it('수수료율과 정산 예정 금액을 준다: 입금 전 null, 확정 전 예상값, 확정 뒤 실제 지급액', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const legacy = await createStoreOrder(store.id, { status: 'CONFIRMED' });
+      const order = await createStoreOrder(store.id, {
+        status: 'CONFIRMED',
+        paid: true,
+        commissionRateBps: 555,
+      });
+
+      expect(await service.sellerOrder(account.id, legacy.id)).toMatchObject({
+        commissionRateBps: 0,
+        expectedPayoutAmount: null,
+        settlementBaseAmount: null,
+        commissionAmount: null,
+      });
+      // 10000 × 5.55% = 555
+      expect(await service.sellerOrder(account.id, order.id)).toMatchObject({
+        commissionRateBps: 555,
+        expectedPayoutAmount: 9_445,
+        settlementBaseAmount: null,
+        commissionAmount: null,
+      });
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: 'CANCELED',
+          settlement_base_amount: 4_000,
+          commission_amount: 222,
+          settlement_finalized_at: new Date(),
+        },
+      });
+      expect(await service.sellerOrder(account.id, order.id)).toMatchObject({
+        expectedPayoutAmount: 3_778,
+        settlementBaseAmount: 4_000,
+        commissionAmount: 222,
+      });
+    });
+
     it('soft-delete된 아이템·상태 이력은 상세에서 제외한다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createStoreOrder(store.id, { status: 'CONFIRMED' });

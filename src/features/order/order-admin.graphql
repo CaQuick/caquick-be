@@ -253,6 +253,31 @@ type AdminOrderDetail {
   판매자 픽업 일시 변경 이력. 오래된 순, 없으면 빈 배열.
   """
   pickupChanges: [OrderPickupChange!]!
+  """
+  주문 생성 시점의 수수료율(bp, 1bp = 0.01%). 바뀐 설정은 그 뒤 주문부터 적용된다.
+  """
+  commissionRateBps: Int!
+  """
+  정산 예정 금액(원). 정산 확정 뒤에는 실제 지급액(기준액 − 수수료), 확정 전에는 결제 금액에서 수수료(원 미만 버림)를 뺀
+  예상값이다. 입금이 확인되지 않았거나 결제 도입 전 주문이면 null, 확정 없이 취소된 주문(전액 환불)은 0.
+  """
+  expectedPayoutAmount: Int
+  """
+  확정된 수수료 기준액(원). 픽업 완료·노쇼는 결제 금액, 구매자 사정 취소는 결제 금액 − 환불 금액. 확정 전이면 null.
+  """
+  settlementBaseAmount: Int
+  """
+  확정된 수수료(원). 기준액 × 수수료율, 원 미만 버림. 확정 전이면 null.
+  """
+  commissionAmount: Int
+  """
+  정산 확정 시각. 확정 전이면 null.
+  """
+  settlementFinalizedAt: DateTime
+  """
+  이 주문이 묶인 주간 정산(adminSettlement). 아직 묶이지 않았으면 null.
+  """
+  settlementId: ID
 }
 
 """

@@ -16,6 +16,7 @@ import { OrderTransitionRepository } from '@/features/order/repositories/order-t
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { RefundRepository } from '@/features/order/repositories/refund.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { OutboxDispatcherService } from '@/features/outbox';
@@ -29,6 +30,7 @@ import {
   createOrderItem,
   createPayment,
   createRefund,
+  createSettlement,
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -58,6 +60,7 @@ describe('AdminDepositService (real DB)', () => {
         AdminDepositService,
         AccountAdminRepository,
         PaymentRepository,
+        SettlementRepository,
         OrderTransitionRepository,
         OrderRepository,
         RefundRepository,
@@ -576,7 +579,7 @@ describe('AdminDepositService (real DB)', () => {
       },
     );
 
-    it("처리 대기 건수는 '입금했어요'·전체 입금 대기와 환불 상태별(종류 무관)을 센다", async () => {
+    it("처리 대기 건수는 '입금했어요'·전체 입금 대기, 환불 상태별(종류 무관), 송금 대기 정산을 센다", async () => {
       const adminId = await admin();
       await pendingOrder({ claimedAt: NOW });
       await pendingOrder();
@@ -585,12 +588,15 @@ describe('AdminDepositService (real DB)', () => {
       await createRefund(prisma, { kind: 'DEPOSIT_RETURN' });
       await createRefund(prisma, { status: 'AWAITING_TRANSFER' });
       await createRefund(prisma, { status: 'COMPLETED' });
+      await createSettlement(prisma);
+      await createSettlement(prisma, { status: 'PAID', paid_at: NOW });
 
       await expect(service.adminTaskCounts(adminId)).resolves.toEqual({
         claimedPayments: 1,
         pendingPayments: 2,
         refundsAwaitingAccount: 2,
         refundsAwaitingTransfer: 1,
+        pendingSettlements: 1,
       });
     });
   });

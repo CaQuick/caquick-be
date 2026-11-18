@@ -26,6 +26,7 @@ import {
   createOrder,
   createOrderItem,
   createPayment,
+  createSettlement,
   createStore,
   createThreeDOrderItemCustom,
   createUserProfile,
@@ -515,6 +516,40 @@ describe('AdminOrderService (real DB)', () => {
           note: null,
         },
       ]);
+    });
+
+    it('수수료·정산 확정과 묶인 주간 정산을 준다', async () => {
+      const { order, storeId } = await orderWithItem({
+        status: 'PICKED_UP',
+        paid: true,
+      });
+      expect(await service.adminOrder(await admin(), order.id)).toMatchObject({
+        commissionRateBps: 0,
+        expectedPayoutAmount: 10_000,
+        settlementFinalizedAt: null,
+        settlementId: null,
+      });
+      const finalizedAt = new Date('2026-11-12T05:00:00.000Z');
+      const settlement = await createSettlement(prisma, { store_id: storeId });
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          commission_rate_bps: 500,
+          settlement_base_amount: 10_000,
+          commission_amount: 500,
+          settlement_finalized_at: finalizedAt,
+          settlement_id: settlement.id,
+        },
+      });
+
+      expect(await service.adminOrder(await admin(), order.id)).toMatchObject({
+        commissionRateBps: 500,
+        expectedPayoutAmount: 9_500,
+        settlementBaseAmount: 10_000,
+        commissionAmount: 500,
+        settlementFinalizedAt: finalizedAt,
+        settlementId: settlement.id.toString(),
+      });
     });
 
     it('결제와 입금 확인 처리자·메모를 준다', async () => {

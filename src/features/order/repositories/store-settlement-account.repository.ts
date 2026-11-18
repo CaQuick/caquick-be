@@ -38,6 +38,15 @@ export class StoreSettlementAccountRepository {
     });
   }
 
+  async findStoreIdsWithAccount(storeIds: bigint[]): Promise<Set<bigint>> {
+    if (storeIds.length === 0) return new Set();
+    const rows = await this.prisma.storeSettlementAccount.findMany({
+      where: { store_id: { in: storeIds } },
+      select: { store_id: true },
+    });
+    return new Set(rows.map((row) => row.store_id));
+  }
+
   /**
    * 매장당 1행. 판매자 본인·관리자 대리 수정이 같은 경로다. 계좌번호는 암호문과 끝 4자리로만 저장하고,
    * 감사는 매장 ID를 달아 판매자 감사 로그에도 보인다.

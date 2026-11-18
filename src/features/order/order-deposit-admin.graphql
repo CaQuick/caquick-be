@@ -140,6 +140,10 @@ type AdminTaskCounts {
   계좌가 들어와 송금을 기다리는 환불 수(adminRefunds status=AWAITING_TRANSFER의 totalCount).
   """
   refundsAwaitingTransfer: Int!
+  """
+  송금을 기다리는 주간 정산 수(adminSettlements status=PENDING의 totalCount).
+  """
+  pendingSettlements: Int!
 }
 
 """

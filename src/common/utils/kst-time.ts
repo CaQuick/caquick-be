@@ -47,6 +47,17 @@ export function kstDayBoundaries(at: Date): KstDayBoundaries {
   };
 }
 
+/** 그 시각이 속한 KST 주(월~일)의 월요일 00:00 KST(UTC 시각). */
+export function kstWeekStart(at: Date): Date {
+  const { dayStartUtc, weekday } = kstDayBoundaries(at);
+  return new Date(dayStartUtc.getTime() - ((weekday + 6) % 7) * DAY_MS);
+}
+
+/** `@db.Date` 값(KST 달력일의 UTC 자정 표현)을 YYYY-MM-DD로. */
+export function formatDateOnly(dateOnlyUtc: Date): string {
+  return dateOnlyUtc.toISOString().slice(0, 10);
+}
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

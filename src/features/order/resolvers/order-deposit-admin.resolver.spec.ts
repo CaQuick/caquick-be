@@ -8,6 +8,7 @@ import { AccountAdminRepository } from '@/features/auth/repositories/account-adm
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { RefundRepository } from '@/features/order/repositories/refund.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { AdminDepositMutationResolver } from '@/features/order/resolvers/order-deposit-admin-mutation.resolver';
 import { AdminDepositQueryResolver } from '@/features/order/resolvers/order-deposit-admin-query.resolver';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
@@ -39,6 +40,7 @@ describe('Admin Deposit Resolvers (real DB)', () => {
         AdminDepositService,
         AccountAdminRepository,
         PaymentRepository,
+        SettlementRepository,
         OrderTransitionRepository,
         RefundRepository,
         OrderEventsService,
@@ -78,6 +80,7 @@ describe('Admin Deposit Resolvers (real DB)', () => {
       pendingPayments: 1,
       refundsAwaitingAccount: 0,
       refundsAwaitingTransfer: 0,
+      pendingSettlements: 0,
     });
 
     const confirmed = await mutationResolver.adminConfirmPayment(user, {

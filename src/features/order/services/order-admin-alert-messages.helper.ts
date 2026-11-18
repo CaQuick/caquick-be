@@ -6,6 +6,7 @@ import {
 import type { OrderPaymentPendingPayload } from '@/features/order/events/order-payment-pending.event';
 import type { PaymentDepositClaimedPayload } from '@/features/order/events/payment-deposit-claimed.event';
 import type { RefundEventPayload } from '@/features/order/events/refund-requested.event';
+import type { SettlementCreatedPayload } from '@/features/order/events/settlement-created.event';
 import { RefundKind } from '@/generated/prisma/client';
 import type { AlertMessage } from '@/global/alerting';
 
@@ -88,6 +89,25 @@ export function buildRefundReadyAlert(
     detail: [
       `주문 ${p.orderNumber}`,
       `${p.amount.toLocaleString('ko-KR')}원 · ${REFUND_KIND_LABELS[p.kind]}`,
+      ...(link ? [link] : []),
+    ].join('\n'),
+  };
+}
+
+/** 매장별 이벤트를 주 단위 key로 묶어 억제 창 안에서 한 번만 보낸다 — 매장별 금액은 처리 화면에서 본다. */
+export function buildSettlementCreatedAlert(
+  p: SettlementCreatedPayload,
+  baseUrl: string | null,
+): AlertMessage {
+  const link = adminTaskLink(baseUrl, '/tasks/settlements', {
+    periodStart: p.periodStart,
+  });
+  return {
+    level: 'info',
+    title: '주간 정산 생성',
+    key: `settlement-week:${p.periodStart}`,
+    detail: [
+      `${p.periodStart} ~ ${p.periodEnd} 정산이 생성됐어요. 매장별 정산을 확인하고 송금해 주세요.`,
       ...(link ? [link] : []),
     ].join('\n'),
   };

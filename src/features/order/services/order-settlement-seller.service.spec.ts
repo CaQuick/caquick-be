@@ -1,5 +1,6 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { SellerSettlementService } from '@/features/order/services/order-settlement-seller.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
@@ -8,8 +9,15 @@ import { AccountCipher } from '@/global/crypto/account-cipher.service';
 import { createTestAccountCipher } from '@/test/account-cipher';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createAccount, setupSellerWithStore } from '@/test/factories';
+import {
+  createAccount,
+  createFinalizedOrder,
+  createSettlement,
+  createStore,
+  setupSellerWithStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
+import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('SellerSettlementService (real DB)', () => {
   let service: SellerSettlementService;
@@ -22,6 +30,8 @@ describe('SellerSettlementService (real DB)', () => {
         SellerSettlementService,
         StoreSellerRepository,
         StoreSettlementAccountRepository,
+        SettlementRepository,
+        ...outboxPublisherProviders(),
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         { provide: AccountCipher, useValue: createTestAccountCipher() },
       ],
@@ -139,5 +149,143 @@ describe('SellerSettlementService (real DB)', () => {
     await expect(
       service.sellerUpsertSettlementAccount(storeless.id, input),
     ).rejects.toThrowDomain('STORE_NOT_FOUND');
+  });
+
+  describe('sellerSettlements·sellerSettlement', () => {
+    const PAID_AT = new Date('2026-11-17T02:00:00.000Z');
+
+    it('내 매장 정산만 최근 생성 순으로 키셋 커서로 넘긴다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const other = await createStore(prisma);
+      const oldest = await createSettlement(prisma, {
+        store_id: store.id,
+        period_start: new Date('2026-11-02T00:00:00.000Z'),
+      });
+      const paid = await createSettlement(prisma, {
+        store_id: store.id,
+        period_start: new Date('2026-11-09T00:00:00.000Z'),
+        order_count: 2,
+        settlement_base_amount: 40_001,
+        commission_amount: 2_220,
+        payout_amount: 37_781,
+        status: 'PAID',
+        paid_at: PAID_AT,
+      });
+      const latest = await createSettlement(prisma, { store_id: store.id });
+      await createSettlement(prisma, { store_id: other.id });
+
+      const first = await service.sellerSettlements(account.id, { limit: 2 });
+      expect(first.items.map((i) => i.id)).toEqual([
+        latest.id.toString(),
+        paid.id.toString(),
+      ]);
+      expect(first).toMatchObject({ totalCount: 3, hasMore: true });
+      expect(first.items[1]).toEqual({
+        id: paid.id.toString(),
+        periodStart: '2026-11-09',
+        periodEnd: '2026-11-15',
+        orderCount: 2,
+        settlementBaseAmount: 40_001,
+        commissionAmount: 2_220,
+        payoutAmount: 37_781,
+        status: 'PAID',
+        paidAt: PAID_AT,
+        createdAt: paid.created_at,
+      });
+
+      const second = await service.sellerSettlements(account.id, {
+        limit: 2,
+        cursor: first.nextCursor!,
+      });
+      expect(second.items.map((i) => i.id)).toEqual([oldest.id.toString()]);
+      expect(second).toMatchObject({ hasMore: false, nextCursor: null });
+    });
+
+    it('상세는 포함 주문(주문 id 순)과 송금 계좌 끝 4자리를 내려준다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const finalizedAt = new Date('2026-11-12T05:00:00.000Z');
+      const orders = [
+        await createFinalizedOrder(prisma, {
+          store_id: store.id,
+          finalized_at: finalizedAt,
+          base_amount: 30_000,
+          commission_rate_bps: 555,
+          product_name_snapshot: '딸기 케이크',
+        }),
+        await createFinalizedOrder(prisma, {
+          store_id: store.id,
+          finalized_at: finalizedAt,
+          base_amount: 7_000,
+          status: 'NO_SHOW',
+        }),
+      ];
+      const settlement = await createSettlement(prisma, {
+        store_id: store.id,
+        status: 'PAID',
+        paid_at: PAID_AT,
+      });
+      await prisma.settlement.update({
+        where: { id: settlement.id },
+        data: {
+          paid_bank_code: '090',
+          paid_account_holder: '홍길동',
+          paid_account_number_enc: cipher.encrypt(
+            '33330123455678',
+            'settlement-account',
+          ),
+          paid_account_last4: '5678',
+        },
+      });
+      await prisma.order.updateMany({
+        where: { id: { in: orders.map((o) => o.id) } },
+        data: { settlement_id: settlement.id },
+      });
+
+      const detail = await service.sellerSettlement(account.id, settlement.id);
+
+      expect(detail.paidAccount).toEqual({
+        bank: { code: '090', name: '카카오뱅크' },
+        accountHolder: '홍길동',
+        accountNumberMasked: '****5678',
+      });
+      expect(detail.orders).toEqual([
+        {
+          orderId: orders[0].id.toString(),
+          orderNumber: orders[0].order_number,
+          productName: '딸기 케이크',
+          status: 'PICKED_UP',
+          commissionRateBps: 555,
+          settlementBaseAmount: 30_000,
+          commissionAmount: 1_665,
+          payoutAmount: 28_335,
+          settlementFinalizedAt: finalizedAt,
+        },
+        expect.objectContaining({
+          orderId: orders[1].id.toString(),
+          status: 'NO_SHOW',
+          payoutAmount: 7_000,
+        }),
+      ]);
+    });
+
+    it('송금 전 정산은 송금 계좌가 null이고, 다른 매장·없는 정산은 SETTLEMENT_NOT_FOUND다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const mine = await createSettlement(prisma, { store_id: store.id });
+      const others = await createSettlement(prisma);
+
+      await expect(
+        service.sellerSettlement(account.id, mine.id),
+      ).resolves.toMatchObject({
+        status: 'PENDING',
+        paidAccount: null,
+        orders: [],
+      });
+      await expect(
+        service.sellerSettlement(account.id, others.id),
+      ).rejects.toThrowDomain('SETTLEMENT_NOT_FOUND');
+      await expect(
+        service.sellerSettlement(account.id, others.id + 100n),
+      ).rejects.toThrowDomain('SETTLEMENT_NOT_FOUND');
+    });
   });
 });
