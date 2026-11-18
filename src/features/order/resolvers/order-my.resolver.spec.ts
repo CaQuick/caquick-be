@@ -1,11 +1,17 @@
+import { PubSub } from 'graphql-subscriptions';
+
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { UserOrderMutationResolver } from '@/features/order/resolvers/order-my-mutation.resolver';
 import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
+import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -33,6 +39,10 @@ describe('User Order Resolver (real DB)', () => {
         UserOrderService,
         OrderRepository,
         PaymentRepository,
+        OrderTransitionRepository,
+        OrderCancelPolicy,
+        OrderEventsService,
+        { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),
@@ -122,5 +132,32 @@ describe('User Order Resolver (real DB)', () => {
 
     expect(result.orderId).toBe(order.id.toString());
     expect(result.payment?.buyerClaimedAt).toBeInstanceOf(Date);
+  });
+
+  it('Mutation.cancelMyOrder: 입금 대기 주문을 취소하고 상세(취소 정보·취소 불가)를 반환한다', async () => {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const order = await createOrder(prisma, {
+      account_id: account.id,
+      status: 'PENDING_PAYMENT',
+    });
+    await createOrderItem(prisma, { order_id: order.id });
+    await createPayment(prisma, { order_id: order.id });
+
+    const result = await mutationResolver.cancelMyOrder(
+      { accountId: account.id.toString() },
+      { orderId: order.id.toString(), note: '다시 주문할게요' },
+    );
+
+    expect(result).toMatchObject({
+      status: 'CANCELED',
+      canCancel: false,
+      cancellation: {
+        actorType: 'BUYER',
+        reason: 'BUYER_REQUEST',
+        note: '다시 주문할게요',
+        refundAmount: 0,
+      },
+    });
   });
 });

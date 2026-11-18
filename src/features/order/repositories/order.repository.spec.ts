@@ -723,7 +723,7 @@ describe('OrderRepository (real DB)', () => {
         orderId: order.id,
         storeId: store.id,
         actorAccountId: seller.id,
-        toStatus: OrderStatus.CANCELED,
+        toStatus: OrderStatus.CONFIRMED,
         assertTransition,
         note: null,
         now: new Date(),
@@ -832,43 +832,31 @@ describe('OrderRepository (real DB)', () => {
       expect(auditLogs[0].user_agent).toBe('seller-app');
     });
 
-    it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {
+    it('전이 이벤트에 판매자 주체와 픽업 일시를 싣는다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();
       const order = await setupOrderForStore(store.id, buyer.id);
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
-      const now = new Date('2026-04-22T10:00:00Z');
 
-      const updated = await repo.updateOrderStatusBySeller({
+      await repo.updateOrderStatusBySeller({
         orderId: order.id,
         storeId: store.id,
         actorAccountId: seller.id,
-        toStatus: OrderStatus.CANCELED,
+        toStatus: OrderStatus.CONFIRMED,
         assertTransition: () => undefined,
-        note: '재고 부족',
-        now,
+        note: null,
+        now: new Date('2026-04-22T10:00:00Z'),
       });
 
-      expect(updated?.status).toBe('CANCELED');
-      expect(updated?.canceled_at?.toISOString()).toBe(now.toISOString());
-
-      // 취소도 구매자에게 알린다(판매자·운영자 취소 공통)
-      await drainOutbox(dispatcher);
-      const notifications = await prisma.notification.findMany({
-        where: { order_id: order.id },
+      const event = await prisma.outbox.findFirstOrThrow({
+        where: { event_type: 'order.status_changed' },
       });
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0]).toMatchObject({
-        account_id: buyer.id,
-        type: 'ORDER_STATUS',
-        event: 'ORDER_CANCELED',
-        store_id: store.id,
+      expect(event.payload_json).toMatchObject({
+        actorType: 'SELLER',
+        cancelReason: null,
+        refundAmount: null,
+        pickupAt: order.pickup_at.toISOString(),
       });
-
-      const histories = await prisma.orderStatusHistory.findMany({
-        where: { order_id: order.id },
-      });
-      expect(histories[0].note).toBe('재고 부족');
     });
 
     it('CONFIRMED→MADE→PICKED_UP 연속 전이 시 각 타임스탬프 컬럼이 누적 기록된다', async () => {

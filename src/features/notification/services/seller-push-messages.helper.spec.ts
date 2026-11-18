@@ -1,8 +1,11 @@
 import {
   buildBuyerMessagePush,
+  buildOrderCanceledPush,
   buildOrderSubmittedPush,
   formatKstPickupAt,
 } from '@/features/notification/services/seller-push-messages.helper';
+import type { OrderStatusChangedPayload } from '@/features/order';
+import { OrderActor, OrderStatus } from '@/generated/prisma/client';
 
 describe('seller-push-messages.helper', () => {
   // UTC → KST(+9), 월·일은 0 채움 없이, 시·분은 두 자리
@@ -68,6 +71,82 @@ describe('seller-push-messages.helper', () => {
       title: '새 문의',
       body: '픽업 시간 바꿀 수 있나요?',
       data: { kind: 'BUYER_MESSAGE', conversationId: '11' },
+    });
+  });
+
+  describe('buildOrderCanceledPush', () => {
+    const CANCELED: OrderStatusChangedPayload = {
+      orderId: '42',
+      orderNumber: 'ORD-1',
+      buyerAccountId: '7',
+      fromStatus: 'SUBMITTED',
+      toStatus: 'CANCELED',
+      storeId: '3',
+      storeName: '케이크샵',
+      productId: '9',
+      productName: '레터링 케이크',
+      actorType: 'BUYER',
+      cancelReason: 'BUYER_REQUEST',
+      refundAmount: 30_000,
+      pickupAt: '2026-10-05T03:05:00.000Z',
+    };
+
+    it.each([
+      ['BUYER', '구매자'],
+      ['ADMIN', '운영자'],
+      ['SYSTEM', '자동'],
+    ] as const)(
+      '%s 취소: 본문 끝에 주체(%s), 딥링크는 주문',
+      (actorType, label) => {
+        expect(buildOrderCanceledPush({ ...CANCELED, actorType })).toEqual({
+          storeId: '3',
+          content: {
+            title: '주문 취소',
+            body: `레터링 케이크 · 픽업 10/5 12:05 주문이 취소됐어요(${label})`,
+            data: { kind: 'ORDER_CANCELED', orderId: '42' },
+          },
+        });
+      },
+    );
+
+    // 푸시 필터 전수: 취소 전이 ∧ 입금 전 주문 아님 ∧ 판매자 본인이 아닌 주체만
+    const cases = Object.values(OrderStatus).flatMap((fromStatus) =>
+      Object.values(OrderStatus).flatMap((toStatus) =>
+        [...Object.values(OrderActor), null].map(
+          (actorType) =>
+            [
+              fromStatus,
+              toStatus,
+              actorType,
+              toStatus === 'CANCELED' &&
+                fromStatus !== 'PENDING_PAYMENT' &&
+                actorType !== null &&
+                actorType !== 'SELLER',
+            ] as const,
+        ),
+      ),
+    );
+
+    it('필터 표는 7 × 7 × 주체 5(모름 포함)를 덮고 보내는 경우는 18개다', () => {
+      expect(cases).toHaveLength(245);
+      expect(cases.filter(([, , , sent]) => sent)).toHaveLength(18);
+    });
+
+    it.each(cases)(
+      '%s → %s by %s: 보냄 %s',
+      (fromStatus, toStatus, actorType, sent) => {
+        const push = buildOrderCanceledPush({
+          ...CANCELED,
+          fromStatus,
+          toStatus,
+          actorType,
+        });
+        expect(push !== null).toBe(sent);
+      },
+    );
+
+    it('매장을 모르면(품목 없음) 보내지 않는다', () => {
+      expect(buildOrderCanceledPush({ ...CANCELED, storeId: null })).toBeNull();
     });
   });
 });

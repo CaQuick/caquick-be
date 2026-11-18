@@ -4,11 +4,14 @@ import type {
   AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 import {
+  toOrderCancellation,
   toOrderItemDetail,
+  toOrderRefund,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
 import { toAdminOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
 import type {
+  AdminOrderCancelOptionsOutput,
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
@@ -36,6 +39,7 @@ export function toAdminOrderSummaryOutput(
 
 export function toAdminOrderDetailOutput(
   row: AdminOrderDetailRow,
+  cancelOptions: AdminOrderCancelOptionsOutput,
 ): AdminOrderDetailOutput {
   const profile = row.account.user_profile;
   return {
@@ -66,5 +70,8 @@ export function toAdminOrderDetailOutput(
     updatedAt: row.updated_at,
     items: row.items.map(toOrderItemDetail),
     statusHistories: row.status_histories.map(toOrderStatusHistory),
+    refunds: row.refunds.map(toOrderRefund),
+    cancellation: toOrderCancellation(row),
+    cancelOptions,
   };
 }

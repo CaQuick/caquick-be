@@ -2,7 +2,10 @@ import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import type { SellerCancelOrderInput } from '@/features/order/dto/inputs/seller-cancel-order.input';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
@@ -36,6 +39,8 @@ describe('SellerOrderService (real DB)', () => {
         StoreSellerRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderCancelPolicy,
+        OrderTransitionRepository,
         {
           provide: AUDIT_LOG_REPOSITORY,
           useClass: AuditLogRepository,
@@ -64,7 +69,13 @@ describe('SellerOrderService (real DB)', () => {
 
   async function createStoreOrder(
     storeId: bigint,
-    opts: { status?: OrderStatus; buyerId?: bigint } = {},
+    opts: {
+      status?: OrderStatus;
+      buyerId?: bigint;
+      /** 확인된 결제를 함께 만든다 */
+      paid?: boolean;
+      commissionRateBps?: number;
+    } = {},
   ) {
     const buyerId =
       opts.buyerId ??
@@ -72,11 +83,19 @@ describe('SellerOrderService (real DB)', () => {
     const order = await createOrder(prisma, {
       account_id: buyerId,
       status: opts.status ?? 'SUBMITTED',
+      commission_rate_bps: opts.commissionRateBps,
     });
     await createOrderItem(prisma, {
       order_id: order.id,
       store_id: storeId,
     });
+    if (opts.paid) {
+      await createPayment(prisma, {
+        order_id: order.id,
+        status: 'CONFIRMED',
+        confirmed_at: new Date(),
+      });
+    }
     return order;
   }
 
@@ -342,6 +361,38 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.statusHistories[0].toStatus).toBe('CONFIRMED');
       // 결제 도입 전 주문은 결제 수단이 없다
       expect(result.paymentMethod).toBeNull();
+      expect(result.statusHistories[0].actorType).toBe('SELLER');
+      expect(result.cancellation).toBeNull();
+    });
+
+    it('입금 반환 환불은 판매자 취소 정보에 섞이지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'CANCELED' });
+      await prisma.orderStatusHistory.create({
+        data: {
+          order_id: order.id,
+          from_status: 'SUBMITTED',
+          to_status: 'CANCELED',
+          actor_type: 'ADMIN',
+          cancel_reason: 'OTHER',
+          refund_amount: 0,
+        },
+      });
+      await prisma.refund.create({
+        data: {
+          order_id: order.id,
+          kind: 'DEPOSIT_RETURN',
+          amount: 500,
+          requested_at: new Date(),
+        },
+      });
+
+      const result = await service.sellerOrder(account.id, order.id);
+      expect(result.cancellation).toMatchObject({
+        actorType: 'ADMIN',
+        refundAmount: 0,
+        refundStatus: null,
+      });
     });
 
     it('결제가 있으면 결제 수단을 준다', async () => {
@@ -456,17 +507,25 @@ describe('SellerOrderService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
-    it('CANCELED 전환 시 note 누락되면 400', async () => {
-      const { account, store } = await setupSellerWithStore(prisma);
-      const order = await createStoreOrder(store.id);
-      await expect(
-        service.sellerUpdateOrderStatus(account.id, {
-          orderId: order.id.toString(),
-          toStatus: 'CANCELED',
-          note: null,
-        }),
-      ).rejects.toThrowDomain(400);
-    });
+    it.each(['SUBMITTED', 'CONFIRMED', 'MADE'] as const)(
+      '%s 주문도 상태 변경으로는 취소할 수 없다(INVALID_ORDER_STATUS_TRANSITION, sellerCancelOrder로만)',
+      async (status) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createStoreOrder(store.id, { status });
+        await expect(
+          service.sellerUpdateOrderStatus(account.id, {
+            orderId: order.id.toString(),
+            toStatus: 'CANCELED',
+            note: '재고 부족',
+          }),
+        ).rejects.toThrowDomain('INVALID_ORDER_STATUS_TRANSITION');
+        expect(
+          await prisma.orderStatusHistory.count({
+            where: { order_id: order.id },
+          }),
+        ).toBe(0);
+      },
+    );
 
     it('정상 상태 전이: SUBMITTED → CONFIRMED, status_history row 생성 확인', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
@@ -535,8 +594,7 @@ describe('SellerOrderService (real DB)', () => {
       await expect(
         service.sellerUpdateOrderStatus(account.id, {
           orderId: order.id.toString(),
-          toStatus: 'CANCELED',
-          note: '취소',
+          toStatus: 'CONFIRMED',
         }),
       ).rejects.toThrowDomain('ORDER_NOT_FOUND');
     });
@@ -570,21 +628,248 @@ describe('SellerOrderService (real DB)', () => {
       });
     });
 
-    it('CANCELED 전환 + note 제공 시 정상 처리', async () => {
+    it('픽업 완료는 확인된 결제액으로 정산을 확정한다(수수료 원 미만 버림)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      const order = await createStoreOrder(store.id);
+      const order = await createStoreOrder(store.id, {
+        status: 'MADE',
+        paid: true,
+        commissionRateBps: 333,
+      });
 
-      const result = await service.sellerUpdateOrderStatus(account.id, {
+      await service.sellerUpdateOrderStatus(account.id, {
         orderId: order.id.toString(),
-        toStatus: 'CANCELED',
-        note: '재고 부족',
+        toStatus: 'PICKED_UP',
       });
 
-      expect(result.status).toBe('CANCELED');
-      const histories = await prisma.orderStatusHistory.findMany({
-        where: { order_id: order.id },
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
       });
-      expect(histories[0].note).toBe('재고 부족');
+      expect(row).toMatchObject({
+        status: 'PICKED_UP',
+        settlement_base_amount: 10_000,
+        commission_amount: 333,
+        settlement_id: null,
+      });
+      expect(row.settlement_finalized_at).toEqual(row.picked_up_at);
+    });
+
+    it('확인된 결제가 없는 주문(결제 도입 전)의 픽업 완료는 정산을 확정하지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'MADE' });
+
+      await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'PICKED_UP',
+      });
+
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({
+        status: 'PICKED_UP',
+        settlement_base_amount: null,
+        settlement_finalized_at: null,
+      });
+    });
+
+    it('픽업 완료가 아닌 전이는 정산을 확정하지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'CONFIRMED',
+        paid: true,
+      });
+
+      await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'MADE',
+      });
+
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({ settlement_finalized_at: null });
+    });
+  });
+
+  describe('sellerCancelOrder', () => {
+    function cancelInput(
+      orderId: bigint,
+      overrides: Partial<SellerCancelOrderInput> = {},
+    ): SellerCancelOrderInput {
+      return {
+        orderId: orderId.toString(),
+        reason: 'OUT_OF_MATERIALS',
+        ...overrides,
+      };
+    }
+
+    it('접수 주문 거절은 결제액 전액 환불이고 사정은 기록하지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { paid: true });
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
+
+      const result = await service.sellerCancelOrder(
+        account.id,
+        cancelInput(order.id, {
+          reason: 'DESIGN_NOT_FEASIBLE',
+          note: '도안이 어려워요',
+          fault: 'BUYER',
+          refundAmount: 0,
+        }),
+      );
+
+      expect(result).toMatchObject({
+        status: 'CANCELED',
+        firstItemName: 'Product snapshot',
+      });
+      await expect(
+        prisma.orderStatusHistory.findFirstOrThrow({
+          where: { order_id: order.id },
+        }),
+      ).resolves.toMatchObject({
+        from_status: 'SUBMITTED',
+        actor_type: 'SELLER',
+        actor_account_id: account.id,
+        cancel_reason: 'DESIGN_NOT_FEASIBLE',
+        cancel_fault: null,
+        refund_amount: 10_000,
+        note: '도안이 어려워요',
+      });
+      await expect(
+        prisma.refund.findFirstOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ amount: 10_000, status: 'AWAITING_ACCOUNT' });
+      expect(topic.received).toEqual([
+        expect.objectContaining({
+          kind: 'STATUS_CHANGED',
+          orderId: order.id.toString(),
+          status: 'CANCELED',
+        }),
+      ]);
+      topic.stop();
+    });
+
+    it('제작 완료 주문도 취소할 수 있고 구매자 사정이면 R만 환불하고 남는 금액을 정산 확정한다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'MADE',
+        paid: true,
+        commissionRateBps: 1_000,
+      });
+
+      await service.sellerCancelOrder(
+        account.id,
+        cancelInput(order.id, {
+          reason: 'BUYER_REQUEST',
+          fault: 'BUYER',
+          refundAmount: 2_500,
+        }),
+      );
+
+      await expect(
+        prisma.refund.findFirstOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ amount: 2_500 });
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({
+        status: 'CANCELED',
+        settlement_base_amount: 7_500,
+        commission_amount: 750,
+      });
+    });
+
+    it.each([
+      [
+        '미입금 사유',
+        'SUBMITTED',
+        { reason: 'PAYMENT_NOT_RECEIVED' },
+        'CANCEL_REASON_NOT_ALLOWED',
+      ],
+      [
+        '자동 미확정 사유',
+        'SUBMITTED',
+        { reason: 'CONFIRM_TIMEOUT' },
+        'CANCEL_REASON_NOT_ALLOWED',
+      ],
+      ['확정 주문에 사정 없음', 'CONFIRMED', {}, 'CANCEL_FAULT_REQUIRED'],
+      [
+        '구매자 사정에 금액 없음',
+        'CONFIRMED',
+        { fault: 'BUYER' },
+        'REFUND_AMOUNT_REQUIRED',
+      ],
+      [
+        '결제액 + 1원',
+        'MADE',
+        { fault: 'BUYER', refundAmount: 10_001 },
+        'REFUND_AMOUNT_OUT_OF_RANGE',
+      ],
+      [
+        '픽업 완료 주문',
+        'PICKED_UP',
+        { fault: 'SELLER' },
+        'ORDER_NOT_CANCELLABLE',
+      ],
+      ['이미 취소된 주문', 'CANCELED', {}, 'ORDER_NOT_CANCELLABLE'],
+    ] as const)(
+      '%s는 %s로 거절한다',
+      async (_label, status, overrides, code) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createStoreOrder(store.id, { status, paid: true });
+
+        await expect(
+          service.sellerCancelOrder(
+            account.id,
+            cancelInput(order.id, overrides),
+          ),
+        ).rejects.toThrowDomain(code);
+        expect(
+          await prisma.orderStatusHistory.count({
+            where: { order_id: order.id },
+          }),
+        ).toBe(0);
+      },
+    );
+
+    it('다른 매장 주문과 입금 확인 전 주문은 404다', async () => {
+      const me = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const othersOrder = await createStoreOrder(other.store.id);
+      const pending = await createStoreOrder(me.store.id, {
+        status: 'PENDING_PAYMENT',
+      });
+
+      for (const order of [othersOrder, pending]) {
+        await expect(
+          service.sellerCancelOrder(me.account.id, cancelInput(order.id)),
+        ).rejects.toThrowDomain('ORDER_NOT_FOUND');
+      }
+      expect(await prisma.orderStatusHistory.count()).toBe(0);
+    });
+
+    it('취소된 주문 상세는 취소 정보(주체·사유·환불)를 준다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'CONFIRMED',
+        paid: true,
+      });
+      await service.sellerCancelOrder(
+        account.id,
+        cancelInput(order.id, { fault: 'SELLER' }),
+      );
+
+      const detail = await service.sellerOrder(account.id, order.id);
+
+      expect(detail.cancellation).toMatchObject({
+        actorType: 'SELLER',
+        reason: 'OUT_OF_MATERIALS',
+        reasonLabel: '재료 소진',
+        fault: 'SELLER',
+        refundAmount: 10_000,
+        refundStatus: 'AWAITING_ACCOUNT',
+      });
+      expect(detail.statusHistories[0]).toMatchObject({
+        toStatus: 'CANCELED',
+        actorType: 'SELLER',
+        cancelReason: 'OUT_OF_MATERIALS',
+      });
     });
   });
 

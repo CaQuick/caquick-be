@@ -438,6 +438,58 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
     });
   });
 
+  describe('order.status_changed', () => {
+    function statusChanged(
+      storeId: bigint,
+      overrides: Record<string, unknown> = {},
+    ): OutboxEvent {
+      return event('order.status_changed', {
+        orderId: '42',
+        orderNumber: 'ORD-1',
+        buyerAccountId: '7',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'CANCELED',
+        storeId: storeId.toString(),
+        storeName: '케이크샵',
+        productId: '9',
+        productName: '레터링 케이크',
+        actorType: 'ADMIN',
+        cancelReason: 'OTHER',
+        refundAmount: 0,
+        pickupAt: '2026-10-05T03:05:00.000Z',
+        ...overrides,
+      });
+    }
+
+    it('운영자 취소는 매장 디바이스에 취소 푸시를 보낸다', async () => {
+      const { storeId } = await storeWithDevices(1);
+
+      await consumer.handle(statusChanged(storeId));
+
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0][0]).toMatchObject({
+        title: '주문 취소',
+        body: '레터링 케이크 · 픽업 10/5 12:05 주문이 취소됐어요(운영자)',
+        data: { kind: 'ORDER_CANCELED', orderId: '42' },
+      });
+      expect(await deliveries()).toHaveLength(1);
+    });
+
+    it.each([
+      ['판매자 본인 취소', { actorType: 'SELLER' }],
+      ['입금 전 주문 취소', { fromStatus: 'PENDING_PAYMENT' }],
+      ['취소가 아닌 전이', { toStatus: 'MADE', cancelReason: null }],
+      ['주체를 모르는 옛 이벤트', { actorType: undefined }],
+    ])('%s는 보내지 않고 정상 소비된다(행 없음)', async (_label, overrides) => {
+      const { storeId } = await storeWithDevices(1);
+
+      await consumer.handle(statusChanged(storeId, overrides));
+
+      expect(send).not.toHaveBeenCalled();
+      expect(await deliveries()).toHaveLength(0);
+    });
+  });
+
   it('conversation.buyer_message_sent는 preview를 본문으로, 딥링크는 대화 id', async () => {
     const { storeId, devices } = await storeWithDevices(1);
 
@@ -465,9 +517,9 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
   });
 
   it('반증: 구독하지 않은 event_type은 던진다', async () => {
-    await expect(
-      consumer.handle(event('order.status_changed', {})),
-    ).rejects.toThrow('구독하지 않은 outbox 이벤트: order.status_changed');
+    await expect(consumer.handle(event('review.liked', {}))).rejects.toThrow(
+      '구독하지 않은 outbox 이벤트: review.liked',
+    );
     expect(send).not.toHaveBeenCalled();
   });
 });

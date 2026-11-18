@@ -41,7 +41,7 @@ enum NotificationEvent {
   """
   ORDER_PICKED_UP
   """
-  주문이 취소됐다(판매자 또는 운영자). type은 ORDER_STATUS.
+  주문이 취소됐다(판매자·운영자·자동 미확정). 본문 끝에 사유 라벨이 붙고, 구매자 본인 취소는 알림이 없다. type은 ORDER_STATUS.
   """
   ORDER_CANCELED
   """

@@ -7,7 +7,10 @@ import { AccountAdminRepository } from '@/features/auth/repositories/account-adm
 import { NotificationAdminRepository } from '@/features/notification/repositories/notification-admin.repository';
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
+import type { AdminCancelOrderInput } from '@/features/order/dto/inputs/admin-cancel-order.input';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
@@ -47,6 +50,8 @@ describe('AdminOrderService (real DB)', () => {
         AccountAdminRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderCancelPolicy,
+        OrderTransitionRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         OrderEventsService,
         // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
@@ -84,6 +89,8 @@ describe('AdminOrderService (real DB)', () => {
       buyerName?: string;
       orderNumber?: string;
       submittedAt?: Date | null;
+      /** 확인된 결제(입금 대기면 PENDING 결제)를 함께 만든다 */
+      paid?: boolean;
     } = {},
   ) {
     const buyer = await createAccount(prisma, { account_type: 'USER' });
@@ -105,7 +112,22 @@ describe('AdminOrderService (real DB)', () => {
       order_id: order.id,
       store_id: store.id,
     });
+    if (overrides.paid) {
+      const confirmed = order.status !== 'PENDING_PAYMENT';
+      await createPayment(prisma, {
+        order_id: order.id,
+        status: confirmed ? 'CONFIRMED' : 'PENDING',
+        confirmed_at: confirmed ? new Date() : null,
+      });
+    }
     return { order, item, buyer, storeId: store.id };
+  }
+
+  function cancelInput(
+    orderId: bigint,
+    overrides: Partial<AdminCancelOrderInput> = {},
+  ): AdminCancelOrderInput {
+    return { orderId: orderId.toString(), reason: 'OTHER', ...overrides };
   }
 
   describe('adminOrders', () => {
@@ -387,6 +409,8 @@ describe('AdminOrderService (real DB)', () => {
       expect(result.items.map((i) => i.id)).toEqual([item.id.toString()]);
       expect(result.statusHistories).toHaveLength(1);
       expect(result.payment).toBeNull();
+      expect(result.refunds).toEqual([]);
+      expect(result.cancellation).toBeNull();
     });
 
     it('결제와 입금 확인 처리자·메모를 준다', async () => {
@@ -425,6 +449,95 @@ describe('AdminOrderService (real DB)', () => {
       });
     });
 
+    it.each([
+      ['PENDING_PAYMENT', true, 'NO_REFUND', 7, 0],
+      ['SUBMITTED', true, 'FULL_REFUND', 6, 10_000],
+      ['CONFIRMED', true, 'BY_FAULT', 6, 10_000],
+      ['MADE', true, 'BY_FAULT', 6, 10_000],
+      ['PICKED_UP', false, null, 0, 10_000],
+      ['NO_SHOW', false, null, 0, 10_000],
+      ['CANCELED', false, null, 0, 10_000],
+    ] as const)(
+      '%s 주문의 취소 선택지: 취소 가능 %s, 규칙 %s, 사유 %d개, 결제액 %d',
+      async (status, cancelable, refundRule, reasonCount, paidAmount) => {
+        const { order } = await orderWithItem({ status, paid: true });
+
+        const { cancelOptions } = await service.adminOrder(
+          await admin(),
+          order.id,
+        );
+
+        expect(cancelOptions).toMatchObject({
+          cancelable,
+          refundRule,
+          paidAmount,
+        });
+        expect(cancelOptions.reasons).toHaveLength(reasonCount);
+        expect(cancelOptions.reasons.includes('PAYMENT_NOT_RECEIVED')).toBe(
+          status === 'PENDING_PAYMENT',
+        );
+      },
+    );
+
+    it('결제 도입 전 주문은 결제액 0으로 내려 준다', async () => {
+      const { order } = await orderWithItem({ status: 'CONFIRMED' });
+      const { cancelOptions } = await service.adminOrder(
+        await admin(),
+        order.id,
+      );
+      expect(cancelOptions.paidAmount).toBe(0);
+    });
+
+    it('취소 뒤에는 취소 정보와 환불 목록(입금 반환 포함, 오래된 순)을 준다', async () => {
+      const { order } = await orderWithItem({ status: 'MADE', paid: true });
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id, {
+          reason: 'OUT_OF_MATERIALS',
+          note: '재료 소진',
+          fault: 'BUYER',
+          refundAmount: 4_000,
+        }),
+      );
+      await prisma.refund.create({
+        data: {
+          order_id: order.id,
+          kind: 'DEPOSIT_RETURN',
+          amount: 500,
+          requested_at: new Date(),
+        },
+      });
+
+      const result = await service.adminOrder(await admin(), order.id);
+
+      expect(result.cancellation).toMatchObject({
+        actorType: 'ADMIN',
+        reason: 'OUT_OF_MATERIALS',
+        reasonLabel: '재료 소진',
+        note: '재료 소진',
+        fault: 'BUYER',
+        refundAmount: 4_000,
+        refundStatus: 'AWAITING_ACCOUNT',
+        refundCompletedAt: null,
+      });
+      expect(result.refunds.map((r) => [r.kind, r.amount])).toEqual([
+        ['CANCEL', 4_000],
+        ['DEPOSIT_RETURN', 500],
+      ]);
+      expect(result.statusHistories[0]).toMatchObject({
+        toStatus: 'CANCELED',
+        actorType: 'ADMIN',
+        cancelReason: 'OUT_OF_MATERIALS',
+        cancelFault: 'BUYER',
+        refundAmount: 4_000,
+      });
+      expect(result.cancelOptions).toMatchObject({
+        cancelable: false,
+        reasons: [],
+        refundRule: null,
+      });
+    });
+
     it('없거나 삭제된 주문이면 404', async () => {
       const deleted = await createOrder(prisma, { deleted_at: new Date() });
       await expect(
@@ -437,26 +550,33 @@ describe('AdminOrderService (real DB)', () => {
   });
 
   describe('adminCancelOrder', () => {
-    it.each(['SUBMITTED', 'CONFIRMED', 'MADE'] as const)(
-      '%s 주문을 취소하고 이력([관리자] 접두)·ORDER_CANCELED 알림·감사(store_id)를 한 번에 남긴다',
-      async (status) => {
+    it.each([
+      ['SUBMITTED', null],
+      ['CONFIRMED', 'SELLER'],
+      ['MADE', 'SELLER'],
+    ] as const)(
+      '%s 주문을 취소하고 이력(주체·사유·환불액, 접두 없음)·전액 환불·취소 알림·환불 계좌 요청·감사를 남긴다',
+      async (status, fault) => {
         const actor = await admin();
-        const { order, buyer, storeId } = await orderWithItem({ status });
-
-        const result = await service.adminCancelOrder(actor, {
-          orderId: order.id.toString(),
-          note: '  가게 사정  ',
+        const { order, buyer, storeId } = await orderWithItem({
+          status,
+          paid: true,
         });
+
+        const result = await service.adminCancelOrder(
+          actor,
+          cancelInput(order.id, {
+            reason: 'SCHEDULE_UNAVAILABLE',
+            note: '  가게 사정  ',
+            fault,
+          }),
+        );
 
         expect(result).toMatchObject({
           status: 'CANCELED',
           firstItemName: 'Product snapshot',
           firstItemImageUrl: null,
         });
-        const row = await prisma.order.findUniqueOrThrow({
-          where: { id: order.id },
-        });
-        expect(row.canceled_at).not.toBeNull();
         const history = await prisma.orderStatusHistory.findFirstOrThrow({
           where: { order_id: order.id, to_status: 'CANCELED' },
         });
@@ -464,17 +584,36 @@ describe('AdminOrderService (real DB)', () => {
           from_status: status,
           actor_type: 'ADMIN',
           actor_account_id: actor,
-          note: '[관리자] 가게 사정',
+          cancel_reason: 'SCHEDULE_UNAVAILABLE',
+          cancel_fault: fault,
+          refund_amount: order.total_price,
+          note: '가게 사정',
+        });
+        await expect(
+          prisma.refund.findFirstOrThrow({ where: { order_id: order.id } }),
+        ).resolves.toMatchObject({
+          kind: 'CANCEL',
+          amount: order.total_price,
+          status: 'AWAITING_ACCOUNT',
         });
         await drainOutbox(dispatcher);
-        const notification = await prisma.notification.findFirstOrThrow({
+        const notifications = await prisma.notification.findMany({
           where: { order_id: order.id },
+          orderBy: { id: 'asc' },
         });
-        expect(notification).toMatchObject({
-          account_id: buyer.id,
-          event: 'ORDER_CANCELED',
-          store_id: storeId,
-        });
+        expect(notifications).toEqual([
+          expect.objectContaining({
+            account_id: buyer.id,
+            event: 'ORDER_CANCELED',
+            body: `${order.order_number} 주문이 취소되었어요. 사유: 일정 불가`,
+            store_id: storeId,
+          }),
+          expect.objectContaining({
+            account_id: buyer.id,
+            event: 'REFUND_ACCOUNT_REQUESTED',
+            body: `${order.order_number} 10,000원을 돌려받을 계좌를 입력해 주세요.`,
+          }),
+        ]);
         const audit = await prisma.auditLog.findFirstOrThrow({
           where: { target_type: 'ORDER', target_id: order.id },
         });
@@ -486,16 +625,43 @@ describe('AdminOrderService (real DB)', () => {
       },
     );
 
-    it.each(['PICKED_UP', 'CANCELED', 'NO_SHOW', 'PENDING_PAYMENT'] as const)(
-      '%s 주문은 400(판매자와 같은 전이 규칙)',
+    it("입금 대기 주문을 미입금으로 취소하면('입금했어요'를 눌렀어도) 결제를 닫고 입금 기한 만료 알림을 보낸다", async () => {
+      const { order, buyer } = await orderWithItem({
+        status: 'PENDING_PAYMENT',
+      });
+      await createPayment(prisma, {
+        order_id: order.id,
+        buyer_claimed_at: new Date(),
+      });
+
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id, { reason: 'PAYMENT_NOT_RECEIVED' }),
+      );
+
+      await expect(
+        prisma.payment.findUniqueOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ status: 'CANCELED' });
+      expect(await prisma.refund.count()).toBe(0);
+      await drainOutbox(dispatcher);
+      await expect(
+        prisma.notification.findMany({ where: { order_id: order.id } }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          account_id: buyer.id,
+          event: 'ORDER_PAYMENT_EXPIRED',
+          body: `${order.order_number} 입금이 확인되지 않아 주문이 취소되었어요.`,
+        }),
+      ]);
+    });
+
+    it.each(['PICKED_UP', 'CANCELED', 'NO_SHOW'] as const)(
+      '%s 주문은 ORDER_NOT_CANCELLABLE',
       async (status) => {
         const { order } = await orderWithItem({ status });
         await expect(
-          service.adminCancelOrder(await admin(), {
-            orderId: order.id.toString(),
-            note: 'x',
-          }),
-        ).rejects.toThrowDomain(400);
+          service.adminCancelOrder(await admin(), cancelInput(order.id)),
+        ).rejects.toThrowDomain('ORDER_NOT_CANCELLABLE');
         expect(
           await prisma.orderStatusHistory.count({
             where: { order_id: order.id },
@@ -504,40 +670,101 @@ describe('AdminOrderService (real DB)', () => {
       },
     );
 
-    it('사유가 공백이면 400, 없는 주문은 404', async () => {
-      const { order } = await orderWithItem();
-      await expect(
-        service.adminCancelOrder(await admin(), {
-          orderId: order.id.toString(),
-          note: '   ',
+    it.each([
+      [
+        '접수 주문에 미입금 사유',
+        'SUBMITTED',
+        { reason: 'PAYMENT_NOT_RECEIVED' },
+        'CANCEL_REASON_NOT_ALLOWED',
+      ],
+      [
+        '자동 미확정 사유',
+        'SUBMITTED',
+        { reason: 'CONFIRM_TIMEOUT' },
+        'CANCEL_REASON_NOT_ALLOWED',
+      ],
+      ['확정 주문에 사정 없음', 'CONFIRMED', {}, 'CANCEL_FAULT_REQUIRED'],
+      [
+        '구매자 사정에 금액 없음',
+        'MADE',
+        { fault: 'BUYER' },
+        'REFUND_AMOUNT_REQUIRED',
+      ],
+      [
+        '결제액 + 1원',
+        'MADE',
+        { fault: 'BUYER', refundAmount: 10_001 },
+        'REFUND_AMOUNT_OUT_OF_RANGE',
+      ],
+      [
+        '음수',
+        'CONFIRMED',
+        { fault: 'BUYER', refundAmount: -1 },
+        'REFUND_AMOUNT_OUT_OF_RANGE',
+      ],
+    ] as const)(
+      '%s는 %s로 거절하고 아무것도 바꾸지 않는다',
+      async (_label, status, overrides, code) => {
+        const { order } = await orderWithItem({ status, paid: true });
+        await expect(
+          service.adminCancelOrder(
+            await admin(),
+            cancelInput(order.id, overrides),
+          ),
+        ).rejects.toThrowDomain(code);
+        await expect(
+          prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+        ).resolves.toMatchObject({ status });
+        expect(await prisma.refund.count()).toBe(0);
+        expect(await prisma.outbox.count()).toBe(0);
+      },
+    );
+
+    it('구매자 사정 부분 환불은 환불 R과 남는 금액의 정산 확정을 함께 남긴다', async () => {
+      const { order } = await orderWithItem({ status: 'MADE', paid: true });
+
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id, {
+          reason: 'BUYER_REQUEST',
+          fault: 'BUYER',
+          refundAmount: 3_000,
         }),
-      ).rejects.toThrowDomain(400);
+      );
+
       await expect(
-        service.adminCancelOrder(await admin(), {
-          orderId: '999999',
-          note: 'x',
-        }),
-      ).rejects.toThrowDomain(404);
+        prisma.refund.findFirstOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ amount: 3_000 });
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({ settlement_base_amount: 7_000 });
     });
 
-    it('사유는 접두를 붙여 500자 이내여야 한다(494자 허용, 495자 거절)', async () => {
+    it('메모는 선택(공백은 null)이고 500자까지 받으며, 없는 주문은 404', async () => {
       const { order } = await orderWithItem();
+      const other = await orderWithItem();
       await expect(
-        service.adminCancelOrder(await admin(), {
-          orderId: order.id.toString(),
-          note: 'x'.repeat(495),
-        }),
-      ).rejects.toThrowDomain(400);
+        service.adminCancelOrder(
+          await admin(),
+          cancelInput(order.id, { note: 'x'.repeat(501) }),
+        ),
+      ).rejects.toThrowDomain('TEXT_TOO_LONG');
 
-      await service.adminCancelOrder(await admin(), {
-        orderId: order.id.toString(),
-        note: 'x'.repeat(494),
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id, { note: 'x'.repeat(500) }),
+      );
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(other.order.id, { note: '   ' }),
+      );
+      const notes = await prisma.orderStatusHistory.findMany({
+        orderBy: { id: 'asc' },
       });
-      const history = await prisma.orderStatusHistory.findFirstOrThrow({
-        where: { order_id: order.id },
-      });
-      expect(history.note).toHaveLength(500);
-      expect(history.note?.startsWith('[관리자] ')).toBe(true);
+      expect(notes.map((h) => h.note)).toEqual(['x'.repeat(500), null]);
+      await expect(
+        service.adminCancelOrder(await admin(), cancelInput(999_999n)),
+      ).rejects.toThrowDomain(404);
     });
 
     // 판매자 확인과 교차: 어느 쪽이 먼저든 최종은 CANCELED이고 이력은 실제 전이 순서만 남는다.
@@ -546,11 +773,11 @@ describe('AdminOrderService (real DB)', () => {
       const { order, storeId } = await orderWithItem();
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
 
-      const [, sellerResult] = await Promise.allSettled([
-        service.adminCancelOrder(await admin(), {
-          orderId: order.id.toString(),
-          note: 'a',
-        }),
+      const [cancelResult, sellerResult] = await Promise.allSettled([
+        service.adminCancelOrder(
+          await admin(),
+          cancelInput(order.id, { fault: 'SELLER' }),
+        ),
         orderRepo.updateOrderStatusBySeller({
           orderId: order.id,
           storeId,
@@ -564,6 +791,7 @@ describe('AdminOrderService (real DB)', () => {
         }),
       ]);
 
+      expect(cancelResult.status).toBe('fulfilled');
       const row = await prisma.order.findUniqueOrThrow({
         where: { id: order.id },
       });
@@ -584,14 +812,8 @@ describe('AdminOrderService (real DB)', () => {
       const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
       const [a, b] = [await admin(), await admin()];
       const results = await Promise.allSettled([
-        service.adminCancelOrder(a, {
-          orderId: order.id.toString(),
-          note: 'a',
-        }),
-        service.adminCancelOrder(b, {
-          orderId: order.id.toString(),
-          note: 'b',
-        }),
+        service.adminCancelOrder(a, cancelInput(order.id, { note: 'a' })),
+        service.adminCancelOrder(b, cancelInput(order.id, { note: 'b' })),
       ]);
       expect(results.map((r) => r.status).sort()).toEqual([
         'fulfilled',
@@ -621,10 +843,10 @@ describe('AdminOrderService (real DB)', () => {
       const { order, storeId } = await orderWithItem({ status: 'CONFIRMED' });
       const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
 
-      await service.adminCancelOrder(await admin(), {
-        orderId: order.id.toString(),
-        note: '가게 사정',
-      });
+      await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id, { fault: 'SELLER' }),
+      );
 
       const row = await prisma.order.findUniqueOrThrow({
         where: { id: order.id },
@@ -650,10 +872,7 @@ describe('AdminOrderService (real DB)', () => {
       const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
 
       await expect(
-        service.adminCancelOrder(await admin(), {
-          orderId: order.id.toString(),
-          note: 'x',
-        }),
+        service.adminCancelOrder(await admin(), cancelInput(order.id)),
       ).rejects.toThrowDomain('ORDER_NOT_CANCELLABLE');
 
       expect(topic.received).toHaveLength(0);
@@ -664,10 +883,10 @@ describe('AdminOrderService (real DB)', () => {
       const { order } = await orderWithItem({ submittedAt: null });
       const publish = jest.spyOn(pubSub, 'publish');
 
-      const result = await service.adminCancelOrder(await admin(), {
-        orderId: order.id.toString(),
-        note: 'x',
-      });
+      const result = await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id),
+      );
 
       const published = publish.mock.calls.length;
       publish.mockRestore();
@@ -683,10 +902,10 @@ describe('AdminOrderService (real DB)', () => {
       });
       const publish = jest.spyOn(pubSub, 'publish');
 
-      const result = await service.adminCancelOrder(await admin(), {
-        orderId: order.id.toString(),
-        note: 'x',
-      });
+      const result = await service.adminCancelOrder(
+        await admin(),
+        cancelInput(order.id),
+      );
 
       expect(result).toMatchObject({ status: 'CANCELED', storeId: null });
       expect(publish).not.toHaveBeenCalled();

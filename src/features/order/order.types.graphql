@@ -2,8 +2,8 @@
 주문 상태. 구매자·판매자·관리자 API가 공용으로 쓴다. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
 
 흐름은 `PENDING_PAYMENT → SUBMITTED → CONFIRMED → MADE → PICKED_UP`이며 어떤 상태에서도
-앞 단계로 되돌아갈 수 없다. 판매자가 직접 바꿀 수 있는 전이는 `SUBMITTED → CONFIRMED`,
-`CONFIRMED → MADE`, `MADE → PICKED_UP`, `SUBMITTED·CONFIRMED·MADE → CANCELED`뿐이다.
+앞 단계로 되돌아갈 수 없다. 판매자가 sellerUpdateOrderStatus로 바꿀 수 있는 전이는 `SUBMITTED → CONFIRMED`,
+`CONFIRMED → MADE`, `MADE → PICKED_UP`뿐이고, 취소는 주체별 취소 mutation(cancelMyOrder·sellerCancelOrder·adminCancelOrder)으로만 한다.
 판매자에게는 입금이 확인된(접수된) 주문만 보인다.
 """
 enum OrderStatusType {
@@ -19,7 +19,7 @@ enum OrderStatusType {
   PICKED_UP
   """노쇼. 구매자가 픽업 시간에 오지 않아 판매자가 처리한 종료 상태. 환불 없음, 리뷰 불가."""
   NO_SHOW
-  """취소된 종료 상태. 취소 처리에는 사유(note)가 필수다."""
+  """취소된 종료 상태. 주체·사유·사정·환불은 주문 상세의 cancellation에 있다."""
   CANCELED
 }
 
@@ -46,8 +46,132 @@ type OrderStatusHistory {
   toStatus: OrderStatusType!
   """변경 시각."""
   changedAt: DateTime!
-  """변경 사유 메모. 취소(CANCELED) 전이에는 필수로 기록된다(관리자 취소는 '[관리자]' 접두)."""
+  """변경할 때 남긴 메모. 없으면 null. 예전 관리자 취소 이력은 '[관리자] ' 접두가 붙어 있다."""
   note: String
+  """변경한 주체."""
+  actorType: OrderActorType!
+  """취소 사유. 취소(CANCELED) 이력에만 있고 그 밖은 null."""
+  cancelReason: OrderCancelReasonType
+  """취소 사정. 확정·제작 완료 뒤 취소 이력에만 있고 그 밖은 null."""
+  cancelFault: OrderCancelFaultType
+  """취소로 돌려줄 금액(원). 취소 이력에만 있고(환불이 없으면 0) 그 밖은 null."""
+  refundAmount: Int
+}
+
+"""
+취소 사유. 값은 늘어날 수 있으니 모르는 값은 reasonLabel(또는 '기타')로 보여 준다.
+판매자는 앞의 여섯 값, 관리자는 여기에 입금 대기 주문의 PAYMENT_NOT_RECEIVED, 구매자는 BUYER_REQUEST(서버가 정한다)를 쓴다.
+"""
+enum OrderCancelReasonType {
+  """제작할 수 없는 디자인."""
+  DESIGN_NOT_FEASIBLE
+  """재료 소진."""
+  OUT_OF_MATERIALS
+  """일정 불가."""
+  SCHEDULE_UNAVAILABLE
+  """부적절한 요청."""
+  INAPPROPRIATE_REQUEST
+  """구매자 요청."""
+  BUYER_REQUEST
+  """기타. 결제 도입 전 취소 기록도 이 값이다."""
+  OTHER
+  """미입금. 입금 기한이 지났거나 관리자가 입금이 없다고 판단한 입금 대기 주문."""
+  PAYMENT_NOT_RECEIVED
+  """판매자가 확정 마감까지 확정하지 않아 자동 취소."""
+  CONFIRM_TIMEOUT
+}
+
+"""
+확정·제작 완료 뒤 취소의 사정. 환불액이 갈린다(판매자 사정 = 전액, 구매자 사정 = 취소자가 정한 금액).
+"""
+enum OrderCancelFaultType {
+  """판매자 사정."""
+  SELLER
+  """구매자 사정."""
+  BUYER
+}
+
+"""
+지금 상태에서 취소할 때의 환불 규칙.
+"""
+enum CancelRefundRuleType {
+  """환불 없음(입금 대기)."""
+  NO_REFUND
+  """결제액 전액 환불(접수)."""
+  FULL_REFUND
+  """사정에 따라: 판매자 사정은 전액, 구매자 사정은 0~결제액 중 입력한 금액(확정·제작 완료)."""
+  BY_FAULT
+}
+
+"""
+환불 종류.
+"""
+enum RefundKindType {
+  """주문 취소 환불."""
+  CANCEL
+  """주문과 별개로 들어온 입금을 돌려주는 반환."""
+  DEPOSIT_RETURN
+}
+
+"""
+환불 진행 상태. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum RefundStatusType {
+  """구매자의 환불 계좌 입력 대기."""
+  AWAITING_ACCOUNT
+  """계좌가 입력돼 케이퀵 송금 대기."""
+  AWAITING_TRANSFER
+  """송금 완료."""
+  COMPLETED
+}
+
+"""
+주문 취소 정보. 취소된 주문에만 있다.
+"""
+type OrderCancellation {
+  """취소한 주체."""
+  actorType: OrderActorType!
+  """취소 사유."""
+  reason: OrderCancelReasonType!
+  """취소 사유 표시 라벨(예: 재료 소진). 모르는 reason 값의 표시에 쓴다."""
+  reasonLabel: String!
+  """취소하며 남긴 메모. 없으면 null."""
+  note: String
+  """취소 사정. 확정·제작 완료 뒤 취소에만 있고 그 밖은 null."""
+  fault: OrderCancelFaultType
+  """돌려줄 금액(원). 환불이 없으면 0."""
+  refundAmount: Int!
+  """환불 진행 상태. 환불이 없으면 null."""
+  refundStatus: RefundStatusType
+  """환불 송금 완료 시각. 완료 전이거나 환불이 없으면 null."""
+  refundCompletedAt: DateTime
+  """취소 시각."""
+  canceledAt: DateTime!
+}
+
+"""
+구매자에게 돌려줄 돈 1건(취소 환불 또는 입금 반환).
+"""
+type OrderRefund {
+  id: ID!
+  """환불 종류."""
+  kind: RefundKindType!
+  """돌려줄 금액(원)."""
+  amount: Int!
+  """진행 상태."""
+  status: RefundStatusType!
+  """환불받을 은행. 계좌 입력 전이면 null."""
+  bank: Bank
+  """환불 계좌 예금주. 계좌 입력 전이면 null."""
+  accountHolder: String
+  """환불 계좌번호 끝 4자리만 보이는 값(예: ****1234). 계좌 입력 전이면 null."""
+  accountNumberMasked: String
+  """환불이 생긴 시각."""
+  requestedAt: DateTime!
+  """구매자가 계좌를 입력한 시각. 입력 전이면 null."""
+  accountSubmittedAt: DateTime
+  """송금 완료 시각. 완료 전이면 null."""
+  completedAt: DateTime
 }
 
 """

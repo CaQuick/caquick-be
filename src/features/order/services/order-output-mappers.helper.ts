@@ -1,9 +1,23 @@
+import { ORDER_CANCEL_REASON_LABELS } from '@/features/order/constants/order-cancel-reasons';
+import {
+  maskAccountNumber,
+  toBank,
+} from '@/features/order/services/order-bank-account.helper';
 import type {
+  OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderItemFreeEditOutput,
+  OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
-import type { OrderStatus } from '@/generated/prisma/client';
+import {
+  OrderCancelReason,
+  OrderStatus,
+  RefundKind,
+  type OrderActor,
+  type OrderCancelFault,
+  type Refund,
+} from '@/generated/prisma/client';
 
 /** 판매자·관리자·구매자 조회 row가 모두 만족하는 구조적 부분집합. */
 export interface OrderItemFreeEditRow {
@@ -45,6 +59,10 @@ export interface OrderStatusHistoryRow {
   to_status: OrderStatus;
   changed_at: Date;
   note: string | null;
+  actor_type: OrderActor;
+  cancel_reason: OrderCancelReason | null;
+  cancel_fault: OrderCancelFault | null;
+  refund_amount: number | null;
 }
 
 export function toOrderItemDetail(
@@ -101,5 +119,54 @@ export function toOrderStatusHistory(
     toStatus: history.to_status,
     changedAt: history.changed_at,
     note: history.note,
+    actorType: history.actor_type,
+    cancelReason: history.cancel_reason,
+    cancelFault: history.cancel_fault,
+    refundAmount: history.refund_amount,
+  };
+}
+
+/** 취소된 주문의 취소 이력과 취소 환불. 취소되지 않았거나 취소 이력이 없으면 null. */
+export function toOrderCancellation(row: {
+  status: OrderStatus;
+  canceled_at: Date | null;
+  status_histories: OrderStatusHistoryRow[];
+  refunds: Pick<Refund, 'kind' | 'status' | 'completed_at'>[];
+}): OrderCancellationOutput | null {
+  if (row.status !== OrderStatus.CANCELED) return null;
+  const history = row.status_histories.find(
+    (h) => h.to_status === OrderStatus.CANCELED,
+  );
+  if (!history) return null;
+  // 도입 전 취소는 마이그레이션이 OTHER로 채웠다
+  const reason = history.cancel_reason ?? OrderCancelReason.OTHER;
+  const refund = row.refunds.find((r) => r.kind === RefundKind.CANCEL);
+  return {
+    actorType: history.actor_type,
+    reason,
+    reasonLabel: ORDER_CANCEL_REASON_LABELS[reason],
+    note: history.note,
+    fault: history.cancel_fault,
+    refundAmount: history.refund_amount ?? 0,
+    refundStatus: refund?.status ?? null,
+    refundCompletedAt: refund?.completed_at ?? null,
+    canceledAt: row.canceled_at ?? history.changed_at,
+  };
+}
+
+export function toOrderRefund(row: Refund): OrderRefundOutput {
+  return {
+    id: row.id.toString(),
+    kind: row.kind,
+    amount: row.amount,
+    status: row.status,
+    bank: row.bank_code ? toBank(row.bank_code) : null,
+    accountHolder: row.account_holder,
+    accountNumberMasked: row.account_number_last4
+      ? maskAccountNumber(row.account_number_last4)
+      : null,
+    requestedAt: row.requested_at,
+    accountSubmittedAt: row.account_submitted_at,
+    completedAt: row.completed_at,
   };
 }

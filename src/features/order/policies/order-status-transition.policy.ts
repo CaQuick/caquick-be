@@ -5,13 +5,15 @@ import { OrderStatus } from '@/generated/prisma/client';
 
 const ORDER_STATUS_VALUES: readonly string[] = Object.values(OrderStatus);
 
-/** 판매자가 만들 수 있는 전이(to → 허용 from). 표에 없는 to는 거절한다 — 새 상태가 조용히 열리지 않게. */
+/**
+ * 판매자가 만들 수 있는 전이(to → 허용 from). 표에 없는 to는 거절한다 — 새 상태가 조용히 열리지 않게.
+ * 취소는 사유·사정·환불액이 필요해 sellerCancelOrder(OrderCancelPolicy)로만 한다.
+ */
 const SELLER_TRANSITIONS: Partial<Record<OrderStatus, readonly OrderStatus[]>> =
   {
     CONFIRMED: [OrderStatus.SUBMITTED],
     MADE: [OrderStatus.CONFIRMED],
     PICKED_UP: [OrderStatus.MADE],
-    CANCELED: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED, OrderStatus.MADE],
   };
 
 @Injectable()
@@ -26,14 +28,6 @@ export class OrderStatusTransitionPolicy {
       throw new DomainException('ORDER_STATUS_UNCHANGED');
     }
     if (SELLER_TRANSITIONS[to]?.includes(from)) return;
-    throw new DomainException(
-      to === OrderStatus.CANCELED
-        ? 'ORDER_NOT_CANCELLABLE'
-        : 'INVALID_ORDER_STATUS_TRANSITION',
-    );
-  }
-
-  requiresCancellationNote(to: OrderStatus): boolean {
-    return to === OrderStatus.CANCELED;
+    throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
   }
 }

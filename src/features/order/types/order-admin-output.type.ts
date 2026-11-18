@@ -1,9 +1,16 @@
+import type { CancelRefundRule } from '@/features/order/policies/order-cancel.policy';
 import type {
+  OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
 import type { AdminOrderPaymentOutput } from '@/features/order/types/order-payment-output.type';
-import type { AccountStatus, OrderStatus } from '@/generated/prisma/client';
+import type {
+  AccountStatus,
+  OrderCancelReason,
+  OrderStatus,
+} from '@/generated/prisma/client';
 
 export interface AdminOrderSummaryOutput {
   id: string;
@@ -54,4 +61,14 @@ export interface AdminOrderDetailOutput {
   updatedAt: Date;
   items: OrderItemDetailOutput[];
   statusHistories: OrderStatusHistoryOutput[];
+  refunds: OrderRefundOutput[];
+  cancellation: OrderCancellationOutput | null;
+  cancelOptions: AdminOrderCancelOptionsOutput;
+}
+
+export interface AdminOrderCancelOptionsOutput {
+  cancelable: boolean;
+  reasons: OrderCancelReason[];
+  refundRule: CancelRefundRule | null;
+  paidAmount: number;
 }

@@ -1,9 +1,13 @@
 import {
+  toOrderCancellation,
   toOrderItemDetail,
   toOrderItemFreeEdit,
+  toOrderRefund,
   toOrderStatusHistory,
   type OrderItemDetailRow,
+  type OrderStatusHistoryRow,
 } from '@/features/order/services/order-output-mappers.helper';
+import type { Refund } from '@/generated/prisma/client';
 
 function itemRow(o: Partial<OrderItemDetailRow> = {}): OrderItemDetailRow {
   return {
@@ -113,22 +117,182 @@ describe('order-output-mappers', () => {
     });
   });
 
-  it('toOrderStatusHistory: 최초 이력은 fromStatus null, note null 허용', () => {
+  it('toOrderStatusHistory: 최초 이력은 fromStatus null, note null 허용, 주체·취소 필드를 그대로 싣는다', () => {
     const changedAt = new Date('2026-09-01T00:00:00.000Z');
-    expect(
-      toOrderStatusHistory({
-        id: 5n,
-        from_status: null,
-        to_status: 'SUBMITTED',
-        changed_at: changedAt,
+    expect(toOrderStatusHistory(historyRow({ changed_at: changedAt }))).toEqual(
+      {
+        id: '5',
+        fromStatus: null,
+        toStatus: 'SUBMITTED',
+        changedAt,
         note: null,
-      }),
-    ).toEqual({
-      id: '5',
-      fromStatus: null,
-      toStatus: 'SUBMITTED',
-      changedAt,
-      note: null,
+        actorType: 'ADMIN',
+        cancelReason: null,
+        cancelFault: null,
+        refundAmount: null,
+      },
+    );
+  });
+
+  describe('toOrderCancellation', () => {
+    const canceledAt = new Date('2026-09-02T00:00:00.000Z');
+    const cancelHistory = historyRow({
+      from_status: 'CONFIRMED',
+      to_status: 'CANCELED',
+      actor_type: 'SELLER',
+      cancel_reason: 'OUT_OF_MATERIALS',
+      cancel_fault: 'BUYER',
+      refund_amount: 10_000,
+      note: '재료가 떨어졌어요',
+    });
+
+    it('취소 이력과 취소 환불을 합친다(입금 반환은 보지 않는다)', () => {
+      const completedAt = new Date('2026-09-03T00:00:00.000Z');
+      expect(
+        toOrderCancellation({
+          status: 'CANCELED',
+          canceled_at: canceledAt,
+          status_histories: [historyRow(), cancelHistory],
+          refunds: [
+            {
+              kind: 'DEPOSIT_RETURN',
+              status: 'AWAITING_ACCOUNT',
+              completed_at: null,
+            },
+            { kind: 'CANCEL', status: 'COMPLETED', completed_at: completedAt },
+          ],
+        }),
+      ).toEqual({
+        actorType: 'SELLER',
+        reason: 'OUT_OF_MATERIALS',
+        reasonLabel: '재료 소진',
+        note: '재료가 떨어졌어요',
+        fault: 'BUYER',
+        refundAmount: 10_000,
+        refundStatus: 'COMPLETED',
+        refundCompletedAt: completedAt,
+        canceledAt,
+      });
+    });
+
+    it('환불이 없으면 환불 상태는 null이고, 사유가 없는 옛 이력은 기타·0원으로 보인다', () => {
+      expect(
+        toOrderCancellation({
+          status: 'CANCELED',
+          canceled_at: null,
+          status_histories: [
+            {
+              ...cancelHistory,
+              cancel_reason: null,
+              cancel_fault: null,
+              refund_amount: null,
+            },
+          ],
+          refunds: [],
+        }),
+      ).toMatchObject({
+        reason: 'OTHER',
+        reasonLabel: '기타',
+        refundAmount: 0,
+        refundStatus: null,
+        refundCompletedAt: null,
+        canceledAt: cancelHistory.changed_at,
+      });
+    });
+
+    it('취소되지 않았거나 취소 이력이 없으면 null', () => {
+      expect(
+        toOrderCancellation({
+          status: 'CONFIRMED',
+          canceled_at: null,
+          status_histories: [cancelHistory],
+          refunds: [],
+        }),
+      ).toBeNull();
+      expect(
+        toOrderCancellation({
+          status: 'CANCELED',
+          canceled_at: canceledAt,
+          status_histories: [historyRow()],
+          refunds: [],
+        }),
+      ).toBeNull();
+    });
+  });
+
+  describe('toOrderRefund', () => {
+    const requestedAt = new Date('2026-09-02T00:00:00.000Z');
+    const refund: Refund = {
+      id: 7n,
+      order_id: 1n,
+      kind: 'CANCEL',
+      cancel_order_id: 1n,
+      deposit_record_id: null,
+      amount: 30_000,
+      status: 'AWAITING_ACCOUNT',
+      bank_code: null,
+      account_holder: null,
+      account_number_enc: null,
+      account_number_last4: null,
+      account_submitted_at: null,
+      requested_at: requestedAt,
+      completed_at: null,
+      completed_by_account_id: null,
+      completed_by_label_snapshot: null,
+      complete_note: null,
+      created_at: requestedAt,
+      updated_at: requestedAt,
+    };
+
+    it('계좌 입력 전이면 은행·예금주·계좌는 null', () => {
+      expect(toOrderRefund(refund)).toEqual({
+        id: '7',
+        kind: 'CANCEL',
+        amount: 30_000,
+        status: 'AWAITING_ACCOUNT',
+        bank: null,
+        accountHolder: null,
+        accountNumberMasked: null,
+        requestedAt,
+        accountSubmittedAt: null,
+        completedAt: null,
+      });
+    });
+
+    it('계좌가 있으면 은행 이름과 끝 4자리 마스킹만 준다(암호문은 내보내지 않는다)', () => {
+      expect(
+        toOrderRefund({
+          ...refund,
+          status: 'AWAITING_TRANSFER',
+          bank_code: '004',
+          account_holder: '홍길동',
+          account_number_enc: 'v1.k1.x.y.z',
+          account_number_last4: '1234',
+          account_submitted_at: requestedAt,
+        }),
+      ).toMatchObject({
+        bank: { code: '004', name: 'KB국민은행' },
+        accountHolder: '홍길동',
+        accountNumberMasked: '****1234',
+        accountSubmittedAt: requestedAt,
+      });
     });
   });
 });
+
+function historyRow(
+  o: Partial<OrderStatusHistoryRow> = {},
+): OrderStatusHistoryRow {
+  return {
+    id: 5n,
+    from_status: null,
+    to_status: 'SUBMITTED',
+    changed_at: new Date('2026-09-01T00:00:00.000Z'),
+    note: null,
+    actor_type: 'ADMIN',
+    cancel_reason: null,
+    cancel_fault: null,
+    refund_amount: null,
+    ...o,
+  };
+}

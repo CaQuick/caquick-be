@@ -8,8 +8,17 @@ export {
 // 주문 상태 전이 이벤트 계약(outbox). 소비자(notification)는 payload 스냅샷만 읽는다.
 export {
   ORDER_STATUS_CHANGED,
+  type OrderStatusChangedPayload,
   parseOrderStatusChangedPayload,
 } from '@/features/order/events/order-status-changed.event';
+// 취소 사유 라벨 — 구매자 취소 알림 본문(notification)이 주문 상세와 같은 값을 쓴다.
+export { ORDER_CANCEL_REASON_LABELS } from '@/features/order/constants/order-cancel-reasons';
+// 환불 생성 이벤트 계약(outbox). 구매자 환불 계좌 요청 알림(notification)이 읽는다.
+export {
+  REFUND_REQUESTED,
+  type RefundRequestedPayload,
+  parseRefundRequestedPayload,
+} from '@/features/order/events/refund-requested.event';
 // 주문 접수 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
 export {
   ORDER_SUBMITTED,

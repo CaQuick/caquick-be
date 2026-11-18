@@ -7,6 +7,16 @@ import {
 } from '@/features/audit-log';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import { orderSubmittedEvent } from '@/features/order/events/order-submitted.event';
+import { refundRequestedEvent } from '@/features/order/events/refund-requested.event';
+import type {
+  OrderCancelDecision,
+  OrderCancelState,
+} from '@/features/order/policies/order-cancel.policy';
+import {
+  confirmedPaidAmount,
+  finalizeSettlementLocked,
+  lockPayment,
+} from '@/features/order/repositories/order-settlement-finalizer.helper';
 import {
   adminOrderInclude,
   type AdminOrderRow,
@@ -16,10 +26,12 @@ import {
   AuditActionType,
   AuditTargetType,
   OrderActor,
+  OrderCancelFault,
   OrderStatus,
   PaymentConfirmSource,
   PaymentStatus,
-  type Prisma,
+  Prisma,
+  RefundKind,
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
@@ -43,10 +55,41 @@ export interface ConfirmPaymentArgs {
   assertConfirmable: (state: PaymentConfirmState) => void;
 }
 
+/** 취소 대상 범위. 범위 밖 주문은 없는 주문과 같다. */
+export type OrderCancelScope =
+  | { kind: 'any' }
+  | { kind: 'buyer'; accountId: bigint }
+  /** 판매자에게 보이는(접수된) 자기 매장 주문 */
+  | { kind: 'store'; storeId: bigint };
+
+export interface CancelOrderArgs {
+  orderId: bigint;
+  actor: OrderActor;
+  /** 시스템 취소는 null(감사 기록 없음) */
+  actorAccountId: bigint | null;
+  scope: OrderCancelScope;
+  note: string | null;
+  now: Date;
+  /** 잠금 시점 재료로 사유·사정·환불액을 정한다. 던지면 tx가 롤백되고 예외가 그대로 나간다. */
+  decide: (state: OrderCancelState) => OrderCancelDecision;
+}
+
 /** 접수 뒤 판매자 확정 마감: 확인 + 24시간과 픽업 시각 중 이른 쪽. */
 const CONFIRM_WINDOW_MS = DAY_MS;
 
-/** 주문 상태 전이 잠금 단위. 잠금 순서는 order → payment. */
+function cancelScopeSql(scope: OrderCancelScope): Prisma.Sql {
+  switch (scope.kind) {
+    case 'buyer':
+      return Prisma.sql`AND o.account_id = ${scope.accountId}`;
+    case 'store':
+      return Prisma.sql`AND o.submitted_at IS NOT NULL AND EXISTS (
+        SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.store_id = ${scope.storeId})`;
+    default:
+      return Prisma.empty;
+  }
+}
+
+/** 주문 상태 전이 잠금 단위. 잠금 순서는 order → payment → refund. */
 @Injectable()
 export class OrderTransitionRepository {
   constructor(
@@ -157,6 +200,8 @@ export class OrderTransitionRepository {
         storeName: firstItem?.store_name_snapshot ?? null,
         productId: firstItem?.product_id ?? null,
         productName: firstItem?.product_name_snapshot ?? null,
+        actorType,
+        pickupAt: updated.pickup_at,
         occurredAt: args.now,
         actorAccountId: args.actorAccountId,
       }),
@@ -197,6 +242,148 @@ export class OrderTransitionRepository {
         note: args.note,
       },
     });
+    return updated;
+  }
+
+  /** 없거나 범위 밖 주문이면 null. */
+  async cancel(args: CancelOrderArgs): Promise<AdminOrderRow | null> {
+    return this.prisma.$transaction((tx) => this.cancelLocked(tx, args));
+  }
+
+  /**
+   * 취소. 판정(decide)은 잠금 읽기 결과로 한다. 입금 전 결제는 CANCELED로 닫고 확인된 결제는 그대로 둔다(돌려줄 돈은
+   * 환불이 맡는다). 환불액이 있으면 환불(AWAITING_ACCOUNT)을, 구매자 사정 취소의 남는 금액은 정산 확정을 같은 tx에 남긴다.
+   */
+  async cancelLocked(
+    tx: Prisma.TransactionClient,
+    args: CancelOrderArgs,
+  ): Promise<AdminOrderRow | null> {
+    const [locked] = await tx.$queryRaw<
+      {
+        id: bigint;
+        status: OrderStatus;
+        commission_rate_bps: number;
+        submitted_at: Date | null;
+      }[]
+    >`
+      SELECT o.id, o.status, o.commission_rate_bps, o.submitted_at FROM \`order\` o
+      WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL ${cancelScopeSql(args.scope)}
+      FOR UPDATE OF o`;
+    if (!locked) return null;
+    const payment = await lockPayment(tx, locked.id);
+    const paidAmount = confirmedPaidAmount(payment);
+    const decision = args.decide({ status: locked.status, paidAmount });
+
+    if (payment?.status === PaymentStatus.PENDING) {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.CANCELED, canceled_at: args.now },
+      });
+    }
+    const updated = await tx.order.update({
+      where: { id: locked.id },
+      data: { status: OrderStatus.CANCELED, canceled_at: args.now },
+      include: adminOrderInclude,
+    });
+    if (decision.fault === OrderCancelFault.BUYER) {
+      await finalizeSettlementLocked(
+        tx,
+        locked,
+        paidAmount - decision.refundAmount,
+        args.now,
+      );
+    }
+    await tx.orderStatusHistory.create({
+      data: {
+        order_id: locked.id,
+        from_status: locked.status,
+        to_status: OrderStatus.CANCELED,
+        changed_at: args.now,
+        actor_type: args.actor,
+        actor_account_id: args.actorAccountId,
+        cancel_reason: decision.reason,
+        cancel_fault: decision.fault,
+        refund_amount: decision.refundAmount,
+        note: args.note,
+      },
+    });
+    const refund =
+      decision.refundAmount > 0
+        ? await tx.refund.create({
+            data: {
+              order_id: locked.id,
+              kind: RefundKind.CANCEL,
+              cancel_order_id: locked.id,
+              amount: decision.refundAmount,
+              requested_at: args.now,
+            },
+          })
+        : null;
+
+    const firstItem = await tx.orderItem.findFirst({
+      where: { order_id: locked.id, ...activeWhere },
+      orderBy: { id: 'asc' },
+      select: {
+        store_id: true,
+        product_id: true,
+        product_name_snapshot: true,
+        store_name_snapshot: true,
+      },
+    });
+    const snapshot = {
+      orderId: locked.id,
+      orderNumber: updated.order_number,
+      buyerAccountId: updated.account_id,
+      storeId: firstItem?.store_id ?? null,
+      storeName: firstItem?.store_name_snapshot ?? null,
+      productId: firstItem?.product_id ?? null,
+      productName: firstItem?.product_name_snapshot ?? null,
+      occurredAt: args.now,
+      actorAccountId: args.actorAccountId,
+    };
+    await this.outbox.publish(
+      tx,
+      orderStatusChangedEvent({
+        ...snapshot,
+        fromStatus: locked.status,
+        toStatus: OrderStatus.CANCELED,
+        actorType: args.actor,
+        pickupAt: updated.pickup_at,
+        cancelReason: decision.reason,
+        refundAmount: decision.refundAmount,
+      }),
+    );
+    if (refund) {
+      await this.outbox.publish(
+        tx,
+        refundRequestedEvent({
+          ...snapshot,
+          refundId: refund.id,
+          kind: refund.kind,
+          amount: refund.amount,
+        }),
+      );
+    }
+
+    if (args.actorAccountId !== null) {
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId: args.actorAccountId,
+        // 입금 전 주문은 판매자에게 보이지 않으므로 매장 감사 로그에도 남기지 않는다
+        storeId: locked.submitted_at ? (firstItem?.store_id ?? null) : null,
+        targetType: AuditTargetType.ORDER,
+        targetId: locked.id,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: { status: locked.status },
+        afterJson: {
+          status: OrderStatus.CANCELED,
+          actorType: args.actor,
+          reason: decision.reason,
+          fault: decision.fault,
+          refundAmount: decision.refundAmount,
+          note: args.note,
+        },
+      });
+    }
     return updated;
   }
 }

@@ -3,22 +3,17 @@ import { OrderStatus } from '@/generated/prisma/client';
 
 const STATUSES = Object.values(OrderStatus);
 
-/** 판매자 전이 허용 목록. 이 밖은 전부 거절이다(기본 거절). */
+/** 판매자 전이 허용 목록. 이 밖은 전부 거절이다(기본 거절). 취소는 sellerCancelOrder로만 한다. */
 const ALLOWED = new Set([
   'SUBMITTED>CONFIRMED',
   'CONFIRMED>MADE',
   'MADE>PICKED_UP',
-  'SUBMITTED>CANCELED',
-  'CONFIRMED>CANCELED',
-  'MADE>CANCELED',
 ]);
 
 function expectedCode(from: OrderStatus, to: OrderStatus): string | null {
   if (from === to) return 'ORDER_STATUS_UNCHANGED';
   if (ALLOWED.has(`${from}>${to}`)) return null;
-  return to === 'CANCELED'
-    ? 'ORDER_NOT_CANCELLABLE'
-    : 'INVALID_ORDER_STATUS_TRANSITION';
+  return 'INVALID_ORDER_STATUS_TRANSITION';
 }
 
 describe('OrderStatusTransitionPolicy', () => {
@@ -42,21 +37,15 @@ describe('OrderStatusTransitionPolicy', () => {
       STATUSES.map((to) => [from, to, expectedCode(from, to)] as const),
     );
 
-    it('표는 상태 전 조합(7×7)을 덮고 허용 전이는 6개다', () => {
+    it('표는 상태 전 조합(7×7)을 덮고 허용 전이는 3개다(CANCELED로 가는 전이는 없다)', () => {
       expect(cases).toHaveLength(49);
-      expect(cases.filter(([, , code]) => code === null)).toHaveLength(6);
+      expect(cases.filter(([, , code]) => code === null)).toHaveLength(3);
     });
 
     it.each(cases)('%s → %s: %s', (from, to, code) => {
       const run = () => policy.assertSellerTransition(from, to);
       if (code === null) expect(run).not.toThrow();
       else expect(run).toThrowDomain(code);
-    });
-  });
-
-  describe('requiresCancellationNote', () => {
-    it.each(STATUSES)('%s', (to) => {
-      expect(policy.requiresCancellationNote(to)).toBe(to === 'CANCELED');
     });
   });
 });

@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { MAX_REASON_LENGTH } from '@/common/constants/reason.constants';
 import { DomainException } from '@/common/errors/error-catalog';
+import { ClockService } from '@/common/providers/clock.service';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
 import { parseId, parseOptionalId } from '@/common/utils/id-parser';
@@ -14,9 +16,12 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import type { SellerCancelOrderInput } from '@/features/order/dto/inputs/seller-cancel-order.input';
 import type { SellerOrderListInput } from '@/features/order/dto/inputs/seller-order-list.input';
 import type { SellerUpdateOrderStatusInput } from '@/features/order/dto/inputs/seller-update-order-status.input';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import {
   OrderRepository,
   type SellerOrderRow,
@@ -24,6 +29,7 @@ import {
 import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import {
+  toOrderCancellation,
   toOrderItemDetail,
   toOrderStatusHistory,
   type OrderItemDetailRow,
@@ -34,7 +40,12 @@ import type {
   SellerOrderSummaryOutput,
 } from '@/features/order/types/order-seller-output.type';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
-import { OrderStatus, type PaymentMethod } from '@/generated/prisma/client';
+import {
+  OrderActor,
+  OrderStatus,
+  type PaymentMethod,
+  type Refund,
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerOrderService extends SellerBaseService {
@@ -44,7 +55,10 @@ export class SellerOrderService extends SellerBaseService {
     auditLogs: IAuditLogRepository,
     private readonly orderRepository: OrderRepository,
     private readonly statusPolicy: OrderStatusTransitionPolicy,
+    private readonly cancelPolicy: OrderCancelPolicy,
+    private readonly transitions: OrderTransitionRepository,
     private readonly events: OrderEventsService,
+    private readonly clock: ClockService,
   ) {
     super(repo, auditLogs);
   }
@@ -117,12 +131,6 @@ export class SellerOrderService extends SellerBaseService {
 
     this.statusPolicy.assertSellerTransition(current.status, toStatus);
 
-    if (this.statusPolicy.requiresCancellationNote(toStatus)) {
-      if (!input.note || input.note.trim().length === 0) {
-        throw new DomainException('CANCELLATION_NOTE_REQUIRED');
-      }
-    }
-
     const updated = await this.orderRepository.updateOrderStatusBySeller({
       orderId,
       storeId: ctx.storeId,
@@ -145,6 +153,35 @@ export class SellerOrderService extends SellerBaseService {
         updated.items[0]?.product_name_snapshot ?? '',
       ),
     );
+    return this.toOrderSummaryOutput(updated);
+  }
+
+  /** 접수 단계 거절(전액 환불)과 확정 뒤 취소(사정 선택). 입금 확인 전 주문은 없는 주문과 같다. */
+  async sellerCancelOrder(
+    accountId: bigint,
+    input: SellerCancelOrderInput,
+  ): Promise<SellerOrderSummaryOutput> {
+    const ctx = await this.requireSellerContext(accountId);
+    const updated = await this.transitions.cancel({
+      orderId: parseId(input.orderId),
+      actor: OrderActor.SELLER,
+      actorAccountId: ctx.accountId,
+      scope: { kind: 'store', storeId: ctx.storeId },
+      note: cleanNullableText(input.note, MAX_REASON_LENGTH),
+      now: this.clock.now(),
+      decide: (state) =>
+        this.cancelPolicy.decide(
+          {
+            actor: OrderActor.SELLER,
+            reason: input.reason,
+            fault: input.fault,
+            refundAmount: input.refundAmount,
+          },
+          state,
+        ),
+    });
+    if (!updated) throw new DomainException('ORDER_NOT_FOUND');
+    await this.events.publishSellerStatusChanged(updated);
     return this.toOrderSummaryOutput(updated);
   }
 
@@ -185,6 +222,7 @@ export class SellerOrderService extends SellerBaseService {
     created_at: Date;
     updated_at: Date;
     status_histories: OrderStatusHistoryRow[];
+    refunds: Refund[];
     items: OrderItemDetailRow[];
   }): SellerOrderDetailOutput {
     return {
@@ -216,6 +254,7 @@ export class SellerOrderService extends SellerBaseService {
             : history,
         ),
       ),
+      cancellation: toOrderCancellation(row),
     };
   }
 }
