@@ -73,27 +73,29 @@ export class OrderTransitionRepository {
     tx: Prisma.TransactionClient,
     args: ConfirmPaymentArgs,
   ): Promise<AdminOrderRow | null> {
-    const [locked] = await tx.$queryRaw<{ id: bigint }[]>`
-      SELECT id FROM \`order\`
+    // 판정 재료는 잠금 읽기에서 가져온다 — 호출 tx가 앞서 만든 스냅샷은 그사이 커밋된 확인을 보지 못한다.
+    const [locked] = await tx.$queryRaw<
+      { id: bigint; status: OrderStatus; pickup_at: Date }[]
+    >`
+      SELECT id, status, pickup_at FROM \`order\`
       WHERE id = ${args.orderId} AND deleted_at IS NULL
       FOR UPDATE`;
     if (!locked) return null;
-    await tx.$queryRaw`SELECT id FROM payment WHERE order_id = ${locked.id} FOR UPDATE`;
-    const order = await tx.order.findUniqueOrThrow({
-      where: { id: locked.id },
-      select: { status: true, pickup_at: true, payment: true },
-    });
+    const [payment] = await tx.$queryRaw<
+      { id: bigint; status: PaymentStatus; amount: bigint }[]
+    >`SELECT id, status, amount FROM payment WHERE order_id = ${locked.id} FOR UPDATE`;
+    // raw는 INT UNSIGNED를 bigint로 돌려준다.
+    const paymentAmount = payment ? Number(payment.amount) : null;
     args.assertConfirmable({
-      orderStatus: order.status,
-      paymentStatus: order.payment?.status ?? null,
-      paymentAmount: order.payment?.amount ?? null,
-      pickupAt: order.pickup_at,
+      orderStatus: locked.status,
+      paymentStatus: payment?.status ?? null,
+      paymentAmount,
+      pickupAt: locked.pickup_at,
     });
-    const payment = order.payment!;
     const confirmDeadlineAt = new Date(
       Math.min(
         args.now.getTime() + CONFIRM_WINDOW_MS,
-        order.pickup_at.getTime(),
+        locked.pickup_at.getTime(),
       ),
     );
     const actorType =
@@ -189,7 +191,7 @@ export class OrderTransitionRepository {
       beforeJson: { status: OrderStatus.PENDING_PAYMENT },
       afterJson: {
         status: OrderStatus.SUBMITTED,
-        paymentAmount: payment.amount,
+        paymentAmount,
         depositedAmount: args.depositedAmount,
         confirmSource: args.source,
         note: args.note,

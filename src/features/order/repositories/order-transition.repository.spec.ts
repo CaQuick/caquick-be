@@ -1,6 +1,7 @@
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ORDER_STATUS_CHANGED } from '@/features/order/events/order-status-changed.event';
+import { assertPaymentConfirmable } from '@/features/order/policies/payment-confirm.policy';
 import {
   OrderTransitionRepository,
   type ConfirmPaymentArgs,
@@ -127,6 +128,52 @@ describe('OrderTransitionRepository (real DB)', () => {
         submitted_at: null,
       });
       expect(await prisma.outbox.count()).toBe(0);
+    });
+
+    it('호출 tx가 먼저 스냅샷을 만들었어도 그사이 커밋된 확인을 보고 다시 확인하지 않는다', async () => {
+      const order = await createOrder(prisma, {
+        status: 'PENDING_PAYMENT',
+        pickup_at: new Date(NOW.getTime() + 48 * 60 * 60_000),
+      });
+      await createPayment(prisma, { order_id: order.id, amount: 10_000 });
+      const args = await confirmArgs(order.id);
+      let snapshotTaken!: () => void;
+      const snapshot = new Promise<void>(
+        (resolve) => (snapshotTaken = resolve),
+      );
+      let proceed!: () => void;
+      const gate = new Promise<void>((resolve) => (proceed = resolve));
+
+      const auto = prisma.$transaction(
+        async (tx) => {
+          await tx.payment.count();
+          snapshotTaken();
+          await gate;
+          return repo.confirmPaymentLocked(tx, {
+            ...args,
+            source: 'AUTO',
+            assertConfirmable: (state) =>
+              assertPaymentConfirmable(state, args.depositedAmount, NOW),
+          });
+        },
+        { timeout: 20_000 },
+      );
+      await snapshot;
+      try {
+        await repo.confirmPayment(args);
+      } finally {
+        proceed();
+      }
+
+      await expect(auto).rejects.toThrowDomain('PAYMENT_NOT_PENDING');
+      expect(
+        await prisma.orderStatusHistory.count({
+          where: { order_id: order.id },
+        }),
+      ).toBe(1);
+      await expect(
+        prisma.payment.findUniqueOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ confirm_source: 'ADMIN' });
     });
   });
 });
