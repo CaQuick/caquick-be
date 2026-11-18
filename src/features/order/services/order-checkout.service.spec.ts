@@ -29,6 +29,7 @@ import {
   createAccount,
   createOrder as createOrderRow,
   createOrderItem,
+  createPaymentSetting,
   createProduct,
   createRegion,
   createStore,
@@ -86,6 +87,8 @@ describe('OrderCheckoutService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    // truncateAll이 마이그레이션이 넣은 결제 설정 행까지 지운다
+    await createPaymentSetting(prisma);
     jest.spyOn(clock, 'now').mockReturnValue(NOW);
   });
 
@@ -267,6 +270,7 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(saved.status_histories[0]).toMatchObject({
         from_status: null,
         to_status: 'SUBMITTED',
+        actor_type: 'BUYER',
       });
     });
 

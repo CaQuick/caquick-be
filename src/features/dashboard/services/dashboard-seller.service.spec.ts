@@ -119,6 +119,7 @@ describe('SellerDashboardService (real DB)', () => {
         capacity: null,
         remainingCapacity: null,
         bookedQuantity: 0,
+        pendingPaymentQuantity: 0,
         activeProductCount: 0,
         unansweredConversationCount: 0,
       });
@@ -197,9 +198,9 @@ describe('SellerDashboardService (real DB)', () => {
   });
 
   describe('pickupDay · createdDay', () => {
-    it('픽업 기준과 생성 기준을 각자의 컬럼으로 센다', async () => {
+    it('픽업 기준과 접수 기준을 각자의 컬럼으로 센다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      // 픽업은 오늘, 생성은 어제
+      // 픽업은 오늘, 접수(=생성)는 어제
       await storeOrder(store.id, {
         pickupAt: IN_DAY,
         createdAt: YESTERDAY,
@@ -234,6 +235,59 @@ describe('SellerDashboardService (real DB)', () => {
       const result = await dashboard(account.id);
       expect(result.pickupDay).toEqual({ orderCount: 1, salesAmount: 1_000 });
       expect(result.createdDay).toEqual({ orderCount: 1, salesAmount: 1_000 });
+    });
+  });
+
+  describe('입금 대기 주문', () => {
+    it('판매자 지표(새 주문·픽업·접수)에서 빠지고 예약 수량에는 들어가며 따로 센다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: TODAY_DATE_ONLY,
+        capacity: 10,
+      });
+      await storeOrder(store.id, { quantity: 1, totalPrice: 100 });
+      await storeOrder(store.id, {
+        status: 'PENDING_PAYMENT',
+        quantity: 2,
+        totalPrice: 1_000,
+      });
+
+      expect(await dashboard(account.id)).toMatchObject({
+        newOrderCount: 1,
+        pickupDay: { orderCount: 1, salesAmount: 100 },
+        createdDay: { orderCount: 1, salesAmount: 100 },
+        bookedQuantity: 3,
+        remainingCapacity: 7,
+        pendingPaymentQuantity: 2,
+      });
+    });
+
+    it('pendingPaymentQuantity는 기준일 픽업·내 매장·삭제 안 된 입금 대기만 센다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const other = await setupSellerWithStore(prisma);
+      const pending = { status: 'PENDING_PAYMENT' as const };
+      await storeOrder(store.id, { ...pending, quantity: 1 });
+      await storeOrder(store.id, {
+        ...pending,
+        quantity: 1,
+        pickupAt: DAY_START,
+      });
+      await storeOrder(store.id, {
+        ...pending,
+        quantity: 10,
+        pickupAt: BEFORE_DAY_START,
+      });
+      await storeOrder(store.id, { ...pending, quantity: 10, deletedAt: NOW });
+      await storeOrder(store.id, {
+        ...pending,
+        quantity: 10,
+        itemDeletedAt: NOW,
+      });
+      await storeOrder(store.id, { status: 'SUBMITTED', quantity: 10 });
+      await storeOrder(other.store.id, { ...pending, quantity: 10 });
+
+      expect((await dashboard(account.id)).pendingPaymentQuantity).toBe(2);
     });
   });
 

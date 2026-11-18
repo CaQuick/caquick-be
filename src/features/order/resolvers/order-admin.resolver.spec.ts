@@ -86,4 +86,19 @@ describe('Admin Order Resolvers (real DB)', () => {
     });
     expect(canceled.status).toBe('CANCELED');
   });
+
+  it('매장 진행 주문 요약 경로', async () => {
+    const actor = await createAccount(prisma, { account_type: 'ADMIN' });
+    const item = await createOrderItem(prisma);
+
+    const summary = await queryResolver.adminStoreInProgressOrderSummary(
+      { accountId: actor.id.toString(), accountType: 'ADMIN' },
+      item.store_id.toString(),
+    );
+    expect(summary).toEqual({
+      storeId: item.store_id.toString(),
+      totalCount: 1,
+      byStatus: [{ status: 'SUBMITTED', count: 1 }],
+    });
+  });
 });

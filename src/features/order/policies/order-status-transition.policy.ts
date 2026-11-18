@@ -3,14 +3,21 @@ import { Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import { OrderStatus } from '@/generated/prisma/client';
 
+const ORDER_STATUS_VALUES: readonly string[] = Object.values(OrderStatus);
+
+/** 판매자가 만들 수 있는 전이(to → 허용 from). 표에 없는 to는 거절한다 — 새 상태가 조용히 열리지 않게. */
+const SELLER_TRANSITIONS: Partial<Record<OrderStatus, readonly OrderStatus[]>> =
+  {
+    CONFIRMED: [OrderStatus.SUBMITTED],
+    MADE: [OrderStatus.CONFIRMED],
+    PICKED_UP: [OrderStatus.MADE],
+    CANCELED: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED, OrderStatus.MADE],
+  };
+
 @Injectable()
 export class OrderStatusTransitionPolicy {
   parse(raw: string): OrderStatus {
-    if (raw === 'SUBMITTED') return OrderStatus.SUBMITTED;
-    if (raw === 'CONFIRMED') return OrderStatus.CONFIRMED;
-    if (raw === 'MADE') return OrderStatus.MADE;
-    if (raw === 'PICKED_UP') return OrderStatus.PICKED_UP;
-    if (raw === 'CANCELED') return OrderStatus.CANCELED;
+    if (ORDER_STATUS_VALUES.includes(raw)) return raw as OrderStatus;
     throw new DomainException('INVALID_ORDER_STATUS');
   }
 
@@ -18,33 +25,12 @@ export class OrderStatusTransitionPolicy {
     if (from === to) {
       throw new DomainException('ORDER_STATUS_UNCHANGED');
     }
-
-    // SUBMITTED는 주문 생성 시점의 초기 상태이므로 어떤 상태에서도 되돌아갈 수 없다.
-    if (to === OrderStatus.SUBMITTED) {
-      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
-    }
-
-    if (to === OrderStatus.CONFIRMED && from !== OrderStatus.SUBMITTED) {
-      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
-    }
-
-    if (to === OrderStatus.MADE && from !== OrderStatus.CONFIRMED) {
-      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
-    }
-
-    if (to === OrderStatus.PICKED_UP && from !== OrderStatus.MADE) {
-      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
-    }
-
-    if (to === OrderStatus.CANCELED) {
-      const cancellable =
-        from === OrderStatus.SUBMITTED ||
-        from === OrderStatus.CONFIRMED ||
-        from === OrderStatus.MADE;
-      if (!cancellable) {
-        throw new DomainException('ORDER_NOT_CANCELLABLE');
-      }
-    }
+    if (SELLER_TRANSITIONS[to]?.includes(from)) return;
+    throw new DomainException(
+      to === OrderStatus.CANCELED
+        ? 'ORDER_NOT_CANCELLABLE'
+        : 'INVALID_ORDER_STATUS_TRANSITION',
+    );
   }
 
   requiresCancellationNote(to: OrderStatus): boolean {

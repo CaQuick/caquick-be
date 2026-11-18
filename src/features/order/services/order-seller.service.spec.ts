@@ -63,11 +63,13 @@ describe('SellerOrderService (real DB)', () => {
 
   async function createStoreOrder(
     storeId: bigint,
-    opts: { status?: OrderStatus } = {},
+    opts: { status?: OrderStatus; buyerId?: bigint } = {},
   ) {
-    const buyer = await createAccount(prisma, { account_type: 'USER' });
+    const buyerId =
+      opts.buyerId ??
+      (await createAccount(prisma, { account_type: 'USER' })).id;
     const order = await createOrder(prisma, {
-      account_id: buyer.id,
+      account_id: buyerId,
       status: opts.status ?? 'SUBMITTED',
     });
     await createOrderItem(prisma, {
@@ -244,6 +246,54 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.items).toHaveLength(2);
       expect(result.nextCursor).not.toBeNull();
     });
+
+    it('입금 확인 전(submitted_at 없음) 주문은 목록·건수에서 빠진다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const visible = await createStoreOrder(store.id);
+      await createStoreOrder(store.id, { status: 'PENDING_PAYMENT' });
+      // 입금 전 취소도 submitted_at이 없어 함께 숨는다
+      const unpaidCanceled = await createOrder(prisma, {
+        status: 'CANCELED',
+        submitted_at: null,
+      });
+      await createOrderItem(prisma, {
+        order_id: unpaidCanceled.id,
+        store_id: store.id,
+      });
+
+      const all = await service.sellerOrderList(account.id);
+      expect(all.items.map((o) => o.id)).toEqual([visible.id.toString()]);
+      expect(all.totalCount).toBe(1);
+      const pending = await service.sellerOrderList(account.id, {
+        status: 'PENDING_PAYMENT',
+      });
+      expect(pending.totalCount).toBe(0);
+    });
+
+    it('buyerAccountId면 그 구매자 주문만 준다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const mine = await createStoreOrder(store.id, { buyerId: buyer.id });
+      await createStoreOrder(store.id);
+
+      const result = await service.sellerOrderList(account.id, {
+        buyerAccountId: buyer.id.toString(),
+      });
+      expect(result.items.map((o) => o.id)).toEqual([mine.id.toString()]);
+      expect(result.totalCount).toBe(1);
+    });
+
+    it('buyerAccountId 빈 문자열은 INVALID_ID, "0"은 버리지 않고 필터로 쓴다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      await createStoreOrder(store.id);
+      await expect(
+        service.sellerOrderList(account.id, { buyerAccountId: '' }),
+      ).rejects.toThrowDomain('INVALID_ID');
+      const zero = await service.sellerOrderList(account.id, {
+        buyerAccountId: '0',
+      });
+      expect(zero.totalCount).toBe(0);
+    });
   });
 
   describe('sellerOrder', () => {
@@ -273,6 +323,7 @@ describe('SellerOrderService (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date('2026-04-15T10:00:00Z'),
+          actor_type: 'SELLER',
           note: '접수 확정',
         },
       });
@@ -299,6 +350,7 @@ describe('SellerOrderService (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date('2026-04-15T10:00:00Z'),
+          actor_type: 'SELLER',
           deleted_at: new Date(),
         },
       });
@@ -306,6 +358,45 @@ describe('SellerOrderService (real DB)', () => {
       const result = await service.sellerOrder(account.id, order.id);
       expect(result.items).toHaveLength(1);
       expect(result.statusHistories).toHaveLength(0);
+    });
+
+    it('입금 대기 주문 상세는 404다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'PENDING_PAYMENT',
+      });
+      await expect(
+        service.sellerOrder(account.id, order.id),
+      ).rejects.toThrowDomain('ORDER_NOT_FOUND');
+    });
+
+    it('입금 대기 이력은 빠지고 접수 이력의 출발 상태는 null(최초)이다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id);
+      const at = (m: number) => new Date(Date.UTC(2026, 3, 15, 10, m));
+      await prisma.orderStatusHistory.createMany({
+        data: [
+          {
+            order_id: order.id,
+            from_status: null,
+            to_status: 'PENDING_PAYMENT',
+            changed_at: at(0),
+            actor_type: 'BUYER',
+          },
+          {
+            order_id: order.id,
+            from_status: 'PENDING_PAYMENT',
+            to_status: 'SUBMITTED',
+            changed_at: at(10),
+            actor_type: 'ADMIN',
+          },
+        ],
+      });
+
+      const result = await service.sellerOrder(account.id, order.id);
+      expect(result.statusHistories).toEqual([
+        expect.objectContaining({ fromStatus: null, toStatus: 'SUBMITTED' }),
+      ]);
     });
 
     it('soft-delete된 아이템만 있는 주문은 상세·목록 모두에서 제외한다', async () => {
@@ -392,8 +483,45 @@ describe('SellerOrderService (real DB)', () => {
         where: { order_id: order.id },
       });
       expect(histories).toHaveLength(1);
-      expect(histories[0].from_status).toBe('SUBMITTED');
-      expect(histories[0].to_status).toBe('CONFIRMED');
+      expect(histories[0]).toMatchObject({
+        from_status: 'SUBMITTED',
+        to_status: 'CONFIRMED',
+        actor_type: 'SELLER',
+        actor_account_id: account.id,
+      });
+    });
+
+    it.each([OrderStatus.NO_SHOW, OrderStatus.PENDING_PAYMENT])(
+      '판매자는 %s로 바꿀 수 없다(400, 상태 불변)',
+      async (toStatus) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createStoreOrder(store.id, { status: 'MADE' });
+
+        await expect(
+          service.sellerUpdateOrderStatus(account.id, {
+            orderId: order.id.toString(),
+            toStatus,
+          }),
+        ).rejects.toThrowDomain('INVALID_ORDER_STATUS_TRANSITION');
+        const row = await prisma.order.findUniqueOrThrow({
+          where: { id: order.id },
+        });
+        expect(row.status).toBe('MADE');
+      },
+    );
+
+    it('입금 대기 주문은 상태를 바꿀 수 없다(404)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'PENDING_PAYMENT',
+      });
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'CANCELED',
+          note: '취소',
+        }),
+      ).rejects.toThrowDomain('ORDER_NOT_FOUND');
     });
 
     it('사전 검사 뒤 품목이 삭제돼도 상태는 바뀌고 첫 품목 필드는 null이다', async () => {

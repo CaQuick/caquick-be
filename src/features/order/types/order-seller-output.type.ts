@@ -2,11 +2,12 @@ import type {
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface SellerOrderSummaryOutput {
   id: string;
   orderNumber: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
@@ -20,7 +21,7 @@ export interface SellerOrderDetailOutput {
   id: string;
   orderNumber: string;
   accountId: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
@@ -42,7 +43,7 @@ export interface SellerOrderDetailOutput {
 export interface SellerOrderUpdateEvent {
   orderId: string;
   orderNumber: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: string;
   buyerName: string;
   totalPrice: number;

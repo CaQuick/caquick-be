@@ -1,12 +1,15 @@
 """
-주문 상태. 구매자·판매자 API가 공용으로 쓴다.
+주문 상태. 구매자·판매자·관리자 API가 공용으로 쓴다. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
 
-전이는 `SUBMITTED → CONFIRMED → MADE → PICKED_UP` 한 방향이며 각 단계는 직전
-상태에서만 진입할 수 있다. `CANCELED`는 `PICKED_UP` 이전 세 상태에서만 가능하고,
-어떤 상태에서도 `SUBMITTED`로 되돌아갈 수 없다.
+흐름은 `PENDING_PAYMENT → SUBMITTED → CONFIRMED → MADE → PICKED_UP`이며 어떤 상태에서도
+앞 단계로 되돌아갈 수 없다. 판매자가 직접 바꿀 수 있는 전이는 `SUBMITTED → CONFIRMED`,
+`CONFIRMED → MADE`, `MADE → PICKED_UP`, `SUBMITTED·CONFIRMED·MADE → CANCELED`뿐이다.
+판매자에게는 입금이 확인된(접수된) 주문만 보인다.
 """
 enum OrderStatusType {
-  """구매자가 주문을 넣은 직후의 초기 상태. 판매자 확인 대기."""
+  """입금 대기. 주문 직후 계좌이체 입금을 기다리는 상태이고, 판매자에게 보이지 않는다."""
+  PENDING_PAYMENT
+  """입금이 확인돼 접수된 상태. 판매자 확인 대기."""
   SUBMITTED
   """판매자가 주문을 확인·수락한 상태. 제작 대기."""
   CONFIRMED
@@ -14,6 +17,8 @@ enum OrderStatusType {
   MADE
   """구매자가 수령을 마친 종료 상태. 이후 상태 변경 불가."""
   PICKED_UP
+  """노쇼. 구매자가 픽업 시간에 오지 않아 판매자가 처리한 종료 상태. 환불 없음, 리뷰 불가."""
+  NO_SHOW
   """취소된 종료 상태. 취소 처리에는 사유(note)가 필수다."""
   CANCELED
 }

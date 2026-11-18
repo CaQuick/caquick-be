@@ -12,7 +12,7 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { OutboxDispatcherService } from '@/features/outbox';
-import type { PrismaClient } from '@/generated/prisma/client';
+import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -78,10 +78,11 @@ describe('AdminOrderService (real DB)', () => {
 
   async function orderWithItem(
     overrides: {
-      status?: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+      status?: OrderStatus;
       storeId?: bigint;
       buyerName?: string;
       orderNumber?: string;
+      submittedAt?: Date | null;
     } = {},
   ) {
     const buyer = await createAccount(prisma, { account_type: 'USER' });
@@ -97,6 +98,7 @@ describe('AdminOrderService (real DB)', () => {
       status: overrides.status,
       buyer_name: overrides.buyerName,
       order_number: overrides.orderNumber,
+      submitted_at: overrides.submittedAt,
     });
     const item = await createOrderItem(prisma, {
       order_id: order.id,
@@ -226,11 +228,145 @@ describe('AdminOrderService (real DB)', () => {
     });
   });
 
+  describe('adminOrders inProgress', () => {
+    async function seedStatuses(): Promise<Map<string, OrderStatus>> {
+      const byId = new Map<string, OrderStatus>();
+      for (const status of [
+        'PENDING_PAYMENT',
+        'SUBMITTED',
+        'CONFIRMED',
+        'MADE',
+        'PICKED_UP',
+        'NO_SHOW',
+        'CANCELED',
+      ] as const) {
+        const { order } = await orderWithItem({ status });
+        byId.set(order.id.toString(), status);
+      }
+      return byId;
+    }
+
+    it('true면 입금 대기·접수·확정·제작 완료만, totalCount도 같다', async () => {
+      const byId = await seedStatuses();
+      const result = await service.adminOrders(await admin(), {
+        inProgress: true,
+      });
+      expect(result.items.map((o) => byId.get(o.id)).sort()).toEqual(
+        ['CONFIRMED', 'MADE', 'PENDING_PAYMENT', 'SUBMITTED'].sort(),
+      );
+      expect(result.totalCount).toBe(4);
+    });
+
+    it.each([false, null, undefined])('%p면 전체다', async (inProgress) => {
+      await seedStatuses();
+      const result = await service.adminOrders(await admin(), {
+        inProgress: inProgress as boolean | undefined,
+      });
+      expect(result.totalCount).toBe(7);
+    });
+
+    it('status와 함께 오면 AND다', async () => {
+      await seedStatuses();
+      const actor = await admin();
+      const both = (status: OrderStatus) =>
+        service.adminOrders(actor, { inProgress: true, status });
+      expect((await both('MADE')).totalCount).toBe(1);
+      expect((await both('PICKED_UP')).totalCount).toBe(0);
+    });
+  });
+
+  describe('adminStoreInProgressOrderSummary', () => {
+    it('진행 중 주문만 상태별로 세고 0건 상태는 빼며 흐름 순으로 준다', async () => {
+      const store = await createStore(prisma);
+      for (const status of [
+        'MADE',
+        'PENDING_PAYMENT',
+        'PENDING_PAYMENT',
+        'SUBMITTED',
+        'PICKED_UP',
+        'NO_SHOW',
+        'CANCELED',
+      ] as const) {
+        await orderWithItem({ status, storeId: store.id });
+      }
+      // 다른 매장 주문은 세지 않는다
+      await orderWithItem({ status: 'CONFIRMED' });
+
+      const result = await service.adminStoreInProgressOrderSummary(
+        await admin(),
+        store.id,
+      );
+      expect(result).toEqual({
+        storeId: store.id.toString(),
+        totalCount: 4,
+        byStatus: [
+          { status: 'PENDING_PAYMENT', count: 2 },
+          { status: 'SUBMITTED', count: 1 },
+          { status: 'MADE', count: 1 },
+        ],
+      });
+    });
+
+    it('진행 중 주문이 없으면(없는 매장 포함) 0건이다', async () => {
+      const store = await createStore(prisma);
+      await orderWithItem({ status: 'PICKED_UP', storeId: store.id });
+      for (const storeId of [store.id, store.id + 1000n]) {
+        expect(
+          await service.adminStoreInProgressOrderSummary(
+            await admin(),
+            storeId,
+          ),
+        ).toEqual({ storeId: storeId.toString(), totalCount: 0, byStatus: [] });
+      }
+    });
+
+    it('삭제된 주문과 이 매장 품목이 삭제된 주문은 세지 않는다', async () => {
+      const store = await createStore(prisma);
+      await orderWithItem({ status: 'SUBMITTED', storeId: store.id });
+      const deletedOrder = await orderWithItem({
+        status: 'CONFIRMED',
+        storeId: store.id,
+      });
+      await prisma.order.update({
+        where: { id: deletedOrder.order.id },
+        data: { deleted_at: new Date() },
+      });
+      const deletedItem = await orderWithItem({
+        status: 'MADE',
+        storeId: store.id,
+      });
+      await prisma.orderItem.update({
+        where: { id: deletedItem.item.id },
+        data: { deleted_at: new Date() },
+      });
+
+      expect(
+        await service.adminStoreInProgressOrderSummary(await admin(), store.id),
+      ).toEqual({
+        storeId: store.id.toString(),
+        totalCount: 1,
+        byStatus: [{ status: 'SUBMITTED', count: 1 }],
+      });
+    });
+
+    it('관리자가 아니면 403', async () => {
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      await expect(
+        service.adminStoreInProgressOrderSummary(user.id, 1n),
+      ).rejects.toThrowDomain(403);
+    });
+  });
+
   describe('adminOrder', () => {
     it('구매자 요약·전체 품목·상태 이력을 준다', async () => {
       const { order, item, buyer } = await orderWithItem();
       await prisma.orderStatusHistory.create({
-        data: { order_id: order.id, from_status: null, to_status: 'SUBMITTED' },
+        data: {
+          order_id: order.id,
+          from_status: null,
+          to_status: 'SUBMITTED',
+          actor_type: 'BUYER',
+        },
       });
 
       const result = await service.adminOrder(await admin(), order.id);
@@ -281,8 +417,12 @@ describe('AdminOrderService (real DB)', () => {
         const history = await prisma.orderStatusHistory.findFirstOrThrow({
           where: { order_id: order.id, to_status: 'CANCELED' },
         });
-        expect(history.from_status).toBe(status);
-        expect(history.note).toBe('[관리자] 가게 사정');
+        expect(history).toMatchObject({
+          from_status: status,
+          actor_type: 'ADMIN',
+          actor_account_id: actor,
+          note: '[관리자] 가게 사정',
+        });
         await drainOutbox(dispatcher);
         const notification = await prisma.notification.findFirstOrThrow({
           where: { order_id: order.id },
@@ -303,7 +443,7 @@ describe('AdminOrderService (real DB)', () => {
       },
     );
 
-    it.each(['PICKED_UP', 'CANCELED'] as const)(
+    it.each(['PICKED_UP', 'CANCELED', 'NO_SHOW', 'PENDING_PAYMENT'] as const)(
       '%s 주문은 400(판매자와 같은 전이 규칙)',
       async (status) => {
         const { order } = await orderWithItem({ status });
@@ -474,6 +614,21 @@ describe('AdminOrderService (real DB)', () => {
 
       expect(topic.received).toHaveLength(0);
       topic.stop();
+    });
+
+    it('입금 확인 전(submitted_at 없음) 주문의 취소는 판매자에게 보이지 않아 발행하지 않는다', async () => {
+      const { order } = await orderWithItem({ submittedAt: null });
+      const publish = jest.spyOn(pubSub, 'publish');
+
+      const result = await service.adminCancelOrder(await admin(), {
+        orderId: order.id.toString(),
+        note: 'x',
+      });
+
+      const published = publish.mock.calls.length;
+      publish.mockRestore();
+      expect(result.status).toBe('CANCELED');
+      expect(published).toBe(0);
     });
 
     it('활성 품목이 없으면 매장을 알 수 없어 발행을 생략한다', async () => {

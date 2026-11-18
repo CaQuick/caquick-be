@@ -31,6 +31,7 @@ import { OrderEventsService } from '@/features/order/services/order-events.servi
 import type {
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
+  AdminStoreInProgressOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
 import { OrderStatus } from '@/generated/prisma/client';
 
@@ -60,6 +61,7 @@ export class AdminOrderService extends AdminBaseService {
     const filter = {
       keyword: input?.keyword?.trim() || undefined,
       status: input?.status ? this.statusPolicy.parse(input.status) : undefined,
+      inProgress: input?.inProgress ?? false,
       storeId: parseOptionalId(input?.storeId) ?? undefined,
       accountId: parseOptionalId(input?.accountId) ?? undefined,
       fromCreatedAt: toDate(input?.fromCreatedAt),
@@ -87,6 +89,21 @@ export class AdminOrderService extends AdminBaseService {
     const row = await this.orderRepository.findOrderDetailForAdmin(orderId);
     if (!row) throw new DomainException('ORDER_NOT_FOUND');
     return toAdminOrderDetailOutput(row);
+  }
+
+  /** 정지·숨김 전 경고용. 매장 존재는 보지 않는다(없는 매장은 0건). */
+  async adminStoreInProgressOrderSummary(
+    accountId: bigint,
+    storeId: bigint,
+  ): Promise<AdminStoreInProgressOrderSummaryOutput> {
+    await this.requireAdminContext(accountId);
+    const byStatus =
+      await this.orderRepository.countInProgressOrdersByStore(storeId);
+    return {
+      storeId: storeId.toString(),
+      totalCount: byStatus.reduce((sum, row) => sum + row.count, 0),
+      byStatus,
+    };
   }
 
   async adminCancelOrder(
@@ -136,9 +153,9 @@ export class AdminOrderService extends AdminBaseService {
       throw new DomainException('ORDER_NOT_CANCELLABLE');
     }
 
-    // 활성 품목이 없으면 매장을 알 수 없어 발행을 생략한다
+    // 활성 품목이 없으면 매장을 알 수 없고, 입금 확인 전 주문은 판매자에게 보이지 않아 발행을 생략한다
     const [firstItem] = updated.items;
-    if (firstItem) {
+    if (firstItem && updated.submitted_at) {
       await this.events.publishSellerOrderUpdate(
         firstItem.store_id,
         toSellerOrderUpdateEvent(updated, firstItem.product_name_snapshot),

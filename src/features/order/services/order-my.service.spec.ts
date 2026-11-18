@@ -499,6 +499,7 @@ describe('UserOrderService (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date('2026-04-15T10:00:00Z'),
+          actor_type: 'SELLER',
           note: '접수 확정',
         },
       });

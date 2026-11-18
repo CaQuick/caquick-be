@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DomainException } from '@/common/errors/error-catalog';
 import type { CursorConnection } from '@/common/types/cursor-connection.type';
 import { toDate } from '@/common/utils/date-parser';
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { parseIdCursor } from '@/common/utils/keyset-cursor';
 import {
   normalizeCursorInput,
@@ -62,6 +62,7 @@ export class SellerOrderService extends SellerBaseService {
     const filters = {
       storeId: ctx.storeId,
       status: input?.status ? this.statusPolicy.parse(input.status) : undefined,
+      buyerAccountId: parseOptionalId(input?.buyerAccountId) ?? undefined,
       fromCreatedAt: toDate(input?.fromCreatedAt),
       toCreatedAt: toDate(input?.toCreatedAt),
       fromPickupAt: toDate(input?.fromPickupAt),
@@ -202,7 +203,14 @@ export class SellerOrderService extends SellerBaseService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       items: row.items.map(toOrderItemDetail),
-      statusHistories: row.status_histories.map(toOrderStatusHistory),
+      // 입금 대기 이력은 repository가 뺐다 — 접수 이력의 출발 상태도 판매자에게는 '최초'로 보인다
+      statusHistories: row.status_histories.map((history) =>
+        toOrderStatusHistory(
+          history.from_status === OrderStatus.PENDING_PAYMENT
+            ? { ...history, from_status: null }
+            : history,
+        ),
+      ),
     };
   }
 }

@@ -3,7 +3,7 @@
 """
 enum NotificationType {
   """
-  주문 상태 변경 알림. ORDER_CONFIRMED·ORDER_MADE·ORDER_PICKED_UP 이벤트가 여기 속한다.
+  주문 상태 변경 알림. 주문(ORDER_*)·환불(REFUND_*) 이벤트가 여기 속한다.
   """
   ORDER_STATUS
   """
@@ -44,4 +44,28 @@ enum NotificationEvent {
   주문이 취소됐다(판매자 또는 운영자). type은 ORDER_STATUS.
   """
   ORDER_CANCELED
+  """
+  입금이 확인돼 주문이 접수됐다. type은 ORDER_STATUS.
+  """
+  ORDER_PAYMENT_CONFIRMED
+  """
+  입금 기한 안에 입금이 확인되지 않아 주문이 취소됐다. type은 ORDER_STATUS.
+  """
+  ORDER_PAYMENT_EXPIRED
+  """
+  픽업 시간에 방문하지 않아 노쇼로 처리됐다. type은 ORDER_STATUS.
+  """
+  ORDER_NO_SHOW
+  """
+  판매자가 픽업 일시를 바꿨다. type은 ORDER_STATUS.
+  """
+  ORDER_PICKUP_RESCHEDULED
+  """
+  돌려받을 돈이 생겨 환불 계좌 입력이 필요하다. type은 ORDER_STATUS.
+  """
+  REFUND_ACCOUNT_REQUESTED
+  """
+  환불 송금이 끝났다. type은 ORDER_STATUS.
+  """
+  REFUND_COMPLETED
 }

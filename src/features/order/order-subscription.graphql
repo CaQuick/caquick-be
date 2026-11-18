@@ -3,7 +3,7 @@ extend type Subscription {
   내 매장 주문 생성·상태 변경 이벤트. 판매자 로그인 필수(SELLER 아니면 FORBIDDEN).
   삭제되지 않은 매장을 보유한 판매자만 구독할 수 있다 — 매장이 없거나 삭제됐으면 NOT_FOUND.
   비활성(is_active=false) 매장도 구독은 유지된다. 인증은 graphql-ws connectionParams.authorization.
-  구매자 주문 생성(SUBMITTED)·판매자 상태 변경·관리자 강제 취소가 모두 여기로 온다.
+  구매자 주문 생성(SUBMITTED)·판매자 상태 변경·관리자 강제 취소가 모두 여기로 온다. 입금 확인 전 주문의 취소는 오지 않는다.
   """
   sellerOrderUpdated: SellerOrderUpdate!
 }

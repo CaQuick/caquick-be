@@ -20,6 +20,12 @@ export interface AdminOrderSummaryOutput {
   firstItemImageUrl: string | null;
 }
 
+export interface AdminStoreInProgressOrderSummaryOutput {
+  storeId: string;
+  totalCount: number;
+  byStatus: { status: OrderStatus; count: number }[];
+}
+
 export interface AdminOrderDetailOutput {
   id: string;
   orderNumber: string;

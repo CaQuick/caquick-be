@@ -1,112 +1,62 @@
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderStatus } from '@/generated/prisma/client';
 
+const STATUSES = Object.values(OrderStatus);
+
+/** 판매자 전이 허용 목록. 이 밖은 전부 거절이다(기본 거절). */
+const ALLOWED = new Set([
+  'SUBMITTED>CONFIRMED',
+  'CONFIRMED>MADE',
+  'MADE>PICKED_UP',
+  'SUBMITTED>CANCELED',
+  'CONFIRMED>CANCELED',
+  'MADE>CANCELED',
+]);
+
+function expectedCode(from: OrderStatus, to: OrderStatus): string | null {
+  if (from === to) return 'ORDER_STATUS_UNCHANGED';
+  if (ALLOWED.has(`${from}>${to}`)) return null;
+  return to === 'CANCELED'
+    ? 'ORDER_NOT_CANCELLABLE'
+    : 'INVALID_ORDER_STATUS_TRANSITION';
+}
+
 describe('OrderStatusTransitionPolicy', () => {
   const policy = new OrderStatusTransitionPolicy();
 
   describe('parse', () => {
-    it.each([
-      ['SUBMITTED', OrderStatus.SUBMITTED],
-      ['CONFIRMED', OrderStatus.CONFIRMED],
-      ['MADE', OrderStatus.MADE],
-      ['PICKED_UP', OrderStatus.PICKED_UP],
-      ['CANCELED', OrderStatus.CANCELED],
-    ])('"%s" → enum %s', (raw, expected) => {
-      expect(policy.parse(raw)).toBe(expected);
+    it('Prisma enum 값 전부를 받는다(입금 대기·노쇼 포함)', () => {
+      expect(STATUSES).toEqual(
+        expect.arrayContaining(['PENDING_PAYMENT', 'NO_SHOW']),
+      );
+      for (const status of STATUSES) expect(policy.parse(status)).toBe(status);
     });
 
-    it('알 수 없는 문자열이면 400', () => {
-      expect(() => policy.parse('INVALID')).toThrowDomain(400);
+    it.each(['INVALID', '', 'submitted'])('%p면 400', (raw) => {
+      expect(() => policy.parse(raw)).toThrowDomain('INVALID_ORDER_STATUS');
     });
   });
 
   describe('assertSellerTransition', () => {
-    it('from === to면 400', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.SUBMITTED,
-        ),
-      ).toThrowDomain(400);
+    const cases = STATUSES.flatMap((from) =>
+      STATUSES.map((to) => [from, to, expectedCode(from, to)] as const),
+    );
+
+    it('표는 상태 전 조합(7×7)을 덮고 허용 전이는 6개다', () => {
+      expect(cases).toHaveLength(49);
+      expect(cases.filter(([, , code]) => code === null)).toHaveLength(6);
     });
 
-    it('CONFIRMED는 SUBMITTED에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.CONFIRMED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.CONFIRMED),
-      ).toThrowDomain(400);
-    });
-
-    it('MADE는 CONFIRMED에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.CONFIRMED, OrderStatus.MADE),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.SUBMITTED, OrderStatus.MADE),
-      ).toThrowDomain(400);
-    });
-
-    it('PICKED_UP은 MADE에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.PICKED_UP),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.CONFIRMED,
-          OrderStatus.PICKED_UP,
-        ),
-      ).toThrowDomain(400);
-    });
-
-    it('CANCELED는 SUBMITTED/CONFIRMED/MADE에서 가능, PICKED_UP에서는 불가', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.CANCELED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.CONFIRMED,
-          OrderStatus.CANCELED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.CANCELED),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.PICKED_UP,
-          OrderStatus.CANCELED,
-        ),
-      ).toThrowDomain(400);
-    });
-
-    // SUBMITTED는 주문 생성 시점의 초기 상태라 어떤 상태에서도 되돌아갈 수 없다 — 가드가 빠지면 역전이가 조용히 통과되므로 모든 from을 전수 검증한다.
-    it.each([
-      OrderStatus.CONFIRMED,
-      OrderStatus.MADE,
-      OrderStatus.PICKED_UP,
-      OrderStatus.CANCELED,
-    ])('SUBMITTED로 되돌리는 역전이는 거부 (from=%s)', (from) => {
-      expect(() =>
-        policy.assertSellerTransition(from, OrderStatus.SUBMITTED),
-      ).toThrowDomain(400);
+    it.each(cases)('%s → %s: %s', (from, to, code) => {
+      const run = () => policy.assertSellerTransition(from, to);
+      if (code === null) expect(run).not.toThrow();
+      else expect(run).toThrowDomain(code);
     });
   });
 
   describe('requiresCancellationNote', () => {
-    it('CANCELED일 때만 true', () => {
-      expect(policy.requiresCancellationNote(OrderStatus.CANCELED)).toBe(true);
-      expect(policy.requiresCancellationNote(OrderStatus.CONFIRMED)).toBe(
-        false,
-      );
-      expect(policy.requiresCancellationNote(OrderStatus.MADE)).toBe(false);
+    it.each(STATUSES)('%s', (to) => {
+      expect(policy.requiresCancellationNote(to)).toBe(to === 'CANCELED');
     });
   });
 });
