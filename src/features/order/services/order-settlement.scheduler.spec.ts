@@ -5,7 +5,11 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { SETTLEMENT_CREATED } from '@/features/order/events/settlement-created.event';
 import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
-import { SettlementScheduler } from '@/features/order/services/order-settlement.scheduler';
+import {
+  SETTLEMENT_BATCH_SIZE,
+  SETTLEMENT_MAX_PER_RUN,
+  SettlementScheduler,
+} from '@/features/order/services/order-settlement.scheduler';
 import { OutboxPublisher } from '@/features/outbox';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { AlertService } from '@/global/alerting';
@@ -29,7 +33,7 @@ const MONDAY_0AM = new Date('2026-11-15T15:00:00.000Z');
 const WEEK_MS = 7 * 24 * 60 * 60_000;
 const dateOnly = (ymd: string) => new Date(`${ymd}T00:00:00.000Z`);
 
-// 주간 정산: KST 주 경계, 매장별 묶음·합계, 재실행 멱등, 정산 행과 outbox의 같은 tx, 묵은 주문, soft-delete 제외, 역할 게이트.
+// 주간 정산: KST 주 경계, 매장별 묶음·합계, 재실행 멱등, 정산 행과 outbox의 같은 tx, 묵은 주문, soft-delete 제외, 후보 배치·상한·키셋, 역할 게이트.
 describe('SettlementScheduler (real DB)', () => {
   let scheduler: SettlementScheduler;
   let publisher: OutboxPublisher;
@@ -81,6 +85,25 @@ describe('SettlementScheduler (real DB)', () => {
       where: { event_type: SETTLEMENT_CREATED },
       orderBy: { id: 'asc' },
     });
+  const settledStoreIds = async () =>
+    (await prisma.settlement.findMany({ orderBy: { store_id: 'asc' } })).map(
+      (s) => s.store_id,
+    );
+  /** 매장마다 지난주 확정 주문 1건. 매장 id 오름차순. */
+  async function pendingStores(count: number): Promise<bigint[]> {
+    const ids: bigint[] = [];
+    for (let i = 0; i < count; i++) {
+      const store = await createStore(prisma);
+      await createFinalizedOrder(prisma, {
+        store_id: store.id,
+        finalized_at: new Date('2026-11-10T00:00:00.000Z'),
+      });
+      ids.push(store.id);
+    }
+    return ids;
+  }
+  const silenceWarn = () =>
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
   it('지난주(월~일 KST)에 확정된 주문을 매장별로 묶고 합계·기간·매장명과 settlement.created를 남긴다', async () => {
     const store = await createStore(prisma);
@@ -383,6 +406,138 @@ describe('SettlementScheduler (real DB)', () => {
 
     expect([...results].sort()).toEqual([0, 1]);
     expect(await prisma.settlement.count()).toBe(1);
+  });
+
+  describe('후보 배치·상한', () => {
+    it.each([100, 101])(
+      '후보 매장 %i곳을 100곳씩 키셋으로 나눠 모두 정산한다',
+      async (count) => {
+        const storeIds = await pendingStores(count);
+        const find = jest.spyOn(repository, 'findUnsettledStoreIds');
+        const warn = silenceWarn();
+
+        await expect(scheduler.settleLastWeek()).resolves.toBe(count);
+
+        expect(find.mock.calls.map(([args]) => args)).toEqual([
+          { before: MONDAY_0AM, afterStoreId: undefined, limit: 100 },
+          { before: MONDAY_0AM, afterStoreId: storeIds[99], limit: 100 },
+        ]);
+        const pages = await Promise.all(
+          find.mock.results.map((r) => r.value as Promise<bigint[]>),
+        );
+        expect(pages.map((page) => page.length)).toEqual([100, count - 100]);
+        expect(await settledStoreIds()).toEqual(storeIds);
+        expect(warn).not.toHaveBeenCalled();
+      },
+    );
+
+    it('운영 값은 배치 100곳·상한 1000곳이고, 상한에 닿으면 멈추고 남은 매장을 경고로 남긴다', async () => {
+      expect(SETTLEMENT_BATCH_SIZE).toBe(100);
+      expect(SETTLEMENT_MAX_PER_RUN).toBe(1000);
+      // 후보 매장 1~1050 — 1000곳을 실제로 만들지 않고 루프만 본다(상한이 없으면 1050곳을 돈다)
+      const find = jest
+        .spyOn(repository, 'findUnsettledStoreIds')
+        .mockImplementation(({ afterStoreId = 0n, limit }) =>
+          Promise.resolve(
+            Array.from(
+              { length: Math.min(limit, 1050 - Number(afterStoreId)) },
+              (_, i) => afterStoreId + BigInt(i + 1),
+            ),
+          ),
+        );
+      const create = jest
+        .spyOn(repository, 'createWeeklySettlement')
+        .mockResolvedValue(null);
+      const warn = silenceWarn();
+
+      await scheduler.settleLastWeek();
+
+      expect(create).toHaveBeenCalledTimes(1000);
+      expect(create.mock.calls[999][0].storeId).toBe(1000n);
+      // 100곳씩 10쪽, 그 뒤 남은 매장이 있는지 1곳만 본다
+      expect(find.mock.calls.map(([args]) => args.limit)).toEqual([
+        ...Array<number>(10).fill(100),
+        1,
+      ]);
+      expect(find.mock.calls[10][0].afterStoreId).toBe(1000n);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(
+        '주간 정산 상한(1000곳)에 걸려 매장 1001부터는 다음 실행에서 정산한다',
+      );
+    });
+
+    it('상한을 넘는 후보는 매장 id 순으로 상한만큼만 정산하고 경고를 남긴 뒤, 다음 실행에서 남은 매장을 정산한다', async () => {
+      const storeIds = await pendingStores(7);
+      const warn = silenceWarn();
+      const limits = { batchSize: 2, maxPerRun: 5 };
+
+      await expect(scheduler.settleLastWeek(limits)).resolves.toBe(5);
+
+      expect(await settledStoreIds()).toEqual(storeIds.slice(0, 5));
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(
+        `주간 정산 상한(5곳)에 걸려 매장 ${storeIds[5]}부터는 다음 실행에서 정산한다`,
+      );
+      // 상한은 실패가 아니라 경보하지 않는다
+      expect(alerts.notify).not.toHaveBeenCalled();
+
+      // 다음 실행(부팅 등) — 정산된 매장은 후보에서 빠지고 남은 매장만 같은 주로 정산한다
+      warn.mockClear();
+      await expect(scheduler.settleLastWeek(limits)).resolves.toBe(2);
+
+      expect(await settledStoreIds()).toEqual(storeIds);
+      expect(await createdEvents()).toHaveLength(7);
+      expect(
+        await prisma.settlement.count({
+          where: { period_start: dateOnly('2026-11-09') },
+        }),
+      ).toBe(7);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('반증: 후보가 상한과 같으면 모두 정산하고 경고하지 않는다', async () => {
+      const storeIds = await pendingStores(4);
+      const warn = silenceWarn();
+
+      await expect(
+        scheduler.settleLastWeek({ batchSize: 2, maxPerRun: 4 }),
+      ).resolves.toBe(4);
+
+      expect(await settledStoreIds()).toEqual(storeIds);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('키셋은 매장 id 오름차순이고, 실패한 매장은 같은 실행에서 다시 잡지 않는다', async () => {
+      const stores = [];
+      for (let i = 0; i < 5; i++) stores.push(await createStore(prisma));
+      // 주문은 매장 역순으로 만들어 주문 id 순과 매장 id 순을 어긋나게 한다
+      for (const store of [...stores].reverse()) {
+        await createFinalizedOrder(prisma, {
+          store_id: store.id,
+          finalized_at: new Date('2026-11-10T00:00:00.000Z'),
+        });
+      }
+      const storeIds = stores.map((store) => store.id);
+      const find = jest.spyOn(repository, 'findUnsettledStoreIds');
+      const create = jest.spyOn(repository, 'createWeeklySettlement');
+      // 첫 매장만 실패 — 다음 쪽 후보에 그대로 남아 있다
+      jest
+        .spyOn(publisher, 'publish')
+        .mockRejectedValueOnce(new Error('outbox down'));
+
+      await expect(
+        scheduler.settleLastWeek({ batchSize: 2, maxPerRun: 10 }),
+      ).resolves.toBe(4);
+
+      expect(create.mock.calls.map(([args]) => args.storeId)).toEqual(storeIds);
+      expect(find.mock.calls.map(([args]) => args.afterStoreId)).toEqual([
+        undefined,
+        storeIds[1],
+        storeIds[3],
+      ]);
+      expect(await settledStoreIds()).toEqual(storeIds.slice(1));
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('역할 게이트', () => {

@@ -15,9 +15,18 @@ import { resolveAppRole, runsBackgroundJobs } from '@/config/app.config';
 import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { AlertService } from '@/global/alerting';
 
+/** 후보 매장은 id 순 100곳씩, 한 실행에 최대 1000곳까지 본다(남은 매장은 다음 실행으로). */
+export const SETTLEMENT_BATCH_SIZE = 100;
+export const SETTLEMENT_MAX_PER_RUN = 1000;
+
+interface RunLimits {
+  batchSize: number;
+  maxPerRun: number;
+}
+
 /**
  * 주간 정산(월 05:00 KST, worker). 지난주(월~일, KST)까지 확정된 주문을 매장별 정산(PENDING)으로 묶는다.
- * 매장마다 따로 커밋하고 이미 만든 주는 건너뛰어, 실패한 매장만 다음 실행(부팅·다음 주)에서 다시 시도된다.
+ * 매장마다 따로 커밋하고 이미 만든 주는 건너뛰어, 실패했거나 상한에 걸려 남은 매장은 다음 실행(부팅·다음 주)에서 다시 시도된다.
  */
 @Injectable()
 export class SettlementScheduler implements OnApplicationBootstrap {
@@ -42,12 +51,17 @@ export class SettlementScheduler implements OnApplicationBootstrap {
     await this.settleLastWeek();
   }
 
-  /** 만든 정산 수. 실패는 던지지 않고 경보한다. */
-  async settleLastWeek(): Promise<number> {
+  /** 만든 정산 수. 실패는 던지지 않고 경보한다. limits는 테스트만 바꾼다. */
+  async settleLastWeek(
+    limits: RunLimits = {
+      batchSize: SETTLEMENT_BATCH_SIZE,
+      maxPerRun: SETTLEMENT_MAX_PER_RUN,
+    },
+  ): Promise<number> {
     if (this.running) return 0;
     this.running = true;
     try {
-      return await this.run();
+      return await this.run(limits);
     } catch (error) {
       await this.fail(error instanceof Error ? error.message : String(error));
       return 0;
@@ -56,7 +70,7 @@ export class SettlementScheduler implements OnApplicationBootstrap {
     }
   }
 
-  private async run(): Promise<number> {
+  private async run(limits: RunLimits): Promise<number> {
     const now = this.clock.now();
     const weekStart = kstWeekStart(now);
     const periodStart = kstDayBoundaries(
@@ -68,9 +82,7 @@ export class SettlementScheduler implements OnApplicationBootstrap {
 
     let created = 0;
     const failed: string[] = [];
-    for (const storeId of await this.settlements.findUnsettledStoreIds(
-      weekStart,
-    )) {
+    await this.forEachCandidateStore(weekStart, limits, async (storeId) => {
       try {
         const settlement = await this.settlements.createWeeklySettlement({
           storeId,
@@ -85,9 +97,40 @@ export class SettlementScheduler implements OnApplicationBootstrap {
           `매장 ${storeId}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    }
+    });
     if (failed.length > 0) await this.fail(failed.join('\n'));
     return created;
+  }
+
+  /** 후보 매장을 id 키셋으로 넘긴다. 실패한 매장도 키셋이 지나가 같은 실행에서 다시 잡히지 않는다. */
+  private async forEachCandidateStore(
+    before: Date,
+    limits: RunLimits,
+    handle: (storeId: bigint) => Promise<void>,
+  ): Promise<void> {
+    let afterStoreId: bigint | undefined;
+    for (let seen = 0; seen < limits.maxPerRun;) {
+      const limit = Math.min(limits.batchSize, limits.maxPerRun - seen);
+      const storeIds = await this.settlements.findUnsettledStoreIds({
+        before,
+        afterStoreId,
+        limit,
+      });
+      for (const storeId of storeIds) await handle(storeId);
+      if (storeIds.length < limit) return;
+      seen += limit;
+      afterStoreId = storeIds[storeIds.length - 1];
+    }
+    const [next] = await this.settlements.findUnsettledStoreIds({
+      before,
+      afterStoreId,
+      limit: 1,
+    });
+    if (next !== undefined) {
+      this.logger.warn(
+        `주간 정산 상한(${limits.maxPerRun}곳)에 걸려 매장 ${next}부터는 다음 실행에서 정산한다`,
+      );
+    }
   }
 
   private async fail(detail: string): Promise<void> {

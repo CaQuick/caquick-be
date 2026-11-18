@@ -83,11 +83,18 @@ export class SettlementRepository {
     private readonly auditLogs: IAuditLogRepository,
   ) {}
 
-  async findUnsettledStoreIds(before: Date): Promise<bigint[]> {
+  /** 정산할 주문이 남은 매장 id의 키셋 한 페이지(id 오름차순). afterStoreId 다음부터 limit곳. */
+  async findUnsettledStoreIds(args: {
+    before: Date;
+    afterStoreId?: bigint;
+    limit: number;
+  }): Promise<bigint[]> {
     const rows = await this.prisma.$queryRaw<{ store_id: bigint }[]>`
       SELECT DISTINCT oi.store_id FROM \`order\` o ${FIRST_ITEM_JOIN}
-      WHERE ${unsettledBefore(before)}
-      ORDER BY oi.store_id`;
+      WHERE ${unsettledBefore(args.before)}
+        ${args.afterStoreId !== undefined ? Prisma.sql`AND oi.store_id > ${args.afterStoreId}` : Prisma.empty}
+      ORDER BY oi.store_id
+      LIMIT ${args.limit}`;
     return rows.map((row) => row.store_id);
   }
 
