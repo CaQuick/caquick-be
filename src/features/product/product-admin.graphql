@@ -219,6 +219,10 @@ type AdminProductOptionItem {
   노출 여부. false면 구매자가 고를 수 없다.
   """
   isActive: Boolean!
+  """
+  이어진 3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key). 없으면 null.
+  """
+  threeDKey: String
 }
 
 """

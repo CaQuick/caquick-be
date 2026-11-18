@@ -27,4 +27,8 @@ export class SellerUpdateOptionItemInput {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  threeDKey?: string | null;
 }

@@ -534,6 +534,25 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '바탕 이미지를 읽을 수 없어요. 이미지를 다시 올려 주세요.',
   },
+  CUSTOM_3D_SCHEMA_UNSUPPORTED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '지원하지 않는 3D 디자인 형식이에요. 앱을 업데이트한 뒤 다시 꾸며 주세요.',
+  },
+  CUSTOM_3D_OPTIONS_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '고른 옵션과 3D 디자인이 맞지 않아요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_3D_ITEM_LIMIT_EXCEEDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) =>
+      `한 면에 글자와 꾸미기는 각각 ${max}개까지 올릴 수 있어요.`,
+  },
+  CUSTOM_3D_DESIGN_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) =>
+      `3D 디자인에 쓸 수 없는 값이 있어요(${field}). 다시 꾸며 주세요.`,
+  },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,
     message: 'dayOfWeek는 0~6이어야 합니다.',

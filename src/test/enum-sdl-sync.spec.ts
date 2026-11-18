@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { Kind, parse, print, visit } from 'graphql';
 
+import { THREE_D_OPTION_CATEGORIES } from '@/features/product/constants/custom-3d-catalog.constants';
 import {
   ConversationBodyFormat,
   CustomMode,
@@ -13,8 +14,8 @@ import {
 } from '@/generated/prisma/client';
 
 /**
- * 응답에 그대로 실리는 Prisma enum은 SDL enum이 그 값을 모두 가져야 한다. 하나라도 빠지면 그 값이 든
- * 응답 전체가 직렬화 오류로 실패한다(예: 새 NotificationEvent가 든 myNotifications). tsc는 둘을 묶지 못한다.
+ * 응답에 그대로 실리는 Prisma enum·TS 상수 union은 SDL enum이 그 값을 모두 가져야 한다. 하나라도 빠지면
+ * 그 값이 든 응답 전체가 직렬화 오류로 실패한다(예: 새 NotificationEvent가 든 myNotifications). tsc는 둘을 묶지 못한다.
  */
 const PAIRS: Array<
   [label: string, prisma: string[], file: string, sdl: string]
@@ -55,6 +56,12 @@ const PAIRS: Array<
     'src/features/product/product.types.graphql',
     'CustomTextAlignType',
   ],
+  [
+    'ThreeDOptionCategory',
+    [...THREE_D_OPTION_CATEGORIES],
+    'src/features/product/product.types.graphql',
+    'ThreeDOptionCategoryType',
+  ],
 ];
 
 function sdlEnumValues(source: string, enumName: string): string[] {
@@ -72,7 +79,7 @@ function missingInSdl(prisma: string[], sdl: string[]): string[] {
 
 const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
-describe('Prisma enum ⊆ SDL enum', () => {
+describe('Prisma enum·TS 상수 ⊆ SDL enum', () => {
   describe('검사기 반증', () => {
     it.each(PAIRS)(
       '%s: SDL에서 값 하나를 지우면 그 값이 빠졌다고 잡는다',
@@ -102,7 +109,7 @@ describe('Prisma enum ⊆ SDL enum', () => {
   });
 
   it.each(PAIRS)(
-    '%s: Prisma 값이 SDL에 모두 있다',
+    '%s: 서버 값이 SDL에 모두 있다',
     (_label, prisma, file, sdl) => {
       expect(prisma.length).toBeGreaterThan(0);
       expect(missingInSdl(prisma, sdlEnumValues(read(file), sdl))).toEqual([]);

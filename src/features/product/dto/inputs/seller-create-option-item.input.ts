@@ -26,4 +26,8 @@ export class SellerCreateOptionItemInput {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  threeDKey?: string | null;
 }

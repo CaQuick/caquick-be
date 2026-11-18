@@ -94,3 +94,17 @@ enum CustomTextAlignType {
   """오른쪽 정렬."""
   RIGHT
 }
+
+"""
+3D 옵션 카테고리. 옵션 항목의 threeDKey가 가리키는 카탈로그 선택지의 종류다.
+"""
+enum ThreeDOptionCategoryType {
+  """케이크 크기. 3D 상품은 필수 단일 선택 그룹이 있어야 한다."""
+  SIZE
+  """시트·크림 맛. 고르지 않아도 되는 그룹으로 둘 수 있다."""
+  FLAVOR
+  """시트 모양. 3D 상품은 필수 단일 선택 그룹이 있어야 한다."""
+  SHAPE
+  """시트 디자인. 고르지 않으면 장식 없는 시트로 그린다."""
+  DESIGN
+}

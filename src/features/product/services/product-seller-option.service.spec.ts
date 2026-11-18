@@ -268,6 +268,41 @@ describe('SellerOptionService (real DB)', () => {
       });
       expect(result.title).toBe('L');
       expect(result.priceDelta).toBe(3000);
+      expect(result.threeDKey).toBeNull();
+    });
+
+    it('3D 키는 공백을 지워 저장하고, 빈 문자열이면 연결하지 않는다', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+
+      const linked = await service.sellerCreateOptionItem(accountId, {
+        optionGroupId: group.id.toString(),
+        title: '하트',
+        threeDKey: ' shape.heart ',
+      });
+      const blank = await service.sellerCreateOptionItem(accountId, {
+        optionGroupId: group.id.toString(),
+        title: '초',
+        threeDKey: '  ',
+      });
+
+      expect([linked.threeDKey, blank.threeDKey]).toEqual([
+        'shape.heart',
+        null,
+      ]);
+    });
+
+    it('3D 키가 40자를 넘으면 거절한다', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+
+      await expect(
+        service.sellerCreateOptionItem(accountId, {
+          optionGroupId: group.id.toString(),
+          title: 'X',
+          threeDKey: `shape.${'a'.repeat(35)}`,
+        }),
+      ).rejects.toThrowDomain('TEXT_TOO_LONG');
     });
   });
 
@@ -310,6 +345,60 @@ describe('SellerOptionService (real DB)', () => {
         title: 'XL',
       });
       expect(result.title).toBe('XL');
+    });
+
+    it('3D 키는 생략하면 그대로, 바꾸면 새 값, null이면 연결을 끊는다', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      const item = await prisma.productOptionItem.create({
+        data: {
+          option_group_id: group.id,
+          title: 'S',
+          three_d_key: 'size.mini',
+        },
+      });
+      const update = (threeDKey?: string | null) =>
+        service.sellerUpdateOptionItem(accountId, {
+          optionItemId: item.id.toString(),
+          threeDKey,
+        });
+
+      expect((await update()).threeDKey).toBe('size.mini');
+      expect((await update('size.no1')).threeDKey).toBe('size.no1');
+      expect((await update(null)).threeDKey).toBeNull();
+    });
+
+    it('그룹 출력의 3D 카테고리는 활성 선택지의 키로 정한다', async () => {
+      const { accountId, product } = await setupProductForSeller();
+      const group = await createOptionGroup(product.id);
+      await prisma.productOptionItem.createMany({
+        data: [
+          {
+            option_group_id: group.id,
+            title: '원',
+            three_d_key: 'shape.circle',
+            sort_order: 0,
+          },
+          {
+            option_group_id: group.id,
+            title: '숨긴 크기',
+            three_d_key: 'size.mini',
+            sort_order: 1,
+            is_active: false,
+          },
+        ],
+      });
+
+      const result = await service.sellerUpdateOptionGroup(accountId, {
+        optionGroupId: group.id.toString(),
+        name: '모양',
+      });
+
+      expect(result.threeDCategory).toBe('SHAPE');
+      expect(result.optionItems.map((i) => i.threeDKey)).toEqual([
+        'shape.circle',
+        'size.mini',
+      ]);
     });
   });
 

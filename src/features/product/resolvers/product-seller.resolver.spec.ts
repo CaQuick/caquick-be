@@ -436,5 +436,27 @@ describe('Seller Product Resolvers (real DB)', () => {
         ),
       ).toBe(true);
     });
+
+    it('3D 기본 세트 → 3D 방식 전환 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      const preset = await mutationResolver.sellerApplyThreeDOptionPreset(
+        auth,
+        productId,
+      );
+      expect(preset.optionGroups.map((g) => g.threeDCategory)).toEqual([
+        'SIZE',
+        'FLAVOR',
+        'SHAPE',
+        'DESIGN',
+      ]);
+
+      const threeD = await mutationResolver.sellerSetProductCustomMode(
+        auth,
+        productId,
+        'THREE_D',
+      );
+      expect(threeD.customMode).toBe('THREE_D');
+    });
   });
 });

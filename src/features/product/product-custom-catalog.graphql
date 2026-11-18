@@ -1,0 +1,217 @@
+extend type Query {
+  """
+  3D 케이크 카탈로그. 모양·크기·디자인·맛 선택지, 시트 색, 글자색, 효과, 꾸미기, 서버가 강제하는 한도를 담는다. 비로그인 접근 가능.
+  항목은 지우지 않고 selectable=false로 퇴역시켜 과거 주문의 디자인도 이 목록으로 그릴 수 있다. revision이 같으면 내용도 같다.
+  """
+  customThreeDCatalog: CustomThreeDCatalog!
+}
+
+"""
+3D 케이크 카탈로그.
+"""
+type CustomThreeDCatalog {
+  """
+  카탈로그 버전. 항목을 더하거나 퇴역시키면 오른다. 클라이언트 캐시 무효화 기준이다.
+  """
+  revision: Int!
+  """
+  주문에 저장하는 3D 디자인 JSON 버전. 주문 생성의 design.schemaVersion은 이 값이어야 한다.
+  """
+  designSchemaVersion: Int!
+  """
+  서버가 강제하는 개수·길이·크기 한도.
+  """
+  limits: CustomThreeDLimits!
+  """
+  상품 옵션 항목이 threeDKey로 이어지는 선택지(크기·맛·모양·디자인).
+  """
+  optionChoices: [CustomThreeDOptionChoice!]!
+  """
+  시트 색(디자인 basic.sheetColor 값).
+  """
+  sheetColors: [CustomThreeDSheetColor!]!
+  """
+  글자색 팔레트(#RRGGBB 대문자, 편집기 표시 순서). 이 밖의 #RRGGBB도 쓸 수 있다.
+  """
+  textColorPresets: [String!]!
+  """
+  새 글자의 기본 색(#RRGGBB).
+  """
+  defaultTextColor: String!
+  """
+  글자·꾸미기에 거는 효과.
+  """
+  effects: [CustomThreeDEffect!]!
+  """
+  꾸미기 분류(편집기 탭).
+  """
+  decoCategories: [CustomThreeDDecoCategory!]!
+  """
+  꾸미기 이미지.
+  """
+  decos: [CustomThreeDDeco!]!
+}
+
+"""
+3D 디자인 한도. 크기 단위는 케이크 판 너비 대비 cqw다.
+"""
+type CustomThreeDLimits {
+  """
+  면(윗면·옆면)당 글자 최대 개수.
+  """
+  maxTextsPerFace: Int!
+  """
+  면(윗면·옆면)당 꾸미기 최대 개수.
+  """
+  maxDecosPerFace: Int!
+  """
+  글자 하나의 최대 길이(코드 포인트, 줄바꿈·이모지 포함).
+  """
+  maxTextLength: Int!
+  """
+  글자 크기 최솟값(cqw).
+  """
+  textSizeMin: Float!
+  """
+  글자 크기 최댓값(cqw).
+  """
+  textSizeMax: Float!
+  """
+  꾸미기 크기 최솟값(cqw).
+  """
+  decoSizeMin: Float!
+  """
+  꾸미기 크기 최댓값(cqw).
+  """
+  decoSizeMax: Float!
+  """
+  효과 강도 최솟값(정수).
+  """
+  effectIntensityMin: Int!
+  """
+  효과 강도 최댓값(정수).
+  """
+  effectIntensityMax: Int!
+  """
+  새 글자·꾸미기의 기본 효과 강도.
+  """
+  effectIntensityDefault: Int!
+}
+
+"""
+옵션 항목에 이을 수 있는 3D 선택지.
+"""
+type CustomThreeDOptionChoice {
+  """
+  옵션 항목 threeDKey로 저장하는 키(예: shape.heart).
+  """
+  key: String!
+  """
+  선택지 카테고리.
+  """
+  category: ThreeDOptionCategoryType!
+  """
+  디자인 JSON basic에 들어가는 값(예: heart).
+  """
+  value: String!
+  """
+  표시 이름. 기본 세트로 만든 옵션 항목의 이름이 된다.
+  """
+  label: String!
+  """
+  기본 추가 금액(원). 기본 세트로 만든 옵션 항목의 priceDelta가 되고, 매장이 바꿀 수 있다.
+  """
+  defaultPriceDelta: Int!
+  """
+  선택지 이미지 URL(디자인만). 없으면 null.
+  """
+  imageUrl: String
+  """
+  위에서 본 케이크 판·옆모습 배율(크기만). 없으면 null.
+  """
+  renderScale: Float
+  """
+  새로 고를 수 있는지. false면 퇴역한 값으로, 과거 주문을 그릴 때만 쓴다.
+  """
+  selectable: Boolean!
+}
+
+"""
+3D 시트 색.
+"""
+type CustomThreeDSheetColor {
+  """
+  디자인 JSON basic.sheetColor 값.
+  """
+  key: String!
+  """
+  표시 이름.
+  """
+  label: String!
+  """
+  렌더 색(#RRGGBB 대문자).
+  """
+  hex: String!
+  """
+  새로 고를 수 있는지. false면 과거 주문을 그릴 때만 쓴다.
+  """
+  selectable: Boolean!
+}
+
+"""
+글자·꾸미기 효과.
+"""
+type CustomThreeDEffect {
+  """
+  디자인 JSON effect.type 값.
+  """
+  key: String!
+  """
+  표시 이름.
+  """
+  label: String!
+  """
+  새로 고를 수 있는지. false면 과거 주문을 그릴 때만 쓴다.
+  """
+  selectable: Boolean!
+}
+
+"""
+꾸미기 분류.
+"""
+type CustomThreeDDecoCategory {
+  """
+  분류 키. CustomThreeDDeco.category가 가리킨다.
+  """
+  key: String!
+  """
+  표시 이름(편집기 탭).
+  """
+  label: String!
+}
+
+"""
+꾸미기 이미지 1개.
+"""
+type CustomThreeDDeco {
+  """
+  디자인 JSON 꾸미기 항목의 decoId 값.
+  """
+  key: String!
+  """
+  분류 키(CustomThreeDDecoCategory.key).
+  """
+  category: String!
+  """
+  표시 이름.
+  """
+  label: String!
+  """
+  이미지 URL(PNG, 투명 배경).
+  """
+  imageUrl: String!
+  """
+  새로 고를 수 있는지. false면 과거 주문을 그릴 때만 쓴다.
+  """
+  selectable: Boolean!
+}

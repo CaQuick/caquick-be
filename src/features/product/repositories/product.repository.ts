@@ -155,10 +155,12 @@ export interface ProductDetailRow {
     region: { name: string } | null;
   };
   images: { image_url: string }[];
+  /** 활성 그룹·항목만 온다. is_active는 준비 상태 판정 입력과 모양을 맞추려고 함께 읽는다. */
   option_groups: {
     id: bigint;
     name: string;
     description: string | null;
+    is_active: boolean;
     is_required: boolean;
     min_select: number;
     max_select: number;
@@ -170,8 +172,18 @@ export interface ProductDetailRow {
       image_url: string | null;
       price_delta: number;
       sort_order: number;
+      is_active: boolean;
+      three_d_key: string | null;
     }[];
   }[];
+}
+
+export interface NewOptionGroup {
+  name: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  items: { title: string; price_delta: number; three_d_key: string }[];
 }
 
 @Injectable()
@@ -943,6 +955,69 @@ export class ProductRepository {
     }, audit);
   }
 
+  /**
+   * 상품 행을 잠근 뒤 현재 그룹으로 계획해 만든다 — 동시 호출이 같은 계획을 두 번 실행하지 않는다.
+   * 새 그룹은 기존 그룹 뒤에 붙고, 만든 그룹이 없으면 감사도 남기지 않는다.
+   */
+  async createOptionGroupsLocked(
+    args: {
+      productId: bigint;
+      plan: (
+        groups: {
+          is_active: boolean;
+          option_items: { is_active: boolean; three_d_key: string | null }[];
+        }[],
+      ) => NewOptionGroup[];
+    },
+    audit: (optionGroupIds: bigint[]) => AuditEntry,
+  ): Promise<bigint[]> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockProductRow(tx, args.productId);
+      const groups = await tx.productOptionGroup.findMany({
+        where: { product_id: args.productId, ...activeWhere },
+        orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+        select: {
+          is_active: true,
+          sort_order: true,
+          option_items: {
+            where: activeWhere,
+            select: { is_active: true, three_d_key: true },
+          },
+        },
+      });
+      const planned = args.plan(groups);
+      if (planned.length === 0) return [];
+
+      const nextSortOrder =
+        Math.max(-1, ...groups.map((g) => g.sort_order)) + 1;
+      const ids: bigint[] = [];
+      for (const [index, group] of planned.entries()) {
+        const created = await tx.productOptionGroup.create({
+          data: {
+            product_id: args.productId,
+            name: group.name,
+            is_required: group.is_required,
+            min_select: group.min_select,
+            max_select: group.max_select,
+            sort_order: nextSortOrder + index,
+            option_items: {
+              create: group.items.map((item, sortOrder) => ({
+                title: item.title,
+                price_delta: item.price_delta,
+                three_d_key: item.three_d_key,
+                sort_order: sortOrder,
+              })),
+            },
+          },
+          select: { id: true },
+        });
+        ids.push(created.id);
+      }
+      await this.auditLogs.recordAudit(tx, audit(ids));
+      return ids;
+    });
+  }
+
   /** 갱신이면 revision을 1 올린다. freeEditEnabled를 생략하면 새 템플릿은 꺼짐, 기존 템플릿은 그대로다. */
   async upsertProductCustomTemplate(
     args: {
@@ -1343,6 +1418,7 @@ export class ProductRepository {
             id: true,
             name: true,
             description: true,
+            is_active: true,
             is_required: true,
             min_select: true,
             max_select: true,
@@ -1357,6 +1433,8 @@ export class ProductRepository {
                 image_url: true,
                 price_delta: true,
                 sort_order: true,
+                is_active: true,
+                three_d_key: true,
               },
             },
           },

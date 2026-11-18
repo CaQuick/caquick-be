@@ -125,6 +125,13 @@ extend type Mutation {
     customMode: CustomModeType!
   ): SellerProduct!
   """
+  3D 기본 세트를 불러온다. 3D 항목 그룹이 없는 카테고리(크기·맛·모양·디자인)마다 단일 선택 그룹을 만들고
+  선택 가능한 카탈로그 선택지 전부를 기본 가격으로 넣는다. 크기·맛·모양은 필수, 디자인은 고르지 않아도 되는 그룹이다.
+  이미 그룹이 있는 카테고리는 건드리지 않아 여러 번 불러도 결과가 같다(새로 만든 그룹이 없으면 감사 기록도 없다).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않거나 내 상품이 아니면 NOT_FOUND.
+  """
+  sellerApplyThreeDOptionPreset(productId: ID!): SellerProduct!
+  """
   상품 커스텀 템플릿(슬롯형 바탕)을 등록 또는 수정한다. 수정하면 revision이 1 오른다.
   바탕 이미지가 바뀔 때만 서버가 이미지를 읽어 정사각(가로·세로 차이 1px 이하)인지 확인한다:
   아니면 CUSTOM_BASE_IMAGE_NOT_SQUARE, 이미지로 읽을 수 없으면 CUSTOM_BASE_IMAGE_UNREADABLE, 저장소를 읽지 못하면 S3_READ_FAILED(503).
@@ -242,6 +249,10 @@ type SellerOptionItem {
   노출 여부. false면 구매자가 고를 수 없다.
   """
   isActive: Boolean!
+  """
+  이어진 3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key). 없으면 null.
+  """
+  threeDKey: String
 }
 
 """
@@ -279,6 +290,10 @@ type SellerOptionGroup {
   노출 여부. false면 구매자에게 그룹 자체가 보이지 않는다.
   """
   isActive: Boolean!
+  """
+  활성 선택지의 threeDKey로 정해지는 3D 카테고리. 이어진 키가 없거나 종류가 섞였으면 null.
+  """
+  threeDCategory: ThreeDOptionCategoryType
   """
   이 그룹의 선택지. sortOrder 오름차순.
   """
@@ -460,7 +475,12 @@ type SellerCustomReadiness {
 """
 type SellerCustomReadinessIssue {
   """
-  이슈 코드(SLOT_TEMPLATE_MISSING, SLOT_NOTHING_TO_EDIT, THREE_D_GROUP_MISSING 등). 값이 늘 수 있어 문자열이다.
+  이슈 코드. 값이 늘 수 있어 문자열이다.
+  슬롯형: SLOT_TEMPLATE_MISSING(바탕 없음), SLOT_NOTHING_TO_EDIT(문구 자리 0개이고 자유 편집 꺼짐).
+  3D: THREE_D_GROUP_MISSING(모양·크기 그룹 없음), THREE_D_GROUP_DUPLICATED(같은 카테고리 그룹이 둘 이상),
+  THREE_D_GROUP_MIXED(한 그룹에 카테고리가 섞였거나 3D 항목 미지정 선택지가 있음),
+  THREE_D_GROUP_NOT_SINGLE_SELECT(모양·크기는 필수·1개 선택, 맛·디자인은 최대 1개 선택이 아님),
+  THREE_D_KEY_DUPLICATED(같은 키가 둘 이상), THREE_D_KEY_UNAVAILABLE(카탈로그에 없거나 퇴역한 키).
   """
   code: String!
   """
@@ -797,6 +817,11 @@ input SellerCreateOptionItemInput {
   노출 여부. 기본 true.
   """
   isActive: Boolean = true
+  """
+  3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key, 40자 이하). 생략하거나 빈 문자열이면 연결하지 않는다.
+  카탈로그에 없거나 퇴역한 키도 저장되지만 3D 준비 이슈(THREE_D_KEY_UNAVAILABLE)가 되어 3D 주문을 받을 수 없다.
+  """
+  threeDKey: String
 }
 
 """
@@ -828,6 +853,10 @@ input SellerUpdateOptionItemInput {
   노출 여부.
   """
   isActive: Boolean
+  """
+  3D 카탈로그 선택지 키(40자 이하). null이나 빈 문자열이면 연결을 끊고, 생략하면 그대로 둔다.
+  """
+  threeDKey: String
 }
 
 """

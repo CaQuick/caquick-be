@@ -256,6 +256,16 @@ describe('S3Service', () => {
     });
   });
 
+  describe('publicUrlFor', () => {
+    it('이 버킷·리전의 공개 URL을 만든다', () => {
+      expect(
+        service.publicUrlFor('custom-3d-catalog/v1/deco/number-0.png'),
+      ).toBe(
+        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/custom-3d-catalog/v1/deco/number-0.png',
+      );
+    });
+  });
+
   describe('생성자의 credentials 분기', () => {
     it('accessKeyId/secretAccessKey가 없으면 S3Client에 credentials 없이 초기화한다', async () => {
       const { S3Client: MockS3Client } =

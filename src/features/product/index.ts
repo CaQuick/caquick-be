@@ -10,6 +10,12 @@ export {
   evaluateProductCustomIssues,
   type ProductCustomIssue,
 } from '@/features/product/services/product-custom-readiness.helper';
+// 주문 생성(order feature)의 3D 디자인 검증. 입력은 product 구조 타입이라 order DTO가 이 구조를 만족한다.
+export {
+  validateThreeDDesign,
+  type ThreeDDesignSource,
+  type ThreeDDesignV1,
+} from '@/features/product/services/three-d-design.helper';
 // 상품 카드 1벌. 찜·최근 본 상품(user feature)이 같은 카드를 쓴다.
 export { ProductCardService } from '@/features/product/services/product-card.service';
 export type { ProductCardOutput } from '@/features/product/types/product-card-output.type';

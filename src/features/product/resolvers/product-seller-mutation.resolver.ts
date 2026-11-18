@@ -254,6 +254,18 @@ export class SellerProductMutationResolver {
     );
   }
 
+  @Mutation('sellerApplyThreeDOptionPreset')
+  sellerApplyThreeDOptionPreset(
+    @CurrentUser() user: JwtUser,
+    @Args('productId') productId: string,
+  ): Promise<SellerProductOutput> {
+    const accountId = parseAccountId(user);
+    return this.templateService.sellerApplyThreeDOptionPreset(
+      accountId,
+      parseId(productId),
+    );
+  }
+
   @Mutation('sellerUpsertProductCustomTextToken')
   sellerUpsertProductCustomTextToken(
     @CurrentUser() user: JwtUser,

@@ -94,6 +94,10 @@ type ProductDetailOptionGroup {
   maxSelect: Int!
   """섹션 노출 순서. 오름차순."""
   sortOrder: Int!
+  """
+  3D 상품에서 이 그룹이 정하는 3D 값의 종류. 선택지가 3D 항목과 이어지지 않았거나 종류가 섞였으면 null.
+  """
+  threeDCategory: ThreeDOptionCategoryType
   """이 그룹의 선택지. 활성 항목만 온다."""
   items: [ProductDetailOptionItem!]!
 }
@@ -111,4 +115,8 @@ type ProductDetailOptionItem {
   priceDelta: Int!
   """그룹 안에서의 노출 순서. 오름차순."""
   sortOrder: Int!
+  """
+  이어진 3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key). 3D 편집기는 이 키의 value로 모양·크기 등을 그린다. 없으면 null.
+  """
+  threeDKey: String
 }

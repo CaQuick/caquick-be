@@ -171,6 +171,43 @@ describe('ProductDetailService (real DB)', () => {
     expect(flavor.items[1].priceDelta).toBe(2000);
   });
 
+  it('옵션 항목의 3D 키와 그룹의 3D 카테고리를 준다(키가 없거나 섞이면 null)', async () => {
+    const product = await createProduct(prisma);
+    const groupOf = async (sortOrder: number, keys: (string | null)[]) => {
+      const group = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: `g${sortOrder}`,
+          sort_order: sortOrder,
+        },
+      });
+      await prisma.productOptionItem.createMany({
+        data: keys.map((key, i) => ({
+          option_group_id: group.id,
+          title: `i${i}`,
+          sort_order: i,
+          three_d_key: key,
+        })),
+      });
+    };
+    await groupOf(0, ['shape.heart', 'shape.star']);
+    await groupOf(1, ['size.mini', 'flavor.cream']);
+    await groupOf(2, [null]);
+
+    const result = await service.productDetail(product.id.toString());
+
+    expect(
+      result.optionGroups.map((g) => [
+        g.threeDCategory,
+        g.items.map((i) => i.threeDKey),
+      ]),
+    ).toEqual([
+      ['SHAPE', ['shape.heart', 'shape.star']],
+      [null, ['size.mini', 'flavor.cream']],
+      [null, [null]],
+    ]);
+  });
+
   it('슬롯형 상품은 꾸미기 설정(revision·바탕·자유 편집·삭제 제외 문구 자리 sortOrder 순)을 준다', async () => {
     const product = await createProduct(prisma);
     await prisma.product.update({

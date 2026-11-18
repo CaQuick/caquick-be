@@ -1,11 +1,28 @@
-import { evaluateProductCustomIssues } from '@/features/product/services/product-custom-readiness.helper';
+import {
+  evaluateProductCustomIssues,
+  threeDCategoryOf,
+} from '@/features/product/services/product-custom-readiness.helper';
 import type {
   SellerCustomReadinessOutput,
   SellerCustomTextTokenOutput,
+  SellerOptionGroupOutput,
+  SellerOptionItemOutput,
   SellerProductImageOutput,
   SellerProductOutput,
 } from '@/features/product/types/product-seller-output.type';
 import { CustomMode, type CustomTextAlign } from '@/generated/prisma/client';
+
+export interface ProductOptionItemRow {
+  id: bigint;
+  option_group_id: bigint;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  price_delta: number;
+  sort_order: number;
+  is_active: boolean;
+  three_d_key: string | null;
+}
 
 export interface ProductOptionGroupRow {
   id: bigint;
@@ -17,16 +34,7 @@ export interface ProductOptionGroupRow {
   max_select: number;
   sort_order: number;
   is_active: boolean;
-  option_items: {
-    id: bigint;
-    option_group_id: bigint;
-    title: string;
-    description: string | null;
-    image_url: string | null;
-    price_delta: number;
-    sort_order: number;
-    is_active: boolean;
-  }[];
+  option_items: ProductOptionItemRow[];
 }
 
 export interface ProductCustomTextTokenRow {
@@ -89,7 +97,25 @@ export function toProductImageOutput(row: {
   };
 }
 
-export function toOptionGroupOutput(g: ProductOptionGroupRow) {
+export function toOptionItemOutput(
+  item: ProductOptionItemRow,
+): SellerOptionItemOutput {
+  return {
+    id: item.id.toString(),
+    optionGroupId: item.option_group_id.toString(),
+    title: item.title,
+    description: item.description,
+    imageUrl: item.image_url,
+    priceDelta: item.price_delta,
+    sortOrder: item.sort_order,
+    isActive: item.is_active,
+    threeDKey: item.three_d_key,
+  };
+}
+
+export function toOptionGroupOutput(
+  g: ProductOptionGroupRow,
+): SellerOptionGroupOutput {
   return {
     id: g.id.toString(),
     productId: g.product_id.toString(),
@@ -100,16 +126,8 @@ export function toOptionGroupOutput(g: ProductOptionGroupRow) {
     maxSelect: g.max_select,
     sortOrder: g.sort_order,
     isActive: g.is_active,
-    optionItems: g.option_items.map((item) => ({
-      id: item.id.toString(),
-      optionGroupId: item.option_group_id.toString(),
-      title: item.title,
-      description: item.description,
-      imageUrl: item.image_url,
-      priceDelta: item.price_delta,
-      sortOrder: item.sort_order,
-      isActive: item.is_active,
-    })),
+    threeDCategory: threeDCategoryOf(g),
+    optionItems: g.option_items.map(toOptionItemOutput),
   };
 }
 
@@ -147,7 +165,7 @@ export function toCustomTemplateOutput(t: ProductCustomTemplateRow) {
 
 /** 판매자 커스텀 설정 화면이 방식별 카드에 준비 이슈를 띄운다. */
 export function toCustomReadinessOutput(
-  row: Pick<ProductDetailRow, 'custom_template'>,
+  row: Pick<ProductDetailRow, 'custom_template' | 'option_groups'>,
 ): SellerCustomReadinessOutput[] {
   return Object.values(CustomMode).map((mode) => {
     const issues = evaluateProductCustomIssues(row, mode);

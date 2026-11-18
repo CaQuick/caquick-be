@@ -1,3 +1,4 @@
+import type { ThreeDOptionCategory } from '@/features/product/constants/custom-3d-catalog.constants';
 import type { CustomMode, CustomTextAlign } from '@/generated/prisma/client';
 
 export interface ProductDetailOptionItem {
@@ -7,6 +8,7 @@ export interface ProductDetailOptionItem {
   imageUrl: string | null;
   priceDelta: number;
   sortOrder: number;
+  threeDKey: string | null;
 }
 
 export interface ProductDetailOptionGroup {
@@ -17,6 +19,7 @@ export interface ProductDetailOptionGroup {
   minSelect: number;
   maxSelect: number;
   sortOrder: number;
+  threeDCategory: ThreeDOptionCategory | null;
   items: ProductDetailOptionItem[];
 }
 

@@ -290,7 +290,7 @@ describe('AdminProductService (real DB)', () => {
       expect(result.tags.map((t) => t.name)).toEqual(['달콤', '촉촉']);
     });
 
-    it('옵션 그룹·선택지는 sortOrder 순으로 숨김을 담고 삭제는 빼며 음수 가격 증감을 그대로 준다', async () => {
+    it('옵션 그룹·선택지는 sortOrder 순으로 숨김을 담고 삭제는 빼며 음수 가격 증감·3D 키를 그대로 준다', async () => {
       const product = await createProduct(prisma);
       const later = await prisma.productOptionGroup.create({
         data: { product_id: product.id, name: '토핑', sort_order: 2 },
@@ -316,7 +316,12 @@ describe('AdminProductService (real DB)', () => {
       });
       await prisma.productOptionItem.createMany({
         data: [
-          { option_group_id: later.id, title: '딸기', sort_order: 2 },
+          {
+            option_group_id: later.id,
+            title: '딸기',
+            sort_order: 2,
+            three_d_key: 'design.heart',
+          },
           {
             option_group_id: later.id,
             title: '빼기',
@@ -346,11 +351,16 @@ describe('AdminProductService (real DB)', () => {
       });
       expect(
         result.optionGroups[1].optionItems.map(
-          ({ title, priceDelta, isActive }) => [title, priceDelta, isActive],
+          ({ title, priceDelta, isActive, threeDKey }) => [
+            title,
+            priceDelta,
+            isActive,
+            threeDKey,
+          ],
         ),
       ).toEqual([
-        ['빼기', -1000, false],
-        ['딸기', 0, true],
+        ['빼기', -1000, false, null],
+        ['딸기', 0, true, 'design.heart'],
       ]);
     });
 

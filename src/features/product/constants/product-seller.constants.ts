@@ -20,6 +20,7 @@ export const MAX_OPTION_GROUP_NAME_LENGTH = 120;
 export const MAX_OPTION_GROUP_DESCRIPTION_LENGTH = 1000;
 export const MAX_OPTION_ITEM_TITLE_LENGTH = 120;
 export const MAX_OPTION_ITEM_DESCRIPTION_LENGTH = 500;
+export const MAX_THREE_D_KEY_LENGTH = 40;
 
 // ── 커스텀 템플릿 ──
 

@@ -1,3 +1,4 @@
+import type { ThreeDOptionCategory } from '@/features/product/constants/custom-3d-catalog.constants';
 import type { ProductCustomIssue } from '@/features/product/services/product-custom-readiness.helper';
 import type { CustomMode, CustomTextAlign } from '@/generated/prisma/client';
 
@@ -33,6 +34,7 @@ export interface SellerOptionItemOutput {
   priceDelta: number;
   sortOrder: number;
   isActive: boolean;
+  threeDKey: string | null;
 }
 
 export interface SellerOptionGroupOutput {
@@ -45,6 +47,7 @@ export interface SellerOptionGroupOutput {
   maxSelect: number;
   sortOrder: number;
   isActive: boolean;
+  threeDCategory: ThreeDOptionCategory | null;
   optionItems: SellerOptionItemOutput[];
 }
 

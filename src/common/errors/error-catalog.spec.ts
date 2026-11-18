@@ -33,6 +33,8 @@ const RENDER_PARAMS: Partial<
   INVALID_LIMIT: { max: 50 },
   FIELD_OUT_OF_RANGE: { field: 'capacity', min: 1, max: 100 },
   CUSTOM_TEXT_DEFAULT_TOO_LONG: { label: '이름', max: 20 },
+  CUSTOM_3D_ITEM_LIMIT_EXCEEDED: { max: 10 },
+  CUSTOM_3D_DESIGN_INVALID: { field: 'top[0].size' },
   IDS_LENGTH_MISMATCH: { field: 'imageIds' },
   INVALID_IDS: { field: 'imageIds' },
   PRODUCT_IMAGE_LIMIT_EXCEEDED: { max: 10 },

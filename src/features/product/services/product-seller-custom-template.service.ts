@@ -21,6 +21,7 @@ import type { SellerReorderProductCustomTextTokensInput } from '@/features/produ
 import type { SellerUpsertProductCustomTemplateInput } from '@/features/product/dto/inputs/seller-upsert-product-custom-template.input';
 import type { SellerUpsertProductCustomTextTokenInput } from '@/features/product/dto/inputs/seller-upsert-product-custom-text-token.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import { planThreeDOptionPreset } from '@/features/product/services/custom-3d-preset.helper';
 import { evaluateProductCustomIssues } from '@/features/product/services/product-custom-readiness.helper';
 import {
   toCustomTemplateOutput,
@@ -78,6 +79,32 @@ export class SellerCustomTemplateService extends SellerBaseService {
         action: AuditActionType.UPDATE,
         beforeJson: { customMode: product.custom_mode },
         afterJson: { customMode },
+      }),
+    );
+    return toProductOutput(
+      await this.requireOwnProduct(productId, ctx.storeId),
+    );
+  }
+
+  /** 3D 항목 그룹이 없는 카테고리만 기본 세트로 채운다. 이미 있는 카테고리는 건드리지 않는다. */
+  async sellerApplyThreeDOptionPreset(
+    accountId: bigint,
+    productId: bigint,
+  ): Promise<SellerProductOutput> {
+    const ctx = await this.requireSellerContext(accountId);
+    await this.requireOwnProduct(productId, ctx.storeId);
+    await this.productRepository.createOptionGroupsLocked(
+      { productId, plan: planThreeDOptionPreset },
+      (optionGroupIds) => ({
+        actorAccountId: ctx.accountId,
+        storeId: ctx.storeId,
+        targetType: AuditTargetType.PRODUCT,
+        targetId: productId,
+        action: AuditActionType.CREATE,
+        afterJson: {
+          threeDOptionPreset: true,
+          optionGroupIds: optionGroupIds.map((id) => id.toString()),
+        },
       }),
     );
     return toProductOutput(
