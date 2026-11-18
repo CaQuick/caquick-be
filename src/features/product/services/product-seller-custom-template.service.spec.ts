@@ -125,6 +125,34 @@ describe('SellerCustomTemplateService (real DB)', () => {
       },
     );
 
+    it('삭제된 문구 자리만 남았고 자유 편집이 꺼졌으면 슬롯형으로 바꿀 수 없고, 준비 상태·응답 문구 자리에서도 삭제 자리를 세지 않는다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const tpl = await createTemplate(product.id);
+      await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        deleted_at: new Date(),
+      });
+
+      await expect(
+        service.sellerSetProductCustomMode(accountId, product.id, 'SLOT'),
+      ).rejects.toThrowDomain('CUSTOM_PRODUCT_NOT_READY');
+
+      // 이미 슬롯형인 상품은 같은 방식 요청이 판매자 상품 출력을 그대로 돌려준다
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { custom_mode: 'SLOT' },
+      });
+      const result = await service.sellerSetProductCustomMode(
+        accountId,
+        product.id,
+        'SLOT',
+      );
+      expect(
+        result.customReadiness.find((r) => r.mode === 'SLOT')?.issues,
+      ).toEqual([expect.objectContaining({ code: 'SLOT_NOTHING_TO_EDIT' })]);
+      expect(result.customTemplate?.textTokens).toEqual([]);
+    });
+
     it.each([
       ['문구 자리가 있으면', false, 1],
       ['자유 편집을 허용했으면', true, 0],
