@@ -1,3 +1,4 @@
+import type * as Catalog from '@/features/product/constants/custom-3d-catalog.constants';
 import {
   THREE_D_DECOS,
   THREE_D_EFFECTS,
@@ -303,6 +304,53 @@ describe('validateThreeDDesign', () => {
       const run = () => validateThreeDDesign(input, SELECTED);
       expect(run).toThrowDomain('CUSTOM_3D_DESIGN_INVALID');
       expect(run).toThrow(`(${field})`);
+    });
+  });
+
+  describe('퇴역 항목(selectable=false)', () => {
+    const CATALOG = '@/features/product/constants/custom-3d-catalog.constants';
+    const retire = <T extends { key: string }>(
+      list: readonly T[],
+      key: string,
+    ) => list.map((e) => (e.key === key ? { ...e, selectable: false } : e));
+
+    it.each<[string, Partial<typeof Catalog>, string]>([
+      [
+        '시트 색',
+        { THREE_D_SHEET_COLORS: retire(THREE_D_SHEET_COLORS, 'white') },
+        'basic.sheetColor',
+      ],
+      [
+        '효과',
+        { THREE_D_EFFECTS: retire(THREE_D_EFFECTS, 'soft') },
+        'top[1].effect.type',
+      ],
+      [
+        '꾸미기',
+        { THREE_D_DECOS: retire(THREE_D_DECOS, 'number-1') },
+        'top[1].decoId',
+      ],
+    ])('%s: 퇴역한 값은 새 주문에서 거절한다', (_label, override, field) => {
+      let error: unknown;
+      jest.isolateModules(() => {
+        jest.doMock(CATALOG, () => ({
+          ...jest.requireActual<typeof Catalog>(CATALOG),
+          ...override,
+        }));
+        const isolated = jest.requireActual<{
+          validateThreeDDesign: typeof validateThreeDDesign;
+        }>('@/features/product/services/three-d-design.helper');
+        try {
+          isolated.validateThreeDDesign(design(), SELECTED);
+        } catch (e) {
+          error = e;
+        }
+      });
+      // 격리 레지스트리의 DomainException은 클래스가 달라 toThrowDomain 대신 code를 본다
+      expect(error).toMatchObject({
+        code: 'CUSTOM_3D_DESIGN_INVALID',
+        message: expect.stringContaining(`(${field})`),
+      });
     });
   });
 
