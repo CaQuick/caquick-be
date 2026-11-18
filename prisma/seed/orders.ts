@@ -59,6 +59,7 @@ export interface SeededOrders {
   o3Made: bigint;
   o4PickedUpReviewed: bigint;
   o4OrderItemId: bigint;
+  o4PreviewImageUrl: string;
   o5PickedUpReviewable: bigint;
   o6Canceled: bigint;
   o7PendingPayment: bigint;
@@ -591,6 +592,7 @@ export async function seedOrders(
     o3Made: o3.id,
     o4PickedUpReviewed: o4.id,
     o4OrderItemId: o4Item.id,
+    o4PreviewImageUrl: o4Preview,
     o5PickedUpReviewable: o5.id,
     o6Canceled: o6.id,
     o7PendingPayment: o7.id,
