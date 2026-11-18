@@ -196,6 +196,7 @@ describe('SettlementScheduler (real DB)', () => {
 
     expect(await prisma.settlement.count()).toBe(1);
     expect(await createdEvents()).toHaveLength(1);
+    expect(alerts.notify).not.toHaveBeenCalled();
   });
 
   it('같은 주 정산이 이미 있으면 늦게 들어온 주문은 건드리지 않고 다음 주 정산에 넣는다', async () => {
@@ -213,6 +214,8 @@ describe('SettlementScheduler (real DB)', () => {
 
     await expect(scheduler.settleLastWeek()).resolves.toBe(0);
     expect(await settlementIdOf(late.id)).toBeNull();
+    // 이미 만든 주는 실패가 아니라 건너뜀이라 재실행마다 경보가 나가지 않는다
+    expect(alerts.notify).not.toHaveBeenCalled();
 
     now = new Date(MONDAY_5AM.getTime() + WEEK_MS);
     await scheduler.settleLastWeek();

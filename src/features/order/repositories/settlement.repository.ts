@@ -273,7 +273,7 @@ export class SettlementRepository {
     });
   }
 
-  /** [from, to)에 정산이 확정된 주문을 매장별로 묶는다. 매장명은 그 달 가장 최근 주문의 것. */
+  /** [from, to)에 정산이 확정된 주문을 매장별로 묶는다. 매장명은 그 달 가장 늦게 확정된 주문의 것. */
   async monthlyCommissions(
     from: Date,
     to: Date,
@@ -291,7 +291,8 @@ export class SettlementRepository {
              CAST(SUM(t.base) AS UNSIGNED) AS base, CAST(SUM(t.commission) AS UNSIGNED) AS commission
       FROM (
         SELECT oi.store_id, o.settlement_base_amount AS base, COALESCE(o.commission_amount, 0) AS commission,
-               FIRST_VALUE(oi.store_name_snapshot) OVER (PARTITION BY oi.store_id ORDER BY o.id DESC) AS store_name
+               FIRST_VALUE(oi.store_name_snapshot) OVER (
+                 PARTITION BY oi.store_id ORDER BY o.settlement_finalized_at DESC, o.id DESC) AS store_name
         FROM \`order\` o ${FIRST_ITEM_JOIN}
         WHERE o.settlement_finalized_at >= ${from} AND o.settlement_finalized_at < ${to}
           AND o.settlement_base_amount > 0 AND o.deleted_at IS NULL

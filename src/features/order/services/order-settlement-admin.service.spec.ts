@@ -470,6 +470,31 @@ describe('AdminSettlementService (real DB)', () => {
       });
     });
 
+    it('매장명은 생성 순서가 아니라 그 달 가장 늦게 확정된 주문의 스냅샷이다', async () => {
+      const store = await createStore(prisma);
+      await createFinalizedOrder(prisma, {
+        store_id: store.id,
+        finalized_at: new Date('2026-11-20T00:00:00.000Z'),
+        store_name_snapshot: '나중 확정(새 이름)',
+      });
+      await createFinalizedOrder(prisma, {
+        store_id: store.id,
+        finalized_at: new Date('2026-11-05T00:00:00.000Z'),
+        store_name_snapshot: '먼저 확정(옛 이름)',
+      });
+
+      const report = await service.adminMonthlyCommissions(await admin(), {
+        month: '2026-11',
+      });
+
+      expect(report.stores).toEqual([
+        expect.objectContaining({
+          storeName: '나중 확정(새 이름)',
+          orderCount: 2,
+        }),
+      ]);
+    });
+
     it('확정 주문이 없는 달은 빈 집계다', async () => {
       await expect(
         service.adminMonthlyCommissions(await admin(), { month: '2027-01' }),
