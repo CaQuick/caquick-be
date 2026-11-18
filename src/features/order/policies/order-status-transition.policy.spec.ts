@@ -27,11 +27,13 @@ const ALLOWED = new Set([
   'SYSTEM:SUBMITTED>CANCELED',
   'SELLER:CONFIRMED>MADE',
   'SELLER:CONFIRMED>PICKED_UP',
+  'ADMIN:CONFIRMED>PICKED_UP',
   'SYSTEM:CONFIRMED>PICKED_UP',
   'SELLER:CONFIRMED>NO_SHOW',
   'SELLER:CONFIRMED>CANCELED',
   'ADMIN:CONFIRMED>CANCELED',
   'SELLER:MADE>PICKED_UP',
+  'ADMIN:MADE>PICKED_UP',
   'SYSTEM:MADE>PICKED_UP',
   'SELLER:MADE>NO_SHOW',
   'SELLER:MADE>CANCELED',
@@ -80,9 +82,9 @@ describe('OrderStatusTransitionPolicy', () => {
       ),
     );
 
-    it('표는 196 조합을 덮고 허용 전이는 20개다(종료 상태에서 나가는 전이는 없다)', () => {
+    it('표는 196 조합을 덮고 허용 전이는 22개다(종료 상태에서 나가는 전이는 없다)', () => {
       expect(cases).toHaveLength(4 * 7 * 7);
-      expect(cases.filter(([, , , code]) => code === null)).toHaveLength(20);
+      expect(cases.filter(([, , , code]) => code === null)).toHaveLength(22);
       for (const terminal of ['PICKED_UP', 'NO_SHOW', 'CANCELED']) {
         expect(
           cases.filter(([, from, , code]) => from === terminal && !code),
@@ -143,7 +145,7 @@ describe('OrderStatusTransitionPolicy', () => {
     });
   });
 
-  describe('자동 픽업 완료(SYSTEM)는 pickupAt + 24h부터', () => {
+  describe('픽업 완료 시각 조건은 시스템만 pickupAt + 24h부터', () => {
     it.each([
       [-1, false],
       [0, true],
@@ -156,10 +158,23 @@ describe('OrderStatusTransitionPolicy', () => {
         pickupAt: PICKUP_AT,
       };
       expect(policy.canTransition(request)).toBe(allowed);
-      // 판매자 픽업 완료에는 시각 조건이 없다
-      expect(
-        policy.canTransition({ ...request, actor: OrderActor.SELLER }),
-      ).toBe(true);
     });
+
+    it.each([OrderActor.SELLER, OrderActor.ADMIN])(
+      '%s 픽업 완료에는 시각 조건이 없다(픽업 시각 전에도 된다)',
+      (actor) => {
+        for (const from of [OrderStatus.CONFIRMED, OrderStatus.MADE]) {
+          expect(
+            policy.canTransition({
+              actor,
+              from,
+              to: OrderStatus.PICKED_UP,
+              now: new Date(PICKUP_AT.getTime() - HOUR_MS),
+              pickupAt: PICKUP_AT,
+            }),
+          ).toBe(true);
+        }
+      },
+    );
   });
 });
