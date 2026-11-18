@@ -6,6 +6,7 @@ import { Kind, parse, print, visit } from 'graphql';
 import {
   ConversationBodyFormat,
   NotificationEvent,
+  OrderActor,
   OrderStatus,
 } from '@/generated/prisma/client';
 
@@ -33,6 +34,12 @@ const PAIRS: Array<
     Object.values(OrderStatus),
     'src/features/order/order.types.graphql',
     'OrderStatusType',
+  ],
+  [
+    'OrderActor',
+    Object.values(OrderActor),
+    'src/features/order/order.types.graphql',
+    'OrderActorType',
   ],
 ];
 

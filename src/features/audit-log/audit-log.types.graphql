@@ -1,5 +1,5 @@
 """
-감사 로그가 가리키는 대상 종류. 판매자 화면(sellerAuditLogs)은 STORE·PRODUCT·ORDER·CONVERSATION·CHANGE_PASSWORD만 노출하고 필터 입력도 그 범위만 받는다.
+감사 로그가 가리키는 대상 종류. 판매자 화면(sellerAuditLogs)은 STORE·PRODUCT·ORDER·CONVERSATION·CHANGE_PASSWORD·SETTLEMENT_ACCOUNT만 노출하고 필터 입력도 그 범위만 받는다.
 """
 enum AuditTargetType {
   """
@@ -67,7 +67,7 @@ enum AuditTargetType {
   """
   PAYMENT_SETTING
   """
-  매장 정산 계좌. 기록에는 계좌번호 마스킹 값만 남는다.
+  매장 정산 계좌(판매자 본인·관리자 대리 수정). 기록에는 계좌번호 끝 4자리만 남고, 판매자 감사 로그에도 보인다.
   """
   SETTLEMENT_ACCOUNT
   """

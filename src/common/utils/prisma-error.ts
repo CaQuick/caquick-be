@@ -24,3 +24,23 @@ export function uniqueConstraintName(
   if (constraint?.fields?.length) return constraint.fields.join(',');
   return null;
 }
+
+/**
+ * 없는 행을 동시에 만들면 한쪽이 unique 충돌(P2002)로 진다. 한 번만 다시 돌리면 그때는 이미 생긴 행의
+ * 갱신 경로를 탄다. 없는 행을 FOR UPDATE로 잡으면 갭 잠금끼리 교착하므로 이 방식으로 경합을 받는다.
+ */
+export async function retryOnceOnUniqueConflict<T>(
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002'
+    ) {
+      throw error;
+    }
+    return run();
+  }
+}

@@ -127,10 +127,15 @@ describe('SellerAuditService (real DB)', () => {
       expect(second.items.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('audit targetType ORDER/CONVERSATION/CHANGE_PASSWORD가 enum으로 정확히 매핑되어 필터된다', async () => {
+    it('audit targetType ORDER/CONVERSATION/CHANGE_PASSWORD/SETTLEMENT_ACCOUNT가 enum으로 정확히 매핑되어 필터된다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
 
-      const types = ['ORDER', 'CONVERSATION', 'CHANGE_PASSWORD'] as const;
+      const types = [
+        'ORDER',
+        'CONVERSATION',
+        'CHANGE_PASSWORD',
+        'SETTLEMENT_ACCOUNT',
+      ] as const;
       const created = new Map<string, bigint>();
       for (const t of types) {
         const row = await prisma.auditLog.create({
@@ -153,6 +158,29 @@ describe('SellerAuditService (real DB)', () => {
           true,
         );
       }
+    });
+
+    it('관리자가 내 매장 정산 계좌를 바꾼 기록은 보이고, 다른 관리자 조작은 보이지 않는다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const admin = await prisma.account.create({
+        data: { account_type: 'ADMIN', status: 'ACTIVE' },
+      });
+      const byAdmin = (targetType: 'SETTLEMENT_ACCOUNT' | 'ACCOUNT') =>
+        prisma.auditLog.create({
+          data: {
+            actor_account_id: admin.id,
+            store_id: store.id,
+            target_type: targetType,
+            target_id: store.id,
+            action: 'UPDATE',
+          },
+        });
+      const visible = await byAdmin('SETTLEMENT_ACCOUNT');
+      await byAdmin('ACCOUNT');
+
+      const result = await service.sellerAuditLogs(account.id);
+      expect(result.items.map((it) => it.id)).toEqual([visible.id.toString()]);
+      expect(result.items[0].actorAccountId).toBe(admin.id.toString());
     });
 
     it('before/after json이 null인 audit log도 정상 직렬화된다', async () => {

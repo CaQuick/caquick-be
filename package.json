@@ -39,6 +39,7 @@
     "postinstall": "prisma generate",
     "prepare": "husky",
     "outbox:requeue": "ts-node -r tsconfig-paths/register scripts/outbox-requeue.ts",
+    "accounts:reencrypt": "ts-node -r tsconfig-paths/register scripts/accounts-reencrypt.ts",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {

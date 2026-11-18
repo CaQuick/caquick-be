@@ -11,13 +11,18 @@ import {
   resetSeedScope,
 } from '../../prisma/seed/idempotent';
 import { seedOrders } from '../../prisma/seed/orders';
-import { seedPayments } from '../../prisma/seed/payments';
+import {
+  SEED_SETTLEMENT_ACCOUNT,
+  seedPayments,
+} from '../../prisma/seed/payments';
 import { seedRegions } from '../../prisma/seed/regions';
 import { seedReviews } from '../../prisma/seed/reviews';
 import { seedStores } from '../../prisma/seed/stores';
 import { seedUsers, type SeededUser } from '../../prisma/seed/users';
 
+import { readAccountCryptoConfig } from '@/config/account-crypto.config';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { AccountCipher } from '@/global/crypto/account-cipher.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -210,7 +215,7 @@ describe('resetSeedScope (real DB)', () => {
       const stores = await seedStores(prisma, { categories });
       const orders = await seedOrders(prisma, { users, stores });
       const admin = await seedAdmins(prisma);
-      await seedPayments(prisma, { orders, admin });
+      await seedPayments(prisma, { orders, stores, admin });
       return { stores, orders };
     };
     const { stores, orders } = await seedAll();
@@ -231,17 +236,6 @@ describe('resetSeedScope (real DB)', () => {
       where: { id: orders.o8NoShow },
       data: { settlement_id: settlement.id },
     });
-    await prisma.storeSettlementAccount.create({
-      data: {
-        store_id: storeA.id,
-        bank_code: '004',
-        account_holder: '케이크샵 A',
-        account_number_enc: 'v1.test',
-        account_number_last4: '1234',
-        updated_by_account_id: storeA.seller_account_id,
-        updated_by_role: 'SELLER',
-      },
-    });
     await prisma.orderPickupChange.create({
       data: {
         order_id: orders.o11PaidSubmitted,
@@ -256,8 +250,9 @@ describe('resetSeedScope (real DB)', () => {
         prisma.payment.count(),
         prisma.refund.count(),
         prisma.depositRecord.count(),
+        prisma.storeSettlementAccount.count(),
       ]);
-    expect(await counts()).toEqual([5, 2, 1]);
+    expect(await counts()).toEqual([5, 2, 1, 1]);
 
     await resetSeedScope(prisma);
     for (const count of await Promise.all([
@@ -273,8 +268,38 @@ describe('resetSeedScope (real DB)', () => {
     expect(await prisma.paymentSetting.count()).toBe(1);
 
     await seedAll();
-    expect(await counts()).toEqual([5, 2, 1]);
+    expect(await counts()).toEqual([5, 2, 1, 1]);
     expect(await prisma.paymentSetting.count()).toBe(1);
+  });
+
+  it('seed-seller-a 매장 정산 계좌는 앱과 같은 키 설정으로 암호화돼 풀린다', async () => {
+    const users = await seedUsers(prisma);
+    await seedRegions(prisma);
+    const categories = await seedCategories(prisma);
+    const stores = await seedStores(prisma, { categories });
+    const orders = await seedOrders(prisma, { users, stores });
+    const admin = await seedAdmins(prisma);
+    await seedPayments(prisma, { orders, stores, admin });
+
+    const [storeA] = stores.stores;
+    const account = await prisma.storeSettlementAccount.findUniqueOrThrow({
+      where: { store_id: storeA.id },
+    });
+    expect(account).toMatchObject({
+      bank_code: SEED_SETTLEMENT_ACCOUNT.bank_code,
+      account_number_last4: SEED_SETTLEMENT_ACCOUNT.account_number.slice(-4),
+      updated_by_account_id: storeA.seller_account_id,
+      updated_by_role: 'SELLER',
+    });
+    expect(account.account_number_enc).not.toContain(
+      SEED_SETTLEMENT_ACCOUNT.account_number,
+    );
+    expect(
+      new AccountCipher(readAccountCryptoConfig()).decrypt(
+        account.account_number_enc,
+        'settlement-account',
+      ),
+    ).toBe(SEED_SETTLEMENT_ACCOUNT.account_number);
   });
 
   it('시드 사용자가 시드 밖 리뷰에 단 댓글은 지우고 그 리뷰는 남긴다', async () => {

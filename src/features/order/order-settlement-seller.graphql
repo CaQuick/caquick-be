@@ -1,0 +1,63 @@
+extend type Query {
+  """
+  내 매장 정산 계좌를 조회한다. 계좌번호는 끝 4자리만 내려준다. 등록 전이면 null.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerSettlementAccount: SellerSettlementAccount
+}
+
+extend type Mutation {
+  """
+  내 매장 정산 계좌를 등록하거나 바꾼다. 계좌번호는 암호화해 저장하고, 응답과 감사 로그(SETTLEMENT_ACCOUNT)에는 끝 4자리만 남는다.
+  은행 코드가 paymentBanks에 없으면 INVALID_BANK_CODE, 계좌번호가 하이픈을 뺀 숫자 8~20자리가 아니면 INVALID_ACCOUNT_NUMBER,
+  예금주가 비었거나 50자를 넘으면 TEXT_REQUIRED·TEXT_TOO_LONG(모두 BAD_USER_INPUT).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerUpsertSettlementAccount(
+    input: SellerUpsertSettlementAccountInput!
+  ): SellerSettlementAccount!
+}
+
+"""
+내 매장 정산 계좌(판매자 시점). 계좌번호 원문은 내려주지 않는다.
+"""
+type SellerSettlementAccount {
+  """
+  은행.
+  """
+  bank: Bank!
+  """
+  예금주.
+  """
+  accountHolder: String!
+  """
+  끝 4자리만 남긴 계좌번호(예: ****1234).
+  """
+  accountNumberMasked: String!
+  """
+  마지막으로 바꾼 주체. SELLER는 본인, ADMIN은 관리자가 대신 바꾼 경우다.
+  """
+  updatedByRole: OrderActorType!
+  """
+  마지막 변경 시각.
+  """
+  updatedAt: DateTime!
+}
+
+"""
+정산 계좌 등록·변경 입력.
+"""
+input SellerUpsertSettlementAccountInput {
+  """
+  은행 코드(paymentBanks의 code).
+  """
+  bankCode: String!
+  """
+  예금주(1~50자).
+  """
+  accountHolder: String!
+  """
+  계좌번호. 하이픈을 빼고 숫자 8~20자리여야 하며 숫자만 저장한다.
+  """
+  accountNumber: String!
+}
