@@ -18,6 +18,7 @@ import {
   type StoreWeekdayBusinessHourRow,
 } from '@/features/store/repositories/store.repository';
 import {
+  effectiveLeadTimeMinutes,
   evaluatePickupDay,
   type PickupDayInput,
 } from '@/features/store/services/store-pickup-policy.helper';
@@ -55,15 +56,13 @@ export class StorePickupScheduleService {
   async pickupCalendar(
     storeId: bigint,
     yearMonth: string,
+    productId: bigint | null = null,
   ): Promise<PickupCalendar> {
     const ym = parseKstYearMonth(yearMonth);
     if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
       throw new DomainException('INVALID_YEAR_MONTH');
     }
-    const store = await this.repo.findStoreForPickupSchedule(storeId);
-    if (!store) {
-      throw new DomainException('STORE_NOT_FOUND');
-    }
+    const store = await this.findScheduleStore(storeId, productId);
 
     const now = this.clock.now();
     const dayCount = daysInMonth(ym.year, ym.month);
@@ -97,6 +96,7 @@ export class StorePickupScheduleService {
   async pickupTimeSlots(
     storeId: bigint,
     date: string,
+    productId: bigint | null = null,
   ): Promise<PickupTimeSlots> {
     const parsed = parseKstDate(date);
     if (!parsed) {
@@ -106,10 +106,7 @@ export class StorePickupScheduleService {
     if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
       throw new DomainException('INVALID_DATE');
     }
-    const store = await this.repo.findStoreForPickupSchedule(storeId);
-    if (!store) {
-      throw new DomainException('STORE_NOT_FOUND');
-    }
+    const store = await this.findScheduleStore(storeId, productId);
 
     const now = this.clock.now();
     const ctx = await this.loadScheduleContext(
@@ -154,9 +151,11 @@ export class StorePickupScheduleService {
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
+    preparationTimeMinutes: number;
   }): Promise<boolean> {
-    const store = await this.repo.findStoreForPickupSchedule(args.storeId);
-    if (!store) return false;
+    const found = await this.repo.findStoreForPickupSchedule(args.storeId);
+    if (!found) return false;
+    const store = withPreparationTime(found, args.preparationTimeMinutes);
 
     // 슬롯은 분 단위 시작 시각 포인트 — 초 이하가 남아 있으면 슬롯 정합 실패
     if (
@@ -188,6 +187,26 @@ export class StorePickupScheduleService {
     return result.slots.some(
       (slot) => slot.available && slotMinutes(slot) === pickupMinutes,
     );
+  }
+
+  /** 상품을 주면 그 상품 제작 시간까지 하한에 반영한다. */
+  private async findScheduleStore(
+    storeId: bigint,
+    productId: bigint | null,
+  ): Promise<StorePickupPolicyRow> {
+    const store = await this.repo.findStoreForPickupSchedule(storeId);
+    if (!store) {
+      throw new DomainException('STORE_NOT_FOUND');
+    }
+    if (productId === null) return store;
+    const preparation = await this.repo.findProductPreparationTimeMinutes(
+      store.id,
+      productId,
+    );
+    if (preparation === null) {
+      throw new DomainException('PRODUCT_NOT_FOUND');
+    }
+    return withPreparationTime(store, preparation);
   }
 
   /** withCapacity=false면 capacity·예약 수량을 읽지 않는다(주문 생성 재검증 — 수량 판정은 order 몫). */
@@ -246,6 +265,19 @@ export class StorePickupScheduleService {
       dayStartUtc: kstMidnightUtc(year, month, day),
     };
   }
+}
+
+function withPreparationTime(
+  store: StorePickupPolicyRow,
+  preparationTimeMinutes: number,
+): StorePickupPolicyRow {
+  return {
+    ...store,
+    min_lead_time_minutes: effectiveLeadTimeMinutes(
+      store.min_lead_time_minutes,
+      preparationTimeMinutes,
+    ),
+  };
 }
 
 function slotMinutes(slot: PickupSlot): number {

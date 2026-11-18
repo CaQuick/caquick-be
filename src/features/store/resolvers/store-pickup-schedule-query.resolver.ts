@@ -1,6 +1,6 @@
 import { Args, Query, Resolver } from '@nestjs/graphql';
 
-import { parseId } from '@/common/utils/id-parser';
+import { parseId, parseOptionalId } from '@/common/utils/id-parser';
 import { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
 import type {
   PickupCalendar,
@@ -15,15 +15,25 @@ export class StorePickupScheduleQueryResolver {
   pickupCalendar(
     @Args('storeId') storeId: string,
     @Args('yearMonth') yearMonth: string,
+    @Args('productId') productId?: string | null,
   ): Promise<PickupCalendar> {
-    return this.service.pickupCalendar(parseId(storeId), yearMonth);
+    return this.service.pickupCalendar(
+      parseId(storeId),
+      yearMonth,
+      parseOptionalId(productId),
+    );
   }
 
   @Query('pickupTimeSlots')
   pickupTimeSlots(
     @Args('storeId') storeId: string,
     @Args('date') date: string,
+    @Args('productId') productId?: string | null,
   ): Promise<PickupTimeSlots> {
-    return this.service.pickupTimeSlots(parseId(storeId), date);
+    return this.service.pickupTimeSlots(
+      parseId(storeId),
+      date,
+      parseOptionalId(productId),
+    );
   }
 }

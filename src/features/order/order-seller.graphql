@@ -155,6 +155,10 @@ type SellerOrderDetail {
   """
   buyerPhone: String!
   """
+  구매자가 남긴 요청 사항. 없으면 null.
+  """
+  requestNote: String
+  """
   할인 전 품목 합계(원).
   """
   subtotalPrice: Int!

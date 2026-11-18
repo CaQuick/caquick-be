@@ -4,12 +4,22 @@ extend type Query {
     storeId: ID!
     """대상 연월. "YYYY-MM" 형식(KST 기준). 예: "2026-09". 형식이 어긋나면 BAD_USER_INPUT."""
     yearMonth: String!
+    """
+    주문할 상품 ID. 주면 매장 리드타임과 상품 제작 시간 중 긴 쪽을 픽업 하한으로 쓴다(createOrder와 같은 판정).
+    그 매장의 판매 중 상품이 아니면 PRODUCT_NOT_FOUND.
+    """
+    productId: ID
   ): PickupCalendar!
   """매장별 선택 날짜의 픽업 시간 슬롯. date: "YYYY-MM-DD" """
   pickupTimeSlots(
     storeId: ID!
     """대상 날짜. "YYYY-MM-DD" 형식(KST 기준). 예: "2026-09-10". 형식이 어긋나면 BAD_USER_INPUT."""
     date: String!
+    """
+    주문할 상품 ID. 주면 매장 리드타임과 상품 제작 시간 중 긴 쪽을 픽업 하한으로 쓴다(createOrder와 같은 판정).
+    그 매장의 판매 중 상품이 아니면 PRODUCT_NOT_FOUND.
+    """
+    productId: ID
   ): PickupTimeSlots!
 }
 
@@ -45,6 +55,6 @@ type PickupTimeSlots {
 type PickupSlot {
   """슬롯 시각. "HH:mm" (KST)."""
   time: String!
-  """예약 가능 여부. 매장 리드타임·영업시간·잔여 수량을 반영한 값이다."""
+  """예약 가능 여부. 매장 리드타임(productId를 주면 상품 제작 시간 포함)·영업시간·잔여 수량을 반영한 값이다."""
   available: Boolean!
 }

@@ -152,9 +152,11 @@ export interface CreateSubmittedOrderArgs {
   accountId: bigint;
   orderNumber: string;
   idempotencyKey: string;
+  idempotencyInputHash: string;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
+  requestNote: string | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;
@@ -190,6 +192,7 @@ export interface CreatedOrderRow {
   buyer_name: string;
   total_price: number;
   updated_at: Date;
+  idempotency_input_hash: string | null;
 }
 
 export interface ReviewableOrderItemRow {
@@ -320,10 +323,12 @@ export class OrderRepository {
         account_id: args.accountId,
         order_number: args.orderNumber,
         idempotency_key: args.idempotencyKey,
+        idempotency_input_hash: args.idempotencyInputHash,
         status: OrderStatus.SUBMITTED,
         pickup_at: args.pickupAt,
         buyer_name: args.buyerName,
         buyer_phone: args.buyerPhone,
+        request_note: args.requestNote,
         subtotal_price: args.subtotalPrice,
         discount_price: args.discountPrice,
         total_price: args.totalPrice,
@@ -370,6 +375,7 @@ export class OrderRepository {
         buyer_name: true,
         total_price: true,
         updated_at: true,
+        idempotency_input_hash: true,
       },
     });
     // 접수 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 구매자 알림은 없다(notification 소비자는 구독하지 않는다).
@@ -407,6 +413,7 @@ export class OrderRepository {
         buyer_name: true,
         total_price: true,
         updated_at: true,
+        idempotency_input_hash: true,
       },
     });
   }

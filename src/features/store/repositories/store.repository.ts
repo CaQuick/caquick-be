@@ -191,6 +191,18 @@ export class StoreRepository {
     });
   }
 
+  /** 그 매장의 판매 중 상품만 찾는다. 다른 매장 상품이거나 판매 중이 아니면 null. */
+  async findProductPreparationTimeMinutes(
+    storeId: bigint,
+    productId: bigint,
+  ): Promise<number | null> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, store_id: storeId, ...visibleWhere },
+      select: { preparation_time_minutes: true },
+    });
+    return product?.preparation_time_minutes ?? null;
+  }
+
   async findBusinessHoursForStore(
     storeId: bigint,
   ): Promise<StoreWeekdayBusinessHourRow[]> {

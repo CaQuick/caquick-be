@@ -6,7 +6,7 @@ import type { PrismaClient } from '@/generated/prisma/client';
 import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createStore } from '@/test/factories';
+import { createProduct, createStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 // 2026-09-16(수) 16:00 KST 고정
@@ -92,5 +92,47 @@ describe('StorePickupSchedule Query Resolver (real DB)', () => {
     expect(result.morning[0]).toEqual({ time: '10:00', available: true });
     expect(result.afternoon[0]).toEqual({ time: '12:00', available: true });
     expect(result.morning.length + result.afternoon.length).toBe(20);
+  });
+
+  it('productId를 파싱해 제작 시간을 반영하고, 빈 문자열은 INVALID_ID·"0"은 버리지 않고 상품 조회에 쓴다', async () => {
+    const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+    await openAllWeek(store.id);
+    const product = await createProduct(prisma, {
+      store_id: store.id,
+      preparation_time_minutes: 26 * 60,
+    });
+
+    const slots = await resolver.pickupTimeSlots(
+      store.id.toString(),
+      '2026-09-17',
+      product.id.toString(),
+    );
+    expect(slots.afternoon.find((s) => s.time === '17:30')?.available).toBe(
+      false,
+    );
+    expect(slots.afternoon.find((s) => s.time === '18:00')?.available).toBe(
+      true,
+    );
+    const calendar = await resolver.pickupCalendar(
+      store.id.toString(),
+      '2026-09',
+      null,
+    );
+    expect(calendar.days.find((d) => d.date === '2026-09-17')?.selectable).toBe(
+      true,
+    );
+
+    expect(() =>
+      resolver.pickupCalendar(store.id.toString(), '2026-09', ''),
+    ).toThrowDomain('INVALID_ID');
+    expect(() =>
+      resolver.pickupTimeSlots(store.id.toString(), '2026-09-17', ''),
+    ).toThrowDomain('INVALID_ID');
+    await expect(
+      resolver.pickupCalendar(store.id.toString(), '2026-09', '0'),
+    ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+    await expect(
+      resolver.pickupTimeSlots(store.id.toString(), '2026-09-17', '0'),
+    ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
   });
 });

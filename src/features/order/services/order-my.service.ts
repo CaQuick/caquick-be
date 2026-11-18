@@ -104,6 +104,7 @@ export class UserOrderService {
       pickupAt: order.pickup_at,
       buyerName: order.buyer_name,
       buyerPhone: order.buyer_phone,
+      requestNote: order.request_note,
       subtotalPrice: order.subtotal_price,
       discountPrice: order.discount_price,
       totalPrice: order.total_price,
