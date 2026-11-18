@@ -239,6 +239,68 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         consumer.handle(event('refund.requested', { refundId: 5 })),
       ).rejects.toThrow('payload 형식 오류');
     });
+
+    async function refundPayload(orderNumber: string) {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const item = await createOrderItem(prisma, { order_id: order.id });
+      return {
+        buyer,
+        order,
+        item,
+        payload: {
+          refundId: '6',
+          orderId: order.id.toString(),
+          orderNumber,
+          buyerAccountId: buyer.id.toString(),
+          kind: 'DEPOSIT_RETURN',
+          amount: 30_000,
+          storeId: item.store_id.toString(),
+          storeName: '케이크샵',
+          productId: item.product_id.toString(),
+          productName: '레터링 케이크',
+        },
+      };
+    }
+
+    it('취소와 함께 계좌가 들어온 refund.requested는 계좌 요청 알림을 만들지 않는다', async () => {
+      const { payload } = await refundPayload('ORD-5');
+
+      await consumer.handle(
+        event('refund.requested', { ...payload, accountSubmitted: true }),
+      );
+
+      expect(await prisma.notification.count()).toBe(0);
+    });
+
+    it('refund.completed는 구매자에게 환불 완료 알림을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+      const { buyer, order, item, payload } = await refundPayload('ORD-6');
+      const completed = event('refund.completed', payload);
+
+      await consumer.handle(completed);
+      await consumer.handle(completed);
+
+      const rows = await prisma.notification.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'REFUND_COMPLETED',
+        title: '환불완료',
+        body: 'ORD-6 30,000원 환불이 완료되었어요.',
+        order_id: order.id,
+        store_id: item.store_id,
+        product_id: item.product_id,
+        order_number: 'ORD-6',
+        created_at: OCCURRED_AT,
+      });
+    });
+
+    it('반증: 형식이 어긋난 refund.completed는 던진다', async () => {
+      await expect(
+        consumer.handle(event('refund.completed', { refundId: 6 })),
+      ).rejects.toThrow('refund.completed payload 형식 오류');
+    });
   });
 
   it('review.liked는 작성자에게 좋아요 알림을 만든다', async () => {

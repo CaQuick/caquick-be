@@ -1,18 +1,22 @@
 import { Module } from '@nestjs/common';
 
 import { BOOKED_QUANTITY_QUERY } from '@/common/ports/booked-quantity.port';
+import { WithdrawalBlockingOrderQuery } from '@/common/ports/withdrawal-blocking-order.port';
 import { AuditLogModule } from '@/features/audit-log';
 import { AuthModule } from '@/features/auth';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { DepositRecordRepository } from '@/features/order/repositories/deposit-record.repository';
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
+import { OrderWithdrawalBlockingRepository } from '@/features/order/repositories/order-withdrawal-blocking.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
@@ -24,6 +28,8 @@ import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-quer
 import { AdminPaymentMutationResolver } from '@/features/order/resolvers/order-payment-admin-mutation.resolver';
 import { AdminPaymentQueryResolver } from '@/features/order/resolvers/order-payment-admin-query.resolver';
 import { PaymentQueryResolver } from '@/features/order/resolvers/order-payment-query.resolver';
+import { AdminRefundMutationResolver } from '@/features/order/resolvers/order-refund-admin-mutation.resolver';
+import { AdminRefundQueryResolver } from '@/features/order/resolvers/order-refund-admin-query.resolver';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
 import { SellerSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-seller-mutation.resolver';
@@ -38,6 +44,7 @@ import { AdminDepositService } from '@/features/order/services/order-deposit-adm
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { AdminPaymentService } from '@/features/order/services/order-payment-admin.service';
+import { AdminRefundService } from '@/features/order/services/order-refund-admin.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { SellerSettlementService } from '@/features/order/services/order-settlement-seller.service';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
@@ -95,7 +102,18 @@ import { StoreModule } from '@/features/store';
     AdminDepositService,
     AdminDepositQueryResolver,
     AdminDepositMutationResolver,
-    // 입금 대기·'입금했어요' 관리자 디스코드 알림(worker 소비자)
+    // 환불 계좌 입력·송금 완료, 입금 반환·종결 기록
+    RefundRepository,
+    DepositRecordRepository,
+    AdminRefundService,
+    AdminRefundQueryResolver,
+    AdminRefundMutationResolver,
+    // auth(구매자 탈퇴)가 ModuleRef로 찾는 탈퇴 차단 포트 구현
+    {
+      provide: WithdrawalBlockingOrderQuery,
+      useClass: OrderWithdrawalBlockingRepository,
+    },
+    // 입금 대기·'입금했어요'·환불 송금 대기 관리자 디스코드 알림(worker 소비자)
     OrderAdminAlertConsumer,
     // 결제 설정·매장 정산 계좌(계좌번호는 global AccountCipher로 암호화)
     PaymentSettingRepository,

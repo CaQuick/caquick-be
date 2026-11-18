@@ -1,6 +1,8 @@
+import { WithdrawalBlockingOrderQuery } from '@/common/ports/withdrawal-blocking-order.port';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
-import type { PrismaClient } from '@/generated/prisma/client';
+import { OrderWithdrawalBlockingRepository } from '@/features/order/repositories/order-withdrawal-blocking.repository';
+import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
 import { TokenBlacklistService } from '@/global/auth';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -8,6 +10,8 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createAccountIdentity,
+  createOrder,
+  createRefund,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -35,6 +39,11 @@ describe('UserProfileService (real DB)', () => {
         { provide: TokenBlacklistService, useValue: blacklist },
         AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
+        // 앱에서는 OrderModule이 제공하고 서비스가 ModuleRef로 찾는다
+        {
+          provide: WithdrawalBlockingOrderQuery,
+          useClass: OrderWithdrawalBlockingRepository,
+        },
       ],
     });
 
@@ -579,6 +588,91 @@ describe('UserProfileService (real DB)', () => {
       await service.deleteMyAccount(account.id);
 
       await expect(service.me(account.id)).rejects.toThrowDomain(401);
+    });
+
+    async function buyer() {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      return account;
+    }
+
+    async function expectBlocked(accountId: bigint, count: number) {
+      await expect(service.deleteMyAccount(accountId)).rejects.toThrowDomain(
+        'ACCOUNT_HAS_ACTIVE_ORDERS',
+      );
+      await expect(service.deleteMyAccount(accountId)).rejects.toThrow(
+        `진행 중인 주문 또는 환불 ${count}건이 있어 탈퇴할 수 없습니다.`,
+      );
+      await expect(
+        prisma.account.findUniqueOrThrow({ where: { id: accountId } }),
+      ).resolves.toMatchObject({ deleted_at: null });
+      expect(blacklist.blockStatus).not.toHaveBeenCalled();
+    }
+
+    it.each<[OrderStatus, boolean]>([
+      ['PENDING_PAYMENT', true],
+      ['SUBMITTED', true],
+      ['CONFIRMED', true],
+      ['MADE', true],
+      ['PICKED_UP', false],
+      ['NO_SHOW', false],
+      ['CANCELED', false],
+    ])('%s 주문이 있으면 탈퇴 차단 = %s', async (status, blocked) => {
+      const account = await buyer();
+      await createOrder(prisma, { account_id: account.id, status });
+
+      if (blocked) {
+        await expectBlocked(account.id, 1);
+      } else {
+        await expect(service.deleteMyAccount(account.id)).resolves.toBe(true);
+      }
+    });
+
+    it.each(['AWAITING_ACCOUNT', 'AWAITING_TRANSFER'] as const)(
+      '끝난 주문이라도 송금이 끝나지 않은 입금 반환(%s)이 있으면 막고, 진행 주문과 합쳐 센다',
+      async (status) => {
+        const account = await buyer();
+        const canceled = await createOrder(prisma, {
+          account_id: account.id,
+          status: 'CANCELED',
+        });
+        await createRefund(prisma, {
+          order_id: canceled.id,
+          kind: 'DEPOSIT_RETURN',
+          status,
+        });
+        await expectBlocked(account.id, 1);
+
+        await createOrder(prisma, { account_id: account.id, status: 'MADE' });
+        await expectBlocked(account.id, 2);
+      },
+    );
+
+    it('환불 송금이 끝나면 탈퇴할 수 있고, 다른 구매자·삭제된 주문의 건은 세지 않는다', async () => {
+      const account = await buyer();
+      const canceled = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'CANCELED',
+      });
+      const refund = await createRefund(prisma, {
+        order_id: canceled.id,
+        status: 'AWAITING_TRANSFER',
+      });
+      await createRefund(prisma);
+      await createOrder(prisma, { status: 'SUBMITTED' });
+      await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+        deleted_at: new Date(),
+      });
+      await expectBlocked(account.id, 1);
+
+      await prisma.refund.update({
+        where: { id: refund.id },
+        data: { status: 'COMPLETED', completed_at: new Date() },
+      });
+
+      await expect(service.deleteMyAccount(account.id)).resolves.toBe(true);
     });
   });
 });

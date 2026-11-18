@@ -12,6 +12,9 @@ import type {
   PaymentStatus,
   Prisma,
   PrismaClient,
+  Refund,
+  RefundKind,
+  RefundStatus,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
 import { createAccount } from '@/test/factories/account.factory';
@@ -141,6 +144,70 @@ export async function createPayment(
         new Date(order.created_at.getTime() + 3_600_000),
       buyer_claimed_at: overrides.buyer_claimed_at ?? null,
       confirmed_at: overrides.confirmed_at ?? null,
+    },
+  });
+}
+
+export interface RefundOverrides {
+  /** 미지정 시 취소된 주문을 새로 만든다 */
+  order_id?: bigint;
+  kind?: RefundKind;
+  status?: RefundStatus;
+  amount?: number;
+  requested_at?: Date;
+  /** 계좌가 있는 상태(송금 대기·완료)의 암호문. 미지정 시 복호화할 수 없는 자리표시 값 */
+  account_number_enc?: string;
+}
+
+/**
+ * 환불. 취소 환불은 cancel_order_id를, 입금 반환은 입금 기록(RETURN)을 함께 만든다.
+ * 송금 대기·완료면 계좌 칸을 채운다.
+ */
+export async function createRefund(
+  prisma: PrismaClient,
+  overrides: RefundOverrides = {},
+): Promise<Refund> {
+  const order = overrides.order_id
+    ? await prisma.order.findUniqueOrThrow({
+        where: { id: overrides.order_id },
+      })
+    : await createOrder(prisma, { status: 'CANCELED' });
+  const kind = overrides.kind ?? 'CANCEL';
+  const status = overrides.status ?? 'AWAITING_ACCOUNT';
+  const amount = overrides.amount ?? order.total_price;
+  const requestedAt = overrides.requested_at ?? new Date();
+  const record =
+    kind === 'DEPOSIT_RETURN'
+      ? await prisma.depositRecord.create({
+          data: {
+            kind: 'RETURN',
+            order_id: order.id,
+            amount,
+            depositor_name: order.buyer_name.slice(0, 50),
+            recorded_by_account_id: order.account_id,
+          },
+        })
+      : null;
+  return prisma.refund.create({
+    data: {
+      order_id: order.id,
+      kind,
+      cancel_order_id: kind === 'CANCEL' ? order.id : null,
+      deposit_record_id: record?.id ?? null,
+      amount,
+      status,
+      requested_at: requestedAt,
+      ...(status === 'AWAITING_ACCOUNT'
+        ? {}
+        : {
+            bank_code: '004',
+            account_holder: '환불받는이',
+            account_number_enc:
+              overrides.account_number_enc ?? 'v1.test.iv.tag.ct',
+            account_number_last4: '5678',
+            account_submitted_at: requestedAt,
+          }),
+      ...(status === 'COMPLETED' ? { completed_at: requestedAt } : {}),
     },
   });
 }

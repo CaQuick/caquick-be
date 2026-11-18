@@ -225,6 +225,11 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '푸시 토큰 형식이 올바르지 않습니다.',
   },
+  ACCOUNT_HAS_ACTIVE_ORDERS: {
+    status: HttpStatus.CONFLICT,
+    message: ({ count }) =>
+      `진행 중인 주문 또는 환불 ${count}건이 있어 탈퇴할 수 없습니다.`,
+  },
 
   // ── 카탈로그(매장·상품·지역)
   STORE_NOT_FOUND: {
@@ -340,6 +345,18 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: ({ max }) => `환불 금액은 0원 이상 ${max}원 이하로 입력해 주세요.`,
   },
+  REFUND_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '환불을 찾을 수 없습니다.',
+  },
+  REFUND_NOT_READY: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '환불 계좌가 입력되지 않아 송금 완료로 처리할 수 없어요.',
+  },
+  REFUND_ALREADY_COMPLETED: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 송금이 끝난 환불입니다.',
+  },
   DUPLICATE_OPTION_ITEM: {
     status: HttpStatus.BAD_REQUEST,
     message: '중복된 옵션 선택입니다.',
@@ -437,12 +454,24 @@ export const ERROR_CATALOG = {
   },
   DEPOSIT_AMOUNT_INVALID: {
     status: HttpStatus.BAD_REQUEST,
-    message: '입금액은 0원 이상의 정수로 입력해 주세요.',
+    message: '입금액이 올바르지 않아요. 원 단위 정수로 입력해 주세요.',
   },
   DEPOSIT_AMOUNT_MISMATCH: {
     status: HttpStatus.BAD_REQUEST,
     message:
       '입금액이 결제 금액과 달라 입금 확인할 수 없어요. 반환 대상으로 연결해 주세요.',
+  },
+  DEPOSIT_NOTE_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '주인 모를 입금은 메모를 남겨야 기록할 수 있어요.',
+  },
+  DEPOSIT_RECORD_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '입금 기록을 찾을 수 없습니다.',
+  },
+  DEPOSIT_RECORD_ALREADY_LINKED: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 반환 대상으로 연결된 입금 기록입니다.',
   },
   // ── 판매자
   SELLER_ONLY: {

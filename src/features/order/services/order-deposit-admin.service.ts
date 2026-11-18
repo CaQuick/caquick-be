@@ -25,6 +25,7 @@ import type { AdminPendingPaymentListInput } from '@/features/order/dto/inputs/a
 import { assertPaymentConfirmable } from '@/features/order/policies/payment-confirm.policy';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { toAdminOrderSummaryOutput } from '@/features/order/services/order-admin-mappers.helper';
 import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
@@ -34,7 +35,7 @@ import type {
   AdminPendingPaymentOutput,
   AdminTaskCountsOutput,
 } from '@/features/order/types/order-payment-output.type';
-import { PaymentConfirmSource } from '@/generated/prisma/client';
+import { PaymentConfirmSource, RefundStatus } from '@/generated/prisma/client';
 
 const MAX_CONFIRM_NOTE_LENGTH = 500;
 
@@ -49,6 +50,7 @@ export class AdminDepositService extends AdminBaseService {
     private readonly transitions: OrderTransitionRepository,
     private readonly clock: ClockService,
     private readonly events: OrderEventsService,
+    private readonly refunds: RefundRepository,
   ) {
     super(accounts, auditLogs);
   }
@@ -89,11 +91,23 @@ export class AdminDepositService extends AdminBaseService {
 
   async adminTaskCounts(accountId: bigint): Promise<AdminTaskCountsOutput> {
     await this.requireAdminContext(accountId);
-    const [claimedPayments, pendingPayments] = await Promise.all([
+    const [
+      claimedPayments,
+      pendingPayments,
+      refundsAwaitingAccount,
+      refundsAwaitingTransfer,
+    ] = await Promise.all([
       this.payments.countPendingPayments({ claimedOnly: true }),
       this.payments.countPendingPayments({ claimedOnly: false }),
+      this.refunds.countRefunds({ status: RefundStatus.AWAITING_ACCOUNT }),
+      this.refunds.countRefunds({ status: RefundStatus.AWAITING_TRANSFER }),
     ]);
-    return { claimedPayments, pendingPayments };
+    return {
+      claimedPayments,
+      pendingPayments,
+      refundsAwaitingAccount,
+      refundsAwaitingTransfer,
+    };
   }
 
   async adminConfirmPayment(

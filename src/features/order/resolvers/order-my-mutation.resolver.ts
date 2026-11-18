@@ -3,6 +3,7 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { parseId } from '@/common/utils/id-parser';
 import { CancelMyOrderInput } from '@/features/order/dto/inputs/cancel-my-order.input';
+import { SubmitMyRefundAccountInput } from '@/features/order/dto/inputs/submit-my-refund-account.input';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { MyOrderDetail } from '@/features/order/types/order-my-output.type';
 import {
@@ -34,5 +35,13 @@ export class UserOrderMutationResolver {
     @Args('input') input: CancelMyOrderInput,
   ): Promise<MyOrderDetail> {
     return this.orderService.cancelMyOrder(parseAccountId(user), input);
+  }
+
+  @Mutation('submitMyRefundAccount')
+  submitMyRefundAccount(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: SubmitMyRefundAccountInput,
+  ): Promise<MyOrderDetail> {
+    return this.orderService.submitMyRefundAccount(parseAccountId(user), input);
   }
 }

@@ -8,6 +8,7 @@ import { THREE_D_OPTION_CATEGORIES } from '@/features/product/constants/custom-3
 import {
   ConversationBodyFormat,
   CustomImageKind,
+  DepositRecordKind,
   CustomMode,
   CustomTextAlign,
   NotificationEvent,
@@ -81,6 +82,12 @@ const PAIRS: Array<
     Object.values(RefundStatus),
     'src/features/order/order.types.graphql',
     'RefundStatusType',
+  ],
+  [
+    'DepositRecordKind',
+    Object.values(DepositRecordKind),
+    'src/features/order/order-refund-admin.graphql',
+    'DepositRecordKindType',
   ],
   [
     'CustomMode',

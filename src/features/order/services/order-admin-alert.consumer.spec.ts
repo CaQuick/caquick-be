@@ -5,6 +5,8 @@ import type { AdminWebConfig } from '@/config/admin-web.config';
 import type { AlertingConfig } from '@/config/alerting.config';
 import { ORDER_PAYMENT_PENDING } from '@/features/order/events/order-payment-pending.event';
 import { PAYMENT_DEPOSIT_CLAIMED } from '@/features/order/events/payment-deposit-claimed.event';
+import { REFUND_ACCOUNT_SUBMITTED } from '@/features/order/events/refund-account-submitted.event';
+import { REFUND_REQUESTED } from '@/features/order/events/refund-requested.event';
 import { OrderAdminAlertConsumer } from '@/features/order/services/order-admin-alert.consumer';
 import type { OutboxEvent } from '@/features/outbox';
 import { AlertService } from '@/global/alerting';
@@ -23,6 +25,18 @@ const CLAIMED = {
   orderNumber: 'ORD-20260916-XYZ789',
   amount: 1234567,
   depositorName: '홍길동',
+};
+const REFUND = {
+  refundId: '9',
+  orderId: '42',
+  orderNumber: 'ORD-20260916-ABC234',
+  buyerAccountId: '3',
+  kind: 'CANCEL',
+  amount: 30000,
+  storeId: '2',
+  storeName: '케이크샵',
+  productId: '5',
+  productName: '레터링 케이크',
 };
 
 function event(
@@ -151,6 +165,75 @@ describe('OrderAdminAlertConsumer', () => {
   });
 
   it.each([
+    [
+      '취소와 함께 계좌 입력',
+      REFUND_REQUESTED,
+      { ...REFUND, accountSubmitted: true },
+    ],
+    ['나중에 계좌 입력', REFUND_ACCOUNT_SUBMITTED, REFUND],
+  ])(
+    '환불 송금 대기(%s): info, 환불별 key, 금액·종류·처리 화면 링크(계좌번호 없음)',
+    async (_label, type, payload) => {
+      const consumer = build({ baseUrl: 'https://admin.caquick.com' });
+
+      await consumer.handle(event(type, payload));
+
+      expect(transport).toHaveBeenCalledWith(
+        expect.any(String),
+        {
+          level: 'info',
+          title: '환불 송금 대기',
+          key: 'refund-ready:9',
+          detail: [
+            '주문 ORD-20260916-ABC234',
+            '30,000원 · 취소 환불',
+            'https://admin.caquick.com/tasks/refunds?refundId=9',
+          ].join('\n'),
+        },
+        expect.any(Object),
+      );
+    },
+  );
+
+  it('계좌가 없는 환불 생성은 관리자에게 보내지 않는다(구매자 계좌 요청 알림만 간다)', async () => {
+    const consumer = build({ baseUrl: null });
+
+    await consumer.handle(event(REFUND_REQUESTED, REFUND));
+    await consumer.handle(
+      event(REFUND_REQUESTED, { ...REFUND, accountSubmitted: false }),
+    );
+
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('같은 환불의 계좌 덮어쓰기는 억제 창 안에서 한 번만, 입금 반환은 종류를 다르게 적는다', async () => {
+    const consumer = build({ baseUrl: null });
+
+    await consumer.handle(event(REFUND_ACCOUNT_SUBMITTED, REFUND));
+    await consumer.handle(event(REFUND_ACCOUNT_SUBMITTED, REFUND));
+    await consumer.handle(
+      event(REFUND_ACCOUNT_SUBMITTED, {
+        ...REFUND,
+        refundId: '10',
+        kind: 'DEPOSIT_RETURN',
+      }),
+    );
+
+    const messages = transport.mock.calls.map(
+      ([, m]) => m as { key: string; detail: string },
+    );
+    expect(messages.map((m) => m.key)).toEqual([
+      'refund-ready:9',
+      'refund-ready:10',
+    ]);
+    expect(messages[1].detail).toBe(
+      ['주문 ORD-20260916-ABC234', '30,000원 · 입금 반환'].join('\n'),
+    );
+  });
+
+  it.each([
+    [REFUND_REQUESTED, { ...REFUND, kind: 'CHARGEBACK' }],
+    [REFUND_ACCOUNT_SUBMITTED, { ...REFUND, amount: '30000' }],
     [ORDER_PAYMENT_PENDING, { ...PENDING, amount: '56000' }],
     [ORDER_PAYMENT_PENDING, { ...PENDING, expiresAt: 'not-a-date' }],
     [PAYMENT_DEPOSIT_CLAIMED, { ...CLAIMED, orderId: 43 }],

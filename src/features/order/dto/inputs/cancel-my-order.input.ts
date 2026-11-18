@@ -1,4 +1,7 @@
-import { IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsOptional, IsString, ValidateNested } from 'class-validator';
+
+import { RefundAccountInput } from '@/features/order/dto/inputs/refund-account.input';
 
 export class CancelMyOrderInput {
   @IsString()
@@ -7,4 +10,9 @@ export class CancelMyOrderInput {
   @IsOptional()
   @IsString()
   note?: string | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RefundAccountInput)
+  refundAccount?: RefundAccountInput | null;
 }
