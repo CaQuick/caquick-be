@@ -570,6 +570,52 @@ export const ERROR_CATALOG = {
     message: ({ field }) =>
       `3D 디자인에 쓸 수 없는 값이 있어요(${field}). 다시 꾸며 주세요.`,
   },
+  CUSTOM_INPUT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '케이크를 꾸민 뒤 주문해 주세요.',
+  },
+  CUSTOM_INPUT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이 상품의 꾸미기 방식과 맞지 않는 주문이에요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_QUANTITY_FIXED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸민 케이크는 한 번에 1개만 주문할 수 있어요.',
+  },
+  CUSTOM_TEMPLATE_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '판매자가 꾸미기 설정을 바꿨어요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_SLOT_TEXTS_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리 입력이 상품 설정과 맞지 않아요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_SLOT_TEXT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label }) => `'${label}'에 문구를 넣어 주세요.`,
+  },
+  CUSTOM_SLOT_TEXT_TOO_LONG: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label, max }) => `'${label}'에는 ${max}자까지 쓸 수 있어요.`,
+  },
+  CUSTOM_FREE_EDIT_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) =>
+      `자유 편집 요청에 쓸 수 없는 값이 있어요(${field}). 다시 확인해 주세요.`,
+  },
+  CUSTOM_RENDER_IMAGES_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '3D 렌더 이미지는 윗면과 옆면 앞·뒤·왼쪽·오른쪽이 1장씩 있어야 해요.',
+  },
+  CUSTOM_UPLOAD_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸미기 이미지를 확인할 수 없어요. 이미지를 다시 올려 주세요.',
+  },
+  CUSTOM_UPLOAD_EXPIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸미기 이미지 보관 기간이 지났어요. 이미지를 다시 올려 주세요.',
+  },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,
     message: 'dayOfWeek는 0~6이어야 합니다.',

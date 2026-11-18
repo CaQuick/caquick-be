@@ -8,6 +8,12 @@ import { IN_PROGRESS_ORDER_STATUSES } from '@/features/order/constants/order-sta
 import { orderPaymentPendingEvent } from '@/features/order/events/order-payment-pending.event';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import {
+  lockCustomUploadsForAttach,
+  markCustomUploadsAttached,
+  type CustomUploadIssue,
+  type CustomUploadRef,
+} from '@/features/order/repositories/order-custom-upload-attach.helper';
+import {
   countPendingPaymentOrdersLocked,
   PENDING_PAYMENT_LIMIT,
   withPendingPaymentLock,
@@ -31,6 +37,9 @@ import {
   Prisma,
   RefundKind,
   type AccountType,
+  type CustomImageKind,
+  type CustomMode,
+  type CustomTextAlign,
   type PaymentStatus,
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
@@ -180,6 +189,38 @@ export interface DailyCapacityGuard {
   dayEndUtc: Date;
 }
 
+/** 주문 품목 커스텀 스냅샷. 검증·정규화를 마친 값이고, uploads는 같은 tx에서 잠가 ATTACHED로 바꿀 업로드다. */
+export interface OrderItemCustomSnapshot {
+  mode: Exclude<CustomMode, 'NONE'>;
+  baseImageUrl: string | null;
+  previewImageUrl: string;
+  texts: {
+    tokenId: bigint;
+    tokenKey: string;
+    label: string;
+    defaultText: string;
+    valueText: string | null;
+    sortOrder: number;
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    textColor: string;
+    textAlign: CustomTextAlign;
+  }[];
+  freeEdits: {
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    descriptionText: string;
+    referenceImageUrls: string[];
+  }[];
+  design: { schemaVersion: number; json: Prisma.InputJsonObject } | null;
+  images: { kind: CustomImageKind; imageUrl: string }[];
+  uploads: CustomUploadRef[];
+}
+
 export interface CreatePendingPaymentOrderArgs {
   accountId: bigint;
   orderNumber: string;
@@ -221,6 +262,7 @@ export interface CreatePendingPaymentOrderArgs {
       optionTitleSnapshot: string;
       optionPriceDeltaSnapshot: number;
     }[];
+    custom: OrderItemCustomSnapshot | null;
   };
 }
 
@@ -246,7 +288,11 @@ const createdOrderSelect = {
 } satisfies Prisma.OrderSelect;
 
 export type CreatePendingPaymentOrderResult =
-  CreatedOrderRow | 'capacity-exceeded' | 'pending-limit' | 'lock-timeout';
+  | CreatedOrderRow
+  | 'capacity-exceeded'
+  | 'pending-limit'
+  | 'lock-timeout'
+  | CustomUploadIssue;
 
 export interface ReviewableOrderItemRow {
   id: bigint;
@@ -293,7 +339,7 @@ export class OrderRepository {
   }
 
   /**
-   * 입금 대기 주문을 결제(PENDING)와 함께 만든다. 계정 잠금(GET_LOCK) → 입금 대기 건수 → capacity 순으로 잠그고,
+   * 입금 대기 주문을 결제(PENDING)와 함께 만든다. 계정 잠금(GET_LOCK) → 입금 대기 건수 → capacity → 커스텀 업로드 순으로 잠그고,
    * capacity는 행을 FOR UPDATE로 잠근 뒤 점유를 재집계해 동시 주문이 마지막 잔여를 함께 차지하지 못하게 한다.
    * order_number P2002는 호출부가 재시도한다.
    * READ COMMITTED: REPEATABLE READ의 갭 잠금은 다른 계정끼리도 건수 잠금 읽기 → INSERT에서 교착한다.
@@ -317,6 +363,12 @@ export class OrderRepository {
             );
             if (exceeded) return 'capacity-exceeded';
           }
+          const uploadIssue = await lockCustomUploadsForAttach(
+            tx,
+            args.accountId,
+            args.item.custom?.uploads ?? [],
+          );
+          if (uploadIssue) return uploadIssue;
           return this.insertPendingPaymentOrder(tx, args);
         }),
       {
@@ -421,6 +473,7 @@ export class OrderRepository {
                 option_price_delta_snapshot: option.optionPriceDeltaSnapshot,
               })),
             },
+            ...(args.item.custom && customItemData(args.item.custom)),
           },
         },
         payment: {
@@ -446,6 +499,11 @@ export class OrderRepository {
       },
       select: createdOrderSelect,
     });
+    await markCustomUploadsAttached(
+      tx,
+      args.item.custom?.uploads ?? [],
+      args.now,
+    );
     // 관리자 경보 원천. 판매자 '새 주문'(order.submitted)은 입금 확인 때 나간다
     await this.outbox.publish(
       tx,
@@ -1135,4 +1193,59 @@ export class OrderRepository {
     }
     return { counts, amountSum };
   }
+}
+
+/** 품목 생성에 펼쳐 넣는 커스텀 스냅샷. 자유 편집·참고 사진 순서는 입력 순서다. */
+function customItemData(custom: OrderItemCustomSnapshot) {
+  return {
+    custom_mode_snapshot: custom.mode,
+    custom_base_image_url_snapshot: custom.baseImageUrl,
+    custom_preview_image_url: custom.previewImageUrl,
+    custom_texts: {
+      create: custom.texts.map((text) => ({
+        token_id: text.tokenId,
+        token_key_snapshot: text.tokenKey,
+        label_snapshot: text.label,
+        default_text_snapshot: text.defaultText,
+        value_text: text.valueText,
+        sort_order: text.sortOrder,
+        pos_x: text.posX,
+        pos_y: text.posY,
+        width: text.width,
+        height: text.height,
+        text_color: text.textColor,
+        text_align: text.textAlign,
+      })),
+    },
+    free_edits: {
+      create: custom.freeEdits.map((edit, index) => ({
+        pos_x: edit.posX,
+        pos_y: edit.posY,
+        width: edit.width,
+        height: edit.height,
+        description_text: edit.descriptionText,
+        sort_order: index,
+        attachments: {
+          create: edit.referenceImageUrls.map((url, order) => ({
+            image_url: url,
+            sort_order: order,
+          })),
+        },
+      })),
+    },
+    custom_images: {
+      create: custom.images.map((image) => ({
+        kind: image.kind,
+        image_url: image.imageUrl,
+      })),
+    },
+    ...(custom.design && {
+      custom_design: {
+        create: {
+          schema_version: custom.design.schemaVersion,
+          design_json: custom.design.json,
+        },
+      },
+    }),
+  };
 }

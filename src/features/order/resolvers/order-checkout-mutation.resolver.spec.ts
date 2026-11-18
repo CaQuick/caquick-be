@@ -7,6 +7,7 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
@@ -44,6 +45,7 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
       providers: [
         OrderCheckoutMutationResolver,
         OrderCheckoutService,
+        OrderCustomizationService,
         OrderRepository,
         OrderCustomUploadRepository,
         ...s3TestProviders(),

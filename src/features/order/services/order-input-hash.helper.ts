@@ -1,4 +1,8 @@
 import { sha256Hex } from '@/common/utils/crypto';
+import {
+  canonicalizeCustomOrderInput,
+  type CustomOrderInputSource,
+} from '@/features/product';
 
 export interface CreateOrderHashInput {
   productId: bigint;
@@ -10,9 +14,10 @@ export interface CreateOrderHashInput {
   depositorName?: string | null;
   requestNote?: string | null;
   expectedTotalPrice: number;
+  custom?: CustomOrderInputSource | null;
 }
 
-/** 같은 멱등 키의 재요청이 같은 주문서인지 가린다. 옵션 순서·quantity 생략(= 1)·null 키에 흔들리지 않게 정규화한다. */
+/** 같은 멱등 키의 재요청이 같은 주문서인지 가린다. 옵션 순서·quantity 생략(= 1)·null 키·커스텀 입력의 순서 없는 목록에 흔들리지 않게 정규화한다. */
 export function hashCreateOrderInput(input: CreateOrderHashInput): string {
   return sha256Hex(
     canonicalJson({
@@ -25,6 +30,7 @@ export function hashCreateOrderInput(input: CreateOrderHashInput): string {
       depositorName: input.depositorName,
       requestNote: input.requestNote,
       expectedTotalPrice: input.expectedTotalPrice,
+      custom: input.custom && canonicalizeCustomOrderInput(input.custom),
     }),
   );
 }

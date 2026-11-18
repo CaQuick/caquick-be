@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DomainException } from '@/common/errors/error-catalog';
+import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
@@ -9,14 +9,17 @@ import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import { buildRegionLabel } from '@/common/utils/region-label';
 import { codePointLength } from '@/common/utils/text-cleaner';
 import { evaluateActiveUserAccount } from '@/features/auth';
+import { CUSTOM_UPLOAD_PURPOSES } from '@/features/order/constants/order-custom-upload-purposes';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import {
   OrderRepository,
   type CreatedOrderRow,
   type CreatePendingPaymentOrderArgs,
+  type CreatePendingPaymentOrderResult,
 } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { hashCreateOrderInput } from '@/features/order/services/order-input-hash.helper';
 import { toOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
@@ -27,10 +30,7 @@ import {
   type OrderCustomUploadPurpose,
 } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
-import type {
-  CreateUploadUrlOutput,
-  UploadPurpose,
-} from '@/global/storage/types/storage.types';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -47,11 +47,16 @@ const PAYMENT_WINDOW_MS = 60 * 60_000;
 /** 은행 입금자명과 대조하는 값이라 자르지 않고 입력을 요구한다. */
 const MAX_DEPOSITOR_NAME_LENGTH = 20;
 
-const CUSTOM_UPLOAD_PURPOSES = {
-  RENDER: 'ORDER_CUSTOM_RENDER',
-  COMPOSITE: 'ORDER_CUSTOM_COMPOSITE',
-  REFERENCE: 'ORDER_CUSTOM_REFERENCE',
-} as const satisfies Record<OrderCustomUploadPurpose, UploadPurpose>;
+/** tx 안 잠금 재검사의 거절 결과 → 같은 키 replay가 아니면 내는 코드. */
+const LOCKED_REJECT_CODES = {
+  'capacity-exceeded': 'PICKUP_NOT_AVAILABLE',
+  'pending-limit': 'PENDING_PAYMENT_LIMIT_EXCEEDED',
+  'upload-invalid': 'CUSTOM_UPLOAD_INVALID',
+  'upload-expired': 'CUSTOM_UPLOAD_EXPIRED',
+} as const satisfies Record<
+  Exclude<CreatePendingPaymentOrderResult, CreatedOrderRow | 'lock-timeout'>,
+  ErrorCode
+>;
 
 interface ResolvedOptionSelection {
   optionGroupId: bigint;
@@ -59,6 +64,7 @@ interface ResolvedOptionSelection {
   groupNameSnapshot: string;
   optionTitleSnapshot: string;
   optionPriceDeltaSnapshot: number;
+  threeDKey: string | null;
 }
 
 @Injectable()
@@ -72,6 +78,7 @@ export class OrderCheckoutService {
     private readonly paymentSettings: PaymentSettingRepository,
     private readonly customUploads: OrderCustomUploadRepository,
     private readonly s3: S3Service,
+    private readonly customization: OrderCustomizationService,
   ) {}
 
   /**
@@ -142,6 +149,13 @@ export class OrderCheckoutService {
     }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
+    const custom = this.customization.resolve({
+      product,
+      selectedThreeDKeys: selections.map((selection) => selection.threeDKey),
+      quantity,
+      custom: input.custom,
+      accountId,
+    });
     const buyer = this.resolveBuyerInfo(buyerProfile, input);
     const depositorName = resolveDepositorName(input.depositorName, buyer.name);
 
@@ -241,6 +255,7 @@ export class OrderCheckoutService {
         quantity,
         itemSubtotalPrice,
         options: selections,
+        custom,
       },
     });
 
@@ -283,6 +298,7 @@ export class OrderCheckoutService {
           groupNameSnapshot: group.name,
           optionTitleSnapshot: item.title,
           optionPriceDeltaSnapshot: item.price_delta,
+          threeDKey: item.three_d_key,
         });
         groupIdByItemId.set(item.id.toString(), group.id.toString());
       }
@@ -358,16 +374,14 @@ export class OrderCheckoutService {
         if (created === 'lock-timeout') {
           throw new DomainException('CONCURRENT_REQUEST');
         }
-        if (created === 'capacity-exceeded' || created === 'pending-limit') {
-          // 트랜잭션 안 잠금 재검사에서 거절됐다. 자리를 채운 것이 같은 키의 내 주문(응답 유실 재시도)일 수 있어
-          // 거절 전에 replay를 확인한다.
+        if (typeof created === 'string') {
+          // 트랜잭션 안 잠금 재검사에서 거절됐다. 자리·건수를 채우거나 업로드를 붙인 것이 같은 키의 내 주문
+          // (응답 유실 재시도)일 수 있어 거절 전에 replay를 확인한다.
           return this.replayOrReject(
             args.accountId,
             args.idempotencyKey,
             args.idempotencyInputHash,
-            created === 'capacity-exceeded'
-              ? 'PICKUP_NOT_AVAILABLE'
-              : 'PENDING_PAYMENT_LIMIT_EXCEEDED',
+            LOCKED_REJECT_CODES[created],
           );
         }
         return created;
@@ -415,7 +429,7 @@ export class OrderCheckoutService {
     accountId: bigint,
     idempotencyKey: string,
     inputHash: string,
-    rejectCode: 'PICKUP_NOT_AVAILABLE' | 'PENDING_PAYMENT_LIMIT_EXCEEDED',
+    rejectCode: ErrorCode,
   ): Promise<CreatedOrderRow> {
     const existing = await this.orderRepo.findOrderByIdempotencyKey(
       accountId,

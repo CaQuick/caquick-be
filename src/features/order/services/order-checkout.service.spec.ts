@@ -15,6 +15,7 @@ import { pendingPaymentLockName } from '@/features/order/repositories/order-pend
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
@@ -67,6 +68,7 @@ describe('OrderCheckoutService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         OrderCheckoutService,
+        OrderCustomizationService,
         OrderRepository,
         OrderCustomUploadRepository,
         ...s3TestProviders(),
