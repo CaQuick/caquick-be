@@ -31,13 +31,13 @@ type PickupCalendar {
   days: [PickupDay!]!
 }
 
-"""매장 달력의 하루. 매장 영업요일·특별휴무·일별 생산 수량이 모두 반영된 결과다."""
+"""매장 달력의 하루. 매장 영업요일·특별휴무·일별 생산 수량·픽업 하한(리드타임, productId를 주면 상품 제작 시간 중 긴 쪽)이 모두 반영된 결과다."""
 type PickupDay {
   """날짜. "YYYY-MM-DD" (KST)."""
   date: String!
   """픽업 예약 가능 여부."""
   selectable: Boolean!
-  """선택 불가 사유. PAST | OUT_OF_RANGE | CLOSED(휴무·영업요일 아님·당일 잔여 슬롯 없음) | CAPACITY_FULL. 선택 가능 시 null."""
+  """선택 불가 사유. PAST | OUT_OF_RANGE | CLOSED(휴무·영업요일 아님·픽업 하한 이후 그날 잔여 슬롯 없음) | CAPACITY_FULL. 선택 가능 시 null."""
   reason: String
 }
 
