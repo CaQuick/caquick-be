@@ -3,6 +3,7 @@ import type {
   OrderAutoTransitionTimes,
   OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderPickupChangeOutput,
   OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
@@ -67,6 +68,7 @@ export interface AdminOrderDetailOutput extends OrderAutoTransitionTimes {
   refunds: OrderRefundOutput[];
   cancellation: OrderCancellationOutput | null;
   cancelOptions: AdminOrderCancelOptionsOutput;
+  pickupChanges: OrderPickupChangeOutput[];
 }
 
 export interface AdminOrderCancelOptionsOutput {

@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { DAY_MS } from '@/common/utils/kst-time';
 import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
@@ -12,7 +11,10 @@ import type {
   OrderCancelDecision,
   OrderCancelState,
 } from '@/features/order/policies/order-cancel.policy';
-import type { OrderLockedState } from '@/features/order/policies/order-lifecycle.policy';
+import {
+  confirmDeadlineFor,
+  type OrderLockedState,
+} from '@/features/order/policies/order-lifecycle.policy';
 import {
   confirmedPaidAmount,
   finalizeSettlementLocked,
@@ -107,9 +109,6 @@ interface PickupActor {
   note: string | null;
   now: Date;
 }
-
-/** 접수 뒤 판매자 확정 마감: 확인 + 24시간과 픽업 시각 중 이른 쪽. */
-const CONFIRM_WINDOW_MS = DAY_MS;
 
 interface LockedOrderRow {
   id: bigint;
@@ -219,12 +218,7 @@ export class OrderTransitionRepository {
       paymentAmount,
       pickupAt: locked.pickup_at,
     });
-    const confirmDeadlineAt = new Date(
-      Math.min(
-        args.now.getTime() + CONFIRM_WINDOW_MS,
-        locked.pickup_at.getTime(),
-      ),
-    );
+    const confirmDeadlineAt = confirmDeadlineFor(args.now, locked.pickup_at);
     const actorType =
       args.source === PaymentConfirmSource.ADMIN
         ? OrderActor.ADMIN

@@ -142,3 +142,12 @@ export interface OrderAutoTransitionTimes {
   autoPickupAt: Date | null;
   noShowAt: Date | null;
 }
+
+/** 판매자 픽업 일시 변경 이력 1건. */
+export interface OrderPickupChangeOutput {
+  id: string;
+  fromPickupAt: Date;
+  toPickupAt: Date;
+  changedAt: Date;
+  note: string | null;
+}

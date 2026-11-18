@@ -7,7 +7,15 @@ export {
 } from '@/features/store/constants/store-ranking.constants';
 // 매장 픽업 가능 판정. 주문 생성(order feature)이 픽업 일시 재검증에 사용한다 —
 // 판정 규칙은 store feature에 유지한다(달력·슬롯 조회와 단일 소스).
-export { StorePickupScheduleService } from '@/features/store/services/store-pickup-schedule.service';
+export {
+  StorePickupScheduleService,
+  type BookedAdjustment,
+} from '@/features/store/services/store-pickup-schedule.service';
+// 판매자 픽업 변경 달력·슬롯(order feature)이 같은 출력 타입을 쓴다.
+export type {
+  PickupCalendar,
+  PickupTimeSlots,
+} from '@/features/store/types/pickup-schedule-output.type';
 // 픽업 하한(매장 리드타임과 상품 제작 시간 중 긴 쪽). 달력·슬롯·주문 생성이 같은 규칙을 쓴다.
 export { effectiveLeadTimeMinutes } from '@/features/store/services/store-pickup-policy.helper';
 export { scoreAndSortByPopularity } from '@/features/store/services/store-ranking.helper';

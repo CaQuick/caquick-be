@@ -1040,6 +1040,36 @@ describe('UserOrderService (real DB)', () => {
       expect(detail.canCancel).toBe(canCancel);
       expect(detail.cancellation).toBeNull();
     });
+
+    it('판매자가 바꾼 픽업 일시 이력을 오래된 순으로 준다', async () => {
+      const account = await setupUser();
+      const { order } = await myOrder(account.id, 'CONFIRMED', null);
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      const first = new Date('2026-09-20T05:00:00.000Z');
+      const second = new Date('2026-09-21T05:00:00.000Z');
+      for (const [to, changedAt, note] of [
+        [second, new Date('2026-09-17T00:00:00.000Z'), null],
+        [first, new Date('2026-09-16T00:00:00.000Z'), '재료 수급'],
+      ] as const) {
+        await prisma.orderPickupChange.create({
+          data: {
+            order_id: order.id,
+            from_pickup_at: order.pickup_at,
+            to_pickup_at: to,
+            changed_by_account_id: seller.id,
+            note,
+            changed_at: changedAt,
+          },
+        });
+      }
+
+      const detail = await service.getMyOrder(account.id, order.id);
+
+      expect(detail.pickupChanges.map((c) => [c.toPickupAt, c.note])).toEqual([
+        [first, '재료 수급'],
+        [second, null],
+      ]);
+    });
   });
 
   describe('환불 계좌', () => {

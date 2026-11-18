@@ -382,3 +382,18 @@ type OrderItemFreeEditAttachment {
   """첨부 순서. 오름차순."""
   sortOrder: Int!
 }
+
+"""
+판매자 픽업 일시 변경 이력 1건. 구매자·판매자·관리자 주문 상세가 공용으로 쓴다.
+"""
+type OrderPickupChange {
+  id: ID!
+  """변경 전 픽업 일시."""
+  fromPickupAt: DateTime!
+  """변경 후 픽업 일시."""
+  toPickupAt: DateTime!
+  """변경 시각."""
+  changedAt: DateTime!
+  """판매자가 남긴 변경 메모. 없으면 null."""
+  note: String
+}

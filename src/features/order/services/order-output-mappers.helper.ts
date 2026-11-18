@@ -10,6 +10,7 @@ import type {
   OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderItemFreeEditOutput,
+  OrderPickupChangeOutput,
   OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
@@ -22,6 +23,7 @@ import {
   type CustomTextAlign,
   type OrderActor,
   type OrderCancelFault,
+  type OrderPickupChange,
   type Prisma,
   type Refund,
 } from '@/generated/prisma/client';
@@ -250,5 +252,17 @@ export function toOrderRefund(row: Refund): OrderRefundOutput {
     requestedAt: row.requested_at,
     accountSubmittedAt: row.account_submitted_at,
     completedAt: row.completed_at,
+  };
+}
+
+export function toOrderPickupChange(
+  row: OrderPickupChange,
+): OrderPickupChangeOutput {
+  return {
+    id: row.id.toString(),
+    fromPickupAt: row.from_pickup_at,
+    toPickupAt: row.to_pickup_at,
+    changedAt: row.changed_at,
+    note: row.note,
   };
 }

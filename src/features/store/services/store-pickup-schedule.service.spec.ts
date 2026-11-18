@@ -732,4 +732,131 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).resolves.toBe(false);
     });
   });
+  describe('판매자 픽업 변경(리드타임 생략·숨긴 매장 허용·자기 수량 차감)', () => {
+    const ADJUST_NONE = { date: '2026-09-18', quantity: 0 };
+
+    it('리드타임·제작 시간 없이 지난 시각만 막는다(isPickupSlotAvailable SKIP)', async () => {
+      const store = await createStore(prisma, {
+        min_lead_time_minutes: 3 * 24 * 60,
+      });
+      await openAllWeek(store);
+      const at = (iso: string) =>
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date(iso),
+          preparationTimeMinutes: 26 * 60,
+          leadTime: 'SKIP',
+          storeActiveOnly: false,
+        });
+
+      // 오늘(9/16) 16:00 KST 정각 슬롯은 가능, 15:30은 지났다
+      await expect(at('2026-09-16T07:00:00.000Z')).resolves.toBe(true);
+      await expect(at('2026-09-16T06:30:00.000Z')).resolves.toBe(false);
+      // 리드 3일 안쪽(9/17)도 가능 — 반증: APPLY면 불가
+      await expect(at('2026-09-17T05:00:00.000Z')).resolves.toBe(true);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date('2026-09-17T05:00:00.000Z'),
+          preparationTimeMinutes: 0,
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('숨긴 매장도 storeActiveOnly false면 판정하고, 기본값은 여전히 불가다', async () => {
+      const store = await createStore(prisma, { is_active: false });
+      await openAllWeek(store);
+      const pickupAt = new Date('2026-09-18T05:00:00.000Z');
+
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt,
+          preparationTimeMinutes: 0,
+          leadTime: 'SKIP',
+          storeActiveOnly: false,
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt,
+          preparationTimeMinutes: 0,
+          leadTime: 'SKIP',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('달력은 숨긴 매장도 계산하고 리드타임에 덮인 날도 고를 수 있다', async () => {
+      const store = await createStore(prisma, {
+        is_active: false,
+        min_lead_time_minutes: 3 * 24 * 60,
+      });
+      await openAllWeek(store);
+
+      const calendar = await service.rescheduleCalendar(
+        store.id,
+        '2026-09',
+        ADJUST_NONE,
+      );
+
+      expect(dayOf(calendar, '2026-09-15').reason).toBe('PAST');
+      expect(dayOf(calendar, '2026-09-17').selectable).toBe(true);
+      const slots = await service.rescheduleTimeSlots(
+        store.id,
+        '2026-09-16',
+        ADJUST_NONE,
+      );
+      expect(
+        slots.afternoon.find((slot) => slot.time === '15:30')?.available,
+      ).toBe(false);
+      expect(
+        slots.afternoon.find((slot) => slot.time === '16:00')?.available,
+      ).toBe(true);
+    });
+
+    it('옮길 주문의 현재 점유는 그 날짜에서 빼고 센다(다른 날짜는 그대로)', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+      await setCapacity(store, new Date(Date.UTC(2026, 8, 18)), 2);
+      await setCapacity(store, new Date(Date.UTC(2026, 8, 19)), 2);
+      await book(store, new Date('2026-09-18T05:00:00.000Z'), 2);
+      await book(store, new Date('2026-09-19T05:00:00.000Z'), 2);
+      const adjustment = { date: '2026-09-18', quantity: 2 };
+
+      const calendar = await service.rescheduleCalendar(
+        store.id,
+        '2026-09',
+        adjustment,
+      );
+      const slots = await service.rescheduleTimeSlots(
+        store.id,
+        '2026-09-18',
+        adjustment,
+      );
+
+      expect(dayOf(calendar, '2026-09-18').selectable).toBe(true);
+      expect(dayOf(calendar, '2026-09-19').reason).toBe('CAPACITY_FULL');
+      expect(slots.afternoon.every((slot) => slot.available)).toBe(true);
+      // 반증: 차감이 없으면 같은 날도 소진이다
+      expect(
+        dayOf(
+          await service.rescheduleCalendar(store.id, '2026-09', ADJUST_NONE),
+          '2026-09-18',
+        ).reason,
+      ).toBe('CAPACITY_FULL');
+    });
+
+    it('없는 매장과 형식 오류는 거절한다', async () => {
+      await expect(
+        service.rescheduleCalendar(999999n, '2026-09', ADJUST_NONE),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.rescheduleCalendar(999999n, '2026-13', ADJUST_NONE),
+      ).rejects.toThrowDomain('INVALID_YEAR_MONTH');
+      await expect(
+        service.rescheduleTimeSlots(999999n, '2026-09-31', ADJUST_NONE),
+      ).rejects.toThrowDomain('INVALID_DATE');
+    });
+  });
 });

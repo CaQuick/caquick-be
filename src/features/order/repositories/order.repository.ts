@@ -8,6 +8,10 @@ import { IN_PROGRESS_ORDER_STATUSES } from '@/features/order/constants/order-sta
 import { orderPaymentPendingEvent } from '@/features/order/events/order-payment-pending.event';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import {
+  isDailyCapacityExceeded,
+  type DailyCapacityGuard,
+} from '@/features/order/repositories/order-capacity.helper';
+import {
   lockCustomUploadsForAttach,
   markCustomUploadsAttached,
   type CustomUploadIssue,
@@ -59,6 +63,11 @@ const sellerVisibleWhere = {
   submitted_at: { not: null },
 } satisfies Prisma.OrderWhereInput;
 
+/** 주문 상세 3곳(구매자·판매자·관리자)의 픽업 변경 이력(오래된 순). */
+const pickupChangesInclude = {
+  orderBy: [{ changed_at: 'asc' }, { id: 'asc' }],
+} satisfies Prisma.Order$pickup_changesArgs;
+
 /** 주문 상세 3곳(구매자·판매자·관리자)의 커스텀 스냅샷. 디자인·이미지는 deleted_at이 없어 부모 품목 가시성을 따른다 */
 const orderItemCustomInclude = {
   custom_design: { select: { schema_version: true, design_json: true } },
@@ -91,7 +100,7 @@ export const adminOrderInclude = {
 } satisfies Prisma.OrderInclude;
 
 /** 목록 카드용 첫 품목 스냅샷 — 매장 필터가 들어가 상수로 둘 수 없다. */
-function sellerOrderSummaryInclude(storeId: bigint) {
+export function sellerOrderSummaryInclude(storeId: bigint) {
   return {
     items: {
       where: { store_id: storeId, ...activeWhere },
@@ -118,6 +127,7 @@ const adminOrderDetailInclude = {
   },
   payment: true,
   refunds: { orderBy: { id: 'asc' } },
+  pickup_changes: pickupChangesInclude,
   status_histories: { where: activeWhere, orderBy: { changed_at: 'desc' } },
   items: {
     where: activeWhere,
@@ -181,13 +191,7 @@ export interface OngoingOrderRow {
   }[];
 }
 
-/** 트랜잭션 안에서 capacity 행을 잠그고 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다. */
-export interface DailyCapacityGuard {
-  storeId: bigint;
-  dateOnlyUtc: Date;
-  dayStartUtc: Date;
-  dayEndUtc: Date;
-}
+export type { DailyCapacityGuard } from '@/features/order/repositories/order-capacity.helper';
 
 /** 주문 품목 커스텀 스냅샷. 검증·정규화를 마친 값이고, uploads는 같은 tx에서 잠가 ATTACHED로 바꿀 업로드다. */
 export interface OrderItemCustomSnapshot {
@@ -356,10 +360,11 @@ export class OrderRepository {
           );
           if (pending >= PENDING_PAYMENT_LIMIT) return 'pending-limit';
           if (args.capacityGuard) {
-            const exceeded = await this.isCapacityExceededLocked(
+            const exceeded = await isDailyCapacityExceeded(
               tx,
               args.capacityGuard,
               args.item.quantity,
+              { forUpdate: true },
             );
             if (exceeded) return 'capacity-exceeded';
           }
@@ -383,53 +388,9 @@ export class OrderRepository {
     guard: DailyCapacityGuard,
     quantity: number,
   ): Promise<boolean> {
-    return this.capacityExceeded(this.prisma, guard, quantity, false);
-  }
-
-  /** FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다. */
-  private isCapacityExceededLocked(
-    tx: Prisma.TransactionClient,
-    guard: DailyCapacityGuard,
-    quantity: number,
-  ): Promise<boolean> {
-    return this.capacityExceeded(tx, guard, quantity, true);
-  }
-
-  /**
-   * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다.
-   * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
-   */
-  private async capacityExceeded(
-    db: Prisma.TransactionClient,
-    guard: DailyCapacityGuard,
-    quantity: number,
-    forUpdate: boolean,
-  ): Promise<boolean> {
-    const capacityRows = await db.$queryRaw<{ capacity: number }[]>(Prisma.sql`
-      SELECT capacity
-      FROM order_store_daily_limit
-      WHERE store_id = ${guard.storeId}
-        AND booking_date = ${guard.dateOnlyUtc}
-        AND capacity IS NOT NULL
-      ${forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty}
-    `);
-    const capacity = capacityRows[0]?.capacity;
-    if (capacity === undefined) return false;
-
-    const bookedRows = await db.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
-      SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked
-      FROM order_item oi
-      JOIN \`order\` o
-        ON o.id = oi.order_id
-        AND o.deleted_at IS NULL
-        AND o.status <> 'CANCELED'
-        AND o.pickup_at >= ${guard.dayStartUtc}
-        AND o.pickup_at < ${guard.dayEndUtc}
-      WHERE oi.store_id = ${guard.storeId}
-        AND oi.deleted_at IS NULL
-    `);
-    const booked = Number(bookedRows[0]?.booked ?? 0);
-    return booked + quantity > capacity;
+    return isDailyCapacityExceeded(this.prisma, guard, quantity, {
+      forUpdate: false,
+    });
   }
 
   private async insertPendingPaymentOrder(
@@ -706,6 +667,7 @@ export class OrderRepository {
       include: {
         payment: { select: orderPaymentSelect },
         refunds: { orderBy: { id: 'asc' } },
+        pickup_changes: pickupChangesInclude,
         status_histories: {
           where: activeWhere,
           orderBy: { changed_at: 'asc' },
@@ -904,6 +866,7 @@ export class OrderRepository {
         payment: { select: { method: true } },
         // 입금 반환은 구매자와 플랫폼 사이 일이라 취소 환불만 본다
         refunds: { where: { kind: RefundKind.CANCEL } },
+        pickup_changes: pickupChangesInclude,
         // 입금 대기 이력은 판매자에게 보이지 않는다
         status_histories: {
           where: {

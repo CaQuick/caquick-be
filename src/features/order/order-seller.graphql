@@ -252,6 +252,10 @@ type SellerOrderDetail {
   노쇼 처리 시각. 노쇼가 아니면 null.
   """
   noShowAt: DateTime
+  """
+  픽업 일시 변경 이력. 오래된 순, 없으면 빈 배열.
+  """
+  pickupChanges: [OrderPickupChange!]!
 }
 
 """

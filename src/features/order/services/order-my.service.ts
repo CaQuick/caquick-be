@@ -24,6 +24,7 @@ import { OrderEventsService } from '@/features/order/services/order-events.servi
 import {
   toOrderCancellation,
   toOrderItemDetail,
+  toOrderPickupChange,
   toOrderRefund,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
@@ -242,6 +243,7 @@ export class UserOrderService {
       cancellation: toOrderCancellation(order),
       canCancel: this.cancelPolicy.canCancel(OrderActor.BUYER, order.status),
       refunds: order.refunds.map(toOrderRefund),
+      pickupChanges: order.pickup_changes.map(toOrderPickupChange),
       statusHistories: order.status_histories.map(toOrderStatusHistory),
       items: order.items.map((item) => ({
         item: toOrderItemDetail(item),

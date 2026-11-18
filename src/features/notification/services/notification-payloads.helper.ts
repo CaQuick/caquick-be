@@ -1,12 +1,14 @@
 import {
   ORDER_CANCELED_NOTIFICATION,
   ORDER_PAYMENT_EXPIRED_NOTIFICATION,
+  ORDER_PICKUP_RESCHEDULED_TITLE,
   ORDER_STATUS_NOTIFICATION_BODIES,
   ORDER_STATUS_NOTIFICATION_TITLES,
   REFUND_ACCOUNT_REQUESTED_TITLE,
   REFUND_COMPLETED_TITLE,
   REVIEW_LIKED_NOTIFICATION,
 } from '@/features/notification/constants/notification-messages';
+import { formatKstPickupAt } from '@/features/notification/services/seller-push-messages.helper';
 import {
   ORDER_CANCEL_REASON_LABELS,
   type OrderStatusChangedPayload,
@@ -83,6 +85,19 @@ function buildOrderCanceled(
     event: NotificationEvent.ORDER_CANCELED,
     title: ORDER_CANCELED_NOTIFICATION.title,
     body: `${p.orderNumber} ${ORDER_CANCELED_NOTIFICATION.body}${reason}`,
+  };
+}
+
+/** 판매자가 픽업 일시를 바꿨을 때. */
+export function buildOrderPickupRescheduledNotification(
+  orderNumber: string,
+  toPickupAt: Date,
+): NotificationPayload {
+  return {
+    type: NotificationType.ORDER_STATUS,
+    event: NotificationEvent.ORDER_PICKUP_RESCHEDULED,
+    title: ORDER_PICKUP_RESCHEDULED_TITLE,
+    body: `${orderNumber} 픽업 일시가 ${formatKstPickupAt(toPickupAt)}로 변경되었어요.`,
   };
 }
 

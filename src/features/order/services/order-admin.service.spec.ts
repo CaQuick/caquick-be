@@ -488,6 +488,35 @@ describe('AdminOrderService (real DB)', () => {
       },
     );
 
+    it('판매자 픽업 일시 변경 이력을 준다(없으면 빈 배열)', async () => {
+      const { order } = await orderWithItem({ status: 'CONFIRMED' });
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      expect(
+        (await service.adminOrder(await admin(), order.id)).pickupChanges,
+      ).toEqual([]);
+      const change = await prisma.orderPickupChange.create({
+        data: {
+          order_id: order.id,
+          from_pickup_at: order.pickup_at,
+          to_pickup_at: new Date('2026-09-21T05:00:00.000Z'),
+          changed_by_account_id: seller.id,
+          changed_at: new Date('2026-09-17T00:00:00.000Z'),
+        },
+      });
+
+      const result = await service.adminOrder(await admin(), order.id);
+
+      expect(result.pickupChanges).toEqual([
+        {
+          id: change.id.toString(),
+          fromPickupAt: order.pickup_at,
+          toPickupAt: change.to_pickup_at,
+          changedAt: change.changed_at,
+          note: null,
+        },
+      ]);
+    });
+
     it('결제와 입금 확인 처리자·메모를 준다', async () => {
       const { order } = await orderWithItem();
       const confirmedAt = new Date('2026-09-16T07:00:00.000Z');

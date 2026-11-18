@@ -1,9 +1,14 @@
-import { HOUR_MS } from '@/common/utils/kst-time';
+import { DAY_MS, HOUR_MS } from '@/common/utils/kst-time';
 import {
   OrderStatus,
   PaymentStatus,
   type Payment,
 } from '@/generated/prisma/client';
+
+/** 판매자 확정 마감: 접수(입금 확인) + 24시간과 픽업 시각 중 이른 쪽. 픽업 변경 때도 다시 잰다. */
+export function confirmDeadlineFor(submittedAt: Date, pickupAt: Date): Date {
+  return new Date(Math.min(submittedAt.getTime() + DAY_MS, pickupAt.getTime()));
+}
 
 /** 확정 마감 이만큼 전에 판매자에게 미리 알린다. */
 export const CONFIRM_REMINDER_LEAD_MS = 2 * HOUR_MS;
