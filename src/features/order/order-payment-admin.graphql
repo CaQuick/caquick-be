@@ -1,0 +1,138 @@
+extend type Query {
+  """
+  플랫폼 결제 설정(판매 수수료율·케이퀵 입금 계좌)을 조회한다. 설정한 적이 없으면 수수료 0, 입금 계좌 없음이다.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminPaymentSetting: AdminPaymentSetting!
+  """
+  매장 정산 계좌를 계좌번호 원문과 함께 조회한다. 등록 전이면 null, 없는 매장이면 NOT_FOUND.
+  관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminStoreSettlementAccount(storeId: ID!): AdminStoreSettlementAccount
+}
+
+extend type Mutation {
+  """
+  플랫폼 결제 설정을 바꾼다. 보낸 필드만 바꾸고 생략·null인 필드는 그대로 둔다. 수수료율은 바꾼 뒤 생성되는 주문부터 적용된다.
+  수수료율이 0~10000bp 밖이면 INVALID_COMMISSION_RATE, 은행 코드가 paymentBanks에 없으면 INVALID_BANK_CODE,
+  계좌번호가 하이픈을 뺀 숫자 8~20자리가 아니면 INVALID_ACCOUNT_NUMBER, 예금주·사유가 비었거나 길면 TEXT_REQUIRED·TEXT_TOO_LONG
+  (모두 BAD_USER_INPUT). 감사 로그(PAYMENT_SETTING)를 남긴다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminUpdatePaymentSetting(
+    input: AdminUpdatePaymentSettingInput!
+  ): AdminPaymentSetting!
+  """
+  매장 정산 계좌를 등록하거나 바꾼다(관리자 대리 수정). 계좌번호는 암호화해 저장하고, 감사 로그(SETTLEMENT_ACCOUNT)에는
+  끝 4자리만 남는다. 이 기록은 판매자 감사 로그에도 보인다. 없는 매장이면 NOT_FOUND, 은행·계좌번호·예금주·사유 오류는
+  adminUpdatePaymentSetting과 같은 코드(BAD_USER_INPUT). 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminUpsertStoreSettlementAccount(
+    input: AdminUpsertStoreSettlementAccountInput!
+  ): AdminStoreSettlementAccount!
+}
+
+"""
+플랫폼 결제 설정. 플랫폼 전체에 하나뿐이다.
+"""
+type AdminPaymentSetting {
+  """
+  판매 수수료율(bp, 1bp = 0.01%). 0~10000. 주문 생성 시점의 값이 주문에 저장된다.
+  """
+  commissionRateBps: Int!
+  """
+  구매자가 입금할 케이퀵 계좌의 은행. 설정 전이면 null.
+  """
+  depositBank: Bank
+  """
+  케이퀵 입금 계좌번호(숫자만). 설정 전이면 null.
+  """
+  depositAccountNumber: String
+  """
+  케이퀵 입금 계좌 예금주. 설정 전이면 null.
+  """
+  depositAccountHolder: String
+  """
+  마지막 변경 시각. 설정한 적이 없으면 null.
+  """
+  updatedAt: DateTime
+}
+
+"""
+매장 정산 계좌(관리자 시점). 계좌번호 원문이 들어 있으니 화면 밖(로그·분석 이벤트)에 남기지 않는다.
+"""
+type AdminStoreSettlementAccount {
+  storeId: ID!
+  """
+  은행.
+  """
+  bank: Bank!
+  """
+  예금주.
+  """
+  accountHolder: String!
+  """
+  계좌번호 원문(숫자만). 정산 송금에 쓴다.
+  """
+  accountNumber: String!
+  """
+  끝 4자리만 남긴 계좌번호(예: ****1234). 목록 표시용.
+  """
+  accountNumberMasked: String!
+  """
+  마지막으로 바꾼 주체. SELLER는 판매자 본인, ADMIN은 관리자 대리 수정이다.
+  """
+  updatedByRole: OrderActorType!
+  """
+  마지막 변경 시각.
+  """
+  updatedAt: DateTime!
+}
+
+"""
+결제 설정 변경 입력. 보낸 필드만 바꾼다.
+"""
+input AdminUpdatePaymentSettingInput {
+  """
+  판매 수수료율(bp). 0~10000 정수. 생략·null이면 그대로 둔다.
+  """
+  commissionRateBps: Int
+  """
+  케이퀵 입금 계좌 은행 코드(paymentBanks의 code). 생략·null이면 그대로 둔다.
+  """
+  depositBankCode: String
+  """
+  케이퀵 입금 계좌번호. 하이픈을 빼고 숫자 8~20자리여야 하며 숫자만 저장한다. 생략·null이면 그대로 둔다.
+  """
+  depositAccountNumber: String
+  """
+  케이퀵 입금 계좌 예금주(1~50자). 생략·null이면 그대로 둔다.
+  """
+  depositAccountHolder: String
+  """
+  변경 사유(필수, 500자 이하). 감사 로그에 남는다.
+  """
+  reason: String!
+}
+
+"""
+매장 정산 계좌 등록·변경 입력(관리자 대리 수정).
+"""
+input AdminUpsertStoreSettlementAccountInput {
+  storeId: ID!
+  """
+  은행 코드(paymentBanks의 code).
+  """
+  bankCode: String!
+  """
+  예금주(1~50자).
+  """
+  accountHolder: String!
+  """
+  계좌번호. 하이픈을 빼고 숫자 8~20자리여야 하며 숫자만 저장한다.
+  """
+  accountNumber: String!
+  """
+  변경 사유(필수, 500자 이하). 감사 로그에 남는다.
+  """
+  reason: String!
+}

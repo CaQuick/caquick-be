@@ -86,8 +86,8 @@ async function main(): Promise<void> {
     log('관리자 시드 중...');
     const admin = await seedAdmins(prisma);
 
-    log('결제 설정·결제·환불·입금 기록 시드 중...');
-    await seedPayments(prisma, { orders, admin });
+    log('결제 설정·결제·환불·입금 기록·정산 계좌 시드 중...');
+    await seedPayments(prisma, { orders, stores, admin });
 
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {

@@ -375,6 +375,19 @@ export const ERROR_CATALOG = {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '주문번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
   },
+  // ── 결제·정산
+  INVALID_BANK_CODE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '지원하지 않는 은행입니다. 은행을 다시 선택해 주세요.',
+  },
+  INVALID_ACCOUNT_NUMBER: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '계좌번호는 하이픈(-)을 뺀 숫자 8~20자리로 입력해 주세요.',
+  },
+  INVALID_COMMISSION_RATE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '수수료율은 0~10000bp(0~100%) 사이 정수여야 합니다.',
+  },
   // ── 판매자
   SELLER_ONLY: {
     status: HttpStatus.FORBIDDEN,

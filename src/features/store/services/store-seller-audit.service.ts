@@ -64,6 +64,7 @@ export class SellerAuditService extends SellerBaseService {
     if (raw === 'ORDER') return AuditTargetType.ORDER;
     if (raw === 'CONVERSATION') return AuditTargetType.CONVERSATION;
     if (raw === 'CHANGE_PASSWORD') return AuditTargetType.CHANGE_PASSWORD;
+    if (raw === 'SETTLEMENT_ACCOUNT') return AuditTargetType.SETTLEMENT_ACCOUNT;
     throw new DomainException('INVALID_AUDIT_TARGET_TYPE');
   }
 }

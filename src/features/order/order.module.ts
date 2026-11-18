@@ -7,18 +7,27 @@ import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-sta
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
+import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
+import { AdminPaymentMutationResolver } from '@/features/order/resolvers/order-payment-admin-mutation.resolver';
+import { AdminPaymentQueryResolver } from '@/features/order/resolvers/order-payment-admin-query.resolver';
+import { PaymentQueryResolver } from '@/features/order/resolvers/order-payment-query.resolver';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
+import { SellerSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-seller-mutation.resolver';
+import { SellerSettlementQueryResolver } from '@/features/order/resolvers/order-settlement-seller-query.resolver';
 import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subscription.resolver';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
+import { AdminPaymentService } from '@/features/order/services/order-payment-admin.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
+import { SellerSettlementService } from '@/features/order/services/order-settlement-seller.service';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
 import { OrderSubscriptionService } from '@/features/order/services/order-subscription.service';
 import { OutboxModule } from '@/features/outbox';
@@ -60,6 +69,16 @@ import { StoreModule } from '@/features/store';
     // 구매자 주문 목록·상세
     UserOrderService,
     UserOrderQueryResolver,
+    // 결제 설정·매장 정산 계좌(계좌번호는 global AccountCipher로 암호화)
+    PaymentSettingRepository,
+    StoreSettlementAccountRepository,
+    PaymentQueryResolver,
+    AdminPaymentService,
+    AdminPaymentQueryResolver,
+    AdminPaymentMutationResolver,
+    SellerSettlementService,
+    SellerSettlementQueryResolver,
+    SellerSettlementMutationResolver,
   ],
   exports: [
     OrderRepository,
