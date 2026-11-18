@@ -34,6 +34,8 @@ export const ORDER_PAYMENT_EXPIRED_NOTIFICATION = {
 
 export const REFUND_ACCOUNT_REQUESTED_TITLE = '환불계좌입력';
 
+export const REFUND_COMPLETED_TITLE = '환불완료';
+
 export const REVIEW_LIKED_NOTIFICATION = {
   title: '리뷰 좋아요',
   body: '다른 사람이 내가 남긴 리뷰를 좋아했어요.',

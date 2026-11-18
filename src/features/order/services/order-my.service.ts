@@ -9,14 +9,22 @@ import { sliceOverfetched } from '@/common/utils/pagination';
 import { cleanNullableText } from '@/common/utils/text-cleaner';
 import type { CancelMyOrderInput } from '@/features/order/dto/inputs/cancel-my-order.input';
 import type { MyOrdersInput } from '@/features/order/dto/inputs/my-orders.input';
+import type { RefundAccountInput } from '@/features/order/dto/inputs/refund-account.input';
+import type { SubmitMyRefundAccountInput } from '@/features/order/dto/inputs/submit-my-refund-account.input';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import {
+  type RefundAccountData,
+  RefundRepository,
+} from '@/features/order/repositories/refund.repository';
+import { normalizeBankAccount } from '@/features/order/services/order-bank-account.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import {
   toOrderCancellation,
   toOrderItemDetail,
+  toOrderRefund,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
 import { toOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
@@ -31,6 +39,7 @@ import {
   OrderStatus,
   PaymentStatus,
 } from '@/generated/prisma/client';
+import { AccountCipher } from '@/global/crypto/account-cipher.service';
 
 @Injectable()
 export class UserOrderService {
@@ -41,20 +50,30 @@ export class UserOrderService {
     private readonly cancelPolicy: OrderCancelPolicy,
     private readonly events: OrderEventsService,
     private readonly clock: ClockService,
+    private readonly refunds: RefundRepository,
+    private readonly cipher: AccountCipher,
   ) {}
 
-  /** 판매자 확정 전까지만. 입금 대기면 환불 없이, 접수면 전액 환불로 취소한다('입금했어요'를 눌렀어도 허용). */
+  /**
+   * 판매자 확정 전까지만. 입금 대기면 환불 없이, 접수면 전액 환불로 취소한다('입금했어요'를 눌렀어도 허용).
+   * 환불 계좌를 함께 받으면 환불이 바로 송금 대기가 된다.
+   */
   async cancelMyOrder(
     accountId: bigint,
     input: CancelMyOrderInput,
   ): Promise<MyOrderDetail> {
     const orderId = parseId(input.orderId);
+    const note = cleanNullableText(input.note, MAX_REASON_LENGTH);
+    const refundAccount = input.refundAccount
+      ? this.encryptRefundAccount(input.refundAccount)
+      : null;
     const updated = await this.transitions.cancel({
       orderId,
       actor: OrderActor.BUYER,
       actorAccountId: accountId,
       scope: { kind: 'buyer', accountId },
-      note: cleanNullableText(input.note, MAX_REASON_LENGTH),
+      note,
+      refundAccount,
       now: this.clock.now(),
       decide: (state) =>
         this.cancelPolicy.decide(
@@ -68,6 +87,38 @@ export class UserOrderService {
     if (!updated) throw new DomainException('ORDER_NOT_FOUND');
     await this.events.publishSellerStatusChanged(updated);
     return this.getMyOrder(accountId, orderId);
+  }
+
+  /** 돌려받을 계좌 입력. 송금 완료 전이면 덮어쓸 수 있고, 입력하면 송금 대기가 된다. */
+  async submitMyRefundAccount(
+    accountId: bigint,
+    input: SubmitMyRefundAccountInput,
+  ): Promise<MyOrderDetail> {
+    const refundId = parseId(input.refundId);
+    const result = await this.refunds.submitAccount({
+      refundId,
+      accountId,
+      account: this.encryptRefundAccount(input),
+      now: this.clock.now(),
+    });
+    if (result === 'not-found') throw new DomainException('REFUND_NOT_FOUND');
+    if (result === 'completed') {
+      throw new DomainException('REFUND_ALREADY_COMPLETED');
+    }
+    return this.getMyOrder(accountId, result.orderId);
+  }
+
+  private encryptRefundAccount(input: RefundAccountInput): RefundAccountData {
+    const account = normalizeBankAccount(input);
+    return {
+      bankCode: account.bankCode,
+      accountHolder: account.accountHolder,
+      accountNumberEnc: this.cipher.encrypt(
+        account.accountNumber,
+        'refund-account',
+      ),
+      accountNumberLast4: account.accountNumber.slice(-4),
+    };
   }
 
   /** '입금했어요'. 마감 전 첫 누름만 기록해 미입금 자동 취소에서 빼고, 다시 누르면 그대로 돌려준다. */
@@ -190,6 +241,7 @@ export class UserOrderService {
       canceledAt: order.canceled_at,
       cancellation: toOrderCancellation(order),
       canCancel: this.cancelPolicy.canCancel(OrderActor.BUYER, order.status),
+      refunds: order.refunds.map(toOrderRefund),
       statusHistories: order.status_histories.map(toOrderStatusHistory),
       items: order.items.map((item) => ({
         item: toOrderItemDetail(item),

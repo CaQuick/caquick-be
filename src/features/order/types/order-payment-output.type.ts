@@ -69,4 +69,6 @@ export interface AdminPendingPaymentOutput {
 export interface AdminTaskCountsOutput {
   claimedPayments: number;
   pendingPayments: number;
+  refundsAwaitingAccount: number;
+  refundsAwaitingTransfer: number;
 }

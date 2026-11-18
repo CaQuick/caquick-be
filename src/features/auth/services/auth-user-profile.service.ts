@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import { WithdrawalBlockingOrderQuery } from '@/common/ports/withdrawal-blocking-order.port';
 import {
   MAX_NICKNAME_LENGTH,
   MIN_NICKNAME_LENGTH,
@@ -20,10 +22,13 @@ import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types
 
 @Injectable()
 export class UserProfileService extends UserBaseService {
+  private blockingOrders: WithdrawalBlockingOrderQuery | undefined;
+
   constructor(
     accounts: AccountUserRepository,
     private readonly s3Service: S3Service,
     private readonly blacklist: TokenBlacklistService,
+    private readonly moduleRef: ModuleRef,
   ) {
     super(accounts);
   }
@@ -190,8 +195,15 @@ export class UserProfileService extends UserBaseService {
     });
   }
 
+  /** 진행 중 주문이나 송금이 끝나지 않은 환불이 있으면 거절한다 — 탈퇴하면 환불 계좌를 받을 수 없다. */
   async deleteMyAccount(accountId: bigint): Promise<boolean> {
     await this.requireActiveUser(accountId);
+    const blocking = await this.withdrawalBlocking().countByBuyer(accountId);
+    if (blocking > 0) {
+      throw new DomainException('ACCOUNT_HAS_ACTIVE_ORDERS', {
+        count: blocking,
+      });
+    }
 
     const now = new Date();
     const deletedNickname = `deleted_${accountId.toString()}`;
@@ -205,5 +217,14 @@ export class UserProfileService extends UserBaseService {
     await this.blacklist.blockStatus(accountId, 'DELETED', changedAt);
 
     return true;
+  }
+
+  /** OrderModule이 auth를 import해 반대 방향 import는 순환이다 — 첫 호출 때 컨테이너 전체에서 찾는다. */
+  private withdrawalBlocking(): WithdrawalBlockingOrderQuery {
+    this.blockingOrders ??= this.moduleRef.get<WithdrawalBlockingOrderQuery>(
+      WithdrawalBlockingOrderQuery,
+      { strict: false },
+    );
+    return this.blockingOrders;
   }
 }

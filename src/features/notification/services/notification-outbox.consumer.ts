@@ -15,13 +15,18 @@ import {
 import {
   buildOrderStatusNotification,
   buildRefundAccountRequestedNotification,
+  buildRefundCompletedNotification,
   buildReviewLikedNotification,
+  type NotificationPayload,
 } from '@/features/notification/services/notification-payloads.helper';
 import {
   ORDER_STATUS_CHANGED,
   parseOrderStatusChangedPayload,
+  parseRefundCompletedPayload,
   parseRefundRequestedPayload,
+  REFUND_COMPLETED,
   REFUND_REQUESTED,
+  type RefundEventPayload,
 } from '@/features/order';
 import {
   type OutboxConsumer,
@@ -38,6 +43,7 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
 @SubscribeOutbox(
   ORDER_STATUS_CHANGED,
   REFUND_REQUESTED,
+  REFUND_COMPLETED,
   REVIEW_LIKED,
   NOTIFICATION_BROADCAST_REQUESTED,
 )
@@ -56,6 +62,8 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
         return this.onOrderStatusChanged(event);
       case REFUND_REQUESTED:
         return this.onRefundRequested(event);
+      case REFUND_COMPLETED:
+        return this.onRefundCompleted(event);
       case REVIEW_LIKED:
         return this.onReviewLiked(event);
       case NOTIFICATION_BROADCAST_REQUESTED:
@@ -87,10 +95,33 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
 
   private async onRefundRequested(event: OutboxEvent): Promise<void> {
     const p = parseRefundRequestedPayload(event.payload);
+    // 취소와 함께 계좌를 넣었으면 요청할 게 없다(관리자 송금 알림만 간다)
+    if (p.accountSubmitted) return;
+    await this.saveRefundNotification(
+      event,
+      p,
+      buildRefundAccountRequestedNotification(p.orderNumber, p.amount),
+    );
+  }
+
+  private async onRefundCompleted(event: OutboxEvent): Promise<void> {
+    const p = parseRefundCompletedPayload(event.payload);
+    await this.saveRefundNotification(
+      event,
+      p,
+      buildRefundCompletedNotification(p.orderNumber, p.amount),
+    );
+  }
+
+  private async saveRefundNotification(
+    event: OutboxEvent,
+    p: RefundEventPayload,
+    payload: NotificationPayload,
+  ): Promise<void> {
     await this.repo.createFromEvent(event.eventId, [
       {
         account_id: parseId(p.buyerAccountId),
-        ...buildRefundAccountRequestedNotification(p.orderNumber, p.amount),
+        ...payload,
         order_id: parseId(p.orderId),
         store_id: p.storeId === null ? null : parseId(p.storeId),
         product_id: p.productId === null ? null : parseId(p.productId),

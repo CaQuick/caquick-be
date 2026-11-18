@@ -1,7 +1,9 @@
+import { WithdrawalBlockingOrderQuery } from '@/common/ports/withdrawal-blocking-order.port';
 import { AccountUserRepository } from '@/features/auth/repositories/account-user.repository';
 import { UserProfileMutationResolver } from '@/features/auth/resolvers/auth-user-profile-mutation.resolver';
 import { UserProfileQueryResolver } from '@/features/auth/resolvers/auth-user-profile-query.resolver';
 import { UserProfileService } from '@/features/auth/services/auth-user-profile.service';
+import { OrderWithdrawalBlockingRepository } from '@/features/order/repositories/order-withdrawal-blocking.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -34,6 +36,10 @@ describe('User Profile Resolvers (real DB)', () => {
         NOOP_BLACKLIST_PROVIDER,
         AccountUserRepository,
         { provide: S3Service, useValue: s3Service },
+        {
+          provide: WithdrawalBlockingOrderQuery,
+          useClass: OrderWithdrawalBlockingRepository,
+        },
       ],
     });
 

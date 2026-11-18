@@ -5,7 +5,14 @@ import {
 } from '@/common/utils/kst-time';
 import type { OrderPaymentPendingPayload } from '@/features/order/events/order-payment-pending.event';
 import type { PaymentDepositClaimedPayload } from '@/features/order/events/payment-deposit-claimed.event';
+import type { RefundEventPayload } from '@/features/order/events/refund-requested.event';
+import { RefundKind } from '@/generated/prisma/client';
 import type { AlertMessage } from '@/global/alerting';
+
+const REFUND_KIND_LABELS: Record<RefundKind, string> = {
+  [RefundKind.CANCEL]: '취소 환불',
+  [RefundKind.DEPOSIT_RETURN]: '입금 반환',
+};
 
 /** 관리자 웹 처리 화면 링크. 주소가 설정되지 않았으면 null(링크 없이 보낸다). */
 export function adminTaskLink(
@@ -63,5 +70,25 @@ export function buildDepositClaimedAlert(
     title: "입금 확인 요청('입금했어요')",
     key: `deposit-claim:${p.orderId}`,
     detail: depositLines(p, depositLink(baseUrl, p.orderId)),
+  };
+}
+
+/** 환불 계좌가 들어와 송금할 차례(취소와 함께 입력·나중에 입력·덮어쓰기). 계좌번호는 싣지 않는다. */
+export function buildRefundReadyAlert(
+  p: RefundEventPayload,
+  baseUrl: string | null,
+): AlertMessage {
+  const link = adminTaskLink(baseUrl, '/tasks/refunds', {
+    refundId: p.refundId,
+  });
+  return {
+    level: 'info',
+    title: '환불 송금 대기',
+    key: `refund-ready:${p.refundId}`,
+    detail: [
+      `주문 ${p.orderNumber}`,
+      `${p.amount.toLocaleString('ko-KR')}원 · ${REFUND_KIND_LABELS[p.kind]}`,
+      ...(link ? [link] : []),
+    ].join('\n'),
   };
 }

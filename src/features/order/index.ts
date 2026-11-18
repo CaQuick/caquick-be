@@ -18,9 +18,14 @@ export { ORDER_CANCEL_REASON_LABELS } from '@/features/order/constants/order-can
 // 환불 생성 이벤트 계약(outbox). 구매자 환불 계좌 요청 알림(notification)이 읽는다.
 export {
   REFUND_REQUESTED,
-  type RefundRequestedPayload,
+  type RefundEventPayload,
   parseRefundRequestedPayload,
 } from '@/features/order/events/refund-requested.event';
+// 환불 송금 완료 이벤트 계약(outbox). 구매자 환불 완료 알림(notification)이 읽는다.
+export {
+  REFUND_COMPLETED,
+  parseRefundCompletedPayload,
+} from '@/features/order/events/refund-completed.event';
 // 주문 접수 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
 export {
   ORDER_SUBMITTED,

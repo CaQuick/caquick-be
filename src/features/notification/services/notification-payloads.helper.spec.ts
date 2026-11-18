@@ -1,6 +1,7 @@
 import {
   buildOrderStatusNotification,
   buildRefundAccountRequestedNotification,
+  buildRefundCompletedNotification,
   buildReviewLikedNotification,
 } from '@/features/notification/services/notification-payloads.helper';
 import { ORDER_CANCEL_REASON_LABELS } from '@/features/order';
@@ -120,6 +121,17 @@ describe('notification-payloads.helper', () => {
         event: NotificationEvent.REFUND_ACCOUNT_REQUESTED,
         title: '환불계좌입력',
         body: 'ORD-2 30,000원을 돌려받을 계좌를 입력해 주세요.',
+      });
+    });
+  });
+
+  describe('buildRefundCompletedNotification', () => {
+    it('주문번호와 천 단위 금액으로 환불 완료를 알린다', () => {
+      expect(buildRefundCompletedNotification('ORD-3', 1_234_567)).toEqual({
+        type: NotificationType.ORDER_STATUS,
+        event: NotificationEvent.REFUND_COMPLETED,
+        title: '환불완료',
+        body: 'ORD-3 1,234,567원 환불이 완료되었어요.',
       });
     });
   });

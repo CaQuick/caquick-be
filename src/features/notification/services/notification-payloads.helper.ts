@@ -4,6 +4,7 @@ import {
   ORDER_STATUS_NOTIFICATION_BODIES,
   ORDER_STATUS_NOTIFICATION_TITLES,
   REFUND_ACCOUNT_REQUESTED_TITLE,
+  REFUND_COMPLETED_TITLE,
   REVIEW_LIKED_NOTIFICATION,
 } from '@/features/notification/constants/notification-messages';
 import {
@@ -94,6 +95,19 @@ export function buildRefundAccountRequestedNotification(
     event: NotificationEvent.REFUND_ACCOUNT_REQUESTED,
     title: REFUND_ACCOUNT_REQUESTED_TITLE,
     body: `${orderNumber} ${amount.toLocaleString('ko-KR')}원을 돌려받을 계좌를 입력해 주세요.`,
+  };
+}
+
+/** 환불 송금이 끝났다. */
+export function buildRefundCompletedNotification(
+  orderNumber: string,
+  amount: number,
+): NotificationPayload {
+  return {
+    type: NotificationType.ORDER_STATUS,
+    event: NotificationEvent.REFUND_COMPLETED,
+    title: REFUND_COMPLETED_TITLE,
+    body: `${orderNumber} ${amount.toLocaleString('ko-KR')}원 환불이 완료되었어요.`,
   };
 }
 

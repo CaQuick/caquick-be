@@ -11,8 +11,17 @@ import {
   PAYMENT_DEPOSIT_CLAIMED,
 } from '@/features/order/events/payment-deposit-claimed.event';
 import {
+  parseRefundAccountSubmittedPayload,
+  REFUND_ACCOUNT_SUBMITTED,
+} from '@/features/order/events/refund-account-submitted.event';
+import {
+  parseRefundRequestedPayload,
+  REFUND_REQUESTED,
+} from '@/features/order/events/refund-requested.event';
+import {
   buildDepositClaimedAlert,
   buildDepositPendingAlert,
+  buildRefundReadyAlert,
 } from '@/features/order/services/order-admin-alert-messages.helper';
 import {
   type OutboxConsumer,
@@ -26,7 +35,12 @@ import { AlertService, type AlertMessage } from '@/global/alerting';
  * 막고, 창이 지난 재전달은 같은 알림이 다시 갈 수 있다(진실은 adminTaskCounts·처리 대기 목록).
  */
 @Injectable()
-@SubscribeOutbox(ORDER_PAYMENT_PENDING, PAYMENT_DEPOSIT_CLAIMED)
+@SubscribeOutbox(
+  ORDER_PAYMENT_PENDING,
+  PAYMENT_DEPOSIT_CLAIMED,
+  REFUND_REQUESTED,
+  REFUND_ACCOUNT_SUBMITTED,
+)
 export class OrderAdminAlertConsumer implements OutboxConsumer {
   constructor(
     private readonly alerts: AlertService,
@@ -34,10 +48,11 @@ export class OrderAdminAlertConsumer implements OutboxConsumer {
   ) {}
 
   async handle(event: OutboxEvent): Promise<void> {
-    await this.alerts.notify(this.messageOf(event));
+    const message = this.messageOf(event);
+    if (message) await this.alerts.notify(message);
   }
 
-  private messageOf(event: OutboxEvent): AlertMessage {
+  private messageOf(event: OutboxEvent): AlertMessage | null {
     const { baseUrl } = this.config.getOrThrow<AdminWebConfig>('adminWeb');
     switch (event.eventType) {
       case ORDER_PAYMENT_PENDING:
@@ -48,6 +63,16 @@ export class OrderAdminAlertConsumer implements OutboxConsumer {
       case PAYMENT_DEPOSIT_CLAIMED:
         return buildDepositClaimedAlert(
           parsePaymentDepositClaimedPayload(event.payload),
+          baseUrl,
+        );
+      case REFUND_REQUESTED: {
+        const p = parseRefundRequestedPayload(event.payload);
+        // 계좌가 아직 없으면 구매자 계좌 요청 알림만 간다(알림 소비자)
+        return p.accountSubmitted ? buildRefundReadyAlert(p, baseUrl) : null;
+      }
+      case REFUND_ACCOUNT_SUBMITTED:
+        return buildRefundReadyAlert(
+          parseRefundAccountSubmittedPayload(event.payload),
           baseUrl,
         );
       default:

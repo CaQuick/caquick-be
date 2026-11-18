@@ -44,7 +44,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 // admin 접두 Query 전수에 nullable 필드를 전부 null로 채워 실제 앱(파이프·필터·가드·실DB)으로 보낸다.
 
 const FEATURES_DIR = join(__dirname, '..', 'features');
-const ADMIN_QUERY_COUNT = 18;
+const ADMIN_QUERY_COUNT = 20;
 
 /** 필수 스칼라의 최소 유효값. 새 스칼라가 필수 필드로 오면 표에 없다고 던져 결정을 강제한다 */
 const MINIMAL_SCALARS: Record<string, unknown> = {

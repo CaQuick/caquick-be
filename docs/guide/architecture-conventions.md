@@ -12,7 +12,7 @@
 
 - (a) 2번째 구현이 현실적으로 예상됨
 - (b) 외부 부수효과 어댑터(OIDC 클라이언트, 경보 전송 함수, 시계, ID 생성기)라 테스트에서 stub이 필요
-- (c) 여러 feature가 광범위하게 주입하는 cross-cutting 포트 — `audit-log`(`AUDIT_LOG_REPOSITORY`), `store`의 `CatalogQuery`(conversation이 묻는 읽기 포트), `order`의 예약 수량 포트
+- (c) 여러 feature가 광범위하게 주입하는 cross-cutting 포트 — `audit-log`(`AUDIT_LOG_REPOSITORY`), `store`의 `CatalogQuery`(conversation이 묻는 읽기 포트), `order`의 예약 수량 포트, `order`의 탈퇴 차단 포트(`WithdrawalBlockingOrderQuery`, auth가 첫 호출 때 `ModuleRef`로 찾는 읽기 포트, `module-wiring.spec`이 역할별 resolve를 본다)
 
 **왜.** NestJS DI는 클래스 토큰도 `Test.overrideProvider(Class)`로 바꿀 수 있어 **테스트 용이성은 토큰 도입 근거가 아니다**. 전 repository에 1:1 인터페이스를 강제하면 lockstep 유지 비용만 늘고 얻는 게 없다(YAGNI, speculative generality).
 

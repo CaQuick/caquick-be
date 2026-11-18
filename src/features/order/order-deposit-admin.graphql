@@ -132,6 +132,14 @@ type AdminTaskCounts {
   입금 확인을 기다리는 전체 주문 수(adminPendingPayments의 totalCount, '입금했어요' 포함).
   """
   pendingPayments: Int!
+  """
+  구매자의 환불 계좌 입력을 기다리는 환불 수(adminRefunds status=AWAITING_ACCOUNT의 totalCount).
+  """
+  refundsAwaitingAccount: Int!
+  """
+  계좌가 들어와 송금을 기다리는 환불 수(adminRefunds status=AWAITING_TRANSFER의 totalCount).
+  """
+  refundsAwaitingTransfer: Int!
 }
 
 """

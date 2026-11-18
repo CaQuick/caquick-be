@@ -9,15 +9,19 @@ import {
   parsePaymentDepositClaimedPayload,
   PAYMENT_DEPOSIT_CLAIMED,
 } from '@/features/order/events/payment-deposit-claimed.event';
+import { REFUND_ACCOUNT_SUBMITTED } from '@/features/order/events/refund-account-submitted.event';
 import { REFUND_REQUESTED } from '@/features/order/events/refund-requested.event';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
+import { AccountCipher } from '@/global/crypto/account-cipher.service';
 import { PUB_SUB } from '@/global/pubsub';
+import { createTestAccountCipher } from '@/test/account-cipher';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -26,6 +30,7 @@ import {
   createOrderItem,
   createPayment,
   createProduct,
+  createRefund,
   createReview,
   createStore,
   createThreeDOrderItemCustom,
@@ -41,6 +46,7 @@ describe('UserOrderService (real DB)', () => {
   let clock: ClockService;
   let prisma: PrismaClient;
   let pubSub: PubSub;
+  let cipher: AccountCipher;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -51,6 +57,8 @@ describe('UserOrderService (real DB)', () => {
         OrderTransitionRepository,
         OrderCancelPolicy,
         OrderEventsService,
+        RefundRepository,
+        { provide: AccountCipher, useValue: createTestAccountCipher() },
         { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
@@ -60,6 +68,7 @@ describe('UserOrderService (real DB)', () => {
     service = module.get(UserOrderService);
     clock = module.get(ClockService);
     pubSub = module.get(PUB_SUB);
+    cipher = module.get(AccountCipher);
     prisma = p;
   });
 
@@ -1030,6 +1039,265 @@ describe('UserOrderService (real DB)', () => {
 
       expect(detail.canCancel).toBe(canCancel);
       expect(detail.cancellation).toBeNull();
+    });
+  });
+
+  describe('환불 계좌', () => {
+    const NOW = new Date('2026-09-16T07:30:00.000Z');
+    const ACCOUNT = {
+      bankCode: '088',
+      accountHolder: ' 홍길동 ',
+      accountNumber: '110-123-456789',
+    };
+
+    async function submittedOrder(accountId: bigint) {
+      const order = await createOrder(prisma, {
+        account_id: accountId,
+        status: 'SUBMITTED',
+      });
+      await createOrderItem(prisma, { order_id: order.id });
+      await createPayment(prisma, {
+        order_id: order.id,
+        status: 'CONFIRMED',
+        confirmed_at: NOW,
+      });
+      return order;
+    }
+
+    async function expectAccount(refundId: bigint, accountNumber: string) {
+      const row = await prisma.refund.findUniqueOrThrow({
+        where: { id: refundId },
+      });
+      expect(cipher.decrypt(row.account_number_enc!, 'refund-account')).toBe(
+        accountNumber,
+      );
+      return row;
+    }
+
+    beforeEach(() => {
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+    });
+
+    it('취소와 함께 계좌를 받으면 환불이 바로 송금 대기가 되고 이벤트에 계좌 입력을 싣는다', async () => {
+      const account = await setupUser();
+      const order = await submittedOrder(account.id);
+
+      const result = await service.cancelMyOrder(account.id, {
+        orderId: order.id.toString(),
+        refundAccount: ACCOUNT,
+      });
+
+      expect(result.cancellation).toMatchObject({
+        refundStatus: 'AWAITING_TRANSFER',
+      });
+      expect(result.refunds).toEqual([
+        expect.objectContaining({
+          kind: 'CANCEL',
+          status: 'AWAITING_TRANSFER',
+          bank: { code: '088', name: expect.any(String) },
+          accountHolder: '홍길동',
+          accountNumberMasked: '****6789',
+          accountSubmittedAt: NOW,
+        }),
+      ]);
+      const refund = await expectAccount(
+        BigInt(result.refunds[0].id),
+        '110123456789',
+      );
+      expect(refund.account_number_last4).toBe('6789');
+      const requested = await prisma.outbox.findFirstOrThrow({
+        where: { event_type: REFUND_REQUESTED },
+      });
+      expect(requested.payload_json).toMatchObject({ accountSubmitted: true });
+    });
+
+    it('환불이 없는 취소(입금 대기)에 보낸 계좌는 버린다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PENDING_PAYMENT',
+      });
+      await createPayment(prisma, { order_id: order.id });
+
+      const result = await service.cancelMyOrder(account.id, {
+        orderId: order.id.toString(),
+        refundAccount: ACCOUNT,
+      });
+
+      expect(result).toMatchObject({ status: 'CANCELED', refunds: [] });
+      expect(await prisma.refund.count()).toBe(0);
+    });
+
+    it('계좌 형식이 틀리면 취소하지 않는다', async () => {
+      const account = await setupUser();
+      const order = await submittedOrder(account.id);
+
+      await expect(
+        service.cancelMyOrder(account.id, {
+          orderId: order.id.toString(),
+          refundAccount: { ...ACCOUNT, bankCode: '999' },
+        }),
+      ).rejects.toThrowDomain('INVALID_BANK_CODE');
+      expect(
+        (await prisma.order.findUniqueOrThrow({ where: { id: order.id } }))
+          .status,
+      ).toBe('SUBMITTED');
+    });
+
+    it('계좌 입력 대기 환불에 계좌를 넣으면 송금 대기가 되고, 완료 전에는 덮어쓸 수 있다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'CANCELED',
+      });
+      const refund = await createRefund(prisma, { order_id: order.id });
+
+      const first = await service.submitMyRefundAccount(account.id, {
+        refundId: refund.id.toString(),
+        ...ACCOUNT,
+      });
+      expect(first.refunds).toEqual([
+        expect.objectContaining({
+          id: refund.id.toString(),
+          status: 'AWAITING_TRANSFER',
+          accountNumberMasked: '****6789',
+          accountSubmittedAt: NOW,
+        }),
+      ]);
+
+      const later = new Date(NOW.getTime() + 60_000);
+      jest.spyOn(clock, 'now').mockReturnValue(later);
+      const second = await service.submitMyRefundAccount(account.id, {
+        refundId: refund.id.toString(),
+        bankCode: '004',
+        accountHolder: '김철수',
+        accountNumber: '12345678',
+      });
+
+      expect(second.refunds[0]).toMatchObject({
+        status: 'AWAITING_TRANSFER',
+        bank: { code: '004' },
+        accountHolder: '김철수',
+        accountNumberMasked: '****5678',
+        accountSubmittedAt: later,
+      });
+      await expectAccount(refund.id, '12345678');
+      const events = await prisma.outbox.findMany({ orderBy: { id: 'asc' } });
+      expect(events.map((e) => e.event_type)).toEqual([
+        REFUND_ACCOUNT_SUBMITTED,
+        REFUND_ACCOUNT_SUBMITTED,
+      ]);
+      expect(events[1].payload_json).toMatchObject({
+        refundId: refund.id.toString(),
+        orderNumber: order.order_number,
+        buyerAccountId: account.id.toString(),
+        amount: refund.amount,
+      });
+    });
+
+    it('송금이 끝난 환불은 REFUND_ALREADY_COMPLETED로 거절하고 계좌를 바꾸지 않는다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'CANCELED',
+      });
+      const refund = await createRefund(prisma, {
+        order_id: order.id,
+        status: 'COMPLETED',
+      });
+
+      await expect(
+        service.submitMyRefundAccount(account.id, {
+          refundId: refund.id.toString(),
+          ...ACCOUNT,
+        }),
+      ).rejects.toThrowDomain('REFUND_ALREADY_COMPLETED');
+      await expect(
+        prisma.refund.findUniqueOrThrow({ where: { id: refund.id } }),
+      ).resolves.toMatchObject({ account_number_last4: '5678' });
+      expect(await prisma.outbox.count()).toBe(0);
+    });
+
+    it('다른 계정·삭제된 주문의 환불과 없는 환불은 REFUND_NOT_FOUND, 계좌번호 형식 오류는 INVALID_ACCOUNT_NUMBER다', async () => {
+      const account = await setupUser();
+      const other = await setupUser();
+      const othersRefund = await createRefund(prisma, {
+        order_id: (
+          await createOrder(prisma, {
+            account_id: other.id,
+            status: 'CANCELED',
+          })
+        ).id,
+      });
+      const deletedRefund = await createRefund(prisma, {
+        order_id: (
+          await createOrder(prisma, {
+            account_id: account.id,
+            status: 'CANCELED',
+            deleted_at: NOW,
+          })
+        ).id,
+      });
+      const mine = await createRefund(prisma, {
+        order_id: (
+          await createOrder(prisma, {
+            account_id: account.id,
+            status: 'CANCELED',
+          })
+        ).id,
+      });
+
+      for (const id of [othersRefund.id, deletedRefund.id, 999_999n]) {
+        await expect(
+          service.submitMyRefundAccount(account.id, {
+            refundId: id.toString(),
+            ...ACCOUNT,
+          }),
+        ).rejects.toThrowDomain('REFUND_NOT_FOUND');
+      }
+      await expect(
+        service.submitMyRefundAccount(account.id, {
+          refundId: mine.id.toString(),
+          ...ACCOUNT,
+          accountNumber: '1234-567',
+        }),
+      ).rejects.toThrowDomain('INVALID_ACCOUNT_NUMBER');
+      expect(
+        await prisma.refund.count({ where: { status: 'AWAITING_ACCOUNT' } }),
+      ).toBe(3);
+    });
+
+    it('상세 refunds는 취소 환불과 입금 반환을 생긴 순서대로 싣는다', async () => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'CANCELED',
+      });
+      const cancel = await createRefund(prisma, { order_id: order.id });
+      const deposit = await createRefund(prisma, {
+        order_id: order.id,
+        kind: 'DEPOSIT_RETURN',
+        amount: 5_000,
+        status: 'COMPLETED',
+      });
+
+      const detail = await service.getMyOrder(account.id, order.id);
+
+      expect(detail.refunds).toEqual([
+        expect.objectContaining({
+          id: cancel.id.toString(),
+          kind: 'CANCEL',
+          status: 'AWAITING_ACCOUNT',
+          bank: null,
+          accountNumberMasked: null,
+        }),
+        expect.objectContaining({
+          id: deposit.id.toString(),
+          kind: 'DEPOSIT_RETURN',
+          amount: 5_000,
+          status: 'COMPLETED',
+        }),
+      ]);
     });
   });
 });

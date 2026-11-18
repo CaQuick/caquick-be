@@ -6,12 +6,15 @@ import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { UserOrderMutationResolver } from '@/features/order/resolvers/order-my-mutation.resolver';
 import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { AccountCipher } from '@/global/crypto/account-cipher.service';
 import { PUB_SUB } from '@/global/pubsub';
+import { createTestAccountCipher } from '@/test/account-cipher';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -20,6 +23,7 @@ import {
   createOrderItem,
   createPayment,
   createProduct,
+  createRefund,
   createStore,
   createUserProfile,
 } from '@/test/factories';
@@ -42,6 +46,8 @@ describe('User Order Resolver (real DB)', () => {
         OrderTransitionRepository,
         OrderCancelPolicy,
         OrderEventsService,
+        RefundRepository,
+        { provide: AccountCipher, useValue: createTestAccountCipher() },
         { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
@@ -159,5 +165,33 @@ describe('User Order Resolver (real DB)', () => {
         refundAmount: 0,
       },
     });
+  });
+
+  it('Mutation.submitMyRefundAccount: ID를 파싱해 계좌를 넣고 상세(송금 대기·마스킹)를 반환한다', async () => {
+    const account = await createAccount(prisma, { account_type: 'USER' });
+    await createUserProfile(prisma, { account_id: account.id });
+    const order = await createOrder(prisma, {
+      account_id: account.id,
+      status: 'CANCELED',
+    });
+    const refund = await createRefund(prisma, { order_id: order.id });
+
+    const result = await mutationResolver.submitMyRefundAccount(
+      { accountId: account.id.toString() },
+      {
+        refundId: refund.id.toString(),
+        bankCode: '004',
+        accountHolder: '홍길동',
+        accountNumber: '12345678901',
+      },
+    );
+
+    expect(result.refunds).toEqual([
+      expect.objectContaining({
+        id: refund.id.toString(),
+        status: 'AWAITING_TRANSFER',
+        accountNumberMasked: '****8901',
+      }),
+    ]);
   });
 });

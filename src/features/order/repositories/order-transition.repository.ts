@@ -21,6 +21,10 @@ import {
   adminOrderInclude,
   type AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
+import {
+  refundAccountColumns,
+  type RefundAccountData,
+} from '@/features/order/repositories/refund.repository';
 import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
@@ -69,6 +73,8 @@ export interface CancelOrderArgs {
   actorAccountId: bigint | null;
   scope: OrderCancelScope;
   note: string | null;
+  /** 취소와 함께 받은 환불 계좌. 환불이 생기면 바로 송금 대기로 만들고, 환불이 없으면 버린다. */
+  refundAccount?: RefundAccountData | null;
   now: Date;
   /** 잠금 시점 재료로 사유·사정·환불액을 정한다. 던지면 tx가 롤백되고 예외가 그대로 나간다. */
   decide: (state: OrderCancelState) => OrderCancelDecision;
@@ -317,6 +323,9 @@ export class OrderTransitionRepository {
               cancel_order_id: locked.id,
               amount: decision.refundAmount,
               requested_at: args.now,
+              ...(args.refundAccount
+                ? refundAccountColumns(args.refundAccount, args.now)
+                : {}),
             },
           })
         : null;
@@ -362,6 +371,7 @@ export class OrderTransitionRepository {
           refundId: refund.id,
           kind: refund.kind,
           amount: refund.amount,
+          accountSubmitted: refund.account_submitted_at !== null,
         }),
       );
     }

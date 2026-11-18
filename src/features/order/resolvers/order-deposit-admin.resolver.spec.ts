@@ -7,6 +7,7 @@ import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { AdminDepositMutationResolver } from '@/features/order/resolvers/order-deposit-admin-mutation.resolver';
 import { AdminDepositQueryResolver } from '@/features/order/resolvers/order-deposit-admin-query.resolver';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
@@ -39,6 +40,7 @@ describe('Admin Deposit Resolvers (real DB)', () => {
         AccountAdminRepository,
         PaymentRepository,
         OrderTransitionRepository,
+        RefundRepository,
         OrderEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -74,6 +76,8 @@ describe('Admin Deposit Resolvers (real DB)', () => {
     await expect(queryResolver.adminTaskCounts(user)).resolves.toEqual({
       claimedPayments: 0,
       pendingPayments: 1,
+      refundsAwaitingAccount: 0,
+      refundsAwaitingTransfer: 0,
     });
 
     const confirmed = await mutationResolver.adminConfirmPayment(user, {

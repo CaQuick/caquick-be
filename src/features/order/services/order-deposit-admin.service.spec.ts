@@ -15,6 +15,7 @@ import {
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
+import { RefundRepository } from '@/features/order/repositories/refund.repository';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { OutboxDispatcherService } from '@/features/outbox';
@@ -27,6 +28,7 @@ import {
   createOrder,
   createOrderItem,
   createPayment,
+  createRefund,
   createStore,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
@@ -58,6 +60,7 @@ describe('AdminDepositService (real DB)', () => {
         PaymentRepository,
         OrderTransitionRepository,
         OrderRepository,
+        RefundRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         OrderEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
@@ -573,15 +576,21 @@ describe('AdminDepositService (real DB)', () => {
       },
     );
 
-    it("처리 대기 건수는 '입금했어요'와 전체 입금 대기를 센다", async () => {
+    it("처리 대기 건수는 '입금했어요'·전체 입금 대기와 환불 상태별(종류 무관)을 센다", async () => {
       const adminId = await admin();
       await pendingOrder({ claimedAt: NOW });
       await pendingOrder();
       await pendingOrder({ status: 'SUBMITTED', paymentStatus: 'CONFIRMED' });
+      await createRefund(prisma);
+      await createRefund(prisma, { kind: 'DEPOSIT_RETURN' });
+      await createRefund(prisma, { status: 'AWAITING_TRANSFER' });
+      await createRefund(prisma, { status: 'COMPLETED' });
 
       await expect(service.adminTaskCounts(adminId)).resolves.toEqual({
         claimedPayments: 1,
         pendingPayments: 2,
+        refundsAwaitingAccount: 2,
+        refundsAwaitingTransfer: 1,
       });
     });
   });
