@@ -320,6 +320,35 @@ describe('AdminOrderService (real DB)', () => {
       }
     });
 
+    it('삭제된 주문과 이 매장 품목이 삭제된 주문은 세지 않는다', async () => {
+      const store = await createStore(prisma);
+      await orderWithItem({ status: 'SUBMITTED', storeId: store.id });
+      const deletedOrder = await orderWithItem({
+        status: 'CONFIRMED',
+        storeId: store.id,
+      });
+      await prisma.order.update({
+        where: { id: deletedOrder.order.id },
+        data: { deleted_at: new Date() },
+      });
+      const deletedItem = await orderWithItem({
+        status: 'MADE',
+        storeId: store.id,
+      });
+      await prisma.orderItem.update({
+        where: { id: deletedItem.item.id },
+        data: { deleted_at: new Date() },
+      });
+
+      expect(
+        await service.adminStoreInProgressOrderSummary(await admin(), store.id),
+      ).toEqual({
+        storeId: store.id.toString(),
+        totalCount: 1,
+        byStatus: [{ status: 'SUBMITTED', count: 1 }],
+      });
+    });
+
     it('관리자가 아니면 403', async () => {
       const user = await createAccount(prisma, { account_type: 'USER' });
       await expect(

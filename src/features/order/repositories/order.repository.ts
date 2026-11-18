@@ -712,12 +712,17 @@ export class OrderRepository {
   }): Promise<{ orderCount: number; salesAmount: number }> {
     const result = await this.prisma.order.aggregate({
       where: {
-        ...sellerVisibleWhere,
+        // 접수 기준 범위가 노출 조건의 submitted_at 키를 덮어쓰지 않도록 AND로 묶는다
+        AND: [
+          sellerVisibleWhere,
+          {
+            [args.basis === 'pickup' ? 'pickup_at' : 'submitted_at']: {
+              gte: args.from,
+              lt: args.to,
+            },
+          },
+        ],
         status: { not: 'CANCELED' },
-        [args.basis === 'pickup' ? 'pickup_at' : 'submitted_at']: {
-          gte: args.from,
-          lt: args.to,
-        },
         items: { some: { store_id: args.storeId, ...activeWhere } },
       },
       _count: { _all: true },
