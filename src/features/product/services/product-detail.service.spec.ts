@@ -9,6 +9,8 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createCustomTemplate,
+  createCustomTextToken,
   createOrderItem,
   createProduct,
   createReview,
@@ -168,6 +170,94 @@ describe('ProductDetailService (real DB)', () => {
     ]);
     expect(flavor.items[1].priceDelta).toBe(2000);
   });
+
+  it('슬롯형 상품은 꾸미기 설정(revision·바탕·자유 편집·삭제 제외 문구 자리 sortOrder 순)을 준다', async () => {
+    const product = await createProduct(prisma);
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { custom_mode: 'SLOT' },
+    });
+    const template = await createCustomTemplate(prisma, {
+      product_id: product.id,
+      base_image_url: 'https://i.example/base.png',
+      free_edit_enabled: true,
+      revision: 3,
+    });
+    const later = await createCustomTextToken(prisma, {
+      template_id: template.id,
+      label: '보내는 사람',
+      sort_order: 2,
+    });
+    const first = await createCustomTextToken(prisma, {
+      template_id: template.id,
+      label: '받는 사람',
+      default_text: '엄마',
+      max_length: 10,
+      is_required: false,
+      pos_x: 0,
+      pos_y: 500,
+      width: 10000,
+      height: 2000,
+      text_color: '#FF0000',
+      text_align: 'LEFT',
+      sort_order: 1,
+    });
+    await createCustomTextToken(prisma, {
+      template_id: template.id,
+      sort_order: 0,
+      deleted_at: new Date(),
+    });
+
+    const result = await service.productDetail(product.id.toString());
+
+    expect(result.customMode).toBe('SLOT');
+    expect(result.customTemplate).toMatchObject({
+      revision: 3,
+      baseImageUrl: 'https://i.example/base.png',
+      freeEditEnabled: true,
+    });
+    expect(result.customTemplate?.slots).toEqual([
+      {
+        id: first.id.toString(),
+        label: '받는 사람',
+        defaultText: '엄마',
+        maxLength: 10,
+        isRequired: false,
+        posX: 0,
+        posY: 500,
+        width: 10000,
+        height: 2000,
+        textColor: '#FF0000',
+        textAlign: 'LEFT',
+        sortOrder: 1,
+      },
+      expect.objectContaining({ id: later.id.toString() }),
+    ]);
+  });
+
+  it.each([
+    ['커스텀 없음', 'NONE', false],
+    ['3D', 'THREE_D', false],
+    ['템플릿이 삭제된 슬롯형', 'SLOT', true],
+  ] as const)(
+    '%s 상품은 템플릿이 있어도 customTemplate이 null이다',
+    async (_label, mode, deleted) => {
+      const product = await createProduct(prisma);
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { custom_mode: mode },
+      });
+      await createCustomTemplate(prisma, {
+        product_id: product.id,
+        deleted_at: deleted ? new Date() : null,
+      });
+
+      const result = await service.productDetail(product.id.toString());
+
+      expect(result.customMode).toBe(mode);
+      expect(result.customTemplate).toBeNull();
+    },
+  );
 
   it('리뷰 수를 집계하고 soft-delete 리뷰는 제외한다', async () => {
     const product = await createProduct(prisma);

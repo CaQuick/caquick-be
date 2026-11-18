@@ -331,10 +331,6 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '옵션 그룹의 선택 규칙을 충족하지 않습니다.',
   },
-  OPTION_CUSTOMIZATION_REQUIRED: {
-    status: HttpStatus.BAD_REQUEST,
-    message: '커스텀 정보가 필요한 옵션은 아직 주문할 수 없습니다.',
-  },
   PICKUP_NOT_AVAILABLE: {
     status: HttpStatus.BAD_REQUEST,
     message: '선택한 픽업 일시는 예약할 수 없습니다.',
@@ -465,6 +461,27 @@ export const ERROR_CATALOG = {
   CUSTOM_TEXT_TOKEN_KEY_TAKEN: {
     status: HttpStatus.CONFLICT,
     message: '이 템플릿에 이미 같은 키의 커스텀 텍스트 토큰이 있습니다.',
+  },
+  CUSTOM_PRODUCT_NOT_READY: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '커스텀 설정이 아직 끝나지 않았어요.',
+  },
+  CUSTOM_TOKEN_KEY_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리 키는 영문 소문자와 숫자 1~60자여야 해요.',
+  },
+  CUSTOM_TEXT_DEFAULT_TOO_LONG: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label, max }) =>
+      `'${label}'의 기본 문구는 ${max}자 이하여야 해요.`,
+  },
+  CUSTOM_AREA_OUT_OF_BOUNDS: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리가 바탕 이미지 밖으로 나갔어요.',
+  },
+  INVALID_COLOR_FORMAT: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '글자색은 #RRGGBB 형식으로 입력해 주세요.',
   },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,

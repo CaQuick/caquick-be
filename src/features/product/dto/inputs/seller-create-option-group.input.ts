@@ -27,14 +27,6 @@ export class SellerCreateOptionGroupInput {
   maxSelect?: number;
 
   @IsOptional()
-  @IsBoolean()
-  optionRequiresDescription?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  optionRequiresImage?: boolean;
-
-  @IsOptional()
   @IsInt()
   sortOrder?: number;
 

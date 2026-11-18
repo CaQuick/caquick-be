@@ -6,6 +6,7 @@ import type {
   BannerLinkType,
   BannerPlacement,
   CategoryType,
+  CustomMode,
 } from '@/generated/prisma/client';
 
 export interface AdminBannerOutput {
@@ -36,7 +37,8 @@ export interface AdminProductOutput {
   regularPrice: number;
   salePrice: number | null;
   currency: string;
-  baseDesignImageUrl: string | null;
+  customMode: CustomMode;
+  thumbnailUrl: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

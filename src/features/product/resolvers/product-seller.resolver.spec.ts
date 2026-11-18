@@ -10,7 +10,6 @@ import type { SellerReorderProductCustomTextTokensInput } from '@/features/produ
 import type { SellerReorderProductImagesInput } from '@/features/product/dto/inputs/seller-reorder-product-images.input';
 import type { SellerSetProductActiveInput } from '@/features/product/dto/inputs/seller-set-product-active.input';
 import type { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
-import type { SellerSetProductCustomTemplateActiveInput } from '@/features/product/dto/inputs/seller-set-product-custom-template-active.input';
 import type { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
 import type { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
 import type { SellerUpdateOptionItemInput } from '@/features/product/dto/inputs/seller-update-option-item.input';
@@ -379,28 +378,18 @@ describe('Seller Product Resolvers (real DB)', () => {
           BigInt(auth.accountId),
           'tpl.png',
         ),
-        isActive: true,
       };
       const template = await mutationResolver.sellerUpsertProductCustomTemplate(
         auth,
         upsertTemplateInput,
       );
-      const setTemplateActiveInput: SellerSetProductCustomTemplateActiveInput =
-        {
-          templateId: template.id,
-          isActive: false,
-        };
-      const templateActive =
-        await mutationResolver.sellerSetProductCustomTemplateActive(
-          auth,
-          setTemplateActiveInput,
-        );
-      expect(templateActive.isActive).toBe(false);
+      const area = { posX: 0, posY: 0, width: 5000, height: 1000 };
 
       const upsertToken1: SellerUpsertProductCustomTextTokenInput = {
         templateId: template.id,
         tokenKey: 'name',
         defaultText: '기본',
+        ...area,
       };
       const token1 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
@@ -410,11 +399,19 @@ describe('Seller Product Resolvers (real DB)', () => {
         templateId: template.id,
         tokenKey: 'age',
         defaultText: '10',
+        ...area,
       };
       const token2 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
         upsertToken2,
       );
+
+      const slotProduct = await mutationResolver.sellerSetProductCustomMode(
+        auth,
+        productId,
+        'SLOT',
+      );
+      expect(slotProduct.customMode).toBe('SLOT');
 
       const reorderTokensInput: SellerReorderProductCustomTextTokensInput = {
         templateId: template.id,

@@ -5,7 +5,12 @@ import { AuditActionType, AuditTargetType } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createProduct, createStore } from '@/test/factories';
+import {
+  createCustomTemplate,
+  createCustomTextToken,
+  createProduct,
+  createStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 
 /** repository가 조작과 같은 트랜잭션에 남기는 감사 항목 — 내용 자체는 서비스 spec이 본다. */
@@ -68,12 +73,7 @@ describe('ProductRepository (real DB)', () => {
   }
 
   async function createTemplate(productId: bigint) {
-    return prisma.productCustomTemplate.create({
-      data: {
-        product_id: productId,
-        base_image_url: 'https://i.example/base.png',
-      },
-    });
+    return createCustomTemplate(prisma, { product_id: productId });
   }
 
   describe('listProductsByStore', () => {
@@ -218,9 +218,7 @@ describe('ProductRepository (real DB)', () => {
       const group = await createOptionGroup(product.id);
       await createOptionItem(group.id);
       const tpl = await createTemplate(product.id);
-      await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'K', default_text: 'V' },
-      });
+      await createCustomTextToken(prisma, { template_id: tpl.id });
 
       const rows = await repo.listProductsByStore({
         storeId: store.id,
@@ -728,115 +726,192 @@ describe('ProductRepository (real DB)', () => {
   });
 
   describe('Custom template / text token', () => {
-    it('upsertProductCustomTemplate: 동일 product_id 재호출 시 같은 row 갱신', async () => {
-      const store = await createStore(prisma);
-      const product = await createProduct(prisma, { store_id: store.id });
+    it('upsertProductCustomTemplate: 같은 상품이면 같은 행을 갱신하고, 자유 편집을 생략하면 새 템플릿은 꺼짐·기존은 유지다', async () => {
+      const product = await createProduct(prisma);
 
       const first = await repo.upsertProductCustomTemplate(
+        { productId: product.id, baseImageUrl: 'https://i.example/a.png' },
+        () => AUDIT_ENTRY,
+      );
+      expect(first.free_edit_enabled).toBe(false);
+      const enabled = await repo.upsertProductCustomTemplate(
         {
           productId: product.id,
           baseImageUrl: 'https://i.example/a.png',
-          isActive: true,
+          freeEditEnabled: true,
         },
         () => AUDIT_ENTRY,
       );
-      const second = await repo.upsertProductCustomTemplate(
+      const kept = await repo.upsertProductCustomTemplate(
+        { productId: product.id, baseImageUrl: 'https://i.example/b.png' },
+        () => AUDIT_ENTRY,
+      );
+
+      expect([enabled.id, kept.id]).toEqual([first.id, first.id]);
+      expect(kept.base_image_url).toBe('https://i.example/b.png');
+      expect(kept.free_edit_enabled).toBe(true);
+    });
+
+    it('템플릿 갱신·슬롯 등록·수정·순서 변경·삭제마다 revision이 1씩 오른다', async () => {
+      const product = await createProduct(prisma);
+      const revision = async () =>
+        (
+          await prisma.productCustomTemplate.findUniqueOrThrow({
+            where: { product_id: product.id },
+          })
+        ).revision;
+      const tpl = await repo.upsertProductCustomTemplate(
+        { productId: product.id, baseImageUrl: 'https://i.example/a.png' },
+        () => AUDIT_ENTRY,
+      );
+      const seen = [await revision()];
+      const slot = {
+        templateId: tpl.id,
+        label: '이름',
+        defaultText: '가',
+        maxLength: 20,
+        sortOrder: 0,
+        isRequired: true,
+        posX: 0,
+        posY: 0,
+        width: 100,
+        height: 100,
+      };
+
+      await repo.upsertProductCustomTemplate(
         {
           productId: product.id,
-          baseImageUrl: 'https://i.example/b.png',
-          isActive: false,
+          baseImageUrl: 'https://i.example/a.png',
+          freeEditEnabled: true,
         },
         () => AUDIT_ENTRY,
       );
-      expect(second.id).toBe(first.id);
-      expect(second.base_image_url).toBe('https://i.example/b.png');
-      expect(second.is_active).toBe(false);
+      seen.push(await revision());
+      const a = await repo.upsertCustomTextToken(
+        { ...slot, tokenKey: 'a' },
+        () => AUDIT_ENTRY,
+      );
+      seen.push(await revision());
+      const b = await repo.upsertCustomTextToken(
+        { ...slot, tokenKey: 'b' },
+        () => AUDIT_ENTRY,
+      );
+      seen.push(await revision());
+      await repo.upsertCustomTextToken(
+        { ...slot, tokenId: a.id, tokenKey: 'a', defaultText: '나' },
+        () => AUDIT_ENTRY,
+      );
+      seen.push(await revision());
+      await repo.reorderCustomTextTokens(
+        { templateId: tpl.id, tokenIds: [b.id, a.id] },
+        () => AUDIT_ENTRY,
+      );
+      seen.push(await revision());
+      await repo.softDeleteCustomTextToken(a.id, () => AUDIT_ENTRY);
+      seen.push(await revision());
+
+      expect(seen).toEqual([1, 2, 3, 4, 5, 6, 7]);
     });
 
-    it('findCustomTemplateById는 soft-delete된 텍스트 토큰을 제외한다', async () => {
+    it('슬롯 변경이 실패하면 revision도 오르지 않는다(같은 tx)', async () => {
+      const product = await createProduct(prisma);
+      const tpl = await createTemplate(product.id);
+      await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        token_key: 'taken',
+      });
+
+      await expect(
+        repo.upsertCustomTextToken(
+          {
+            templateId: tpl.id,
+            tokenKey: 'taken',
+            label: '이름',
+            defaultText: '가',
+            maxLength: 20,
+            sortOrder: 0,
+            isRequired: true,
+            posX: 0,
+            posY: 0,
+            width: 100,
+            height: 100,
+          },
+          () => AUDIT_ENTRY,
+        ),
+      ).rejects.toThrowDomain('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
+
+      const after = await prisma.productCustomTemplate.findUniqueOrThrow({
+        where: { id: tpl.id },
+      });
+      expect(after.revision).toBe(1);
+    });
+
+    it('findCustomTemplateById는 soft-delete된 텍스트 토큰을 제외하고 소속 매장을 담는다', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
       const tpl = await createTemplate(product.id);
-      const live = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'live', default_text: '문구' },
+      const live = await createCustomTextToken(prisma, { template_id: tpl.id });
+      await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        deleted_at: new Date(),
       });
-      await prisma.productCustomTextToken.create({
-        data: {
-          template_id: tpl.id,
-          token_key: 'deleted',
-          default_text: '삭제',
-          deleted_at: new Date(),
-        },
-      });
-
-      const found = await repo.findCustomTemplateById(tpl.id);
-      expect(found?.text_tokens.map((t) => t.id)).toEqual([live.id]);
-    });
-
-    it('findCustomTemplateById + setCustomTemplateActive', async () => {
-      const store = await createStore(prisma);
-      const product = await createProduct(prisma, { store_id: store.id });
-      const tpl = await createTemplate(product.id);
 
       const found = await repo.findCustomTemplateById(tpl.id);
       expect(found?.product.store_id).toBe(store.id);
-
-      const toggled = await repo.setCustomTemplateActive(
-        tpl.id,
-        false,
-        () => AUDIT_ENTRY,
-      );
-      expect(toggled.is_active).toBe(false);
+      expect(found?.text_tokens.map((t) => t.id)).toEqual([live.id]);
     });
 
-    it('upsertCustomTextToken: tokenId 없으면 create, 있으면 update', async () => {
-      const store = await createStore(prisma);
-      const product = await createProduct(prisma, { store_id: store.id });
+    it('upsertCustomTextToken: 등록은 글자색·정렬 기본값을 채우고, 수정은 생략한 글자색·정렬을 그대로 둔다', async () => {
+      const product = await createProduct(prisma);
       const tpl = await createTemplate(product.id);
+      const base = {
+        templateId: tpl.id,
+        tokenKey: 'name',
+        label: '이름',
+        defaultText: '가',
+        maxLength: 20,
+        sortOrder: 0,
+        isRequired: true,
+        posX: 10,
+        posY: 20,
+        width: 100,
+        height: 50,
+      };
 
-      const created = await repo.upsertCustomTextToken(
+      const created = await repo.upsertCustomTextToken(base, () => AUDIT_ENTRY);
+      expect([created.text_color, created.text_align]).toEqual([
+        '#000000',
+        'CENTER',
+      ]);
+      const styled = await repo.upsertCustomTextToken(
         {
-          templateId: tpl.id,
-          tokenKey: 'NAME',
-          defaultText: '가',
-          maxLength: 30,
-          sortOrder: 0,
-          isRequired: true,
-          posX: 10,
-          posY: 20,
-          width: 100,
-          height: 50,
-        },
-        () => AUDIT_ENTRY,
-      );
-      expect(created.token_key).toBe('NAME');
-
-      const updated = await repo.upsertCustomTextToken(
-        {
+          ...base,
           tokenId: created.id,
-          templateId: tpl.id,
-          tokenKey: 'NAME2',
-          defaultText: '나',
-          maxLength: 40,
-          sortOrder: 0,
-          isRequired: false,
-          posX: null,
-          posY: null,
-          width: null,
-          height: null,
+          textColor: '#FF0000',
+          textAlign: 'LEFT',
         },
         () => AUDIT_ENTRY,
       );
-      expect(updated.id).toBe(created.id);
-      expect(updated.token_key).toBe('NAME2');
+      const kept = await repo.upsertCustomTextToken(
+        { ...base, tokenId: created.id, tokenKey: 'name2', maxLength: 40 },
+        () => AUDIT_ENTRY,
+      );
+
+      expect([styled.id, kept.id]).toEqual([created.id, created.id]);
+      expect(kept).toMatchObject({
+        token_key: 'name2',
+        max_length: 40,
+        text_color: '#FF0000',
+        text_align: 'LEFT',
+      });
     });
 
     it('findCustomTextTokenById (template 경유 store_id 확인용 include)', async () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
       const tpl = await createTemplate(product.id);
-      const token = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'K', default_text: 'V' },
+      const token = await createCustomTextToken(prisma, {
+        template_id: tpl.id,
       });
 
       const found = await repo.findCustomTextTokenById(token.id);
@@ -847,21 +922,13 @@ describe('ProductRepository (real DB)', () => {
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
       const tpl = await createTemplate(product.id);
-      const t1 = await prisma.productCustomTextToken.create({
-        data: {
-          template_id: tpl.id,
-          token_key: 'A',
-          default_text: 'a',
-          sort_order: 0,
-        },
+      const t1 = await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        sort_order: 0,
       });
-      const t2 = await prisma.productCustomTextToken.create({
-        data: {
-          template_id: tpl.id,
-          token_key: 'B',
-          default_text: 'b',
-          sort_order: 1,
-        },
+      const t2 = await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        sort_order: 1,
       });
 
       const listed = await repo.listCustomTextTokens(tpl.id);

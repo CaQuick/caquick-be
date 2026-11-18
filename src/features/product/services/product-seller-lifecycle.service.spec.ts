@@ -140,7 +140,7 @@ describe('SellerProductLifecycleService (real DB)', () => {
       expect(auditLogs).toHaveLength(1);
     });
 
-    it('description/purchaseNotice/currency/baseDesignImageUrl/preparationTimeMinutes 포함 수정 (buildProductUpdateData 전 필드 분기)', async () => {
+    it('description/purchaseNotice/currency/preparationTimeMinutes 포함 수정 (buildProductUpdateData 전 필드 분기)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const product = await createSellerProduct(store.id, { name: '초기' });
 
@@ -149,11 +149,6 @@ describe('SellerProductLifecycleService (real DB)', () => {
         description: '설명',
         purchaseNotice: '주의사항',
         currency: 'KRW',
-        baseDesignImageUrl: ownedUploadUrl(
-          'PRODUCT_IMAGE',
-          account.id,
-          'base.png',
-        ),
         preparationTimeMinutes: 60,
         regularPrice: 12000,
         salePrice: 9000,
@@ -162,9 +157,6 @@ describe('SellerProductLifecycleService (real DB)', () => {
       expect(result.description).toBe('설명');
       expect(result.purchaseNotice).toBe('주의사항');
       expect(result.currency).toBe('KRW');
-      expect(result.baseDesignImageUrl).toBe(
-        ownedUploadUrl('PRODUCT_IMAGE', account.id, 'base.png'),
-      );
       expect(result.preparationTimeMinutes).toBe(60);
       expect(result.regularPrice).toBe(12000);
       expect(result.salePrice).toBe(9000);
@@ -262,46 +254,5 @@ describe('SellerProductLifecycleService (real DB)', () => {
         expect(await prisma.product.count()).toBe(0);
       },
     );
-
-    it.each(rejected)(
-      'sellerCreateProduct.baseDesignImageUrl이 %s면 BadRequest',
-      async (_label, url) => {
-        const { account } = await setupSellerWithStore(prisma);
-        await expect(
-          service.sellerCreateProduct(account.id, {
-            name: 'X',
-            regularPrice: 10000,
-            initialImageUrl: ownedUploadUrl('PRODUCT_IMAGE', account.id),
-            baseDesignImageUrl: url(account.id),
-          }),
-        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
-      },
-    );
-
-    it.each(rejected)(
-      'sellerUpdateProduct.baseDesignImageUrl이 %s면 BadRequest',
-      async (_label, url) => {
-        const { account, store } = await setupSellerWithStore(prisma);
-        const product = await createSellerProduct(store.id);
-        await expect(
-          service.sellerUpdateProduct(account.id, {
-            productId: product.id.toString(),
-            baseDesignImageUrl: url(account.id),
-          }),
-        ).rejects.toThrowDomain('INVALID_IMAGE_URL');
-      },
-    );
-
-    it('sellerUpdateProduct.baseDesignImageUrl 빈 문자열은 제거 의미라 검증 없이 통과한다', async () => {
-      const { account, store } = await setupSellerWithStore(prisma);
-      const product = await createSellerProduct(store.id, {
-        base_design_image_url: 'https://legacy.example/base.png',
-      });
-      const result = await service.sellerUpdateProduct(account.id, {
-        productId: product.id.toString(),
-        baseDesignImageUrl: '',
-      });
-      expect(result.baseDesignImageUrl).toBeNull();
-    });
   });
 });

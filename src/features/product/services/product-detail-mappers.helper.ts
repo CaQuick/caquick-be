@@ -1,6 +1,39 @@
 import { calcDiscountRate } from '@/common/utils/discount-rate';
 import type { ProductDetailRow } from '@/features/product/repositories/product.repository';
-import type { ProductDetail } from '@/features/product/types/product-detail-output.type';
+import type {
+  ProductDetail,
+  ProductDetailCustomTemplate,
+} from '@/features/product/types/product-detail-output.type';
+import { CustomMode } from '@/generated/prisma/client';
+
+/** 슬롯형 상품만 템플릿을 연다 — 3D·없음은 바탕 위 문구 편집이 없다. */
+function toCustomTemplate(
+  row: ProductDetailRow,
+): ProductDetailCustomTemplate | null {
+  const template = row.custom_template;
+  if (row.custom_mode !== CustomMode.SLOT || template?.deleted_at !== null) {
+    return null;
+  }
+  return {
+    revision: template.revision,
+    baseImageUrl: template.base_image_url,
+    freeEditEnabled: template.free_edit_enabled,
+    slots: template.text_tokens.map((slot) => ({
+      id: slot.id.toString(),
+      label: slot.label,
+      defaultText: slot.default_text,
+      maxLength: slot.max_length,
+      isRequired: slot.is_required,
+      posX: slot.pos_x,
+      posY: slot.pos_y,
+      width: slot.width,
+      height: slot.height,
+      textColor: slot.text_color,
+      textAlign: slot.text_align,
+      sortOrder: slot.sort_order,
+    })),
+  };
+}
 
 export function toProductDetail(
   row: ProductDetailRow,
@@ -37,5 +70,7 @@ export function toProductDetail(
         sortOrder: item.sort_order,
       })),
     })),
+    customMode: row.custom_mode,
+    customTemplate: toCustomTemplate(row),
   };
 }

@@ -9,5 +9,5 @@ export class SellerUpsertProductCustomTemplateInput {
 
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  freeEditEnabled?: boolean | null;
 }

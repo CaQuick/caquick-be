@@ -368,7 +368,7 @@ describe('SellerOptionService (real DB)', () => {
   });
 
   describe('sellerUpdateOptionGroup 모든 선택 필드 분기', () => {
-    it('name/isRequired/minSelect/maxSelect/sortOrder/isActive/optionRequires* 전체 포함 수정', async () => {
+    it('name/isRequired/minSelect/maxSelect/sortOrder/isActive 전체 포함 수정', async () => {
       const { accountId, product } = await setupProductForSeller();
       const group = await prisma.productOptionGroup.create({
         data: {
@@ -388,8 +388,6 @@ describe('SellerOptionService (real DB)', () => {
         maxSelect: 3,
         sortOrder: 5,
         isActive: false,
-        optionRequiresDescription: true,
-        optionRequiresImage: true,
       });
 
       expect(result.name).toBe('사이즈(수정)');
@@ -398,8 +396,6 @@ describe('SellerOptionService (real DB)', () => {
       expect(result.maxSelect).toBe(3);
       expect(result.sortOrder).toBe(5);
       expect(result.isActive).toBe(false);
-      expect(result.optionRequiresDescription).toBe(true);
-      expect(result.optionRequiresImage).toBe(true);
     });
   });
 

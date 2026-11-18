@@ -1,6 +1,7 @@
 export * from './account.factory';
 export * from './auth.factory';
 export * from './category.factory';
+export * from './custom-template.factory';
 export * from './notification.factory';
 export * from './order.factory';
 export * from './product.factory';

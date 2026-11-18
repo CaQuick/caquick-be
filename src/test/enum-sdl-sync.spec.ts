@@ -5,6 +5,8 @@ import { Kind, parse, print, visit } from 'graphql';
 
 import {
   ConversationBodyFormat,
+  CustomMode,
+  CustomTextAlign,
   NotificationEvent,
   OrderActor,
   OrderStatus,
@@ -40,6 +42,18 @@ const PAIRS: Array<
     Object.values(OrderActor),
     'src/features/order/order.types.graphql',
     'OrderActorType',
+  ],
+  [
+    'CustomMode',
+    Object.values(CustomMode),
+    'src/features/product/product.types.graphql',
+    'CustomModeType',
+  ],
+  [
+    'CustomTextAlign',
+    Object.values(CustomTextAlign),
+    'src/features/product/product.types.graphql',
+    'CustomTextAlignType',
   ],
 ];
 
