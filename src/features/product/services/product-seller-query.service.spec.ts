@@ -8,6 +8,8 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createCustomTemplate,
+  createCustomTextToken,
   createProduct,
   setupSellerWithStore,
 } from '@/test/factories';
@@ -243,19 +245,53 @@ describe('SellerProductQueryService (real DB)', () => {
       const product = await createSellerProduct(store.id, {
         name: '템플릿 상품',
       });
-      await prisma.productCustomTemplate.create({
-        data: {
-          product_id: product.id,
-          base_image_url: 'https://i.example/tpl.png',
-          is_active: true,
-        },
+      const template = await createCustomTemplate(prisma, {
+        product_id: product.id,
+        base_image_url: 'https://i.example/tpl.png',
+      });
+      const slot = await createCustomTextToken(prisma, {
+        template_id: template.id,
+        token_key: 'name',
+        label: '받는 사람',
+        text_color: '#FF0000',
+        text_align: 'LEFT',
       });
 
       const result = await service.sellerProduct(account.id, product.id);
-      expect(result.customTemplate).not.toBeNull();
-      expect(result.customTemplate?.baseImageUrl).toBe(
-        'https://i.example/tpl.png',
-      );
+      expect(result.customMode).toBe('NONE');
+      expect(result.customTemplate).toEqual({
+        id: template.id.toString(),
+        productId: product.id.toString(),
+        baseImageUrl: 'https://i.example/tpl.png',
+        freeEditEnabled: false,
+        revision: 1,
+        textTokens: [
+          {
+            id: slot.id.toString(),
+            templateId: template.id.toString(),
+            tokenKey: 'name',
+            label: '받는 사람',
+            defaultText: slot.default_text,
+            maxLength: 20,
+            sortOrder: 0,
+            isRequired: true,
+            posX: 1000,
+            posY: 1000,
+            width: 8000,
+            height: 1500,
+            textColor: '#FF0000',
+            textAlign: 'LEFT',
+          },
+        ],
+      });
+      // 문구 자리가 있어 슬롯형은 준비됐고, 3D는 연결 그룹이 없다
+      expect(
+        result.customReadiness.map(({ mode, ready }) => [mode, ready]),
+      ).toEqual([
+        ['NONE', true],
+        ['SLOT', true],
+        ['THREE_D', false],
+      ]);
     });
   });
 });

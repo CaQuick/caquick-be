@@ -237,14 +237,6 @@ export class OrderCheckoutService {
       if (!valid) {
         throw new DomainException('OPTION_GROUP_RULE_VIOLATION');
       }
-      // 설명/이미지 필수 옵션은 커스텀 입력 없이는 판매자 요구 정보가 빠진 채
-      // 주문된다 — 커스텀 체크아웃 확장 전까지 해당 옵션 선택은 거절한다
-      if (
-        count > 0 &&
-        (group.option_requires_description || group.option_requires_image)
-      ) {
-        throw new DomainException('OPTION_CUSTOMIZATION_REQUIRED');
-      }
     }
     return selections;
   }

@@ -30,10 +30,6 @@ export class SellerCreateProductInput {
   currency?: string;
 
   @IsOptional()
-  @IsString()
-  baseDesignImageUrl?: string;
-
-  @IsOptional()
   @IsInt()
   @Min(1)
   preparationTimeMinutes?: number;

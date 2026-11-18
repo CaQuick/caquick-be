@@ -18,11 +18,11 @@ describe('SellerUpsertProductCustomTemplateInput', () => {
     expect(await validate(dto)).toHaveLength(0);
   });
 
-  it('isActive 포함 통과', async () => {
+  it.each([true, false, null])('freeEditEnabled %s 통과', async (value) => {
     const dto = build({
       productId: '1',
       baseImageUrl: 'https://x/y.jpg',
-      isActive: false,
+      freeEditEnabled: value,
     });
     expect(await validate(dto)).toHaveLength(0);
   });

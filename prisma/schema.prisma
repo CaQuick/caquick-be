@@ -46,6 +46,18 @@ enum CategoryType {
   OTHER
 }
 
+enum CustomMode {
+  NONE
+  SLOT
+  THREE_D
+}
+
+enum CustomTextAlign {
+  LEFT
+  CENTER
+  RIGHT
+}
+
 enum OrderStatus {
   SUBMITTED
   CONFIRMED
@@ -659,8 +671,8 @@ model Product {
 
   currency String @default("KRW") @db.Char(3)
 
-  base_design_image_url    String? @db.VarChar(2048)
-  preparation_time_minutes Int     @default(180) @db.UnsignedInt
+  preparation_time_minutes Int        @default(180) @db.UnsignedInt
+  custom_mode              CustomMode @default(NONE)
 
   is_active Boolean @default(true) @db.TinyInt
 
@@ -761,9 +773,6 @@ model ProductOptionGroup {
   min_select  Int     @default(1) @db.UnsignedSmallInt
   max_select  Int     @default(1) @db.UnsignedSmallInt
 
-  option_requires_description Boolean @default(false) @db.TinyInt
-  option_requires_image       Boolean @default(false) @db.TinyInt
-
   sort_order Int     @default(0)
   is_active  Boolean @default(true) @db.TinyInt
 
@@ -816,8 +825,10 @@ model ProductCustomTemplate {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   product_id BigInt @unique @db.UnsignedBigInt
 
-  base_image_url String  @db.VarChar(2048)
-  is_active      Boolean @default(true) @db.TinyInt
+  base_image_url    String  @db.VarChar(2048)
+  free_edit_enabled Boolean @default(false) @db.TinyInt
+  // 템플릿·슬롯이 바뀔 때마다 1 올린다. 구매자가 꾸민 기준과 주문 시점 설정이 같은지 대조한다
+  revision          Int     @default(1) @db.UnsignedInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -836,15 +847,20 @@ model ProductCustomTextToken {
   template_id BigInt @db.UnsignedBigInt
 
   token_key    String  @db.VarChar(60)
+  label        String  @db.VarChar(30)
   default_text String  @db.VarChar(200)
-  max_length   Int     @default(30) @db.UnsignedSmallInt
+  max_length   Int     @default(20) @db.UnsignedSmallInt
   sort_order   Int     @default(0)
   is_required  Boolean @default(true) @db.TinyInt
 
-  pos_x  Int?
-  pos_y  Int?
-  width  Int?
-  height Int?
+  // 바탕 이미지 한 변을 10000으로 본 정수 비율, 원점은 왼쪽 위
+  pos_x  Int
+  pos_y  Int
+  width  Int
+  height Int
+
+  text_color String          @default("#000000") @db.Char(7)
+  text_align CustomTextAlign @default(CENTER)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)

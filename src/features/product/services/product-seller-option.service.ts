@@ -77,8 +77,6 @@ export class SellerOptionService extends SellerBaseService {
           is_required: input.isRequired ?? true,
           min_select: minSelect,
           max_select: maxSelect,
-          option_requires_description: input.optionRequiresDescription ?? false,
-          option_requires_image: input.optionRequiresImage ?? false,
           sort_order: input.sortOrder ?? 0,
           is_active: input.isActive ?? true,
         },
@@ -144,12 +142,6 @@ export class SellerOptionService extends SellerBaseService {
             : {}),
           ...(input.maxSelect !== undefined
             ? { max_select: input.maxSelect }
-            : {}),
-          ...(input.optionRequiresDescription !== undefined
-            ? { option_requires_description: input.optionRequiresDescription }
-            : {}),
-          ...(input.optionRequiresImage !== undefined
-            ? { option_requires_image: input.optionRequiresImage }
             : {}),
           ...(input.sortOrder !== undefined
             ? { sort_order: input.sortOrder }
@@ -450,8 +442,6 @@ export class SellerOptionService extends SellerBaseService {
     is_required: boolean;
     min_select: number;
     max_select: number;
-    option_requires_description: boolean;
-    option_requires_image: boolean;
     sort_order: number;
     is_active: boolean;
     option_items: {
@@ -473,8 +463,6 @@ export class SellerOptionService extends SellerBaseService {
       isRequired: row.is_required,
       minSelect: row.min_select,
       maxSelect: row.max_select,
-      optionRequiresDescription: row.option_requires_description,
-      optionRequiresImage: row.option_requires_image,
       sortOrder: row.sort_order,
       isActive: row.is_active,
       optionItems: row.option_items.map((item) =>

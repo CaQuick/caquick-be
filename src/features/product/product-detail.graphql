@@ -30,6 +30,53 @@ type ProductDetail {
   isWishlisted: Boolean!
   """옵션 섹션(케이크 사이즈/맛 등, sort_order asc). 활성 그룹만."""
   optionGroups: [ProductDetailOptionGroup!]!
+  """커스텀 방식. NONE이 아니면 꾸민 내용과 함께 주문해야 한다."""
+  customMode: CustomModeType!
+  """슬롯형 꾸미기 설정. customMode가 SLOT일 때만 오고 그 밖에는 null."""
+  customTemplate: ProductDetailCustomTemplate
+}
+
+"""
+슬롯형 꾸미기 설정. 바탕 이미지는 정사각(1:1)이고 문구 자리 좌표는 한 변을 10000으로 본 정수 비율이다(원점 왼쪽 위).
+"""
+type ProductDetailCustomTemplate {
+  """설정 버전. 주문할 때 그대로 보내고, 그사이 판매자가 설정을 바꿨으면 주문이 거절되어 다시 꾸며야 한다."""
+  revision: Int!
+  """바탕 이미지 URL(정사각)."""
+  baseImageUrl: String!
+  """자유 편집(바탕 위 영역 지정 + 요청 문구·참고 사진) 허용 여부."""
+  freeEditEnabled: Boolean!
+  """문구 자리. sortOrder 오름차순."""
+  slots: [ProductDetailCustomSlot!]!
+}
+
+"""
+슬롯형 문구 자리 1개. 구매자는 기본 문구로 시작해 바꾸거나 지운다(필수 자리는 지울 수 없다).
+"""
+type ProductDetailCustomSlot {
+  id: ID!
+  """자리 이름(예: 받는 사람). 입력 화면 라벨로 쓴다."""
+  label: String!
+  """기본 문구. 바꾸지 않으면 이 문구로 주문된다."""
+  defaultText: String!
+  """입력 가능한 최대 글자 수(코드 포인트, 1~50)."""
+  maxLength: Int!
+  """필수 자리 여부. true면 문구를 비울 수 없다."""
+  isRequired: Boolean!
+  """자리 왼쪽 위 가로 위치(0~10000)."""
+  posX: Int!
+  """자리 왼쪽 위 세로 위치(0~10000)."""
+  posY: Int!
+  """자리 너비(1~10000, posX + width ≤ 10000)."""
+  width: Int!
+  """자리 높이(1~10000, posY + height ≤ 10000)."""
+  height: Int!
+  """글자색(#RRGGBB 대문자)."""
+  textColor: String!
+  """자리 안 글자 정렬."""
+  textAlign: CustomTextAlignType!
+  """입력 화면 노출 순서. 오름차순."""
+  sortOrder: Int!
 }
 
 """상품 상세 옵션 섹션(그룹)."""

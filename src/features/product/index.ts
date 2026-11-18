@@ -5,6 +5,11 @@ export {
   // 주문 생성(order feature)의 옵션 검증·가격 스냅샷 입력 타입
   type ProductDetailRow,
 } from '@/features/product/repositories/product.repository';
+// 커스텀 방식 준비 상태. 판매자 방식 변경과 주문 생성(order feature)이 같은 판정을 쓴다.
+export {
+  evaluateProductCustomIssues,
+  type ProductCustomIssue,
+} from '@/features/product/services/product-custom-readiness.helper';
 // 상품 카드 1벌. 찜·최근 본 상품(user feature)이 같은 카드를 쓴다.
 export { ProductCardService } from '@/features/product/services/product-card.service';
 export type { ProductCardOutput } from '@/features/product/types/product-card-output.type';

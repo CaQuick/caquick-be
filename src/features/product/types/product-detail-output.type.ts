@@ -1,3 +1,5 @@
+import type { CustomMode, CustomTextAlign } from '@/generated/prisma/client';
+
 export interface ProductDetailOptionItem {
   id: string;
   title: string;
@@ -18,6 +20,28 @@ export interface ProductDetailOptionGroup {
   items: ProductDetailOptionItem[];
 }
 
+export interface ProductDetailCustomSlot {
+  id: string;
+  label: string;
+  defaultText: string;
+  maxLength: number;
+  isRequired: boolean;
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  textColor: string;
+  textAlign: CustomTextAlign;
+  sortOrder: number;
+}
+
+export interface ProductDetailCustomTemplate {
+  revision: number;
+  baseImageUrl: string;
+  freeEditEnabled: boolean;
+  slots: ProductDetailCustomSlot[];
+}
+
 export interface ProductDetail {
   id: string;
   storeId: string;
@@ -32,4 +56,6 @@ export interface ProductDetail {
   reviewCount: number;
   isWishlisted: boolean;
   optionGroups: ProductDetailOptionGroup[];
+  customMode: CustomMode;
+  customTemplate: ProductDetailCustomTemplate | null;
 }

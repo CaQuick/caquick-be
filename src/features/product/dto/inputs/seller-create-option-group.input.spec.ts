@@ -22,8 +22,6 @@ describe('SellerCreateOptionGroupInput', () => {
       isRequired: true,
       minSelect: 1,
       maxSelect: 2,
-      optionRequiresDescription: false,
-      optionRequiresImage: false,
       sortOrder: 0,
       isActive: true,
     });
