@@ -7,6 +7,7 @@ import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
+import { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -106,9 +107,12 @@ import { StoreModule } from '@/features/store';
     SellerSettlementService,
     SellerSettlementQueryResolver,
     SellerSettlementMutationResolver,
+    // 채팅 주문 카드·숨김 매장 문의 판정(conversation)
+    OrderInquiryRepository,
   ],
   exports: [
     OrderRepository,
+    OrderInquiryRepository,
     OrderStatusTransitionPolicy,
     BOOKED_QUANTITY_QUERY,
   ],

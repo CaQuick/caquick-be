@@ -51,4 +51,10 @@ export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
     maxSizeBytes: 10 * 1024 * 1024,
     allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
   },
+  // 채팅 첨부(구매자·판매자 공용). 계정별 경로라 보낸 사람 것만 메시지에 실을 수 있다
+  CONVERSATION_IMAGE: {
+    keyPrefix: 'conversation-images',
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
 } as const;

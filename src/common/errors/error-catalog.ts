@@ -660,6 +660,14 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '본문 형식이 올바르지 않습니다.',
   },
+  IMAGE_URL_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: 'IMAGE 형식에는 imageUrl이 필요합니다.',
+  },
+  ORDER_INQUIRY_NOT_AVAILABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금이 확인된 뒤 문의할 수 있어요.',
+  },
   // ── 관리자
   ADMIN_ONLY: {
     status: HttpStatus.FORBIDDEN,

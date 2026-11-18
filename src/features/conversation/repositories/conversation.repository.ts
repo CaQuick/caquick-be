@@ -14,12 +14,34 @@ import {
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
+export interface ConversationOrderCardSnapshot {
+  orderId: bigint;
+  orderNumber: string;
+  productName: string;
+  thumbnailUrl: string | null;
+  pickupAt: Date;
+}
+
 export interface ConversationMessageEntry {
   senderType: ConversationSenderType;
   senderAccountId: bigint | null;
   bodyFormat: ConversationBodyFormat;
   bodyText: string | null;
   bodyHtml: string | null;
+  imageUrl?: string;
+  orderCard?: ConversationOrderCardSnapshot;
+}
+
+function orderCardColumns(card: ConversationOrderCardSnapshot | undefined) {
+  return card
+    ? {
+        order_card_order_id: card.orderId,
+        order_card_order_number: card.orderNumber,
+        order_card_product_name: card.productName,
+        order_card_thumbnail_url: card.thumbnailUrl,
+        order_card_pickup_at: card.pickupAt,
+      }
+    : {};
 }
 
 @Injectable()
@@ -539,6 +561,8 @@ export class ConversationRepository {
               body_format: entry.bodyFormat,
               body_text: entry.bodyText,
               body_html: entry.bodyHtml,
+              image_url: entry.imageUrl ?? null,
+              ...orderCardColumns(entry.orderCard),
               created_at: now,
             },
           }),
@@ -684,6 +708,7 @@ export class ConversationRepository {
       bodyFormat: ConversationBodyFormat;
       bodyText: string | null;
       bodyHtml: string | null;
+      imageUrl?: string | null;
     },
     audit: (row: { id: bigint }) => AuditEntry,
   ) {
@@ -701,6 +726,7 @@ export class ConversationRepository {
           body_format: args.bodyFormat,
           body_text: args.bodyText,
           body_html: args.bodyHtml,
+          image_url: args.imageUrl ?? null,
           created_at: now,
         },
       });

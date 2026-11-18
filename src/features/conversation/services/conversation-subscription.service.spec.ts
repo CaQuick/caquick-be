@@ -7,6 +7,7 @@ import { ConversationRepository } from '@/features/conversation/repositories/con
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
 import { ConversationSubscriptionService } from '@/features/conversation/services/conversation-subscription.service';
+import { OrderInquiryRepository } from '@/features/order';
 import { CATALOG_QUERY, StoreSellerRepository } from '@/features/store';
 import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
@@ -20,6 +21,7 @@ import {
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import { s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('ConversationSubscriptionService (real DB)', () => {
   let service: ConversationSubscriptionService;
@@ -32,6 +34,8 @@ describe('ConversationSubscriptionService (real DB)', () => {
         ConversationSubscriptionService,
         ConversationInquiryService,
         ConversationEventsService,
+        OrderInquiryRepository,
+        ...s3TestProviders(),
         ConversationRepository,
         // 발행 repository가 OutboxPublisher를 주입받는다
         ...outboxPublisherProviders(),

@@ -26,6 +26,14 @@ export interface StoreInquiryContextOutput {
   conversationId: string | null;
 }
 
+export interface ConversationOrderCardOutput {
+  orderId: string;
+  orderNumber: string;
+  productName: string;
+  thumbnailUrl: string | null;
+  pickupAt: Date;
+}
+
 export interface ConversationMessageOutput {
   id: string;
   conversationId: string;
@@ -33,6 +41,8 @@ export interface ConversationMessageOutput {
   bodyFormat: ConversationBodyFormat;
   bodyText: string | null;
   bodyHtml: string | null;
+  imageUrl: string | null;
+  orderCard: ConversationOrderCardOutput | null;
   createdAt: Date;
 }
 
@@ -65,6 +75,12 @@ export interface ConversationMessageEvent {
   bodyFormat: ConversationBodyFormat;
   bodyText: string | null;
   bodyHtml: string | null;
+  imageUrl: string | null;
+  orderCard:
+    | (Omit<ConversationOrderCardOutput, 'pickupAt'> & {
+        pickupAt: string;
+      })
+    | null;
   createdAt: string;
 }
 

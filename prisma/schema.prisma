@@ -177,6 +177,8 @@ enum ConversationSenderType {
 enum ConversationBodyFormat {
   TEXT
   HTML
+  IMAGE
+  ORDER_CARD
 }
 
 enum ReviewMediaType {
@@ -1858,8 +1860,17 @@ model StoreConversationMessage {
   sender_account_id BigInt?                @db.UnsignedBigInt
 
   body_format ConversationBodyFormat @default(TEXT)
+  // IMAGE·ORDER_CARD는 목록 미리보기·푸시에 쓰는 대체 문구를 담는다
   body_text   String?                @db.Text
   body_html   String?                @db.Text
+  image_url   String?                @db.VarChar(2048)
+
+  // 주문 카드는 보낸 시점 값으로 남긴다. 주문이 바뀌거나 지워져도 대화 이력이 그대로 보이게 FK를 두지 않는다
+  order_card_order_id      BigInt?   @db.UnsignedBigInt
+  order_card_order_number  String?   @db.VarChar(30)
+  order_card_product_name  String?   @db.VarChar(200)
+  order_card_thumbnail_url String?   @db.VarChar(2048)
+  order_card_pickup_at     DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
