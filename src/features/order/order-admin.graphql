@@ -233,7 +233,7 @@ type AdminOrderDetail {
   confirmDeadlineAt: DateTime
   """
   자동 픽업 완료 예정 시각(픽업 시각 + 24시간). 확정·제작 완료 상태에서만 있고 그 밖은 null.
-  매장이 숨김이면 자동으로 픽업 완료되지 않으므로 건별로 처리한다.
+  매장이 숨김이면 자동으로 픽업 완료되지 않는다. 판매자가 직접 처리하지 않으면 관리자는 강제 취소만 할 수 있다.
   """
   autoPickupAt: DateTime
   """
