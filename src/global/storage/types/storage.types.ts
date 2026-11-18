@@ -4,7 +4,10 @@ export type UploadPurpose =
   | 'REVIEW_VIDEO'
   | 'PRODUCT_IMAGE'
   | 'STORE_IMAGE'
-  | 'BANNER_IMAGE';
+  | 'BANNER_IMAGE'
+  | 'ORDER_CUSTOM_RENDER'
+  | 'ORDER_CUSTOM_COMPOSITE'
+  | 'ORDER_CUSTOM_REFERENCE';
 
 export interface CreateUploadUrlInput {
   accountId: bigint;

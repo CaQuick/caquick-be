@@ -10,6 +10,7 @@ import {
   parseOrderPaymentPendingPayload,
 } from '@/features/order/events/order-payment-pending.event';
 import { ORDER_SUBMITTED } from '@/features/order/events/order-submitted.event';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { pendingPaymentLockName } from '@/features/order/repositories/order-pending-payment-lock.helper';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
@@ -42,6 +43,11 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
 import { collectTopic } from '@/test/pubsub';
+import { s3TestProviders, TEST_S3_CONFIG } from '@/test/storage/s3-test.helper';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
+}));
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -62,6 +68,8 @@ describe('OrderCheckoutService (real DB)', () => {
       providers: [
         OrderCheckoutService,
         OrderRepository,
+        OrderCustomUploadRepository,
+        ...s3TestProviders(),
         PaymentSettingRepository,
         ProductRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -205,6 +213,83 @@ describe('OrderCheckoutService (real DB)', () => {
       ...overrides,
     };
   }
+
+  describe('createOrderCustomUploadUrl', () => {
+    async function buyer(): Promise<Account> {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      return account;
+    }
+
+    it.each([
+      ['RENDER', 'order-custom/renders'],
+      ['COMPOSITE', 'order-custom/composites'],
+      ['REFERENCE', 'order-custom/references'],
+    ] as const)(
+      '%s 용도는 %s/{accountId}/ 아래로 발급하고 PENDING으로 기록한다',
+      async (purpose, prefix) => {
+        const account = await buyer();
+
+        const result = await service.createOrderCustomUploadUrl(account.id, {
+          purpose,
+          contentType: 'image/webp',
+          contentLength: 10 * 1024 * 1024,
+        });
+
+        expect(result.key).toMatch(
+          new RegExp(
+            `^${prefix}/${account.id}/\\d{4}-\\d{2}-\\d{2}/[a-f0-9-]+\\.webp$`,
+          ),
+        );
+        expect(result.publicUrl).toBe(
+          `https://${TEST_S3_CONFIG.bucket}.s3.${TEST_S3_CONFIG.region}.amazonaws.com/${result.key}`,
+        );
+        expect(await prisma.orderCustomUpload.findMany()).toEqual([
+          expect.objectContaining({
+            account_id: account.id,
+            purpose,
+            object_key: result.key,
+            content_type: 'image/webp',
+            content_length: 10 * 1024 * 1024,
+            status: 'PENDING',
+            attached_at: null,
+            purge_started_at: null,
+          }),
+        ]);
+      },
+    );
+
+    it.each([
+      ['형식이 이미지가 아님', 'video/mp4', 1024, 'INVALID_CONTENT_TYPE'],
+      ['10MB 초과', 'image/png', 10 * 1024 * 1024 + 1, 'FILE_TOO_LARGE'],
+      ['크기 0', 'image/png', 0, 'INVALID_CONTENT_LENGTH'],
+    ] as const)(
+      '%s이면 %s이고 기록하지 않는다',
+      async (_case, contentType, contentLength, code) => {
+        const account = await buyer();
+        await expect(
+          service.createOrderCustomUploadUrl(account.id, {
+            purpose: 'RENDER',
+            contentType,
+            contentLength,
+          }),
+        ).rejects.toThrowDomain(code);
+        expect(await prisma.orderCustomUpload.count()).toBe(0);
+      },
+    );
+
+    it('구매자 계정이 아니면 USER_ONLY이고 기록하지 않는다', async () => {
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      await expect(
+        service.createOrderCustomUploadUrl(seller.id, {
+          purpose: 'RENDER',
+          contentType: 'image/png',
+          contentLength: 1024,
+        }),
+      ).rejects.toThrowDomain('USER_ONLY');
+      expect(await prisma.orderCustomUpload.count()).toBe(0);
+    });
+  });
 
   describe('createOrder', () => {
     it('주문을 생성하고 가격·옵션·상태 히스토리를 스냅샷한다', async () => {

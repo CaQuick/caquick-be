@@ -29,6 +29,7 @@ import {
   createAccount,
   createNotification,
   createOrder,
+  createOrderCustomUpload,
   createOrderItem,
   createReview,
   createReviewReport,
@@ -180,6 +181,26 @@ describe('resetSeedScope (real DB)', () => {
 
     await seedThroughReviews();
     expect(await counts()).toEqual([0, 2]);
+  });
+
+  it('시드 사용자의 커스텀 업로드 기록은 지우고 시드 밖 계정 것은 남긴다', async () => {
+    const [seedUser] = await seedThroughReviews();
+    const outsider = await createAccount(prisma, { account_type: 'USER' });
+    for (const [accountId, key] of [
+      [seedUser.id, 'order-custom/renders/seed.png'],
+      [outsider.id, 'order-custom/renders/outsider.png'],
+    ] as const) {
+      await createOrderCustomUpload(prisma, {
+        account_id: accountId,
+        object_key: key,
+      });
+    }
+
+    await resetSeedScope(prisma);
+    await seedThroughReviews();
+
+    const left = await prisma.orderCustomUpload.findMany();
+    expect(left.map((u) => u.account_id)).toEqual([outsider.id]);
   });
 
   it('시드 밖 계정이 시드 밖 매장에 넣은 주문은 남긴다', async () => {

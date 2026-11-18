@@ -10,6 +10,7 @@ import { buildRegionLabel } from '@/common/utils/region-label';
 import { codePointLength } from '@/common/utils/text-cleaner';
 import { evaluateActiveUserAccount } from '@/features/auth';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import {
   OrderRepository,
   type CreatedOrderRow,
@@ -21,7 +22,15 @@ import { toOrderPaymentOutput } from '@/features/order/services/order-payment-ma
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
-import { Prisma } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type OrderCustomUploadPurpose,
+} from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
+import type {
+  CreateUploadUrlOutput,
+  UploadPurpose,
+} from '@/global/storage/types/storage.types';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -37,6 +46,12 @@ const MAX_ORDER_AMOUNT = 2_147_483_647;
 const PAYMENT_WINDOW_MS = 60 * 60_000;
 /** 은행 입금자명과 대조하는 값이라 자르지 않고 입력을 요구한다. */
 const MAX_DEPOSITOR_NAME_LENGTH = 20;
+
+const CUSTOM_UPLOAD_PURPOSES = {
+  RENDER: 'ORDER_CUSTOM_RENDER',
+  COMPOSITE: 'ORDER_CUSTOM_COMPOSITE',
+  REFERENCE: 'ORDER_CUSTOM_REFERENCE',
+} as const satisfies Record<OrderCustomUploadPurpose, UploadPurpose>;
 
 interface ResolvedOptionSelection {
   optionGroupId: bigint;
@@ -55,7 +70,38 @@ export class OrderCheckoutService {
     private readonly clock: ClockService,
     private readonly random: RandomService,
     private readonly paymentSettings: PaymentSettingRepository,
+    private readonly customUploads: OrderCustomUploadRepository,
+    private readonly s3: S3Service,
   ) {}
+
+  /**
+   * 커스텀 이미지(3D 렌더·슬롯형 합성·참고 사진) 선업로드 URL. 발급을 기록해 두고, 주문에 쓰이지 않으면
+   * 정리 크론이 하루 뒤 지운다. 형식·크기는 S3 정책이 검증한다.
+   */
+  async createOrderCustomUploadUrl(
+    accountId: bigint,
+    input: {
+      purpose: OrderCustomUploadPurpose;
+      contentType: string;
+      contentLength: number;
+    },
+  ): Promise<CreateUploadUrlOutput> {
+    await this.requireActiveBuyer(accountId);
+    const issued = await this.s3.createUploadUrl({
+      accountId,
+      purpose: CUSTOM_UPLOAD_PURPOSES[input.purpose],
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
+    await this.customUploads.create({
+      accountId,
+      purpose: input.purpose,
+      objectKey: issued.key,
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
+    return issued;
+  }
 
   /**
    * 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한 뒤 입금 대기 주문을 만든다.

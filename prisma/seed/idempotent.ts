@@ -185,6 +185,11 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
     });
     await prisma.review.deleteMany({ where: { account_id: { in: userIds } } });
 
+    // 커스텀 이미지 선업로드 기록(계정 FK는 없지만 시드 사용자 것은 함께 지운다)
+    await prisma.orderCustomUpload.deleteMany({
+      where: { account_id: { in: userIds } },
+    });
+
     // 찜
     await prisma.wishlistItem.deleteMany({
       where: { account_id: { in: userIds } },

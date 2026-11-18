@@ -7,6 +7,30 @@ extend type Mutation {
   CONCURRENT_REQUEST(CONFLICT)다. 로그인 필수.
   """
   createOrder(input: CreateOrderInput!): CreateOrderOutput!
+  """
+  커스텀 이미지 업로드용 Presigned URL 발급(구매자). uploadUrl로 PUT한 뒤 publicUrl을 주문 생성의 커스텀 입력에 넣는다.
+  JPEG·PNG·WebP, 장당 1바이트 이상 10MB 이하(아니면 INVALID_CONTENT_TYPE·INVALID_CONTENT_LENGTH·FILE_TOO_LARGE).
+  주문에 쓰이지 않은 파일은 발급 하루 뒤 지워진다. 구매자 계정만 쓸 수 있고(아니면 USER_ONLY), 정지·탈퇴 등으로
+  이용할 수 없는 계정이면 BUYER_ACCOUNT_NOT_ACTIVE다. 로그인 필수.
+  """
+  createOrderCustomUploadUrl(
+    """이미지 용도. 주문 생성 때 이 용도의 자리에만 쓸 수 있다."""
+    purpose: OrderCustomUploadPurpose!
+    """파일 MIME 타입(image/jpeg·image/png·image/webp)."""
+    contentType: String!
+    """파일 크기(바이트, 1 이상 10MB 이하)."""
+    contentLength: Int!
+  ): UploadUrl!
+}
+
+"""구매자 커스텀 이미지 업로드 용도."""
+enum OrderCustomUploadPurpose {
+  """3D 렌더 이미지(윗면·옆면 앞·뒤·좌·우)."""
+  RENDER
+  """슬롯형 합성 이미지(바탕 + 문구, 구매자가 본 그대로)."""
+  COMPOSITE
+  """자유 편집 참고 사진."""
+  REFERENCE
 }
 
 """주문 생성 입력. 커스텀 필드는 커스텀 스펙 확정 후 optional로 확장 예정."""

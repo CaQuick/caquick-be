@@ -14,6 +14,7 @@ import {
   OrderActor,
   OrderCancelFault,
   OrderCancelReason,
+  OrderCustomUploadPurpose,
   OrderStatus,
   RefundKind,
   RefundStatus,
@@ -115,8 +116,23 @@ function sdlEnumValues(source: string, enumName: string): string[] {
   throw new Error(`enum ${enumName}이 SDL에 없습니다`);
 }
 
-function missingInSdl(prisma: string[], sdl: string[]): string[] {
-  return prisma.filter((v) => !sdl.includes(v));
+/**
+ * 입력 SDL enum은 방향이 반대다 — SDL 값이 서버 enum에 모두 있어야 한다. SDL에만 값이 늘면 그 값을 받은
+ * 요청이 서버 매핑(예: 업로드 용도 → 정책)을 찾지 못해 500으로 떨어진다.
+ */
+const INPUT_PAIRS: Array<
+  [label: string, prisma: string[], file: string, sdl: string]
+> = [
+  [
+    'OrderCustomUploadPurpose',
+    Object.values(OrderCustomUploadPurpose),
+    'src/features/order/order-checkout.graphql',
+    'OrderCustomUploadPurpose',
+  ],
+];
+
+function missingFrom(values: string[], target: string[]): string[] {
+  return values.filter((v) => !target.includes(v));
 }
 
 const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
@@ -133,14 +149,14 @@ describe('Prisma enum·TS 상수 ⊆ SDL enum', () => {
               node.name.value === removed ? null : undefined,
           }),
         );
-        expect(missingInSdl(prisma, sdlEnumValues(broken, sdl))).toEqual([
+        expect(missingFrom(prisma, sdlEnumValues(broken, sdl))).toEqual([
           removed,
         ]);
       },
     );
 
     it('SDL에만 있는 값은 허용한다(부분집합 판정)', () => {
-      expect(missingInSdl(['A'], ['A', 'B'])).toEqual([]);
+      expect(missingFrom(['A'], ['A', 'B'])).toEqual([]);
     });
 
     it('SDL에 enum이 없으면 실패한다', () => {
@@ -154,7 +170,44 @@ describe('Prisma enum·TS 상수 ⊆ SDL enum', () => {
     '%s: 서버 값이 SDL에 모두 있다',
     (_label, prisma, file, sdl) => {
       expect(prisma.length).toBeGreaterThan(0);
-      expect(missingInSdl(prisma, sdlEnumValues(read(file), sdl))).toEqual([]);
+      expect(missingFrom(prisma, sdlEnumValues(read(file), sdl))).toEqual([]);
+    },
+  );
+});
+
+describe('입력 SDL enum ⊆ Prisma enum', () => {
+  it.each(INPUT_PAIRS)(
+    '%s: 검사기 반증 — SDL에 값을 하나 더하면 서버에 없다고 잡는다',
+    (_label, prisma, file, sdl) => {
+      const added = print(
+        visit(parse(read(file)), {
+          EnumTypeDefinition: (node) =>
+            node.name.value === sdl
+              ? {
+                  ...node,
+                  values: [
+                    ...(node.values ?? []),
+                    {
+                      kind: Kind.ENUM_VALUE_DEFINITION,
+                      name: { kind: Kind.NAME, value: 'ADDED_IN_SDL' },
+                    },
+                  ],
+                }
+              : undefined,
+        }),
+      );
+      expect(missingFrom(sdlEnumValues(added, sdl), prisma)).toEqual([
+        'ADDED_IN_SDL',
+      ]);
+    },
+  );
+
+  it.each(INPUT_PAIRS)(
+    '%s: SDL 값이 서버에 모두 있다',
+    (_label, prisma, file, sdl) => {
+      const values = sdlEnumValues(read(file), sdl);
+      expect(values.length).toBeGreaterThan(0);
+      expect(missingFrom(values, prisma)).toEqual([]);
     },
   );
 });

@@ -4,6 +4,7 @@ import type {
   CustomImageKind,
   CustomMode,
   Order,
+  OrderCustomUpload,
   OrderItem,
   OrderStatus,
   Payment,
@@ -268,4 +269,37 @@ export async function createThreeDOrderItemCustom(
       },
     });
   }
+}
+
+export type OrderCustomUploadOverrides = Partial<
+  Pick<
+    OrderCustomUpload,
+    | 'account_id'
+    | 'purpose'
+    | 'object_key'
+    | 'status'
+    | 'created_at'
+    | 'purge_started_at'
+    | 'attached_at'
+  >
+>;
+
+/** 커스텀 이미지 선업로드 기록. 계정을 안 주면 구매자를 새로 만든다. */
+export async function createOrderCustomUpload(
+  prisma: PrismaClient,
+  overrides: OrderCustomUploadOverrides = {},
+): Promise<OrderCustomUpload> {
+  const accountId =
+    overrides.account_id ??
+    (await createAccount(prisma, { account_type: 'USER' })).id;
+  return prisma.orderCustomUpload.create({
+    data: {
+      purpose: 'RENDER',
+      object_key: `order-custom/renders/${accountId}/2026-11-19/${nextSeq()}.png`,
+      content_type: 'image/png',
+      content_length: 1024,
+      ...overrides,
+      account_id: accountId,
+    },
+  });
 }

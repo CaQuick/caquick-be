@@ -35,4 +35,20 @@ export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
     maxSizeBytes: 5 * 1024 * 1024,
     allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
   },
+  // 구매자 커스텀 주문 이미지는 리뷰 이미지와 같은 정책. 주문에 쓰이지 않으면 정리 크론이 order-custom/ 아래를 지운다
+  ORDER_CUSTOM_RENDER: {
+    keyPrefix: 'order-custom/renders',
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  ORDER_CUSTOM_COMPOSITE: {
+    keyPrefix: 'order-custom/composites',
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+  ORDER_CUSTOM_REFERENCE: {
+    keyPrefix: 'order-custom/references',
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
 } as const;
