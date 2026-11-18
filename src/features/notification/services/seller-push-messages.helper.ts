@@ -5,6 +5,7 @@ import {
 } from '@/common/utils/kst-time';
 import type { ConversationBuyerMessageSentPayload } from '@/features/conversation';
 import type {
+  OrderConfirmReminderDuePayload,
   OrderStatusChangedPayload,
   OrderSubmittedPayload,
 } from '@/features/order';
@@ -14,6 +15,7 @@ import { OrderActor, OrderStatus } from '@/generated/prisma/client';
 const SELLER_PUSH_KIND = {
   ORDER_SUBMITTED: 'ORDER_SUBMITTED',
   ORDER_CANCELED: 'ORDER_CANCELED',
+  ORDER_CONFIRM_REMINDER: 'ORDER_CONFIRM_REMINDER',
   BUYER_MESSAGE: 'BUYER_MESSAGE',
 } as const;
 
@@ -82,6 +84,20 @@ export function buildOrderCanceledPush(
       body: `${p.productName ?? p.orderNumber}${pickup} 주문이 취소됐어요(${actorLabel})`,
       data: { kind: SELLER_PUSH_KIND.ORDER_CANCELED, orderId: p.orderId },
     },
+  };
+}
+
+/** 확정 마감 2시간 전. 마감은 2시간 안이라 시각만 적는다. */
+export function buildOrderConfirmReminderPush(
+  p: OrderConfirmReminderDuePayload,
+): SellerPushContent {
+  const deadline = formatMinutesOfDay(
+    kstMinutesOfDay(new Date(p.confirmDeadlineAt)),
+  );
+  return {
+    title: '확정 마감 임박',
+    body: `${p.productName} 주문을 ${deadline}까지 확정하지 않으면 자동 취소돼요`,
+    data: { kind: SELLER_PUSH_KIND.ORDER_CONFIRM_REMINDER, orderId: p.orderId },
   };
 }
 

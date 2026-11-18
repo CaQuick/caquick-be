@@ -6,6 +6,8 @@ export interface LockedPayment {
   id: bigint;
   status: PaymentStatus;
   amount: number;
+  expires_at: Date;
+  buyer_claimed_at: Date | null;
   confirmed_at: Date | null;
 }
 
@@ -15,13 +17,10 @@ export async function lockPayment(
   orderId: bigint,
 ): Promise<LockedPayment | null> {
   const [row] = await tx.$queryRaw<
-    {
-      id: bigint;
-      status: PaymentStatus;
-      amount: bigint;
-      confirmed_at: Date | null;
-    }[]
-  >`SELECT id, status, amount, confirmed_at FROM payment WHERE order_id = ${orderId} FOR UPDATE`;
+    (Omit<LockedPayment, 'amount'> & { amount: bigint })[]
+  >`
+    SELECT id, status, amount, expires_at, buyer_claimed_at, confirmed_at
+    FROM payment WHERE order_id = ${orderId} FOR UPDATE`;
   // raw는 INT UNSIGNED를 bigint로 돌려준다
   return row ? { ...row, amount: Number(row.amount) } : null;
 }

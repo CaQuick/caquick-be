@@ -12,10 +12,12 @@ import type {
   OrderCancelDecision,
   OrderCancelState,
 } from '@/features/order/policies/order-cancel.policy';
+import type { OrderLockedState } from '@/features/order/policies/order-lifecycle.policy';
 import {
   confirmedPaidAmount,
   finalizeSettlementLocked,
   lockPayment,
+  type LockedPayment,
 } from '@/features/order/repositories/order-settlement-finalizer.helper';
 import {
   adminOrderInclude,
@@ -76,12 +78,87 @@ export interface CancelOrderArgs {
   /** 취소와 함께 받은 환불 계좌. 환불이 생기면 바로 송금 대기로 만들고, 환불이 없으면 버린다. */
   refundAccount?: RefundAccountData | null;
   now: Date;
+  /** 크론 대상 조건을 잠금 뒤 다시 본다. false면 아무것도 바꾸지 않고 null이다(그사이 다른 전이·입금했어요). */
+  eligible?: (state: OrderLockedState) => boolean;
   /** 잠금 시점 재료로 사유·사정·환불액을 정한다. 던지면 tx가 롤백되고 예외가 그대로 나간다. */
   decide: (state: OrderCancelState) => OrderCancelDecision;
 }
 
+export interface CompletePickupBySystemArgs {
+  orderId: bigint;
+  now: Date;
+  /** 잠금 뒤 상태·픽업 시각으로 다시 판정한다. false면 아무것도 바꾸지 않고 null이다. */
+  eligible: (state: OrderLockedState) => boolean;
+}
+
+export interface CompletePickupByAdminArgs {
+  orderId: bigint;
+  actorAccountId: bigint;
+  note: string | null;
+  now: Date;
+  /** 잠금 뒤 상태·픽업 시각으로 판정한다. 던지면 tx가 롤백되고 예외가 그대로 나간다. */
+  assertTransition: (state: OrderLockedState) => void;
+}
+
+/** 픽업 완료를 남기는 주체. 시스템 전이는 계정·메모가 없다. */
+interface PickupActor {
+  actor: OrderActor;
+  actorAccountId: bigint | null;
+  note: string | null;
+  now: Date;
+}
+
 /** 접수 뒤 판매자 확정 마감: 확인 + 24시간과 픽업 시각 중 이른 쪽. */
 const CONFIRM_WINDOW_MS = DAY_MS;
+
+interface LockedOrderRow {
+  id: bigint;
+  status: OrderStatus;
+  pickup_at: Date;
+  commission_rate_bps: number;
+  submitted_at: Date | null;
+  confirm_deadline_at: Date | null;
+}
+
+async function lockOrder(
+  tx: Prisma.TransactionClient,
+  orderId: bigint,
+  scopeSql: Prisma.Sql = Prisma.empty,
+): Promise<LockedOrderRow | undefined> {
+  const [row] = await tx.$queryRaw<LockedOrderRow[]>`
+    SELECT o.id, o.status, o.pickup_at, o.commission_rate_bps, o.submitted_at, o.confirm_deadline_at
+    FROM \`order\` o
+    WHERE o.id = ${orderId} AND o.deleted_at IS NULL ${scopeSql}
+    FOR UPDATE OF o`;
+  return row;
+}
+
+function lockedState(
+  order: LockedOrderRow,
+  payment: LockedPayment | null,
+): OrderLockedState {
+  return {
+    status: order.status,
+    pickupAt: order.pickup_at,
+    confirmDeadlineAt: order.confirm_deadline_at,
+    payment,
+  };
+}
+
+/** 이벤트 스냅샷용 첫 활성 품목(주문 1건 = 상품 1개). */
+function firstItemOf(tx: Prisma.TransactionClient, orderId: bigint) {
+  return tx.orderItem.findFirst({
+    where: { order_id: orderId, ...activeWhere },
+    orderBy: { id: 'asc' },
+    select: {
+      store_id: true,
+      product_id: true,
+      product_name_snapshot: true,
+      store_name_snapshot: true,
+      quantity: true,
+    },
+  });
+}
 
 function cancelScopeSql(scope: OrderCancelScope): Prisma.Sql {
   switch (scope.kind) {
@@ -184,17 +261,7 @@ export class OrderTransitionRepository {
       },
     });
 
-    const firstItem = await tx.orderItem.findFirst({
-      where: { order_id: locked.id, ...activeWhere },
-      orderBy: { id: 'asc' },
-      select: {
-        store_id: true,
-        product_id: true,
-        product_name_snapshot: true,
-        store_name_snapshot: true,
-        quantity: true,
-      },
-    });
+    const firstItem = await firstItemOf(tx, locked.id);
     await this.outbox.publish(
       tx,
       orderStatusChangedEvent({
@@ -265,19 +332,16 @@ export class OrderTransitionRepository {
     tx: Prisma.TransactionClient,
     args: CancelOrderArgs,
   ): Promise<AdminOrderRow | null> {
-    const [locked] = await tx.$queryRaw<
-      {
-        id: bigint;
-        status: OrderStatus;
-        commission_rate_bps: number;
-        submitted_at: Date | null;
-      }[]
-    >`
-      SELECT o.id, o.status, o.commission_rate_bps, o.submitted_at FROM \`order\` o
-      WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL ${cancelScopeSql(args.scope)}
-      FOR UPDATE OF o`;
+    const locked = await lockOrder(
+      tx,
+      args.orderId,
+      cancelScopeSql(args.scope),
+    );
     if (!locked) return null;
     const payment = await lockPayment(tx, locked.id);
+    if (args.eligible && !args.eligible(lockedState(locked, payment))) {
+      return null;
+    }
     const paidAmount = confirmedPaidAmount(payment);
     const decision = args.decide({ status: locked.status, paidAmount });
 
@@ -330,16 +394,7 @@ export class OrderTransitionRepository {
           })
         : null;
 
-    const firstItem = await tx.orderItem.findFirst({
-      where: { order_id: locked.id, ...activeWhere },
-      orderBy: { id: 'asc' },
-      select: {
-        store_id: true,
-        product_id: true,
-        product_name_snapshot: true,
-        store_name_snapshot: true,
-      },
-    });
+    const firstItem = await firstItemOf(tx, locked.id);
     const snapshot = {
       orderId: locked.id,
       orderNumber: updated.order_number,
@@ -395,6 +450,112 @@ export class OrderTransitionRepository {
           fault: decision.fault,
           refundAmount: decision.refundAmount,
           note: args.note,
+        },
+      });
+    }
+    return updated;
+  }
+
+  /**
+   * 자동 픽업 완료(SYSTEM). 잠금 뒤 다시 판정해 그사이 판매자가 처리했거나 픽업이 바뀐 주문은 건너뛴다.
+   * 시스템 전이라 감사 기록은 없다.
+   */
+  async completePickupBySystem(
+    args: CompletePickupBySystemArgs,
+  ): Promise<AdminOrderRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await lockOrder(tx, args.orderId);
+      if (!locked) return null;
+      const payment = await lockPayment(tx, locked.id);
+      if (!args.eligible(lockedState(locked, payment))) return null;
+      return this.completePickupLocked(tx, locked, payment, {
+        actor: OrderActor.SYSTEM,
+        actorAccountId: null,
+        note: null,
+        now: args.now,
+      });
+    });
+  }
+
+  /** 관리자 픽업 완료(매장 숨김과 무관). 없는 주문이면 null. */
+  async completePickupByAdmin(
+    args: CompletePickupByAdminArgs,
+  ): Promise<AdminOrderRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await lockOrder(tx, args.orderId);
+      if (!locked) return null;
+      const payment = await lockPayment(tx, locked.id);
+      args.assertTransition(lockedState(locked, payment));
+      return this.completePickupLocked(tx, locked, payment, {
+        actor: OrderActor.ADMIN,
+        actorAccountId: args.actorAccountId,
+        note: args.note,
+        now: args.now,
+      });
+    });
+  }
+
+  /** 픽업 완료와 정산 확정. 확인된 결제가 없는 주문(결제 도입 전)은 정산을 확정하지 않는다. */
+  private async completePickupLocked(
+    tx: Prisma.TransactionClient,
+    locked: LockedOrderRow,
+    payment: LockedPayment | null,
+    by: PickupActor,
+  ): Promise<AdminOrderRow> {
+    const updated = await tx.order.update({
+      where: { id: locked.id },
+      data: { status: OrderStatus.PICKED_UP, picked_up_at: by.now },
+      include: adminOrderInclude,
+    });
+    await finalizeSettlementLocked(
+      tx,
+      locked,
+      confirmedPaidAmount(payment),
+      by.now,
+    );
+    await tx.orderStatusHistory.create({
+      data: {
+        order_id: locked.id,
+        from_status: locked.status,
+        to_status: OrderStatus.PICKED_UP,
+        changed_at: by.now,
+        actor_type: by.actor,
+        actor_account_id: by.actorAccountId,
+        note: by.note,
+      },
+    });
+    const firstItem = await firstItemOf(tx, locked.id);
+    await this.outbox.publish(
+      tx,
+      orderStatusChangedEvent({
+        orderId: locked.id,
+        orderNumber: updated.order_number,
+        buyerAccountId: updated.account_id,
+        fromStatus: locked.status,
+        toStatus: OrderStatus.PICKED_UP,
+        storeId: firstItem?.store_id ?? null,
+        storeName: firstItem?.store_name_snapshot ?? null,
+        productId: firstItem?.product_id ?? null,
+        productName: firstItem?.product_name_snapshot ?? null,
+        actorType: by.actor,
+        pickupAt: updated.pickup_at,
+        occurredAt: by.now,
+        actorAccountId: by.actorAccountId,
+      }),
+    );
+    if (by.actorAccountId !== null) {
+      await this.auditLogs.recordAudit(tx, {
+        actorAccountId: by.actorAccountId,
+        // 판매자에게 보인 주문만 매장 id를 붙인다(판매자 감사 로그 노출)
+        storeId: locked.submitted_at ? (firstItem?.store_id ?? null) : null,
+        targetType: AuditTargetType.ORDER,
+        targetId: locked.id,
+        action: AuditActionType.STATUS_CHANGE,
+        beforeJson: { status: locked.status },
+        afterJson: {
+          status: OrderStatus.PICKED_UP,
+          actorType: by.actor,
+          note: by.note,
         },
       });
     }

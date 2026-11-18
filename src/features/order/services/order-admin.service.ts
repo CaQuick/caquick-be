@@ -17,6 +17,7 @@ import {
 } from '@/features/audit-log';
 import { AccountAdminRepository, AdminBaseService } from '@/features/auth';
 import type { AdminCancelOrderInput } from '@/features/order/dto/inputs/admin-cancel-order.input';
+import type { AdminCompleteOrderPickupInput } from '@/features/order/dto/inputs/admin-complete-order-pickup.input';
 import type { AdminOrderListInput } from '@/features/order/dto/inputs/admin-order-list.input';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
@@ -37,7 +38,7 @@ import type {
   AdminOrderSummaryOutput,
   AdminStoreInProgressOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
-import { OrderActor } from '@/generated/prisma/client';
+import { OrderActor, OrderStatus } from '@/generated/prisma/client';
 
 /** 취소 규칙은 OrderCancelPolicy가 단일 소스이고, 저장·이력·환불·알림·감사는 OrderTransitionRepository가 한 트랜잭션에서 처리한다. */
 @Injectable()
@@ -149,6 +150,35 @@ export class AdminOrderService extends AdminBaseService {
           },
           state,
         ),
+    });
+    if (!updated) throw new DomainException('ORDER_NOT_FOUND');
+    await this.events.publishSellerStatusChanged(updated);
+    return toAdminOrderSummaryOutput(updated);
+  }
+
+  /**
+   * 확정·제작 완료 주문을 픽업 완료로 바꾸고 정산을 확정한다. 숨긴 매장 주문처럼 자동 픽업 완료가 건너뛰는 주문을
+   * 관리자가 건별로 닫는 경로라 매장 숨김은 보지 않는다. 판정은 잠금 읽기 결과로 한다.
+   */
+  async adminCompleteOrderPickup(
+    accountId: bigint,
+    input: AdminCompleteOrderPickupInput,
+  ): Promise<AdminOrderSummaryOutput> {
+    const ctx = await this.requireAdminContext(accountId);
+    const now = this.clock.now();
+    const updated = await this.transitions.completePickupByAdmin({
+      orderId: parseId(input.orderId),
+      actorAccountId: ctx.accountId,
+      note: cleanNullableText(input.note, MAX_REASON_LENGTH),
+      now,
+      assertTransition: (state) =>
+        this.statusPolicy.assertTransition({
+          actor: OrderActor.ADMIN,
+          from: state.status,
+          to: OrderStatus.PICKED_UP,
+          now,
+          pickupAt: state.pickupAt,
+        }),
     });
     if (!updated) throw new DomainException('ORDER_NOT_FOUND');
     await this.events.publishSellerStatusChanged(updated);

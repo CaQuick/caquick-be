@@ -1,4 +1,5 @@
 import type {
+  OrderAutoTransitionTimes,
   OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
@@ -18,9 +19,10 @@ export interface SellerOrderSummaryOutput {
   firstItemImageUrl: string | null;
   hasCustom: boolean;
   firstItemCustomImageUrl: string | null;
+  confirmDeadlineAt: Date | null;
 }
 
-export interface SellerOrderDetailOutput {
+export interface SellerOrderDetailOutput extends OrderAutoTransitionTimes {
   id: string;
   orderNumber: string;
   accountId: string;
@@ -43,6 +45,7 @@ export interface SellerOrderDetailOutput {
   items: OrderItemDetailOutput[];
   statusHistories: OrderStatusHistoryOutput[];
   cancellation: OrderCancellationOutput | null;
+  canMarkNoShow: boolean;
 }
 
 /** SDL SellerOrderUpdateKind. PICKUP_RESCHEDULED는 판매자 픽업 일시 변경이 발행한다. */

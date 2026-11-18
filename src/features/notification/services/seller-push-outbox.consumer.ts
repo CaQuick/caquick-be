@@ -21,13 +21,16 @@ import { SellerPushDeviceRepository } from '@/features/notification/repositories
 import {
   buildBuyerMessagePush,
   buildOrderCanceledPush,
+  buildOrderConfirmReminderPush,
   buildOrderSubmittedPush,
   SELLER_PUSH_CHANNEL_ID,
   type SellerPushContent,
 } from '@/features/notification/services/seller-push-messages.helper';
 import {
+  ORDER_CONFIRM_REMINDER_DUE,
   ORDER_STATUS_CHANGED,
   ORDER_SUBMITTED,
+  parseOrderConfirmReminderDuePayload,
   parseOrderStatusChangedPayload,
   parseOrderSubmittedPayload,
 } from '@/features/order';
@@ -55,6 +58,7 @@ import { MetricsService } from '@/global/metrics';
 @SubscribeOutbox(
   ORDER_SUBMITTED,
   ORDER_STATUS_CHANGED,
+  ORDER_CONFIRM_REMINDER_DUE,
   CONVERSATION_BUYER_MESSAGE_SENT,
 )
 export class SellerPushOutboxConsumer implements OutboxConsumer {
@@ -180,6 +184,13 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
         return push
           ? { storeId: parseId(push.storeId), content: push.content }
           : null;
+      }
+      case ORDER_CONFIRM_REMINDER_DUE: {
+        const p = parseOrderConfirmReminderDuePayload(event.payload);
+        return {
+          storeId: parseId(p.storeId),
+          content: buildOrderConfirmReminderPush(p),
+        };
       }
       case CONVERSATION_BUYER_MESSAGE_SENT: {
         const p = parseConversationBuyerMessageSentPayload(event.payload);

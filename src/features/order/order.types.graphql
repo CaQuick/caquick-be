@@ -3,8 +3,10 @@
 
 흐름은 `PENDING_PAYMENT → SUBMITTED → CONFIRMED → MADE → PICKED_UP`이며 어떤 상태에서도
 앞 단계로 되돌아갈 수 없다. 판매자가 sellerUpdateOrderStatus로 바꿀 수 있는 전이는 `SUBMITTED → CONFIRMED`,
-`CONFIRMED → MADE`, `MADE → PICKED_UP`뿐이고, 취소는 주체별 취소 mutation(cancelMyOrder·sellerCancelOrder·adminCancelOrder)으로만 한다.
-판매자에게는 입금이 확인된(접수된) 주문만 보인다.
+`CONFIRMED → MADE`, `CONFIRMED·MADE → PICKED_UP·NO_SHOW`뿐이고, 취소는 주체별 취소 mutation(cancelMyOrder·sellerCancelOrder·adminCancelOrder)으로만 한다.
+관리자도 adminCompleteOrderPickup으로 확정·제작 완료 주문을 픽업 완료할 수 있다.
+시스템은 입금 기한(1시간)이 지난 입금 대기를 취소하고, 확정 마감이 지난 접수를 취소(전액 환불)하며,
+픽업 시각 + 24시간이 지난 확정·제작 완료를 픽업 완료로 바꾼다. 판매자에게는 입금이 확인된(접수된) 주문만 보인다.
 """
 enum OrderStatusType {
   """입금 대기. 주문 직후 계좌이체 입금을 기다리는 상태이고, 판매자에게 보이지 않는다."""

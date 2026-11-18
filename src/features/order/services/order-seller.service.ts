@@ -31,6 +31,7 @@ import { OrderEventsService } from '@/features/order/services/order-events.servi
 import {
   toOrderCancellation,
   toOrderItemDetail,
+  toOrderAutoTransitionTimes,
   toOrderListCustomBadge,
   toOrderStatusHistory,
   type OrderItemDetailRow,
@@ -123,6 +124,10 @@ export class SellerOrderService extends SellerBaseService {
     const ctx = await this.requireSellerContext(accountId);
     const orderId = parseId(input.orderId);
     const toStatus = this.statusPolicy.parse(input.toStatus);
+    // 취소는 사유·사정·환불액이 필요해 sellerCancelOrder로만 한다
+    if (toStatus === OrderStatus.CANCELED) {
+      throw new DomainException('INVALID_ORDER_STATUS_TRANSITION');
+    }
 
     const current = await this.orderRepository.findOrderDetailByStore({
       orderId,
@@ -130,7 +135,16 @@ export class SellerOrderService extends SellerBaseService {
     });
     if (!current) throw new DomainException('ORDER_NOT_FOUND');
 
-    this.statusPolicy.assertSellerTransition(current.status, toStatus);
+    const now = this.clock.now();
+    const assertTransition = (from: OrderStatus, pickupAt: Date) =>
+      this.statusPolicy.assertTransition({
+        actor: OrderActor.SELLER,
+        from,
+        to: toStatus,
+        now,
+        pickupAt,
+      });
+    assertTransition(current.status, current.pickup_at);
 
     const updated = await this.orderRepository.updateOrderStatusBySeller({
       orderId,
@@ -138,10 +152,9 @@ export class SellerOrderService extends SellerBaseService {
       actorAccountId: ctx.accountId,
       toStatus,
       note: cleanNullableText(input.note, 500),
-      now: this.clock.now(),
+      now,
       // 잠금 뒤 현재 상태로 같은 규칙을 다시 적용한다(위 사전 검사는 빠른 거절용)
-      assertTransition: (from) =>
-        this.statusPolicy.assertSellerTransition(from, toStatus),
+      assertTransition,
     });
 
     if (!updated) throw new DomainException('ORDER_NOT_FOUND');
@@ -196,6 +209,7 @@ export class SellerOrderService extends SellerBaseService {
       firstItemName: row.items[0]?.product_name_snapshot ?? null,
       firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
       ...toOrderListCustomBadge(row.items[0]),
+      confirmDeadlineAt: toOrderAutoTransitionTimes(row).confirmDeadlineAt,
     };
   }
 
@@ -217,6 +231,8 @@ export class SellerOrderService extends SellerBaseService {
     made_at: Date | null;
     picked_up_at: Date | null;
     canceled_at: Date | null;
+    confirm_deadline_at: Date | null;
+    no_show_at: Date | null;
     created_at: Date;
     updated_at: Date;
     status_histories: OrderStatusHistoryRow[];
@@ -253,6 +269,14 @@ export class SellerOrderService extends SellerBaseService {
         ),
       ),
       cancellation: toOrderCancellation(row),
+      ...toOrderAutoTransitionTimes(row),
+      canMarkNoShow: this.statusPolicy.canTransition({
+        actor: OrderActor.SELLER,
+        from: row.status,
+        to: OrderStatus.NO_SHOW,
+        now: this.clock.now(),
+        pickupAt: row.pickup_at,
+      }),
     };
   }
 }

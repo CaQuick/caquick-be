@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { PubSub } from 'graphql-subscriptions';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
@@ -8,6 +9,7 @@ import { NotificationAdminRepository } from '@/features/notification/repositorie
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import type { AdminCancelOrderInput } from '@/features/order/dto/inputs/admin-cancel-order.input';
+import type { AdminCompleteOrderPickupInput } from '@/features/order/dto/inputs/admin-complete-order-pickup.input';
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
@@ -42,6 +44,7 @@ describe('AdminOrderService (real DB)', () => {
   let prisma: PrismaClient;
   let dispatcher: OutboxDispatcherService;
   let pubSub: PubSub;
+  let clock: ClockService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -67,6 +70,7 @@ describe('AdminOrderService (real DB)', () => {
     orderRepo = module.get(OrderRepository);
     dispatcher = module.get(OutboxDispatcherService);
     pubSub = module.get(PUB_SUB);
+    clock = module.get(ClockService);
     prisma = p;
   });
 
@@ -77,6 +81,10 @@ describe('AdminOrderService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   async function admin(): Promise<bigint> {
@@ -448,6 +456,37 @@ describe('AdminOrderService (real DB)', () => {
       expect(result.refunds).toEqual([]);
       expect(result.cancellation).toBeNull();
     });
+
+    it.each([
+      ['SUBMITTED', true, false],
+      ['MADE', false, true],
+      ['NO_SHOW', false, false],
+    ] as const)(
+      '%s: 확정 마감은 접수만, 자동 픽업 완료는 확정·제작 완료만, 노쇼 시각은 그대로 준다',
+      async (status, hasDeadline, hasAutoPickup) => {
+        const { order } = await orderWithItem({ status });
+        const deadline = new Date('2026-11-19T06:00:00.000Z');
+        const noShowAt = new Date('2026-11-19T07:00:00.000Z');
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            pickup_at: new Date('2026-11-19T04:00:00.000Z'),
+            confirm_deadline_at: deadline,
+            no_show_at: status === 'NO_SHOW' ? noShowAt : null,
+          },
+        });
+
+        const result = await service.adminOrder(await admin(), order.id);
+
+        expect(result).toMatchObject({
+          confirmDeadlineAt: hasDeadline ? deadline : null,
+          autoPickupAt: hasAutoPickup
+            ? new Date('2026-11-20T04:00:00.000Z')
+            : null,
+          noShowAt: status === 'NO_SHOW' ? noShowAt : null,
+        });
+      },
+    );
 
     it('결제와 입금 확인 처리자·메모를 준다', async () => {
       const { order } = await orderWithItem();
@@ -868,6 +907,263 @@ describe('AdminOrderService (real DB)', () => {
         await prisma.auditLog.count({
           where: { target_type: 'ORDER', target_id: order.id },
         }),
+      ).toBe(1);
+      expect(topic.received).toHaveLength(1);
+      topic.stop();
+    });
+  });
+
+  describe('adminCompleteOrderPickup', () => {
+    const NOW = new Date('2026-11-19T03:00:00.000Z');
+
+    beforeEach(() => {
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+    });
+
+    function pickupInput(
+      orderId: bigint,
+      note?: string | null,
+    ): AdminCompleteOrderPickupInput {
+      return { orderId: orderId.toString(), note };
+    }
+
+    it.each(['CONFIRMED', 'MADE'] as const)(
+      '%s 주문을 픽업 완료하고 픽업 시각·정산 확정·이력(주체 ADMIN·메모)·픽업 완료 알림·감사·판매자 구독을 남긴다',
+      async (status) => {
+        const actor = await admin();
+        const { order, buyer, storeId } = await orderWithItem({
+          status,
+          paid: true,
+        });
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { commission_rate_bps: 333 },
+        });
+        const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
+
+        const result = await service.adminCompleteOrderPickup(
+          actor,
+          pickupInput(order.id, '  매장 인도 확인  '),
+        );
+
+        expect(result).toMatchObject({
+          id: order.id.toString(),
+          status: 'PICKED_UP',
+          storeId: storeId.toString(),
+        });
+        await expect(
+          prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+        ).resolves.toMatchObject({
+          status: 'PICKED_UP',
+          picked_up_at: NOW,
+          settlement_base_amount: 10_000,
+          commission_amount: 333,
+          settlement_finalized_at: NOW,
+        });
+        await expect(
+          prisma.orderStatusHistory.findMany({ where: { order_id: order.id } }),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            from_status: status,
+            to_status: 'PICKED_UP',
+            changed_at: NOW,
+            actor_type: 'ADMIN',
+            actor_account_id: actor,
+            note: '매장 인도 확인',
+          }),
+        ]);
+        await expect(
+          prisma.auditLog.findMany({
+            where: { target_type: 'ORDER', target_id: order.id },
+          }),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            actor_account_id: actor,
+            store_id: storeId,
+            action: 'STATUS_CHANGE',
+            before_json: { status },
+            after_json: {
+              status: 'PICKED_UP',
+              actorType: 'ADMIN',
+              note: '매장 인도 확인',
+            },
+          }),
+        ]);
+        await drainOutbox(dispatcher);
+        await expect(
+          prisma.notification.findMany({ where: { order_id: order.id } }),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            account_id: buyer.id,
+            event: 'ORDER_PICKED_UP',
+            body: `${order.order_number} 케이크 픽업이 완료되었어요.`,
+          }),
+        ]);
+        expect(topic.received).toEqual([
+          expect.objectContaining({
+            kind: 'STATUS_CHANGED',
+            orderId: order.id.toString(),
+            status: 'PICKED_UP',
+          }),
+        ]);
+        topic.stop();
+      },
+    );
+
+    it('숨긴 매장의 주문도 픽업 시각 전에 처리한다(자동 픽업 완료가 건너뛰는 주문)', async () => {
+      const hidden = await createStore(prisma, { is_active: false });
+      const { order } = await orderWithItem({
+        status: 'MADE',
+        storeId: hidden.id,
+        paid: true,
+      });
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { pickup_at: new Date(NOW.getTime() + 3 * 60 * 60_000) },
+      });
+
+      const result = await service.adminCompleteOrderPickup(
+        await admin(),
+        pickupInput(order.id),
+      );
+
+      expect(result.status).toBe('PICKED_UP');
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({
+        picked_up_at: NOW,
+        settlement_finalized_at: NOW,
+      });
+    });
+
+    it('확인된 결제가 없는 주문(결제 도입 전)은 픽업 완료만 하고 정산은 건너뛴다', async () => {
+      const { order } = await orderWithItem({ status: 'CONFIRMED' });
+
+      await service.adminCompleteOrderPickup(
+        await admin(),
+        pickupInput(order.id),
+      );
+
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({
+        status: 'PICKED_UP',
+        picked_up_at: NOW,
+        settlement_base_amount: null,
+        settlement_finalized_at: null,
+      });
+    });
+
+    it.each([
+      ['PENDING_PAYMENT', 'INVALID_ORDER_STATUS_TRANSITION'],
+      ['SUBMITTED', 'INVALID_ORDER_STATUS_TRANSITION'],
+      ['NO_SHOW', 'INVALID_ORDER_STATUS_TRANSITION'],
+      ['CANCELED', 'INVALID_ORDER_STATUS_TRANSITION'],
+      ['PICKED_UP', 'ORDER_STATUS_UNCHANGED'],
+    ] as const)(
+      '%s 주문은 %s로 거절하고 아무것도 바꾸지 않는다',
+      async (status, code) => {
+        const { order, storeId } = await orderWithItem({ status, paid: true });
+        const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
+
+        await expect(
+          service.adminCompleteOrderPickup(
+            await admin(),
+            pickupInput(order.id),
+          ),
+        ).rejects.toThrowDomain(code);
+
+        await expect(
+          prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+        ).resolves.toMatchObject({
+          status,
+          picked_up_at: null,
+          settlement_finalized_at: null,
+        });
+        expect(await prisma.orderStatusHistory.count()).toBe(0);
+        expect(await prisma.outbox.count()).toBe(0);
+        expect(await prisma.auditLog.count()).toBe(0);
+        expect(topic.received).toHaveLength(0);
+        topic.stop();
+      },
+    );
+
+    it('메모는 선택(공백은 null)이고 500자를 넘으면 TEXT_TOO_LONG, 없거나 삭제된 주문은 404', async () => {
+      const { order } = await orderWithItem({ status: 'CONFIRMED' });
+      const other = await orderWithItem({ status: 'MADE' });
+      await expect(
+        service.adminCompleteOrderPickup(
+          await admin(),
+          pickupInput(order.id, 'x'.repeat(501)),
+        ),
+      ).rejects.toThrowDomain('TEXT_TOO_LONG');
+
+      await service.adminCompleteOrderPickup(
+        await admin(),
+        pickupInput(order.id, 'x'.repeat(500)),
+      );
+      await service.adminCompleteOrderPickup(
+        await admin(),
+        pickupInput(other.order.id, '   '),
+      );
+      const histories = await prisma.orderStatusHistory.findMany({
+        orderBy: { id: 'asc' },
+      });
+      expect(histories.map((h) => h.note)).toEqual(['x'.repeat(500), null]);
+
+      const deleted = await createOrder(prisma, {
+        status: 'CONFIRMED',
+        deleted_at: new Date(),
+      });
+      for (const orderId of [deleted.id, 999_999n]) {
+        await expect(
+          service.adminCompleteOrderPickup(await admin(), pickupInput(orderId)),
+        ).rejects.toThrowDomain(404);
+      }
+    });
+
+    it('관리자가 아니면 403', async () => {
+      const { order } = await orderWithItem({ status: 'CONFIRMED' });
+      const user = await createAccount(prisma, { account_type: 'USER' });
+      await expect(
+        service.adminCompleteOrderPickup(user.id, pickupInput(order.id)),
+      ).rejects.toThrowDomain(403);
+    });
+
+    it('두 관리자가 동시에 처리해도 전이·감사·알림·구독은 1건씩이고 늦은 쪽은 잠금 뒤 상태로 ORDER_STATUS_UNCHANGED', async () => {
+      const { order, storeId } = await orderWithItem({
+        status: 'MADE',
+        paid: true,
+      });
+      const topic = await collectTopic(pubSub, `order.seller.${storeId}`);
+      const [a, b] = [await admin(), await admin()];
+
+      const results = await Promise.allSettled([
+        service.adminCompleteOrderPickup(a, pickupInput(order.id, 'a')),
+        service.adminCompleteOrderPickup(b, pickupInput(order.id, 'b')),
+      ]);
+
+      expect(results.map((r) => r.status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      const rejected = results.find((r) => r.status === 'rejected');
+      expect((rejected as PromiseRejectedResult).reason).toThrowDomain(
+        'ORDER_STATUS_UNCHANGED',
+      );
+      expect(
+        await prisma.orderStatusHistory.count({
+          where: { order_id: order.id },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { target_type: 'ORDER', target_id: order.id },
+        }),
+      ).toBe(1);
+      await drainOutbox(dispatcher);
+      expect(
+        await prisma.notification.count({ where: { order_id: order.id } }),
       ).toBe(1);
       expect(topic.received).toHaveLength(1);
       topic.stop();

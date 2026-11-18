@@ -37,6 +37,8 @@ export interface OrderOverrides {
   commission_rate_bps?: number;
   /** 미지정 시 PENDING_PAYMENT면 null, 그 밖의 상태는 생성 시각(입금 확인 = 판매자 노출) */
   submitted_at?: Date | null;
+  confirm_deadline_at?: Date | null;
+  confirm_reminder_sent_at?: Date | null;
 }
 
 export async function createOrder(
@@ -68,6 +70,8 @@ export async function createOrder(
       ...(overrides.commission_rate_bps !== undefined
         ? { commission_rate_bps: overrides.commission_rate_bps }
         : {}),
+      confirm_deadline_at: overrides.confirm_deadline_at ?? null,
+      confirm_reminder_sent_at: overrides.confirm_reminder_sent_at ?? null,
       submitted_at:
         overrides.submitted_at !== undefined
           ? overrides.submitted_at

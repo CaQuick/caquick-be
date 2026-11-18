@@ -27,6 +27,15 @@ extend type Mutation {
   없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminCancelOrder(input: AdminCancelOrderInput!): AdminOrderSummary!
+  """
+  주문을 픽업 완료로 처리한다. 확정·제작 완료 주문만 되고(이미 픽업 완료면 ORDER_STATUS_UNCHANGED, 그 밖은
+  INVALID_ORDER_STATUS_TRANSITION, 모두 BAD_USER_INPUT), 매장이 숨김이어도 픽업 시각 전이어도 처리한다.
+  확인된 결제액으로 정산을 확정하고(결제 도입 전 주문은 건너뜀) 구매자에게 픽업 완료 알림이 간다.
+  없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminCompleteOrderPickup(
+    input: AdminCompleteOrderPickupInput!
+  ): AdminOrderSummary!
 }
 
 """
@@ -227,6 +236,19 @@ type AdminOrderDetail {
   강제 취소 다이얼로그의 선택지. 지금 상태 기준이다.
   """
   cancelOptions: AdminOrderCancelOptions!
+  """
+  판매자 확정 마감 시각. 지나면 자동 취소·전액 환불된다. 접수(SUBMITTED) 상태가 아니거나 결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
+  """
+  자동 픽업 완료 예정 시각(픽업 시각 + 24시간). 확정·제작 완료 상태에서만 있고 그 밖은 null.
+  매장이 숨김이면 자동으로 픽업 완료되지 않으므로 관리자가 건별로 픽업 완료(adminCompleteOrderPickup)하거나 취소(adminCancelOrder)한다.
+  """
+  autoPickupAt: DateTime
+  """
+  노쇼 처리 시각. 노쇼가 아니면 null.
+  """
+  noShowAt: DateTime
 }
 
 """
@@ -343,4 +365,15 @@ input AdminCancelOrderInput {
   돌려줄 금액(원, 0~cancelOptions.paidAmount). fault가 BUYER일 때 필수이고, 그 밖에는 무시한다.
   """
   refundAmount: Int
+}
+
+"""
+주문 픽업 완료 입력. 확정·제작 완료 주문만 처리할 수 있다.
+"""
+input AdminCompleteOrderPickupInput {
+  orderId: ID!
+  """
+  처리 메모. 선택, 최대 500자. 상태 이력과 감사 로그에 남는다.
+  """
+  note: String
 }

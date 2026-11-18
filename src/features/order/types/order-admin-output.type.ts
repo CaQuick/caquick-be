@@ -1,5 +1,6 @@
 import type { CancelRefundRule } from '@/features/order/policies/order-cancel.policy';
 import type {
+  OrderAutoTransitionTimes,
   OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderRefundOutput,
@@ -36,7 +37,7 @@ export interface AdminStoreInProgressOrderSummaryOutput {
   byStatus: { status: OrderStatus; count: number }[];
 }
 
-export interface AdminOrderDetailOutput {
+export interface AdminOrderDetailOutput extends OrderAutoTransitionTimes {
   id: string;
   orderNumber: string;
   buyer: {

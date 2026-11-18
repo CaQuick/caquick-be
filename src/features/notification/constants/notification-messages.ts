@@ -8,6 +8,7 @@ export const ORDER_STATUS_NOTIFICATION_TITLES: Partial<
   [OrderStatus.CONFIRMED]: '주문확정',
   [OrderStatus.MADE]: '제작완료',
   [OrderStatus.PICKED_UP]: '픽업완료',
+  [OrderStatus.NO_SHOW]: '노쇼',
 };
 
 /** 주문번호 prefix는 식별 필요 가능성에 대비해 유지한다 — 표시 여부는 FE 판단. */
@@ -18,6 +19,7 @@ export const ORDER_STATUS_NOTIFICATION_BODIES: Partial<
   [OrderStatus.CONFIRMED]: '주문이 확정되었어요.',
   [OrderStatus.MADE]: '주문하신 케이크 제작이 완료되었어요.',
   [OrderStatus.PICKED_UP]: '케이크 픽업이 완료되었어요.',
+  [OrderStatus.NO_SHOW]: '픽업 시간에 방문하지 않아 노쇼로 처리되었어요.',
 };
 
 /** 취소는 사유 라벨을 덧붙인다(판매자·운영자·자동 미확정 공통). */

@@ -19,6 +19,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createOrder,
   createOrderItem,
   createUserProfile,
 } from '@/test/factories';
@@ -95,6 +96,30 @@ describe('Admin Order Resolvers (real DB)', () => {
       note: '운영 판단',
     });
     expect(canceled.status).toBe('CANCELED');
+  });
+
+  it('확정 주문 픽업 완료 경로', async () => {
+    const actor = await createAccount(prisma, { account_type: 'ADMIN' });
+    const user = {
+      accountId: actor.id.toString(),
+      accountType: 'ADMIN' as const,
+    };
+    const order = await createOrder(prisma, { status: 'CONFIRMED' });
+    await createOrderItem(prisma, { order_id: order.id });
+    await createUserProfile(prisma, { account_id: order.account_id });
+
+    const result = await mutationResolver.adminCompleteOrderPickup(user, {
+      orderId: order.id.toString(),
+      note: '매장 인도 확인',
+    });
+
+    expect(result.status).toBe('PICKED_UP');
+    const detail = await queryResolver.adminOrder(user, order.id.toString());
+    expect(detail.statusHistories[0]).toMatchObject({
+      toStatus: 'PICKED_UP',
+      actorType: 'ADMIN',
+    });
+    expect(detail.autoPickupAt).toBeNull();
   });
 
   it('매장 진행 주문 요약 경로', async () => {

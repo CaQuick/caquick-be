@@ -373,6 +373,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '선택한 픽업 일시는 예약할 수 없습니다.',
   },
+  NO_SHOW_NOT_ALLOWED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '노쇼는 픽업 시각부터 24시간 안에만 처리할 수 있습니다.',
+  },
   ORDER_AMOUNT_OUT_OF_RANGE: {
     status: HttpStatus.BAD_REQUEST,
     message: '주문 금액이 처리 가능한 범위를 벗어났습니다.',
