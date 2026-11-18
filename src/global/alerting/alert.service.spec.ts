@@ -20,6 +20,11 @@ describe('AlertService', () => {
       service as unknown as { lastSentAt: Map<string, number> }
     ).lastSentAt.keys(),
   ];
+  const trackedAttempts = (service: AlertService) => [
+    ...(
+      service as unknown as { latestAttempt: Map<string, number> }
+    ).latestAttempt.keys(),
+  ];
 
   function build(
     config: Partial<AlertingConfig> = {},
@@ -225,6 +230,33 @@ describe('AlertService', () => {
 
       await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
       expect(transport).toHaveBeenCalledTimes(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('반증: 겹친 전송에서 더 새 시도가 먼저 성공하면 늦게 실패한 묵은 시도는 재전송하지 않는다', async () => {
+    jest.useFakeTimers();
+    try {
+      let failOld!: (ok: boolean) => void;
+      const { service, transport } = build(
+        { dedupeWindowMs: 1_000 },
+        jest
+          .fn()
+          .mockReturnValueOnce(new Promise<boolean>((r) => (failOld = r)))
+          .mockResolvedValue(true),
+      );
+      const old = service.notify({ level: 'error', title: 't', key: 'a' }); // t=0 전송 중
+      nowMs += 1_500;
+      await expect(
+        service.notify({ level: 'error', title: 't', key: 'a' }),
+      ).resolves.toBe('sent'); // t=1.5s 새 시도 성공
+      failOld(false); // t=2.5s 묵은 시도 실패
+      await expect(old).resolves.toBe('failed');
+
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(2);
+      expect(trackedAttempts(service)).toEqual([]);
     } finally {
       jest.useRealTimers();
     }
