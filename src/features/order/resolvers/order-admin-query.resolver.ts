@@ -8,6 +8,7 @@ import { AdminOrderService } from '@/features/order/services/order-admin.service
 import type {
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
+  AdminStoreInProgressOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
 import {
   CurrentUser,
@@ -38,5 +39,16 @@ export class AdminOrderQueryResolver {
     @Args('orderId') orderId: string,
   ): Promise<AdminOrderDetailOutput> {
     return this.orderService.adminOrder(parseAccountId(user), parseId(orderId));
+  }
+
+  @Query('adminStoreInProgressOrderSummary')
+  adminStoreInProgressOrderSummary(
+    @CurrentUser() user: JwtUser,
+    @Args('storeId') storeId: string,
+  ): Promise<AdminStoreInProgressOrderSummaryOutput> {
+    return this.orderService.adminStoreInProgressOrderSummary(
+      parseAccountId(user),
+      parseId(storeId),
+    );
   }
 }

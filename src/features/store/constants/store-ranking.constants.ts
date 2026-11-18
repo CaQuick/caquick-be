@@ -13,10 +13,12 @@ export const RANKING_BAYESIAN_M = 5;
 
 export const RANKING_RECENT_ORDER_DAYS = 30;
 
+// 노쇼도 판매자가 만든 케이크라 픽업 완료와 같이 센다
 export const RANKING_VALID_ORDER_STATUSES = [
   'CONFIRMED',
   'MADE',
   'PICKED_UP',
+  'NO_SHOW',
 ] as const;
 
 export const DEFAULT_GLOBAL_RATING_PRIOR = 4.0;

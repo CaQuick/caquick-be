@@ -7,6 +7,13 @@ extend type Query {
   주문 상세를 전체 품목·구매자 요약·상태 이력과 함께 조회한다. 없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminOrder(orderId: ID!): AdminOrderDetail!
+  """
+  매장의 진행 중 주문(입금 대기·접수·확정·제작 완료) 건수를 상태별로 센다. 판매자 정지·매장 숨김 전 경고용이며
+  없는 매장이면 0건이다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminStoreInProgressOrderSummary(
+    storeId: ID!
+  ): AdminStoreInProgressOrderSummary!
 }
 
 extend type Mutation {
@@ -191,6 +198,35 @@ type AdminOrderDetail {
 }
 
 """
+매장의 진행 중 주문 요약.
+"""
+type AdminStoreInProgressOrderSummary {
+  storeId: ID!
+  """
+  진행 중 주문 전체 건수.
+  """
+  totalCount: Int!
+  """
+  상태별 건수. 0건인 상태는 빠지고 흐름 순(입금 대기 → 제작 완료)으로 온다.
+  """
+  byStatus: [AdminStoreInProgressStatusCount!]!
+}
+
+"""
+상태 1개의 주문 건수.
+"""
+type AdminStoreInProgressStatusCount {
+  """
+  주문 상태.
+  """
+  status: OrderStatusType!
+  """
+  건수.
+  """
+  count: Int!
+}
+
+"""
 주문 목록 조회 조건. 모든 필터는 AND로 결합된다.
 """
 input AdminOrderListInput {
@@ -210,6 +246,10 @@ input AdminOrderListInput {
   주문 상태 필터. 미지정 시 전체.
   """
   status: OrderStatusType
+  """
+  true면 진행 중 주문(입금 대기·접수·확정·제작 완료)만. 기본 false, null도 false(전체)로 본다. status와 함께 오면 AND다.
+  """
+  inProgress: Boolean = false
   """
   매장 ID 필터(품목 기준). 미지정 시 전체.
   """

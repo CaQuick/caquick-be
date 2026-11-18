@@ -1,10 +1,10 @@
 extend type Query {
   """
-  내 매장 주문 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  내 매장 주문 목록을 조회한다. 입금이 확인된(접수된) 주문만 보인다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerOrderList(input: SellerOrderListInput): SellerOrderConnection!
   """
-  내 매장 주문 상세를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  내 매장 주문 상세를 조회한다. 입금 확인 전 주문은 없는 주문과 같이 NOT_FOUND다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerOrder(orderId: ID!): SellerOrderDetail!
 }
@@ -100,6 +100,10 @@ input SellerOrderListInput {
   """
   status: OrderStatusType
   """
+  구매자 계정 ID 필터. 채팅 상대의 주문만 볼 때 쓴다. 미지정 시 전체.
+  """
+  buyerAccountId: ID
+  """
   주문 생성 시각 하한(이상).
   """
   fromCreatedAt: DateTime
@@ -189,7 +193,7 @@ type SellerOrderDetail {
   """
   items: [OrderItemDetail!]!
   """
-  상태 변경 이력. 최신순.
+  상태 변경 이력. 최신순. 입금 대기 이력은 빠지고, 접수 이력은 fromStatus가 null(최초)로 온다.
   """
   statusHistories: [OrderStatusHistory!]!
 }

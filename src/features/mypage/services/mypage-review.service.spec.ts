@@ -406,27 +406,31 @@ describe('UserReviewService (real DB)', () => {
       ).rejects.toThrowDomain(404);
     });
 
-    it('주문이 PICKED_UP 이전 상태면 400', async () => {
-      const account = await createAccount(prisma, { account_type: 'USER' });
-      await createUserProfile(prisma, { account_id: account.id });
-      const product = await createProduct(prisma);
-      const order = await createOrder(prisma, {
-        account_id: account.id,
-        status: 'SUBMITTED',
-      });
-      const item = await createOrderItem(prisma, {
-        order_id: order.id,
-        product_id: product.id,
-      });
+    // 노쇼는 종료 상태지만 받지 않은 케이크라 리뷰를 쓸 수 없다
+    it.each(['SUBMITTED', 'NO_SHOW'] as const)(
+      '주문이 %s면 400(PICKED_UP만 쓸 수 있다)',
+      async (status) => {
+        const account = await createAccount(prisma, { account_type: 'USER' });
+        await createUserProfile(prisma, { account_id: account.id });
+        const product = await createProduct(prisma);
+        const order = await createOrder(prisma, {
+          account_id: account.id,
+          status,
+        });
+        const item = await createOrderItem(prisma, {
+          order_id: order.id,
+          product_id: product.id,
+        });
 
-      await expect(
-        service.writeReview(account.id, {
-          orderItemId: item.id.toString(),
-          rating: 5,
-          content: VALID_CONTENT,
-        }),
-      ).rejects.toThrowDomain(400);
-    });
+        await expect(
+          service.writeReview(account.id, {
+            orderItemId: item.id.toString(),
+            rating: 5,
+            content: VALID_CONTENT,
+          }),
+        ).rejects.toThrowDomain(400);
+      },
+    );
 
     it('활성 리뷰가 이미 있으면 409', async () => {
       const ctx = await setupReviewableOrderItem();
@@ -733,7 +737,7 @@ describe('UserReviewService (real DB)', () => {
       args?: {
         productName?: string;
         pickedUpAt?: Date;
-        orderStatus?: 'PICKED_UP' | 'CONFIRMED';
+        orderStatus?: 'PICKED_UP' | 'CONFIRMED' | 'NO_SHOW';
         orderDeletedAt?: Date | null;
       },
     ): Promise<bigint> {
@@ -838,6 +842,7 @@ describe('UserReviewService (real DB)', () => {
     it('픽업 완료가 아닌 주문·삭제된 주문·타인 주문은 제외한다', async () => {
       const account = await createAccount(prisma, { account_type: 'USER' });
       await pickUpItem(account.id, { orderStatus: 'CONFIRMED' });
+      await pickUpItem(account.id, { orderStatus: 'NO_SHOW' });
       await pickUpItem(account.id, { orderDeletedAt: new Date() });
       const other = await createAccount(prisma, { account_type: 'USER' });
       await pickUpItem(other.id);

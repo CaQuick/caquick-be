@@ -108,9 +108,14 @@ describe('OrderRepository (real DB)', () => {
   });
 
   describe('findOngoingOrdersByAccount', () => {
-    it('SUBMITTED/CONFIRMED/MADE 상태 주문만 since 이후로 반환하고 PICKED_UP/CANCELED 제외', async () => {
+    it('진행 중(입금 대기·접수·확정·제작 완료) 주문만 since 이후로 반환하고 PICKED_UP·NO_SHOW·CANCELED 제외', async () => {
       const buyer = await setupBuyer();
       const since = new Date('2026-01-01');
+      const pending = await createOrder(prisma, {
+        account_id: buyer.id,
+        status: 'PENDING_PAYMENT',
+      });
+      await createOrder(prisma, { account_id: buyer.id, status: 'NO_SHOW' });
 
       const o1 = await createOrder(prisma, {
         account_id: buyer.id,
@@ -134,7 +139,9 @@ describe('OrderRepository (real DB)', () => {
         since,
         limit: 10,
       });
-      expect(rows.map((r) => r.id).sort()).toEqual([o1.id, o4.id].sort());
+      expect(rows.map((r) => r.id).sort()).toEqual(
+        [pending.id, o1.id, o4.id].sort(),
+      );
     });
 
     it('since 이전에 생성된 주문은 제외한다', async () => {
@@ -393,6 +400,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2025-01-01'),
+          submitted_at: new Date('2025-01-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -425,6 +433,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2025-06-01'),
+          submitted_at: new Date('2025-06-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -444,6 +453,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2026-05-01'),
+          submitted_at: new Date('2026-05-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -508,21 +518,21 @@ describe('OrderRepository (real DB)', () => {
 
     it('basis가 기준 컬럼을 고르고 범위는 [from, to)다', async () => {
       const store = await createStore(prisma);
-      // 픽업은 범위 안, 생성은 범위 밖
+      // 픽업은 범위 안, 접수는 범위 밖
       await storeOrder(store.id, {
         pickup_at: inside,
-        created_at: before,
+        submitted_at: before,
         total_price: 1_000,
       });
       // 경계: from은 포함, to는 제외
       await storeOrder(store.id, {
         pickup_at: from,
-        created_at: to,
+        submitted_at: to,
         total_price: 10,
       });
       await storeOrder(store.id, {
         pickup_at: to,
-        created_at: from,
+        submitted_at: from,
         total_price: 100,
       });
 
@@ -531,9 +541,47 @@ describe('OrderRepository (real DB)', () => {
         await repo.aggregateStoreOrdersInRange({ ...base, basis: 'pickup' }),
       ).toEqual({ orderCount: 2, salesAmount: 1_010 });
       expect(
-        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'created' }),
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'submitted' }),
       ).toEqual({ orderCount: 1, salesAmount: 100 });
     });
+
+    it('접수 기준은 생성 시각이 아니라 입금 확인(접수) 시각이다', async () => {
+      const store = await createStore(prisma);
+      await storeOrder(store.id, {
+        created_at: before,
+        submitted_at: inside,
+        total_price: 7,
+      });
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'submitted',
+        }),
+      ).toEqual({ orderCount: 1, salesAmount: 7 });
+    });
+
+    it.each(['pickup', 'submitted'] as const)(
+      '입금 대기(판매자 비노출) 주문은 %s 기준에서 빠진다',
+      async (basis) => {
+        const store = await createStore(prisma);
+        await storeOrder(store.id, {
+          status: 'PENDING_PAYMENT',
+          pickup_at: inside,
+          created_at: inside,
+          total_price: 5,
+        });
+        expect(
+          await repo.aggregateStoreOrdersInRange({
+            storeId: store.id,
+            from,
+            to,
+            basis,
+          }),
+        ).toEqual({ orderCount: 0, salesAmount: 0 });
+      },
+    );
 
     it('CANCELED·soft-delete 주문·품목이 soft-delete된 주문·다른 매장은 제외한다', async () => {
       const store = await createStore(prisma);
@@ -573,7 +621,7 @@ describe('OrderRepository (real DB)', () => {
           storeId: store.id,
           from,
           to,
-          basis: 'created',
+          basis: 'submitted',
         }),
       ).toEqual({ orderCount: 0, salesAmount: 0 });
     });
@@ -658,6 +706,31 @@ describe('OrderRepository (real DB)', () => {
           where: { order_id: order.id },
         }),
       ).toBe(0);
+    });
+
+    it('입금 확인 전(submitted_at 없음) 주문은 잠금 조회에서 빠져 null이다(전이 판정 전)', async () => {
+      const store = await createStore(prisma);
+      const order = await createOrder(prisma, { status: 'PENDING_PAYMENT' });
+      await createOrderItem(prisma, { order_id: order.id, store_id: store.id });
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      const assertTransition = jest.fn();
+
+      const result = await repo.updateOrderStatusBySeller({
+        orderId: order.id,
+        storeId: store.id,
+        actorAccountId: seller.id,
+        toStatus: OrderStatus.CANCELED,
+        assertTransition,
+        note: null,
+        now: new Date(),
+      });
+
+      expect(result).toBeNull();
+      expect(assertTransition).not.toHaveBeenCalled();
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(row.status).toBe('PENDING_PAYMENT');
     });
 
     it('다른 store의 주문이면 null 반환 (update 미수행)', async () => {

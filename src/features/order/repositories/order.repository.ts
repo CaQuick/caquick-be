@@ -4,6 +4,7 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { IN_PROGRESS_ORDER_STATUSES } from '@/features/order/constants/order-status-traits';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import { orderSubmittedEvent } from '@/features/order/events/order-submitted.event';
 import { OutboxPublisher } from '@/features/outbox';
@@ -26,6 +27,11 @@ export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
 export type SellerOrderRow = Prisma.OrderGetPayload<{
   include: ReturnType<typeof sellerOrderSummaryInclude>;
 }>;
+
+/** 판매자에게 보이는 주문 — 입금 확인(접수) 때 submitted_at을 채우므로 입금 대기와 입금 전 취소가 함께 빠진다. */
+const sellerVisibleWhere = {
+  submitted_at: { not: null },
+} satisfies Prisma.OrderWhereInput;
 
 const adminOrderInclude = {
   items: {
@@ -82,6 +88,26 @@ const adminOrderDetailInclude = {
     },
   },
 } satisfies Prisma.OrderInclude;
+
+export interface AdminOrderStatusCounts {
+  pendingPayment: number;
+  submitted: number;
+  confirmed: number;
+  made: number;
+  pickedUp: number;
+  noShow: number;
+  canceled: number;
+}
+
+const ADMIN_STATUS_COUNT_KEYS = {
+  PENDING_PAYMENT: 'pendingPayment',
+  SUBMITTED: 'submitted',
+  CONFIRMED: 'confirmed',
+  MADE: 'made',
+  PICKED_UP: 'pickedUp',
+  NO_SHOW: 'noShow',
+  CANCELED: 'canceled',
+} as const satisfies Record<OrderStatus, keyof AdminOrderStatusCounts>;
 
 export interface MyOrderRow {
   id: bigint;
@@ -412,9 +438,7 @@ export class OrderRepository {
     return this.prisma.order.findMany({
       where: {
         account_id: args.accountId,
-        status: {
-          in: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED, OrderStatus.MADE],
-        },
+        status: { in: [...IN_PROGRESS_ORDER_STATUSES] },
         created_at: { gte: args.since },
       },
       orderBy: { created_at: 'desc' },
@@ -617,6 +641,7 @@ export class OrderRepository {
   private storeOrderScopeWhere(args: {
     storeId: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -624,7 +649,11 @@ export class OrderRepository {
     search?: string;
   }): Prisma.OrderWhereInput {
     return {
+      ...sellerVisibleWhere,
       ...(args.status ? { status: args.status } : {}),
+      ...(args.buyerAccountId !== undefined
+        ? { account_id: args.buyerAccountId }
+        : {}),
       ...(args.fromCreatedAt || args.toCreatedAt
         ? {
             created_at: {
@@ -662,6 +691,7 @@ export class OrderRepository {
   async countOrdersByStore(args: {
     storeId: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -673,17 +703,18 @@ export class OrderRepository {
     });
   }
 
-  /** [from, to) 픽업 또는 생성 기준 건수·금액 합(CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
+  /** [from, to) 픽업 또는 접수 기준 건수·금액 합(판매자 노출·CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
   async aggregateStoreOrdersInRange(args: {
     storeId: bigint;
     from: Date;
     to: Date;
-    basis: 'pickup' | 'created';
+    basis: 'pickup' | 'submitted';
   }): Promise<{ orderCount: number; salesAmount: number }> {
     const result = await this.prisma.order.aggregate({
       where: {
+        ...sellerVisibleWhere,
         status: { not: 'CANCELED' },
-        [args.basis === 'pickup' ? 'pickup_at' : 'created_at']: {
+        [args.basis === 'pickup' ? 'pickup_at' : 'submitted_at']: {
           gte: args.from,
           lt: args.to,
         },
@@ -698,11 +729,32 @@ export class OrderRepository {
     };
   }
 
+  /** [from, to) 픽업 입금 대기 주문의 제작 수량 합. 판매자에게 주문은 숨기고 점유한 수량만 알린다. */
+  async sumPendingPaymentQuantityByStore(args: {
+    storeId: bigint;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    const result = await this.prisma.orderItem.aggregate({
+      where: {
+        store_id: args.storeId,
+        order: {
+          status: OrderStatus.PENDING_PAYMENT,
+          pickup_at: { gte: args.from, lt: args.to },
+          ...activeWhere,
+        },
+      },
+      _sum: { quantity: true },
+    });
+    return result._sum.quantity ?? 0;
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
     cursor?: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -724,6 +776,7 @@ export class OrderRepository {
     return this.prisma.order.findFirst({
       where: {
         id: args.orderId,
+        ...sellerVisibleWhere,
         items: {
           some: {
             store_id: args.storeId,
@@ -733,8 +786,12 @@ export class OrderRepository {
       },
       // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
+        // 입금 대기 이력은 판매자에게 보이지 않는다
         status_histories: {
-          where: activeWhere,
+          where: {
+            to_status: { not: OrderStatus.PENDING_PAYMENT },
+            ...activeWhere,
+          },
           orderBy: {
             changed_at: 'desc',
           },
@@ -787,6 +844,7 @@ export class OrderRepository {
       const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
         SELECT o.id, o.status FROM \`order\` o
         WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
+          AND o.submitted_at IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM order_item i
             WHERE i.order_id = o.id AND i.store_id = ${args.storeId}
@@ -889,13 +947,20 @@ export class OrderRepository {
   private adminOrderScopeWhere(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
   }): Prisma.OrderWhereInput {
     return {
-      ...(args.status ? { status: args.status } : {}),
+      // status와 함께 오면 AND — 둘이 겹치지 않으면 빈 결과다
+      AND: [
+        args.status ? { status: args.status } : {},
+        args.inProgress
+          ? { status: { in: [...IN_PROGRESS_ORDER_STATUSES] } }
+          : {},
+      ],
       ...(args.accountId !== undefined ? { account_id: args.accountId } : {}),
       ...(args.storeId !== undefined
         ? { items: { some: { store_id: args.storeId, ...activeWhere } } }
@@ -923,6 +988,7 @@ export class OrderRepository {
   async listOrdersForAdmin(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
@@ -944,6 +1010,7 @@ export class OrderRepository {
   async countOrdersForAdmin(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
@@ -1045,55 +1112,53 @@ export class OrderRepository {
     });
   }
 
+  /** 매장의 진행 중 주문 상태별 건수(관리자 정지·숨김 경고용). 0건 상태는 빼고 흐름 순으로 돌려준다. */
+  async countInProgressOrdersByStore(
+    storeId: bigint,
+  ): Promise<{ status: OrderStatus; count: number }[]> {
+    const grouped = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: {
+        status: { in: [...IN_PROGRESS_ORDER_STATUSES] },
+        items: { some: { store_id: storeId, ...activeWhere } },
+      },
+      _count: { _all: true },
+    });
+    const counts = new Map(grouped.map((g) => [g.status, g._count._all]));
+    return IN_PROGRESS_ORDER_STATUSES.flatMap((status) => {
+      const count = counts.get(status);
+      return count ? [{ status, count }] : [];
+    });
+  }
+
   // ── 대시보드 집계(dashboard feature가 배럴로 소비) ──
 
+  /** 금액 합은 돈이 오가지 않은 취소·입금 대기를 뺀다. */
   async aggregateOrdersBetween(
     from: Date,
     to: Date,
-  ): Promise<{
-    counts: {
-      submitted: number;
-      confirmed: number;
-      made: number;
-      pickedUp: number;
-      canceled: number;
-    };
-    amountSum: number;
-  }> {
+  ): Promise<{ counts: AdminOrderStatusCounts; amountSum: number }> {
     const grouped = await this.prisma.order.groupBy({
       by: ['status'],
       where: { created_at: { gte: from, lte: to } },
       _count: { _all: true },
       _sum: { total_price: true },
     });
-    const counts = {
+    const counts: AdminOrderStatusCounts = {
+      pendingPayment: 0,
       submitted: 0,
       confirmed: 0,
       made: 0,
       pickedUp: 0,
+      noShow: 0,
       canceled: 0,
     };
     let amountSum = 0;
     for (const g of grouped) {
-      const n = g._count._all;
-      switch (g.status) {
-        case 'SUBMITTED':
-          counts.submitted = n;
-          break;
-        case 'CONFIRMED':
-          counts.confirmed = n;
-          break;
-        case 'MADE':
-          counts.made = n;
-          break;
-        case 'PICKED_UP':
-          counts.pickedUp = n;
-          break;
-        case 'CANCELED':
-          counts.canceled = n;
-          break;
+      counts[ADMIN_STATUS_COUNT_KEYS[g.status]] = g._count._all;
+      if (g.status !== 'CANCELED' && g.status !== 'PENDING_PAYMENT') {
+        amountSum += g._sum.total_price ?? 0;
       }
-      if (g.status !== 'CANCELED') amountSum += g._sum.total_price ?? 0;
     }
     return { counts, amountSum };
   }

@@ -1,5 +1,5 @@
 import { StoreStatsRepository } from '@/features/store/repositories/store-stats.repository';
-import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
+import { OrderStatus, type PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -111,6 +111,25 @@ describe('StoreStatsRepository (real DB)', () => {
     );
     expect(counts.get(product.id)).toBe(1);
     expect(sold.get(store.id)).toBe(4);
+  });
+
+  // 판매자가 만든 케이크(확정 이후, 노쇼 포함)만 유효하다
+  it.each(
+    Object.values(OrderStatus).map((status) => [
+      status,
+      ['CONFIRMED', 'MADE', 'PICKED_UP', 'NO_SHOW'].includes(status),
+    ]),
+  )('%s 주문의 유효 여부는 %s다', async (status, valid) => {
+    const store = await createStore(prisma);
+    const product = await createProduct(prisma, { store_id: store.id });
+    await placeOrder({ storeId: store.id, productId: product.id, status });
+
+    const counts = await repo.aggregateRecentOrderCounts(
+      'store_id',
+      [store.id],
+      SINCE,
+    );
+    expect(counts.get(store.id) ?? 0).toBe(valid ? 1 : 0);
   });
 
   it('since 경계(같은 시각)는 포함한다', async () => {

@@ -12,6 +12,7 @@ export interface SellerDashboardOutput {
   capacity: number | null;
   remainingCapacity: number | null;
   bookedQuantity: number;
+  pendingPaymentQuantity: number;
   activeProductCount: number;
   unansweredConversationCount: number;
 }
