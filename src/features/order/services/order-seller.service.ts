@@ -22,21 +22,19 @@ import type { SellerUpdateOrderStatusInput } from '@/features/order/dto/inputs/s
 import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
-import {
-  OrderRepository,
-  type SellerOrderRow,
-} from '@/features/order/repositories/order.repository';
+import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import {
+  toOrderAutoTransitionTimes,
   toOrderCancellation,
   toOrderItemDetail,
-  toOrderAutoTransitionTimes,
-  toOrderListCustomBadge,
+  toOrderPickupChange,
   toOrderStatusHistory,
   type OrderItemDetailRow,
   type OrderStatusHistoryRow,
 } from '@/features/order/services/order-output-mappers.helper';
+import { toSellerOrderSummaryOutput } from '@/features/order/services/order-seller-mappers.helper';
 import type {
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
@@ -45,6 +43,7 @@ import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 import {
   OrderActor,
   OrderStatus,
+  type OrderPickupChange,
   type PaymentMethod,
   type Refund,
 } from '@/generated/prisma/client';
@@ -97,7 +96,7 @@ export class SellerOrderService extends SellerBaseService {
 
     const paged = sliceIdCursorPage(rows, normalized.limit);
     return {
-      items: paged.items.map((row) => this.toOrderSummaryOutput(row)),
+      items: paged.items.map((row) => toSellerOrderSummaryOutput(row)),
       nextCursor: paged.nextCursor,
       hasMore: paged.hasMore,
       totalCount,
@@ -163,7 +162,7 @@ export class SellerOrderService extends SellerBaseService {
       ctx.storeId,
       toSellerOrderUpdateEvent('STATUS_CHANGED', updated),
     );
-    return this.toOrderSummaryOutput(updated);
+    return toSellerOrderSummaryOutput(updated);
   }
 
   /** 접수 단계 거절(전액 환불)과 확정 뒤 취소(사정 선택). 입금 확인 전 주문은 없는 주문과 같다. */
@@ -192,25 +191,7 @@ export class SellerOrderService extends SellerBaseService {
     });
     if (!updated) throw new DomainException('ORDER_NOT_FOUND');
     await this.events.publishSellerStatusChanged(updated);
-    return this.toOrderSummaryOutput(updated);
-  }
-
-  private toOrderSummaryOutput(row: SellerOrderRow): SellerOrderSummaryOutput {
-    return {
-      id: row.id.toString(),
-      orderNumber: row.order_number,
-      status: row.status,
-      pickupAt: row.pickup_at,
-      buyerName: row.buyer_name,
-      buyerPhone: row.buyer_phone,
-      totalPrice: row.total_price,
-      createdAt: row.created_at,
-      // 내 매장 첫 품목의 주문 시점 스냅샷 — 상품이 바뀌어도 카드 값은 유지된다
-      firstItemName: row.items[0]?.product_name_snapshot ?? null,
-      firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
-      ...toOrderListCustomBadge(row.items[0]),
-      confirmDeadlineAt: toOrderAutoTransitionTimes(row).confirmDeadlineAt,
-    };
+    return toSellerOrderSummaryOutput(updated);
   }
 
   private toOrderDetailOutput(row: {
@@ -237,6 +218,7 @@ export class SellerOrderService extends SellerBaseService {
     updated_at: Date;
     status_histories: OrderStatusHistoryRow[];
     refunds: Refund[];
+    pickup_changes: OrderPickupChange[];
     items: OrderItemDetailRow[];
   }): SellerOrderDetailOutput {
     return {
@@ -277,6 +259,7 @@ export class SellerOrderService extends SellerBaseService {
         now: this.clock.now(),
         pickupAt: row.pickup_at,
       }),
+      pickupChanges: row.pickup_changes.map(toOrderPickupChange),
     };
   }
 }

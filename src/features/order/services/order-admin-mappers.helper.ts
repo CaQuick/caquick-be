@@ -7,6 +7,7 @@ import {
   toOrderAutoTransitionTimes,
   toOrderCancellation,
   toOrderItemDetail,
+  toOrderPickupChange,
   toOrderRefund,
   toOrderListCustomBadge,
   toOrderStatusHistory,
@@ -77,5 +78,6 @@ export function toAdminOrderDetailOutput(
     cancellation: toOrderCancellation(row),
     cancelOptions,
     ...toOrderAutoTransitionTimes(row),
+    pickupChanges: row.pickup_changes.map(toOrderPickupChange),
   };
 }

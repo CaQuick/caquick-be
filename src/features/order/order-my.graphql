@@ -267,6 +267,10 @@ type MyOrderDetail {
   status가 AWAITING_ACCOUNT면 submitMyRefundAccount로 계좌를 입력받는다.
   """
   refunds: [OrderRefund!]!
+  """
+  판매자가 바꾼 픽업 일시 이력. 오래된 순, 없으면 빈 배열. pickupAt은 마지막 변경 뒤 값이다.
+  """
+  pickupChanges: [OrderPickupChange!]!
 
   """
   상태 변경 이력. 오래된 순이다(판매자 주문 상세는 최신순 — 방향이 반대다).

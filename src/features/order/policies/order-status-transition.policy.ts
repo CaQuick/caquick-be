@@ -30,6 +30,13 @@ const TRANSITIONS: Partial<
   },
 };
 
+/** 판매자가 픽업 일시를 바꿀 수 있는 상태. */
+const PICKUP_RESCHEDULABLE: readonly OrderStatus[] = [
+  OrderStatus.SUBMITTED,
+  OrderStatus.CONFIRMED,
+  OrderStatus.MADE,
+];
+
 /** 픽업 시각에서 이만큼 지나면 자동 픽업 완료되고, 노쇼는 그 전까지만 처리할 수 있다. */
 export const AUTO_PICKUP_DELAY_MS = DAY_MS;
 
@@ -89,5 +96,22 @@ export class OrderStatusTransitionPolicy {
 
   canTransition(request: OrderTransitionRequest): boolean {
     return violationOf(request) === null;
+  }
+
+  assertPickupReschedulable(status: OrderStatus): void {
+    if (!PICKUP_RESCHEDULABLE.includes(status)) {
+      throw new DomainException('PICKUP_RESCHEDULE_NOT_ALLOWED');
+    }
+  }
+
+  assertPickupChange(args: {
+    status: OrderStatus;
+    fromPickupAt: Date;
+    toPickupAt: Date;
+  }): void {
+    this.assertPickupReschedulable(args.status);
+    if (args.fromPickupAt.getTime() === args.toPickupAt.getTime()) {
+      throw new DomainException('PICKUP_UNCHANGED');
+    }
   }
 }

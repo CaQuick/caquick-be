@@ -2,6 +2,7 @@ import type {
   OrderAutoTransitionTimes,
   OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderPickupChangeOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
 import type { OrderStatus, PaymentMethod } from '@/generated/prisma/client';
@@ -46,6 +47,7 @@ export interface SellerOrderDetailOutput extends OrderAutoTransitionTimes {
   statusHistories: OrderStatusHistoryOutput[];
   cancellation: OrderCancellationOutput | null;
   canMarkNoShow: boolean;
+  pickupChanges: OrderPickupChangeOutput[];
 }
 
 /** SDL SellerOrderUpdateKind. PICKUP_RESCHEDULED는 판매자 픽업 일시 변경이 발행한다. */

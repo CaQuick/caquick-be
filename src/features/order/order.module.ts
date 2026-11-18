@@ -11,6 +11,7 @@ import { OrderBookedRepository } from '@/features/order/repositories/order-booke
 import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
 import { OrderLifecycleRepository } from '@/features/order/repositories/order-lifecycle.repository';
+import { OrderPickupChangeRepository } from '@/features/order/repositories/order-pickup-change.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderWithdrawalBlockingRepository } from '@/features/order/repositories/order-withdrawal-blocking.repository';
@@ -32,6 +33,8 @@ import { PaymentQueryResolver } from '@/features/order/resolvers/order-payment-q
 import { AdminRefundMutationResolver } from '@/features/order/resolvers/order-refund-admin-mutation.resolver';
 import { AdminRefundQueryResolver } from '@/features/order/resolvers/order-refund-admin-query.resolver';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
+import { SellerOrderPickupMutationResolver } from '@/features/order/resolvers/order-seller-pickup-mutation.resolver';
+import { SellerOrderPickupQueryResolver } from '@/features/order/resolvers/order-seller-pickup-query.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
 import { SellerSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-seller-mutation.resolver';
 import { SellerSettlementQueryResolver } from '@/features/order/resolvers/order-settlement-seller-query.resolver';
@@ -47,6 +50,7 @@ import { OrderLifecycleScheduler } from '@/features/order/services/order-lifecyc
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { AdminPaymentService } from '@/features/order/services/order-payment-admin.service';
 import { AdminRefundService } from '@/features/order/services/order-refund-admin.service';
+import { SellerOrderPickupService } from '@/features/order/services/order-seller-pickup.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
 import { SellerSettlementService } from '@/features/order/services/order-settlement-seller.service';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
@@ -90,6 +94,11 @@ import { StoreModule } from '@/features/store';
     SellerOrderService,
     SellerOrderQueryResolver,
     SellerOrderMutationResolver,
+    // 판매자 픽업 일시 변경(변경 시트 달력·슬롯 포함)
+    OrderPickupChangeRepository,
+    SellerOrderPickupService,
+    SellerOrderPickupQueryResolver,
+    SellerOrderPickupMutationResolver,
     // 관리자 주문 관리(목록·상세·강제 취소)
     AdminOrderService,
     AdminOrderQueryResolver,

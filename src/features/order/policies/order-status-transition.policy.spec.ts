@@ -177,4 +177,39 @@ describe('OrderStatusTransitionPolicy', () => {
       },
     );
   });
+
+  describe('픽업 일시 변경', () => {
+    const changed = new Date(PICKUP_AT.getTime() + HOUR_MS);
+
+    it.each(
+      STATUSES.map(
+        (status) =>
+          [
+            status,
+            ['SUBMITTED', 'CONFIRMED', 'MADE'].includes(status)
+              ? null
+              : 'PICKUP_RESCHEDULE_NOT_ALLOWED',
+          ] as const,
+      ),
+    )('%s: %s', (status, code) => {
+      const run = () =>
+        policy.assertPickupChange({
+          status,
+          fromPickupAt: PICKUP_AT,
+          toPickupAt: changed,
+        });
+      if (code === null) expect(run).not.toThrow();
+      else expect(run).toThrowDomain(code);
+    });
+
+    it('같은 일시면 PICKUP_UNCHANGED', () => {
+      expect(() =>
+        policy.assertPickupChange({
+          status: OrderStatus.CONFIRMED,
+          fromPickupAt: PICKUP_AT,
+          toPickupAt: new Date(PICKUP_AT.getTime()),
+        }),
+      ).toThrowDomain('PICKUP_UNCHANGED');
+    });
+  });
 });

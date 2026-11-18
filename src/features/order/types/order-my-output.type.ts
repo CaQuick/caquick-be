@@ -2,6 +2,7 @@ import type { OffsetConnection } from '@/common/types/cursor-connection.type';
 import type {
   OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderPickupChangeOutput,
   OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
@@ -69,6 +70,7 @@ export interface MyOrderDetail {
   cancellation: OrderCancellationOutput | null;
   canCancel: boolean;
   refunds: OrderRefundOutput[];
+  pickupChanges: OrderPickupChangeOutput[];
   statusHistories: OrderStatusHistoryOutput[];
   items: MyOrderItem[];
   store: MyOrderStoreInfo;

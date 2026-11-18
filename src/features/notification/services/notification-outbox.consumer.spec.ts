@@ -303,6 +303,40 @@ describe('NotificationOutboxConsumer (real DB)', () => {
     });
   });
 
+  it('order.pickup_rescheduled는 구매자에게 바뀐 픽업 일시(KST) 알림을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+    const buyer = await createAccount(prisma, { account_type: 'USER' });
+    const order = await createOrder(prisma, { account_id: buyer.id });
+    const item = await createOrderItem(prisma, { order_id: order.id });
+    const rescheduled = event('order.pickup_rescheduled', {
+      orderId: order.id.toString(),
+      orderNumber: 'ORD-5',
+      buyerAccountId: buyer.id.toString(),
+      storeId: item.store_id.toString(),
+      storeName: '케이크샵',
+      productId: item.product_id.toString(),
+      productName: '레터링 케이크',
+      fromPickupAt: '2026-09-20T05:00:00.000Z',
+      toPickupAt: '2026-09-21T06:30:00.000Z',
+    });
+
+    await consumer.handle(rescheduled);
+    await consumer.handle(rescheduled);
+
+    const rows = await prisma.notification.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      account_id: buyer.id,
+      type: 'ORDER_STATUS',
+      event: 'ORDER_PICKUP_RESCHEDULED',
+      title: '픽업변경',
+      body: 'ORD-5 픽업 일시가 9/21 15:30로 변경되었어요.',
+      order_id: order.id,
+      store_id: item.store_id,
+      product_id: item.product_id,
+      created_at: OCCURRED_AT,
+    });
+  });
+
   it('review.liked는 작성자에게 좋아요 알림을 만든다', async () => {
     const review = await createReview(prisma);
     await consumer.handle(

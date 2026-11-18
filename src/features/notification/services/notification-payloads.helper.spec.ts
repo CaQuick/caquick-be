@@ -1,4 +1,5 @@
 import {
+  buildOrderPickupRescheduledNotification,
   buildOrderStatusNotification,
   buildRefundAccountRequestedNotification,
   buildRefundCompletedNotification,
@@ -120,6 +121,22 @@ describe('notification-payloads.helper', () => {
         }),
       ).toBeNull();
       expect(status('PENDING_PAYMENT', { actorType: 'BUYER' })).toBeNull();
+    });
+  });
+
+  describe('buildOrderPickupRescheduledNotification', () => {
+    it('바뀐 픽업 일시를 KST M/d HH:mm로 적는다', () => {
+      expect(
+        buildOrderPickupRescheduledNotification(
+          'ORD-3',
+          new Date('2026-10-05T15:30:00.000Z'),
+        ),
+      ).toEqual({
+        type: NotificationType.ORDER_STATUS,
+        event: NotificationEvent.ORDER_PICKUP_RESCHEDULED,
+        title: '픽업변경',
+        body: 'ORD-3 픽업 일시가 10/6 00:30로 변경되었어요.',
+      });
     });
   });
 

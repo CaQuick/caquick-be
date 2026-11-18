@@ -71,6 +71,8 @@ export interface PickupDayInput {
   /** 레코드가 없으면 undefined = 무제한. */
   capacity: number | undefined;
   booked: number;
+  /** 이 날짜에 더 들어가야 하는 수량. 기본 1(새 주문 한 건), 픽업 변경은 옮길 주문의 수량. */
+  required?: number;
   now: Date;
   dayStartUtc: Date;
 }
@@ -111,7 +113,10 @@ export function evaluatePickupDay(input: PickupDayInput): PickupDayResult {
   }
 
   // capacity 레코드가 없으면 무제한으로 간주
-  if (input.capacity !== undefined && input.booked >= input.capacity) {
+  if (
+    input.capacity !== undefined &&
+    input.booked + (input.required ?? 1) > input.capacity
+  ) {
     return { reason: STORE_PICKUP_DAY_REASON.CAPACITY_FULL, slots };
   }
 

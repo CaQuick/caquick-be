@@ -13,6 +13,7 @@ import {
   NotificationRepository,
 } from '@/features/notification/repositories/notification.repository';
 import {
+  buildOrderPickupRescheduledNotification,
   buildOrderStatusNotification,
   buildRefundAccountRequestedNotification,
   buildRefundCompletedNotification,
@@ -20,7 +21,9 @@ import {
   type NotificationPayload,
 } from '@/features/notification/services/notification-payloads.helper';
 import {
+  ORDER_PICKUP_RESCHEDULED,
   ORDER_STATUS_CHANGED,
+  parseOrderPickupRescheduledPayload,
   parseOrderStatusChangedPayload,
   parseRefundCompletedPayload,
   parseRefundRequestedPayload,
@@ -42,6 +45,7 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
 @Injectable()
 @SubscribeOutbox(
   ORDER_STATUS_CHANGED,
+  ORDER_PICKUP_RESCHEDULED,
   REFUND_REQUESTED,
   REFUND_COMPLETED,
   REVIEW_LIKED,
@@ -60,6 +64,8 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
     switch (event.eventType) {
       case ORDER_STATUS_CHANGED:
         return this.onOrderStatusChanged(event);
+      case ORDER_PICKUP_RESCHEDULED:
+        return this.onPickupRescheduled(event);
       case REFUND_REQUESTED:
         return this.onRefundRequested(event);
       case REFUND_COMPLETED:
@@ -82,6 +88,26 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
       {
         account_id: parseId(p.buyerAccountId),
         ...payload,
+        order_id: parseId(p.orderId),
+        store_id: p.storeId === null ? null : parseId(p.storeId),
+        product_id: p.productId === null ? null : parseId(p.productId),
+        order_number: p.orderNumber,
+        store_name: p.storeName,
+        product_name: p.productName,
+        created_at: event.occurredAt,
+      },
+    ]);
+  }
+
+  private async onPickupRescheduled(event: OutboxEvent): Promise<void> {
+    const p = parseOrderPickupRescheduledPayload(event.payload);
+    await this.repo.createFromEvent(event.eventId, [
+      {
+        account_id: parseId(p.buyerAccountId),
+        ...buildOrderPickupRescheduledNotification(
+          p.orderNumber,
+          new Date(p.toPickupAt),
+        ),
         order_id: parseId(p.orderId),
         store_id: p.storeId === null ? null : parseId(p.storeId),
         product_id: p.productId === null ? null : parseId(p.productId),

@@ -38,3 +38,9 @@ export {
   type OrderConfirmReminderDuePayload,
   parseOrderConfirmReminderDuePayload,
 } from '@/features/order/events/order-confirm-reminder-due.event';
+// 판매자 픽업 변경 이벤트 계약(outbox). 구매자 알림 소비자(notification)가 읽는다.
+export {
+  ORDER_PICKUP_RESCHEDULED,
+  type OrderPickupRescheduledPayload,
+  parseOrderPickupRescheduledPayload,
+} from '@/features/order/events/order-pickup-rescheduled.event';

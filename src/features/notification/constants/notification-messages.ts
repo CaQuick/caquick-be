@@ -34,6 +34,8 @@ export const ORDER_PAYMENT_EXPIRED_NOTIFICATION = {
   body: '입금이 확인되지 않아 주문이 취소되었어요.',
 } as const;
 
+export const ORDER_PICKUP_RESCHEDULED_TITLE = '픽업변경';
+
 export const REFUND_ACCOUNT_REQUESTED_TITLE = '환불계좌입력';
 
 export const REFUND_COMPLETED_TITLE = '환불완료';
