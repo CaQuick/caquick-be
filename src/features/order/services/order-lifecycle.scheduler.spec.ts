@@ -265,6 +265,19 @@ describe('OrderLifecycleScheduler (real DB)', () => {
       ]);
     });
 
+    it('품목이 없는 주문은 보낼 매장을 몰라 표시만 남기고 이벤트는 없다', async () => {
+      const order = await createOrder(prisma, {
+        status: 'SUBMITTED',
+        submitted_at: at(-20 * HOUR_MS),
+        confirm_deadline_at: at(HOUR_MS),
+      });
+
+      await scheduler.remindConfirmDeadlines();
+
+      expect((await orderRow(order.id)).confirm_reminder_sent_at).toEqual(NOW);
+      expect(await outboxTypes(order.id)).toEqual([]);
+    });
+
     it('잠금 뒤 다시 보면 대상이 아닌 주문(그사이 확정)은 표시도 이벤트도 없다', async () => {
       const { order } = await submitted(at(HOUR_MS), at(-20 * HOUR_MS));
       await prisma.order.update({
