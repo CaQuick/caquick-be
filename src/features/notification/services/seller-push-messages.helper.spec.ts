@@ -1,6 +1,7 @@
 import {
   buildBuyerMessagePush,
   buildOrderCanceledPush,
+  buildOrderConfirmReminderPush,
   buildOrderSubmittedPush,
   formatKstPickupAt,
 } from '@/features/notification/services/seller-push-messages.helper';
@@ -55,6 +56,22 @@ describe('seller-push-messages.helper', () => {
         SUBMITTED_AT,
       ).body,
     ).toBe(`레터링 케이크 2개 · 픽업 10/5 12:05${suffix}`);
+  });
+
+  it('확정 마감 미리 알림: 상품명과 마감 시각(KST HH:mm), 딥링크 data는 kind·orderId', () => {
+    expect(
+      buildOrderConfirmReminderPush({
+        orderId: '42',
+        orderNumber: 'ORD-1',
+        storeId: '3',
+        productName: '레터링 케이크',
+        confirmDeadlineAt: '2026-10-05T03:00:00.000Z',
+      }),
+    ).toEqual({
+      title: '확정 마감 임박',
+      body: '레터링 케이크 주문을 12:00까지 확정하지 않으면 자동 취소돼요',
+      data: { kind: 'ORDER_CONFIRM_REMINDER', orderId: '42' },
+    });
   });
 
   it('구매자 문의: 본문은 preview 그대로, data는 kind·conversationId', () => {

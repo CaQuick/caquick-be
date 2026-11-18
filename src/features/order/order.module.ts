@@ -10,6 +10,7 @@ import { DepositRecordRepository } from '@/features/order/repositories/deposit-r
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
 import { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
+import { OrderLifecycleRepository } from '@/features/order/repositories/order-lifecycle.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
 import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderWithdrawalBlockingRepository } from '@/features/order/repositories/order-withdrawal-blocking.repository';
@@ -42,6 +43,7 @@ import { OrderCustomUploadCleanupScheduler } from '@/features/order/services/ord
 import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
+import { OrderLifecycleScheduler } from '@/features/order/services/order-lifecycle.scheduler';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { AdminPaymentService } from '@/features/order/services/order-payment-admin.service';
 import { AdminRefundService } from '@/features/order/services/order-refund-admin.service';
@@ -99,6 +101,9 @@ import { StoreModule } from '@/features/store';
     // 결제(입금 대기)와 상태 전이 잠금 단위, 관리자 입금 확인
     PaymentRepository,
     OrderTransitionRepository,
+    // 자동 전이 크론(미입금 취소·확정 마감 알림·미확정 취소·자동 픽업 완료, worker)
+    OrderLifecycleRepository,
+    OrderLifecycleScheduler,
     AdminDepositService,
     AdminDepositQueryResolver,
     AdminDepositMutationResolver,

@@ -490,6 +490,27 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
     });
   });
 
+  it('order.confirm_reminder_due는 매장 디바이스에 확정 마감 미리 알림을 보낸다', async () => {
+    const { storeId } = await storeWithDevices(1);
+
+    await consumer.handle(
+      event('order.confirm_reminder_due', {
+        orderId: '42',
+        orderNumber: 'ORD-1',
+        storeId: storeId.toString(),
+        productName: '레터링 케이크',
+        confirmDeadlineAt: '2026-10-05T03:00:00.000Z',
+      }),
+    );
+
+    expect(send.mock.calls[0][0][0]).toMatchObject({
+      title: '확정 마감 임박',
+      body: '레터링 케이크 주문을 12:00까지 확정하지 않으면 자동 취소돼요',
+      data: { kind: 'ORDER_CONFIRM_REMINDER', orderId: '42' },
+    });
+    expect(await deliveries()).toHaveLength(1);
+  });
+
   it('conversation.buyer_message_sent는 preview를 본문으로, 딥링크는 대화 id', async () => {
     const { storeId, devices } = await storeWithDevices(1);
 

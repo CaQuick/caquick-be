@@ -32,3 +32,9 @@ export {
   type OrderSubmittedPayload,
   parseOrderSubmittedPayload,
 } from '@/features/order/events/order-submitted.event';
+// 확정 마감 미리 알림 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
+export {
+  ORDER_CONFIRM_REMINDER_DUE,
+  type OrderConfirmReminderDuePayload,
+  parseOrderConfirmReminderDuePayload,
+} from '@/features/order/events/order-confirm-reminder-due.event';

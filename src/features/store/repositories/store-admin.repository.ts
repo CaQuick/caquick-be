@@ -161,4 +161,13 @@ export class StoreAdminRepository {
   async countActiveStores(): Promise<number> {
     return this.prisma.store.count({ where: { is_active: true } });
   }
+
+  /** 숨긴 매장 id(주문 자동 픽업 완료 제외용, order feature가 배럴로 소비). */
+  async findInactiveStoreIds(): Promise<bigint[]> {
+    const rows = await this.prisma.store.findMany({
+      where: { is_active: false },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
 }
