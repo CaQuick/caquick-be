@@ -1,5 +1,6 @@
 import { PubSub } from 'graphql-subscriptions';
 
+import { ClockService } from '@/common/providers/clock.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { SellerCancelOrderInput } from '@/features/order/dto/inputs/seller-cancel-order.input';
@@ -31,6 +32,7 @@ describe('SellerOrderService (real DB)', () => {
   let prisma: PrismaClient;
   let repo: OrderRepository;
   let pubSub: PubSub;
+  let clock: ClockService;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -55,6 +57,7 @@ describe('SellerOrderService (real DB)', () => {
     service = module.get(SellerOrderService);
     repo = module.get(OrderRepository);
     pubSub = module.get(PUB_SUB);
+    clock = module.get(ClockService);
     prisma = p;
   });
 
@@ -65,6 +68,10 @@ describe('SellerOrderService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   async function createStoreOrder(
@@ -636,21 +643,24 @@ describe('SellerOrderService (real DB)', () => {
         commissionRateBps: 333,
       });
 
+      const now = new Date('2026-09-16T07:00:00.000Z');
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+
       await service.sellerUpdateOrderStatus(account.id, {
         orderId: order.id.toString(),
         toStatus: 'PICKED_UP',
       });
 
-      const row = await prisma.order.findUniqueOrThrow({
-        where: { id: order.id },
-      });
-      expect(row).toMatchObject({
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({
         status: 'PICKED_UP',
+        picked_up_at: now,
         settlement_base_amount: 10_000,
         commission_amount: 333,
+        settlement_finalized_at: now,
         settlement_id: null,
       });
-      expect(row.settlement_finalized_at).toEqual(row.picked_up_at);
     });
 
     it('확인된 결제가 없는 주문(결제 도입 전)의 픽업 완료는 정산을 확정하지 않는다', async () => {

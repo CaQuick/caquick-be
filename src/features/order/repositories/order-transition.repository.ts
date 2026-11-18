@@ -83,7 +83,8 @@ function cancelScopeSql(scope: OrderCancelScope): Prisma.Sql {
       return Prisma.sql`AND o.account_id = ${scope.accountId}`;
     case 'store':
       return Prisma.sql`AND o.submitted_at IS NOT NULL AND EXISTS (
-        SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.store_id = ${scope.storeId})`;
+        SELECT 1 FROM order_item i
+        WHERE i.order_id = o.id AND i.store_id = ${scope.storeId} AND i.deleted_at IS NULL)`;
     default:
       return Prisma.empty;
   }
@@ -368,8 +369,11 @@ export class OrderTransitionRepository {
     if (args.actorAccountId !== null) {
       await this.auditLogs.recordAudit(tx, {
         actorAccountId: args.actorAccountId,
-        // 입금 전 주문은 판매자에게 보이지 않으므로 매장 감사 로그에도 남기지 않는다
-        storeId: locked.submitted_at ? (firstItem?.store_id ?? null) : null,
+        // 매장 id가 붙으면 판매자 감사 로그에 ip·ua까지 보인다 — 입금 전 주문과 구매자 행위는 비운다
+        storeId:
+          locked.submitted_at && args.actor !== OrderActor.BUYER
+            ? (firstItem?.store_id ?? null)
+            : null,
         targetType: AuditTargetType.ORDER,
         targetId: locked.id,
         action: AuditActionType.STATUS_CHANGE,

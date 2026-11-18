@@ -12,8 +12,10 @@ import {
   OrderTransitionRepository,
   type CancelOrderArgs,
   type ConfirmPaymentArgs,
+  type OrderCancelScope,
 } from '@/features/order/repositories/order-transition.repository';
 import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
+import { requestContextStorage } from '@/global/request-context';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -29,6 +31,7 @@ const NOW = new Date('2026-09-16T07:00:00.000Z');
 
 describe('OrderTransitionRepository (real DB)', () => {
   let repo: OrderTransitionRepository;
+  let auditLogs: AuditLogRepository;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -40,6 +43,7 @@ describe('OrderTransitionRepository (real DB)', () => {
       ],
     });
     repo = module.get(OrderTransitionRepository);
+    auditLogs = module.get(AUDIT_LOG_REPOSITORY);
     prisma = p;
   });
 
@@ -403,15 +407,24 @@ describe('OrderTransitionRepository (real DB)', () => {
       expect(await prisma.auditLog.count()).toBe(0);
     });
 
-    it('범위 밖 주문은 null이다: 다른 구매자, 입금 전·다른 매장(판매자), 삭제된 주문', async () => {
+    it('범위 밖 주문은 null이다: 다른 구매자, 입금 전·다른 매장·품목 삭제(판매자), 삭제된 주문', async () => {
       const { order, item } = await paidOrder('SUBMITTED');
       const pending = await paidOrder('PENDING_PAYMENT');
+      const itemDeleted = await paidOrder('SUBMITTED');
+      await prisma.orderItem.update({
+        where: { id: itemDeleted.item.id },
+        data: { deleted_at: NOW },
+      });
       const deleted = await createOrder(prisma, { deleted_at: new Date() });
 
       for (const [id, scope] of [
         [order.id, { kind: 'buyer', accountId: order.account_id + 1n }],
         [order.id, { kind: 'store', storeId: item.store_id + 1n }],
         [pending.order.id, { kind: 'store', storeId: pending.item.store_id }],
+        [
+          itemDeleted.order.id,
+          { kind: 'store', storeId: itemDeleted.item.store_id },
+        ],
         [deleted.id, { kind: 'any' }],
       ] as const) {
         await expect(
@@ -487,6 +500,82 @@ describe('OrderTransitionRepository (real DB)', () => {
       });
       expect(systemEvent.actor_account_id).toBeNull();
     });
+
+    // 판매자는 입금 대기 주문이 범위 밖이라 표에서 뺀다(범위 밖 테스트)
+    it.each([
+      ['BUYER', 'PENDING_PAYMENT', '매장 없이 남긴다'],
+      ['BUYER', 'SUBMITTED', '매장 없이 남긴다'],
+      ['SELLER', 'SUBMITTED', '매장과 함께 남긴다'],
+      ['ADMIN', 'PENDING_PAYMENT', '매장 없이 남긴다'],
+      ['ADMIN', 'SUBMITTED', '매장과 함께 남긴다'],
+      ['SYSTEM', 'PENDING_PAYMENT', '남기지 않는다'],
+      ['SYSTEM', 'SUBMITTED', '남기지 않는다'],
+    ] as const)(
+      '%s의 %s 취소 감사는 %s — 같은 매장 다른 판매자의 감사 목록에는 매장이 있을 때만 보인다',
+      async (actor, status, audit) => {
+        const { order, item } = await paidOrder(status);
+        const actorAccountId =
+          actor === 'SYSTEM'
+            ? null
+            : actor === 'BUYER'
+              ? order.account_id
+              : (await createAccount(prisma, { account_type: actor })).id;
+        const scope: OrderCancelScope =
+          actor === 'BUYER'
+            ? { kind: 'buyer', accountId: order.account_id }
+            : actor === 'SELLER'
+              ? { kind: 'store', storeId: item.store_id }
+              : { kind: 'any' };
+
+        await requestContextStorage.run(
+          { clientIp: '203.0.113.77', userAgent: 'buyer-phone' },
+          () =>
+            repo.cancel(
+              cancelArgs(
+                order.id,
+                {},
+                {
+                  actor,
+                  actorAccountId,
+                  scope,
+                  decide: () => ({
+                    reason: 'OTHER',
+                    fault: null,
+                    refundAmount: 0,
+                  }),
+                },
+              ),
+            ),
+        );
+
+        const audits = await prisma.auditLog.findMany();
+        expect(
+          audits.map((a) => ({
+            actor: a.actor_account_id,
+            store: a.store_id,
+          })),
+        ).toEqual(
+          audit === '남기지 않는다'
+            ? []
+            : [
+                {
+                  actor: actorAccountId,
+                  store: audit === '매장과 함께 남긴다' ? item.store_id : null,
+                },
+              ],
+        );
+        const otherSeller = await createAccount(prisma, {
+          account_type: 'SELLER',
+        });
+        await expect(
+          auditLogs.listAuditLogsBySeller({
+            sellerAccountId: otherSeller.id,
+            storeId: item.store_id,
+            limit: 10,
+          }),
+        ).resolves.toHaveLength(audit === '매장과 함께 남긴다' ? 1 : 0);
+      },
+    );
 
     it('동시에 두 번 취소해도 하나만 성공하고 환불은 1건이다', async () => {
       const { order } = await paidOrder('SUBMITTED');

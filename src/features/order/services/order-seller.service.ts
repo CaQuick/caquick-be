@@ -137,7 +137,7 @@ export class SellerOrderService extends SellerBaseService {
       actorAccountId: ctx.accountId,
       toStatus,
       note: cleanNullableText(input.note, 500),
-      now: new Date(),
+      now: this.clock.now(),
       // 잠금 뒤 현재 상태로 같은 규칙을 다시 적용한다(위 사전 검사는 빠른 거절용)
       assertTransition: (from) =>
         this.statusPolicy.assertSellerTransition(from, toStatus),

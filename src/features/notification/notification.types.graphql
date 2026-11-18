@@ -49,7 +49,7 @@ enum NotificationEvent {
   """
   ORDER_PAYMENT_CONFIRMED
   """
-  입금 기한 안에 입금이 확인되지 않아 주문이 취소됐다. type은 ORDER_STATUS.
+  입금이 확인되지 않아 주문이 취소됐다(입금 기한 만료 자동 취소 또는 운영자 미입금 취소). type은 ORDER_STATUS.
   """
   ORDER_PAYMENT_EXPIRED
   """
