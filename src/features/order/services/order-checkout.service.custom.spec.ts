@@ -63,6 +63,7 @@ const RENDER_KINDS = [
 describe('OrderCheckoutService 커스텀 주문 (real DB)', () => {
   let service: OrderCheckoutService;
   let orderRepo: OrderRepository;
+  let uploads: OrderCustomUploadRepository;
   let outbox: OutboxPublisher;
   let clock: ClockService;
   let prisma: PrismaClient;
@@ -88,6 +89,7 @@ describe('OrderCheckoutService 커스텀 주문 (real DB)', () => {
     });
     service = module.get(OrderCheckoutService);
     orderRepo = module.get(OrderRepository);
+    uploads = module.get(OrderCustomUploadRepository);
     outbox = module.get(OutboxPublisher);
     clock = module.get(ClockService);
     prisma = p;
@@ -396,6 +398,35 @@ describe('OrderCheckoutService 커스텀 주문 (real DB)', () => {
       await expect(
         service.createOrder(buyer.id, input(product, 25000, { slot })),
       ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
+    });
+
+    it('주문 tx가 업로드를 잠근 동안 돈 정리 크론은 그 업로드를 잡지 못하고, 주문이 ATTACHED로 붙인다', async () => {
+      const { buyer, product, slot } = await setup();
+      // 잠금 검사와 ATTACHED 표시 사이에 크론이 끼어드는 경우를 재현한다(크론은 별도 커넥션)
+      const repo = orderRepo as unknown as {
+        insertPendingPaymentOrder: (...args: unknown[]) => Promise<unknown>;
+      };
+      const insert = repo.insertPendingPaymentOrder.bind(orderRepo);
+      let claimed: unknown[] | undefined;
+      jest
+        .spyOn(repo, 'insertPendingPaymentOrder')
+        .mockImplementation(async (...args) => {
+          claimed = await uploads.claimForPurge({
+            now: NOW,
+            pendingCreatedBefore: new Date('2100-01-01T00:00:00.000Z'),
+            purgingStartedBefore: NOW,
+            limit: 10,
+          });
+          return insert(...args);
+        });
+
+      await service.createOrder(buyer.id, input(product, 25000, { slot }));
+
+      expect(claimed).toEqual([]);
+      expect(await uploadStatuses()).toEqual([
+        ['composite.png', 'ATTACHED'],
+        ['ref.png', 'ATTACHED'],
+      ]);
     });
 
     it('같은 키·같은 커스텀 입력의 재요청은 기존 주문을 돌려주고, 커스텀만 달라도 IDEMPOTENCY_KEY_INPUT_MISMATCH다', async () => {
