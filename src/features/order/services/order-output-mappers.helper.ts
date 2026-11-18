@@ -1,10 +1,12 @@
 import { ORDER_CANCEL_REASON_LABELS } from '@/features/order/constants/order-cancel-reasons';
+import { autoPickupAt } from '@/features/order/policies/order-status-transition.policy';
 import {
   maskAccountNumber,
   toBank,
 } from '@/features/order/services/order-bank-account.helper';
 import { readStoredThreeDDesign } from '@/features/order/services/order-custom-design.helper';
 import type {
+  OrderAutoTransitionTimes,
   OrderCancellationOutput,
   OrderItemDetailOutput,
   OrderItemFreeEditOutput,
@@ -186,6 +188,23 @@ export function toOrderStatusHistory(
     cancelReason: history.cancel_reason,
     cancelFault: history.cancel_fault,
     refundAmount: history.refund_amount,
+  };
+}
+
+/** 자동 전이 예정 시각. 확정 마감은 접수 상태에서만, 자동 픽업 완료는 확정·제작 완료 상태에서만 있다. */
+export function toOrderAutoTransitionTimes(row: {
+  status: OrderStatus;
+  pickup_at: Date;
+  confirm_deadline_at: Date | null;
+  no_show_at: Date | null;
+}): OrderAutoTransitionTimes {
+  const awaitingPickup =
+    row.status === OrderStatus.CONFIRMED || row.status === OrderStatus.MADE;
+  return {
+    confirmDeadlineAt:
+      row.status === OrderStatus.SUBMITTED ? row.confirm_deadline_at : null,
+    autoPickupAt: awaitingPickup ? autoPickupAt(row.pickup_at) : null,
+    noShowAt: row.no_show_at,
   };
 }
 

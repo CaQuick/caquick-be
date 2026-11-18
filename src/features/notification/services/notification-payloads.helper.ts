@@ -39,6 +39,7 @@ const ORDER_STATUS_NOTIFICATION_EVENTS: Partial<
   [OrderStatus.CONFIRMED]: NotificationEvent.ORDER_CONFIRMED,
   [OrderStatus.MADE]: NotificationEvent.ORDER_MADE,
   [OrderStatus.PICKED_UP]: NotificationEvent.ORDER_PICKED_UP,
+  [OrderStatus.NO_SHOW]: NotificationEvent.ORDER_NO_SHOW,
 };
 
 /** 매핑에 없는 상태와 구매자 본인 행위(취소)는 알림 없음(null). */

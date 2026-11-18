@@ -50,6 +50,12 @@ describe('notification-payloads.helper', () => {
         '픽업완료',
         '케이크 픽업이 완료되었어요.',
       ],
+      [
+        'NO_SHOW',
+        'ORDER_NO_SHOW',
+        '노쇼',
+        '픽업 시간에 방문하지 않아 노쇼로 처리되었어요.',
+      ],
     ] as const)('%s는 %s(주문번호 접두)', (toStatus, event, title, body) => {
       expect(status(toStatus)).toEqual({
         type: NotificationType.ORDER_STATUS,
@@ -59,12 +65,15 @@ describe('notification-payloads.helper', () => {
       });
     });
 
-    it.each(['PENDING_PAYMENT', 'NO_SHOW'] as const)(
-      '매핑이 없는 상태(%s)는 null',
-      (toStatus) => {
-        expect(status(toStatus)).toBeNull();
-      },
-    );
+    it('매핑이 없는 상태(PENDING_PAYMENT)는 null', () => {
+      expect(status('PENDING_PAYMENT')).toBeNull();
+    });
+
+    it('자동 픽업 완료(SYSTEM)도 픽업 완료 알림이다', () => {
+      expect(status('PICKED_UP', { actorType: 'SYSTEM' })).toMatchObject({
+        event: NotificationEvent.ORDER_PICKED_UP,
+      });
+    });
 
     it.each(
       Object.values(OrderCancelReason).filter(

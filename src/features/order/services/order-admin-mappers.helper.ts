@@ -4,6 +4,7 @@ import type {
   AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 import {
+  toOrderAutoTransitionTimes,
   toOrderCancellation,
   toOrderItemDetail,
   toOrderRefund,
@@ -75,5 +76,6 @@ export function toAdminOrderDetailOutput(
     refunds: row.refunds.map(toOrderRefund),
     cancellation: toOrderCancellation(row),
     cancelOptions,
+    ...toOrderAutoTransitionTimes(row),
   };
 }

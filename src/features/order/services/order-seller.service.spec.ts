@@ -83,6 +83,8 @@ describe('SellerOrderService (real DB)', () => {
       /** 확인된 결제를 함께 만든다 */
       paid?: boolean;
       commissionRateBps?: number;
+      pickupAt?: Date;
+      confirmDeadlineAt?: Date;
     } = {},
   ) {
     const buyerId =
@@ -92,6 +94,8 @@ describe('SellerOrderService (real DB)', () => {
       account_id: buyerId,
       status: opts.status ?? 'SUBMITTED',
       commission_rate_bps: opts.commissionRateBps,
+      pickup_at: opts.pickupAt,
+      confirm_deadline_at: opts.confirmDeadlineAt,
     });
     await createOrderItem(prisma, {
       order_id: order.id,
@@ -397,6 +401,59 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.cancellation).toBeNull();
     });
 
+    describe('자동 전이 예정·노쇼', () => {
+      const NOW = new Date('2026-11-19T05:00:00.000Z');
+      const PICKUP_AT = new Date('2026-11-19T04:00:00.000Z');
+      const DEADLINE = new Date('2026-11-19T06:00:00.000Z');
+      const AUTO_PICKUP = new Date('2026-11-20T04:00:00.000Z');
+
+      it.each([
+        ['SUBMITTED', DEADLINE, null, false],
+        ['CONFIRMED', null, AUTO_PICKUP, true],
+        ['MADE', null, AUTO_PICKUP, true],
+        ['NO_SHOW', null, null, false],
+        ['CANCELED', null, null, false],
+      ] as const)(
+        '%s: 확정 마감 %p, 자동 픽업 %p, 노쇼 가능 %s',
+        async (status, confirmDeadlineAt, autoPickupAt, canMarkNoShow) => {
+          jest.spyOn(clock, 'now').mockReturnValue(NOW);
+          const { account, store } = await setupSellerWithStore(prisma);
+          // 확정 마감 값은 상태가 바뀌어도 남는다 — 접수 상태에서만 내려 준다
+          const order = await createStoreOrder(store.id, {
+            status,
+            pickupAt: PICKUP_AT,
+            confirmDeadlineAt: DEADLINE,
+          });
+
+          const detail = await service.sellerOrder(account.id, order.id);
+          const [summary] = (await service.sellerOrderList(account.id)).items;
+
+          expect(detail).toMatchObject({
+            confirmDeadlineAt,
+            autoPickupAt,
+            canMarkNoShow,
+            noShowAt: null,
+          });
+          expect(summary.confirmDeadlineAt).toEqual(confirmDeadlineAt);
+        },
+      );
+
+      it('픽업 시각 전이면 노쇼로 처리할 수 없다', async () => {
+        jest
+          .spyOn(clock, 'now')
+          .mockReturnValue(new Date(PICKUP_AT.getTime() - 1));
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createStoreOrder(store.id, {
+          status: 'MADE',
+          pickupAt: PICKUP_AT,
+        });
+
+        const detail = await service.sellerOrder(account.id, order.id);
+
+        expect(detail.canMarkNoShow).toBe(false);
+      });
+    });
+
     it('입금 반환 환불은 판매자 취소 정보에 섞이지 않는다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createStoreOrder(store.id, { status: 'CANCELED' });
@@ -621,9 +678,13 @@ describe('SellerOrderService (real DB)', () => {
       });
     });
 
-    it.each([OrderStatus.NO_SHOW, OrderStatus.PENDING_PAYMENT])(
-      '판매자는 %s로 바꿀 수 없다(400, 상태 불변)',
-      async (toStatus) => {
+    it.each([
+      [OrderStatus.PENDING_PAYMENT, 'INVALID_ORDER_STATUS_TRANSITION'],
+      // 기본 픽업은 하루 뒤라 아직 노쇼 구간이 아니다
+      [OrderStatus.NO_SHOW, 'NO_SHOW_NOT_ALLOWED'],
+    ] as const)(
+      '판매자는 %s로 바꿀 수 없다(%s, 상태 불변)',
+      async (toStatus, code) => {
         const { account, store } = await setupSellerWithStore(prisma);
         const order = await createStoreOrder(store.id, { status: 'MADE' });
 
@@ -632,13 +693,74 @@ describe('SellerOrderService (real DB)', () => {
             orderId: order.id.toString(),
             toStatus,
           }),
-        ).rejects.toThrowDomain('INVALID_ORDER_STATUS_TRANSITION');
+        ).rejects.toThrowDomain(code);
         const row = await prisma.order.findUniqueOrThrow({
           where: { id: order.id },
         });
         expect(row.status).toBe('MADE');
       },
     );
+
+    it.each(['CONFIRMED', 'MADE'] as const)(
+      '%s 주문을 픽업 시각 뒤 노쇼로 처리하면 노쇼 시각·정산을 남기고 환불은 없다',
+      async (status) => {
+        const now = new Date('2026-11-19T05:00:00.000Z');
+        jest.spyOn(clock, 'now').mockReturnValue(now);
+        const { account, store } = await setupSellerWithStore(prisma);
+        const order = await createStoreOrder(store.id, {
+          status,
+          paid: true,
+          commissionRateBps: 1_000,
+          pickupAt: new Date(now.getTime() - 60 * 60_000),
+        });
+
+        const result = await service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'NO_SHOW',
+        });
+
+        expect(result.status).toBe('NO_SHOW');
+        await expect(
+          prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+        ).resolves.toMatchObject({
+          status: 'NO_SHOW',
+          no_show_at: now,
+          settlement_base_amount: 10_000,
+          commission_amount: 1_000,
+          settlement_finalized_at: now,
+        });
+        expect(
+          await prisma.orderStatusHistory.findMany({
+            where: { order_id: order.id },
+          }),
+        ).toEqual([
+          expect.objectContaining({
+            from_status: status,
+            to_status: 'NO_SHOW',
+            actor_type: 'SELLER',
+          }),
+        ]);
+        expect(await prisma.refund.count()).toBe(0);
+        const [event] = await prisma.outbox.findMany();
+        expect(event.payload_json).toMatchObject({
+          fromStatus: status,
+          toStatus: 'NO_SHOW',
+          actorType: 'SELLER',
+        });
+      },
+    );
+
+    it('확정 주문도 바로 픽업 완료할 수 있다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'CONFIRMED' });
+
+      const result = await service.sellerUpdateOrderStatus(account.id, {
+        orderId: order.id.toString(),
+        toStatus: 'PICKED_UP',
+      });
+
+      expect(result.status).toBe('PICKED_UP');
+    });
 
     it('입금 대기 주문은 상태를 바꿀 수 없다(404)', async () => {
       const { account, store } = await setupSellerWithStore(prisma);

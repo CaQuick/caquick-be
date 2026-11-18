@@ -931,8 +931,8 @@ export class OrderRepository {
   /**
    * 판매자 상태 변경. 주문 행을 잠근(FOR UPDATE) 뒤 잠금 시점 상태로 전이를 다시 판정한다 —
    * 취소(OrderTransitionRepository.cancelLocked)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
-   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다). 픽업 완료는 정산을 함께 확정한다.
-   * assertTransition이 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
+   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다). 픽업 완료·노쇼는 정산을 함께 확정한다.
+   * assertTransition은 잠금 시점 상태·픽업 시각으로 부르고, 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
    */
   async updateOrderStatusBySeller(args: {
     orderId: bigint;
@@ -941,15 +941,20 @@ export class OrderRepository {
     toStatus: OrderStatus;
     note: string | null;
     now: Date;
-    assertTransition: (fromStatus: OrderStatus) => void;
+    assertTransition: (fromStatus: OrderStatus, pickupAt: Date) => void;
     ipAddress?: string;
     userAgent?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<
-        { id: bigint; status: OrderStatus; commission_rate_bps: number }[]
+        {
+          id: bigint;
+          status: OrderStatus;
+          pickup_at: Date;
+          commission_rate_bps: number;
+        }[]
       >`
-        SELECT o.id, o.status, o.commission_rate_bps FROM \`order\` o
+        SELECT o.id, o.status, o.pickup_at, o.commission_rate_bps FROM \`order\` o
         WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
           AND o.submitted_at IS NOT NULL
           AND EXISTS (
@@ -964,7 +969,7 @@ export class OrderRepository {
       }
 
       const fromStatus = order.status;
-      args.assertTransition(fromStatus);
+      args.assertTransition(fromStatus, order.pickup_at);
 
       const updatedOrder = await tx.order.update({
         where: {
@@ -979,10 +984,16 @@ export class OrderRepository {
           ...(args.toStatus === OrderStatus.PICKED_UP
             ? { picked_up_at: args.now }
             : {}),
+          ...(args.toStatus === OrderStatus.NO_SHOW
+            ? { no_show_at: args.now }
+            : {}),
         },
         include: sellerOrderSummaryInclude(args.storeId),
       });
-      if (args.toStatus === OrderStatus.PICKED_UP) {
+      if (
+        args.toStatus === OrderStatus.PICKED_UP ||
+        args.toStatus === OrderStatus.NO_SHOW
+      ) {
         const payment = await lockPayment(tx, order.id);
         await finalizeSettlementLocked(
           tx,

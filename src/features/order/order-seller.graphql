@@ -11,7 +11,10 @@ extend type Query {
 
 extend type Mutation {
   """
-  주문 상태를 변경한다. 취소(CANCELED)는 받지 않으므로 sellerCancelOrder를 쓴다(INVALID_ORDER_STATUS_TRANSITION).
+  주문 상태를 변경한다. 접수 → 확정, 확정 → 제작 완료, 확정·제작 완료 → 픽업 완료·노쇼만 된다(그 밖은
+  INVALID_ORDER_STATUS_TRANSITION, 같은 상태면 ORDER_STATUS_UNCHANGED). 노쇼는 픽업 시각부터 24시간(자동 픽업 완료 전)
+  안에서만 되고 벗어나면 NO_SHOW_NOT_ALLOWED(BAD_USER_INPUT)다. 픽업 완료·노쇼는 정산 금액을 확정하고, 노쇼는 환불이 없다.
+  취소(CANCELED)는 받지 않으므로 sellerCancelOrder를 쓴다(INVALID_ORDER_STATUS_TRANSITION).
   판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerUpdateOrderStatus(
@@ -77,6 +80,11 @@ type SellerOrderSummary {
   내 매장 첫 품목의 커스텀 대표 이미지 URL(3D 윗면 렌더 또는 슬롯형 합성). 없으면 null.
   """
   firstItemCustomImageUrl: String
+  """
+  확정 마감 시각. 이때까지 확정하지 않으면 자동 취소되고 결제액 전액이 환불된다. 접수(SUBMITTED) 상태가 아니거나
+  결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
 }
 
 """
@@ -226,6 +234,24 @@ type SellerOrderDetail {
   취소 정보(주체·사유·사정·환불액·환불 진행). 취소되지 않은 주문이면 null.
   """
   cancellation: OrderCancellation
+  """
+  확정 마감 시각. 이때까지 확정하지 않으면 자동 취소되고 결제액 전액이 환불된다. 접수(SUBMITTED) 상태가 아니거나
+  결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
+  """
+  자동 픽업 완료 예정 시각(픽업 시각 + 24시간). 확정·제작 완료 상태에서만 있고 그 밖은 null.
+  매장이 숨김이면 자동으로 픽업 완료되지 않는다.
+  """
+  autoPickupAt: DateTime
+  """
+  지금 노쇼로 처리할 수 있는지. 확정·제작 완료 상태이고 픽업 시각 ≤ 지금 < autoPickupAt일 때 true.
+  """
+  canMarkNoShow: Boolean!
+  """
+  노쇼 처리 시각. 노쇼가 아니면 null.
+  """
+  noShowAt: DateTime
 }
 
 """
@@ -235,7 +261,7 @@ BAD_USER_INPUT으로 거절된다.
 input SellerUpdateOrderStatusInput {
   orderId: ID!
   """
-  변경할 상태. 현재 상태에서 진입 가능한 값이어야 한다.
+  변경할 상태. CONFIRMED·MADE·PICKED_UP·NO_SHOW 중 현재 상태에서 진입 가능한 값이어야 한다.
   """
   toStatus: OrderStatusType!
   """

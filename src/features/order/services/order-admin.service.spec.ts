@@ -449,6 +449,37 @@ describe('AdminOrderService (real DB)', () => {
       expect(result.cancellation).toBeNull();
     });
 
+    it.each([
+      ['SUBMITTED', true, false],
+      ['MADE', false, true],
+      ['NO_SHOW', false, false],
+    ] as const)(
+      '%s: 확정 마감은 접수만, 자동 픽업 완료는 확정·제작 완료만, 노쇼 시각은 그대로 준다',
+      async (status, hasDeadline, hasAutoPickup) => {
+        const { order } = await orderWithItem({ status });
+        const deadline = new Date('2026-11-19T06:00:00.000Z');
+        const noShowAt = new Date('2026-11-19T07:00:00.000Z');
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            pickup_at: new Date('2026-11-19T04:00:00.000Z'),
+            confirm_deadline_at: deadline,
+            no_show_at: status === 'NO_SHOW' ? noShowAt : null,
+          },
+        });
+
+        const result = await service.adminOrder(await admin(), order.id);
+
+        expect(result).toMatchObject({
+          confirmDeadlineAt: hasDeadline ? deadline : null,
+          autoPickupAt: hasAutoPickup
+            ? new Date('2026-11-20T04:00:00.000Z')
+            : null,
+          noShowAt: status === 'NO_SHOW' ? noShowAt : null,
+        });
+      },
+    );
+
     it('결제와 입금 확인 처리자·메모를 준다', async () => {
       const { order } = await orderWithItem();
       const confirmedAt = new Date('2026-09-16T07:00:00.000Z');

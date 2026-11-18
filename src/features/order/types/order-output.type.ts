@@ -135,3 +135,10 @@ export interface OrderRefundOutput {
   accountSubmittedAt: Date | null;
   completedAt: Date | null;
 }
+
+/** 자동 전이 예정·노쇼 시각(판매자·관리자 주문 상세). */
+export interface OrderAutoTransitionTimes {
+  confirmDeadlineAt: Date | null;
+  autoPickupAt: Date | null;
+  noShowAt: Date | null;
+}
