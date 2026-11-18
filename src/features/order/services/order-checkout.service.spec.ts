@@ -5,6 +5,10 @@ import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
+import {
+  ORDER_PAYMENT_PENDING,
+  parseOrderPaymentPendingPayload,
+} from '@/features/order/events/order-payment-pending.event';
 import { ORDER_SUBMITTED } from '@/features/order/events/order-submitted.event';
 import { pendingPaymentLockName } from '@/features/order/repositories/order-pending-payment-lock.helper';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
@@ -1214,8 +1218,78 @@ describe('OrderCheckoutService (real DB)', () => {
     });
   });
 
-  describe('createOrder — 판매자 비노출', () => {
-    it('판매자 새 주문 이벤트(order.submitted)도 구독 발행도 없다(입금 확인 뒤에 보인다)', async () => {
+  describe('createOrder — 입금 대기 이벤트(order.payment_pending)', () => {
+    async function pendingEvents() {
+      return prisma.outbox.findMany({
+        where: { event_type: ORDER_PAYMENT_PENDING },
+        orderBy: { id: 'asc' },
+      });
+    }
+
+    it('생성과 같은 tx에 1건 남기고, 판매자 새 주문(order.submitted)은 남기지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer('010-1234-5678', '차차');
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+
+      const events = await pendingEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_id: result.orderId,
+        occurred_at: NOW,
+        actor_account_id: buyer.id,
+      });
+      expect(parseOrderPaymentPendingPayload(events[0].payload_json)).toEqual({
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        amount: 10_000,
+        depositorName: '차차',
+        expiresAt: new Date(NOW.getTime() + 60 * 60_000).toISOString(),
+      });
+      expect(
+        await prisma.outbox.count({ where: { event_type: ORDER_SUBMITTED } }),
+      ).toBe(0);
+    });
+
+    it('반증: capacity 거절과 같은 키 replay는 이벤트를 남기지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 1,
+      });
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString(), quantity: 2 }),
+        ),
+      ).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+      expect(await pendingEvents()).toHaveLength(0);
+
+      const input = baseInput({
+        idempotencyKey: 'replay-idem-key',
+        productId: product.id.toString(),
+      });
+      const first = await service.createOrder(buyer.id, input);
+      expect(await service.createOrder(buyer.id, input)).toEqual(first);
+      // 사전 조회 miss → tx 안 capacity 거절 → replay 경로
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      expect(await service.createOrder(buyer.id, input)).toEqual(first);
+
+      const events = await pendingEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0].aggregate_id).toBe(first.orderId);
+    });
+
+    it('판매자 주문 구독에는 아무것도 발행하지 않는다(입금 확인 뒤에 보인다)', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
@@ -1227,9 +1301,6 @@ describe('OrderCheckoutService (real DB)', () => {
       );
 
       expect(await prisma.order.count()).toBe(1);
-      expect(
-        await prisma.outbox.count({ where: { event_type: ORDER_SUBMITTED } }),
-      ).toBe(0);
       expect(topic.received).toEqual([]);
       topic.stop();
     });

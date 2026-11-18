@@ -18,6 +18,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 
 import { CommonModule } from '@/common/common.module';
 import accountCryptoConfig from '@/config/account-crypto.config';
+import adminWebConfig from '@/config/admin-web.config';
 import alertingConfig from '@/config/alerting.config';
 import appConfig, {
   APP_ROLE_TOKEN,
@@ -123,6 +124,7 @@ export class AppModule implements NestModule {
           cache: true,
           load: [
             accountCryptoConfig,
+            adminWebConfig,
             alertingConfig,
             appConfig,
             authConfig,

@@ -5,6 +5,7 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import { IN_PROGRESS_ORDER_STATUSES } from '@/features/order/constants/order-status-traits';
+import { orderPaymentPendingEvent } from '@/features/order/events/order-payment-pending.event';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
 import {
   countPendingPaymentOrdersLocked,
@@ -360,11 +361,11 @@ export class OrderRepository {
     return booked + quantity > capacity;
   }
 
-  private insertPendingPaymentOrder(
+  private async insertPendingPaymentOrder(
     tx: Prisma.TransactionClient,
     args: CreatePendingPaymentOrderArgs,
   ): Promise<CreatedOrderRow> {
-    return tx.order.create({
+    const created = await tx.order.create({
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
@@ -426,6 +427,20 @@ export class OrderRepository {
       },
       select: createdOrderSelect,
     });
+    // 관리자 경보 원천. 판매자 '새 주문'(order.submitted)은 입금 확인 때 나간다
+    await this.outbox.publish(
+      tx,
+      orderPaymentPendingEvent({
+        orderId: created.id,
+        orderNumber: created.order_number,
+        buyerAccountId: args.accountId,
+        amount: args.totalPrice,
+        depositorName: args.payment.depositorName,
+        expiresAt: args.payment.expiresAt,
+        occurredAt: args.now,
+      }),
+    );
+    return created;
   }
 
   /** 상태가 이후 변경됐어도 현재 row를 그대로 반환한다(replay 응답 재구성용). */

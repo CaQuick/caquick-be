@@ -26,6 +26,7 @@ import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-selle
 import { SellerSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-seller-mutation.resolver';
 import { SellerSettlementQueryResolver } from '@/features/order/resolvers/order-settlement-seller-query.resolver';
 import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subscription.resolver';
+import { OrderAdminAlertConsumer } from '@/features/order/services/order-admin-alert.consumer';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
 import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
@@ -82,6 +83,8 @@ import { StoreModule } from '@/features/store';
     AdminDepositService,
     AdminDepositQueryResolver,
     AdminDepositMutationResolver,
+    // 입금 대기·'입금했어요' 관리자 디스코드 알림(worker 소비자)
+    OrderAdminAlertConsumer,
     // 결제 설정·매장 정산 계좌(계좌번호는 global AccountCipher로 암호화)
     PaymentSettingRepository,
     StoreSettlementAccountRepository,

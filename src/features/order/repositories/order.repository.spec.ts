@@ -4,6 +4,10 @@ import { NotificationAdminRepository } from '@/features/notification/repositorie
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import {
+  ORDER_PAYMENT_PENDING,
+  parseOrderPaymentPendingPayload,
+} from '@/features/order/events/order-payment-pending.event';
+import {
   pendingPaymentLockName,
   withPendingPaymentLock,
 } from '@/features/order/repositories/order-pending-payment-lock.helper';
@@ -987,7 +991,7 @@ describe('OrderRepository (real DB)', () => {
       };
     }
 
-    it('입금 대기 주문·결제(계좌 스냅샷)·이력을 같은 tx에 남기고 판매자 새 주문 이벤트는 없다', async () => {
+    it('입금 대기 주문·결제(계좌 스냅샷)·이력과 입금 대기 이벤트를 같은 tx에 남긴다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma, { store_name: '해즈 케이크' });
       const product = await createProduct(prisma, {
@@ -1032,10 +1036,26 @@ describe('OrderRepository (real DB)', () => {
         }),
       ]);
       expect(created.payment).toMatchObject({ amount: 50000 });
-      expect(await prisma.outbox.count()).toBe(0);
+
+      const events = await prisma.outbox.findMany();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_type: 'order',
+        aggregate_id: created.id.toString(),
+        event_type: ORDER_PAYMENT_PENDING,
+        occurred_at: NOW,
+        actor_account_id: buyer.id,
+      });
+      expect(parseOrderPaymentPendingPayload(events[0].payload_json)).toEqual({
+        orderId: created.id.toString(),
+        orderNumber: 'ORD-20260916-ABC234',
+        amount: 50000,
+        depositorName: '차차맘',
+        expiresAt: EXPIRES_AT.toISOString(),
+      });
     });
 
-    it('반증: capacity 재검사에서 거절되면 주문도 결제도 남지 않는다', async () => {
+    it('반증: capacity 재검사에서 거절되면 주문도 결제도 이벤트도 남지 않는다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -1063,9 +1083,10 @@ describe('OrderRepository (real DB)', () => {
       expect(created).toBe('capacity-exceeded');
       expect(await prisma.order.count()).toBe(0);
       expect(await prisma.payment.count()).toBe(0);
+      expect(await prisma.outbox.count()).toBe(0);
     });
 
-    it('반증: order_number 충돌로 tx가 롤백되면 결제도 남지 않는다', async () => {
+    it('반증: order_number 충돌로 tx가 롤백되면 결제도 이벤트도 남지 않는다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -1083,6 +1104,7 @@ describe('OrderRepository (real DB)', () => {
       ).rejects.toMatchObject({ code: 'P2002' });
 
       expect(await prisma.payment.count()).toBe(0);
+      expect(await prisma.outbox.count()).toBe(0);
     });
 
     it('실패한 tx도 계정 잠금을 풀어 같은 계정의 다음 요청이 기다리지 않는다', async () => {
