@@ -6,10 +6,7 @@ export {
   type AdminOrderStatusCounts,
 } from '@/features/order/repositories/order.repository';
 // 채팅 주문 카드 원천과 숨김 매장 문의 허용 판정(conversation).
-export {
-  OrderInquiryRepository,
-  type OrderCardSource,
-} from '@/features/order/repositories/order-inquiry.repository';
+export { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
 // 주문 상태 전이 이벤트 계약(outbox). 소비자(notification)는 payload 스냅샷만 읽는다.
 export {
   ORDER_STATUS_CHANGED,

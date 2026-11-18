@@ -662,7 +662,7 @@ export const ERROR_CATALOG = {
   },
   IMAGE_URL_REQUIRED: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'IMAGE 형식에는 imageUrl이 필요합니다.',
+    message: '보낼 사진을 첨부해 주세요.',
   },
   ORDER_INQUIRY_NOT_AVAILABLE: {
     status: HttpStatus.BAD_REQUEST,

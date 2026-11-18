@@ -551,7 +551,7 @@ describe('ConversationInquiryService (real DB)', () => {
   }
 
   describe('숨김 매장 문의(그 매장에 진행 중인 주문이 있는 구매자만)', () => {
-    it('진행 중인 주문이 있으면 문의 컨텍스트 조회·텍스트·FAQ 전송을 허용한다', async () => {
+    it('진행 중인 주문이 있으면 문의 컨텍스트 조회·텍스트·FAQ·이미지 전송을 허용한다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma, { is_active: false });
       const faq = await createFaq(store.id);
@@ -569,6 +569,11 @@ describe('ConversationInquiryService (real DB)', () => {
         faqTopicId: faq.id.toString(),
       });
       expect(faqResult.messages).toHaveLength(2);
+      const imageResult = await service.sendConversationImageMessage(buyer.id, {
+        storeId: store.id.toString(),
+        imageUrl: ownedUploadUrl('CONVERSATION_IMAGE', buyer.id),
+      });
+      expect(imageResult.messages.map((m) => m.bodyFormat)).toEqual(['IMAGE']);
     });
 
     it.each([
@@ -577,17 +582,32 @@ describe('ConversationInquiryService (real DB)', () => {
     ] as const)('%s이면 STORE_NOT_FOUND', async (_label, status) => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma, { is_active: false });
+      const faq = await createFaq(store.id);
       await orderAt(buyer.id, store.id, { status });
+      const storeId = store.id.toString();
 
       await expect(
-        service.storeInquiryContext(buyer.id, store.id.toString()),
+        service.storeInquiryContext(buyer.id, storeId),
       ).rejects.toThrowDomain('STORE_NOT_FOUND');
       await expect(
         service.sendConversationMessage(buyer.id, {
-          storeId: store.id.toString(),
+          storeId,
           bodyText: '문의',
         }),
       ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.sendConversationFaqMessage(buyer.id, {
+          storeId,
+          faqTopicId: faq.id.toString(),
+        }),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.sendConversationImageMessage(buyer.id, {
+          storeId,
+          imageUrl: ownedUploadUrl('CONVERSATION_IMAGE', buyer.id),
+        }),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      expect(await prisma.storeConversationMessage.count()).toBe(0);
     });
 
     it('다른 구매자·다른 매장의 진행 주문은 허용 근거가 아니고, 삭제된 매장은 진행 주문이 있어도 거절한다', async () => {
