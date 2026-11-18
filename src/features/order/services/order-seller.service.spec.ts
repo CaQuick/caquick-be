@@ -750,6 +750,42 @@ describe('SellerOrderService (real DB)', () => {
       },
     );
 
+    it('사전 검사 뒤 픽업 일시가 미래로 바뀌면 잠금 시점 픽업 일시로 다시 판정해 노쇼를 거절한다', async () => {
+      const now = new Date('2026-11-19T05:00:00.000Z');
+      jest.spyOn(clock, 'now').mockReturnValue(now);
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, {
+        status: 'CONFIRMED',
+        pickupAt: new Date(now.getTime() - 60 * 60_000),
+      });
+      const original = repo.findOrderDetailByStore.bind(repo);
+      jest
+        .spyOn(repo, 'findOrderDetailByStore')
+        .mockImplementationOnce(async (args) => {
+          const row = await original(args);
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { pickup_at: new Date(now.getTime() + 24 * 60 * 60_000) },
+          });
+          return row;
+        });
+
+      await expect(
+        service.sellerUpdateOrderStatus(account.id, {
+          orderId: order.id.toString(),
+          toStatus: 'NO_SHOW',
+        }),
+      ).rejects.toThrowDomain('NO_SHOW_NOT_ALLOWED');
+      await expect(
+        prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+      ).resolves.toMatchObject({ status: 'CONFIRMED', no_show_at: null });
+      expect(
+        await prisma.orderStatusHistory.count({
+          where: { order_id: order.id },
+        }),
+      ).toBe(0);
+    });
+
     it('확정 주문도 바로 픽업 완료할 수 있다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
       const order = await createStoreOrder(store.id, { status: 'CONFIRMED' });
