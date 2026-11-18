@@ -11,9 +11,13 @@ import {
 } from './credential-policy';
 import { SEED_ADMIN_EMAIL_PREFIX } from './idempotent';
 
+import { formatAccountLabel } from '@/common/utils/account-label';
 import type { PrismaClient } from '@/generated/prisma/client';
 
-export async function seedAdmins(prisma: PrismaClient): Promise<void> {
+/** 처리자 라벨은 관리자 조작 기록(결제 확인·입금 기록)의 스냅샷 값이다. */
+export async function seedAdmins(
+  prisma: PrismaClient,
+): Promise<{ id: bigint; label: string | null }> {
   assertSeedCredential({
     username: SEED_ADMIN_USERNAME,
     password: SEED_PASSWORD,
@@ -41,4 +45,8 @@ export async function seedAdmins(prisma: PrismaClient): Promise<void> {
   console.log(
     `[seed]   관리자 accountId=${admin.id.toString()} (${SEED_ADMIN_USERNAME})`,
   );
+  return {
+    id: admin.id,
+    label: formatAccountLabel(admin.name, SEED_ADMIN_USERNAME),
+  };
 }

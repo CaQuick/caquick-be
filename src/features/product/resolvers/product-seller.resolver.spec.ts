@@ -10,7 +10,6 @@ import type { SellerReorderProductCustomTextTokensInput } from '@/features/produ
 import type { SellerReorderProductImagesInput } from '@/features/product/dto/inputs/seller-reorder-product-images.input';
 import type { SellerSetProductActiveInput } from '@/features/product/dto/inputs/seller-set-product-active.input';
 import type { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
-import type { SellerSetProductCustomTemplateActiveInput } from '@/features/product/dto/inputs/seller-set-product-custom-template-active.input';
 import type { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
 import type { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
 import type { SellerUpdateOptionItemInput } from '@/features/product/dto/inputs/seller-update-option-item.input';
@@ -28,6 +27,7 @@ import { SellerProductQueryService } from '@/features/product/services/product-s
 import { SellerProductTaxonomyService } from '@/features/product/services/product-seller-taxonomy.service';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
@@ -66,6 +66,10 @@ describe('Seller Product Resolvers (real DB)', () => {
     queryResolver = module.get(SellerProductQueryResolver);
     mutationResolver = module.get(SellerProductMutationResolver);
     prisma = p;
+    // 바탕 이미지 1:1 확인은 S3를 읽는다 — 배선 검증이라 정사각 결과만 준다
+    jest
+      .spyOn(module.get(S3Service), 'readImageSize')
+      .mockResolvedValue({ width: 1000, height: 1000 });
   });
 
   afterAll(async () => {
@@ -379,28 +383,18 @@ describe('Seller Product Resolvers (real DB)', () => {
           BigInt(auth.accountId),
           'tpl.png',
         ),
-        isActive: true,
       };
       const template = await mutationResolver.sellerUpsertProductCustomTemplate(
         auth,
         upsertTemplateInput,
       );
-      const setTemplateActiveInput: SellerSetProductCustomTemplateActiveInput =
-        {
-          templateId: template.id,
-          isActive: false,
-        };
-      const templateActive =
-        await mutationResolver.sellerSetProductCustomTemplateActive(
-          auth,
-          setTemplateActiveInput,
-        );
-      expect(templateActive.isActive).toBe(false);
+      const area = { posX: 0, posY: 0, width: 5000, height: 1000 };
 
       const upsertToken1: SellerUpsertProductCustomTextTokenInput = {
         templateId: template.id,
         tokenKey: 'name',
         defaultText: '기본',
+        ...area,
       };
       const token1 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
@@ -410,11 +404,19 @@ describe('Seller Product Resolvers (real DB)', () => {
         templateId: template.id,
         tokenKey: 'age',
         defaultText: '10',
+        ...area,
       };
       const token2 = await mutationResolver.sellerUpsertProductCustomTextToken(
         auth,
         upsertToken2,
       );
+
+      const slotProduct = await mutationResolver.sellerSetProductCustomMode(
+        auth,
+        productId,
+        'SLOT',
+      );
+      expect(slotProduct.customMode).toBe('SLOT');
 
       const reorderTokensInput: SellerReorderProductCustomTextTokensInput = {
         templateId: template.id,
@@ -433,6 +435,28 @@ describe('Seller Product Resolvers (real DB)', () => {
           token1.id,
         ),
       ).toBe(true);
+    });
+
+    it('3D 기본 세트 → 3D 방식 전환 배선', async () => {
+      const { auth, productId } = await setupProductForMutationWiring();
+
+      const preset = await mutationResolver.sellerApplyThreeDOptionPreset(
+        auth,
+        productId,
+      );
+      expect(preset.optionGroups.map((g) => g.threeDCategory)).toEqual([
+        'SIZE',
+        'FLAVOR',
+        'SHAPE',
+        'DESIGN',
+      ]);
+
+      const threeD = await mutationResolver.sellerSetProductCustomMode(
+        auth,
+        productId,
+        'THREE_D',
+      );
+      expect(threeD.customMode).toBe('THREE_D');
     });
   });
 });

@@ -44,7 +44,7 @@ import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.bui
 // admin 접두 Query 전수에 nullable 필드를 전부 null로 채워 실제 앱(파이프·필터·가드·실DB)으로 보낸다.
 
 const FEATURES_DIR = join(__dirname, '..', 'features');
-const ADMIN_QUERY_COUNT = 17;
+const ADMIN_QUERY_COUNT = 22;
 
 /** 필수 스칼라의 최소 유효값. 새 스칼라가 필수 필드로 오면 표에 없다고 던져 결정을 강제한다 */
 const MINIMAL_SCALARS: Record<string, unknown> = {
@@ -81,11 +81,21 @@ function minimalValue(type: GraphQLInputType): unknown {
   return MINIMAL_SCALARS[inner.name];
 }
 
+/** 형식이 정해진 필수 입력 필드는 스칼라 최소값으로는 리졸버 검증을 넘지 못한다 — 필드 이름으로 유효값을 준다 */
+const MINIMAL_REQUIRED_FIELDS: Record<string, unknown> = {
+  month: '2026-01',
+};
+
 function nullFilledInput(
   type: GraphQLInputObjectType,
 ): Record<string, unknown> {
   return Object.fromEntries(
-    Object.values(type.getFields()).map((f) => [f.name, minimalValue(f.type)]),
+    Object.values(type.getFields()).map((f) => [
+      f.name,
+      isNonNullType(f.type) && f.name in MINIMAL_REQUIRED_FIELDS
+        ? MINIMAL_REQUIRED_FIELDS[f.name]
+        : minimalValue(f.type),
+    ]),
   );
 }
 

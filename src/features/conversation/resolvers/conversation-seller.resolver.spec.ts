@@ -15,6 +15,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import { s3TestProviders } from '@/test/storage/s3-test.helper';
 
 describe('Seller Conversation Resolvers (real DB)', () => {
   let queryResolver: SellerConversationQueryResolver;
@@ -32,6 +33,7 @@ describe('Seller Conversation Resolvers (real DB)', () => {
         // 발행 repository가 OutboxPublisher를 주입받는다
         ...outboxPublisherProviders(),
         ConversationEventsService,
+        ...s3TestProviders(),
         { provide: PUB_SUB, useValue: new PubSub() },
         {
           provide: AUDIT_LOG_REPOSITORY,

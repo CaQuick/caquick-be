@@ -12,6 +12,7 @@ import { AdminTaxonomyMutationResolver } from '@/features/product/resolvers/prod
 import { AdminTaxonomyQueryResolver } from '@/features/product/resolvers/product-admin-taxonomy-query.resolver';
 import { AdminUploadMutationResolver } from '@/features/product/resolvers/product-admin-upload-mutation.resolver';
 import { ProductCategoryQueryResolver } from '@/features/product/resolvers/product-category-query.resolver';
+import { ProductCustomCatalogQueryResolver } from '@/features/product/resolvers/product-custom-catalog-query.resolver';
 import { ProductDetailQueryResolver } from '@/features/product/resolvers/product-detail-query.resolver';
 import { ProductHomeQueryResolver } from '@/features/product/resolvers/product-home-query.resolver';
 import { ProductReviewQueryResolver } from '@/features/product/resolvers/product-review-query.resolver';
@@ -27,6 +28,7 @@ import { AdminProductService } from '@/features/product/services/product-admin.s
 import { ProductBestSellerService } from '@/features/product/services/product-best-seller.service';
 import { ProductCardService } from '@/features/product/services/product-card.service';
 import { ProductCategoryService } from '@/features/product/services/product-category.service';
+import { ProductCustomCatalogService } from '@/features/product/services/product-custom-catalog.service';
 import { ProductDetailService } from '@/features/product/services/product-detail.service';
 import { ProductHomeService } from '@/features/product/services/product-home.service';
 import { ProductReviewService } from '@/features/product/services/product-review.service';
@@ -60,6 +62,8 @@ import { StoreModule } from '@/features/store';
     ProductBestSellerService,
     ProductSearchService,
     ProductSearchQueryResolver,
+    ProductCustomCatalogService,
+    ProductCustomCatalogQueryResolver,
     // 판매자 상품 관리(상품·이미지·분류·옵션·커스텀 템플릿·업로드 URL) — 상품 도메인이 소유한다
     SellerProductQueryService,
     SellerProductLifecycleService,

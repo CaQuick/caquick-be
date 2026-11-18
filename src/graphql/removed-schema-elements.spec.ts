@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   buildSchema,
   type GraphQLSchema,
+  isInputObjectType,
   isNonNullType,
   isObjectType,
 } from 'graphql';
@@ -19,6 +20,35 @@ const REMOVED_OUTPUT_FIELDS: Array<[type: string, field: string, pr: string]> =
     ['TodayPickupStore', 'storeName', '플랜 11'],
     ['PopularCake', 'name', '플랜 12'],
     ['StoreProduct', 'name', '플랜 12'],
+    // 커스텀 방식이 템플릿 활성 토글·옵션 커스텀 요구 플래그를, 템플릿 바탕이 상품 바탕 이미지를 대신한다
+    ['SellerProduct', 'baseDesignImageUrl', '커스텀 방식'],
+    ['AdminProduct', 'baseDesignImageUrl', '커스텀 방식'],
+    ['SellerOptionGroup', 'optionRequiresDescription', '커스텀 방식'],
+    ['SellerOptionGroup', 'optionRequiresImage', '커스텀 방식'],
+    ['AdminProductOptionGroup', 'optionRequiresDescription', '커스텀 방식'],
+    ['AdminProductOptionGroup', 'optionRequiresImage', '커스텀 방식'],
+    ['SellerCustomTemplate', 'isActive', '커스텀 방식'],
+    ['AdminProductCustomTemplate', 'isActive', '커스텀 방식'],
+    // 자유 편집은 크롭 이미지 대신 바탕 위 영역 좌표를 저장한다
+    ['OrderItemFreeEdit', 'cropImageUrl', '커스텀 주문 스냅샷'],
+  ];
+const REMOVED_INPUT_FIELDS: Array<[input: string, field: string, pr: string]> =
+  [
+    ['SellerCreateProductInput', 'baseDesignImageUrl', '커스텀 방식'],
+    ['SellerUpdateProductInput', 'baseDesignImageUrl', '커스텀 방식'],
+    [
+      'SellerCreateOptionGroupInput',
+      'optionRequiresDescription',
+      '커스텀 방식',
+    ],
+    ['SellerCreateOptionGroupInput', 'optionRequiresImage', '커스텀 방식'],
+    [
+      'SellerUpdateOptionGroupInput',
+      'optionRequiresDescription',
+      '커스텀 방식',
+    ],
+    ['SellerUpdateOptionGroupInput', 'optionRequiresImage', '커스텀 방식'],
+    ['SellerUpsertProductCustomTemplateInput', 'isActive', '커스텀 방식'],
   ];
 const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['SellerCursorInput', '플랜 06'],
@@ -55,12 +85,14 @@ const REMOVED_TYPES: Array<[type: string, pr: string]> = [
   ['MyOrderItemSelectedOption', '플랜 13'],
   ['MyOrderItemCustomText', '플랜 13'],
   ['MyOrderItemCustomFreeEdit', '플랜 13'],
+  ['SellerSetProductCustomTemplateActiveInput', '커스텀 방식'],
 ];
 const REMOVED_ROOT_FIELDS: Array<
   [root: 'Query' | 'Mutation', field: string, pr: string]
 > = [
   ['Query', 'storePickupCalendar', '플랜 08'],
   ['Query', 'storePickupTimeSlots', '플랜 08'],
+  ['Mutation', 'sellerSetProductCustomTemplateActive', '커스텀 방식'],
 ];
 // 개명된 매장판 루트 필드는 storeId를 필수로 받는다 — 전역판(인자 없음)이 같은 이름으로 되살아나지 않게.
 const REQUIRED_ROOT_ARGS: Array<
@@ -74,6 +106,10 @@ const REQUIRED_ROOT_ARGS: Array<
 const PRESENT_OUTPUT_FIELD: [string, string] = [
   'MyPageCounts',
   'wishlistCount',
+];
+const PRESENT_INPUT_FIELD: [string, string] = [
+  'SellerCreateProductInput',
+  'name',
 ];
 const PRESENT_TYPE = 'MyPageCounts';
 const PRESENT_ROOT_FIELD: ['Query', string] = ['Query', 'myPageOverview'];
@@ -95,6 +131,15 @@ function hasOutputField(
   return isObjectType(t) && field in t.getFields();
 }
 
+function hasInputField(
+  schema: GraphQLSchema,
+  input: string,
+  field: string,
+): boolean {
+  const t = schema.getType(input);
+  return isInputObjectType(t) && field in t.getFields();
+}
+
 describe('삭제된 스키마 요소 부재 (전체 SDL 빌드)', () => {
   const schema = buildSchema(
     collectSdl(join(process.cwd(), 'src/features')).join('\n'),
@@ -102,6 +147,10 @@ describe('삭제된 스키마 요소 부재 (전체 SDL 빌드)', () => {
 
   it('검사기는 존재하는 요소를 있음으로 판정한다 (반증)', () => {
     expect(hasOutputField(schema, ...PRESENT_OUTPUT_FIELD)).toBe(true);
+    expect(hasInputField(schema, ...PRESENT_INPUT_FIELD)).toBe(true);
+    // 출력 판정기는 입력 타입을, 입력 판정기는 출력 타입을 보지 않는다
+    expect(hasOutputField(schema, ...PRESENT_INPUT_FIELD)).toBe(false);
+    expect(hasInputField(schema, ...PRESENT_OUTPUT_FIELD)).toBe(false);
     expect(schema.getType(PRESENT_TYPE)).toBeDefined();
     expect(
       hasOutputField(schema, PRESENT_ROOT_FIELD[0], PRESENT_ROOT_FIELD[1]),
@@ -112,6 +161,13 @@ describe('삭제된 스키마 요소 부재 (전체 SDL 빌드)', () => {
   for (const [type, field, pr] of REMOVED_OUTPUT_FIELDS) {
     it(`${type}.${field} 필드는 없다 (${pr})`, () => {
       expect(hasOutputField(schema, type, field)).toBe(false);
+    });
+  }
+
+  for (const [input, field, pr] of REMOVED_INPUT_FIELDS) {
+    it(`${input}.${field} 입력 필드는 없다 (${pr})`, () => {
+      expect(schema.getType(input)).toBeDefined();
+      expect(hasInputField(schema, input, field)).toBe(false);
     });
   }
 

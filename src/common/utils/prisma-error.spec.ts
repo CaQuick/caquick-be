@@ -1,4 +1,7 @@
-import { uniqueConstraintName } from '@/common/utils/prisma-error';
+import {
+  retryOnceOnUniqueConflict,
+  uniqueConstraintName,
+} from '@/common/utils/prisma-error';
 import { Prisma } from '@/generated/prisma/client';
 
 function p2002(
@@ -49,5 +52,39 @@ describe('uniqueConstraintName', () => {
       meta: { target: 'whatever' },
     });
     expect(uniqueConstraintName(err)).toBeNull();
+  });
+});
+
+describe('retryOnceOnUniqueConflict', () => {
+  it('P2002면 한 번 다시 돌리고 그 결과를 돌려준다', async () => {
+    const run = jest
+      .fn<Promise<string>, []>()
+      .mockRejectedValueOnce(p2002({}))
+      .mockResolvedValueOnce('ok');
+    await expect(retryOnceOnUniqueConflict(run)).resolves.toBe('ok');
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('두 번째도 P2002면 그대로 던진다(무한 재시도 없음)', async () => {
+    const run = jest.fn<Promise<string>, []>().mockRejectedValue(p2002({}));
+    await expect(retryOnceOnUniqueConflict(run)).rejects.toMatchObject({
+      code: 'P2002',
+    });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [
+      '다른 Prisma 오류',
+      new Prisma.PrismaClientKnownRequestError('x', {
+        code: 'P2025',
+        clientVersion: 'test',
+      }),
+    ],
+    ['일반 오류', new Error('boom')],
+  ])('%s는 재시도하지 않는다', async (_label, error) => {
+    const run = jest.fn<Promise<string>, []>().mockRejectedValue(error);
+    await expect(retryOnceOnUniqueConflict(run)).rejects.toBe(error);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

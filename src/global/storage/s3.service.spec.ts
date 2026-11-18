@@ -198,6 +198,39 @@ describe('S3Service', () => {
       });
     });
 
+    describe.each([
+      ['ORDER_CUSTOM_RENDER', 'order-custom/renders/'],
+      ['ORDER_CUSTOM_COMPOSITE', 'order-custom/composites/'],
+      ['ORDER_CUSTOM_REFERENCE', 'order-custom/references/'],
+      ['CONVERSATION_IMAGE', 'conversation-images/'],
+    ] as const)('%s purpose', (purpose, prefix) => {
+      const input = { ...baseInput, purpose };
+
+      it.each(['image/jpeg', 'image/png', 'image/webp'])(
+        `%s 10MB를 ${prefix} 아래로 발급한다`,
+        async (contentType) => {
+          const result = await service.createUploadUrl({
+            ...input,
+            contentType,
+            contentLength: 10 * 1024 * 1024,
+          });
+          expect(result.key.startsWith(`${prefix}1/`)).toBe(true);
+        },
+      );
+
+      it('10MB 초과·이미지가 아닌 형식은 거부한다', async () => {
+        await expect(
+          service.createUploadUrl({
+            ...input,
+            contentLength: 10 * 1024 * 1024 + 1,
+          }),
+        ).rejects.toThrowDomain('FILE_TOO_LARGE');
+        await expect(
+          service.createUploadUrl({ ...input, contentType: 'video/mp4' }),
+        ).rejects.toThrowDomain('INVALID_CONTENT_TYPE');
+      });
+    });
+
     describe('contentLength 검증', () => {
       it('0이면 거부해야 한다', async () => {
         await expect(
@@ -256,6 +289,16 @@ describe('S3Service', () => {
     });
   });
 
+  describe('publicUrlFor', () => {
+    it('이 버킷·리전의 공개 URL을 만든다', () => {
+      expect(
+        service.publicUrlFor('custom-3d-catalog/v1/deco/number-0.png'),
+      ).toBe(
+        'https://caquick-media-test.s3.ap-northeast-2.amazonaws.com/custom-3d-catalog/v1/deco/number-0.png',
+      );
+    });
+  });
+
   describe('생성자의 credentials 분기', () => {
     it('accessKeyId/secretAccessKey가 없으면 S3Client에 credentials 없이 초기화한다', async () => {
       const { S3Client: MockS3Client } =
@@ -297,6 +340,7 @@ describe('S3Service', () => {
       ['PROFILE_IMAGE', 'profile-images', 'review-media/images'],
       ['REVIEW_IMAGE', 'review-media/images', 'profile-images'],
       ['REVIEW_VIDEO', 'review-media/videos', 'review-media/images'],
+      ['CONVERSATION_IMAGE', 'conversation-images', 'product-images'],
     ] as const;
 
     describe.each(PURPOSES)('%s', (purpose, prefix, otherPrefix) => {

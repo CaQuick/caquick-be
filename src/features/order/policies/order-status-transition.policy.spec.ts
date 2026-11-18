@@ -1,112 +1,215 @@
-import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
-import { OrderStatus } from '@/generated/prisma/client';
+import { HOUR_MS } from '@/common/utils/kst-time';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
+import {
+  autoPickupAt,
+  isInNoShowWindow,
+  OrderStatusTransitionPolicy,
+} from '@/features/order/policies/order-status-transition.policy';
+import { OrderActor, OrderStatus } from '@/generated/prisma/client';
+
+const STATUSES = Object.values(OrderStatus);
+const ACTORS = Object.values(OrderActor);
+
+const PICKUP_AT = new Date('2026-11-20T05:00:00.000Z');
+const IN_NO_SHOW_WINDOW = new Date(PICKUP_AT.getTime() + HOUR_MS);
+const AFTER_AUTO_PICKUP = autoPickupAt(PICKUP_AT);
+
+/** 허용 전이 정본(actor:from>to). 이 밖은 전부 거절이다(기본 거절). */
+const ALLOWED = new Set([
+  'ADMIN:PENDING_PAYMENT>SUBMITTED',
+  'BUYER:PENDING_PAYMENT>CANCELED',
+  'ADMIN:PENDING_PAYMENT>CANCELED',
+  'SYSTEM:PENDING_PAYMENT>CANCELED',
+  'SELLER:SUBMITTED>CONFIRMED',
+  'BUYER:SUBMITTED>CANCELED',
+  'SELLER:SUBMITTED>CANCELED',
+  'ADMIN:SUBMITTED>CANCELED',
+  'SYSTEM:SUBMITTED>CANCELED',
+  'SELLER:CONFIRMED>MADE',
+  'SELLER:CONFIRMED>PICKED_UP',
+  'ADMIN:CONFIRMED>PICKED_UP',
+  'SYSTEM:CONFIRMED>PICKED_UP',
+  'SELLER:CONFIRMED>NO_SHOW',
+  'SELLER:CONFIRMED>CANCELED',
+  'ADMIN:CONFIRMED>CANCELED',
+  'SELLER:MADE>PICKED_UP',
+  'ADMIN:MADE>PICKED_UP',
+  'SYSTEM:MADE>PICKED_UP',
+  'SELLER:MADE>NO_SHOW',
+  'SELLER:MADE>CANCELED',
+  'ADMIN:MADE>CANCELED',
+]);
+
+function expectedCode(
+  actor: OrderActor,
+  from: OrderStatus,
+  to: OrderStatus,
+): string | null {
+  if (from === to) return 'ORDER_STATUS_UNCHANGED';
+  if (ALLOWED.has(`${actor}:${from}>${to}`)) return null;
+  return 'INVALID_ORDER_STATUS_TRANSITION';
+}
+
+/** 시각 조건이 있는 전이는 그 조건을 채우는 시각으로 표를 본다(경계는 아래 describe). */
+function nowFor(actor: OrderActor, to: OrderStatus): Date {
+  return to === OrderStatus.PICKED_UP && actor === OrderActor.SYSTEM
+    ? AFTER_AUTO_PICKUP
+    : IN_NO_SHOW_WINDOW;
+}
 
 describe('OrderStatusTransitionPolicy', () => {
   const policy = new OrderStatusTransitionPolicy();
 
   describe('parse', () => {
-    it.each([
-      ['SUBMITTED', OrderStatus.SUBMITTED],
-      ['CONFIRMED', OrderStatus.CONFIRMED],
-      ['MADE', OrderStatus.MADE],
-      ['PICKED_UP', OrderStatus.PICKED_UP],
-      ['CANCELED', OrderStatus.CANCELED],
-    ])('"%s" → enum %s', (raw, expected) => {
-      expect(policy.parse(raw)).toBe(expected);
-    });
-
-    it('알 수 없는 문자열이면 400', () => {
-      expect(() => policy.parse('INVALID')).toThrowDomain(400);
-    });
-  });
-
-  describe('assertSellerTransition', () => {
-    it('from === to면 400', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.SUBMITTED,
-        ),
-      ).toThrowDomain(400);
-    });
-
-    it('CONFIRMED는 SUBMITTED에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.CONFIRMED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.CONFIRMED),
-      ).toThrowDomain(400);
-    });
-
-    it('MADE는 CONFIRMED에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.CONFIRMED, OrderStatus.MADE),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.SUBMITTED, OrderStatus.MADE),
-      ).toThrowDomain(400);
-    });
-
-    it('PICKED_UP은 MADE에서만 가능', () => {
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.PICKED_UP),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.CONFIRMED,
-          OrderStatus.PICKED_UP,
-        ),
-      ).toThrowDomain(400);
-    });
-
-    it('CANCELED는 SUBMITTED/CONFIRMED/MADE에서 가능, PICKED_UP에서는 불가', () => {
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.SUBMITTED,
-          OrderStatus.CANCELED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.CONFIRMED,
-          OrderStatus.CANCELED,
-        ),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(OrderStatus.MADE, OrderStatus.CANCELED),
-      ).not.toThrow();
-      expect(() =>
-        policy.assertSellerTransition(
-          OrderStatus.PICKED_UP,
-          OrderStatus.CANCELED,
-        ),
-      ).toThrowDomain(400);
-    });
-
-    // SUBMITTED는 주문 생성 시점의 초기 상태라 어떤 상태에서도 되돌아갈 수 없다 — 가드가 빠지면 역전이가 조용히 통과되므로 모든 from을 전수 검증한다.
-    it.each([
-      OrderStatus.CONFIRMED,
-      OrderStatus.MADE,
-      OrderStatus.PICKED_UP,
-      OrderStatus.CANCELED,
-    ])('SUBMITTED로 되돌리는 역전이는 거부 (from=%s)', (from) => {
-      expect(() =>
-        policy.assertSellerTransition(from, OrderStatus.SUBMITTED),
-      ).toThrowDomain(400);
-    });
-  });
-
-  describe('requiresCancellationNote', () => {
-    it('CANCELED일 때만 true', () => {
-      expect(policy.requiresCancellationNote(OrderStatus.CANCELED)).toBe(true);
-      expect(policy.requiresCancellationNote(OrderStatus.CONFIRMED)).toBe(
-        false,
+    it('Prisma enum 값 전부를 받는다(입금 대기·노쇼 포함)', () => {
+      expect(STATUSES).toEqual(
+        expect.arrayContaining(['PENDING_PAYMENT', 'NO_SHOW']),
       );
-      expect(policy.requiresCancellationNote(OrderStatus.MADE)).toBe(false);
+      for (const status of STATUSES) expect(policy.parse(status)).toBe(status);
+    });
+
+    it.each(['INVALID', '', 'submitted'])('%p면 400', (raw) => {
+      expect(() => policy.parse(raw)).toThrowDomain('INVALID_ORDER_STATUS');
+    });
+  });
+
+  describe('assertTransition 전수(주체 4 × from 7 × to 7)', () => {
+    const cases = ACTORS.flatMap((actor) =>
+      STATUSES.flatMap((from) =>
+        STATUSES.map(
+          (to) => [actor, from, to, expectedCode(actor, from, to)] as const,
+        ),
+      ),
+    );
+
+    it('표는 196 조합을 덮고 허용 전이는 22개다(종료 상태에서 나가는 전이는 없다)', () => {
+      expect(cases).toHaveLength(4 * 7 * 7);
+      expect(cases.filter(([, , , code]) => code === null)).toHaveLength(22);
+      for (const terminal of ['PICKED_UP', 'NO_SHOW', 'CANCELED']) {
+        expect(
+          cases.filter(([, from, , code]) => from === terminal && !code),
+        ).toHaveLength(0);
+      }
+    });
+
+    it.each(cases)('%s: %s → %s = %s', (actor, from, to, code) => {
+      const request = {
+        actor,
+        from,
+        to,
+        now: nowFor(actor, to),
+        pickupAt: PICKUP_AT,
+      };
+      expect(policy.canTransition(request)).toBe(code === null);
+      const run = () => policy.assertTransition(request);
+      if (code === null) expect(run).not.toThrow();
+      else expect(run).toThrowDomain(code);
+    });
+
+    it.each(
+      ACTORS.flatMap((actor) => STATUSES.map((s) => [actor, s] as const)),
+    )('%s의 %s 취소 허용은 OrderCancelPolicy와 같다', (actor, status) => {
+      const allowed = policy.canTransition({
+        actor,
+        from: status,
+        to: OrderStatus.CANCELED,
+        now: IN_NO_SHOW_WINDOW,
+        pickupAt: PICKUP_AT,
+      });
+      expect(allowed).toBe(new OrderCancelPolicy().canCancel(actor, status));
+    });
+  });
+
+  describe('노쇼 구간(pickupAt ≤ now < pickupAt + 24h)', () => {
+    const at = (offsetMs: number) => new Date(PICKUP_AT.getTime() + offsetMs);
+
+    it.each([
+      ['pickupAt − 1ms', at(-1), false],
+      ['pickupAt', at(0), true],
+      ['pickupAt + 24h − 1ms', at(24 * HOUR_MS - 1), true],
+      ['pickupAt + 24h', at(24 * HOUR_MS), false],
+    ])('%s: 허용 %s', (_label, now, allowed) => {
+      expect(isInNoShowWindow(PICKUP_AT, now)).toBe(allowed);
+      for (const from of [OrderStatus.CONFIRMED, OrderStatus.MADE]) {
+        const run = () =>
+          policy.assertTransition({
+            actor: OrderActor.SELLER,
+            from,
+            to: OrderStatus.NO_SHOW,
+            now,
+            pickupAt: PICKUP_AT,
+          });
+        if (allowed) expect(run).not.toThrow();
+        else expect(run).toThrowDomain('NO_SHOW_NOT_ALLOWED');
+      }
+    });
+  });
+
+  describe('픽업 완료 시각 조건은 시스템만 pickupAt + 24h부터', () => {
+    it.each([
+      [-1, false],
+      [0, true],
+    ])('pickupAt + 24h %+dms: 허용 %s', (offset, allowed) => {
+      const request = {
+        actor: OrderActor.SYSTEM,
+        from: OrderStatus.MADE,
+        to: OrderStatus.PICKED_UP,
+        now: new Date(AFTER_AUTO_PICKUP.getTime() + offset),
+        pickupAt: PICKUP_AT,
+      };
+      expect(policy.canTransition(request)).toBe(allowed);
+    });
+
+    it.each([OrderActor.SELLER, OrderActor.ADMIN])(
+      '%s 픽업 완료에는 시각 조건이 없다(픽업 시각 전에도 된다)',
+      (actor) => {
+        for (const from of [OrderStatus.CONFIRMED, OrderStatus.MADE]) {
+          expect(
+            policy.canTransition({
+              actor,
+              from,
+              to: OrderStatus.PICKED_UP,
+              now: new Date(PICKUP_AT.getTime() - HOUR_MS),
+              pickupAt: PICKUP_AT,
+            }),
+          ).toBe(true);
+        }
+      },
+    );
+  });
+
+  describe('픽업 일시 변경', () => {
+    const changed = new Date(PICKUP_AT.getTime() + HOUR_MS);
+
+    it.each(
+      STATUSES.map(
+        (status) =>
+          [
+            status,
+            ['SUBMITTED', 'CONFIRMED', 'MADE'].includes(status)
+              ? null
+              : 'PICKUP_RESCHEDULE_NOT_ALLOWED',
+          ] as const,
+      ),
+    )('%s: %s', (status, code) => {
+      const run = () =>
+        policy.assertPickupChange({
+          status,
+          fromPickupAt: PICKUP_AT,
+          toPickupAt: changed,
+        });
+      if (code === null) expect(run).not.toThrow();
+      else expect(run).toThrowDomain(code);
+    });
+
+    it('같은 일시면 PICKUP_UNCHANGED', () => {
+      expect(() =>
+        policy.assertPickupChange({
+          status: OrderStatus.CONFIRMED,
+          fromPickupAt: PICKUP_AT,
+          toPickupAt: new Date(PICKUP_AT.getTime()),
+        }),
+      ).toThrowDomain('PICKUP_UNCHANGED');
     });
   });
 });

@@ -3,7 +3,7 @@ extend type Subscription {
   내 매장 주문 생성·상태 변경 이벤트. 판매자 로그인 필수(SELLER 아니면 FORBIDDEN).
   삭제되지 않은 매장을 보유한 판매자만 구독할 수 있다 — 매장이 없거나 삭제됐으면 NOT_FOUND.
   비활성(is_active=false) 매장도 구독은 유지된다. 인증은 graphql-ws connectionParams.authorization.
-  구매자 주문 생성(SUBMITTED)·판매자 상태 변경·관리자 강제 취소가 모두 여기로 온다.
+  입금 확인(새 주문)·판매자 상태 변경·관리자 강제 취소가 모두 여기로 온다. 입금 확인 전 주문(생성·취소)은 오지 않는다.
   """
   sellerOrderUpdated: SellerOrderUpdate!
 }
@@ -14,6 +14,10 @@ extend type Subscription {
 전달 누락 가능(Redis 장애 시 발행 생략)하므로 폴백은 sellerOrderList 재조회다.
 """
 type SellerOrderUpdate {
+  """
+  갱신 종류. 새 주문 알림은 SUBMITTED일 때만 띄운다.
+  """
+  kind: SellerOrderUpdateKind!
   orderId: ID!
   """주문번호."""
   orderNumber: String!
@@ -27,6 +31,20 @@ type SellerOrderUpdate {
   totalPrice: Int!
   """첫 품목의 상품명(주문 시점 스냅샷). 주문은 단일 상품 구조다."""
   productName: String!
+  """커스텀 주문 여부(첫 품목의 커스텀 방식이 NONE이 아니면 true)."""
+  hasCustom: Boolean!
   """주문 행의 updated_at. 폐기 규칙의 비교 키다."""
   updatedAt: DateTime!
+}
+
+"""
+판매자 주문 갱신 종류. 값은 늘어날 수 있으니 모르는 값은 목록 재조회로 처리한다.
+"""
+enum SellerOrderUpdateKind {
+  """입금이 확인돼 새 주문이 접수됐다."""
+  SUBMITTED
+  """주문 상태가 바뀌었다(확정·제작 완료·픽업 완료·취소 등)."""
+  STATUS_CHANGED
+  """픽업 일시가 바뀌었다."""
+  PICKUP_RESCHEDULED
 }

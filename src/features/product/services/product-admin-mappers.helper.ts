@@ -21,7 +21,10 @@ export function toAdminProductOutput(row: AdminProductRow): AdminProductOutput {
     regularPrice: row.regular_price,
     salePrice: row.sale_price,
     currency: row.currency,
-    baseDesignImageUrl: row.base_design_image_url,
+    customMode: row.custom_mode,
+    // 상세 include는 삭제 이미지도 담아 첫 미삭제 장을 고른다
+    thumbnailUrl:
+      row.images.find((image) => image.deleted_at === null)?.image_url ?? null,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

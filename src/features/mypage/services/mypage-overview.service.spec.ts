@@ -126,7 +126,7 @@ describe('UserMypageService (real DB)', () => {
       expect(result.counts.myReviewCount).toBe(0);
     });
 
-    it('진행중 주문은 SUBMITTED/CONFIRMED/MADE 상태만, 90일 내로 필터한다', async () => {
+    it('진행중 주문은 진행 중 상태(입금 대기~제작 완료)만, 90일 내로 필터한다', async () => {
       const account = await setupUser();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -141,13 +141,25 @@ describe('UserMypageService (real DB)', () => {
         product_name_snapshot: '대표상품A',
       });
 
-      // 완료(PICKED_UP) 상태 → 진행중에서 제외
-      const completed = await createOrder(prisma, {
+      // 완료(PICKED_UP)·노쇼 → 진행중에서 제외
+      for (const status of ['PICKED_UP', 'NO_SHOW'] as const) {
+        const completed = await createOrder(prisma, {
+          account_id: account.id,
+          status,
+        });
+        await createOrderItem(prisma, {
+          order_id: completed.id,
+          product_id: product.id,
+        });
+      }
+      // 입금 대기는 진행중이다
+      const pending = await createOrder(prisma, {
         account_id: account.id,
-        status: 'PICKED_UP',
+        status: 'PENDING_PAYMENT',
+        created_at: new Date(Date.now() - 60_000),
       });
       await createOrderItem(prisma, {
-        order_id: completed.id,
+        order_id: pending.id,
         product_id: product.id,
       });
 
@@ -173,9 +185,11 @@ describe('UserMypageService (real DB)', () => {
 
       const result = await service.getOverview(account.id);
 
-      expect(result.ongoingOrders).toHaveLength(1);
+      expect(result.ongoingOrders.map((o) => o.status)).toEqual([
+        'SUBMITTED',
+        'PENDING_PAYMENT',
+      ]);
       expect(result.ongoingOrders[0].orderId).toBe(active1.id.toString());
-      expect(result.ongoingOrders[0].status).toBe('SUBMITTED');
       expect(result.ongoingOrders[0].representativeProductName).toBe(
         '대표상품A',
       );

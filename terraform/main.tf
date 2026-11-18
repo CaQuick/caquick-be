@@ -129,8 +129,8 @@ resource "github_repository_ruleset" "develop_protection" {
     bypass_mode = "always"
   }
 
+  # 삭제 금지는 아래 develop_no_deletion에 둔다 — 여기 두면 Admin 우회가 함께 풀린다.
   rules {
-    deletion         = true
     non_fast_forward = true
 
     pull_request {
@@ -157,6 +157,29 @@ resource "github_repository_ruleset" "develop_protection" {
         context = "Analyze (javascript-typescript)"
       }
     }
+  }
+}
+
+############################################
+# Branch Ruleset: develop 삭제 금지 (우회자 없음)
+############################################
+# 릴리즈 PR(head develop)을 Admin이 머지하면 delete_branch_on_merge가 develop을 지운다 —
+# 우회 권한은 ruleset 단위라, 우회자 없는 ruleset으로 분리해야 Admin 머지에서도 삭제가 막힌다.
+resource "github_repository_ruleset" "develop_no_deletion" {
+  name        = "develop-no-deletion"
+  repository  = data.github_repository.this.name
+  target      = "branch"
+  enforcement = "active"
+
+  conditions {
+    ref_name {
+      include = ["refs/heads/develop"]
+      exclude = []
+    }
+  }
+
+  rules {
+    deletion = true
   }
 }
 

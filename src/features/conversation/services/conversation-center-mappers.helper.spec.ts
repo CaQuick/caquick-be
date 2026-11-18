@@ -42,6 +42,19 @@ describe('conversation-center-mappers.helper', () => {
       ).toBe('답변');
     });
 
+    it.each([
+      ['IMAGE', '사진을 보냈습니다.'],
+      ['ORDER_CARD', '주문 문의: 케이크 (ORD-1)'],
+    ] as const)('%s 메시지는 대체 문구를 반환한다', (format, alt) => {
+      expect(
+        toLastMessagePreview({
+          body_format: format,
+          body_text: alt,
+          body_html: null,
+        }),
+      ).toBe(alt);
+    });
+
     it('메시지가 없거나 본문이 비면 null', () => {
       expect(toLastMessagePreview(null)).toBeNull();
       expect(

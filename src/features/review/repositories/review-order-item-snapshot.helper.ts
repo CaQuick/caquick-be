@@ -17,7 +17,7 @@ export interface ReviewOrderItemSnapshot {
 
 /**
  * 리뷰 작성 시점에 주문 품목에서 표시값(상품명·매장명·옵션·before 이미지)을 복사한다 — 이후 조회는 review 컬럼만 읽는다.
- * 옵션은 활성 option_item을 id 순으로, before 이미지는 활성 free_edit 첫 장(sort_order·id 순). 옵션이 없으면 null.
+ * 옵션은 활성 option_item을 id 순으로(없으면 null), before 이미지는 커스텀 대표 이미지(3D 윗면 렌더·슬롯형 합성). 커스텀 문구는 옮기지 않는다.
  */
 export async function snapshotReviewOrderItem(
   tx: Prisma.TransactionClient,
@@ -33,12 +33,7 @@ export async function snapshotReviewOrderItem(
         orderBy: { id: 'asc' },
         select: { group_name_snapshot: true, option_title_snapshot: true },
       },
-      free_edits: {
-        where: activeWhere,
-        orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
-        take: 1,
-        select: { crop_image_url: true },
-      },
+      custom_preview_image_url: true,
     },
   });
   return {
@@ -51,7 +46,7 @@ export async function snapshotReviewOrderItem(
             optionTitle: o.option_title_snapshot,
           }))
         : Prisma.DbNull,
-    before_image_url: item.free_edits[0]?.crop_image_url ?? null,
+    before_image_url: item.custom_preview_image_url,
   };
 }
 

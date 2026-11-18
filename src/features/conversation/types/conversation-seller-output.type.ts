@@ -1,3 +1,5 @@
+import type { ConversationMessageOutput } from '@/features/conversation/types/conversation-output.type';
+
 export interface SellerConversationOutput {
   id: string;
   accountId: string;
@@ -11,13 +13,6 @@ export interface SellerConversationOutput {
   updatedAt: Date;
 }
 
-export interface SellerConversationMessageOutput {
-  id: string;
-  conversationId: string;
-  senderType: 'USER' | 'STORE' | 'SYSTEM';
+export interface SellerConversationMessageOutput extends ConversationMessageOutput {
   senderAccountId: string | null;
-  bodyFormat: 'TEXT' | 'HTML';
-  bodyText: string | null;
-  bodyHtml: string | null;
-  createdAt: Date;
 }

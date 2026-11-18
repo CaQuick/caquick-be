@@ -7,15 +7,35 @@ extend type Query {
   주문 상세를 전체 품목·구매자 요약·상태 이력과 함께 조회한다. 없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminOrder(orderId: ID!): AdminOrderDetail!
+  """
+  매장의 진행 중 주문(입금 대기·접수·확정·제작 완료) 건수를 상태별로 센다. 판매자 정지·매장 숨김 전 경고용이며
+  없는 매장이면 0건이다. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminStoreInProgressOrderSummary(
+    storeId: ID!
+  ): AdminStoreInProgressOrderSummary!
 }
 
 extend type Mutation {
   """
-  주문을 강제 취소한다. 전이 규칙은 판매자 취소와 같다 — SUBMITTED·CONFIRMED·MADE에서만 가능하고
-  PICKED_UP·CANCELED면 BAD_USER_INPUT. 사유(note)는 필수이며 상태 이력에 '[관리자]' 접두로 기록된다.
-  구매자에게 ORDER_CANCELED 알림이 간다. 없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  주문을 강제 취소한다. 입금 대기·접수·확정·제작 완료 주문만 되고(그 밖은 ORDER_NOT_CANCELLABLE), 규칙은 adminOrder의
+  cancelOptions가 그대로 알려 준다. 입금 대기는 환불 없이(미입금이면 reason PAYMENT_NOT_RECEIVED), 접수는 결제액 전액,
+  확정·제작 완료는 fault(사정)에 따라 환불한다(판매자 사정 = 전액, 구매자 사정 = refundAmount, 남는 금액은 수수료를 뺀 뒤 정산에 포함).
+  고를 수 없는 사유면 CANCEL_REASON_NOT_ALLOWED, 사정이 없으면 CANCEL_FAULT_REQUIRED, 구매자 사정인데 금액이 없으면
+  REFUND_AMOUNT_REQUIRED, 금액이 0~결제액 밖이면 REFUND_AMOUNT_OUT_OF_RANGE(모두 BAD_USER_INPUT).
+  구매자에게 취소 알림(미입금이면 입금 기한 만료 알림)이, 입금 확인 뒤 주문이면 판매자에게 취소 푸시가 간다.
+  없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
   """
   adminCancelOrder(input: AdminCancelOrderInput!): AdminOrderSummary!
+  """
+  주문을 픽업 완료로 처리한다. 확정·제작 완료 주문만 되고(이미 픽업 완료면 ORDER_STATUS_UNCHANGED, 그 밖은
+  INVALID_ORDER_STATUS_TRANSITION, 모두 BAD_USER_INPUT), 매장이 숨김이어도 픽업 시각 전이어도 처리한다.
+  확인된 결제액으로 정산을 확정하고(결제 도입 전 주문은 건너뜀) 구매자에게 픽업 완료 알림이 간다.
+  없으면 NOT_FOUND. 관리자 로그인 필수. ADMIN 계정이 아니면 FORBIDDEN.
+  """
+  adminCompleteOrderPickup(
+    input: AdminCompleteOrderPickupInput!
+  ): AdminOrderSummary!
 }
 
 """
@@ -71,6 +91,14 @@ type AdminOrderSummary {
   첫 품목의 상품 대표 이미지 URL(주문 시점 스냅샷). 주문 당시 이미지가 없었거나 품목이 없으면 null.
   """
   firstItemImageUrl: String
+  """
+  커스텀 주문 여부(첫 품목의 커스텀 방식이 NONE이 아니면 true). 목록 '커스텀' 배지용이다.
+  """
+  hasCustom: Boolean!
+  """
+  첫 품목의 커스텀 대표 이미지 URL(3D 윗면 렌더 또는 슬롯형 합성). 없으면 null.
+  """
+  firstItemCustomImageUrl: String
 }
 
 """
@@ -147,6 +175,14 @@ type AdminOrderDetail {
   """
   buyerPhone: String!
   """
+  구매자가 남긴 요청 사항. 없으면 null.
+  """
+  requestNote: String
+  """
+  결제와 입금 확인 기록. 결제 도입 전 주문이면 null.
+  """
+  payment: AdminOrderPayment
+  """
   할인 전 품목 합계(원).
   """
   subtotalPrice: Int!
@@ -188,6 +224,111 @@ type AdminOrderDetail {
   상태 변경 이력. 최신순.
   """
   statusHistories: [OrderStatusHistory!]!
+  """
+  이 주문의 환불(취소 환불·입금 반환). 오래된 순, 없으면 빈 배열.
+  """
+  refunds: [OrderRefund!]!
+  """
+  취소 정보(주체·사유·사정·환불액·환불 진행). 취소되지 않은 주문이면 null.
+  """
+  cancellation: OrderCancellation
+  """
+  강제 취소 다이얼로그의 선택지. 지금 상태 기준이다.
+  """
+  cancelOptions: AdminOrderCancelOptions!
+  """
+  판매자 확정 마감 시각. 지나면 자동 취소·전액 환불된다. 접수(SUBMITTED) 상태가 아니거나 결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
+  """
+  자동 픽업 완료 예정 시각(픽업 시각 + 24시간). 확정·제작 완료 상태에서만 있고 그 밖은 null.
+  매장이 숨김이면 자동으로 픽업 완료되지 않으므로 관리자가 건별로 픽업 완료(adminCompleteOrderPickup)하거나 취소(adminCancelOrder)한다.
+  """
+  autoPickupAt: DateTime
+  """
+  노쇼 처리 시각. 노쇼가 아니면 null.
+  """
+  noShowAt: DateTime
+  """
+  판매자 픽업 일시 변경 이력. 오래된 순, 없으면 빈 배열.
+  """
+  pickupChanges: [OrderPickupChange!]!
+  """
+  주문 생성 시점의 수수료율(bp, 1bp = 0.01%). 바뀐 설정은 그 뒤 주문부터 적용된다.
+  """
+  commissionRateBps: Int!
+  """
+  정산 예정 금액(원). 정산 확정 뒤에는 실제 지급액(기준액 − 수수료), 확정 전에는 결제 금액에서 수수료(원 미만 버림)를 뺀
+  예상값이다. 입금이 확인되지 않았거나 결제 도입 전 주문이면 null, 확정 없이 취소된 주문(전액 환불)은 0.
+  """
+  expectedPayoutAmount: Int
+  """
+  확정된 수수료 기준액(원). 픽업 완료·노쇼는 결제 금액, 구매자 사정 취소는 결제 금액 − 환불 금액. 확정 전이면 null.
+  """
+  settlementBaseAmount: Int
+  """
+  확정된 수수료(원). 기준액 × 수수료율, 원 미만 버림. 확정 전이면 null.
+  """
+  commissionAmount: Int
+  """
+  정산 확정 시각. 확정 전이면 null.
+  """
+  settlementFinalizedAt: DateTime
+  """
+  이 주문이 묶인 주간 정산(adminSettlement). 아직 묶이지 않았으면 null.
+  """
+  settlementId: ID
+}
+
+"""
+관리자 강제 취소 선택지. 화면은 이 값으로 다이얼로그를 그리고 규칙을 복제하지 않는다.
+"""
+type AdminOrderCancelOptions {
+  """
+  지금 취소할 수 있는지.
+  """
+  cancelable: Boolean!
+  """
+  고를 수 있는 취소 사유. 취소할 수 없으면 빈 배열.
+  """
+  reasons: [OrderCancelReasonType!]!
+  """
+  환불 규칙. BY_FAULT면 사정을 고르게 하고, 구매자 사정이면 환불 금액(0~paidAmount)을 입력받는다. 취소할 수 없으면 null.
+  """
+  refundRule: CancelRefundRuleType
+  """
+  확인된 결제액(원). 입금 전이거나 결제 도입 전 주문이면 0.
+  """
+  paidAmount: Int!
+}
+
+"""
+매장의 진행 중 주문 요약.
+"""
+type AdminStoreInProgressOrderSummary {
+  storeId: ID!
+  """
+  진행 중 주문 전체 건수.
+  """
+  totalCount: Int!
+  """
+  상태별 건수. 0건인 상태는 빠지고 흐름 순(입금 대기 → 제작 완료)으로 온다.
+  """
+  byStatus: [AdminStoreInProgressStatusCount!]!
+}
+
+"""
+상태 1개의 주문 건수.
+"""
+type AdminStoreInProgressStatusCount {
+  """
+  주문 상태.
+  """
+  status: OrderStatusType!
+  """
+  건수.
+  """
+  count: Int!
 }
 
 """
@@ -211,6 +352,10 @@ input AdminOrderListInput {
   """
   status: OrderStatusType
   """
+  true면 진행 중 주문(입금 대기·접수·확정·제작 완료)만. 기본 false, null도 false(전체)로 본다. status와 함께 오면 AND다.
+  """
+  inProgress: Boolean = false
+  """
   매장 ID 필터(품목 기준). 미지정 시 전체.
   """
   storeId: ID
@@ -229,12 +374,35 @@ input AdminOrderListInput {
 }
 
 """
-주문 강제 취소 입력.
+주문 강제 취소 입력. 허용 범위는 adminOrder.cancelOptions를 따른다.
 """
 input AdminCancelOrderInput {
   orderId: ID!
   """
-  취소 사유. 필수. 최대 494자('[관리자] ' 접두를 붙여 500자 이내로 이력에 남는다). 감사 로그에도 기록된다.
+  취소 사유. 필수. cancelOptions.reasons 중 하나여야 한다.
   """
-  note: String!
+  reason: OrderCancelReasonType!
+  """
+  취소 메모. 선택, 최대 500자. 상태 이력과 감사 로그에 남는다.
+  """
+  note: String
+  """
+  취소 사정. cancelOptions.refundRule이 BY_FAULT면 필수이고, 그 밖에는 무시한다.
+  """
+  fault: OrderCancelFaultType
+  """
+  돌려줄 금액(원, 0~cancelOptions.paidAmount). fault가 BUYER일 때 필수이고, 그 밖에는 무시한다.
+  """
+  refundAmount: Int
+}
+
+"""
+주문 픽업 완료 입력. 확정·제작 완료 주문만 처리할 수 있다.
+"""
+input AdminCompleteOrderPickupInput {
+  orderId: ID!
+  """
+  처리 메모. 선택, 최대 500자. 상태 이력과 감사 로그에 남는다.
+  """
+  note: String
 }

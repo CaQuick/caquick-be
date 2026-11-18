@@ -13,12 +13,23 @@ import {
   NotificationRepository,
 } from '@/features/notification/repositories/notification.repository';
 import {
+  buildOrderPickupRescheduledNotification,
   buildOrderStatusNotification,
+  buildRefundAccountRequestedNotification,
+  buildRefundCompletedNotification,
   buildReviewLikedNotification,
+  type NotificationPayload,
 } from '@/features/notification/services/notification-payloads.helper';
 import {
+  ORDER_PICKUP_RESCHEDULED,
   ORDER_STATUS_CHANGED,
+  parseOrderPickupRescheduledPayload,
   parseOrderStatusChangedPayload,
+  parseRefundCompletedPayload,
+  parseRefundRequestedPayload,
+  REFUND_COMPLETED,
+  REFUND_REQUESTED,
+  type RefundEventPayload,
 } from '@/features/order';
 import {
   type OutboxConsumer,
@@ -34,6 +45,9 @@ import { parseReviewLikedPayload, REVIEW_LIKED } from '@/features/review';
 @Injectable()
 @SubscribeOutbox(
   ORDER_STATUS_CHANGED,
+  ORDER_PICKUP_RESCHEDULED,
+  REFUND_REQUESTED,
+  REFUND_COMPLETED,
   REVIEW_LIKED,
   NOTIFICATION_BROADCAST_REQUESTED,
 )
@@ -50,6 +64,12 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
     switch (event.eventType) {
       case ORDER_STATUS_CHANGED:
         return this.onOrderStatusChanged(event);
+      case ORDER_PICKUP_RESCHEDULED:
+        return this.onPickupRescheduled(event);
+      case REFUND_REQUESTED:
+        return this.onRefundRequested(event);
+      case REFUND_COMPLETED:
+        return this.onRefundCompleted(event);
       case REVIEW_LIKED:
         return this.onReviewLiked(event);
       case NOTIFICATION_BROADCAST_REQUESTED:
@@ -61,9 +81,69 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
 
   private async onOrderStatusChanged(event: OutboxEvent): Promise<void> {
     const p = parseOrderStatusChangedPayload(event.payload);
-    // SUBMITTED 등 알림 대상이 아닌 전이는 payload가 null — 이벤트는 정상 소비된다
-    const payload = buildOrderStatusNotification(p.orderNumber, p.toStatus);
+    // 알림 대상이 아닌 전이는 payload가 null — 이벤트는 정상 소비된다
+    const payload = buildOrderStatusNotification(p);
     if (!payload) return;
+    await this.repo.createFromEvent(event.eventId, [
+      {
+        account_id: parseId(p.buyerAccountId),
+        ...payload,
+        order_id: parseId(p.orderId),
+        store_id: p.storeId === null ? null : parseId(p.storeId),
+        product_id: p.productId === null ? null : parseId(p.productId),
+        order_number: p.orderNumber,
+        store_name: p.storeName,
+        product_name: p.productName,
+        created_at: event.occurredAt,
+      },
+    ]);
+  }
+
+  private async onPickupRescheduled(event: OutboxEvent): Promise<void> {
+    const p = parseOrderPickupRescheduledPayload(event.payload);
+    await this.repo.createFromEvent(event.eventId, [
+      {
+        account_id: parseId(p.buyerAccountId),
+        ...buildOrderPickupRescheduledNotification(
+          p.orderNumber,
+          new Date(p.toPickupAt),
+        ),
+        order_id: parseId(p.orderId),
+        store_id: p.storeId === null ? null : parseId(p.storeId),
+        product_id: p.productId === null ? null : parseId(p.productId),
+        order_number: p.orderNumber,
+        store_name: p.storeName,
+        product_name: p.productName,
+        created_at: event.occurredAt,
+      },
+    ]);
+  }
+
+  private async onRefundRequested(event: OutboxEvent): Promise<void> {
+    const p = parseRefundRequestedPayload(event.payload);
+    // 취소와 함께 계좌를 넣었으면 요청할 게 없다(관리자 송금 알림만 간다)
+    if (p.accountSubmitted) return;
+    await this.saveRefundNotification(
+      event,
+      p,
+      buildRefundAccountRequestedNotification(p.orderNumber, p.amount),
+    );
+  }
+
+  private async onRefundCompleted(event: OutboxEvent): Promise<void> {
+    const p = parseRefundCompletedPayload(event.payload);
+    await this.saveRefundNotification(
+      event,
+      p,
+      buildRefundCompletedNotification(p.orderNumber, p.amount),
+    );
+  }
+
+  private async saveRefundNotification(
+    event: OutboxEvent,
+    p: RefundEventPayload,
+    payload: NotificationPayload,
+  ): Promise<void> {
     await this.repo.createFromEvent(event.eventId, [
       {
         account_id: parseId(p.buyerAccountId),

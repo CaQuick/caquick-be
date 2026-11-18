@@ -12,7 +12,7 @@
 
 - (a) 2번째 구현이 현실적으로 예상됨
 - (b) 외부 부수효과 어댑터(OIDC 클라이언트, 경보 전송 함수, 시계, ID 생성기)라 테스트에서 stub이 필요
-- (c) 여러 feature가 광범위하게 주입하는 cross-cutting 포트 — `audit-log`(`AUDIT_LOG_REPOSITORY`), `store`의 `CatalogQuery`(conversation이 묻는 읽기 포트), `order`의 예약 수량 포트
+- (c) 여러 feature가 광범위하게 주입하는 cross-cutting 포트 — `audit-log`(`AUDIT_LOG_REPOSITORY`), `store`의 `CatalogQuery`(conversation이 묻는 읽기 포트), `order`의 예약 수량 포트, `order`의 탈퇴 차단 포트(`WithdrawalBlockingOrderQuery`, auth가 첫 호출 때 `ModuleRef`로 찾는 읽기 포트, `module-wiring.spec`이 역할별 resolve를 본다)
 
 **왜.** NestJS DI는 클래스 토큰도 `Test.overrideProvider(Class)`로 바꿀 수 있어 **테스트 용이성은 토큰 도입 근거가 아니다**. 전 repository에 1:1 인터페이스를 강제하면 lockstep 유지 비용만 늘고 얻는 게 없다(YAGNI, speculative generality).
 
@@ -110,7 +110,7 @@
 
 ### 경보
 
-`AlertService.notify({ level, title, detail, key })`가 운영 경보의 단일 출구다. **절대 던지지 않고** 결과(`sent | suppressed | skipped | failed`)만 돌려준다 — 경보 때문에 본 작업이 실패하면 안 된다. 같은 `key`는 억제 창(`ALERT_DEDUPE_WINDOW_MS`, 기본 5분) 안에서 1회. 웹훅 미설정이면 로그만. 부팅 실패는 DI가 없을 수 있어 전송 함수를 직접 부르고, 감독자의 동시 재시작에 대비해 호스트 잠금 파일(`BOOT_ALERT_STATE_DIR`, 700)로 억제한다. **사람이 개입해야 하는 상태만** 보낸다(outbox FAILED·DLQ·블랙리스트 폴백·브로커 blocked·부팅 실패). 재시도 중인 상태는 보내지 않는다.
+`AlertService.notify({ level, title, detail, key })`가 운영 경보의 단일 출구다. **절대 던지지 않고** 결과(`sent | suppressed | skipped | failed`)만 돌려준다 — 경보 때문에 본 작업이 실패하면 안 된다. 같은 `key`는 억제 창(`ALERT_DEDUPE_WINDOW_MS`, 기본 5분) 안에서 1회. 웹훅 미설정이면 로그만. 부팅 실패는 DI가 없을 수 있어 전송 함수를 직접 부르고, 감독자의 동시 재시작에 대비해 호스트 잠금 파일(`BOOT_ALERT_STATE_DIR`, 700)로 억제한다. **사람이 개입해야 하는 상태만** 보낸다(outbox FAILED·DLQ·블랙리스트 폴백·브로커 blocked·부팅 실패). 재시도 중인 상태는 보내지 않는다. 사람이 처리할 업무(입금 확인 요청 등)는 `level: 'info'`로 같은 채널에 보내 색으로 가르고, 건별 `key`(`deposit-claim:{orderId}` 등)를 쓴다 — 억제 창이 지난 key는 notify 때 지우며, 창이 지난 재전달은 다시 갈 수 있어 진실은 처리 대기 목록(`adminTaskCounts`)이다. `ADMIN_WEB_BASE_URL`이 있으면 처리 화면 링크를 붙인다.
 
 ### 메트릭
 

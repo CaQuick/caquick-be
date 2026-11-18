@@ -15,6 +15,7 @@ import {
   MAX_OPTION_GROUP_NAME_LENGTH,
   MAX_OPTION_ITEM_DESCRIPTION_LENGTH,
   MAX_OPTION_ITEM_TITLE_LENGTH,
+  MAX_THREE_D_KEY_LENGTH,
   MAX_URL_LENGTH,
 } from '@/features/product/constants/product-seller.constants';
 import type { SellerCreateOptionGroupInput } from '@/features/product/dto/inputs/seller-create-option-group.input';
@@ -24,6 +25,10 @@ import type { SellerReorderOptionItemsInput } from '@/features/product/dto/input
 import type { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
 import type { SellerUpdateOptionItemInput } from '@/features/product/dto/inputs/seller-update-option-item.input';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
+import {
+  toOptionGroupOutput,
+  toOptionItemOutput,
+} from '@/features/product/services/product-seller-mappers.helper';
 import type {
   SellerOptionGroupOutput,
   SellerOptionItemOutput,
@@ -77,8 +82,6 @@ export class SellerOptionService extends SellerBaseService {
           is_required: input.isRequired ?? true,
           min_select: minSelect,
           max_select: maxSelect,
-          option_requires_description: input.optionRequiresDescription ?? false,
-          option_requires_image: input.optionRequiresImage ?? false,
           sort_order: input.sortOrder ?? 0,
           is_active: input.isActive ?? true,
         },
@@ -94,7 +97,7 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return this.toOptionGroupOutput(row);
+    return toOptionGroupOutput(row);
   }
 
   async sellerUpdateOptionGroup(
@@ -145,12 +148,6 @@ export class SellerOptionService extends SellerBaseService {
           ...(input.maxSelect !== undefined
             ? { max_select: input.maxSelect }
             : {}),
-          ...(input.optionRequiresDescription !== undefined
-            ? { option_requires_description: input.optionRequiresDescription }
-            : {}),
-          ...(input.optionRequiresImage !== undefined
-            ? { option_requires_image: input.optionRequiresImage }
-            : {}),
           ...(input.sortOrder !== undefined
             ? { sort_order: input.sortOrder }
             : {}),
@@ -170,7 +167,7 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return this.toOptionGroupOutput(row);
+    return toOptionGroupOutput(row);
   }
 
   async sellerDeleteOptionGroup(
@@ -243,7 +240,7 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return rows.map((row) => this.toOptionGroupOutput(row));
+    return rows.map(toOptionGroupOutput);
   }
 
   async sellerCreateOptionItem(
@@ -281,6 +278,10 @@ export class SellerOptionService extends SellerBaseService {
           price_delta: input.priceDelta ?? 0,
           sort_order: input.sortOrder ?? 0,
           is_active: input.isActive ?? true,
+          three_d_key: cleanNullableText(
+            input.threeDKey,
+            MAX_THREE_D_KEY_LENGTH,
+          ),
         },
       },
       (created) => ({
@@ -294,7 +295,7 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return this.toOptionItemOutput(row);
+    return toOptionItemOutput(row);
   }
 
   async sellerUpdateOptionItem(
@@ -354,6 +355,14 @@ export class SellerOptionService extends SellerBaseService {
           ...(input.isActive !== undefined
             ? { is_active: input.isActive }
             : {}),
+          ...(input.threeDKey !== undefined
+            ? {
+                three_d_key: cleanNullableText(
+                  input.threeDKey,
+                  MAX_THREE_D_KEY_LENGTH,
+                ),
+              }
+            : {}),
         },
       },
       (created) => ({
@@ -367,7 +376,7 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return this.toOptionItemOutput(row);
+    return toOptionItemOutput(row);
   }
 
   async sellerDeleteOptionItem(
@@ -439,69 +448,6 @@ export class SellerOptionService extends SellerBaseService {
         },
       }),
     );
-    return rows.map((row) => this.toOptionItemOutput(row));
-  }
-
-  private toOptionGroupOutput(row: {
-    id: bigint;
-    product_id: bigint;
-    name: string;
-    description: string | null;
-    is_required: boolean;
-    min_select: number;
-    max_select: number;
-    option_requires_description: boolean;
-    option_requires_image: boolean;
-    sort_order: number;
-    is_active: boolean;
-    option_items: {
-      id: bigint;
-      option_group_id: bigint;
-      title: string;
-      description: string | null;
-      image_url: string | null;
-      price_delta: number;
-      sort_order: number;
-      is_active: boolean;
-    }[];
-  }): SellerOptionGroupOutput {
-    return {
-      id: row.id.toString(),
-      productId: row.product_id.toString(),
-      name: row.name,
-      description: row.description,
-      isRequired: row.is_required,
-      minSelect: row.min_select,
-      maxSelect: row.max_select,
-      optionRequiresDescription: row.option_requires_description,
-      optionRequiresImage: row.option_requires_image,
-      sortOrder: row.sort_order,
-      isActive: row.is_active,
-      optionItems: row.option_items.map((item) =>
-        this.toOptionItemOutput(item),
-      ),
-    };
-  }
-
-  private toOptionItemOutput(row: {
-    id: bigint;
-    option_group_id: bigint;
-    title: string;
-    description: string | null;
-    image_url: string | null;
-    price_delta: number;
-    sort_order: number;
-    is_active: boolean;
-  }): SellerOptionItemOutput {
-    return {
-      id: row.id.toString(),
-      optionGroupId: row.option_group_id.toString(),
-      title: row.title,
-      description: row.description,
-      imageUrl: row.image_url,
-      priceDelta: row.price_delta,
-      sortOrder: row.sort_order,
-      isActive: row.is_active,
-    };
+    return rows.map(toOptionItemOutput);
   }
 }

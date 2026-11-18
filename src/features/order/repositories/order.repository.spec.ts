@@ -4,11 +4,15 @@ import { NotificationAdminRepository } from '@/features/notification/repositorie
 import { NotificationRepository } from '@/features/notification/repositories/notification.repository';
 import { NotificationOutboxConsumer } from '@/features/notification/services/notification-outbox.consumer';
 import {
-  ORDER_SUBMITTED,
-  parseOrderSubmittedPayload,
-} from '@/features/order/events/order-submitted.event';
+  ORDER_PAYMENT_PENDING,
+  parseOrderPaymentPendingPayload,
+} from '@/features/order/events/order-payment-pending.event';
 import {
-  type CreateSubmittedOrderArgs,
+  pendingPaymentLockName,
+  withPendingPaymentLock,
+} from '@/features/order/repositories/order-pending-payment-lock.helper';
+import {
+  type CreatePendingPaymentOrderArgs,
   type DailyCapacityGuard,
   OrderRepository,
 } from '@/features/order/repositories/order.repository';
@@ -108,9 +112,14 @@ describe('OrderRepository (real DB)', () => {
   });
 
   describe('findOngoingOrdersByAccount', () => {
-    it('SUBMITTED/CONFIRMED/MADE 상태 주문만 since 이후로 반환하고 PICKED_UP/CANCELED 제외', async () => {
+    it('진행 중(입금 대기·접수·확정·제작 완료) 주문만 since 이후로 반환하고 PICKED_UP·NO_SHOW·CANCELED 제외', async () => {
       const buyer = await setupBuyer();
       const since = new Date('2026-01-01');
+      const pending = await createOrder(prisma, {
+        account_id: buyer.id,
+        status: 'PENDING_PAYMENT',
+      });
+      await createOrder(prisma, { account_id: buyer.id, status: 'NO_SHOW' });
 
       const o1 = await createOrder(prisma, {
         account_id: buyer.id,
@@ -134,7 +143,9 @@ describe('OrderRepository (real DB)', () => {
         since,
         limit: 10,
       });
-      expect(rows.map((r) => r.id).sort()).toEqual([o1.id, o4.id].sort());
+      expect(rows.map((r) => r.id).sort()).toEqual(
+        [pending.id, o1.id, o4.id].sort(),
+      );
     });
 
     it('since 이전에 생성된 주문은 제외한다', async () => {
@@ -287,6 +298,7 @@ describe('OrderRepository (real DB)', () => {
           from_status: 'SUBMITTED',
           to_status: 'CONFIRMED',
           changed_at: new Date(),
+          actor_type: 'SELLER',
           note: '확정',
         },
       });
@@ -392,6 +404,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2025-01-01'),
+          submitted_at: new Date('2025-01-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -424,6 +437,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2025-06-01'),
+          submitted_at: new Date('2025-06-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -443,6 +457,7 @@ describe('OrderRepository (real DB)', () => {
           discount_price: 0,
           total_price: 0,
           created_at: new Date('2026-05-01'),
+          submitted_at: new Date('2026-05-01'),
         },
       });
       await createOrderItem(prisma, {
@@ -507,21 +522,21 @@ describe('OrderRepository (real DB)', () => {
 
     it('basis가 기준 컬럼을 고르고 범위는 [from, to)다', async () => {
       const store = await createStore(prisma);
-      // 픽업은 범위 안, 생성은 범위 밖
+      // 픽업은 범위 안, 접수는 범위 밖
       await storeOrder(store.id, {
         pickup_at: inside,
-        created_at: before,
+        submitted_at: before,
         total_price: 1_000,
       });
       // 경계: from은 포함, to는 제외
       await storeOrder(store.id, {
         pickup_at: from,
-        created_at: to,
+        submitted_at: to,
         total_price: 10,
       });
       await storeOrder(store.id, {
         pickup_at: to,
-        created_at: from,
+        submitted_at: from,
         total_price: 100,
       });
 
@@ -530,9 +545,47 @@ describe('OrderRepository (real DB)', () => {
         await repo.aggregateStoreOrdersInRange({ ...base, basis: 'pickup' }),
       ).toEqual({ orderCount: 2, salesAmount: 1_010 });
       expect(
-        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'created' }),
+        await repo.aggregateStoreOrdersInRange({ ...base, basis: 'submitted' }),
       ).toEqual({ orderCount: 1, salesAmount: 100 });
     });
+
+    it('접수 기준은 생성 시각이 아니라 입금 확인(접수) 시각이다', async () => {
+      const store = await createStore(prisma);
+      await storeOrder(store.id, {
+        created_at: before,
+        submitted_at: inside,
+        total_price: 7,
+      });
+      expect(
+        await repo.aggregateStoreOrdersInRange({
+          storeId: store.id,
+          from,
+          to,
+          basis: 'submitted',
+        }),
+      ).toEqual({ orderCount: 1, salesAmount: 7 });
+    });
+
+    it.each(['pickup', 'submitted'] as const)(
+      '입금 대기(판매자 비노출) 주문은 %s 기준에서 빠진다',
+      async (basis) => {
+        const store = await createStore(prisma);
+        await storeOrder(store.id, {
+          status: 'PENDING_PAYMENT',
+          pickup_at: inside,
+          created_at: inside,
+          total_price: 5,
+        });
+        expect(
+          await repo.aggregateStoreOrdersInRange({
+            storeId: store.id,
+            from,
+            to,
+            basis,
+          }),
+        ).toEqual({ orderCount: 0, salesAmount: 0 });
+      },
+    );
 
     it('CANCELED·soft-delete 주문·품목이 soft-delete된 주문·다른 매장은 제외한다', async () => {
       const store = await createStore(prisma);
@@ -572,7 +625,7 @@ describe('OrderRepository (real DB)', () => {
           storeId: store.id,
           from,
           to,
-          basis: 'created',
+          basis: 'submitted',
         }),
       ).toEqual({ orderCount: 0, salesAmount: 0 });
     });
@@ -657,6 +710,31 @@ describe('OrderRepository (real DB)', () => {
           where: { order_id: order.id },
         }),
       ).toBe(0);
+    });
+
+    it('입금 확인 전(submitted_at 없음) 주문은 잠금 조회에서 빠져 null이다(전이 판정 전)', async () => {
+      const store = await createStore(prisma);
+      const order = await createOrder(prisma, { status: 'PENDING_PAYMENT' });
+      await createOrderItem(prisma, { order_id: order.id, store_id: store.id });
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      const assertTransition = jest.fn();
+
+      const result = await repo.updateOrderStatusBySeller({
+        orderId: order.id,
+        storeId: store.id,
+        actorAccountId: seller.id,
+        toStatus: OrderStatus.CONFIRMED,
+        assertTransition,
+        note: null,
+        now: new Date(),
+      });
+
+      expect(result).toBeNull();
+      expect(assertTransition).not.toHaveBeenCalled();
+      const row = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+      expect(row.status).toBe('PENDING_PAYMENT');
     });
 
     it('다른 store의 주문이면 null 반환 (update 미수행)', async () => {
@@ -754,43 +832,31 @@ describe('OrderRepository (real DB)', () => {
       expect(auditLogs[0].user_agent).toBe('seller-app');
     });
 
-    it('CANCELED 전환: canceled_at 갱신되고 ORDER_CANCELED notification이 생성된다', async () => {
+    it('전이 이벤트에 판매자 주체와 픽업 일시를 싣는다', async () => {
       const store = await createStore(prisma);
       const buyer = await setupBuyer();
       const order = await setupOrderForStore(store.id, buyer.id);
       const seller = await createAccount(prisma, { account_type: 'SELLER' });
-      const now = new Date('2026-04-22T10:00:00Z');
 
-      const updated = await repo.updateOrderStatusBySeller({
+      await repo.updateOrderStatusBySeller({
         orderId: order.id,
         storeId: store.id,
         actorAccountId: seller.id,
-        toStatus: OrderStatus.CANCELED,
+        toStatus: OrderStatus.CONFIRMED,
         assertTransition: () => undefined,
-        note: '재고 부족',
-        now,
+        note: null,
+        now: new Date('2026-04-22T10:00:00Z'),
       });
 
-      expect(updated?.status).toBe('CANCELED');
-      expect(updated?.canceled_at?.toISOString()).toBe(now.toISOString());
-
-      // 취소도 구매자에게 알린다(판매자·운영자 취소 공통)
-      await drainOutbox(dispatcher);
-      const notifications = await prisma.notification.findMany({
-        where: { order_id: order.id },
+      const event = await prisma.outbox.findFirstOrThrow({
+        where: { event_type: 'order.status_changed' },
       });
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0]).toMatchObject({
-        account_id: buyer.id,
-        type: 'ORDER_STATUS',
-        event: 'ORDER_CANCELED',
-        store_id: store.id,
+      expect(event.payload_json).toMatchObject({
+        actorType: 'SELLER',
+        cancelReason: null,
+        refundAmount: null,
+        pickupAt: order.pickup_at.toISOString(),
       });
-
-      const histories = await prisma.orderStatusHistory.findMany({
-        where: { order_id: order.id },
-      });
-      expect(histories[0].note).toBe('재고 부족');
     });
 
     it('CONFIRMED→MADE→PICKED_UP 연속 전이 시 각 타임스탬프 컬럼이 누적 기록된다', async () => {
@@ -861,31 +927,42 @@ describe('OrderRepository (real DB)', () => {
     });
   });
 
-  describe('createSubmittedOrder', () => {
+  describe('createPendingPaymentOrder', () => {
     const PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
-    const SUBMITTED_AT = new Date('2026-09-16T07:00:00.000Z');
+    const NOW = new Date('2026-09-16T07:00:00.000Z');
+    const EXPIRES_AT = new Date('2026-09-16T08:00:00.000Z');
 
-    function submitArgs(args: {
+    function createArgs(args: {
       buyerId: bigint;
       store: { id: bigint; store_name: string };
       product: { id: bigint; name: string };
       orderNumber?: string;
       quantity?: number;
       capacityGuard?: DailyCapacityGuard;
-    }): CreateSubmittedOrderArgs {
+    }): CreatePendingPaymentOrderArgs {
       const quantity = args.quantity ?? 2;
       return {
         accountId: args.buyerId,
         orderNumber: args.orderNumber ?? 'ORD-20260916-ABC234',
         idempotencyKey: `idem-${args.orderNumber ?? 'base'}`,
+        idempotencyInputHash: 'a'.repeat(64),
         pickupAt: PICKUP_AT,
         buyerName: '차차',
         buyerPhone: '010-0000-1111',
+        requestNote: null,
         subtotalPrice: 30000 * quantity,
         discountPrice: 5000 * quantity,
         totalPrice: 25000 * quantity,
-        submittedAt: SUBMITTED_AT,
+        commissionRateBps: 550,
+        now: NOW,
         capacityGuard: args.capacityGuard ?? null,
+        payment: {
+          depositorName: '차차맘',
+          depositBankCode: '004',
+          depositAccountNumber: '12345678901234',
+          depositAccountHolder: '케이퀵',
+          expiresAt: EXPIRES_AT,
+        },
         item: {
           storeId: args.store.id,
           productId: args.product.id,
@@ -898,11 +975,12 @@ describe('OrderRepository (real DB)', () => {
           quantity,
           itemSubtotalPrice: 25000 * quantity,
           options: [],
+          custom: null,
         },
       };
     }
 
-    it('접수 이벤트(order.submitted)를 같은 tx에 1건 남기고 payload는 생성 시점 스냅샷이다', async () => {
+    it('입금 대기 주문·결제(계좌 스냅샷)·이력과 입금 대기 이벤트를 같은 tx에 남긴다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma, { store_name: '해즈 케이크' });
       const product = await createProduct(prisma, {
@@ -910,35 +988,63 @@ describe('OrderRepository (real DB)', () => {
         name: '딸기 케이크',
       });
 
-      const created = await repo.createSubmittedOrder(
-        submitArgs({ buyerId: buyer.id, store, product }),
+      const created = await repo.createPendingPaymentOrder(
+        createArgs({ buyerId: buyer.id, store, product }),
       );
+      if (typeof created === 'string') throw new Error(created);
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { payment: true, status_histories: true },
+      });
+      expect(order).toMatchObject({
+        status: 'PENDING_PAYMENT',
+        submitted_at: null,
+        commission_rate_bps: 550,
+        total_price: 50000,
+      });
+      expect(order.payment).toMatchObject({
+        method: 'BANK_TRANSFER',
+        status: 'PENDING',
+        amount: 50000,
+        depositor_name: '차차맘',
+        deposit_bank_code: '004',
+        deposit_account_number: '12345678901234',
+        deposit_account_holder: '케이퀵',
+        expires_at: EXPIRES_AT,
+        buyer_claimed_at: null,
+        confirmed_at: null,
+      });
+      expect(order.status_histories).toEqual([
+        expect.objectContaining({
+          from_status: null,
+          to_status: 'PENDING_PAYMENT',
+          actor_type: 'BUYER',
+          actor_account_id: buyer.id,
+          changed_at: NOW,
+        }),
+      ]);
+      expect(created.payment).toMatchObject({ amount: 50000 });
 
       const events = await prisma.outbox.findMany();
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         aggregate_type: 'order',
-        aggregate_id: created!.id.toString(),
-        event_type: ORDER_SUBMITTED,
-        occurred_at: SUBMITTED_AT,
+        aggregate_id: created.id.toString(),
+        event_type: ORDER_PAYMENT_PENDING,
+        occurred_at: NOW,
         actor_account_id: buyer.id,
-        status: 'PENDING',
       });
-      expect(parseOrderSubmittedPayload(events[0].payload_json)).toEqual({
-        orderId: created!.id.toString(),
+      expect(parseOrderPaymentPendingPayload(events[0].payload_json)).toEqual({
+        orderId: created.id.toString(),
         orderNumber: 'ORD-20260916-ABC234',
-        buyerAccountId: buyer.id.toString(),
-        storeId: store.id.toString(),
-        storeName: '해즈 케이크',
-        productId: product.id.toString(),
-        productName: '딸기 케이크',
-        quantity: 2,
-        pickupAt: PICKUP_AT.toISOString(),
-        totalPrice: 50000,
+        amount: 50000,
+        depositorName: '차차맘',
+        expiresAt: EXPIRES_AT.toISOString(),
       });
     });
 
-    it('반증: capacity 재검사에서 거절되면 주문도 이벤트도 남지 않는다', async () => {
+    it('반증: capacity 재검사에서 거절되면 주문도 결제도 이벤트도 남지 않는다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
@@ -948,8 +1054,8 @@ describe('OrderRepository (real DB)', () => {
         capacity: 1,
       });
 
-      const created = await repo.createSubmittedOrder(
-        submitArgs({
+      const created = await repo.createPendingPaymentOrder(
+        createArgs({
           buyerId: buyer.id,
           store,
           product,
@@ -963,20 +1069,21 @@ describe('OrderRepository (real DB)', () => {
         }),
       );
 
-      expect(created).toBeNull();
+      expect(created).toBe('capacity-exceeded');
       expect(await prisma.order.count()).toBe(0);
+      expect(await prisma.payment.count()).toBe(0);
       expect(await prisma.outbox.count()).toBe(0);
     });
 
-    it('반증: order_number 충돌로 tx가 롤백되면 이벤트도 남지 않는다', async () => {
+    it('반증: order_number 충돌로 tx가 롤백되면 결제도 이벤트도 남지 않는다', async () => {
       const buyer = await setupBuyer();
       const store = await createStore(prisma);
       const product = await createProduct(prisma, { store_id: store.id });
       await createOrder(prisma, { order_number: 'ORD-20260916-DUP000' });
 
       await expect(
-        repo.createSubmittedOrder(
-          submitArgs({
+        repo.createPendingPaymentOrder(
+          createArgs({
             buyerId: buyer.id,
             store,
             product,
@@ -985,7 +1092,60 @@ describe('OrderRepository (real DB)', () => {
         ),
       ).rejects.toMatchObject({ code: 'P2002' });
 
+      expect(await prisma.payment.count()).toBe(0);
       expect(await prisma.outbox.count()).toBe(0);
     });
+
+    it('실패한 tx도 계정 잠금을 풀어 같은 계정의 다음 요청이 기다리지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+      await createOrder(prisma, { order_number: 'ORD-20260916-DUP000' });
+      await expect(
+        repo.createPendingPaymentOrder(
+          createArgs({
+            buyerId: buyer.id,
+            store,
+            product,
+            orderNumber: 'ORD-20260916-DUP000',
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'P2002' });
+
+      expect(await lockHolder(buyer.id)).toBeNull();
+    });
+
+    it('tx가 timeout으로 만료돼 해제를 보내지 못해도 그 세션을 끊어 계정 잠금이 남지 않는다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const product = await createProduct(prisma, { store_id: store.id });
+
+      await expect(
+        prisma.$transaction(
+          (tx) =>
+            withPendingPaymentLock(tx, prisma, buyer.id, async () => {
+              await tx.$queryRaw`SELECT SLEEP(2)`;
+            }),
+          { timeout: 1_000 },
+        ),
+      ).rejects.toThrow();
+
+      // 끊긴 세션의 잠금 해제는 KILL 응답 직후 비동기로 끝난다.
+      for (let i = 0; i < 20 && (await lockHolder(buyer.id)) !== null; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(await lockHolder(buyer.id)).toBeNull();
+      await expect(
+        repo.createPendingPaymentOrder(
+          createArgs({ buyerId: buyer.id, store, product }),
+        ),
+      ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
+    });
+
+    async function lockHolder(accountId: bigint): Promise<unknown> {
+      const [row] = await prisma.$queryRaw<{ holder: unknown }[]>`
+        SELECT IS_USED_LOCK(${pendingPaymentLockName(accountId)}) AS holder`;
+      return row.holder;
+    }
   });
 });

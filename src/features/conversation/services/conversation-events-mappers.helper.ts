@@ -15,6 +15,13 @@ export function toConversationMessageEvent(
     bodyFormat: message.bodyFormat,
     bodyText: message.bodyText,
     bodyHtml: message.bodyHtml,
+    imageUrl: message.imageUrl,
+    orderCard: message.orderCard
+      ? {
+          ...message.orderCard,
+          pickupAt: message.orderCard.pickupAt.toISOString(),
+        }
+      : null,
     createdAt: message.createdAt.toISOString(),
   };
 }

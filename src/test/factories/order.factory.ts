@@ -1,15 +1,27 @@
 import { DAY_MS } from '@/common/utils/kst-time';
 import { buildRegionLabel } from '@/common/utils/region-label';
 import type {
+  CustomImageKind,
+  CustomMode,
   Order,
+  OrderCustomUpload,
   OrderItem,
   OrderStatus,
+  Payment,
+  PaymentSetting,
+  PaymentStatus,
+  Prisma,
   PrismaClient,
+  Refund,
+  RefundKind,
+  RefundStatus,
+  Settlement,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';
+import { createStore } from '@/test/factories/store.factory';
 
 export interface OrderOverrides {
   account_id?: bigint;
@@ -24,6 +36,11 @@ export interface OrderOverrides {
   deleted_at?: Date;
   idempotency_key?: string;
   created_at?: Date;
+  commission_rate_bps?: number;
+  /** 미지정 시 PENDING_PAYMENT면 null, 그 밖의 상태는 생성 시각(입금 확인 = 판매자 노출) */
+  submitted_at?: Date | null;
+  confirm_deadline_at?: Date | null;
+  confirm_reminder_sent_at?: Date | null;
 }
 
 export async function createOrder(
@@ -34,12 +51,13 @@ export async function createOrder(
   const accountId =
     overrides.account_id ??
     (await createAccount(prisma, { account_type: 'USER' })).id;
+  const status = overrides.status ?? 'SUBMITTED';
 
   return prisma.order.create({
     data: {
       account_id: accountId,
       order_number: overrides.order_number ?? `ORD-${Date.now()}-${seq}`,
-      status: overrides.status ?? 'SUBMITTED',
+      status,
       pickup_at: overrides.pickup_at ?? new Date(Date.now() + DAY_MS),
       buyer_name: overrides.buyer_name ?? `Buyer ${seq}`,
       buyer_phone: overrides.buyer_phone ?? '010-0000-0000',
@@ -51,6 +69,151 @@ export async function createOrder(
         : {}),
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
       ...(overrides.created_at ? { created_at: overrides.created_at } : {}),
+      ...(overrides.commission_rate_bps !== undefined
+        ? { commission_rate_bps: overrides.commission_rate_bps }
+        : {}),
+      confirm_deadline_at: overrides.confirm_deadline_at ?? null,
+      confirm_reminder_sent_at: overrides.confirm_reminder_sent_at ?? null,
+      submitted_at:
+        overrides.submitted_at !== undefined
+          ? overrides.submitted_at
+          : status === 'PENDING_PAYMENT'
+            ? null
+            : (overrides.created_at ?? new Date()),
+    },
+  });
+}
+
+export type PaymentSettingOverrides = Partial<
+  Pick<
+    PaymentSetting,
+    | 'commission_rate_bps'
+    | 'deposit_bank_code'
+    | 'deposit_account_number'
+    | 'deposit_account_holder'
+  >
+>;
+
+/** 결제 설정 단일 행(id=1). truncateAll이 마이그레이션이 넣은 행까지 지우므로 필요한 spec이 다시 만든다. */
+export async function createPaymentSetting(
+  prisma: PrismaClient,
+  overrides: PaymentSettingOverrides = {},
+): Promise<PaymentSetting> {
+  const data = {
+    commission_rate_bps: 0,
+    deposit_bank_code: '004',
+    deposit_account_number: '12345678901234',
+    deposit_account_holder: '케이퀵',
+    ...overrides,
+  };
+  return prisma.paymentSetting.upsert({
+    where: { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
+  });
+}
+
+export interface PaymentOverrides {
+  /** 미지정 시 입금 대기 주문을 새로 만든다 */
+  order_id?: bigint;
+  status?: PaymentStatus;
+  /** 미지정 시 주문 total_price */
+  amount?: number;
+  depositor_name?: string;
+  expires_at?: Date;
+  buyer_claimed_at?: Date | null;
+  confirmed_at?: Date | null;
+}
+
+/** 계좌이체 결제. 계좌 스냅샷은 createPaymentSetting 기본값과 같다. */
+export async function createPayment(
+  prisma: PrismaClient,
+  overrides: PaymentOverrides = {},
+): Promise<Payment> {
+  const order = overrides.order_id
+    ? await prisma.order.findUniqueOrThrow({
+        where: { id: overrides.order_id },
+      })
+    : await createOrder(prisma, { status: 'PENDING_PAYMENT' });
+  return prisma.payment.create({
+    data: {
+      order_id: order.id,
+      method: 'BANK_TRANSFER',
+      status: overrides.status ?? 'PENDING',
+      amount: overrides.amount ?? order.total_price,
+      depositor_name: overrides.depositor_name ?? order.buyer_name.slice(0, 20),
+      deposit_bank_code: '004',
+      deposit_account_number: '12345678901234',
+      deposit_account_holder: '케이퀵',
+      expires_at:
+        overrides.expires_at ??
+        new Date(order.created_at.getTime() + 3_600_000),
+      buyer_claimed_at: overrides.buyer_claimed_at ?? null,
+      confirmed_at: overrides.confirmed_at ?? null,
+    },
+  });
+}
+
+export interface RefundOverrides {
+  /** 미지정 시 취소된 주문을 새로 만든다 */
+  order_id?: bigint;
+  kind?: RefundKind;
+  status?: RefundStatus;
+  amount?: number;
+  requested_at?: Date;
+  /** 계좌가 있는 상태(송금 대기·완료)의 암호문. 미지정 시 복호화할 수 없는 자리표시 값 */
+  account_number_enc?: string;
+}
+
+/**
+ * 환불. 취소 환불은 cancel_order_id를, 입금 반환은 입금 기록(RETURN)을 함께 만든다.
+ * 송금 대기·완료면 계좌 칸을 채운다.
+ */
+export async function createRefund(
+  prisma: PrismaClient,
+  overrides: RefundOverrides = {},
+): Promise<Refund> {
+  const order = overrides.order_id
+    ? await prisma.order.findUniqueOrThrow({
+        where: { id: overrides.order_id },
+      })
+    : await createOrder(prisma, { status: 'CANCELED' });
+  const kind = overrides.kind ?? 'CANCEL';
+  const status = overrides.status ?? 'AWAITING_ACCOUNT';
+  const amount = overrides.amount ?? order.total_price;
+  const requestedAt = overrides.requested_at ?? new Date();
+  const record =
+    kind === 'DEPOSIT_RETURN'
+      ? await prisma.depositRecord.create({
+          data: {
+            kind: 'RETURN',
+            order_id: order.id,
+            amount,
+            depositor_name: order.buyer_name.slice(0, 50),
+            recorded_by_account_id: order.account_id,
+          },
+        })
+      : null;
+  return prisma.refund.create({
+    data: {
+      order_id: order.id,
+      kind,
+      cancel_order_id: kind === 'CANCEL' ? order.id : null,
+      deposit_record_id: record?.id ?? null,
+      amount,
+      status,
+      requested_at: requestedAt,
+      ...(status === 'AWAITING_ACCOUNT'
+        ? {}
+        : {
+            bank_code: '004',
+            account_holder: '환불받는이',
+            account_number_enc:
+              overrides.account_number_enc ?? 'v1.test.iv.tag.ct',
+            account_number_last4: '5678',
+            account_submitted_at: requestedAt,
+          }),
+      ...(status === 'COMPLETED' ? { completed_at: requestedAt } : {}),
     },
   });
 }
@@ -68,6 +231,9 @@ export interface OrderItemOverrides {
   sale_price_snapshot?: number | null;
   quantity?: number;
   item_subtotal_price?: number;
+  custom_mode_snapshot?: CustomMode;
+  custom_base_image_url_snapshot?: string | null;
+  custom_preview_image_url?: string | null;
   deleted_at?: Date;
 }
 
@@ -124,7 +290,178 @@ export async function createOrderItem(
       sale_price_snapshot: overrides.sale_price_snapshot ?? null,
       quantity: overrides.quantity ?? 1,
       item_subtotal_price: overrides.item_subtotal_price ?? 10000,
+      custom_mode_snapshot: overrides.custom_mode_snapshot ?? 'NONE',
+      custom_base_image_url_snapshot:
+        overrides.custom_base_image_url_snapshot ?? null,
+      custom_preview_image_url: overrides.custom_preview_image_url ?? null,
       ...(overrides.deleted_at ? { deleted_at: overrides.deleted_at } : {}),
+    },
+  });
+}
+
+const THREE_D_RENDER_KINDS = [
+  'THREE_D_TOP',
+  'THREE_D_FRONT',
+  'THREE_D_BACK',
+  'THREE_D_LEFT',
+  'THREE_D_RIGHT',
+] as const satisfies readonly CustomImageKind[];
+
+export const MINIMAL_THREE_D_DESIGN = {
+  schemaVersion: 1,
+  basic: {
+    shape: 'heart',
+    size: 'mini',
+    design: null,
+    flavor: null,
+    sheetColor: 'white',
+  },
+  top: [],
+  side: [],
+};
+
+/** 3D 품목 스냅샷: 디자인 JSON과 렌더 5장(`https://img/<kind>.png`). 정렬이 드러나게 종류 역순으로 넣는다. */
+export async function createThreeDOrderItemCustom(
+  prisma: PrismaClient,
+  orderItemId: bigint,
+  designJson: Prisma.InputJsonValue = MINIMAL_THREE_D_DESIGN,
+): Promise<void> {
+  await prisma.orderItemCustomDesign.create({
+    data: {
+      order_item_id: orderItemId,
+      schema_version: 1,
+      design_json: designJson,
+    },
+  });
+  for (const kind of [...THREE_D_RENDER_KINDS].reverse()) {
+    await prisma.orderItemCustomImage.create({
+      data: {
+        order_item_id: orderItemId,
+        kind,
+        image_url: `https://img/${kind}.png`,
+      },
+    });
+  }
+}
+
+export type OrderCustomUploadOverrides = Partial<
+  Pick<
+    OrderCustomUpload,
+    | 'account_id'
+    | 'purpose'
+    | 'object_key'
+    | 'status'
+    | 'created_at'
+    | 'purge_started_at'
+    | 'attached_at'
+  >
+>;
+
+/** 커스텀 이미지 선업로드 기록. 계정을 안 주면 구매자를 새로 만든다. */
+export async function createOrderCustomUpload(
+  prisma: PrismaClient,
+  overrides: OrderCustomUploadOverrides = {},
+): Promise<OrderCustomUpload> {
+  const accountId =
+    overrides.account_id ??
+    (await createAccount(prisma, { account_type: 'USER' })).id;
+  return prisma.orderCustomUpload.create({
+    data: {
+      purpose: 'RENDER',
+      object_key: `order-custom/renders/${accountId}/2026-11-19/${nextSeq()}.png`,
+      content_type: 'image/png',
+      content_length: 1024,
+      ...overrides,
+      account_id: accountId,
+    },
+  });
+}
+
+export interface FinalizedOrderArgs {
+  store_id: bigint;
+  finalized_at: Date;
+  /** 기본 10000. 결제액도 같은 값이다 */
+  base_amount?: number;
+  commission_rate_bps?: number;
+  status?: OrderStatus;
+  store_name_snapshot?: string;
+  product_name_snapshot?: string;
+}
+
+/** 정산이 확정된 주문(확인된 결제·품목 포함). 수수료는 확정 규칙과 같이 원 미만 버림. */
+export async function createFinalizedOrder(
+  prisma: PrismaClient,
+  args: FinalizedOrderArgs,
+): Promise<Order> {
+  const base = args.base_amount ?? 10000;
+  const bps = args.commission_rate_bps ?? 0;
+  const order = await createOrder(prisma, {
+    status: args.status ?? 'PICKED_UP',
+    total_price: base,
+    commission_rate_bps: bps,
+  });
+  await createOrderItem(prisma, {
+    order_id: order.id,
+    store_id: args.store_id,
+    ...(args.store_name_snapshot
+      ? { store_name_snapshot: args.store_name_snapshot }
+      : {}),
+    ...(args.product_name_snapshot
+      ? { product_name_snapshot: args.product_name_snapshot }
+      : {}),
+  });
+  await createPayment(prisma, {
+    order_id: order.id,
+    status: 'CONFIRMED',
+    confirmed_at: order.created_at,
+  });
+  return prisma.order.update({
+    where: { id: order.id },
+    data: {
+      settlement_base_amount: base,
+      commission_amount: Math.floor((base * bps) / 10000),
+      settlement_finalized_at: args.finalized_at,
+    },
+  });
+}
+
+export type SettlementOverrides = Partial<
+  Pick<
+    Settlement,
+    | 'store_id'
+    | 'store_name_snapshot'
+    | 'period_start'
+    | 'period_end'
+    | 'order_count'
+    | 'settlement_base_amount'
+    | 'commission_amount'
+    | 'payout_amount'
+    | 'status'
+    | 'paid_at'
+  >
+>;
+
+/** 주간 정산 행. 기간을 안 주면 겹치지 않는 주(월~일)를 고른다. */
+export async function createSettlement(
+  prisma: PrismaClient,
+  overrides: SettlementOverrides = {},
+): Promise<Settlement> {
+  const storeId = overrides.store_id ?? (await createStore(prisma)).id;
+  // 2030-01-07(월)부터 시퀀스만큼 뒤 주 — spec이 직접 고르는 기간과 겹치지 않게 멀리 둔다
+  const periodStart =
+    overrides.period_start ??
+    new Date(Date.UTC(2030, 0, 7) + nextSeq() * 7 * DAY_MS);
+  return prisma.settlement.create({
+    data: {
+      store_name_snapshot: 'Store snapshot',
+      period_end: new Date(periodStart.getTime() + 6 * DAY_MS),
+      order_count: 1,
+      settlement_base_amount: 10000,
+      commission_amount: 0,
+      payout_amount: 10000,
+      ...overrides,
+      store_id: storeId,
+      period_start: periodStart,
     },
   });
 }

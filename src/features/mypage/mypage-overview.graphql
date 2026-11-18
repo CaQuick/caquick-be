@@ -38,7 +38,7 @@ type MyPageCounts {
 }
 
 """
-진행중 주문 요약 카드. 픽업 완료·취소는 제외된다.
+진행중 주문 요약 카드. 입금 대기부터 제작 완료까지만 담고, 픽업 완료·노쇼·취소는 제외된다.
 """
 type OngoingOrderSummary {
   orderId: ID!

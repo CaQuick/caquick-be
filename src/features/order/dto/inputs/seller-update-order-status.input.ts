@@ -1,20 +1,14 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 
-const ORDER_STATUSES = [
-  'SUBMITTED',
-  'CONFIRMED',
-  'MADE',
-  'PICKED_UP',
-  'CANCELED',
-] as const;
-type SellerOrderStatusInput = (typeof ORDER_STATUSES)[number];
+import { OrderStatus } from '@/generated/prisma/client';
 
 export class SellerUpdateOrderStatusInput {
   @IsString()
   orderId!: string;
 
-  @IsIn(ORDER_STATUSES)
-  toStatus!: SellerOrderStatusInput;
+  // 전이 가능 여부는 정책(assertTransition)이 판정한다
+  @IsEnum(OrderStatus)
+  toStatus!: OrderStatus;
 
   @IsOptional()
   @IsString()

@@ -1,21 +1,36 @@
 import { Injectable } from '@nestjs/common';
 
-import { DomainException } from '@/common/errors/error-catalog';
+import { DomainException, type ErrorCode } from '@/common/errors/error-catalog';
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { parseId } from '@/common/utils/id-parser';
 import { formatKstDate, kstDayBoundaries } from '@/common/utils/kst-time';
 import { uniqueConstraintName } from '@/common/utils/prisma-error';
 import { buildRegionLabel } from '@/common/utils/region-label';
+import { codePointLength } from '@/common/utils/text-cleaner';
 import { evaluateActiveUserAccount } from '@/features/auth';
+import { CUSTOM_UPLOAD_PURPOSES } from '@/features/order/constants/order-custom-upload-purposes';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
-import { OrderRepository } from '@/features/order/repositories/order.repository';
-import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
-import { OrderEventsService } from '@/features/order/services/order-events.service';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
+import {
+  OrderRepository,
+  type CreatedOrderRow,
+  type CreatePendingPaymentOrderArgs,
+  type CreatePendingPaymentOrderResult,
+} from '@/features/order/repositories/order.repository';
+import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
+import { hashCreateOrderInput } from '@/features/order/services/order-input-hash.helper';
+import { toOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
-import { Prisma } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type OrderCustomUploadPurpose,
+} from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 // 0/O·1/I 등 혼동 문자를 뺀 대문자 영숫자. 주문번호 무작위부에 사용.
 const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -27,12 +42,29 @@ const ORDER_NUMBER_MAX_ATTEMPTS = 3;
 // "저장은 됐는데 응답 직렬화에서 실패 → 재시도 중복 주문" 경로를 차단한다.
 const MAX_ORDER_AMOUNT = 2_147_483_647;
 
+/** 미입금 자동 취소까지의 입금 기한. */
+const PAYMENT_WINDOW_MS = 60 * 60_000;
+/** 은행 입금자명과 대조하는 값이라 자르지 않고 입력을 요구한다. */
+const MAX_DEPOSITOR_NAME_LENGTH = 20;
+
+/** tx 안 잠금 재검사의 거절 결과 → 같은 키 replay가 아니면 내는 코드. */
+const LOCKED_REJECT_CODES = {
+  'capacity-exceeded': 'PICKUP_NOT_AVAILABLE',
+  'pending-limit': 'PENDING_PAYMENT_LIMIT_EXCEEDED',
+  'upload-invalid': 'CUSTOM_UPLOAD_INVALID',
+  'upload-expired': 'CUSTOM_UPLOAD_EXPIRED',
+} as const satisfies Record<
+  Exclude<CreatePendingPaymentOrderResult, CreatedOrderRow | 'lock-timeout'>,
+  ErrorCode
+>;
+
 interface ResolvedOptionSelection {
   optionGroupId: bigint;
   optionItemId: bigint;
   groupNameSnapshot: string;
   optionTitleSnapshot: string;
   optionPriceDeltaSnapshot: number;
+  threeDKey: string | null;
 }
 
 @Injectable()
@@ -43,10 +75,45 @@ export class OrderCheckoutService {
     private readonly pickupSchedule: StorePickupScheduleService,
     private readonly clock: ClockService,
     private readonly random: RandomService,
-    private readonly events: OrderEventsService,
+    private readonly paymentSettings: PaymentSettingRepository,
+    private readonly customUploads: OrderCustomUploadRepository,
+    private readonly s3: S3Service,
+    private readonly customization: OrderCustomizationService,
   ) {}
 
-  /** 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한다. 커스텀 입력은 스펙 확정 후 확장. */
+  /**
+   * 커스텀 이미지(3D 렌더·슬롯형 합성·참고 사진) 선업로드 URL. 발급을 기록해 두고, 주문에 쓰이지 않으면
+   * 정리 크론이 하루 뒤 지운다. 형식·크기는 S3 정책이 검증한다.
+   */
+  async createOrderCustomUploadUrl(
+    accountId: bigint,
+    input: {
+      purpose: OrderCustomUploadPurpose;
+      contentType: string;
+      contentLength: number;
+    },
+  ): Promise<CreateUploadUrlOutput> {
+    await this.requireActiveBuyer(accountId);
+    const issued = await this.s3.createUploadUrl({
+      accountId,
+      purpose: CUSTOM_UPLOAD_PURPOSES[input.purpose],
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
+    await this.customUploads.create({
+      accountId,
+      purpose: input.purpose,
+      objectKey: issued.key,
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
+    return issued;
+  }
+
+  /**
+   * 옵션 그룹 규칙·픽업 일시를 서버가 재검증하고 가격을 스냅샷한 뒤 입금 대기 주문을 만든다.
+   * 판매자에게는 입금 확인 뒤에 보이므로 여기서는 판매자 구독을 발행하지 않는다.
+   */
   async createOrder(
     accountId: bigint,
     input: CreateOrderInput,
@@ -54,6 +121,11 @@ export class OrderCheckoutService {
     const productId = parseId(input.productId);
     const optionItemIds = input.optionItemIds.map((id) => parseId(id));
     const quantity = input.quantity ?? 1;
+    const inputHash = hashCreateOrderInput({
+      ...input,
+      productId,
+      optionItemIds,
+    });
 
     // 멱등 replay: 같은 (계정, 키)의 주문이 있으면 검증·생성 없이 그 결과를 반환한다 — 원 요청 시점의 검증을 이미 통과한 주문이다.
     const replayed = await this.orderRepo.findOrderByIdempotencyKey(
@@ -61,6 +133,7 @@ export class OrderCheckoutService {
       input.idempotencyKey,
     );
     if (replayed) {
+      assertReplayInputMatches(replayed, inputHash);
       return this.toCreateOrderOutput(replayed);
     }
 
@@ -76,30 +149,37 @@ export class OrderCheckoutService {
     }
 
     const selections = this.resolveOptionSelections(product, optionItemIds);
+    const custom = this.customization.resolve({
+      product,
+      selectedThreeDKeys: selections.map((selection) => selection.threeDKey),
+      quantity,
+      custom: input.custom,
+      accountId,
+    });
     const buyer = this.resolveBuyerInfo(buyerProfile, input);
+    const depositorName = resolveDepositorName(input.depositorName, buyer.name);
 
     const now = this.clock.now();
-    // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
-    const preparationDeadlineMs =
-      now.getTime() + product.preparation_time_minutes * 60_000;
-    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
+    // 영업일·슬롯·하한(리드타임과 제작 시간 중 긴 쪽)은 달력과 같은 catalog 판정, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
     const capacityGuard = this.buildCapacityGuard(
       product.store_id,
       input.pickupAt,
     );
     const pickupAvailable =
-      input.pickupAt.getTime() >= preparationDeadlineMs &&
       (await this.pickupSchedule.isPickupSlotAvailable({
         storeId: product.store_id,
         pickupAt: input.pickupAt,
+        preparationTimeMinutes: product.preparation_time_minutes,
       })) &&
       !(await this.orderRepo.isDailyCapacityExceeded(capacityGuard, quantity));
     if (!pickupAvailable) {
       // 같은 키의 동시 재시도가 방금 capacity를 채운 것일 수 있다 — 거절 전에 키를 재조회해,
       // 내 주문이 이미 생성돼 있으면 실패 대신 replay로 응답한다(응답 유실 재시도가 '가득 참' 실패를 받는 race 차단).
-      const raced = await this.replayAfterCapacityReject(
+      const raced = await this.replayOrReject(
         accountId,
         input.idempotencyKey,
+        inputHash,
+        'PICKUP_NOT_AVAILABLE',
       );
       return this.toCreateOrderOutput(raced);
     }
@@ -125,19 +205,43 @@ export class OrderCheckoutService {
         throw new DomainException('ORDER_AMOUNT_OUT_OF_RANGE');
       }
     }
+    // 구매자가 본 금액과 다르면 바뀐 가격으로 주문을 만들지 않는다
+    if (itemSubtotalPrice !== input.expectedTotalPrice) {
+      throw new DomainException('ORDER_PRICE_CHANGED');
+    }
 
-    const submittedAt = now;
+    const setting = await this.paymentSettings.findPaymentSetting();
+    const {
+      deposit_bank_code: depositBankCode,
+      deposit_account_number: depositAccountNumber,
+      deposit_account_holder: depositAccountHolder,
+    } = setting;
+    // 결제 설정은 보낸 필드만 바꾸므로 일부만 채워진 행이 있을 수 있다 — 세 값이 다 있어야 안내할 수 있다
+    if (!depositBankCode || !depositAccountNumber || !depositAccountHolder) {
+      throw new DomainException('PAYMENT_ACCOUNT_NOT_CONFIGURED');
+    }
+
     const created = await this.createWithOrderNumberRetry({
       accountId,
       idempotencyKey: input.idempotencyKey,
+      idempotencyInputHash: inputHash,
       pickupAt: input.pickupAt,
       buyerName: buyer.name,
       buyerPhone: buyer.phone,
+      requestNote: input.requestNote?.trim() || null,
       subtotalPrice,
       discountPrice,
       totalPrice: itemSubtotalPrice,
-      submittedAt,
+      commissionRateBps: setting.commission_rate_bps,
+      now,
       capacityGuard,
+      payment: {
+        depositorName,
+        depositBankCode,
+        depositAccountNumber,
+        depositAccountHolder,
+        expiresAt: new Date(now.getTime() + PAYMENT_WINDOW_MS),
+      },
       item: {
         storeId: product.store_id,
         productId: product.id,
@@ -151,25 +255,21 @@ export class OrderCheckoutService {
         quantity,
         itemSubtotalPrice,
         options: selections,
+        custom,
       },
     });
 
     return this.toCreateOrderOutput(created);
   }
 
-  private toCreateOrderOutput(row: {
-    id: bigint;
-    order_number: string;
-    status: CreateOrderOutput['status'];
-    pickup_at: Date;
-    total_price: number;
-  }): CreateOrderOutput {
+  private toCreateOrderOutput(row: CreatedOrderRow): CreateOrderOutput {
     return {
       orderId: row.id.toString(),
       orderNumber: row.order_number,
       status: row.status,
       pickupAt: row.pickup_at,
       totalPrice: row.total_price,
+      payment: row.payment ? toOrderPaymentOutput(row.payment) : null,
     };
   }
 
@@ -198,6 +298,7 @@ export class OrderCheckoutService {
           groupNameSnapshot: group.name,
           optionTitleSnapshot: item.title,
           optionPriceDeltaSnapshot: item.price_delta,
+          threeDKey: item.three_d_key,
         });
         groupIdByItemId.set(item.id.toString(), group.id.toString());
       }
@@ -225,14 +326,6 @@ export class OrderCheckoutService {
         : count === 0 || withinRange;
       if (!valid) {
         throw new DomainException('OPTION_GROUP_RULE_VIOLATION');
-      }
-      // 설명/이미지 필수 옵션은 커스텀 입력 없이는 판매자 요구 정보가 빠진 채
-      // 주문된다 — 커스텀 체크아웃 확장 전까지 해당 옵션 선택은 거절한다
-      if (
-        count > 0 &&
-        (group.option_requires_description || group.option_requires_image)
-      ) {
-        throw new DomainException('OPTION_CUSTOMIZATION_REQUIRED');
       }
     }
     return selections;
@@ -270,30 +363,27 @@ export class OrderCheckoutService {
   }
 
   private async createWithOrderNumberRetry(
-    args: Omit<
-      Parameters<OrderRepository['createSubmittedOrder']>[0],
-      'orderNumber'
-    >,
-  ) {
+    args: Omit<CreatePendingPaymentOrderArgs, 'orderNumber'>,
+  ): Promise<CreatedOrderRow> {
     for (let attempt = 0; attempt < ORDER_NUMBER_MAX_ATTEMPTS; attempt += 1) {
       try {
-        const created = await this.orderRepo.createSubmittedOrder({
+        const created = await this.orderRepo.createPendingPaymentOrder({
           ...args,
-          orderNumber: this.generateOrderNumber(args.submittedAt),
+          orderNumber: this.generateOrderNumber(args.now),
         });
-        if (created === null) {
-          // 트랜잭션 내 capacity 재검사에서 잔여 부족 판정(동시 주문 race 차단).
-          // 잔여를 채운 것이 같은 키의 내 주문일 수 있어 거절 전에 replay를 확인한다.
-          return this.replayAfterCapacityReject(
+        if (created === 'lock-timeout') {
+          throw new DomainException('CONCURRENT_REQUEST');
+        }
+        if (typeof created === 'string') {
+          // 트랜잭션 안 잠금 재검사에서 거절됐다. 자리·건수를 채우거나 업로드를 붙인 것이 같은 키의 내 주문
+          // (응답 유실 재시도)일 수 있어 거절 전에 replay를 확인한다.
+          return this.replayOrReject(
             args.accountId,
             args.idempotencyKey,
+            args.idempotencyInputHash,
+            LOCKED_REJECT_CODES[created],
           );
         }
-        // 커밋된 새 주문만 발행한다 — replay(멱등 키·capacity·P2002)는 이미 발행된 주문이다
-        await this.events.publishSellerOrderUpdate(
-          args.item.storeId,
-          toSellerOrderUpdateEvent(created, args.item.productNameSnapshot),
-        );
         return created;
       } catch (error) {
         const isUniqueViolation =
@@ -305,7 +395,10 @@ export class OrderCheckoutService {
             args.accountId,
             args.idempotencyKey,
           );
-          if (existing) return existing;
+          if (existing) {
+            assertReplayInputMatches(existing, args.idempotencyInputHash);
+            return existing;
+          }
           // 활성 주문이 없는데 키 unique가 충돌했다면 soft-delete된 주문이 키를 점유한 경우다 — MySQL unique는
           // deleted_at을 보지 않는다. 같은 키로는 몇 번을 재시도해도 동일하게 실패하므로 새 주문서(새 키)로 유도한다.
           const heldByDeleted =
@@ -332,16 +425,19 @@ export class OrderCheckoutService {
     throw new DomainException('ORDER_NUMBER_GENERATION_FAILED');
   }
 
-  private async replayAfterCapacityReject(
+  private async replayOrReject(
     accountId: bigint,
     idempotencyKey: string,
-  ) {
+    inputHash: string,
+    rejectCode: ErrorCode,
+  ): Promise<CreatedOrderRow> {
     const existing = await this.orderRepo.findOrderByIdempotencyKey(
       accountId,
       idempotencyKey,
     );
-    if (existing) return existing;
-    throw new DomainException('PICKUP_NOT_AVAILABLE');
+    if (!existing) throw new DomainException(rejectCode);
+    assertReplayInputMatches(existing, inputHash);
+    return existing;
   }
 
   /** 그 외 P2002(주문번호 등)는 재시도 대상이라 구분한다. */
@@ -360,5 +456,30 @@ export class OrderCheckoutService {
       );
     }
     return `ORD-${datePart}-${randomPart}`;
+  }
+}
+
+/** 생략·공백이면 주문자 이름. 어느 쪽이든 20자를 넘으면 자르지 않고 입력을 요구한다. */
+function resolveDepositorName(
+  raw: string | null | undefined,
+  buyerName: string,
+): string {
+  const name = raw?.trim() || buyerName;
+  if (codePointLength(name) > MAX_DEPOSITOR_NAME_LENGTH) {
+    throw new DomainException('DEPOSITOR_NAME_INVALID');
+  }
+  return name;
+}
+
+/** 해시 도입 전 주문(null)은 비교하지 않는다. */
+function assertReplayInputMatches(
+  existing: { idempotency_input_hash: string | null },
+  inputHash: string,
+): void {
+  if (
+    existing.idempotency_input_hash !== null &&
+    existing.idempotency_input_hash !== inputHash
+  ) {
+    throw new DomainException('IDEMPOTENCY_KEY_INPUT_MISMATCH');
   }
 }

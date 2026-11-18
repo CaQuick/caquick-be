@@ -1,3 +1,6 @@
+import type { ThreeDOptionCategory } from '@/features/product/constants/custom-3d-catalog.constants';
+import type { CustomMode, CustomTextAlign } from '@/generated/prisma/client';
+
 export interface ProductDetailOptionItem {
   id: string;
   title: string;
@@ -5,6 +8,7 @@ export interface ProductDetailOptionItem {
   imageUrl: string | null;
   priceDelta: number;
   sortOrder: number;
+  threeDKey: string | null;
 }
 
 export interface ProductDetailOptionGroup {
@@ -15,7 +19,30 @@ export interface ProductDetailOptionGroup {
   minSelect: number;
   maxSelect: number;
   sortOrder: number;
+  threeDCategory: ThreeDOptionCategory | null;
   items: ProductDetailOptionItem[];
+}
+
+export interface ProductDetailCustomSlot {
+  id: string;
+  label: string;
+  defaultText: string;
+  maxLength: number;
+  isRequired: boolean;
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  textColor: string;
+  textAlign: CustomTextAlign;
+  sortOrder: number;
+}
+
+export interface ProductDetailCustomTemplate {
+  revision: number;
+  baseImageUrl: string;
+  freeEditEnabled: boolean;
+  slots: ProductDetailCustomSlot[];
 }
 
 export interface ProductDetail {
@@ -32,4 +59,6 @@ export interface ProductDetail {
   reviewCount: number;
   isWishlisted: boolean;
   optionGroups: ProductDetailOptionGroup[];
+  customMode: CustomMode;
+  customTemplate: ProductDetailCustomTemplate | null;
 }

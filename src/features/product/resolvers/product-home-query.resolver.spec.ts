@@ -63,13 +63,9 @@ describe('ProductHome Query Resolver (real DB)', () => {
   });
 
   it('customCakeShowcase: 서비스에 위임해 제작 후기 목록을 반환한다', async () => {
-    const orderItem = await createOrderItem(prisma);
-    await prisma.orderItemCustomFreeEdit.create({
-      data: {
-        order_item_id: orderItem.id,
-        crop_image_url: 'https://img/before.png',
-        description_text: '요청 디자인',
-      },
+    const orderItem = await createOrderItem(prisma, {
+      custom_mode_snapshot: 'SLOT',
+      custom_preview_image_url: 'https://img/before.png',
     });
     const review = await createReview(prisma, {
       order_item_id: orderItem.id,

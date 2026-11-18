@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 
-export type AlertLevel = 'warn' | 'error';
+/** info는 사람이 처리할 업무 알림(입금 확인 요청 등), warn·error는 장애 경보. 같은 채널이라 색으로 가른다. */
+export type AlertLevel = 'info' | 'warn' | 'error';
 
 export interface AlertMessage {
   level: AlertLevel;
@@ -27,7 +28,11 @@ export const ALERT_TRANSPORT = Symbol('ALERT_TRANSPORT');
 /** Discord 웹훅 전송 상한 — 경보 때문에 요청·소비가 매달리면 안 된다. */
 export const ALERT_POST_TIMEOUT_MS = 3_000;
 const DESCRIPTION_LIMIT = 1_800;
-const COLOR: Record<AlertLevel, number> = { warn: 0xf59e0b, error: 0xef4444 };
+const COLOR: Record<AlertLevel, number> = {
+  info: 0x3b82f6,
+  warn: 0xf59e0b,
+  error: 0xef4444,
+};
 
 export function buildDiscordPayload(
   message: AlertMessage,

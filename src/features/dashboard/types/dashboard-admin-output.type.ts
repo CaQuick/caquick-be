@@ -1,3 +1,4 @@
+import type { AdminOrderStatusCounts } from '@/features/order';
 import type {
   AccountType,
   AuditActionType,
@@ -25,13 +26,7 @@ export interface AdminDashboardSummaryOutput {
   to: Date;
   newUserCount: number;
   newSellerCount: number;
-  orderCounts: {
-    submitted: number;
-    confirmed: number;
-    made: number;
-    pickedUp: number;
-    canceled: number;
-  };
+  orderCounts: AdminOrderStatusCounts;
   orderAmountSum: number;
   activeStoreCount: number;
   activeProductCount: number;

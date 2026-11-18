@@ -12,7 +12,6 @@ import { SellerReorderProductCustomTextTokensInput } from '@/features/product/dt
 import { SellerReorderProductImagesInput } from '@/features/product/dto/inputs/seller-reorder-product-images.input';
 import { SellerSetProductActiveInput } from '@/features/product/dto/inputs/seller-set-product-active.input';
 import { SellerSetProductCategoriesInput } from '@/features/product/dto/inputs/seller-set-product-categories.input';
-import { SellerSetProductCustomTemplateActiveInput } from '@/features/product/dto/inputs/seller-set-product-custom-template-active.input';
 import { SellerSetProductTagsByNameInput } from '@/features/product/dto/inputs/seller-set-product-tags-by-name.input';
 import { SellerSetProductTagsInput } from '@/features/product/dto/inputs/seller-set-product-tags.input';
 import { SellerUpdateOptionGroupInput } from '@/features/product/dto/inputs/seller-update-option-group.input';
@@ -33,6 +32,7 @@ import type {
   SellerProductImageOutput,
   SellerProductOutput,
 } from '@/features/product/types/product-seller-output.type';
+import type { CustomMode } from '@/generated/prisma/client';
 import {
   CurrentUser,
   JwtAuthGuard,
@@ -240,15 +240,29 @@ export class SellerProductMutationResolver {
     );
   }
 
-  @Mutation('sellerSetProductCustomTemplateActive')
-  sellerSetProductCustomTemplateActive(
+  @Mutation('sellerSetProductCustomMode')
+  sellerSetProductCustomMode(
     @CurrentUser() user: JwtUser,
-    @Args('input') input: SellerSetProductCustomTemplateActiveInput,
-  ): Promise<SellerCustomTemplateOutput> {
+    @Args('productId') productId: string,
+    @Args('customMode') customMode: CustomMode,
+  ): Promise<SellerProductOutput> {
     const accountId = parseAccountId(user);
-    return this.templateService.sellerSetProductCustomTemplateActive(
+    return this.templateService.sellerSetProductCustomMode(
       accountId,
-      input,
+      parseId(productId),
+      customMode,
+    );
+  }
+
+  @Mutation('sellerApplyThreeDOptionPreset')
+  sellerApplyThreeDOptionPreset(
+    @CurrentUser() user: JwtUser,
+    @Args('productId') productId: string,
+  ): Promise<SellerProductOutput> {
+    const accountId = parseAccountId(user);
+    return this.templateService.sellerApplyThreeDOptionPreset(
+      accountId,
+      parseId(productId),
     );
   }
 

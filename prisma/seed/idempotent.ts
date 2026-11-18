@@ -9,6 +9,7 @@
  *
  * 정리 시 위 prefix에 매칭되는 row와 그 종속 데이터(주문/리뷰/찜/...)를
  * 삭제한 뒤 다시 삽입하므로, 수동으로 만든 다른 데이터는 보존된다.
+ * 결제 설정(payment_setting 단일 행)은 시드 영역이 아니라 지우지 않고 seedPayments가 upsert한다.
  */
 import type { PrismaClient } from '@/generated/prisma/client';
 
@@ -117,6 +118,12 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
         await prisma.orderItemCustomText.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });
+        await prisma.orderItemCustomDesign.deleteMany({
+          where: { order_item_id: { in: orderItemIds } },
+        });
+        await prisma.orderItemCustomImage.deleteMany({
+          where: { order_item_id: { in: orderItemIds } },
+        });
         await prisma.orderItemOptionItem.deleteMany({
           where: { order_item_id: { in: orderItemIds } },
         });
@@ -135,6 +142,19 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
           where: { order_item_id: { in: orderItemIds } },
         });
       }
+      // 결제·환불·입금 기록(환불이 입금 기록을 가리켜 먼저)·픽업 변경 — 전부 주문 FK(RESTRICT)
+      await prisma.refund.deleteMany({
+        where: { order_id: { in: orderIds } },
+      });
+      await prisma.depositRecord.deleteMany({
+        where: { order_id: { in: orderIds } },
+      });
+      await prisma.payment.deleteMany({
+        where: { order_id: { in: orderIds } },
+      });
+      await prisma.orderPickupChange.deleteMany({
+        where: { order_id: { in: orderIds } },
+      });
       await prisma.orderItem.deleteMany({
         where: { order_id: { in: orderIds } },
       });
@@ -164,6 +184,11 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       },
     });
     await prisma.review.deleteMany({ where: { account_id: { in: userIds } } });
+
+    // 커스텀 이미지 선업로드 기록(계정 FK는 없지만 시드 사용자 것은 함께 지운다)
+    await prisma.orderCustomUpload.deleteMany({
+      where: { account_id: { in: userIds } },
+    });
 
     // 찜
     await prisma.wishlistItem.deleteMany({
@@ -299,6 +324,13 @@ export async function resetSeedScope(prisma: PrismaClient): Promise<void> {
       });
     }
     await prisma.storeFaqTopic.deleteMany({
+      where: { store_id: { in: storeIds } },
+    });
+    // 정산은 주문이 가리키지만 시드 매장 주문은 1)에서 이미 지웠다
+    await prisma.settlement.deleteMany({
+      where: { store_id: { in: storeIds } },
+    });
+    await prisma.storeSettlementAccount.deleteMany({
       where: { store_id: { in: storeIds } },
     });
 

@@ -47,10 +47,15 @@ function event(
   };
 }
 
-function orderSubmitted(storeId: bigint, eventId = EVENT_ID): OutboxEvent {
+function orderSubmitted(
+  storeId: bigint,
+  eventId = EVENT_ID,
+  confirmDeadlineAt?: string,
+): OutboxEvent {
   return event(
     'order.submitted',
     {
+      ...(confirmDeadlineAt ? { confirmDeadlineAt } : {}),
       orderId: '42',
       orderNumber: 'ORD-1',
       buyerAccountId: '7',
@@ -177,6 +182,19 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
         receipt_checked_at: null,
       });
       expect(await sendsCounter()).toEqual({ TICKET_OK: 2 });
+    });
+
+    it('접수 시각(occurredAt) 기준 확정 마감까지 2시간 미만이면 본문에 마감 시각을 싣는다', async () => {
+      const { storeId } = await storeWithDevices(1);
+
+      // NOW(10/5 21:00 KST) + 1시간
+      await consumer.handle(
+        orderSubmitted(storeId, EVENT_ID, '2026-10-05T13:00:00.000Z'),
+      );
+
+      expect(send.mock.calls[0][0][0].body).toBe(
+        '레터링 케이크 2개 · 픽업 10/5 12:05 · 22:00까지 확정',
+      );
     });
 
     it('해제된 디바이스와 다른 매장의 디바이스는 대상이 아니다', async () => {
@@ -420,6 +438,79 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
     });
   });
 
+  describe('order.status_changed', () => {
+    function statusChanged(
+      storeId: bigint,
+      overrides: Record<string, unknown> = {},
+    ): OutboxEvent {
+      return event('order.status_changed', {
+        orderId: '42',
+        orderNumber: 'ORD-1',
+        buyerAccountId: '7',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'CANCELED',
+        storeId: storeId.toString(),
+        storeName: '케이크샵',
+        productId: '9',
+        productName: '레터링 케이크',
+        actorType: 'ADMIN',
+        cancelReason: 'OTHER',
+        refundAmount: 0,
+        pickupAt: '2026-10-05T03:05:00.000Z',
+        ...overrides,
+      });
+    }
+
+    it('운영자 취소는 매장 디바이스에 취소 푸시를 보낸다', async () => {
+      const { storeId } = await storeWithDevices(1);
+
+      await consumer.handle(statusChanged(storeId));
+
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0][0]).toMatchObject({
+        title: '주문 취소',
+        body: '레터링 케이크 · 픽업 10/5 12:05 주문이 취소됐어요(운영자)',
+        data: { kind: 'ORDER_CANCELED', orderId: '42' },
+      });
+      expect(await deliveries()).toHaveLength(1);
+    });
+
+    it.each([
+      ['판매자 본인 취소', { actorType: 'SELLER' }],
+      ['입금 전 주문 취소', { fromStatus: 'PENDING_PAYMENT' }],
+      ['취소가 아닌 전이', { toStatus: 'MADE', cancelReason: null }],
+      ['주체를 모르는 옛 이벤트', { actorType: undefined }],
+    ])('%s는 보내지 않고 정상 소비된다(행 없음)', async (_label, overrides) => {
+      const { storeId } = await storeWithDevices(1);
+
+      await consumer.handle(statusChanged(storeId, overrides));
+
+      expect(send).not.toHaveBeenCalled();
+      expect(await deliveries()).toHaveLength(0);
+    });
+  });
+
+  it('order.confirm_reminder_due는 매장 디바이스에 확정 마감 미리 알림을 보낸다', async () => {
+    const { storeId } = await storeWithDevices(1);
+
+    await consumer.handle(
+      event('order.confirm_reminder_due', {
+        orderId: '42',
+        orderNumber: 'ORD-1',
+        storeId: storeId.toString(),
+        productName: '레터링 케이크',
+        confirmDeadlineAt: '2026-10-05T03:00:00.000Z',
+      }),
+    );
+
+    expect(send.mock.calls[0][0][0]).toMatchObject({
+      title: '확정 마감 임박',
+      body: '레터링 케이크 주문을 12:00까지 확정하지 않으면 자동 취소돼요',
+      data: { kind: 'ORDER_CONFIRM_REMINDER', orderId: '42' },
+    });
+    expect(await deliveries()).toHaveLength(1);
+  });
+
   it('conversation.buyer_message_sent는 preview를 본문으로, 딥링크는 대화 id', async () => {
     const { storeId, devices } = await storeWithDevices(1);
 
@@ -447,9 +538,9 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
   });
 
   it('반증: 구독하지 않은 event_type은 던진다', async () => {
-    await expect(
-      consumer.handle(event('order.status_changed', {})),
-    ).rejects.toThrow('구독하지 않은 outbox 이벤트: order.status_changed');
+    await expect(consumer.handle(event('review.liked', {}))).rejects.toThrow(
+      '구독하지 않은 outbox 이벤트: review.liked',
+    );
     expect(send).not.toHaveBeenCalled();
   });
 });

@@ -1,15 +1,46 @@
 // cross-feature 공개 API. 단일 구현 repo라 토큰/인터페이스 없이 구체 클래스로 주입(의도적).
 export { OrderModule } from '@/features/order/order.module';
 // 주문 집계(dashboard feature)와 주문 읽기(user·notification).
-export { OrderRepository } from '@/features/order/repositories/order.repository';
+export {
+  OrderRepository,
+  type AdminOrderStatusCounts,
+} from '@/features/order/repositories/order.repository';
+// 채팅 주문 카드 원천과 숨김 매장 문의 허용 판정(conversation).
+export { OrderInquiryRepository } from '@/features/order/repositories/order-inquiry.repository';
 // 주문 상태 전이 이벤트 계약(outbox). 소비자(notification)는 payload 스냅샷만 읽는다.
 export {
   ORDER_STATUS_CHANGED,
+  type OrderStatusChangedPayload,
   parseOrderStatusChangedPayload,
 } from '@/features/order/events/order-status-changed.event';
+// 취소 사유 라벨 — 구매자 취소 알림 본문(notification)이 주문 상세와 같은 값을 쓴다.
+export { ORDER_CANCEL_REASON_LABELS } from '@/features/order/constants/order-cancel-reasons';
+// 환불 생성 이벤트 계약(outbox). 구매자 환불 계좌 요청 알림(notification)이 읽는다.
+export {
+  REFUND_REQUESTED,
+  type RefundEventPayload,
+  parseRefundRequestedPayload,
+} from '@/features/order/events/refund-requested.event';
+// 환불 송금 완료 이벤트 계약(outbox). 구매자 환불 완료 알림(notification)이 읽는다.
+export {
+  REFUND_COMPLETED,
+  parseRefundCompletedPayload,
+} from '@/features/order/events/refund-completed.event';
 // 주문 접수 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
 export {
   ORDER_SUBMITTED,
   type OrderSubmittedPayload,
   parseOrderSubmittedPayload,
 } from '@/features/order/events/order-submitted.event';
+// 확정 마감 미리 알림 이벤트 계약(outbox). 판매자 푸시 소비자(notification)가 읽는다.
+export {
+  ORDER_CONFIRM_REMINDER_DUE,
+  type OrderConfirmReminderDuePayload,
+  parseOrderConfirmReminderDuePayload,
+} from '@/features/order/events/order-confirm-reminder-due.event';
+// 판매자 픽업 변경 이벤트 계약(outbox). 구매자 알림 소비자(notification)가 읽는다.
+export {
+  ORDER_PICKUP_RESCHEDULED,
+  type OrderPickupRescheduledPayload,
+  parseOrderPickupRescheduledPayload,
+} from '@/features/order/events/order-pickup-rescheduled.event';

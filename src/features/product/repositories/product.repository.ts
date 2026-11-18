@@ -7,10 +7,13 @@ import {
   type AuditEntry,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { DEFAULT_TEXT_COLOR } from '@/features/product/constants/product-seller.constants';
 import { bannerLinkTargetVisibleWhere } from '@/features/product/repositories/banner-link-target.helper';
 import {
   type BannerLinkType,
   type CategoryType,
+  type CustomMode,
+  CustomTextAlign,
   Prisma,
   type Product,
   type ProductCustomTemplate,
@@ -109,6 +112,22 @@ export interface HomeBannerRow {
   link_category_id: bigint | null;
 }
 
+export interface ProductDetailSlotRow {
+  id: bigint;
+  token_key: string;
+  label: string;
+  default_text: string;
+  max_length: number;
+  is_required: boolean;
+  pos_x: number;
+  pos_y: number;
+  width: number;
+  height: number;
+  text_color: string;
+  text_align: CustomTextAlign;
+  sort_order: number;
+}
+
 export interface ProductDetailRow {
   id: bigint;
   store_id: bigint;
@@ -119,6 +138,15 @@ export interface ProductDetailRow {
   sale_price: number | null;
   currency: string;
   preparation_time_minutes: number;
+  custom_mode: CustomMode;
+  /** 삭제된 템플릿도 올 수 있어 deleted_at으로 거른다. 문구 자리는 삭제 제외. */
+  custom_template: {
+    base_image_url: string;
+    free_edit_enabled: boolean;
+    revision: number;
+    deleted_at: Date | null;
+    text_tokens: ProductDetailSlotRow[];
+  } | null;
   /** 주문 생성 시 매장명·지역 표기 스냅샷용 */
   store: {
     store_name: string;
@@ -127,15 +155,15 @@ export interface ProductDetailRow {
     region: { name: string } | null;
   };
   images: { image_url: string }[];
+  /** 활성 그룹·항목만 온다. is_active는 준비 상태 판정 입력과 모양을 맞추려고 함께 읽는다. */
   option_groups: {
     id: bigint;
     name: string;
     description: string | null;
+    is_active: boolean;
     is_required: boolean;
     min_select: number;
     max_select: number;
-    option_requires_description: boolean;
-    option_requires_image: boolean;
     sort_order: number;
     option_items: {
       id: bigint;
@@ -144,8 +172,18 @@ export interface ProductDetailRow {
       image_url: string | null;
       price_delta: number;
       sort_order: number;
+      is_active: boolean;
+      three_d_key: string | null;
     }[];
   }[];
+}
+
+export interface NewOptionGroup {
+  name: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  items: { title: string; price_delta: number; three_d_key: string }[];
 }
 
 @Injectable()
@@ -917,11 +955,75 @@ export class ProductRepository {
     }, audit);
   }
 
+  /**
+   * 상품 행을 잠근 뒤 현재 그룹으로 계획해 만든다 — 동시 호출이 같은 계획을 두 번 실행하지 않는다.
+   * 새 그룹은 기존 그룹 뒤에 붙고, 만든 그룹이 없으면 감사도 남기지 않는다.
+   */
+  async createOptionGroupsLocked(
+    args: {
+      productId: bigint;
+      plan: (
+        groups: {
+          is_active: boolean;
+          option_items: { is_active: boolean; three_d_key: string | null }[];
+        }[],
+      ) => NewOptionGroup[];
+    },
+    audit: (optionGroupIds: bigint[]) => AuditEntry,
+  ): Promise<bigint[]> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockProductRow(tx, args.productId);
+      const groups = await tx.productOptionGroup.findMany({
+        where: { product_id: args.productId, ...activeWhere },
+        orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+        select: {
+          is_active: true,
+          sort_order: true,
+          option_items: {
+            where: activeWhere,
+            select: { is_active: true, three_d_key: true },
+          },
+        },
+      });
+      const planned = args.plan(groups);
+      if (planned.length === 0) return [];
+
+      const nextSortOrder =
+        Math.max(-1, ...groups.map((g) => g.sort_order)) + 1;
+      const ids: bigint[] = [];
+      for (const [index, group] of planned.entries()) {
+        const created = await tx.productOptionGroup.create({
+          data: {
+            product_id: args.productId,
+            name: group.name,
+            is_required: group.is_required,
+            min_select: group.min_select,
+            max_select: group.max_select,
+            sort_order: nextSortOrder + index,
+            option_items: {
+              create: group.items.map((item, sortOrder) => ({
+                title: item.title,
+                price_delta: item.price_delta,
+                three_d_key: item.three_d_key,
+                sort_order: sortOrder,
+              })),
+            },
+          },
+          select: { id: true },
+        });
+        ids.push(created.id);
+      }
+      await this.auditLogs.recordAudit(tx, audit(ids));
+      return ids;
+    });
+  }
+
+  /** 갱신이면 revision을 1 올린다. freeEditEnabled를 생략하면 새 템플릿은 꺼짐, 기존 템플릿은 그대로다. */
   async upsertProductCustomTemplate(
     args: {
       productId: bigint;
       baseImageUrl: string;
-      isActive: boolean;
+      freeEditEnabled?: boolean;
     },
     audit: (row: ProductCustomTemplate) => AuditEntry,
   ) {
@@ -934,11 +1036,12 @@ export class ProductRepository {
           create: {
             product_id: args.productId,
             base_image_url: args.baseImageUrl,
-            is_active: args.isActive,
+            free_edit_enabled: args.freeEditEnabled ?? false,
           },
           update: {
             base_image_url: args.baseImageUrl,
-            is_active: args.isActive,
+            free_edit_enabled: args.freeEditEnabled,
+            revision: { increment: 1 },
           },
           include: {
             text_tokens: {
@@ -949,6 +1052,17 @@ export class ProductRepository {
         }),
       audit,
     );
+  }
+
+  /** 슬롯이 바뀐 tx 안에서 부른다 — 구매자가 꾸민 기준 revision과 주문 시점 설정을 대조하는 근거다. */
+  private async bumpTemplateRevision(
+    tx: Prisma.TransactionClient,
+    templateId: bigint,
+  ): Promise<void> {
+    await tx.productCustomTemplate.update({
+      where: { id: templateId },
+      data: { revision: { increment: 1 } },
+    });
   }
 
   async findCustomTemplateById(id: bigint) {
@@ -969,47 +1083,29 @@ export class ProductRepository {
     });
   }
 
-  async setCustomTemplateActive(
-    templateId: bigint,
-    isActive: boolean,
-    audit: (row: ProductCustomTemplate) => AuditEntry,
-  ) {
-    return this.writeWithAudit(
-      (tx) =>
-        tx.productCustomTemplate.update({
-          where: { id: templateId },
-          data: {
-            is_active: isActive,
-          },
-          include: {
-            text_tokens: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-          },
-        }),
-      audit,
-    );
-  }
-
+  /** label·textColor·textAlign을 생략하면 수정은 기존 값을 두고, 등록(삭제 슬롯 복구 포함)은 기본값으로 채운다. */
   async upsertCustomTextToken(
     args: {
       tokenId?: bigint;
       templateId: bigint;
       tokenKey: string;
+      label: string;
       defaultText: string;
       maxLength: number;
       sortOrder: number;
       isRequired: boolean;
-      posX: number | null;
-      posY: number | null;
-      width: number | null;
-      height: number | null;
+      posX: number;
+      posY: number;
+      width: number;
+      height: number;
+      textColor?: string;
+      textAlign?: CustomTextAlign;
     },
     audit: (row: ProductCustomTextToken) => AuditEntry,
   ) {
     const data = {
       token_key: args.tokenKey,
+      label: args.label,
       default_text: args.defaultText,
       max_length: args.maxLength,
       sort_order: args.sortOrder,
@@ -1018,33 +1114,44 @@ export class ProductRepository {
       pos_y: args.posY,
       width: args.width,
       height: args.height,
+      text_color: args.textColor,
+      text_align: args.textAlign,
+    };
+    const createData = {
+      ...data,
+      text_color: args.textColor ?? DEFAULT_TEXT_COLOR,
+      text_align: args.textAlign ?? CustomTextAlign.CENTER,
     };
     const tokenId = args.tokenId;
     return this.writeWithAudit(async (tx) => {
+      let row: ProductCustomTextToken;
       if (tokenId) {
-        return tx.productCustomTextToken
+        row = await tx.productCustomTextToken
           .update({ where: { id: tokenId }, data })
           .catch(rethrowTokenKeyTaken);
+      } else {
+        // 같은 템플릿의 슬롯 생성을 직렬화한다 — 잠금 없이는 같은 삭제 슬롯을 동시에 복구한 둘이 모두 성공한다
+        await tx.$queryRaw`SELECT id FROM product_custom_template WHERE id = ${args.templateId} FOR UPDATE`;
+        // unique가 삭제 행도 세므로 같은 키의 삭제 슬롯은 새로 만들지 않고 복구한다
+        const deleted = await tx.productCustomTextToken.findFirst({
+          where: {
+            template_id: args.templateId,
+            token_key: args.tokenKey,
+            deleted_at: { not: null },
+          },
+          select: { id: true },
+        });
+        row = deleted
+          ? await tx.productCustomTextToken.update({
+              where: { id: deleted.id },
+              data: { ...createData, deleted_at: null },
+            })
+          : await tx.productCustomTextToken
+              .create({ data: { template_id: args.templateId, ...createData } })
+              .catch(rethrowTokenKeyTaken);
       }
-      // 같은 템플릿의 슬롯 생성을 직렬화한다 — 잠금 없이는 같은 삭제 슬롯을 동시에 복구한 둘이 모두 성공한다
-      await tx.$queryRaw`SELECT id FROM product_custom_template WHERE id = ${args.templateId} FOR UPDATE`;
-      // unique가 삭제 행도 세므로 같은 키의 삭제 슬롯은 새로 만들지 않고 복구한다
-      const deleted = await tx.productCustomTextToken.findFirst({
-        where: {
-          template_id: args.templateId,
-          token_key: args.tokenKey,
-          deleted_at: { not: null },
-        },
-        select: { id: true },
-      });
-      return deleted
-        ? tx.productCustomTextToken.update({
-            where: { id: deleted.id },
-            data: { ...data, deleted_at: null },
-          })
-        : tx.productCustomTextToken
-            .create({ data: { template_id: args.templateId, ...data } })
-            .catch(rethrowTokenKeyTaken);
+      await this.bumpTemplateRevision(tx, args.templateId);
+      return row;
     }, audit);
   }
 
@@ -1070,16 +1177,16 @@ export class ProductRepository {
     id: bigint,
     audit: (row: { id: bigint }) => AuditEntry,
   ): Promise<void> {
-    await this.writeWithAudit(
-      (tx) =>
-        tx.productCustomTextToken.update({
-          where: { id },
-          data: {
-            deleted_at: new Date(),
-          },
-        }),
-      audit,
-    );
+    await this.writeWithAudit(async (tx) => {
+      const row = await tx.productCustomTextToken.update({
+        where: { id },
+        data: {
+          deleted_at: new Date(),
+        },
+      });
+      await this.bumpTemplateRevision(tx, row.template_id);
+      return row;
+    }, audit);
   }
 
   async listCustomTextTokens(templateId: bigint) {
@@ -1107,6 +1214,7 @@ export class ProductRepository {
           }),
         ),
       );
+      await this.bumpTemplateRevision(tx, args.templateId);
 
       return tx.productCustomTextToken.findMany({
         where: {
@@ -1261,6 +1369,34 @@ export class ProductRepository {
         sale_price: true,
         currency: true,
         preparation_time_minutes: true,
+        custom_mode: true,
+        custom_template: {
+          select: {
+            base_image_url: true,
+            free_edit_enabled: true,
+            revision: true,
+            deleted_at: true,
+            text_tokens: {
+              where: activeWhere,
+              orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                token_key: true,
+                label: true,
+                default_text: true,
+                max_length: true,
+                is_required: true,
+                pos_x: true,
+                pos_y: true,
+                width: true,
+                height: true,
+                text_color: true,
+                text_align: true,
+                sort_order: true,
+              },
+            },
+          },
+        },
         store: {
           select: {
             store_name: true,
@@ -1282,11 +1418,10 @@ export class ProductRepository {
             id: true,
             name: true,
             description: true,
+            is_active: true,
             is_required: true,
             min_select: true,
             max_select: true,
-            option_requires_description: true,
-            option_requires_image: true,
             sort_order: true,
             option_items: {
               where: visibleWhere,
@@ -1298,6 +1433,8 @@ export class ProductRepository {
                 image_url: true,
                 price_delta: true,
                 sort_order: true,
+                is_active: true,
+                three_d_key: true,
               },
             },
           },

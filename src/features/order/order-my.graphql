@@ -9,6 +9,83 @@ extend type Query {
   myOrder(orderId: ID!): MyOrderDetail!
 }
 
+extend type Mutation {
+  """
+  '입금했어요'. 입금 기한 전에 누르면 미입금 자동 취소에서 빠지고 관리자에게 확인 요청이 간다(입금이 없으면 관리자가 취소한다).
+  이미 눌렀으면 아무것도 바꾸지 않고 그대로 돌려준다. 입금 대기가 아니면(확인·취소됨) PAYMENT_NOT_PENDING(CONFLICT),
+  기한이 지났으면 PAYMENT_DEADLINE_PASSED(BAD_USER_INPUT). 로그인 필수. 본인 주문이 아니면 NOT_FOUND.
+  """
+  markMyOrderDepositSent(orderId: ID!): MyOrderDetail!
+  """
+  내 주문을 취소한다. 판매자 확정 전(입금 대기·접수)까지만 되고 사유는 구매자 요청으로 기록된다.
+  입금 대기는 환불 없이, 접수는 결제액 전액 환불로 취소되고 환불이 생기면 환불 계좌 입력 요청 알림이 간다.
+  refundAccount를 함께 보내면 환불이 바로 송금 대기가 되고 계좌 요청 알림은 가지 않는다(환불이 없으면 계좌는 버린다).
+  '입금했어요'를 누른 주문도 취소할 수 있다. 그 밖의 상태면 ORDER_NOT_CANCELLABLE(BAD_USER_INPUT).
+  계좌 형식 오류는 submitMyRefundAccount와 같은 코드다. 로그인 필수. 본인 주문이 아니면 NOT_FOUND.
+  """
+  cancelMyOrder(input: CancelMyOrderInput!): MyOrderDetail!
+  """
+  돌려받을 환불 계좌를 입력한다(MyOrderDetail.refunds의 id). 송금 완료 전이면 다시 보내 덮어쓸 수 있고, 입력하면 송금 대기가 된다.
+  계좌번호는 암호화해 저장하고 응답에는 끝 4자리만 나간다. 은행 코드가 paymentBanks에 없으면 INVALID_BANK_CODE,
+  계좌번호가 하이픈을 뺀 숫자 8~20자리가 아니면 INVALID_ACCOUNT_NUMBER, 예금주가 비었거나 50자를 넘으면
+  TEXT_REQUIRED·TEXT_TOO_LONG(모두 BAD_USER_INPUT), 송금이 끝났으면 REFUND_ALREADY_COMPLETED(CONFLICT).
+  로그인 필수. 본인 환불이 아니면 REFUND_NOT_FOUND(NOT_FOUND).
+  """
+  submitMyRefundAccount(input: SubmitMyRefundAccountInput!): MyOrderDetail!
+}
+
+"""
+내 주문 취소 입력.
+"""
+input CancelMyOrderInput {
+  orderId: ID!
+  """
+  취소 메모. 선택, 최대 500자. 상태 이력에 남고 판매자도 본다.
+  """
+  note: String
+  """
+  환불받을 계좌. 선택. 접수 주문처럼 환불이 생기는 취소에서 계좌 입력을 한 번에 끝낸다.
+  """
+  refundAccount: RefundAccountInput
+}
+
+"""
+환불받을 계좌.
+"""
+input RefundAccountInput {
+  """
+  은행 코드(paymentBanks의 code).
+  """
+  bankCode: String!
+  """
+  예금주(1~50자).
+  """
+  accountHolder: String!
+  """
+  계좌번호. 하이픈을 빼고 숫자 8~20자리여야 하며 숫자만 저장한다.
+  """
+  accountNumber: String!
+}
+
+"""
+환불 계좌 입력.
+"""
+input SubmitMyRefundAccountInput {
+  refundId: ID!
+  """
+  은행 코드(paymentBanks의 code).
+  """
+  bankCode: String!
+  """
+  예금주(1~50자).
+  """
+  accountHolder: String!
+  """
+  계좌번호. 하이픈을 빼고 숫자 8~20자리여야 하며 숫자만 저장한다.
+  """
+  accountNumber: String!
+}
+
 """
 내 주문 조회 입력
 """
@@ -99,6 +176,10 @@ type MyOrderSummary {
   주문 내 OrderItem 중 리뷰 작성 가능한 것이 1건이라도 있는지 (PICKED_UP + 활성 리뷰 미존재)
   """
   hasReviewableItem: Boolean!
+  """
+  입금 기한. 입금을 기다리는 주문(결제 대기)만 값이 있고 그 밖은 null.
+  """
+  paymentExpiresAt: DateTime
 }
 
 """
@@ -131,6 +212,14 @@ type MyOrderDetail {
   주문자 연락처.
   """
   buyerPhone: String!
+  """
+  구매자가 남긴 요청 사항. 없으면 null.
+  """
+  requestNote: String
+  """
+  결제(입금 안내·진행 상태). 결제 도입 전 주문이면 null.
+  """
+  payment: OrderPayment
 
   """
   할인 전 품목 합계(원).
@@ -165,6 +254,23 @@ type MyOrderDetail {
   CANCELED 도달 시각. 취소되지 않았으면 null.
   """
   canceledAt: DateTime
+  """
+  취소 정보(주체·사유·환불액·환불 진행). 취소되지 않은 주문이면 null.
+  """
+  cancellation: OrderCancellation
+  """
+  지금 cancelMyOrder로 취소할 수 있는지. 입금 대기·접수 상태일 때 true.
+  """
+  canCancel: Boolean!
+  """
+  이 주문에서 돌려받을 돈(취소 환불·입금 반환). 오래된 순, 없으면 빈 배열.
+  status가 AWAITING_ACCOUNT면 submitMyRefundAccount로 계좌를 입력받는다.
+  """
+  refunds: [OrderRefund!]!
+  """
+  판매자가 바꾼 픽업 일시 이력. 오래된 순, 없으면 빈 배열. pickupAt은 마지막 변경 뒤 값이다.
+  """
+  pickupChanges: [OrderPickupChange!]!
 
   """
   상태 변경 이력. 오래된 순이다(판매자 주문 상세는 최신순 — 방향이 반대다).

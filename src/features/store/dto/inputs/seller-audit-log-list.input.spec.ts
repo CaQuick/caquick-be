@@ -20,6 +20,14 @@ describe('SellerAuditLogListInput', () => {
     expect(await validate(dto)).toHaveLength(0);
   });
 
+  it('정산 계좌(SETTLEMENT_ACCOUNT)는 받고 관리자 전용 대상(ACCOUNT)은 거절한다', async () => {
+    expect(
+      await validate(build({ targetType: 'SETTLEMENT_ACCOUNT' })),
+    ).toHaveLength(0);
+    const errors = await validate(build({ targetType: 'ACCOUNT' }));
+    expect(errors[0].property).toBe('targetType');
+  });
+
   it('알 수 없는 targetType 거절', async () => {
     const dto = build({ targetType: 'INVALID' });
     const errors = await validate(dto);

@@ -136,6 +136,19 @@ describe('AdminDashboardService (real DB)', () => {
         total_price: 9_000,
         created_at: outOfRange,
       });
+      // 입금 대기는 돈이 오가지 않아 금액에서 빠지고, 노쇼는 픽업 완료처럼 금액에 든다
+      await createOrder(prisma, {
+        account_id: user.id,
+        status: 'PENDING_PAYMENT',
+        total_price: 20_000,
+        created_at: inRange,
+      });
+      await createOrder(prisma, {
+        account_id: user.id,
+        status: 'NO_SHOW',
+        total_price: 40_000,
+        created_at: inRange,
+      });
       // 신고 대상 리뷰는 위 매장·주문에 붙인다 — 팩토리 기본값이 계정·매장·주문을 새로 만들면 집계가 흔들린다
       const item = await createOrderItem(prisma, {
         order_id: submitted.id,
@@ -160,13 +173,15 @@ describe('AdminDashboardService (real DB)', () => {
         newUserCount: 1,
         newSellerCount: 1,
         orderCounts: {
+          pendingPayment: 1,
           submitted: 1,
           confirmed: 0,
           made: 0,
           pickedUp: 1,
+          noShow: 1,
           canceled: 1,
         },
-        orderAmountSum: 3_000,
+        orderAmountSum: 43_000,
         activeStoreCount: 1,
         activeProductCount: 1,
         pendingReportCount: 1,

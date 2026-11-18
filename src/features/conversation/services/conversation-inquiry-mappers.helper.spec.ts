@@ -1,7 +1,10 @@
 import {
   formatTimeOfDay,
   renderGreeting,
+  toConversationMessageOutput,
   toInquiryBusinessHour,
+  toOrderCardOutput,
+  type ConversationMessageRow,
 } from '@/features/conversation/services/conversation-inquiry-mappers.helper';
 
 describe('conversation-inquiry-mappers.helper', () => {
@@ -70,6 +73,43 @@ describe('conversation-inquiry-mappers.helper', () => {
         openTime: null,
         closeTime: null,
       });
+    });
+  });
+
+  describe('toOrderCardOutput', () => {
+    const cardRow: ConversationMessageRow = {
+      id: 1n,
+      conversation_id: 2n,
+      sender_type: 'USER',
+      body_format: 'ORDER_CARD',
+      body_text: '주문 문의: 케이크 (ORD-1)',
+      body_html: null,
+      image_url: null,
+      order_card_order_id: 5n,
+      order_card_order_number: 'ORD-1',
+      order_card_product_name: '케이크',
+      order_card_thumbnail_url: null,
+      order_card_pickup_at: new Date('2026-08-03T03:00:00Z'),
+      created_at: new Date('2026-08-01T12:00:00Z'),
+    };
+
+    it('카드 스냅샷 컬럼으로 주문 카드를 만든다(썸네일은 없으면 null)', () => {
+      expect(toConversationMessageOutput(cardRow).orderCard).toEqual({
+        orderId: '5',
+        orderNumber: 'ORD-1',
+        productName: '케이크',
+        thumbnailUrl: null,
+        pickupAt: new Date('2026-08-03T03:00:00Z'),
+      });
+    });
+
+    it.each([
+      'order_card_order_id',
+      'order_card_order_number',
+      'order_card_product_name',
+      'order_card_pickup_at',
+    ] as const)('%s가 비면 카드가 아니다(null)', (column) => {
+      expect(toOrderCardOutput({ ...cardRow, [column]: null })).toBeNull();
     });
   });
 });

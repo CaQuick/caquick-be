@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { PubSub } from 'graphql-subscriptions';
 
 import { AppModule } from '@/app.module';
+import { WithdrawalBlockingOrderQuery } from '@/common/ports/withdrawal-blocking-order.port';
 import { PUB_SUB } from '@/global/pubsub';
 import { PrismaService } from '@/prisma';
 
@@ -55,6 +56,7 @@ describe('모듈 배선 (AppModule compile)', () => {
   }
 
   // 역할 전수 — 어느 역할이든 모든 provider가 resolve되고, 역할에 없는 책임(GraphQL·크론)은 실리지 않는다.
+  // 지연 바인딩 포트(탈퇴 차단)는 compile이 잡지 못해 토큰이 실제로 resolve되는지 따로 본다.
   it.each([
     ['api', true, false],
     ['ws', true, false],
@@ -73,6 +75,7 @@ describe('모듈 배선 (AppModule compile)', () => {
       };
       expect(has(GraphQLModule)).toBe(graphql);
       expect(has(SchedulerRegistry)).toBe(schedule);
+      expect(has(WithdrawalBlockingOrderQuery)).toBe(true);
       await module.close();
     },
   );

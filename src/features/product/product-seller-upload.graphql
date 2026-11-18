@@ -1,6 +1,6 @@
 extend type Mutation {
   """
-  이미지 업로드용 Presigned URL을 발급한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND. 상품·옵션·커스텀 템플릿·매장 로고의 URL 필드는 여기서 발급된 publicUrl만 받는다.
+  이미지 업로드용 Presigned URL을 발급한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND. 상품·옵션·커스텀 템플릿·매장 로고·채팅 이미지의 URL 필드는 여기서 발급된 publicUrl만 받는다.
   """
   sellerCreateUploadUrl(input: SellerCreateUploadUrlInput!): UploadUrl!
 }
@@ -18,7 +18,7 @@ input SellerCreateUploadUrlInput {
   """
   contentType: String!
   """
-  파일 크기(바이트). 1 이상 5MB 이하, 아니면 BAD_USER_INPUT.
+  파일 크기(바이트). 1 이상, 용도별 최대 크기(CONVERSATION_IMAGE 10MB, 그 밖 5MB) 이하. 아니면 BAD_USER_INPUT.
   """
   contentLength: Int!
 }

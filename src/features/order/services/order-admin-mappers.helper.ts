@@ -4,10 +4,18 @@ import type {
   AdminOrderRow,
 } from '@/features/order/repositories/order.repository';
 import {
+  toOrderAutoTransitionTimes,
+  toOrderCancellation,
   toOrderItemDetail,
+  toOrderPickupChange,
+  toOrderRefund,
+  toOrderListCustomBadge,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
+import { toAdminOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
+import { toOrderSettlementFields } from '@/features/order/services/order-settlement-mappers.helper';
 import type {
+  AdminOrderCancelOptionsOutput,
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
 } from '@/features/order/types/order-admin-output.type';
@@ -30,11 +38,13 @@ export function toAdminOrderSummaryOutput(
     createdAt: row.created_at,
     firstItemName: row.items[0]?.product_name_snapshot ?? null,
     firstItemImageUrl: row.items[0]?.product_thumbnail_url_snapshot ?? null,
+    ...toOrderListCustomBadge(row.items[0]),
   };
 }
 
 export function toAdminOrderDetailOutput(
   row: AdminOrderDetailRow,
+  cancelOptions: AdminOrderCancelOptionsOutput,
 ): AdminOrderDetailOutput {
   const profile = row.account.user_profile;
   return {
@@ -51,6 +61,8 @@ export function toAdminOrderDetailOutput(
     pickupAt: row.pickup_at,
     buyerName: row.buyer_name,
     buyerPhone: row.buyer_phone,
+    requestNote: row.request_note,
+    payment: row.payment ? toAdminOrderPaymentOutput(row.payment) : null,
     subtotalPrice: row.subtotal_price,
     discountPrice: row.discount_price,
     totalPrice: row.total_price,
@@ -63,5 +75,13 @@ export function toAdminOrderDetailOutput(
     updatedAt: row.updated_at,
     items: row.items.map(toOrderItemDetail),
     statusHistories: row.status_histories.map(toOrderStatusHistory),
+    refunds: row.refunds.map(toOrderRefund),
+    cancellation: toOrderCancellation(row),
+    cancelOptions,
+    ...toOrderAutoTransitionTimes(row),
+    pickupChanges: row.pickup_changes.map(toOrderPickupChange),
+    ...toOrderSettlementFields(row),
+    settlementFinalizedAt: row.settlement_finalized_at,
+    settlementId: row.settlement_id?.toString() ?? null,
   };
 }

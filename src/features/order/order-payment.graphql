@@ -1,0 +1,103 @@
+extend type Query {
+  """
+  계좌 입력 화면의 은행 목록(금융결제원 3자리 코드). 환불 계좌·정산 계좌·케이퀵 입금 계좌가 같은 목록을 쓰고,
+  배열 순서가 표시 순서다. 로그인 없이 조회할 수 있다.
+  """
+  paymentBanks: [Bank!]!
+}
+
+"""
+은행.
+"""
+type Bank {
+  """
+  금융결제원 3자리 은행 코드(예: 004). 계좌 입력 mutation의 bankCode로 그대로 보낸다.
+  """
+  code: String!
+  """
+  은행 이름(예: KB국민은행). 목록에서 빠진 옛 코드면 코드를 그대로 준다.
+  """
+  name: String!
+}
+
+"""
+결제 수단. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum PaymentMethodType {
+  """계좌이체(케이퀵 계좌로 입금)."""
+  BANK_TRANSFER
+  """토스 결제. 아직 쓰지 않는다."""
+  TOSS
+}
+
+"""
+결제 상태. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum PaymentStatusType {
+  """입금 대기."""
+  PENDING
+  """입금 확인됨. 주문이 나중에 취소돼도 이 값으로 남고 돌려줄 돈은 환불이 맡는다."""
+  CONFIRMED
+  """입금 전에 주문이 취소됨."""
+  CANCELED
+}
+
+"""
+입금을 확인한 경로.
+"""
+enum PaymentConfirmSourceType {
+  """입금 알림 자동 매칭. 아직 쓰지 않는다."""
+  AUTO
+  """관리자가 은행 앱에서 확인."""
+  ADMIN
+}
+
+"""
+주문 결제(계좌이체 입금 안내와 진행 상태). 구매자 주문 화면이 그대로 입금 안내에 쓴다.
+"""
+type OrderPayment {
+  """
+  결제 수단.
+  """
+  method: PaymentMethodType!
+  """
+  결제 상태.
+  """
+  status: PaymentStatusType!
+  """
+  입금할 금액(원). 주문 최종 결제 금액과 같다.
+  """
+  amount: Int!
+  """
+  입금자명. 은행 입금자명이 이 값과 같아야 확인이 빠르다.
+  """
+  depositorName: String!
+  """
+  입금할 케이퀵 계좌의 은행(주문 시점 스냅샷).
+  """
+  depositBank: Bank!
+  """
+  입금할 케이퀵 계좌번호(숫자만, 주문 시점 스냅샷).
+  """
+  depositAccountNumber: String!
+  """
+  입금할 케이퀵 계좌 예금주(주문 시점 스냅샷).
+  """
+  depositAccountHolder: String!
+  """
+  입금 기한(주문 후 1시간). 이때까지 입금이 확인되지 않고 '입금했어요'도 누르지 않았으면 주문이 자동 취소된다.
+  """
+  expiresAt: DateTime!
+  """
+  구매자가 '입금했어요'를 누른 시각. 누르지 않았으면 null.
+  """
+  buyerClaimedAt: DateTime
+  """
+  입금이 확인된 시각. 확인 전이면 null.
+  """
+  confirmedAt: DateTime
+  """
+  입금 확인 경로. 확인 전이면 null.
+  """
+  confirmSource: PaymentConfirmSourceType
+}

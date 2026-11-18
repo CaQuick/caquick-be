@@ -29,7 +29,8 @@ extend type Mutation {
   """
   updateMyProfileImage(input: UpdateMyProfileImageInput!): MePayload!
   """
-  회원 탈퇴(soft delete). 로그인 필수. 본인 데이터만 대상이 된다.
+  회원 탈퇴(soft delete). 진행 중인 주문(입금 대기~제작 완료)이나 송금이 끝나지 않은 환불(계좌 입력 대기·송금 대기)이 있으면
+  ACCOUNT_HAS_ACTIVE_ORDERS(CONFLICT, 메시지에 건수). 로그인 필수. 본인 데이터만 대상이 된다.
   """
   deleteMyAccount: Boolean!
   """

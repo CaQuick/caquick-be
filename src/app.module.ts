@@ -17,6 +17,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 
 import { CommonModule } from '@/common/common.module';
+import accountCryptoConfig from '@/config/account-crypto.config';
+import adminWebConfig from '@/config/admin-web.config';
 import alertingConfig from '@/config/alerting.config';
 import appConfig, {
   APP_ROLE_TOKEN,
@@ -48,6 +50,7 @@ import { SystemModule } from '@/features/system/system.module';
 import { AlertingModule } from '@/global/alerting';
 import { AuthGlobalModule } from '@/global/auth/auth-global.module';
 import { BlacklistModule } from '@/global/auth/blacklist';
+import { CryptoModule } from '@/global/crypto/crypto.module';
 import { formatGraphqlError } from '@/global/graphql/format-graphql-error';
 import { buildGraphqlContext } from '@/global/graphql/graphql-context.helper';
 import { GraphqlGlobalModule } from '@/global/graphql/graphql.module';
@@ -120,6 +123,8 @@ export class AppModule implements NestModule {
           isGlobal: true,
           cache: true,
           load: [
+            accountCryptoConfig,
+            adminWebConfig,
             alertingConfig,
             appConfig,
             authConfig,
@@ -147,6 +152,7 @@ export class AppModule implements NestModule {
         BlacklistModule,
         PubSubModule,
         StorageModule,
+        CryptoModule,
         // 크론(SearchModule)은 worker만 — api가 같이 돌리면 같은 스냅샷을 두 번 만든다
         ...(runsBackgroundJobs(role) ? [ScheduleModule.forRoot()] : []),
         ...(servesHttpApi(role) ? httpModules() : []),

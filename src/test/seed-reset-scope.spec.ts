@@ -11,18 +11,25 @@ import {
   resetSeedScope,
 } from '../../prisma/seed/idempotent';
 import { seedOrders } from '../../prisma/seed/orders';
+import {
+  SEED_SETTLEMENT_ACCOUNT,
+  seedPayments,
+} from '../../prisma/seed/payments';
 import { seedRegions } from '../../prisma/seed/regions';
 import { seedReviews } from '../../prisma/seed/reviews';
 import { seedStores } from '../../prisma/seed/stores';
 import { seedUsers, type SeededUser } from '../../prisma/seed/users';
 
+import { readAccountCryptoConfig } from '@/config/account-crypto.config';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { AccountCipher } from '@/global/crypto/account-cipher.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
   createNotification,
   createOrder,
+  createOrderCustomUpload,
   createOrderItem,
   createReview,
   createReviewReport,
@@ -145,6 +152,57 @@ describe('resetSeedScope (real DB)', () => {
     ).not.toBeNull();
   });
 
+  it('시드 주문과 시드 상품을 산 외부 주문에 커스텀 디자인·이미지가 붙어도 정리하고 다시 시드한다', async () => {
+    await seedThroughReviews();
+    const seedProduct = await prisma.product.findFirstOrThrow({
+      where: { store: { store_name: { startsWith: SEED_STORE_NAME_PREFIX } } },
+    });
+    const { item } = await outsiderOrder(seedProduct.id);
+    await prisma.orderItemCustomDesign.create({
+      data: { order_item_id: item.id, schema_version: 1, design_json: {} },
+    });
+    await prisma.orderItemCustomImage.create({
+      data: {
+        order_item_id: item.id,
+        kind: 'THREE_D_TOP',
+        image_url: 'https://img/top.png',
+      },
+    });
+    const counts = () =>
+      Promise.all([
+        prisma.orderItemCustomDesign.count(),
+        prisma.orderItemCustomImage.count(),
+      ]);
+    // 시드도 슬롯형 합성 이미지를 2장 넣는다
+    expect(await counts()).toEqual([1, 3]);
+
+    await resetSeedScope(prisma);
+    expect(await counts()).toEqual([0, 0]);
+
+    await seedThroughReviews();
+    expect(await counts()).toEqual([0, 2]);
+  });
+
+  it('시드 사용자의 커스텀 업로드 기록은 지우고 시드 밖 계정 것은 남긴다', async () => {
+    const [seedUser] = await seedThroughReviews();
+    const outsider = await createAccount(prisma, { account_type: 'USER' });
+    for (const [accountId, key] of [
+      [seedUser.id, 'order-custom/renders/seed.png'],
+      [outsider.id, 'order-custom/renders/outsider.png'],
+    ] as const) {
+      await createOrderCustomUpload(prisma, {
+        account_id: accountId,
+        object_key: key,
+      });
+    }
+
+    await resetSeedScope(prisma);
+    await seedThroughReviews();
+
+    const left = await prisma.orderCustomUpload.findMany();
+    expect(left.map((u) => u.account_id)).toEqual([outsider.id]);
+  });
+
   it('시드 밖 계정이 시드 밖 매장에 넣은 주문은 남긴다', async () => {
     await seedThroughReviews();
     const { order, item } = await outsiderOrder();
@@ -199,6 +257,101 @@ describe('resetSeedScope (real DB)', () => {
     expect(
       await prisma.reviewReport.findUnique({ where: { id: report.id } }),
     ).toBeNull();
+  });
+
+  it('결제·환불·입금 기록·픽업 변경·정산·정산 계좌가 붙어도 정리하고 다시 시드하며 결제 설정은 남긴다', async () => {
+    const seedAll = async () => {
+      const users = await seedUsers(prisma);
+      await seedRegions(prisma);
+      const categories = await seedCategories(prisma);
+      const stores = await seedStores(prisma, { categories });
+      const orders = await seedOrders(prisma, { users, stores });
+      const admin = await seedAdmins(prisma);
+      await seedPayments(prisma, { orders, stores, admin });
+      return { stores, orders };
+    };
+    const { stores, orders } = await seedAll();
+    const [storeA] = stores.stores;
+    const settlement = await prisma.settlement.create({
+      data: {
+        store_id: storeA.id,
+        store_name_snapshot: storeA.store_name,
+        period_start: new Date('2026-11-02'),
+        period_end: new Date('2026-11-08'),
+        order_count: 1,
+        settlement_base_amount: 25000,
+        commission_amount: 0,
+        payout_amount: 25000,
+      },
+    });
+    await prisma.order.update({
+      where: { id: orders.o8NoShow },
+      data: { settlement_id: settlement.id },
+    });
+    await prisma.orderPickupChange.create({
+      data: {
+        order_id: orders.o11PaidSubmitted,
+        from_pickup_at: new Date('2026-11-20T03:00:00Z'),
+        to_pickup_at: new Date('2026-11-21T03:00:00Z'),
+        changed_by_account_id: storeA.seller_account_id,
+        changed_at: new Date(),
+      },
+    });
+    const counts = () =>
+      Promise.all([
+        prisma.payment.count(),
+        prisma.refund.count(),
+        prisma.depositRecord.count(),
+        prisma.storeSettlementAccount.count(),
+      ]);
+    expect(await counts()).toEqual([5, 2, 1, 1]);
+
+    await resetSeedScope(prisma);
+    for (const count of await Promise.all([
+      prisma.payment.count(),
+      prisma.refund.count(),
+      prisma.depositRecord.count(),
+      prisma.orderPickupChange.count(),
+      prisma.settlement.count(),
+      prisma.storeSettlementAccount.count(),
+    ])) {
+      expect(count).toBe(0);
+    }
+    expect(await prisma.paymentSetting.count()).toBe(1);
+
+    await seedAll();
+    expect(await counts()).toEqual([5, 2, 1, 1]);
+    expect(await prisma.paymentSetting.count()).toBe(1);
+  });
+
+  it('seed-seller-a 매장 정산 계좌는 앱과 같은 키 설정으로 암호화돼 풀린다', async () => {
+    const users = await seedUsers(prisma);
+    await seedRegions(prisma);
+    const categories = await seedCategories(prisma);
+    const stores = await seedStores(prisma, { categories });
+    const orders = await seedOrders(prisma, { users, stores });
+    const admin = await seedAdmins(prisma);
+    await seedPayments(prisma, { orders, stores, admin });
+
+    const [storeA] = stores.stores;
+    const account = await prisma.storeSettlementAccount.findUniqueOrThrow({
+      where: { store_id: storeA.id },
+    });
+    expect(account).toMatchObject({
+      bank_code: SEED_SETTLEMENT_ACCOUNT.bank_code,
+      account_number_last4: SEED_SETTLEMENT_ACCOUNT.account_number.slice(-4),
+      updated_by_account_id: storeA.seller_account_id,
+      updated_by_role: 'SELLER',
+    });
+    expect(account.account_number_enc).not.toContain(
+      SEED_SETTLEMENT_ACCOUNT.account_number,
+    );
+    expect(
+      new AccountCipher(readAccountCryptoConfig()).decrypt(
+        account.account_number_enc,
+        'settlement-account',
+      ),
+    ).toBe(SEED_SETTLEMENT_ACCOUNT.account_number);
   });
 
   it('시드 사용자가 시드 밖 리뷰에 단 댓글은 지우고 그 리뷰는 남긴다', async () => {

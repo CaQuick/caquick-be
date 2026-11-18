@@ -4,15 +4,47 @@ import {
   AUDIT_LOG_REPOSITORY,
   type IAuditLogRepository,
 } from '@/features/audit-log';
+import { IN_PROGRESS_ORDER_STATUSES } from '@/features/order/constants/order-status-traits';
+import { orderPaymentPendingEvent } from '@/features/order/events/order-payment-pending.event';
 import { orderStatusChangedEvent } from '@/features/order/events/order-status-changed.event';
-import { orderSubmittedEvent } from '@/features/order/events/order-submitted.event';
+import {
+  isDailyCapacityExceeded,
+  type DailyCapacityGuard,
+} from '@/features/order/repositories/order-capacity.helper';
+import {
+  lockCustomUploadsForAttach,
+  markCustomUploadsAttached,
+  type CustomUploadIssue,
+  type CustomUploadRef,
+} from '@/features/order/repositories/order-custom-upload-attach.helper';
+import {
+  countPendingPaymentOrdersLocked,
+  PENDING_PAYMENT_LIMIT,
+  withPendingPaymentLock,
+} from '@/features/order/repositories/order-pending-payment-lock.helper';
+import {
+  confirmedPaidAmount,
+  finalizeSettlementLocked,
+  lockPayment,
+} from '@/features/order/repositories/order-settlement-finalizer.helper';
+import {
+  orderPaymentSelect,
+  type OrderPaymentRow,
+} from '@/features/order/repositories/payment.repository';
 import { OutboxPublisher } from '@/features/outbox';
 import {
   AuditActionType,
   AuditTargetType,
+  OrderActor,
   OrderStatus,
+  PaymentMethod,
   Prisma,
+  RefundKind,
   type AccountType,
+  type CustomImageKind,
+  type CustomMode,
+  type CustomTextAlign,
+  type PaymentStatus,
 } from '@/generated/prisma/client';
 import { activeWhere, PrismaService } from '@/prisma';
 
@@ -26,7 +58,32 @@ export type SellerOrderRow = Prisma.OrderGetPayload<{
   include: ReturnType<typeof sellerOrderSummaryInclude>;
 }>;
 
-const adminOrderInclude = {
+/** 판매자에게 보이는 주문 — 입금 확인(접수) 때 submitted_at을 채우므로 입금 대기와 입금 전 취소가 함께 빠진다. */
+const sellerVisibleWhere = {
+  submitted_at: { not: null },
+} satisfies Prisma.OrderWhereInput;
+
+/** 주문 상세 3곳(구매자·판매자·관리자)의 픽업 변경 이력(오래된 순). */
+const pickupChangesInclude = {
+  orderBy: [{ changed_at: 'asc' }, { id: 'asc' }],
+} satisfies Prisma.Order$pickup_changesArgs;
+
+/** 주문 상세 3곳(구매자·판매자·관리자)의 커스텀 스냅샷. 디자인·이미지는 deleted_at이 없어 부모 품목 가시성을 따른다 */
+const orderItemCustomInclude = {
+  custom_design: { select: { schema_version: true, design_json: true } },
+  // enum 선언 순서(3D 윗면·앞·뒤·좌·우, 슬롯형 합성)
+  custom_images: { orderBy: { kind: 'asc' } },
+  custom_texts: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+  free_edits: {
+    where: activeWhere,
+    orderBy: { sort_order: 'asc' },
+    include: {
+      attachments: { where: activeWhere, orderBy: { sort_order: 'asc' } },
+    },
+  },
+} satisfies Prisma.OrderItemInclude;
+
+export const adminOrderInclude = {
   items: {
     where: activeWhere,
     select: {
@@ -34,6 +91,8 @@ const adminOrderInclude = {
       store_name_snapshot: true,
       product_name_snapshot: true,
       product_thumbnail_url_snapshot: true,
+      custom_mode_snapshot: true,
+      custom_preview_image_url: true,
     },
     orderBy: { id: 'asc' },
     take: 1,
@@ -41,13 +100,15 @@ const adminOrderInclude = {
 } satisfies Prisma.OrderInclude;
 
 /** 목록 카드용 첫 품목 스냅샷 — 매장 필터가 들어가 상수로 둘 수 없다. */
-function sellerOrderSummaryInclude(storeId: bigint) {
+export function sellerOrderSummaryInclude(storeId: bigint) {
   return {
     items: {
       where: { store_id: storeId, ...activeWhere },
       select: {
         product_name_snapshot: true,
         product_thumbnail_url_snapshot: true,
+        custom_mode_snapshot: true,
+        custom_preview_image_url: true,
       },
       orderBy: { id: 'asc' },
       take: 1,
@@ -64,23 +125,39 @@ const adminOrderDetailInclude = {
       user_profile: { select: { nickname: true, deleted_at: true } },
     },
   },
+  payment: true,
+  refunds: { orderBy: { id: 'asc' } },
+  pickup_changes: pickupChangesInclude,
   status_histories: { where: activeWhere, orderBy: { changed_at: 'desc' } },
   items: {
     where: activeWhere,
     orderBy: { id: 'asc' },
     include: {
       option_items: { where: activeWhere },
-      custom_texts: { where: activeWhere, orderBy: { sort_order: 'asc' } },
-      free_edits: {
-        where: activeWhere,
-        orderBy: { sort_order: 'asc' },
-        include: {
-          attachments: { where: activeWhere, orderBy: { sort_order: 'asc' } },
-        },
-      },
+      ...orderItemCustomInclude,
     },
   },
 } satisfies Prisma.OrderInclude;
+
+export interface AdminOrderStatusCounts {
+  pendingPayment: number;
+  submitted: number;
+  confirmed: number;
+  made: number;
+  pickedUp: number;
+  noShow: number;
+  canceled: number;
+}
+
+const ADMIN_STATUS_COUNT_KEYS = {
+  PENDING_PAYMENT: 'pendingPayment',
+  SUBMITTED: 'submitted',
+  CONFIRMED: 'confirmed',
+  MADE: 'made',
+  PICKED_UP: 'pickedUp',
+  NO_SHOW: 'noShow',
+  CANCELED: 'canceled',
+} as const satisfies Record<OrderStatus, keyof AdminOrderStatusCounts>;
 
 export interface MyOrderRow {
   id: bigint;
@@ -98,6 +175,7 @@ export interface MyOrderRow {
     product_thumbnail_url_snapshot: string | null;
   }[];
   _count: { items: number };
+  payment: { status: PaymentStatus; expires_at: Date } | null;
 }
 
 export interface OngoingOrderRow {
@@ -113,27 +191,63 @@ export interface OngoingOrderRow {
   }[];
 }
 
-/** 트랜잭션 안에서 capacity 행을 잠그고 점유를 재집계해 검사-삽입 race로 capacity가 초과되는 것을 막는다. */
-export interface DailyCapacityGuard {
-  storeId: bigint;
-  dateOnlyUtc: Date;
-  dayStartUtc: Date;
-  dayEndUtc: Date;
+export type { DailyCapacityGuard } from '@/features/order/repositories/order-capacity.helper';
+
+/** 주문 품목 커스텀 스냅샷. 검증·정규화를 마친 값이고, uploads는 같은 tx에서 잠가 ATTACHED로 바꿀 업로드다. */
+export interface OrderItemCustomSnapshot {
+  mode: Exclude<CustomMode, 'NONE'>;
+  baseImageUrl: string | null;
+  previewImageUrl: string;
+  texts: {
+    tokenId: bigint;
+    tokenKey: string;
+    label: string;
+    defaultText: string;
+    valueText: string | null;
+    sortOrder: number;
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    textColor: string;
+    textAlign: CustomTextAlign;
+  }[];
+  freeEdits: {
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    descriptionText: string;
+    referenceImageUrls: string[];
+  }[];
+  design: { schemaVersion: number; json: Prisma.InputJsonObject } | null;
+  images: { kind: CustomImageKind; imageUrl: string }[];
+  uploads: CustomUploadRef[];
 }
 
-export interface CreateSubmittedOrderArgs {
+export interface CreatePendingPaymentOrderArgs {
   accountId: bigint;
   orderNumber: string;
   idempotencyKey: string;
+  idempotencyInputHash: string;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
+  requestNote: string | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;
-  submittedAt: Date;
+  commissionRateBps: number;
+  now: Date;
   /** null이면 capacity 원자 검사 생략 — 항상 전달 권장. */
   capacityGuard: DailyCapacityGuard | null;
+  payment: {
+    depositorName: string;
+    depositBankCode: string;
+    depositAccountNumber: string;
+    depositAccountHolder: string;
+    expiresAt: Date;
+  };
   item: {
     storeId: bigint;
     productId: bigint;
@@ -152,6 +266,7 @@ export interface CreateSubmittedOrderArgs {
       optionTitleSnapshot: string;
       optionPriceDeltaSnapshot: number;
     }[];
+    custom: OrderItemCustomSnapshot | null;
   };
 }
 
@@ -160,10 +275,28 @@ export interface CreatedOrderRow {
   order_number: string;
   status: OrderStatus;
   pickup_at: Date;
-  buyer_name: string;
   total_price: number;
-  updated_at: Date;
+  idempotency_input_hash: string | null;
+  /** 결제 도입 전 주문은 null */
+  payment: OrderPaymentRow | null;
 }
+
+const createdOrderSelect = {
+  id: true,
+  order_number: true,
+  status: true,
+  pickup_at: true,
+  total_price: true,
+  idempotency_input_hash: true,
+  payment: { select: orderPaymentSelect },
+} satisfies Prisma.OrderSelect;
+
+export type CreatePendingPaymentOrderResult =
+  | CreatedOrderRow
+  | 'capacity-exceeded'
+  | 'pending-limit'
+  | 'lock-timeout'
+  | CustomUploadIssue;
 
 export interface ReviewableOrderItemRow {
   id: bigint;
@@ -210,97 +343,75 @@ export class OrderRepository {
   }
 
   /**
-   * SUBMITTED는 알림 미발송(알림은 판매자 상태 변경부터 — buildOrderStatusNotification 규칙).
-   * capacityGuard가 있으면 capacity 행을 FOR UPDATE로 잠근 뒤 점유를 재집계해, 동시 주문이 마지막 잔여를
-   * 함께 차지하는 race를 차단한다. capacity 초과면 null(호출부가 도메인 에러로), order_number P2002는 호출부가 재시도한다.
+   * 입금 대기 주문을 결제(PENDING)와 함께 만든다. 계정 잠금(GET_LOCK) → 입금 대기 건수 → capacity → 커스텀 업로드 순으로 잠그고,
+   * capacity는 행을 FOR UPDATE로 잠근 뒤 점유를 재집계해 동시 주문이 마지막 잔여를 함께 차지하지 못하게 한다.
+   * order_number P2002는 호출부가 재시도한다.
+   * READ COMMITTED: REPEATABLE READ의 갭 잠금은 다른 계정끼리도 건수 잠금 읽기 → INSERT에서 교착한다.
    */
-  async createSubmittedOrder(
-    args: CreateSubmittedOrderArgs,
-  ): Promise<CreatedOrderRow | null> {
-    return this.prisma.$transaction(async (tx) => {
-      if (args.capacityGuard) {
-        const exceeded = await this.isCapacityExceededLocked(
-          tx,
-          args.capacityGuard,
-          args.item.quantity,
-        );
-        if (exceeded) return null;
-      }
-      return this.insertSubmittedOrder(tx, args);
-    });
+  async createPendingPaymentOrder(
+    args: CreatePendingPaymentOrderArgs,
+  ): Promise<CreatePendingPaymentOrderResult> {
+    return this.prisma.$transaction(
+      (tx) =>
+        withPendingPaymentLock(tx, this.prisma, args.accountId, async () => {
+          const pending = await countPendingPaymentOrdersLocked(
+            tx,
+            args.accountId,
+          );
+          if (pending >= PENDING_PAYMENT_LIMIT) return 'pending-limit';
+          if (args.capacityGuard) {
+            const exceeded = await isDailyCapacityExceeded(
+              tx,
+              args.capacityGuard,
+              args.item.quantity,
+              { forUpdate: true },
+            );
+            if (exceeded) return 'capacity-exceeded';
+          }
+          const uploadIssue = await lockCustomUploadsForAttach(
+            tx,
+            args.accountId,
+            args.item.custom?.uploads ?? [],
+          );
+          if (uploadIssue) return uploadIssue;
+          return this.insertPendingPaymentOrder(tx, args);
+        }),
+      {
+        timeout: 10_000,
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      },
+    );
   }
 
-  /** tx 밖 사전 검증(잠금 없음) — 거절을 tx 전에 내리고, 최종 판정은 createSubmittedOrder의 잠금 재검사가 한다. */
+  /** tx 밖 사전 검증(잠금 없음) — 거절을 tx 전에 내리고, 최종 판정은 createPendingPaymentOrder의 잠금 재검사가 한다. */
   async isDailyCapacityExceeded(
     guard: DailyCapacityGuard,
     quantity: number,
   ): Promise<boolean> {
-    return this.capacityExceeded(this.prisma, guard, quantity, false);
+    return isDailyCapacityExceeded(this.prisma, guard, quantity, {
+      forUpdate: false,
+    });
   }
 
-  /** FOR UPDATE는 같은 매장·날짜의 동시 주문 생성을 직렬화한다. */
-  private isCapacityExceededLocked(
+  private async insertPendingPaymentOrder(
     tx: Prisma.TransactionClient,
-    guard: DailyCapacityGuard,
-    quantity: number,
-  ): Promise<boolean> {
-    return this.capacityExceeded(tx, guard, quantity, true);
-  }
-
-  /**
-   * capacity는 order 소유 복제본(order_store_daily_limit)에서 읽는다 — catalog 행을 잠그지 않는다.
-   * 복제본이 없거나 capacity가 비어 있으면(tombstone) 무제한: 설정 직후 복제 지연 구간에는 제한 없이 받는다.
-   */
-  private async capacityExceeded(
-    db: Prisma.TransactionClient,
-    guard: DailyCapacityGuard,
-    quantity: number,
-    forUpdate: boolean,
-  ): Promise<boolean> {
-    const capacityRows = await db.$queryRaw<{ capacity: number }[]>(Prisma.sql`
-      SELECT capacity
-      FROM order_store_daily_limit
-      WHERE store_id = ${guard.storeId}
-        AND booking_date = ${guard.dateOnlyUtc}
-        AND capacity IS NOT NULL
-      ${forUpdate ? Prisma.sql`FOR UPDATE` : Prisma.empty}
-    `);
-    const capacity = capacityRows[0]?.capacity;
-    if (capacity === undefined) return false;
-
-    const bookedRows = await db.$queryRaw<{ booked: bigint }[]>(Prisma.sql`
-      SELECT CAST(COALESCE(SUM(oi.quantity), 0) AS UNSIGNED) AS booked
-      FROM order_item oi
-      JOIN \`order\` o
-        ON o.id = oi.order_id
-        AND o.deleted_at IS NULL
-        AND o.status <> 'CANCELED'
-        AND o.pickup_at >= ${guard.dayStartUtc}
-        AND o.pickup_at < ${guard.dayEndUtc}
-      WHERE oi.store_id = ${guard.storeId}
-        AND oi.deleted_at IS NULL
-    `);
-    const booked = Number(bookedRows[0]?.booked ?? 0);
-    return booked + quantity > capacity;
-  }
-
-  private async insertSubmittedOrder(
-    tx: Prisma.TransactionClient,
-    args: CreateSubmittedOrderArgs,
+    args: CreatePendingPaymentOrderArgs,
   ): Promise<CreatedOrderRow> {
     const created = await tx.order.create({
       data: {
         account_id: args.accountId,
         order_number: args.orderNumber,
         idempotency_key: args.idempotencyKey,
-        status: OrderStatus.SUBMITTED,
+        idempotency_input_hash: args.idempotencyInputHash,
+        status: OrderStatus.PENDING_PAYMENT,
         pickup_at: args.pickupAt,
         buyer_name: args.buyerName,
         buyer_phone: args.buyerPhone,
+        request_note: args.requestNote,
         subtotal_price: args.subtotalPrice,
         discount_price: args.discountPrice,
         total_price: args.totalPrice,
-        submitted_at: args.submittedAt,
+        commission_rate_bps: args.commissionRateBps,
         items: {
           create: {
             store_id: args.item.storeId,
@@ -323,41 +434,48 @@ export class OrderRepository {
                 option_price_delta_snapshot: option.optionPriceDeltaSnapshot,
               })),
             },
+            ...(args.item.custom && customItemData(args.item.custom)),
+          },
+        },
+        payment: {
+          create: {
+            method: PaymentMethod.BANK_TRANSFER,
+            amount: args.totalPrice,
+            depositor_name: args.payment.depositorName,
+            deposit_bank_code: args.payment.depositBankCode,
+            deposit_account_number: args.payment.depositAccountNumber,
+            deposit_account_holder: args.payment.depositAccountHolder,
+            expires_at: args.payment.expiresAt,
           },
         },
         status_histories: {
           create: {
             from_status: null,
-            to_status: OrderStatus.SUBMITTED,
-            changed_at: args.submittedAt,
+            to_status: OrderStatus.PENDING_PAYMENT,
+            changed_at: args.now,
+            actor_type: OrderActor.BUYER,
+            actor_account_id: args.accountId,
           },
         },
       },
-      select: {
-        id: true,
-        order_number: true,
-        status: true,
-        pickup_at: true,
-        buyer_name: true,
-        total_price: true,
-        updated_at: true,
-      },
+      select: createdOrderSelect,
     });
-    // 접수 이벤트(outbox, 같은 tx) — 판매자 푸시 원천. 구매자 알림은 없다(notification 소비자는 구독하지 않는다).
+    await markCustomUploadsAttached(
+      tx,
+      args.item.custom?.uploads ?? [],
+      args.now,
+    );
+    // 관리자 경보 원천. 판매자 '새 주문'(order.submitted)은 입금 확인 때 나간다
     await this.outbox.publish(
       tx,
-      orderSubmittedEvent({
+      orderPaymentPendingEvent({
         orderId: created.id,
         orderNumber: created.order_number,
         buyerAccountId: args.accountId,
-        storeId: args.item.storeId,
-        storeName: args.item.storeNameSnapshot,
-        productId: args.item.productId,
-        productName: args.item.productNameSnapshot,
-        quantity: args.item.quantity,
-        pickupAt: args.pickupAt,
-        totalPrice: args.totalPrice,
-        occurredAt: args.submittedAt,
+        amount: args.totalPrice,
+        depositorName: args.payment.depositorName,
+        expiresAt: args.payment.expiresAt,
+        occurredAt: args.now,
       }),
     );
     return created;
@@ -370,15 +488,7 @@ export class OrderRepository {
   ): Promise<CreatedOrderRow | null> {
     return this.prisma.order.findFirst({
       where: { account_id: accountId, idempotency_key: idempotencyKey },
-      select: {
-        id: true,
-        order_number: true,
-        status: true,
-        pickup_at: true,
-        buyer_name: true,
-        total_price: true,
-        updated_at: true,
-      },
+      select: createdOrderSelect,
     });
   }
 
@@ -409,9 +519,7 @@ export class OrderRepository {
     return this.prisma.order.findMany({
       where: {
         account_id: args.accountId,
-        status: {
-          in: [OrderStatus.SUBMITTED, OrderStatus.CONFIRMED, OrderStatus.MADE],
-        },
+        status: { in: [...IN_PROGRESS_ORDER_STATUSES] },
         created_at: { gte: args.since },
       },
       orderBy: { created_at: 'desc' },
@@ -453,6 +561,7 @@ export class OrderRepository {
         _count: {
           select: { items: { where: activeWhere } },
         },
+        payment: { select: { status: true, expires_at: true } },
       },
     });
   }
@@ -556,6 +665,9 @@ export class OrderRepository {
         account_id: args.accountId,
       },
       include: {
+        payment: { select: orderPaymentSelect },
+        refunds: { orderBy: { id: 'asc' } },
+        pickup_changes: pickupChangesInclude,
         status_histories: {
           where: activeWhere,
           orderBy: { changed_at: 'asc' },
@@ -587,20 +699,7 @@ export class OrderRepository {
               where: activeWhere,
               orderBy: { id: 'asc' },
             },
-            custom_texts: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-            free_edits: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              include: {
-                attachments: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                },
-              },
-            },
+            ...orderItemCustomInclude,
             review: {
               select: { id: true, deleted_at: true },
             },
@@ -614,6 +713,7 @@ export class OrderRepository {
   private storeOrderScopeWhere(args: {
     storeId: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -621,7 +721,11 @@ export class OrderRepository {
     search?: string;
   }): Prisma.OrderWhereInput {
     return {
+      ...sellerVisibleWhere,
       ...(args.status ? { status: args.status } : {}),
+      ...(args.buyerAccountId !== undefined
+        ? { account_id: args.buyerAccountId }
+        : {}),
       ...(args.fromCreatedAt || args.toCreatedAt
         ? {
             created_at: {
@@ -659,6 +763,7 @@ export class OrderRepository {
   async countOrdersByStore(args: {
     storeId: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -670,20 +775,26 @@ export class OrderRepository {
     });
   }
 
-  /** [from, to) 픽업 또는 생성 기준 건수·금액 합(CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
+  /** [from, to) 픽업 또는 접수 기준 건수·금액 합(판매자 노출·CANCELED 제외). 주문 1건 = 매장 1곳이라 total_price 합이 매장 매출이다. */
   async aggregateStoreOrdersInRange(args: {
     storeId: bigint;
     from: Date;
     to: Date;
-    basis: 'pickup' | 'created';
+    basis: 'pickup' | 'submitted';
   }): Promise<{ orderCount: number; salesAmount: number }> {
     const result = await this.prisma.order.aggregate({
       where: {
+        // 접수 기준 범위가 노출 조건의 submitted_at 키를 덮어쓰지 않도록 AND로 묶는다
+        AND: [
+          sellerVisibleWhere,
+          {
+            [args.basis === 'pickup' ? 'pickup_at' : 'submitted_at']: {
+              gte: args.from,
+              lt: args.to,
+            },
+          },
+        ],
         status: { not: 'CANCELED' },
-        [args.basis === 'pickup' ? 'pickup_at' : 'created_at']: {
-          gte: args.from,
-          lt: args.to,
-        },
         items: { some: { store_id: args.storeId, ...activeWhere } },
       },
       _count: { _all: true },
@@ -695,11 +806,32 @@ export class OrderRepository {
     };
   }
 
+  /** [from, to) 픽업 입금 대기 주문의 제작 수량 합. 판매자에게 주문은 숨기고 점유한 수량만 알린다. */
+  async sumPendingPaymentQuantityByStore(args: {
+    storeId: bigint;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    const result = await this.prisma.orderItem.aggregate({
+      where: {
+        store_id: args.storeId,
+        order: {
+          status: OrderStatus.PENDING_PAYMENT,
+          pickup_at: { gte: args.from, lt: args.to },
+          ...activeWhere,
+        },
+      },
+      _sum: { quantity: true },
+    });
+    return result._sum.quantity ?? 0;
+  }
+
   async listOrdersByStore(args: {
     storeId: bigint;
     limit: number;
     cursor?: bigint;
     status?: OrderStatus;
+    buyerAccountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
     fromPickupAt?: Date;
@@ -721,6 +853,7 @@ export class OrderRepository {
     return this.prisma.order.findFirst({
       where: {
         id: args.orderId,
+        ...sellerVisibleWhere,
         items: {
           some: {
             store_id: args.storeId,
@@ -730,8 +863,16 @@ export class OrderRepository {
       },
       // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
+        payment: { select: { method: true, amount: true, confirmed_at: true } },
+        // 입금 반환은 구매자와 플랫폼 사이 일이라 취소 환불만 본다
+        refunds: { where: { kind: RefundKind.CANCEL } },
+        pickup_changes: pickupChangesInclude,
+        // 입금 대기 이력은 판매자에게 보이지 않는다
         status_histories: {
-          where: activeWhere,
+          where: {
+            to_status: { not: OrderStatus.PENDING_PAYMENT },
+            ...activeWhere,
+          },
           orderBy: {
             changed_at: 'desc',
           },
@@ -743,20 +884,7 @@ export class OrderRepository {
           },
           include: {
             option_items: { where: activeWhere },
-            custom_texts: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-            },
-            free_edits: {
-              where: activeWhere,
-              orderBy: { sort_order: 'asc' },
-              include: {
-                attachments: {
-                  where: activeWhere,
-                  orderBy: { sort_order: 'asc' },
-                },
-              },
-            },
+            ...orderItemCustomInclude,
           },
         },
       },
@@ -765,9 +893,9 @@ export class OrderRepository {
 
   /**
    * 판매자 상태 변경. 주문 행을 잠근(FOR UPDATE) 뒤 잠금 시점 상태로 전이를 다시 판정한다 —
-   * 관리자 강제 취소(cancelOrderByAdmin)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
-   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다).
-   * assertTransition이 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
+   * 취소(OrderTransitionRepository.cancelLocked)와 같은 잠금을 쓰므로 둘이 교차해도 나중 쪽은 바뀐
+   * 상태를 보고 거절된다(잠금 없이 읽으면 CANCELED 위에 CONFIRMED를 덮어쓴다). 픽업 완료·노쇼는 정산을 함께 확정한다.
+   * assertTransition은 잠금 시점 상태·픽업 시각으로 부르고, 던지면 트랜잭션은 롤백되고 예외가 그대로 전파된다.
    */
   async updateOrderStatusBySeller(args: {
     orderId: bigint;
@@ -776,14 +904,22 @@ export class OrderRepository {
     toStatus: OrderStatus;
     note: string | null;
     now: Date;
-    assertTransition: (fromStatus: OrderStatus) => void;
+    assertTransition: (fromStatus: OrderStatus, pickupAt: Date) => void;
     ipAddress?: string;
     userAgent?: string;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
-        SELECT o.id, o.status FROM \`order\` o
+      const locked = await tx.$queryRaw<
+        {
+          id: bigint;
+          status: OrderStatus;
+          pickup_at: Date;
+          commission_rate_bps: number;
+        }[]
+      >`
+        SELECT o.id, o.status, o.pickup_at, o.commission_rate_bps FROM \`order\` o
         WHERE o.id = ${args.orderId} AND o.deleted_at IS NULL
+          AND o.submitted_at IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM order_item i
             WHERE i.order_id = o.id AND i.store_id = ${args.storeId}
@@ -796,7 +932,7 @@ export class OrderRepository {
       }
 
       const fromStatus = order.status;
-      args.assertTransition(fromStatus);
+      args.assertTransition(fromStatus, order.pickup_at);
 
       const updatedOrder = await tx.order.update({
         where: {
@@ -811,12 +947,24 @@ export class OrderRepository {
           ...(args.toStatus === OrderStatus.PICKED_UP
             ? { picked_up_at: args.now }
             : {}),
-          ...(args.toStatus === OrderStatus.CANCELED
-            ? { canceled_at: args.now }
+          ...(args.toStatus === OrderStatus.NO_SHOW
+            ? { no_show_at: args.now }
             : {}),
         },
         include: sellerOrderSummaryInclude(args.storeId),
       });
+      if (
+        args.toStatus === OrderStatus.PICKED_UP ||
+        args.toStatus === OrderStatus.NO_SHOW
+      ) {
+        const payment = await lockPayment(tx, order.id);
+        await finalizeSettlementLocked(
+          tx,
+          order,
+          confirmedPaidAmount(payment),
+          args.now,
+        );
+      }
 
       await tx.orderStatusHistory.create({
         data: {
@@ -824,6 +972,8 @@ export class OrderRepository {
           from_status: fromStatus,
           to_status: args.toStatus,
           changed_at: args.now,
+          actor_type: OrderActor.SELLER,
+          actor_account_id: args.actorAccountId,
           note: args.note,
         },
       });
@@ -851,6 +1001,8 @@ export class OrderRepository {
           storeName: firstItem?.store_name_snapshot ?? null,
           productId: firstItem?.product_id ?? null,
           productName: firstItem?.product_name_snapshot ?? null,
+          actorType: OrderActor.SELLER,
+          pickupAt: updatedOrder.pickup_at,
           occurredAt: args.now,
           actorAccountId: args.actorAccountId,
         }),
@@ -884,13 +1036,20 @@ export class OrderRepository {
   private adminOrderScopeWhere(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
     toCreatedAt?: Date;
   }): Prisma.OrderWhereInput {
     return {
-      ...(args.status ? { status: args.status } : {}),
+      // status와 함께 오면 AND — 둘이 겹치지 않으면 빈 결과다
+      AND: [
+        args.status ? { status: args.status } : {},
+        args.inProgress
+          ? { status: { in: [...IN_PROGRESS_ORDER_STATUSES] } }
+          : {},
+      ],
       ...(args.accountId !== undefined ? { account_id: args.accountId } : {}),
       ...(args.storeId !== undefined
         ? { items: { some: { store_id: args.storeId, ...activeWhere } } }
@@ -918,6 +1077,7 @@ export class OrderRepository {
   async listOrdersForAdmin(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
@@ -939,6 +1099,7 @@ export class OrderRepository {
   async countOrdersForAdmin(args: {
     keyword?: string;
     status?: OrderStatus;
+    inProgress?: boolean;
     storeId?: bigint;
     accountId?: bigint;
     fromCreatedAt?: Date;
@@ -956,138 +1117,109 @@ export class OrderRepository {
     });
   }
 
-  /**
-   * 관리자 강제 취소. 주문 행을 잠근(FOR UPDATE) 뒤 트랜잭션 안에서 현재 상태로 취소 가능 여부를
-   * 다시 판정한다 — 판매자 상태 변경과 교차해도 둘 다 커밋되지 않게. 이력·알림(ORDER_CANCELED)·
-   * 감사(store_id는 첫 품목 매장)는 판매자 취소와 같은 규칙으로 같은 트랜잭션에 남긴다.
-   */
-  async cancelOrderByAdmin(args: {
-    orderId: bigint;
-    actorAccountId: bigint;
-    note: string;
-    now: Date;
-    canCancelFrom: (status: OrderStatus) => boolean;
-  }): Promise<AdminOrderRow | 'not-found' | 'not-cancellable'> {
-    return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
-        SELECT id, status FROM \`order\`
-        WHERE id = ${args.orderId} AND deleted_at IS NULL
-        FOR UPDATE`;
-      const current = locked[0];
-      if (!current) return 'not-found';
-      if (!args.canCancelFrom(current.status)) return 'not-cancellable';
-
-      const updated = await tx.order.update({
-        where: { id: current.id },
-        data: { status: OrderStatus.CANCELED, canceled_at: args.now },
-        include: adminOrderInclude,
-      });
-      await tx.orderStatusHistory.create({
-        data: {
-          order_id: current.id,
-          from_status: current.status,
-          to_status: OrderStatus.CANCELED,
-          changed_at: args.now,
-          note: args.note,
-        },
-      });
-
-      const firstItem = await tx.orderItem.findFirst({
-        where: { order_id: current.id, ...activeWhere },
-        orderBy: { id: 'asc' },
-        select: {
-          product_id: true,
-          store_id: true,
-          product_name_snapshot: true,
-          store_name_snapshot: true,
-        },
-      });
-      // 상태 전이 이벤트(outbox, 같은 tx) — 판매자 취소와 같은 계약
-      await this.outbox.publish(
-        tx,
-        orderStatusChangedEvent({
-          orderId: current.id,
-          orderNumber: updated.order_number,
-          buyerAccountId: updated.account_id,
-          fromStatus: current.status,
-          toStatus: OrderStatus.CANCELED,
-          storeId: firstItem?.store_id ?? null,
-          storeName: firstItem?.store_name_snapshot ?? null,
-          productId: firstItem?.product_id ?? null,
-          productName: firstItem?.product_name_snapshot ?? null,
-          occurredAt: args.now,
-          actorAccountId: args.actorAccountId,
-        }),
-      );
-
-      await this.auditLogs.recordAudit(tx, {
-        actorAccountId: args.actorAccountId,
-        storeId: firstItem?.store_id ?? null,
-        targetType: AuditTargetType.ORDER,
-        targetId: current.id,
-        action: AuditActionType.STATUS_CHANGE,
-        beforeJson: { status: current.status },
-        afterJson: {
-          status: OrderStatus.CANCELED,
-          note: args.note,
-          byAdmin: true,
-        },
-      });
-
-      return updated;
+  /** 매장의 진행 중 주문 상태별 건수(관리자 정지·숨김 경고용). 0건 상태는 빼고 흐름 순으로 돌려준다. */
+  async countInProgressOrdersByStore(
+    storeId: bigint,
+  ): Promise<{ status: OrderStatus; count: number }[]> {
+    const grouped = await this.prisma.order.groupBy({
+      by: ['status'],
+      where: {
+        status: { in: [...IN_PROGRESS_ORDER_STATUSES] },
+        items: { some: { store_id: storeId, ...activeWhere } },
+      },
+      _count: { _all: true },
+    });
+    const counts = new Map(grouped.map((g) => [g.status, g._count._all]));
+    return IN_PROGRESS_ORDER_STATUSES.flatMap((status) => {
+      const count = counts.get(status);
+      return count ? [{ status, count }] : [];
     });
   }
 
   // ── 대시보드 집계(dashboard feature가 배럴로 소비) ──
 
+  /** 금액 합은 돈이 오가지 않은 취소·입금 대기를 뺀다. */
   async aggregateOrdersBetween(
     from: Date,
     to: Date,
-  ): Promise<{
-    counts: {
-      submitted: number;
-      confirmed: number;
-      made: number;
-      pickedUp: number;
-      canceled: number;
-    };
-    amountSum: number;
-  }> {
+  ): Promise<{ counts: AdminOrderStatusCounts; amountSum: number }> {
     const grouped = await this.prisma.order.groupBy({
       by: ['status'],
       where: { created_at: { gte: from, lte: to } },
       _count: { _all: true },
       _sum: { total_price: true },
     });
-    const counts = {
+    const counts: AdminOrderStatusCounts = {
+      pendingPayment: 0,
       submitted: 0,
       confirmed: 0,
       made: 0,
       pickedUp: 0,
+      noShow: 0,
       canceled: 0,
     };
     let amountSum = 0;
     for (const g of grouped) {
-      const n = g._count._all;
-      switch (g.status) {
-        case 'SUBMITTED':
-          counts.submitted = n;
-          break;
-        case 'CONFIRMED':
-          counts.confirmed = n;
-          break;
-        case 'MADE':
-          counts.made = n;
-          break;
-        case 'PICKED_UP':
-          counts.pickedUp = n;
-          break;
-        case 'CANCELED':
-          counts.canceled = n;
-          break;
+      counts[ADMIN_STATUS_COUNT_KEYS[g.status]] = g._count._all;
+      if (g.status !== 'CANCELED' && g.status !== 'PENDING_PAYMENT') {
+        amountSum += g._sum.total_price ?? 0;
       }
-      if (g.status !== 'CANCELED') amountSum += g._sum.total_price ?? 0;
     }
     return { counts, amountSum };
   }
+}
+
+/** 품목 생성에 펼쳐 넣는 커스텀 스냅샷. 자유 편집·참고 사진 순서는 입력 순서다. */
+function customItemData(custom: OrderItemCustomSnapshot) {
+  return {
+    custom_mode_snapshot: custom.mode,
+    custom_base_image_url_snapshot: custom.baseImageUrl,
+    custom_preview_image_url: custom.previewImageUrl,
+    custom_texts: {
+      create: custom.texts.map((text) => ({
+        token_id: text.tokenId,
+        token_key_snapshot: text.tokenKey,
+        label_snapshot: text.label,
+        default_text_snapshot: text.defaultText,
+        value_text: text.valueText,
+        sort_order: text.sortOrder,
+        pos_x: text.posX,
+        pos_y: text.posY,
+        width: text.width,
+        height: text.height,
+        text_color: text.textColor,
+        text_align: text.textAlign,
+      })),
+    },
+    free_edits: {
+      create: custom.freeEdits.map((edit, index) => ({
+        pos_x: edit.posX,
+        pos_y: edit.posY,
+        width: edit.width,
+        height: edit.height,
+        description_text: edit.descriptionText,
+        sort_order: index,
+        attachments: {
+          create: edit.referenceImageUrls.map((url, order) => ({
+            image_url: url,
+            sort_order: order,
+          })),
+        },
+      })),
+    },
+    custom_images: {
+      create: custom.images.map((image) => ({
+        kind: image.kind,
+        image_url: image.imageUrl,
+      })),
+    },
+    ...(custom.design && {
+      custom_design: {
+        create: {
+          schema_version: custom.design.schemaVersion,
+          design_json: custom.design.json,
+        },
+      },
+    }),
+  };
 }

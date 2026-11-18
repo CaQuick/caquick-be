@@ -12,7 +12,7 @@ export const CATALOG_QUERY = Symbol('CATALOG_QUERY');
 
 export type InquiryStoreRow = Pick<
   Store,
-  'id' | 'store_name' | 'profile_image_url' | 'greeting_message'
+  'id' | 'store_name' | 'profile_image_url' | 'greeting_message' | 'is_active'
 > & {
   business_hours: Pick<
     StoreBusinessHour,
@@ -24,7 +24,7 @@ export type FaqTopicSummaryRow = Pick<StoreFaqTopic, 'id' | 'title'>;
 export type FaqTopicRow = Pick<StoreFaqTopic, 'id' | 'title' | 'answer_html'>;
 
 export interface ICatalogQuery {
-  /** 노출 가능한(활성·미삭제) 매장만 — 문의 진입 화면의 매장 컨텍스트. */
+  /** 삭제되지 않은 매장(숨김 포함) — 문의 진입 화면의 매장 컨텍스트. 숨김 매장 문의 허용은 호출부가 is_active로 가린다. */
   findInquiryStore(storeId: bigint): Promise<InquiryStoreRow | null>;
   listActiveFaqTopics(storeId: bigint): Promise<FaqTopicSummaryRow[]>;
   findActiveFaqTopic(args: {

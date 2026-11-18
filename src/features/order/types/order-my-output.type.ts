@@ -1,8 +1,12 @@
 import type { OffsetConnection } from '@/common/types/cursor-connection.type';
 import type {
+  OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderPickupChangeOutput,
+  OrderRefundOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { OrderPaymentOutput } from '@/features/order/types/order-payment-output.type';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyOrderSummary {
@@ -19,6 +23,7 @@ export interface MyOrderSummary {
   storeName: string;
   regionLabel: string | null;
   hasReviewableItem: boolean;
+  paymentExpiresAt: Date | null;
 }
 
 export type MyOrderConnection = OffsetConnection<MyOrderSummary>;
@@ -52,6 +57,8 @@ export interface MyOrderDetail {
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
+  requestNote: string | null;
+  payment: OrderPaymentOutput | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;
@@ -60,6 +67,10 @@ export interface MyOrderDetail {
   madeAt: Date | null;
   pickedUpAt: Date | null;
   canceledAt: Date | null;
+  cancellation: OrderCancellationOutput | null;
+  canCancel: boolean;
+  refunds: OrderRefundOutput[];
+  pickupChanges: OrderPickupChangeOutput[];
   statusHistories: OrderStatusHistoryOutput[];
   items: MyOrderItem[];
   store: MyOrderStoreInfo;

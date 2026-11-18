@@ -1,3 +1,4 @@
+import { DomainException } from '@/common/errors/error-catalog';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { ProductRepository } from '@/features/product/repositories/product.repository';
@@ -5,9 +6,15 @@ import { SellerCustomTemplateService } from '@/features/product/services/product
 import type { SellerCustomTextTokenOutput } from '@/features/product/types/product-seller-output.type';
 import { StoreSellerRepository } from '@/features/store/repositories/store-seller.repository';
 import type { PrismaClient, Product } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
-import { createProduct, setupSellerWithStore } from '@/test/factories';
+import {
+  createCustomTemplate,
+  createCustomTextToken,
+  createProduct,
+  setupSellerWithStore,
+} from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import {
   FOREIGN_UPLOAD_URL,
@@ -18,6 +25,7 @@ import {
 describe('SellerCustomTemplateService (real DB)', () => {
   let service: SellerCustomTemplateService;
   let prisma: PrismaClient;
+  let readImageSize: jest.SpyInstance;
 
   beforeAll(async () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
@@ -34,6 +42,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
     });
     service = module.get(SellerCustomTemplateService);
     prisma = p;
+    // 바탕 이미지 읽기는 S3 네트워크 호출이라 결과만 주입한다(읽기 자체는 S3Service spec이 본다)
+    readImageSize = jest.spyOn(module.get(S3Service), 'readImageSize');
   });
 
   afterAll(async () => {
@@ -43,6 +53,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    readImageSize.mockReset();
+    readImageSize.mockResolvedValue({ width: 1000, height: 1000 });
   });
 
   async function setupSellerWithProduct(): Promise<{
@@ -55,30 +67,350 @@ describe('SellerCustomTemplateService (real DB)', () => {
     return { accountId: account.id, storeId: store.id, product };
   }
 
-  async function createTemplate(productId: bigint) {
-    return prisma.productCustomTemplate.create({
-      data: {
-        product_id: productId,
-        base_image_url: 'https://i.example/base.png',
-      },
+  async function createTemplate(productId: bigint, freeEditEnabled = false) {
+    return createCustomTemplate(prisma, {
+      product_id: productId,
+      free_edit_enabled: freeEditEnabled,
     });
   }
 
-  /** 활성 슬롯 A + soft-delete된 슬롯 B. */
+  /** 활성 슬롯 1개 + soft-delete된 슬롯 1개. */
   async function createTokensWithDeleted(templateId: bigint) {
-    const live = await prisma.productCustomTextToken.create({
-      data: { template_id: templateId, token_key: 'A', default_text: 'a' },
+    const live = await createCustomTextToken(prisma, {
+      template_id: templateId,
     });
-    await prisma.productCustomTextToken.create({
-      data: {
-        template_id: templateId,
-        token_key: 'B',
-        default_text: 'b',
-        deleted_at: new Date(),
-      },
+    await createCustomTextToken(prisma, {
+      template_id: templateId,
+      deleted_at: new Date(),
     });
     return live;
   }
+
+  const AREA = { posX: 1000, posY: 1000, width: 8000, height: 1500 };
+  const slot = (templateId: bigint, overrides: object = {}) => ({
+    templateId: templateId.toString(),
+    tokenKey: 'name',
+    defaultText: '가',
+    ...AREA,
+    ...overrides,
+  });
+
+  describe('sellerSetProductCustomMode', () => {
+    it('다른 매장 상품이면 404', async () => {
+      const me = await setupSellerWithProduct();
+      const other = await setupSellerWithProduct();
+      await expect(
+        service.sellerSetProductCustomMode(
+          me.accountId,
+          other.product.id,
+          'NONE',
+        ),
+      ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+    });
+
+    it.each([
+      ['템플릿이 없는 슬롯형', 'SLOT', 'none'],
+      ['문구 자리도 자유 편집도 없는 슬롯형', 'SLOT', 'empty'],
+      ['3D 연결 그룹이 없는 3D', 'THREE_D', 'empty'],
+    ] as const)(
+      '%s으로는 바꿀 수 없고 방식·감사 기록이 그대로다',
+      async (_label, mode, template) => {
+        const { accountId, storeId, product } = await setupSellerWithProduct();
+        if (template === 'empty') await createTemplate(product.id);
+
+        await expect(
+          service.sellerSetProductCustomMode(accountId, product.id, mode),
+        ).rejects.toThrowDomain('CUSTOM_PRODUCT_NOT_READY');
+
+        const after = await prisma.product.findUniqueOrThrow({
+          where: { id: product.id },
+        });
+        expect(after.custom_mode).toBe('NONE');
+        expect(
+          await prisma.auditLog.count({ where: { store_id: storeId } }),
+        ).toBe(0);
+      },
+    );
+
+    it('삭제된 문구 자리만 남았고 자유 편집이 꺼졌으면 슬롯형으로 바꿀 수 없고, 준비 상태·응답 문구 자리에서도 삭제 자리를 세지 않는다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const tpl = await createTemplate(product.id);
+      await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        deleted_at: new Date(),
+      });
+
+      await expect(
+        service.sellerSetProductCustomMode(accountId, product.id, 'SLOT'),
+      ).rejects.toThrowDomain('CUSTOM_PRODUCT_NOT_READY');
+
+      // 이미 슬롯형인 상품은 같은 방식 요청이 판매자 상품 출력을 그대로 돌려준다
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { custom_mode: 'SLOT' },
+      });
+      const result = await service.sellerSetProductCustomMode(
+        accountId,
+        product.id,
+        'SLOT',
+      );
+      expect(
+        result.customReadiness.find((r) => r.mode === 'SLOT')?.issues,
+      ).toEqual([expect.objectContaining({ code: 'SLOT_NOTHING_TO_EDIT' })]);
+      expect(result.customTemplate?.textTokens).toEqual([]);
+    });
+
+    it.each([
+      ['문구 자리가 있으면', false, 1],
+      ['자유 편집을 허용했으면', true, 0],
+    ])(
+      '%s 슬롯형으로 바꾸고 이전·이후 방식을 감사에 남긴다',
+      async (_label, freeEdit, slots) => {
+        const { accountId, storeId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id, freeEdit);
+        for (let i = 0; i < slots; i++) {
+          await createCustomTextToken(prisma, { template_id: tpl.id });
+        }
+
+        const result = await service.sellerSetProductCustomMode(
+          accountId,
+          product.id,
+          'SLOT',
+        );
+
+        expect(result.customMode).toBe('SLOT');
+        expect(result.customReadiness.find((r) => r.mode === 'SLOT')).toEqual({
+          mode: 'SLOT',
+          ready: true,
+          issues: [],
+        });
+        const audits = await prisma.auditLog.findMany({
+          where: { store_id: storeId },
+        });
+        expect(audits.map((a) => [a.before_json, a.after_json])).toEqual([
+          [{ customMode: 'NONE' }, { customMode: 'SLOT' }],
+        ]);
+      },
+    );
+
+    it('없음으로는 준비 상태와 무관하게 바꾼다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { custom_mode: 'SLOT' },
+      });
+
+      const result = await service.sellerSetProductCustomMode(
+        accountId,
+        product.id,
+        'NONE',
+      );
+      expect(result.customMode).toBe('NONE');
+    });
+
+    it('지금과 같은 방식이면 준비 상태를 보지 않고 감사 없이 그대로 돌려준다', async () => {
+      const { accountId, storeId, product } = await setupSellerWithProduct();
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { custom_mode: 'SLOT' },
+      });
+
+      const result = await service.sellerSetProductCustomMode(
+        accountId,
+        product.id,
+        'SLOT',
+      );
+
+      expect(result.customMode).toBe('SLOT');
+      expect(result.customReadiness).toEqual([
+        { mode: 'NONE', ready: true, issues: [] },
+        {
+          mode: 'SLOT',
+          ready: false,
+          issues: [
+            {
+              code: 'SLOT_TEMPLATE_MISSING',
+              message: '바탕 이미지를 먼저 등록해 주세요.',
+              optionGroupId: null,
+            },
+          ],
+        },
+        {
+          mode: 'THREE_D',
+          ready: false,
+          issues: [
+            expect.objectContaining({ code: 'THREE_D_GROUP_MISSING' }),
+            expect.objectContaining({ code: 'THREE_D_GROUP_MISSING' }),
+          ],
+        },
+      ]);
+      expect(
+        await prisma.auditLog.count({ where: { store_id: storeId } }),
+      ).toBe(0);
+    });
+  });
+
+  describe('sellerApplyThreeDOptionPreset', () => {
+    const groupsOf = (productId: bigint) =>
+      prisma.productOptionGroup.findMany({
+        where: { product_id: productId },
+        orderBy: { sort_order: 'asc' },
+        include: { option_items: { orderBy: { sort_order: 'asc' } } },
+      });
+
+    it('다른 매장 상품이면 404이고 아무것도 만들지 않는다', async () => {
+      const me = await setupSellerWithProduct();
+      const other = await setupSellerWithProduct();
+
+      await expect(
+        service.sellerApplyThreeDOptionPreset(me.accountId, other.product.id),
+      ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+      expect(await groupsOf(other.product.id)).toEqual([]);
+    });
+
+    it('빈 카테고리마다 단일 선택 그룹을 기존 그룹 뒤에 만들고, 3D 방식으로 바꿀 수 있게 된다', async () => {
+      const { accountId, storeId, product } = await setupSellerWithProduct();
+      await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '초', sort_order: 4 },
+      });
+
+      const result = await service.sellerApplyThreeDOptionPreset(
+        accountId,
+        product.id,
+      );
+
+      const groups = await groupsOf(product.id);
+      expect(
+        groups.map((g) => [
+          g.name,
+          g.sort_order,
+          g.is_required,
+          g.min_select,
+          g.max_select,
+        ]),
+      ).toEqual([
+        ['초', 4, true, 1, 1],
+        ['크기', 5, true, 1, 1],
+        ['맛', 6, true, 1, 1],
+        ['모양', 7, true, 1, 1],
+        ['디자인', 8, false, 0, 1],
+      ]);
+      expect(
+        groups[1].option_items.map((i) => [
+          i.title,
+          i.price_delta,
+          i.three_d_key,
+          i.sort_order,
+        ]),
+      ).toEqual([
+        ['도시락 (1~2인)', 0, 'size.lunchbox', 0],
+        ['미니 (1~2인)', 0, 'size.mini', 1],
+        ['1호 (2~3인)', 5000, 'size.no1', 2],
+      ]);
+      expect(groups.slice(1).map((g) => g.option_items.length)).toEqual([
+        3, 3, 8, 5,
+      ]);
+      expect(result.optionGroups.map((g) => g.threeDCategory)).toEqual([
+        null,
+        'SIZE',
+        'FLAVOR',
+        'SHAPE',
+        'DESIGN',
+      ]);
+      expect(result.customReadiness.find((r) => r.mode === 'THREE_D')).toEqual({
+        mode: 'THREE_D',
+        ready: true,
+        issues: [],
+      });
+
+      const audits = await prisma.auditLog.findMany({
+        where: { store_id: storeId },
+      });
+      expect(audits.map((a) => [a.action, a.after_json])).toEqual([
+        [
+          'CREATE',
+          {
+            threeDOptionPreset: true,
+            optionGroupIds: groups.slice(1).map((g) => g.id.toString()),
+          },
+        ],
+      ]);
+      await expect(
+        service.sellerSetProductCustomMode(accountId, product.id, 'THREE_D'),
+      ).resolves.toMatchObject({ customMode: 'THREE_D' });
+    });
+
+    it('다시 불러도 아무것도 만들지 않고 감사도 남기지 않는다', async () => {
+      const { accountId, storeId, product } = await setupSellerWithProduct();
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+      const before = await groupsOf(product.id);
+
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+
+      expect(await groupsOf(product.id)).toEqual(before);
+      expect(
+        await prisma.auditLog.count({ where: { store_id: storeId } }),
+      ).toBe(1);
+    });
+
+    it('3D 항목 그룹이 이미 있는 카테고리는 건드리지 않고, 숨긴 그룹의 카테고리는 다시 만든다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const shape = await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '하트만', sort_order: 0 },
+      });
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: shape.id,
+          title: '하트',
+          price_delta: 3000,
+          three_d_key: 'shape.heart',
+        },
+      });
+      const hiddenSize = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '숨긴 크기',
+          sort_order: 1,
+          is_active: false,
+        },
+      });
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: hiddenSize.id,
+          title: '미니',
+          three_d_key: 'size.mini',
+        },
+      });
+
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+
+      const groups = await groupsOf(product.id);
+      expect(groups.map((g) => g.name)).toEqual([
+        '하트만',
+        '숨긴 크기',
+        '크기',
+        '맛',
+        '디자인',
+      ]);
+      expect(groups[0].option_items.map((i) => i.price_delta)).toEqual([3000]);
+    });
+
+    it('동시에 두 번 불러도 카테고리마다 그룹은 하나다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+
+      await Promise.all([
+        service.sellerApplyThreeDOptionPreset(accountId, product.id),
+        service.sellerApplyThreeDOptionPreset(accountId, product.id),
+      ]);
+
+      expect((await groupsOf(product.id)).map((g) => g.name)).toEqual([
+        '크기',
+        '맛',
+        '모양',
+        '디자인',
+      ]);
+    });
+  });
 
   describe('sellerUpsertProductCustomTemplate', () => {
     it('없는 productId면 404', async () => {
@@ -92,30 +424,48 @@ describe('SellerCustomTemplateService (real DB)', () => {
     });
 
     it('처음 호출 시 template 생성, 두 번째 호출 시 같은 product_id의 template 갱신 (upsert)', async () => {
-      const { accountId, product } = await setupSellerWithProduct();
+      const { accountId, storeId, product } = await setupSellerWithProduct();
 
       const first = await service.sellerUpsertProductCustomTemplate(accountId, {
         productId: product.id.toString(),
         baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'a.png'),
       });
-
       const second = await service.sellerUpsertProductCustomTemplate(
         accountId,
         {
           productId: product.id.toString(),
           baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+          freeEditEnabled: true,
         },
       );
 
-      expect(second.id).toBe(first.id);
-      expect(second.baseImageUrl).toBe(
-        ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
-      );
-
-      const templates = await prisma.productCustomTemplate.findMany({
-        where: { product_id: product.id },
+      expect(second).toMatchObject({
+        id: first.id,
+        baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+        freeEditEnabled: true,
+        revision: first.revision + 1,
       });
-      expect(templates).toHaveLength(1);
+      expect(
+        await prisma.productCustomTemplate.count({
+          where: { product_id: product.id },
+        }),
+      ).toBe(1);
+      const audits = await prisma.auditLog.findMany({
+        where: { store_id: storeId },
+        orderBy: { id: 'asc' },
+      });
+      expect(audits.map((a) => a.after_json)).toEqual([
+        {
+          templateId: first.id,
+          baseImageUrl: first.baseImageUrl,
+          freeEditEnabled: false,
+        },
+        {
+          templateId: first.id,
+          baseImageUrl: second.baseImageUrl,
+          freeEditEnabled: true,
+        },
+      ]);
     });
 
     it('응답 textTokens에서 soft-delete된 슬롯은 제외한다', async () => {
@@ -133,63 +483,82 @@ describe('SellerCustomTemplateService (real DB)', () => {
 
       expect(result.textTokens.map((t) => t.id)).toEqual([live.id.toString()]);
     });
-  });
 
-  describe('sellerSetProductCustomTemplateActive', () => {
-    it('없는 templateId면 404', async () => {
-      const { accountId } = await setupSellerWithProduct();
-      await expect(
-        service.sellerSetProductCustomTemplateActive(accountId, {
-          templateId: '999999',
-          isActive: false,
-        }),
-      ).rejects.toThrowDomain(404);
-    });
+    describe('바탕 이미지 1:1', () => {
+      it.each([
+        ['정사각', 1000, 1000, null],
+        ['가로가 1px 길다', 1001, 1000, null],
+        ['세로가 1px 길다', 1000, 1001, null],
+        ['가로가 2px 길다', 1002, 1000, 'CUSTOM_BASE_IMAGE_NOT_SQUARE'],
+        ['세로로 길다', 800, 1000, 'CUSTOM_BASE_IMAGE_NOT_SQUARE'],
+      ] as const)('%s(%i×%i)', async (_label, width, height, error) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockResolvedValue({ width, height });
+        const upsert = service.sellerUpsertProductCustomTemplate(accountId, {
+          productId: product.id.toString(),
+          baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+        });
 
-    it('다른 매장 template이면 404', async () => {
-      const me = await setupSellerWithProduct();
-      const other = await setupSellerWithProduct();
-      const othersTemplate = await createTemplate(other.product.id);
-
-      await expect(
-        service.sellerSetProductCustomTemplateActive(me.accountId, {
-          templateId: othersTemplate.id.toString(),
-          isActive: false,
-        }),
-      ).rejects.toThrowDomain(404);
-    });
-
-    it('is_active 토글 + audit log STATUS_CHANGE', async () => {
-      const { accountId, storeId, product } = await setupSellerWithProduct();
-      const tpl = await createTemplate(product.id);
-
-      await service.sellerSetProductCustomTemplateActive(accountId, {
-        templateId: tpl.id.toString(),
-        isActive: false,
+        if (error) await expect(upsert).rejects.toThrowDomain(error);
+        else await expect(upsert).resolves.toBeDefined();
+        expect(
+          await prisma.productCustomTemplate.count({
+            where: { product_id: product.id },
+          }),
+        ).toBe(error ? 0 : 1);
       });
 
-      const after = await prisma.productCustomTemplate.findUniqueOrThrow({
-        where: { id: tpl.id },
+      it('이미지로 읽을 수 없으면 CUSTOM_BASE_IMAGE_UNREADABLE', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockResolvedValue(null);
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+          }),
+        ).rejects.toThrowDomain('CUSTOM_BASE_IMAGE_UNREADABLE');
       });
-      expect(after.is_active).toBe(false);
 
-      const auditLogs = await prisma.auditLog.findMany({
-        where: { store_id: storeId, action: 'STATUS_CHANGE' },
+      it('저장소를 읽지 못하면 503(S3_READ_FAILED)을 그대로 낸다', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        readImageSize.mockRejectedValue(new DomainException('S3_READ_FAILED'));
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: ownedUploadUrl('PRODUCT_IMAGE', accountId, 'b.png'),
+          }),
+        ).rejects.toThrowDomain(503);
       });
-      expect(auditLogs).toHaveLength(1);
-    });
 
-    it('응답 textTokens에서 soft-delete된 슬롯은 제외한다', async () => {
-      const { accountId, product } = await setupSellerWithProduct();
-      const tpl = await createTemplate(product.id);
-      const live = await createTokensWithDeleted(tpl.id);
+      it('바탕 URL이 그대로면 다시 읽지 않고, 바뀔 때만 읽는다', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const kept = ownedUploadUrl('PRODUCT_IMAGE', accountId, 'kept.png');
+        await createCustomTemplate(prisma, {
+          product_id: product.id,
+          base_image_url: kept,
+        });
+        readImageSize.mockResolvedValue({ width: 300, height: 1000 });
 
-      const result = await service.sellerSetProductCustomTemplateActive(
-        accountId,
-        { templateId: tpl.id.toString(), isActive: false },
-      );
+        const result = await service.sellerUpsertProductCustomTemplate(
+          accountId,
+          {
+            productId: product.id.toString(),
+            baseImageUrl: kept,
+            freeEditEnabled: true,
+          },
+        );
+        expect(result.freeEditEnabled).toBe(true);
+        expect(readImageSize).not.toHaveBeenCalled();
 
-      expect(result.textTokens.map((t) => t.id)).toEqual([live.id.toString()]);
+        const changed = ownedUploadUrl('PRODUCT_IMAGE', accountId, 'new.png');
+        await expect(
+          service.sellerUpsertProductCustomTemplate(accountId, {
+            productId: product.id.toString(),
+            baseImageUrl: changed,
+          }),
+        ).rejects.toThrowDomain('CUSTOM_BASE_IMAGE_NOT_SQUARE');
+        expect(readImageSize).toHaveBeenCalledWith(changed);
+      });
     });
   });
 
@@ -197,11 +566,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
     it('templateId가 없으면 404', async () => {
       const { accountId } = await setupSellerWithProduct();
       await expect(
-        service.sellerUpsertProductCustomTextToken(accountId, {
-          templateId: '999999',
-          tokenKey: 'NAME',
-          defaultText: 'X',
-        }),
+        service.sellerUpsertProductCustomTextToken(accountId, slot(999999n)),
       ).rejects.toThrowDomain(404);
     });
 
@@ -210,62 +575,233 @@ describe('SellerCustomTemplateService (real DB)', () => {
       const other = await setupSellerWithProduct();
       const myTpl = await createTemplate(me.product.id);
       const othersTpl = await createTemplate(other.product.id);
-      const othersToken = await prisma.productCustomTextToken.create({
-        data: {
-          template_id: othersTpl.id,
-          token_key: 'X',
-          default_text: 'x',
-        },
+      const othersToken = await createCustomTextToken(prisma, {
+        template_id: othersTpl.id,
       });
 
       await expect(
-        service.sellerUpsertProductCustomTextToken(me.accountId, {
-          templateId: myTpl.id.toString(),
-          tokenId: othersToken.id.toString(),
-          tokenKey: 'Y',
-          defaultText: 'y',
-        }),
+        service.sellerUpsertProductCustomTextToken(
+          me.accountId,
+          slot(myTpl.id, { tokenId: othersToken.id.toString() }),
+        ),
       ).rejects.toThrowDomain(404);
     });
 
-    it('tokenId 없이 호출 → 신규 생성', async () => {
+    it('tokenId 없이 호출하면 새로 만들고 표시 이름·글자색·정렬은 기본값이다', async () => {
       const { accountId, product } = await setupSellerWithProduct();
       const tpl = await createTemplate(product.id);
 
       const result = await service.sellerUpsertProductCustomTextToken(
         accountId,
-        {
-          templateId: tpl.id.toString(),
-          tokenKey: 'NAME',
-          defaultText: '홍길동',
-        },
+        slot(tpl.id, { tokenKey: 'name', defaultText: '홍길동' }),
       );
-      expect(result.tokenKey).toBe('NAME');
 
-      const tokens = await prisma.productCustomTextToken.findMany({
-        where: { template_id: tpl.id },
+      expect(result).toMatchObject({
+        tokenKey: 'name',
+        label: 'name',
+        maxLength: 20,
+        textColor: '#000000',
+        textAlign: 'CENTER',
+        ...AREA,
       });
-      expect(tokens).toHaveLength(1);
     });
 
-    it('tokenId 포함 호출 → 기존 토큰 갱신', async () => {
+    it('tokenId 포함 호출 → 기존 토큰 갱신, 생략한 표시 이름·글자색·정렬은 그대로 둔다', async () => {
       const { accountId, product } = await setupSellerWithProduct();
       const tpl = await createTemplate(product.id);
-      const token = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'A', default_text: '가' },
+      const token = await createCustomTextToken(prisma, {
+        template_id: tpl.id,
+        token_key: 'a',
+        label: '받는 사람',
+        text_color: '#FF0000',
+        text_align: 'RIGHT',
       });
 
       const result = await service.sellerUpsertProductCustomTextToken(
         accountId,
-        {
-          templateId: tpl.id.toString(),
+        slot(tpl.id, {
           tokenId: token.id.toString(),
-          tokenKey: 'B',
+          tokenKey: 'b',
           defaultText: '나',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        id: token.id.toString(),
+        tokenKey: 'b',
+        label: '받는 사람',
+        defaultText: '나',
+        textColor: '#FF0000',
+        textAlign: 'RIGHT',
+      });
+    });
+
+    it('표시 이름·글자색(소문자는 대문자로)·정렬을 입력대로 저장한다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const tpl = await createTemplate(product.id);
+
+      const result = await service.sellerUpsertProductCustomTextToken(
+        accountId,
+        slot(tpl.id, {
+          label: '  받는 사람 ',
+          textColor: '#ff00aa',
+          textAlign: 'LEFT',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        label: '받는 사람',
+        textColor: '#FF00AA',
+        textAlign: 'LEFT',
+      });
+    });
+
+    describe('입력 검증', () => {
+      it.each([
+        ['가득 찬 영역', 0, 0, 10000, 10000, true],
+        ['최소 영역', 0, 0, 1, 1, true],
+        ['오른쪽 아래 끝 1칸', 9999, 9999, 1, 1, true],
+        ['x 음수', -1, 0, 10, 10, false],
+        ['y 음수', 0, -1, 10, 10, false],
+        ['너비 0', 0, 0, 0, 10, false],
+        ['높이 0', 0, 0, 10, 0, false],
+        ['x + 너비 10001', 5000, 0, 5001, 10, false],
+        ['y + 높이 10001', 0, 5000, 10, 5001, false],
+        ['x가 끝(10000)', 10000, 0, 1, 1, false],
+        ['너비 10001', 0, 0, 10001, 1, false],
+      ])(
+        '좌표 경계 — %s(x=%i, y=%i, w=%i, h=%i)',
+        async (_label, posX, posY, width, height, ok) => {
+          const { accountId, product } = await setupSellerWithProduct();
+          const tpl = await createTemplate(product.id);
+          const upsert = service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { posX, posY, width, height }),
+          );
+
+          if (ok) await expect(upsert).resolves.toMatchObject({ posX, width });
+          else
+            await expect(upsert).rejects.toThrowDomain(
+              'CUSTOM_AREA_OUT_OF_BOUNDS',
+            );
         },
       );
-      expect(result.id).toBe(token.id.toString());
-      expect(result.tokenKey).toBe('B');
+
+      it.each([
+        [0, 'FIELD_OUT_OF_RANGE'],
+        [1, null],
+        [50, null],
+        [51, 'FIELD_OUT_OF_RANGE'],
+      ] as const)('최대 글자 수 %i', async (maxLength, error) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        const upsert = service.sellerUpsertProductCustomTextToken(
+          accountId,
+          slot(tpl.id, { maxLength }),
+        );
+
+        if (error) await expect(upsert).rejects.toThrowDomain(error);
+        else await expect(upsert).resolves.toMatchObject({ maxLength });
+      });
+
+      it('기본 문구는 코드 포인트로 최대 글자 수까지다(이모지 1개 = 1자)', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+
+        await expect(
+          service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { tokenKey: 'ok', maxLength: 2, defaultText: '🎂🎂' }),
+          ),
+        ).resolves.toMatchObject({ defaultText: '🎂🎂' });
+        const tooLong = service.sellerUpsertProductCustomTextToken(
+          accountId,
+          slot(tpl.id, {
+            tokenKey: 'long',
+            label: '이름',
+            maxLength: 2,
+            defaultText: '🎂🎂🎂',
+          }),
+        );
+        await expect(tooLong).rejects.toThrowDomain(
+          'CUSTOM_TEXT_DEFAULT_TOO_LONG',
+        );
+        await expect(tooLong).rejects.toThrow(
+          "'이름'의 기본 문구는 2자 이하여야 해요.",
+        );
+      });
+
+      it.each([
+        ['slot1', true],
+        ['a'.repeat(60), true],
+        ['a'.repeat(61), false],
+        ['Name', false],
+        ['slot_1', false],
+        ['   ', false],
+      ])('키 %s', async (tokenKey, ok) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        const upsert = service.sellerUpsertProductCustomTextToken(
+          accountId,
+          slot(tpl.id, { tokenKey }),
+        );
+
+        if (ok) await expect(upsert).resolves.toMatchObject({ tokenKey });
+        else
+          await expect(upsert).rejects.toThrowDomain(
+            'CUSTOM_TOKEN_KEY_INVALID',
+          );
+      });
+
+      it('형식 규칙 전 키는 그대로 두면 수정할 수 있고, 다른 형식 밖 키로는 못 바꾼다', async () => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        const legacy = await createCustomTextToken(prisma, {
+          template_id: tpl.id,
+          token_key: 'NAME',
+        });
+        const update = (tokenKey: string) =>
+          service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { tokenId: legacy.id.toString(), tokenKey }),
+          );
+
+        await expect(update('NAME')).resolves.toMatchObject({
+          tokenKey: 'NAME',
+        });
+        await expect(update('NAME2')).rejects.toThrowDomain(
+          'CUSTOM_TOKEN_KEY_INVALID',
+        );
+      });
+
+      it.each([
+        ['#FFF', 'INVALID_COLOR_FORMAT'],
+        ['red', 'INVALID_COLOR_FORMAT'],
+        ['#GGGGGG', 'INVALID_COLOR_FORMAT'],
+      ])('글자색 %s', async (textColor, error) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        await expect(
+          service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { textColor }),
+          ),
+        ).rejects.toThrowDomain(error);
+      });
+
+      it.each([
+        ['공백뿐', '   ', 'TEXT_REQUIRED'],
+        ['31자', '가'.repeat(31), 'TEXT_TOO_LONG'],
+      ])('표시 이름 %s', async (_label, label, error) => {
+        const { accountId, product } = await setupSellerWithProduct();
+        const tpl = await createTemplate(product.id);
+        await expect(
+          service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { label }),
+          ),
+        ).rejects.toThrowDomain(error);
+      });
     });
 
     describe('같은 tokenKey 재사용', () => {
@@ -274,11 +810,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
         const tpl = await createTemplate(product.id);
         const first = await service.sellerUpsertProductCustomTextToken(
           accountId,
-          {
-            templateId: tpl.id.toString(),
-            tokenKey: 'NAME',
-            defaultText: '가',
-          },
+          slot(tpl.id, { textColor: '#FF0000' }),
         );
         await service.sellerDeleteProductCustomTextToken(
           accountId,
@@ -289,7 +821,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
           accountId,
           {
             templateId: tpl.id.toString(),
-            tokenKey: 'NAME',
+            tokenKey: 'name',
+            label: '이름',
             defaultText: '나',
             maxLength: 12,
             sortOrder: 3,
@@ -301,10 +834,12 @@ describe('SellerCustomTemplateService (real DB)', () => {
           },
         );
 
+        // 복구도 등록이라 생략한 글자색은 기본값으로 돌아간다
         expect(result).toEqual({
           id: first.id,
           templateId: tpl.id.toString(),
-          tokenKey: 'NAME',
+          tokenKey: 'name',
+          label: '이름',
           defaultText: '나',
           maxLength: 12,
           sortOrder: 3,
@@ -313,6 +848,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
           posY: 2000,
           width: 8000,
           height: 1500,
+          textColor: '#000000',
+          textAlign: 'CENTER',
         });
         const rows = await prisma.productCustomTextToken.findMany({
           where: { template_id: tpl.id, deleted_at: undefined },
@@ -324,24 +861,25 @@ describe('SellerCustomTemplateService (real DB)', () => {
           orderBy: { id: 'asc' },
         });
         expect(audits.map((a) => a.after_json)).toEqual([
-          { tokenId: first.id, tokenKey: 'NAME' },
-          { tokenId: first.id, tokenKey: 'NAME' },
+          { tokenId: first.id, tokenKey: 'name' },
+          { tokenId: first.id, tokenKey: 'name' },
         ]);
       });
 
       it('활성 슬롯과 키가 겹치면 CUSTOM_TEXT_TOKEN_KEY_TAKEN이고 아무것도 바뀌지 않는다', async () => {
         const { accountId, storeId, product } = await setupSellerWithProduct();
         const tpl = await createTemplate(product.id);
-        const live = await prisma.productCustomTextToken.create({
-          data: { template_id: tpl.id, token_key: 'NAME', default_text: '가' },
+        const live = await createCustomTextToken(prisma, {
+          template_id: tpl.id,
+          token_key: 'name',
+          default_text: '가',
         });
 
         await expect(
-          service.sellerUpsertProductCustomTextToken(accountId, {
-            templateId: tpl.id.toString(),
-            tokenKey: 'NAME',
-            defaultText: '나',
-          }),
+          service.sellerUpsertProductCustomTextToken(
+            accountId,
+            slot(tpl.id, { defaultText: '나' }),
+          ),
         ).rejects.toThrowDomain('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
 
         const after = await prisma.productCustomTextToken.findUniqueOrThrow({
@@ -361,25 +899,21 @@ describe('SellerCustomTemplateService (real DB)', () => {
         async (_label, deletedAt) => {
           const { accountId, product } = await setupSellerWithProduct();
           const tpl = await createTemplate(product.id);
-          await prisma.productCustomTextToken.create({
-            data: {
-              template_id: tpl.id,
-              token_key: 'TAKEN',
-              default_text: 'x',
-              deleted_at: deletedAt,
-            },
+          await createCustomTextToken(prisma, {
+            template_id: tpl.id,
+            token_key: 'taken',
+            deleted_at: deletedAt,
           });
-          const mine = await prisma.productCustomTextToken.create({
-            data: { template_id: tpl.id, token_key: 'MINE', default_text: 'y' },
+          const mine = await createCustomTextToken(prisma, {
+            template_id: tpl.id,
+            token_key: 'mine',
           });
 
           await expect(
-            service.sellerUpsertProductCustomTextToken(accountId, {
-              templateId: tpl.id.toString(),
-              tokenId: mine.id.toString(),
-              tokenKey: 'TAKEN',
-              defaultText: 'y',
-            }),
+            service.sellerUpsertProductCustomTextToken(
+              accountId,
+              slot(tpl.id, { tokenId: mine.id.toString(), tokenKey: 'taken' }),
+            ),
           ).rejects.toThrowDomain('CUSTOM_TEXT_TOKEN_KEY_TAKEN');
         },
       );
@@ -389,29 +923,22 @@ describe('SellerCustomTemplateService (real DB)', () => {
         const other = await setupSellerWithProduct();
         const myTpl = await createTemplate(me.product.id);
         const othersTpl = await createTemplate(other.product.id);
-        const othersLive = await prisma.productCustomTextToken.create({
-          data: {
-            template_id: othersTpl.id,
-            token_key: 'NAME',
-            default_text: 'a',
-          },
+        const othersLive = await createCustomTextToken(prisma, {
+          template_id: othersTpl.id,
+          token_key: 'name',
         });
-        const othersDeleted = await prisma.productCustomTextToken.create({
-          data: {
-            template_id: othersTpl.id,
-            token_key: 'GONE',
-            default_text: 'b',
-            deleted_at: new Date(),
-          },
+        const othersDeleted = await createCustomTextToken(prisma, {
+          template_id: othersTpl.id,
+          token_key: 'gone',
+          deleted_at: new Date(),
         });
 
         const created = await Promise.all(
-          ['NAME', 'GONE'].map((tokenKey) =>
-            service.sellerUpsertProductCustomTextToken(me.accountId, {
-              templateId: myTpl.id.toString(),
-              tokenKey,
-              defaultText: '내것',
-            }),
+          ['name', 'gone'].map((tokenKey) =>
+            service.sellerUpsertProductCustomTextToken(
+              me.accountId,
+              slot(myTpl.id, { tokenKey, defaultText: '내것' }),
+            ),
           ),
         );
 
@@ -439,23 +966,20 @@ describe('SellerCustomTemplateService (real DB)', () => {
             await setupSellerWithProduct();
           const tpl = await createTemplate(product.id);
           if (withDeleted) {
-            await prisma.productCustomTextToken.create({
-              data: {
-                template_id: tpl.id,
-                token_key: 'NAME',
-                default_text: 'old',
-                deleted_at: new Date(),
-              },
+            await createCustomTextToken(prisma, {
+              template_id: tpl.id,
+              token_key: 'name',
+              default_text: 'old',
+              deleted_at: new Date(),
             });
           }
 
           const results = await Promise.allSettled(
             ['A', 'B'].map((defaultText) =>
-              service.sellerUpsertProductCustomTextToken(accountId, {
-                templateId: tpl.id.toString(),
-                tokenKey: 'NAME',
-                defaultText,
-              }),
+              service.sellerUpsertProductCustomTextToken(
+                accountId,
+                slot(tpl.id, { defaultText }),
+              ),
             ),
           );
 
@@ -498,8 +1022,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
     it('soft-delete + audit log', async () => {
       const { accountId, storeId, product } = await setupSellerWithProduct();
       const tpl = await createTemplate(product.id);
-      const token = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'A', default_text: '가' },
+      const token = await createCustomTextToken(prisma, {
+        template_id: tpl.id,
       });
 
       await service.sellerDeleteProductCustomTextToken(accountId, token.id);
@@ -531,12 +1055,8 @@ describe('SellerCustomTemplateService (real DB)', () => {
     it('정상 재정렬', async () => {
       const { accountId, product } = await setupSellerWithProduct();
       const tpl = await createTemplate(product.id);
-      const t1 = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'A', default_text: 'a' },
-      });
-      const t2 = await prisma.productCustomTextToken.create({
-        data: { template_id: tpl.id, token_key: 'B', default_text: 'b' },
-      });
+      const t1 = await createCustomTextToken(prisma, { template_id: tpl.id });
+      const t2 = await createCustomTextToken(prisma, { template_id: tpl.id });
 
       const result = await service.sellerReorderProductCustomTextTokens(
         accountId,
@@ -572,6 +1092,7 @@ describe('SellerCustomTemplateService (real DB)', () => {
             baseImageUrl: url(accountId),
           }),
         ).rejects.toThrowDomain('INVALID_IMAGE_URL');
+        expect(readImageSize).not.toHaveBeenCalled();
       },
     );
   });

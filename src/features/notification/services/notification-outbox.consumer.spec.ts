@@ -37,7 +37,7 @@ function event(
   };
 }
 
-// 알림 생성의 단일 진입점 — payload 스냅샷 → 알림 컬럼 매핑, SUBMITTED 무시, 재전달 멱등, 형식 오류는 던진다.
+// 알림 생성의 단일 진입점 — payload 스냅샷 → 알림 컬럼 매핑, 대상 아닌 전이 무시, 재전달 멱등, 형식 오류는 던진다.
 describe('NotificationOutboxConsumer (real DB)', () => {
   let consumer: NotificationOutboxConsumer;
   let repo: NotificationRepository;
@@ -104,7 +104,34 @@ describe('NotificationOutboxConsumer (real DB)', () => {
       expect(row.body).toContain('ORD-77');
     });
 
-    it('SUBMITTED 전이는 알림 없이 정상 소비되고, 같은 이벤트 재전달은 중복을 만들지 않는다', async () => {
+    it('입금 확인(PENDING_PAYMENT → SUBMITTED)은 구매자에게 ORDER_PAYMENT_CONFIRMED 알림을 만든다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+
+      await consumer.handle(
+        event('order.status_changed', {
+          orderId: order.id.toString(),
+          orderNumber: 'ORD-9',
+          buyerAccountId: buyer.id.toString(),
+          fromStatus: 'PENDING_PAYMENT',
+          toStatus: 'SUBMITTED',
+          storeId: null,
+          storeName: null,
+          productId: null,
+          productName: null,
+        }),
+      );
+
+      const row = await prisma.notification.findFirstOrThrow();
+      expect(row).toMatchObject({
+        account_id: buyer.id,
+        event: 'ORDER_PAYMENT_CONFIRMED',
+        title: '입금확인',
+        body: 'ORD-9 입금이 확인되어 주문이 접수되었어요.',
+      });
+    });
+
+    it('알림 대상이 아닌 전이는 알림 없이 정상 소비되고, 같은 이벤트 재전달은 중복을 만들지 않는다', async () => {
       const buyer = await createAccount(prisma, { account_type: 'USER' });
       const order = await createOrder(prisma, { account_id: buyer.id });
       const submitted = event('order.status_changed', {
@@ -112,7 +139,7 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         orderNumber: 'ORD-1',
         buyerAccountId: buyer.id.toString(),
         fromStatus: 'SUBMITTED',
-        toStatus: 'SUBMITTED',
+        toStatus: 'PENDING_PAYMENT',
         storeId: null,
         storeName: null,
         productId: null,
@@ -128,6 +155,185 @@ describe('NotificationOutboxConsumer (real DB)', () => {
       await consumer.handle(canceled);
       await consumer.handle(canceled);
       expect(await prisma.notification.count()).toBe(1);
+    });
+  });
+
+  describe('취소·환불', () => {
+    it('구매자 본인 취소는 알림 없이 소비되고, 운영자 취소는 사유 라벨을 붙여 알린다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const base = {
+        orderId: order.id.toString(),
+        orderNumber: 'ORD-3',
+        buyerAccountId: buyer.id.toString(),
+        fromStatus: 'SUBMITTED',
+        toStatus: 'CANCELED',
+        storeId: null,
+        storeName: null,
+        productId: null,
+        productName: null,
+        cancelReason: 'BUYER_REQUEST',
+        refundAmount: 10_000,
+        pickupAt: '2026-09-20T03:00:00.000Z',
+      };
+
+      await consumer.handle(
+        event('order.status_changed', { ...base, actorType: 'BUYER' }),
+      );
+      expect(await prisma.notification.count()).toBe(0);
+
+      await consumer.handle(
+        event(
+          'order.status_changed',
+          { ...base, actorType: 'ADMIN', cancelReason: 'OUT_OF_MATERIALS' },
+          '22222222-2222-4222-8222-222222222222',
+        ),
+      );
+      await expect(
+        prisma.notification.findFirstOrThrow(),
+      ).resolves.toMatchObject({
+        event: 'ORDER_CANCELED',
+        body: 'ORD-3 주문이 취소되었어요. 사유: 재료 소진',
+      });
+    });
+
+    it('refund.requested는 구매자에게 환불 계좌 입력 요청을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const item = await createOrderItem(prisma, { order_id: order.id });
+      const requested = event('refund.requested', {
+        refundId: '5',
+        orderId: order.id.toString(),
+        orderNumber: 'ORD-4',
+        buyerAccountId: buyer.id.toString(),
+        kind: 'CANCEL',
+        amount: 12_500,
+        storeId: item.store_id.toString(),
+        storeName: '케이크샵',
+        productId: item.product_id.toString(),
+        productName: '레터링 케이크',
+      });
+
+      await consumer.handle(requested);
+      await consumer.handle(requested);
+
+      const rows = await prisma.notification.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'REFUND_ACCOUNT_REQUESTED',
+        title: '환불계좌입력',
+        body: 'ORD-4 12,500원을 돌려받을 계좌를 입력해 주세요.',
+        order_id: order.id,
+        store_id: item.store_id,
+        product_id: item.product_id,
+        order_number: 'ORD-4',
+        store_name: '케이크샵',
+        created_at: OCCURRED_AT,
+      });
+    });
+
+    it('반증: 형식이 어긋난 refund.requested는 던진다', async () => {
+      await expect(
+        consumer.handle(event('refund.requested', { refundId: 5 })),
+      ).rejects.toThrow('payload 형식 오류');
+    });
+
+    async function refundPayload(orderNumber: string) {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+      const item = await createOrderItem(prisma, { order_id: order.id });
+      return {
+        buyer,
+        order,
+        item,
+        payload: {
+          refundId: '6',
+          orderId: order.id.toString(),
+          orderNumber,
+          buyerAccountId: buyer.id.toString(),
+          kind: 'DEPOSIT_RETURN',
+          amount: 30_000,
+          storeId: item.store_id.toString(),
+          storeName: '케이크샵',
+          productId: item.product_id.toString(),
+          productName: '레터링 케이크',
+        },
+      };
+    }
+
+    it('취소와 함께 계좌가 들어온 refund.requested는 계좌 요청 알림을 만들지 않는다', async () => {
+      const { payload } = await refundPayload('ORD-5');
+
+      await consumer.handle(
+        event('refund.requested', { ...payload, accountSubmitted: true }),
+      );
+
+      expect(await prisma.notification.count()).toBe(0);
+    });
+
+    it('refund.completed는 구매자에게 환불 완료 알림을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+      const { buyer, order, item, payload } = await refundPayload('ORD-6');
+      const completed = event('refund.completed', payload);
+
+      await consumer.handle(completed);
+      await consumer.handle(completed);
+
+      const rows = await prisma.notification.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        account_id: buyer.id,
+        type: 'ORDER_STATUS',
+        event: 'REFUND_COMPLETED',
+        title: '환불완료',
+        body: 'ORD-6 30,000원 환불이 완료되었어요.',
+        order_id: order.id,
+        store_id: item.store_id,
+        product_id: item.product_id,
+        order_number: 'ORD-6',
+        created_at: OCCURRED_AT,
+      });
+    });
+
+    it('반증: 형식이 어긋난 refund.completed는 던진다', async () => {
+      await expect(
+        consumer.handle(event('refund.completed', { refundId: 6 })),
+      ).rejects.toThrow('refund.completed payload 형식 오류');
+    });
+  });
+
+  it('order.pickup_rescheduled는 구매자에게 바뀐 픽업 일시(KST) 알림을 만들고, 재전달은 중복을 만들지 않는다', async () => {
+    const buyer = await createAccount(prisma, { account_type: 'USER' });
+    const order = await createOrder(prisma, { account_id: buyer.id });
+    const item = await createOrderItem(prisma, { order_id: order.id });
+    const rescheduled = event('order.pickup_rescheduled', {
+      orderId: order.id.toString(),
+      orderNumber: 'ORD-5',
+      buyerAccountId: buyer.id.toString(),
+      storeId: item.store_id.toString(),
+      storeName: '케이크샵',
+      productId: item.product_id.toString(),
+      productName: '레터링 케이크',
+      fromPickupAt: '2026-09-20T05:00:00.000Z',
+      toPickupAt: '2026-09-21T06:30:00.000Z',
+    });
+
+    await consumer.handle(rescheduled);
+    await consumer.handle(rescheduled);
+
+    const rows = await prisma.notification.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      account_id: buyer.id,
+      type: 'ORDER_STATUS',
+      event: 'ORDER_PICKUP_RESCHEDULED',
+      title: '픽업변경',
+      body: 'ORD-5 픽업 일시가 9/21 15:30로 변경되었어요.',
+      order_id: order.id,
+      store_id: item.store_id,
+      product_id: item.product_id,
+      created_at: OCCURRED_AT,
     });
   });
 

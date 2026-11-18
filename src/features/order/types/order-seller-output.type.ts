@@ -1,12 +1,17 @@
 import type {
+  OrderAutoTransitionTimes,
+  OrderCancellationOutput,
   OrderItemDetailOutput,
+  OrderPickupChangeOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { OrderSettlementFieldsOutput } from '@/features/order/types/order-settlement-output.type';
+import type { OrderStatus, PaymentMethod } from '@/generated/prisma/client';
 
 export interface SellerOrderSummaryOutput {
   id: string;
   orderNumber: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
@@ -14,16 +19,22 @@ export interface SellerOrderSummaryOutput {
   createdAt: Date;
   firstItemName: string | null;
   firstItemImageUrl: string | null;
+  hasCustom: boolean;
+  firstItemCustomImageUrl: string | null;
+  confirmDeadlineAt: Date | null;
 }
 
-export interface SellerOrderDetailOutput {
+export interface SellerOrderDetailOutput
+  extends OrderAutoTransitionTimes, OrderSettlementFieldsOutput {
   id: string;
   orderNumber: string;
   accountId: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
+  requestNote: string | null;
+  paymentMethod: PaymentMethod | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;
@@ -36,16 +47,25 @@ export interface SellerOrderDetailOutput {
   updatedAt: Date;
   items: OrderItemDetailOutput[];
   statusHistories: OrderStatusHistoryOutput[];
+  cancellation: OrderCancellationOutput | null;
+  canMarkNoShow: boolean;
+  pickupChanges: OrderPickupChangeOutput[];
 }
+
+/** SDL SellerOrderUpdateKind. PICKUP_RESCHEDULED는 판매자 픽업 일시 변경이 발행한다. */
+export type SellerOrderUpdateKind =
+  'SUBMITTED' | 'STATUS_CHANGED' | 'PICKUP_RESCHEDULED';
 
 /** 구독 이벤트 payload — Redis JSON 직렬화를 거치므로 날짜는 ISO 문자열. */
 export interface SellerOrderUpdateEvent {
+  kind: SellerOrderUpdateKind;
   orderId: string;
   orderNumber: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'MADE' | 'PICKED_UP' | 'CANCELED';
+  status: OrderStatus;
   pickupAt: string;
   buyerName: string;
   totalPrice: number;
   productName: string;
+  hasCustom: boolean;
   updatedAt: string;
 }

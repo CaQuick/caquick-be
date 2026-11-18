@@ -6,7 +6,7 @@ import type {
   ICatalogQuery,
   InquiryStoreRow,
 } from '@/features/store/repositories/store-catalog-query.repository.interface';
-import { activeWhere, PrismaService, visibleWhere } from '@/prisma';
+import { activeWhere, PrismaService } from '@/prisma';
 
 /** CatalogQuery 포트의 모놀리스 구현. 서비스로 분리되면 클라이언트 구현으로 바뀐다. */
 @Injectable()
@@ -15,12 +15,13 @@ export class StoreCatalogQueryRepository implements ICatalogQuery {
 
   async findInquiryStore(storeId: bigint): Promise<InquiryStoreRow | null> {
     return this.prisma.store.findFirst({
-      where: { id: storeId, ...visibleWhere },
+      where: { id: storeId, ...activeWhere },
       select: {
         id: true,
         store_name: true,
         profile_image_url: true,
         greeting_message: true,
+        is_active: true,
         business_hours: {
           where: activeWhere,
           orderBy: { day_of_week: 'asc' },

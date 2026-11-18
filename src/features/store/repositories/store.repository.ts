@@ -177,11 +177,13 @@ export class StoreRepository {
     return new Map(rows.map((r) => [r.store_id, r.capacity]));
   }
 
+  /** activeOnly=false는 판매자 픽업 변경용 — 숨긴 매장의 진행 주문도 옮길 수 있다. */
   async findStoreForPickupSchedule(
     storeId: bigint,
+    activeOnly = true,
   ): Promise<StorePickupPolicyRow | null> {
     return this.prisma.store.findFirst({
-      where: { id: storeId, is_active: true },
+      where: { id: storeId, ...(activeOnly ? { is_active: true } : {}) },
       select: {
         id: true,
         pickup_slot_interval_minutes: true,
@@ -189,6 +191,18 @@ export class StoreRepository {
         max_days_ahead: true,
       },
     });
+  }
+
+  /** 그 매장의 판매 중 상품만 찾는다. 다른 매장 상품이거나 판매 중이 아니면 null. */
+  async findProductPreparationTimeMinutes(
+    storeId: bigint,
+    productId: bigint,
+  ): Promise<number | null> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, store_id: storeId, ...visibleWhere },
+      select: { preparation_time_minutes: true },
+    });
+    return product?.preparation_time_minutes ?? null;
   }
 
   async findBusinessHoursForStore(

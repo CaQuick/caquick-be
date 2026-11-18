@@ -23,7 +23,7 @@ import { ProductRepository } from '@/features/product';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
 
 /**
- * 요청 시 계산하며 스냅샷 테이블은 두지 않는다(관리자 대시보드와 동일). 읽기 7개를 트랜잭션으로 묶지 않는다 —
+ * 요청 시 계산하며 스냅샷 테이블은 두지 않는다(관리자 대시보드와 동일). 읽기 8개를 트랜잭션으로 묶지 않는다 —
  * 카드 간 ms 단위 불일치는 허용. capacity는 catalog 정본을, 예약 수량은 픽업 판정과 같은 포트를 읽는다.
  */
 @Injectable()
@@ -59,6 +59,7 @@ export class SellerDashboardService extends SellerBaseService {
       createdDay,
       capacityRow,
       bookedByStore,
+      pendingPaymentQuantity,
       activeProductCount,
       unansweredConversationCount,
     ] = await Promise.all([
@@ -73,10 +74,15 @@ export class SellerDashboardService extends SellerBaseService {
         storeId,
         from: dayStartUtc,
         to: dayEndUtc,
-        basis: 'created',
+        basis: 'submitted',
       }),
       this.repo.findStoreDailyCapacityByDate(storeId, dateOnlyUtc),
       this.booked.sumByStore([storeId], dayStartUtc, dayEndUtc),
+      this.orders.sumPendingPaymentQuantityByStore({
+        storeId,
+        from: dayStartUtc,
+        to: dayEndUtc,
+      }),
       this.products.countProductsByStore({ storeId, isActive: true }),
       this.conversations.countUnansweredConversationsByStore(storeId),
     ]);
@@ -94,6 +100,7 @@ export class SellerDashboardService extends SellerBaseService {
       remainingCapacity:
         capacity === null ? null : Math.max(capacity - bookedQuantity, 0),
       bookedQuantity,
+      pendingPaymentQuantity,
       activeProductCount,
       unansweredConversationCount,
     };

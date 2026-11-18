@@ -2,6 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { AdminCancelOrderInput } from '@/features/order/dto/inputs/admin-cancel-order.input';
+import { AdminCompleteOrderPickupInput } from '@/features/order/dto/inputs/admin-complete-order-pickup.input';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import type { AdminOrderSummaryOutput } from '@/features/order/types/order-admin-output.type';
 import {
@@ -25,5 +26,16 @@ export class AdminOrderMutationResolver {
     @Args('input') input: AdminCancelOrderInput,
   ): Promise<AdminOrderSummaryOutput> {
     return this.orderService.adminCancelOrder(parseAccountId(user), input);
+  }
+
+  @Mutation('adminCompleteOrderPickup')
+  adminCompleteOrderPickup(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: AdminCompleteOrderPickupInput,
+  ): Promise<AdminOrderSummaryOutput> {
+    return this.orderService.adminCompleteOrderPickup(
+      parseAccountId(user),
+      input,
+    );
   }
 }

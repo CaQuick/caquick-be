@@ -18,6 +18,7 @@ import {
   type StoreWeekdayBusinessHourRow,
 } from '@/features/store/repositories/store.repository';
 import {
+  effectiveLeadTimeMinutes,
   evaluatePickupDay,
   type PickupDayInput,
 } from '@/features/store/services/store-pickup-policy.helper';
@@ -41,6 +42,13 @@ interface ScheduleContext {
   closureDates: Set<string>;
   capacities: Map<string, number>;
   bookedByDate: Map<string, number>;
+  required: number;
+}
+
+/** 픽업 변경 달력에서 옮길 주문이 지금 점유한 수량. 그 날짜(KST 'YYYY-MM-DD') 예약 수량에서 뺀다. */
+export interface BookedAdjustment {
+  date: string;
+  quantity: number;
 }
 
 @Injectable()
@@ -55,16 +63,30 @@ export class StorePickupScheduleService {
   async pickupCalendar(
     storeId: bigint,
     yearMonth: string,
+    productId: bigint | null = null,
   ): Promise<PickupCalendar> {
-    const ym = parseKstYearMonth(yearMonth);
-    if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
-      throw new DomainException('INVALID_YEAR_MONTH');
-    }
-    const store = await this.repo.findStoreForPickupSchedule(storeId);
-    if (!store) {
-      throw new DomainException('STORE_NOT_FOUND');
-    }
+    const ym = parseScheduleYearMonth(yearMonth);
+    const store = await this.findScheduleStore(storeId, productId);
+    return this.buildCalendar(store, ym, yearMonth);
+  }
 
+  /** 판매자 픽업 변경 달력: 리드타임·제작 시간 없이(과거만 막는다) 숨긴 매장도 계산하고, 옮길 주문의 수량은 빼고 센다. */
+  async rescheduleCalendar(
+    storeId: bigint,
+    yearMonth: string,
+    adjustment: BookedAdjustment,
+  ): Promise<PickupCalendar> {
+    const ym = parseScheduleYearMonth(yearMonth);
+    const store = await this.findRescheduleStore(storeId);
+    return this.buildCalendar(store, ym, yearMonth, adjustment);
+  }
+
+  private async buildCalendar(
+    store: StorePickupPolicyRow,
+    ym: { year: number; month: number },
+    yearMonth: string,
+    adjustment?: BookedAdjustment,
+  ): Promise<PickupCalendar> {
     const now = this.clock.now();
     const dayCount = daysInMonth(ym.year, ym.month);
     // 조회는 월 범위 벌크 4회로 끝내고, 날짜 루프에서는 추가 쿼리를 내지 않는다
@@ -74,6 +96,7 @@ export class StorePickupScheduleService {
       new Date(Date.UTC(ym.year, ym.month, 1)),
       kstMidnightUtc(ym.year, ym.month, 1),
       kstMidnightUtc(ym.year, ym.month + 1, 1),
+      { withCapacity: true, adjustment },
     );
 
     const days: PickupDay[] = Array.from({ length: dayCount }, (_, index) => {
@@ -97,20 +120,31 @@ export class StorePickupScheduleService {
   async pickupTimeSlots(
     storeId: bigint,
     date: string,
+    productId: bigint | null = null,
   ): Promise<PickupTimeSlots> {
-    const parsed = parseKstDate(date);
-    if (!parsed) {
-      throw new DomainException('INVALID_DATE');
-    }
-    const { year, month, day } = toKstYmd(parsed);
-    if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
-      throw new DomainException('INVALID_DATE');
-    }
-    const store = await this.repo.findStoreForPickupSchedule(storeId);
-    if (!store) {
-      throw new DomainException('STORE_NOT_FOUND');
-    }
+    const parsed = parseScheduleDate(date);
+    const store = await this.findScheduleStore(storeId, productId);
+    return this.buildTimeSlots(store, date, parsed);
+  }
 
+  /** 판매자 픽업 변경 슬롯. 규칙은 rescheduleCalendar와 같다. */
+  async rescheduleTimeSlots(
+    storeId: bigint,
+    date: string,
+    adjustment: BookedAdjustment,
+  ): Promise<PickupTimeSlots> {
+    const parsed = parseScheduleDate(date);
+    const store = await this.findRescheduleStore(storeId);
+    return this.buildTimeSlots(store, date, parsed, adjustment);
+  }
+
+  private async buildTimeSlots(
+    store: StorePickupPolicyRow,
+    date: string,
+    parsed: Date,
+    adjustment?: BookedAdjustment,
+  ): Promise<PickupTimeSlots> {
+    const { year, month, day } = toKstYmd(parsed);
     const now = this.clock.now();
     const ctx = await this.loadScheduleContext(
       store.id,
@@ -118,6 +152,7 @@ export class StorePickupScheduleService {
       new Date(Date.UTC(year, month - 1, day + 1)),
       parsed,
       kstMidnightUtc(year, month, day + 1),
+      { withCapacity: true, adjustment },
     );
 
     const input = this.pickupDayInput(store, ctx, now, year, month, day);
@@ -150,13 +185,24 @@ export class StorePickupScheduleService {
    * **capacity는 보지 않는다** — 일일 수량 판정은 order가 자기 복제본으로만 한다.
    * 여기서 catalog 설정을 함께 보면 복제 지연 구간에 두 소스가 어긋나 "복제본 없으면 무제한"이 깨진다.
    * 매장이 없거나 비활성이면 false(존재 검증은 호출부 책임).
+   * 판매자 픽업 변경은 leadTime 'SKIP'(리드타임·제작 시간 없이 과거만 막는다)·storeActiveOnly false(숨긴 매장 허용)로 부른다.
    */
   async isPickupSlotAvailable(args: {
     storeId: bigint;
     pickupAt: Date;
+    preparationTimeMinutes: number;
+    leadTime?: 'APPLY' | 'SKIP';
+    storeActiveOnly?: boolean;
   }): Promise<boolean> {
-    const store = await this.repo.findStoreForPickupSchedule(args.storeId);
-    if (!store) return false;
+    const found = await this.repo.findStoreForPickupSchedule(
+      args.storeId,
+      args.storeActiveOnly ?? true,
+    );
+    if (!found) return false;
+    const store =
+      args.leadTime === 'SKIP'
+        ? withoutLeadTime(found)
+        : withPreparationTime(found, args.preparationTimeMinutes);
 
     // 슬롯은 분 단위 시작 시각 포인트 — 초 이하가 남아 있으면 슬롯 정합 실패
     if (
@@ -190,6 +236,36 @@ export class StorePickupScheduleService {
     );
   }
 
+  /** 상품을 주면 그 상품 제작 시간까지 하한에 반영한다. */
+  private async findScheduleStore(
+    storeId: bigint,
+    productId: bigint | null,
+  ): Promise<StorePickupPolicyRow> {
+    const store = await this.repo.findStoreForPickupSchedule(storeId);
+    if (!store) {
+      throw new DomainException('STORE_NOT_FOUND');
+    }
+    if (productId === null) return store;
+    const preparation = await this.repo.findProductPreparationTimeMinutes(
+      store.id,
+      productId,
+    );
+    if (preparation === null) {
+      throw new DomainException('PRODUCT_NOT_FOUND');
+    }
+    return withPreparationTime(store, preparation);
+  }
+
+  private async findRescheduleStore(
+    storeId: bigint,
+  ): Promise<StorePickupPolicyRow> {
+    const store = await this.repo.findStoreForPickupSchedule(storeId, false);
+    if (!store) {
+      throw new DomainException('STORE_NOT_FOUND');
+    }
+    return withoutLeadTime(store);
+  }
+
   /** withCapacity=false면 capacity·예약 수량을 읽지 않는다(주문 생성 재검증 — 수량 판정은 order 몫). */
   private async loadScheduleContext(
     storeId: bigint,
@@ -197,7 +273,7 @@ export class StorePickupScheduleService {
     toDateOnly: Date,
     rangeStartUtc: Date,
     rangeEndUtc: Date,
-    options: { withCapacity: boolean } = { withCapacity: true },
+    options: { withCapacity: boolean; adjustment?: BookedAdjustment },
   ): Promise<ScheduleContext> {
     const [hours, closureDates, capacities, bookedByDate] = await Promise.all([
       this.repo.findBusinessHoursForStore(storeId),
@@ -217,11 +293,21 @@ export class StorePickupScheduleService {
         ? this.booked.sumByKstDate(storeId, rangeStartUtc, rangeEndUtc)
         : new Map<string, number>(),
     ]);
+    const { adjustment } = options;
+    const adjusted = adjustment && bookedByDate.get(adjustment.date);
+    if (adjustment && adjusted !== undefined) {
+      bookedByDate.set(
+        adjustment.date,
+        Math.max(0, adjusted - adjustment.quantity),
+      );
+    }
     return {
       hoursByWeekday: new Map(hours.map((h) => [h.day_of_week, h])),
       closureDates,
       capacities,
       bookedByDate,
+      // 옮길 주문은 수량 전체가 들어가야 한다
+      required: Math.max(1, adjustment?.quantity ?? 1),
     };
   }
 
@@ -242,10 +328,52 @@ export class StorePickupScheduleService {
       isSpecialClosure: ctx.closureDates.has(dateKey),
       capacity: ctx.capacities.get(dateKey),
       booked: ctx.bookedByDate.get(dateKey) ?? 0,
+      required: ctx.required,
       now,
       dayStartUtc: kstMidnightUtc(year, month, day),
     };
   }
+}
+
+function withPreparationTime(
+  store: StorePickupPolicyRow,
+  preparationTimeMinutes: number,
+): StorePickupPolicyRow {
+  return {
+    ...store,
+    min_lead_time_minutes: effectiveLeadTimeMinutes(
+      store.min_lead_time_minutes,
+      preparationTimeMinutes,
+    ),
+  };
+}
+
+/** 판매자 픽업 변경은 리드타임·제작 시간을 보지 않는다 — 하한은 지금(과거 금지)이다. */
+function withoutLeadTime(store: StorePickupPolicyRow): StorePickupPolicyRow {
+  return { ...store, min_lead_time_minutes: 0 };
+}
+
+function parseScheduleYearMonth(yearMonth: string): {
+  year: number;
+  month: number;
+} {
+  const ym = parseKstYearMonth(yearMonth);
+  if (!ym || ym.year < MIN_SCHEDULE_YEAR || ym.year > MAX_SCHEDULE_YEAR) {
+    throw new DomainException('INVALID_YEAR_MONTH');
+  }
+  return ym;
+}
+
+function parseScheduleDate(date: string): Date {
+  const parsed = parseKstDate(date);
+  if (!parsed) {
+    throw new DomainException('INVALID_DATE');
+  }
+  const { year } = toKstYmd(parsed);
+  if (year < MIN_SCHEDULE_YEAR || year > MAX_SCHEDULE_YEAR) {
+    throw new DomainException('INVALID_DATE');
+  }
+  return parsed;
 }
 
 function slotMinutes(slot: PickupSlot): number {

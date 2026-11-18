@@ -35,6 +35,8 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/prisma ./prisma
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/scripts ./scripts
+# 3D 카탈로그 에셋 — worker 컨테이너에서 yarn catalog:upload로 올린다(infra/runbook.md)
+COPY --from=build --chown=node:node /app/assets ./assets
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/dist ./dist
 # corepack은 첫 실행 때 패키지 매니저를 내려받으려 한다(런타임 네트워크 의존) — 릴리즈 파일을 바로 yarn으로 건다

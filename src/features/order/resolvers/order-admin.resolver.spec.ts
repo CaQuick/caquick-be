@@ -5,7 +5,9 @@ import { PubSub } from 'graphql-subscriptions';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { AccountAdminRepository } from '@/features/auth/repositories/account-admin.repository';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
@@ -17,6 +19,7 @@ import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createOrder,
   createOrderItem,
   createUserProfile,
 } from '@/test/factories';
@@ -37,6 +40,8 @@ describe('Admin Order Resolvers (real DB)', () => {
         AccountAdminRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderCancelPolicy,
+        OrderTransitionRepository,
         OrderEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
@@ -80,10 +85,55 @@ describe('Admin Order Resolvers (real DB)', () => {
     const detail = await queryResolver.adminOrder(user, order.id.toString());
     expect(detail.items).toHaveLength(1);
 
+    expect(detail.cancelOptions).toMatchObject({
+      cancelable: true,
+      refundRule: 'FULL_REFUND',
+    });
+
     const canceled = await mutationResolver.adminCancelOrder(user, {
       orderId: order.id.toString(),
+      reason: 'OTHER',
       note: '운영 판단',
     });
     expect(canceled.status).toBe('CANCELED');
+  });
+
+  it('확정 주문 픽업 완료 경로', async () => {
+    const actor = await createAccount(prisma, { account_type: 'ADMIN' });
+    const user = {
+      accountId: actor.id.toString(),
+      accountType: 'ADMIN' as const,
+    };
+    const order = await createOrder(prisma, { status: 'CONFIRMED' });
+    await createOrderItem(prisma, { order_id: order.id });
+    await createUserProfile(prisma, { account_id: order.account_id });
+
+    const result = await mutationResolver.adminCompleteOrderPickup(user, {
+      orderId: order.id.toString(),
+      note: '매장 인도 확인',
+    });
+
+    expect(result.status).toBe('PICKED_UP');
+    const detail = await queryResolver.adminOrder(user, order.id.toString());
+    expect(detail.statusHistories[0]).toMatchObject({
+      toStatus: 'PICKED_UP',
+      actorType: 'ADMIN',
+    });
+    expect(detail.autoPickupAt).toBeNull();
+  });
+
+  it('매장 진행 주문 요약 경로', async () => {
+    const actor = await createAccount(prisma, { account_type: 'ADMIN' });
+    const item = await createOrderItem(prisma);
+
+    const summary = await queryResolver.adminStoreInProgressOrderSummary(
+      { accountId: actor.id.toString(), accountType: 'ADMIN' },
+      item.store_id.toString(),
+    );
+    expect(summary).toEqual({
+      storeId: item.store_id.toString(),
+      totalCount: 1,
+      byStatus: [{ status: 'SUBMITTED', count: 1 }],
+    });
   });
 });

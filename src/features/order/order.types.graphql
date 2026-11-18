@@ -1,12 +1,17 @@
 """
-주문 상태. 구매자·판매자 API가 공용으로 쓴다.
+주문 상태. 구매자·판매자·관리자 API가 공용으로 쓴다. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
 
-전이는 `SUBMITTED → CONFIRMED → MADE → PICKED_UP` 한 방향이며 각 단계는 직전
-상태에서만 진입할 수 있다. `CANCELED`는 `PICKED_UP` 이전 세 상태에서만 가능하고,
-어떤 상태에서도 `SUBMITTED`로 되돌아갈 수 없다.
+흐름은 `PENDING_PAYMENT → SUBMITTED → CONFIRMED → MADE → PICKED_UP`이며 어떤 상태에서도
+앞 단계로 되돌아갈 수 없다. 판매자가 sellerUpdateOrderStatus로 바꿀 수 있는 전이는 `SUBMITTED → CONFIRMED`,
+`CONFIRMED → MADE`, `CONFIRMED·MADE → PICKED_UP·NO_SHOW`뿐이고, 취소는 주체별 취소 mutation(cancelMyOrder·sellerCancelOrder·adminCancelOrder)으로만 한다.
+관리자도 adminCompleteOrderPickup으로 확정·제작 완료 주문을 픽업 완료할 수 있다.
+시스템은 입금 기한(1시간)이 지난 입금 대기를 취소하고, 확정 마감이 지난 접수를 취소(전액 환불)하며,
+픽업 시각 + 24시간이 지난 확정·제작 완료를 픽업 완료로 바꾼다. 판매자에게는 입금이 확인된(접수된) 주문만 보인다.
 """
 enum OrderStatusType {
-  """구매자가 주문을 넣은 직후의 초기 상태. 판매자 확인 대기."""
+  """입금 대기. 주문 직후 계좌이체 입금을 기다리는 상태이고, 판매자에게 보이지 않는다."""
+  PENDING_PAYMENT
+  """입금이 확인돼 접수된 상태. 판매자 확인 대기."""
   SUBMITTED
   """판매자가 주문을 확인·수락한 상태. 제작 대기."""
   CONFIRMED
@@ -14,8 +19,24 @@ enum OrderStatusType {
   MADE
   """구매자가 수령을 마친 종료 상태. 이후 상태 변경 불가."""
   PICKED_UP
-  """취소된 종료 상태. 취소 처리에는 사유(note)가 필수다."""
+  """노쇼. 구매자가 픽업 시간에 오지 않아 판매자가 처리한 종료 상태. 환불 없음, 리뷰 불가."""
+  NO_SHOW
+  """취소된 종료 상태. 주체·사유·사정·환불은 주문 상세의 cancellation에 있다."""
   CANCELED
+}
+
+"""
+주문·결제·정산 기록을 남긴 주체. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum OrderActorType {
+  """구매자."""
+  BUYER
+  """판매자."""
+  SELLER
+  """관리자."""
+  ADMIN
+  """시스템 자동 처리."""
+  SYSTEM
 }
 
 """주문 상태 변경 이력 1건. 구매자·판매자·관리자 주문 상세가 공용으로 쓴다."""
@@ -27,8 +48,199 @@ type OrderStatusHistory {
   toStatus: OrderStatusType!
   """변경 시각."""
   changedAt: DateTime!
-  """변경 사유 메모. 취소(CANCELED) 전이에는 필수로 기록된다(관리자 취소는 '[관리자]' 접두)."""
+  """변경할 때 남긴 메모. 없으면 null. 예전 관리자 취소 이력은 '[관리자] ' 접두가 붙어 있다."""
   note: String
+  """변경한 주체."""
+  actorType: OrderActorType!
+  """취소 사유. 취소(CANCELED) 이력에만 있고 그 밖은 null."""
+  cancelReason: OrderCancelReasonType
+  """취소 사정. 확정·제작 완료 뒤 취소 이력에만 있고 그 밖은 null."""
+  cancelFault: OrderCancelFaultType
+  """취소로 돌려줄 금액(원). 취소 이력에만 있고(환불이 없으면 0) 그 밖은 null."""
+  refundAmount: Int
+}
+
+"""
+취소 사유. 값은 늘어날 수 있으니 모르는 값은 reasonLabel(또는 '기타')로 보여 준다.
+판매자는 앞의 여섯 값, 관리자는 여기에 입금 대기 주문의 PAYMENT_NOT_RECEIVED, 구매자는 BUYER_REQUEST(서버가 정한다)를 쓴다.
+"""
+enum OrderCancelReasonType {
+  """제작할 수 없는 디자인."""
+  DESIGN_NOT_FEASIBLE
+  """재료 소진."""
+  OUT_OF_MATERIALS
+  """일정 불가."""
+  SCHEDULE_UNAVAILABLE
+  """부적절한 요청."""
+  INAPPROPRIATE_REQUEST
+  """구매자 요청."""
+  BUYER_REQUEST
+  """기타. 결제 도입 전 취소 기록도 이 값이다."""
+  OTHER
+  """미입금. 입금 기한이 지났거나 관리자가 입금이 없다고 판단한 입금 대기 주문."""
+  PAYMENT_NOT_RECEIVED
+  """판매자가 확정 마감까지 확정하지 않아 자동 취소."""
+  CONFIRM_TIMEOUT
+}
+
+"""
+확정·제작 완료 뒤 취소의 사정. 환불액이 갈린다(판매자 사정 = 전액, 구매자 사정 = 취소자가 정한 금액).
+"""
+enum OrderCancelFaultType {
+  """판매자 사정."""
+  SELLER
+  """구매자 사정."""
+  BUYER
+}
+
+"""
+지금 상태에서 취소할 때의 환불 규칙.
+"""
+enum CancelRefundRuleType {
+  """환불 없음(입금 대기)."""
+  NO_REFUND
+  """결제액 전액 환불(접수)."""
+  FULL_REFUND
+  """사정에 따라: 판매자 사정은 전액, 구매자 사정은 0~결제액 중 입력한 금액(확정·제작 완료)."""
+  BY_FAULT
+}
+
+"""
+환불 종류.
+"""
+enum RefundKindType {
+  """주문 취소 환불."""
+  CANCEL
+  """주문과 별개로 들어온 입금을 돌려주는 반환."""
+  DEPOSIT_RETURN
+}
+
+"""
+환불 진행 상태. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum RefundStatusType {
+  """구매자의 환불 계좌 입력 대기."""
+  AWAITING_ACCOUNT
+  """계좌가 입력돼 케이퀵 송금 대기."""
+  AWAITING_TRANSFER
+  """송금 완료."""
+  COMPLETED
+}
+
+"""
+주간 정산 상태. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+"""
+enum SettlementStatusType {
+  """케이퀵의 매장 송금 대기."""
+  PENDING
+  """송금 완료."""
+  PAID
+}
+
+"""
+정산을 송금한 계좌(송금 시점 스냅샷). 계좌번호는 끝 4자리만 내려준다.
+"""
+type SettlementPaidAccount {
+  """
+  은행.
+  """
+  bank: Bank!
+  """
+  예금주.
+  """
+  accountHolder: String!
+  """
+  끝 4자리만 남긴 계좌번호(예: ****1234).
+  """
+  accountNumberMasked: String!
+}
+
+"""
+주간 정산에 묶인 주문 1건.
+"""
+type SettlementOrder {
+  orderId: ID!
+  """
+  주문번호.
+  """
+  orderNumber: String!
+  """
+  상품명(주문 시점 스냅샷). 품목이 없으면 null.
+  """
+  productName: String
+  """
+  주문 상태(픽업 완료·노쇼, 구매자 사정 취소의 남은 금액이면 취소).
+  """
+  status: OrderStatusType!
+  """
+  주문 생성 시점의 수수료율(bp, 1bp = 0.01%).
+  """
+  commissionRateBps: Int!
+  """
+  수수료 기준액(원). 결제 금액, 구매자 사정 취소면 결제 금액 − 환불 금액.
+  """
+  settlementBaseAmount: Int!
+  """
+  수수료(원). 기준액 × 수수료율, 원 미만 버림.
+  """
+  commissionAmount: Int!
+  """
+  매장 지급액(원) = 기준액 − 수수료.
+  """
+  payoutAmount: Int!
+  """
+  정산 확정 시각(픽업 완료·노쇼·구매자 사정 취소 시각). 이 시각이 속한 주(월~일, KST)가 끝난 뒤 첫 주간 정산에 묶인다.
+  """
+  settlementFinalizedAt: DateTime!
+}
+
+"""
+주문 취소 정보. 취소된 주문에만 있다.
+"""
+type OrderCancellation {
+  """취소한 주체."""
+  actorType: OrderActorType!
+  """취소 사유."""
+  reason: OrderCancelReasonType!
+  """취소 사유 표시 라벨(예: 재료 소진). 모르는 reason 값의 표시에 쓴다."""
+  reasonLabel: String!
+  """취소하며 남긴 메모. 없으면 null."""
+  note: String
+  """취소 사정. 확정·제작 완료 뒤 취소에만 있고 그 밖은 null."""
+  fault: OrderCancelFaultType
+  """돌려줄 금액(원). 환불이 없으면 0."""
+  refundAmount: Int!
+  """환불 진행 상태. 환불이 없으면 null."""
+  refundStatus: RefundStatusType
+  """환불 송금 완료 시각. 완료 전이거나 환불이 없으면 null."""
+  refundCompletedAt: DateTime
+  """취소 시각."""
+  canceledAt: DateTime!
+}
+
+"""
+구매자에게 돌려줄 돈 1건(취소 환불 또는 입금 반환).
+"""
+type OrderRefund {
+  id: ID!
+  """환불 종류."""
+  kind: RefundKindType!
+  """돌려줄 금액(원)."""
+  amount: Int!
+  """진행 상태."""
+  status: RefundStatusType!
+  """환불받을 은행. 계좌 입력 전이면 null."""
+  bank: Bank
+  """환불 계좌 예금주. 계좌 입력 전이면 null."""
+  accountHolder: String
+  """환불 계좌번호 끝 4자리만 보이는 값(예: ****1234). 계좌 입력 전이면 null."""
+  accountNumberMasked: String
+  """환불이 생긴 시각."""
+  requestedAt: DateTime!
+  """구매자가 계좌를 입력한 시각. 입력 전이면 null."""
+  accountSubmittedAt: DateTime
+  """송금 완료 시각. 완료 전이면 null."""
+  completedAt: DateTime
 }
 
 """
@@ -51,10 +263,117 @@ type OrderItemDetail {
   itemSubtotalPrice: Int!
   """선택한 옵션(주문 시점 스냅샷)."""
   optionItems: [OrderItemOption!]!
+  """커스텀 방식(주문 시점 스냅샷). 커스텀이 없는 품목은 NONE."""
+  customMode: CustomModeType!
+  """
+  커스텀 대표 이미지 URL. 3D는 윗면 렌더, 슬롯형은 합성 이미지이고 목록 썸네일·리뷰 Before에 쓰인다. 없으면 null.
+  """
+  customPreviewImageUrl: String
+  """
+  슬롯형 바탕 이미지 URL(주문 시점 스냅샷, 정사각). 문구 자리·자유 편집 영역 좌표의 기준이다. 슬롯형이 아니거나 바탕을 저장하기 전 주문이면 null.
+  """
+  customBaseImageUrl: String
+  """커스텀 이미지(3D 렌더 5장 또는 슬롯형 합성 1장). kind 선언 순서다. 없으면 빈 배열."""
+  customImages: [OrderItemCustomImage!]!
+  """3D 디자인(JSON v1). 3D가 아니거나 저장된 값을 읽을 수 없으면 null."""
+  threeDDesign: ThreeDDesign
   """입력한 커스텀 문구(주문 시점 스냅샷)."""
   customTexts: [OrderItemCustomText!]!
   """자유 편집 요청(주문 시점 스냅샷)."""
   freeEdits: [OrderItemFreeEdit!]!
+}
+
+"""
+주문 커스텀 이미지 종류. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다.
+3D 옆면은 옆면 고도 asin(0.4) 정사영이고 좌·우는 정면을 보는 사람 기준이다.
+"""
+enum CustomImageKindType {
+  """3D 윗면(위에서 내려다본 정사각). 대표 이미지다."""
+  THREE_D_TOP
+  """3D 옆면 정면(yaw 0)."""
+  THREE_D_FRONT
+  """3D 옆면 뒤(정면 반대)."""
+  THREE_D_BACK
+  """3D 옆면 왼쪽."""
+  THREE_D_LEFT
+  """3D 옆면 오른쪽."""
+  THREE_D_RIGHT
+  """슬롯형 합성 이미지(바탕 + 문구, 구매자가 본 그대로). 대표 이미지다."""
+  SLOT_COMPOSITE
+}
+
+"""주문 커스텀 이미지 1장."""
+type OrderItemCustomImage {
+  id: ID!
+  """이미지 종류. 품목마다 종류당 1장이다."""
+  kind: CustomImageKindType!
+  """이미지 URL."""
+  imageUrl: String!
+}
+
+"""
+주문에 저장된 3D 디자인(JSON v1). 배열 순서가 그리는 순서다. 그리는 규칙은 판매자 앱 렌더러와 구매자 편집기가 공유한다.
+선택지·시트 색·효과·꾸미기 키는 customThreeDCatalog의 key이고, 퇴역한 항목도 과거 주문을 그릴 수 있게 카탈로그에 남는다.
+"""
+type ThreeDDesign {
+  """디자인 JSON 버전. 지금은 1."""
+  schemaVersion: Int!
+  """모양·크기·디자인·맛·시트 색."""
+  basic: ThreeDDesignBasic!
+  """윗면 항목. x·y는 케이크 판 정사각 기준 중심 0~1(왼쪽 위 원점)."""
+  top: [ThreeDDesignItem!]!
+  """옆면 항목. x는 정면(yaw 0)에서 잰 둘레 비율 0~1, y는 윗면 0~바닥 1."""
+  side: [ThreeDDesignItem!]!
+}
+
+"""3D 디자인의 케이크 기본값."""
+type ThreeDDesignBasic {
+  """모양 선택지 key."""
+  shape: String!
+  """크기 선택지 key."""
+  size: String!
+  """디자인 선택지 key. 고르지 않았으면 null(장식 없는 시트)."""
+  design: String
+  """맛 선택지 key. 고르지 않았으면 null."""
+  flavor: String
+  """시트 색 key."""
+  sheetColor: String!
+}
+
+"""3D 디자인 항목 종류. 값은 늘어날 수 있으니 모르는 값을 받아도 화면이 죽지 않게 처리한다."""
+enum ThreeDItemKindType {
+  """글자."""
+  TEXT
+  """꾸미기 이미지."""
+  DECO
+}
+
+"""3D 디자인 항목(글자 또는 꾸미기) 1개."""
+type ThreeDDesignItem {
+  """항목 종류."""
+  kind: ThreeDItemKindType!
+  """가로 위치(면별 좌표계, ThreeDDesign.top·side 참고)."""
+  x: Float!
+  """세로 위치(면별 좌표계, ThreeDDesign.top·side 참고)."""
+  y: Float!
+  """크기(케이크 판 너비 대비 cqw)."""
+  size: Float!
+  """효과."""
+  effect: ThreeDDesignEffect!
+  """글자 내용(줄바꿈·이모지 포함). TEXT만 값이 있다."""
+  text: String
+  """글자색(#RRGGBB 대문자). TEXT만 값이 있다."""
+  color: String
+  """꾸미기 key. DECO만 값이 있다."""
+  decoId: String
+}
+
+"""3D 디자인 항목에 건 효과."""
+type ThreeDDesignEffect {
+  """효과 key(카탈로그 effects)."""
+  type: String!
+  """효과 강도(0~100 정수)."""
+  intensity: Int!
 }
 
 """주문 시점의 옵션 스냅샷. 판매자가 이후 옵션을 수정·삭제해도 주문 내용은 변하지 않는다."""
@@ -68,24 +387,52 @@ type OrderItemOption {
   priceDelta: Int!
 }
 
-"""주문 시점의 커스텀 문구 스냅샷."""
+"""
+주문 시점의 커스텀 문구 스냅샷. 좌표는 바탕 이미지 한 변을 10000으로 본 정수 비율이고 원점은 왼쪽 위다.
+글꼴은 플랫폼 공통 1종(Pretendard Bold)이고 크기는 영역에 맞춰 자동이다.
+"""
 type OrderItemCustomText {
   id: ID!
-  """문구 슬롯 식별 키(주문 시점)."""
+  """원본 문구 자리 ID. 자리가 이후 바뀌거나 지워져도 스냅샷은 그대로다. 문구 자리를 지정하기 전 주문이면 null."""
+  tokenId: ID
+  """문구 자리 식별 키(주문 시점)."""
   tokenKey: String!
-  """슬롯의 기본 문구(주문 시점)."""
+  """문구 자리 표시 이름(주문 시점)."""
+  label: String!
+  """문구 자리의 기본 문구(주문 시점)."""
   defaultText: String!
-  """구매자가 실제로 입력한 문구."""
-  valueText: String!
+  """구매자가 넣은 문구(줄바꿈·이모지 포함). 선택 자리를 지웠으면 null('문구 없음')."""
+  valueText: String
+  """영역 왼쪽 위 x(0~10000)."""
+  posX: Int!
+  """영역 왼쪽 위 y(0~10000)."""
+  posY: Int!
+  """영역 너비(posX + width ≤ 10000)."""
+  width: Int!
+  """영역 높이(posY + height ≤ 10000)."""
+  height: Int!
+  """글자색(#RRGGBB 대문자)."""
+  textColor: String!
+  """영역 안 글자 정렬."""
+  textAlign: CustomTextAlignType!
   """입력 화면 노출 순서. 오름차순."""
   sortOrder: Int!
 }
 
-"""주문 시점의 자유 편집 요청 스냅샷. 구매자가 이미지 위에 영역을 지정해 남긴 요청이다."""
+"""
+주문 시점의 자유 편집 요청 스냅샷. 구매자가 슬롯형 바탕 이미지 위에 영역을 지정해 남긴 요청이다.
+좌표계는 OrderItemCustomText와 같다(바탕 한 변 10000, 왼쪽 위 원점).
+"""
 type OrderItemFreeEdit {
   id: ID!
-  """지정한 편집 영역을 잘라낸 이미지 URL."""
-  cropImageUrl: String!
+  """영역 왼쪽 위 x(0~10000)."""
+  posX: Int!
+  """영역 왼쪽 위 y(0~10000)."""
+  posY: Int!
+  """영역 너비(posX + width ≤ 10000)."""
+  width: Int!
+  """영역 높이(posY + height ≤ 10000)."""
+  height: Int!
   """해당 영역에 대한 요청 문구."""
   descriptionText: String!
   """요청 순서. 오름차순."""
@@ -101,4 +448,19 @@ type OrderItemFreeEditAttachment {
   imageUrl: String!
   """첨부 순서. 오름차순."""
   sortOrder: Int!
+}
+
+"""
+판매자 픽업 일시 변경 이력 1건. 구매자·판매자·관리자 주문 상세가 공용으로 쓴다.
+"""
+type OrderPickupChange {
+  id: ID!
+  """변경 전 픽업 일시."""
+  fromPickupAt: DateTime!
+  """변경 후 픽업 일시."""
+  toPickupAt: DateTime!
+  """변경 시각."""
+  changedAt: DateTime!
+  """판매자가 남긴 변경 메모. 없으면 null."""
+  note: String
 }

@@ -61,9 +61,16 @@ export type AdminProductDetailRow = Prisma.ProductGetPayload<{
   include: typeof productDetailInclude;
 }>;
 
+// 목록 썸네일은 대표 이미지(삭제 제외 첫 장). 상세 include와 같은 모양이라 매퍼 하나를 같이 쓴다
 const productInclude = {
   store: { select: { store_name: true, is_active: true } },
-} as const;
+  images: {
+    where: activeWhere,
+    select: { image_url: true, deleted_at: true },
+    orderBy: [{ sort_order: 'asc' }, { id: 'asc' }],
+    take: 1,
+  },
+} satisfies Prisma.ProductInclude;
 
 // orderBy 배열은 as const로 readonly가 되면 Prisma 타입과 어긋나 satisfies로 고정한다
 const productDetailInclude = {

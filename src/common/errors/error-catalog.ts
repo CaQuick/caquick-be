@@ -138,6 +138,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '업로드 URL 생성에 실패했습니다.',
   },
+  S3_READ_FAILED: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '이미지를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+  },
   INVALID_PROFILE_IMAGE_URL: {
     status: HttpStatus.BAD_REQUEST,
     message: '업로드 URL로 발급된 프로필 이미지 URL만 저장할 수 있습니다.',
@@ -220,6 +224,11 @@ export const ERROR_CATALOG = {
   INVALID_PUSH_TOKEN: {
     status: HttpStatus.BAD_REQUEST,
     message: '푸시 토큰 형식이 올바르지 않습니다.',
+  },
+  ACCOUNT_HAS_ACTIVE_ORDERS: {
+    status: HttpStatus.CONFLICT,
+    message: ({ count }) =>
+      `진행 중인 주문 또는 환불 ${count}건이 있어 탈퇴할 수 없습니다.`,
   },
 
   // ── 카탈로그(매장·상품·지역)
@@ -319,6 +328,35 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '현재 상태에서는 주문을 취소할 수 없습니다.',
   },
+  CANCEL_REASON_NOT_ALLOWED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이 주문에는 선택할 수 없는 취소 사유입니다.',
+  },
+  CANCEL_FAULT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '확정된 주문은 판매자 사정인지 구매자 사정인지 선택해야 취소할 수 있습니다.',
+  },
+  REFUND_AMOUNT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '구매자 사정으로 취소하려면 환불 금액을 입력해 주세요.',
+  },
+  REFUND_AMOUNT_OUT_OF_RANGE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) => `환불 금액은 0원 이상 ${max}원 이하로 입력해 주세요.`,
+  },
+  REFUND_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '환불을 찾을 수 없습니다.',
+  },
+  REFUND_NOT_READY: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '환불 계좌가 입력되지 않아 송금 완료로 처리할 수 없어요.',
+  },
+  REFUND_ALREADY_COMPLETED: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 송금이 끝난 환불입니다.',
+  },
   DUPLICATE_OPTION_ITEM: {
     status: HttpStatus.BAD_REQUEST,
     message: '중복된 옵션 선택입니다.',
@@ -331,17 +369,29 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '옵션 그룹의 선택 규칙을 충족하지 않습니다.',
   },
-  OPTION_CUSTOMIZATION_REQUIRED: {
-    status: HttpStatus.BAD_REQUEST,
-    message: '커스텀 정보가 필요한 옵션은 아직 주문할 수 없습니다.',
-  },
   PICKUP_NOT_AVAILABLE: {
     status: HttpStatus.BAD_REQUEST,
     message: '선택한 픽업 일시는 예약할 수 없습니다.',
   },
+  NO_SHOW_NOT_ALLOWED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '노쇼는 픽업 시각부터 24시간 안에만 처리할 수 있습니다.',
+  },
+  PICKUP_RESCHEDULE_NOT_ALLOWED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '접수·확정·제작 완료 주문만 픽업 일시를 바꿀 수 있습니다.',
+  },
+  PICKUP_UNCHANGED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '지금과 같은 픽업 일시입니다.',
+  },
   ORDER_AMOUNT_OUT_OF_RANGE: {
     status: HttpStatus.BAD_REQUEST,
     message: '주문 금액이 처리 가능한 범위를 벗어났습니다.',
+  },
+  ORDER_PRICE_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '가격이 바뀌었어요. 금액을 다시 확인해 주세요.',
   },
   UNSUPPORTED_CURRENCY: {
     status: HttpStatus.BAD_REQUEST,
@@ -357,6 +407,11 @@ export const ERROR_CATALOG = {
     message:
       '이 요청 키로는 주문을 만들 수 없습니다. 주문서를 새로 열어 다시 시도해 주세요.',
   },
+  IDEMPOTENCY_KEY_INPUT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '같은 요청 키로 다른 주문 내용이 들어왔습니다. 주문서를 새로 열어 다시 시도해 주세요.',
+  },
   IDEMPOTENT_REPLAY_FAILED: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message:
@@ -365,6 +420,83 @@ export const ERROR_CATALOG = {
   ORDER_NUMBER_GENERATION_FAILED: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '주문번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  DEPOSITOR_NAME_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금자명을 20자 이내로 입력해 주세요.',
+  },
+  PENDING_PAYMENT_LIMIT_EXCEEDED: {
+    status: HttpStatus.CONFLICT,
+    message:
+      '입금 대기 중인 주문이 2건 있어요. 입금하거나 취소한 뒤 다시 주문해 주세요.',
+  },
+  CONCURRENT_REQUEST: {
+    status: HttpStatus.CONFLICT,
+    message: '같은 요청을 처리하고 있어요. 잠시 뒤 다시 시도해 주세요.',
+  },
+  // ── 결제·정산
+  INVALID_BANK_CODE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '지원하지 않는 은행입니다. 은행을 다시 선택해 주세요.',
+  },
+  INVALID_ACCOUNT_NUMBER: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '계좌번호는 하이픈(-)을 뺀 숫자 8~20자리로 입력해 주세요.',
+  },
+  INVALID_COMMISSION_RATE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '수수료율은 0~10000bp(0~100%) 사이 정수여야 합니다.',
+  },
+  PAYMENT_ACCOUNT_NOT_CONFIGURED: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '지금은 주문을 받을 수 없습니다.',
+  },
+  PAYMENT_NOT_PENDING: {
+    status: HttpStatus.CONFLICT,
+    message: '입금 대기 중인 주문이 아닙니다. 이미 처리됐는지 확인해 주세요.',
+  },
+  PAYMENT_DEADLINE_PASSED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금 기한이 지났어요.',
+  },
+  PAYMENT_PICKUP_PASSED: {
+    status: HttpStatus.CONFLICT,
+    message:
+      '픽업 시각이 지난 주문은 입금 확인할 수 없어요. 미입금 취소 뒤 반환 대상으로 연결해 주세요.',
+  },
+  DEPOSIT_AMOUNT_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금액이 올바르지 않아요. 원 단위 정수로 입력해 주세요.',
+  },
+  DEPOSIT_AMOUNT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '입금액이 결제 금액과 달라 입금 확인할 수 없어요. 반환 대상으로 연결해 주세요.',
+  },
+  DEPOSIT_NOTE_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '주인 모를 입금은 메모를 남겨야 기록할 수 있어요.',
+  },
+  DEPOSIT_RECORD_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '입금 기록을 찾을 수 없습니다.',
+  },
+  DEPOSIT_RECORD_ALREADY_LINKED: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 반환 대상으로 연결된 입금 기록입니다.',
+  },
+  SETTLEMENT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '정산 내역을 찾을 수 없어요.',
+  },
+  SETTLEMENT_ALREADY_PAID: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 송금 완료로 처리된 정산이에요.',
+  },
+  SETTLEMENT_ACCOUNT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '매장 정산 계좌가 등록되지 않아 송금 완료로 처리할 수 없어요. 정산 계좌를 먼저 등록해 주세요.',
   },
   // ── 판매자
   SELLER_ONLY: {
@@ -444,6 +576,100 @@ export const ERROR_CATALOG = {
     status: HttpStatus.CONFLICT,
     message: '이 템플릿에 이미 같은 키의 커스텀 텍스트 토큰이 있습니다.',
   },
+  CUSTOM_PRODUCT_NOT_READY: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '커스텀 설정이 아직 끝나지 않았어요.',
+  },
+  CUSTOM_TOKEN_KEY_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리 키는 영문 소문자와 숫자 1~60자여야 해요.',
+  },
+  CUSTOM_TEXT_DEFAULT_TOO_LONG: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label, max }) =>
+      `'${label}'의 기본 문구는 ${max}자 이하여야 해요.`,
+  },
+  CUSTOM_AREA_OUT_OF_BOUNDS: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리가 바탕 이미지 밖으로 나갔어요.',
+  },
+  INVALID_COLOR_FORMAT: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '글자색은 #RRGGBB 형식으로 입력해 주세요.',
+  },
+  CUSTOM_BASE_IMAGE_NOT_SQUARE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '바탕 이미지는 정사각형(1:1)이어야 해요.',
+  },
+  CUSTOM_BASE_IMAGE_UNREADABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '바탕 이미지를 읽을 수 없어요. 이미지를 다시 올려 주세요.',
+  },
+  CUSTOM_3D_SCHEMA_UNSUPPORTED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '지원하지 않는 3D 디자인 형식이에요. 앱을 업데이트한 뒤 다시 꾸며 주세요.',
+  },
+  CUSTOM_3D_OPTIONS_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '고른 옵션과 3D 디자인이 맞지 않아요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_3D_ITEM_LIMIT_EXCEEDED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ max }) =>
+      `한 면에 글자와 꾸미기는 각각 ${max}개까지 올릴 수 있어요.`,
+  },
+  CUSTOM_3D_DESIGN_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) =>
+      `3D 디자인에 쓸 수 없는 값이 있어요(${field}). 다시 꾸며 주세요.`,
+  },
+  CUSTOM_INPUT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '케이크를 꾸민 뒤 주문해 주세요.',
+  },
+  CUSTOM_INPUT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '이 상품의 꾸미기 방식과 맞지 않는 주문이에요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_QUANTITY_FIXED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸민 케이크는 한 번에 1개만 주문할 수 있어요.',
+  },
+  CUSTOM_TEMPLATE_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '판매자가 꾸미기 설정을 바꿨어요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_SLOT_TEXTS_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '문구 자리 입력이 상품 설정과 맞지 않아요. 다시 꾸며 주세요.',
+  },
+  CUSTOM_SLOT_TEXT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label }) => `'${label}'에 문구를 넣어 주세요.`,
+  },
+  CUSTOM_SLOT_TEXT_TOO_LONG: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ label, max }) => `'${label}'에는 ${max}자까지 쓸 수 있어요.`,
+  },
+  CUSTOM_FREE_EDIT_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: ({ field }) =>
+      `자유 편집 요청에 쓸 수 없는 값이 있어요(${field}). 다시 확인해 주세요.`,
+  },
+  CUSTOM_RENDER_IMAGES_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '3D 렌더 이미지는 윗면과 옆면 앞·뒤·왼쪽·오른쪽이 1장씩 있어야 해요.',
+  },
+  CUSTOM_UPLOAD_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸미기 이미지를 확인할 수 없어요. 이미지를 다시 올려 주세요.',
+  },
+  CUSTOM_UPLOAD_EXPIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '꾸미기 이미지 보관 기간이 지났어요. 이미지를 다시 올려 주세요.',
+  },
   INVALID_DAY_OF_WEEK: {
     status: HttpStatus.BAD_REQUEST,
     message: 'dayOfWeek는 0~6이어야 합니다.',
@@ -488,9 +714,13 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '본문 형식이 올바르지 않습니다.',
   },
-  CANCELLATION_NOTE_REQUIRED: {
+  IMAGE_URL_REQUIRED: {
     status: HttpStatus.BAD_REQUEST,
-    message: '취소 사유가 필요합니다.',
+    message: '보낼 사진을 첨부해 주세요.',
+  },
+  ORDER_INQUIRY_NOT_AVAILABLE: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금이 확인된 뒤 문의할 수 있어요.',
   },
   // ── 관리자
   ADMIN_ONLY: {

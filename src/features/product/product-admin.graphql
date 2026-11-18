@@ -51,9 +51,13 @@ type AdminProduct {
   """
   currency: String!
   """
-  기본 디자인 이미지 URL. 미등록 시 null.
+  대표 이미지 URL(삭제 제외 첫 장). 이미지가 없으면 null.
   """
-  baseDesignImageUrl: String
+  thumbnailUrl: String
+  """
+  커스텀 방식.
+  """
+  customMode: CustomModeType!
   """
   노출 여부. false면 구매자 화면에 나오지 않는다.
   """
@@ -173,14 +177,6 @@ type AdminProductOptionGroup {
   """
   maxSelect: Int!
   """
-  선택지에 구매자 커스텀 입력(설명)이 필요한 그룹인지. 현재는 true인 그룹의 옵션을 고르면 주문이 거절된다(잠정 가드).
-  """
-  optionRequiresDescription: Boolean!
-  """
-  선택지에 구매자 커스텀 입력(이미지)이 필요한 그룹인지. 현재는 true인 그룹의 옵션을 고르면 주문이 거절된다(잠정 가드).
-  """
-  optionRequiresImage: Boolean!
-  """
   상품 안에서의 그룹 노출 순서. 오름차순.
   """
   sortOrder: Int!
@@ -223,6 +219,10 @@ type AdminProductOptionItem {
   노출 여부. false면 구매자가 고를 수 없다.
   """
   isActive: Boolean!
+  """
+  이어진 3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key). 없으면 null.
+  """
+  threeDKey: String
 }
 
 """
@@ -235,9 +235,9 @@ type AdminProductCustomTemplate {
   """
   baseImageUrl: String!
   """
-  활성 여부. false면 구매자 화면에 커스텀 입력이 열리지 않는다.
+  자유 편집(바탕 위 영역 지정 + 요청 문구·참고 사진) 허용 여부.
   """
-  isActive: Boolean!
+  freeEditEnabled: Boolean!
   """
   문구 슬롯. sortOrder 오름차순. 삭제된 슬롯은 뺀다.
   """
@@ -254,6 +254,10 @@ type AdminProductCustomTextToken {
   """
   tokenKey: String!
   """
+  표시 이름(구매자 입력 화면 라벨).
+  """
+  label: String!
+  """
   구매자가 입력하지 않았을 때 쓸 기본 문구.
   """
   defaultText: String!
@@ -269,6 +273,14 @@ type AdminProductCustomTextToken {
   필수 입력 여부.
   """
   isRequired: Boolean!
+  """
+  글자색(#RRGGBB 대문자).
+  """
+  textColor: String!
+  """
+  자리 안 글자 정렬.
+  """
+  textAlign: CustomTextAlignType!
 }
 
 """

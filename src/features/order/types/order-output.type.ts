@@ -1,4 +1,15 @@
-import type { OrderStatus } from '@/generated/prisma/client';
+import type { BankOutput } from '@/features/order/types/order-payment-output.type';
+import type {
+  CustomImageKind,
+  CustomMode,
+  CustomTextAlign,
+  OrderActor,
+  OrderCancelFault,
+  OrderCancelReason,
+  OrderStatus,
+  RefundKind,
+  RefundStatus,
+} from '@/generated/prisma/client';
 
 export interface OrderItemOptionOutput {
   id: string;
@@ -7,11 +18,22 @@ export interface OrderItemOptionOutput {
   priceDelta: number;
 }
 
-export interface OrderItemCustomTextOutput {
+export interface OrderCustomAreaOutput {
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+}
+
+export interface OrderItemCustomTextOutput extends OrderCustomAreaOutput {
   id: string;
+  tokenId: string | null;
   tokenKey: string;
+  label: string;
   defaultText: string;
-  valueText: string;
+  valueText: string | null;
+  textColor: string;
+  textAlign: CustomTextAlign;
   sortOrder: number;
 }
 
@@ -21,12 +43,41 @@ export interface OrderItemFreeEditAttachmentOutput {
   sortOrder: number;
 }
 
-export interface OrderItemFreeEditOutput {
+export interface OrderItemFreeEditOutput extends OrderCustomAreaOutput {
   id: string;
-  cropImageUrl: string;
   descriptionText: string;
   sortOrder: number;
   attachments: OrderItemFreeEditAttachmentOutput[];
+}
+
+export interface OrderItemCustomImageOutput {
+  id: string;
+  kind: CustomImageKind;
+  imageUrl: string;
+}
+
+export interface ThreeDDesignItemOutput {
+  kind: 'TEXT' | 'DECO';
+  x: number;
+  y: number;
+  size: number;
+  effect: { type: string; intensity: number };
+  text: string | null;
+  color: string | null;
+  decoId: string | null;
+}
+
+export interface ThreeDDesignOutput {
+  schemaVersion: number;
+  basic: {
+    shape: string;
+    size: string;
+    design: string | null;
+    flavor: string | null;
+    sheetColor: string;
+  };
+  top: ThreeDDesignItemOutput[];
+  side: ThreeDDesignItemOutput[];
 }
 
 export interface OrderItemDetailOutput {
@@ -39,6 +90,11 @@ export interface OrderItemDetailOutput {
   quantity: number;
   itemSubtotalPrice: number;
   optionItems: OrderItemOptionOutput[];
+  customMode: CustomMode;
+  customPreviewImageUrl: string | null;
+  customBaseImageUrl: string | null;
+  customImages: OrderItemCustomImageOutput[];
+  threeDDesign: ThreeDDesignOutput | null;
   customTexts: OrderItemCustomTextOutput[];
   freeEdits: OrderItemFreeEditOutput[];
 }
@@ -47,6 +103,51 @@ export interface OrderStatusHistoryOutput {
   id: string;
   fromStatus: OrderStatus | null;
   toStatus: OrderStatus;
+  changedAt: Date;
+  note: string | null;
+  actorType: OrderActor;
+  cancelReason: OrderCancelReason | null;
+  cancelFault: OrderCancelFault | null;
+  refundAmount: number | null;
+}
+
+export interface OrderCancellationOutput {
+  actorType: OrderActor;
+  reason: OrderCancelReason;
+  reasonLabel: string;
+  note: string | null;
+  fault: OrderCancelFault | null;
+  refundAmount: number;
+  refundStatus: RefundStatus | null;
+  refundCompletedAt: Date | null;
+  canceledAt: Date;
+}
+
+export interface OrderRefundOutput {
+  id: string;
+  kind: RefundKind;
+  amount: number;
+  status: RefundStatus;
+  bank: BankOutput | null;
+  accountHolder: string | null;
+  accountNumberMasked: string | null;
+  requestedAt: Date;
+  accountSubmittedAt: Date | null;
+  completedAt: Date | null;
+}
+
+/** 자동 전이 예정·노쇼 시각(판매자·관리자 주문 상세). */
+export interface OrderAutoTransitionTimes {
+  confirmDeadlineAt: Date | null;
+  autoPickupAt: Date | null;
+  noShowAt: Date | null;
+}
+
+/** 판매자 픽업 일시 변경 이력 1건. */
+export interface OrderPickupChangeOutput {
+  id: string;
+  fromPickupAt: Date;
+  toPickupAt: Date;
   changedAt: Date;
   note: string | null;
 }

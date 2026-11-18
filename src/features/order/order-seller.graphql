@@ -1,21 +1,34 @@
 extend type Query {
   """
-  내 매장 주문 목록을 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  내 매장 주문 목록을 조회한다. 입금이 확인된(접수된) 주문만 보인다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerOrderList(input: SellerOrderListInput): SellerOrderConnection!
   """
-  내 매장 주문 상세를 조회한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  내 매장 주문 상세를 조회한다. 입금 확인 전 주문은 없는 주문과 같이 NOT_FOUND다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerOrder(orderId: ID!): SellerOrderDetail!
 }
 
 extend type Mutation {
   """
-  주문 상태를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  주문 상태를 변경한다. 접수 → 확정, 확정 → 제작 완료, 확정·제작 완료 → 픽업 완료·노쇼만 된다(그 밖은
+  INVALID_ORDER_STATUS_TRANSITION, 같은 상태면 ORDER_STATUS_UNCHANGED). 노쇼는 픽업 시각부터 24시간(자동 픽업 완료 전)
+  안에서만 되고 벗어나면 NO_SHOW_NOT_ALLOWED(BAD_USER_INPUT)다. 픽업 완료·노쇼는 정산 금액을 확정하고, 노쇼는 환불이 없다.
+  취소(CANCELED)는 받지 않으므로 sellerCancelOrder를 쓴다(INVALID_ORDER_STATUS_TRANSITION).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerUpdateOrderStatus(
     input: SellerUpdateOrderStatusInput!
   ): SellerOrderSummary!
+  """
+  주문을 거절·취소한다. 접수(SUBMITTED) 단계 거절은 결제액 전액 환불이고, 확정·제작 완료(CONFIRMED·MADE) 뒤 취소는
+  fault(사정)가 필수다(판매자 사정 = 전액 환불, 구매자 사정 = refundAmount 환불, 남는 금액은 수수료를 뺀 뒤 정산에 포함).
+  환불 송금은 케이퀵이 한다. 그 밖의 상태면 ORDER_NOT_CANCELLABLE, 판매자가 고를 수 없는 사유면 CANCEL_REASON_NOT_ALLOWED,
+  사정이 없으면 CANCEL_FAULT_REQUIRED, 구매자 사정인데 금액이 없으면 REFUND_AMOUNT_REQUIRED,
+  금액이 0~결제액 밖이면 REFUND_AMOUNT_OUT_OF_RANGE(모두 BAD_USER_INPUT). 입금 확인 전·다른 매장 주문은 NOT_FOUND.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerCancelOrder(input: SellerCancelOrderInput!): SellerOrderSummary!
 }
 
 """
@@ -59,6 +72,19 @@ type SellerOrderSummary {
   내 매장 첫 품목의 상품 대표 이미지 URL(주문 시점 스냅샷). 주문 당시 이미지가 없었으면 null.
   """
   firstItemImageUrl: String
+  """
+  커스텀 주문 여부(내 매장 첫 품목의 커스텀 방식이 NONE이 아니면 true). 목록 '커스텀' 배지용이다.
+  """
+  hasCustom: Boolean!
+  """
+  내 매장 첫 품목의 커스텀 대표 이미지 URL(3D 윗면 렌더 또는 슬롯형 합성). 없으면 null.
+  """
+  firstItemCustomImageUrl: String
+  """
+  확정 마감 시각. 이때까지 확정하지 않으면 자동 취소되고 결제액 전액이 환불된다. 접수(SUBMITTED) 상태가 아니거나
+  결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
 }
 
 """
@@ -99,6 +125,10 @@ input SellerOrderListInput {
   주문 상태 필터. 미지정 시 전체 상태.
   """
   status: OrderStatusType
+  """
+  구매자 계정 ID 필터. 채팅 상대의 주문만 볼 때 쓴다. 미지정 시 전체.
+  """
+  buyerAccountId: ID
   """
   주문 생성 시각 하한(이상).
   """
@@ -151,6 +181,14 @@ type SellerOrderDetail {
   """
   buyerPhone: String!
   """
+  구매자가 남긴 요청 사항. 없으면 null.
+  """
+  requestNote: String
+  """
+  결제 수단. 결제 도입 전 주문이면 null. 값은 늘어날 수 있으니 모르는 값은 '기타'로 보여 준다.
+  """
+  paymentMethod: PaymentMethodType
+  """
   할인 전 품목 합계(원).
   """
   subtotalPrice: Int!
@@ -189,9 +227,52 @@ type SellerOrderDetail {
   """
   items: [OrderItemDetail!]!
   """
-  상태 변경 이력. 최신순.
+  상태 변경 이력. 최신순. 입금 대기 이력은 빠지고, 접수 이력은 fromStatus가 null(최초)로 온다.
   """
   statusHistories: [OrderStatusHistory!]!
+  """
+  취소 정보(주체·사유·사정·환불액·환불 진행). 취소되지 않은 주문이면 null.
+  """
+  cancellation: OrderCancellation
+  """
+  확정 마감 시각. 이때까지 확정하지 않으면 자동 취소되고 결제액 전액이 환불된다. 접수(SUBMITTED) 상태가 아니거나
+  결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
+  """
+  자동 픽업 완료 예정 시각(픽업 시각 + 24시간). 확정·제작 완료 상태에서만 있고 그 밖은 null.
+  매장이 숨김이면 자동으로 픽업 완료되지 않는다.
+  """
+  autoPickupAt: DateTime
+  """
+  지금 노쇼로 처리할 수 있는지. 확정·제작 완료 상태이고 픽업 시각 ≤ 지금 < autoPickupAt일 때 true.
+  """
+  canMarkNoShow: Boolean!
+  """
+  노쇼 처리 시각. 노쇼가 아니면 null.
+  """
+  noShowAt: DateTime
+  """
+  픽업 일시 변경 이력. 오래된 순, 없으면 빈 배열.
+  """
+  pickupChanges: [OrderPickupChange!]!
+  """
+  주문 생성 시점의 수수료율(bp, 1bp = 0.01%). 바뀐 설정은 그 뒤 주문부터 적용된다.
+  """
+  commissionRateBps: Int!
+  """
+  정산 예정 금액(원). 정산 확정 뒤에는 실제 지급액(기준액 − 수수료), 확정 전에는 결제 금액에서 수수료(원 미만 버림)를 뺀
+  예상값이다. 입금이 확인되지 않았거나 결제 도입 전 주문이면 null, 확정 없이 취소된 주문(전액 환불)은 0.
+  """
+  expectedPayoutAmount: Int
+  """
+  확정된 수수료 기준액(원). 픽업 완료·노쇼는 결제 금액, 구매자 사정 취소는 결제 금액 − 환불 금액. 확정 전이면 null.
+  """
+  settlementBaseAmount: Int
+  """
+  확정된 수수료(원). 기준액 × 수수료율, 원 미만 버림. 확정 전이면 null.
+  """
+  commissionAmount: Int
 }
 
 """
@@ -201,11 +282,34 @@ BAD_USER_INPUT으로 거절된다.
 input SellerUpdateOrderStatusInput {
   orderId: ID!
   """
-  변경할 상태. 현재 상태에서 진입 가능한 값이어야 한다.
+  변경할 상태. CONFIRMED·MADE·PICKED_UP·NO_SHOW 중 현재 상태에서 진입 가능한 값이어야 한다.
   """
   toStatus: OrderStatusType!
   """
-  변경 사유 메모. toStatus가 CANCELED면 필수이고, 없으면 BAD_USER_INPUT.
+  변경 메모. 선택, 최대 500자. 상태 이력에 남는다.
   """
   note: String
+}
+
+"""
+판매자 주문 거절·취소 입력. 허용 범위는 sellerCancelOrder 설명을 따른다.
+"""
+input SellerCancelOrderInput {
+  orderId: ID!
+  """
+  취소 사유. DESIGN_NOT_FEASIBLE·OUT_OF_MATERIALS·SCHEDULE_UNAVAILABLE·INAPPROPRIATE_REQUEST·BUYER_REQUEST·OTHER 중 하나.
+  """
+  reason: OrderCancelReasonType!
+  """
+  취소 메모. 선택, 최대 500자. 상태 이력에 남고 구매자도 본다.
+  """
+  note: String
+  """
+  취소 사정. 확정·제작 완료 주문이면 필수이고, 접수 단계 거절에서는 무시한다.
+  """
+  fault: OrderCancelFaultType
+  """
+  돌려줄 금액(원, 0~결제액). fault가 BUYER일 때 필수이고, 그 밖에는 무시한다.
+  """
+  refundAmount: Int
 }

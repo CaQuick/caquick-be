@@ -17,4 +17,28 @@ enum ConversationBodyFormat {
   서버 측 sanitize는 아직 적용돼 있지 않다.
   """
   HTML
+  """
+  이미지 1장. imageUrl을 그리고, bodyText에는 대체 문구('사진을 보냈습니다.')가 있다.
+  """
+  IMAGE
+  """
+  주문 카드(구매자만 보낸다). orderCard를 그리고, bodyText에는 대체 문구('주문 문의: {상품명} ({주문번호})')가 있다.
+  """
+  ORDER_CARD
+}
+
+"""
+채팅 주문 카드. 구매자가 보낸 시점의 주문 스냅샷이라 이후 주문이 바뀌거나 지워져도 그대로 보인다.
+판매자 앱은 orderId로 주문 상세를 연다.
+"""
+type ConversationOrderCard {
+  orderId: ID!
+  """주문번호."""
+  orderNumber: String!
+  """상품명(주문 시점 스냅샷)."""
+  productName: String!
+  """썸네일. 커스텀 주문이면 커스텀 대표 이미지(3D 윗면·슬롯형 합성), 아니면 상품 대표 이미지. 둘 다 없으면 null."""
+  thumbnailUrl: String
+  """보낸 시점의 픽업 일시."""
+  pickupAt: DateTime!
 }

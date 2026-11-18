@@ -1,11 +1,13 @@
 import {
   daysInMonth,
+  formatDateOnly,
   formatKstDate,
   formatMinutesOfDay,
   kstDayBoundaries,
   kstDayDiff,
   kstMidnightUtc,
   kstMinutesOfDay,
+  kstWeekStart,
   parseKstDate,
   parseKstYearMonth,
   toKstYmd,
@@ -102,6 +104,41 @@ describe('kst-time', () => {
       expect(b.dateOnlyUtc.toISOString()).toBe('2026-09-10T00:00:00.000Z');
       expect(b.dayStartUtc.toISOString()).toBe('2026-09-09T15:00:00.000Z');
       expect(b.dayEndUtc.toISOString()).toBe('2026-09-10T15:00:00.000Z');
+    });
+  });
+
+  describe('kstWeekStart', () => {
+    it.each([
+      [
+        '월 00:00 KST는 그 주의 시작이다',
+        '2026-11-15T15:00:00.000Z',
+        '2026-11-15T15:00:00.000Z',
+      ],
+      [
+        '일 23:59:59.999 KST는 앞 주에 속한다',
+        '2026-11-15T14:59:59.999Z',
+        '2026-11-08T15:00:00.000Z',
+      ],
+      [
+        'UTC로는 수요일인 목 00:30 KST',
+        '2026-11-18T15:30:00.000Z',
+        '2026-11-15T15:00:00.000Z',
+      ],
+      [
+        '연말 금요일은 전년 12월 월요일로 간다',
+        '2027-01-01T01:00:00.000Z',
+        '2026-12-27T15:00:00.000Z',
+      ],
+    ])('%s', (_label, at, expected) => {
+      expect(kstWeekStart(new Date(at)).toISOString()).toBe(expected);
+    });
+  });
+
+  describe('formatDateOnly', () => {
+    it('@db.Date 값을 YYYY-MM-DD로 쓴다', () => {
+      expect(formatDateOnly(new Date('2026-11-09T00:00:00.000Z'))).toBe(
+        '2026-11-09',
+      );
     });
   });
 

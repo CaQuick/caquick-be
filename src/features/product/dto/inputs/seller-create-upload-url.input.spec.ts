@@ -10,7 +10,7 @@ function build(plain: object): SellerCreateUploadUrlInput {
 }
 
 describe('SellerCreateUploadUrlInput', () => {
-  it.each(['PRODUCT_IMAGE', 'STORE_IMAGE'])(
+  it.each(['PRODUCT_IMAGE', 'STORE_IMAGE', 'CONVERSATION_IMAGE'])(
     'purpose %s 통과',
     async (purpose) => {
       const dto = build({

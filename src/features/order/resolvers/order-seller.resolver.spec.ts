@@ -2,7 +2,9 @@ import { PubSub } from 'graphql-subscriptions';
 
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import { OrderCancelPolicy } from '@/features/order/policies/order-cancel.policy';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-seller-mutation.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
@@ -36,6 +38,8 @@ describe('Seller Order Resolvers (real DB)', () => {
         StoreSellerRepository,
         OrderRepository,
         OrderStatusTransitionPolicy,
+        OrderCancelPolicy,
+        OrderTransitionRepository,
         OrderEventsService,
         { provide: PUB_SUB, useValue: new PubSub() },
         {
@@ -101,5 +105,20 @@ describe('Seller Order Resolvers (real DB)', () => {
         } as never,
       ),
     ).rejects.toThrowDomain(404);
+  });
+
+  it('Mutation.sellerCancelOrder: ID를 파싱해 접수 주문을 거절하고 요약을 반환한다', async () => {
+    const me = await setupSellerWithStore(prisma);
+    const order = await setupOrderForStore(me.store.id);
+
+    const result = await mutationResolver.sellerCancelOrder(
+      { accountId: me.account.id.toString() },
+      { orderId: order.id.toString(), reason: 'SCHEDULE_UNAVAILABLE' },
+    );
+
+    expect(result).toMatchObject({
+      id: order.id.toString(),
+      status: 'CANCELED',
+    });
   });
 });

@@ -1,4 +1,4 @@
-# 운영 runbook — 백업·복구·롤백
+# 운영 runbook — 백업·복구·롤백·키 회전
 
 ## 백업
 
@@ -76,3 +76,21 @@ Actions → `Deploy` → Run workflow → `image_tag`에 이전 sha. 마이그�
 
 - `FAILED`(릴레이 상한 초과): `docker compose exec worker yarn outbox:requeue --event-type=<type>` 또는 `--id=<n>`
 - 소비 DLQ(`q.<Consumer>.dlq`): 원인 해소 뒤 `docker compose exec worker yarn outbox:requeue --event-id=<uuid> --republish`(경보 메시지의 명령 앞에 `docker compose exec worker`를 붙인다)
+
+## 계좌번호 암호화 키
+
+환불·정산 계좌번호는 `ACCOUNT_ENCRYPTION_KEYS`(APP_ENV secret)로 암호화한다. 형식은 `k2:<base64 32바이트>,k1:<base64 32바이트>`이고, 첫 키로 암호화하며 토큰에 적힌 keyId로 복호화한다.
+
+- 만들기: `printf 'k1:%s\n' "$(openssl rand -base64 32)"`. keyId는 영문·숫자·`_`·`-` 32자 이하.
+- 백업: 키를 잃으면 계좌번호를 복구할 수 없다. GitHub secret은 다시 읽을 수 없으므로 등록 전에 비밀번호 관리자에 먼저 보관한다. DB 백업과 같은 곳에 두지 않는다.
+- 회전(유출이 의심될 때도 같은 절차)
+  1. 새 키를 만들어 백업하고, APP_ENV의 `ACCOUNT_ENCRYPTION_KEYS` 맨 앞에 넣어(`k2:<새 키>,k1:<옛 키>`) 배포한다. 이때부터 새로 쓰는 계좌번호는 새 키로 암호화된다.
+  2. `docker compose exec worker yarn accounts:reencrypt --dry-run`으로 대상 수를 보고, `docker compose exec worker yarn accounts:reencrypt`로 다시 암호화한다. 읽은 뒤 바뀐 행은 건너뛰므로 `--dry-run`이 0이 될 때까지 반복한다.
+  3. 대상이 0이면 옛 키를 env에서 빼고 배포한다. 옛 키 백업은 DB 백업 보관 기간(14일)이 지날 때까지 남긴다 — 그 전 덤프를 복구하면 옛 키로 암호화된 행이 돌아온다(복구 뒤 1단계부터 다시).
+
+## 3D 카탈로그 에셋
+
+판매자 앱 3D 렌더러와 옵션 칩이 쓰는 이미지(`assets/custom-3d-catalog/v1`)는 미디어 버킷의 같은 경로에서 공개 URL로 열린다(`customThreeDCatalog`). 에셋이 더해진 릴리즈를 배포한 뒤 올린다. 빠지면 렌더러·옵션 칩 이미지가 404다.
+
+- `docker compose exec worker yarn catalog:upload --bucket <미디어 버킷> --dry-run`으로 올릴 개수를 보고, `--dry-run`을 빼고 올린다. 같은 내용은 건너뛴다.
+- 에셋은 `immutable`로 캐시되고 과거 주문이 같은 모습으로 그려져야 해서 덮어쓰지 않는다. 같은 경로에 다른 내용이 있으면 아무것도 올리지 않고 실패한다. 그림을 바꾸려면 새 파일과 새 key를 더하고 옛 key를 `selectable: false`로 퇴역시킨다.

@@ -11,6 +11,7 @@ import { redisTestContainer } from '@/test/containers';
 jest.setTimeout(180_000);
 
 const EVENT: SellerOrderUpdateEvent = {
+  kind: 'SUBMITTED',
   orderId: '1',
   orderNumber: 'ORD-20260916-ABC234',
   status: 'SUBMITTED',
@@ -18,6 +19,7 @@ const EVENT: SellerOrderUpdateEvent = {
   buyerName: '차차',
   totalPrice: 56000,
   productName: '딸기 케이크',
+  hasCustom: false,
   updatedAt: '2026-09-16T07:00:00.000Z',
 };
 

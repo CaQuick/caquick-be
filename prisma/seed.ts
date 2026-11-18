@@ -17,6 +17,7 @@ import { seedConversations } from './seed/conversations';
 import { resetSeedScope } from './seed/idempotent';
 import { seedNotifications } from './seed/notifications';
 import { seedOrders } from './seed/orders';
+import { seedPayments } from './seed/payments';
 import { seedRecentViews } from './seed/recent-views';
 import { seedRegions } from './seed/regions';
 import { seedReviews } from './seed/reviews';
@@ -83,7 +84,10 @@ async function main(): Promise<void> {
     await seedBanners(prisma);
 
     log('관리자 시드 중...');
-    await seedAdmins(prisma);
+    const admin = await seedAdmins(prisma);
+
+    log('결제 설정·결제·환불·입금 기록·정산 계좌 시드 중...');
+    await seedPayments(prisma, { orders, stores, admin });
 
     log('완료. 발급된 테스트 계정:');
     for (const u of users) {

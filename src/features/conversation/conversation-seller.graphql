@@ -15,6 +15,7 @@ extend type Query {
 extend type Mutation {
   """
   판매자 메시지를 발송한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  bodyFormat은 TEXT·HTML·IMAGE이고 ORDER_CARD는 INVALID_BODY_FORMAT이다(주문 카드는 구매자만 보낸다).
   """
   sellerSendConversationMessage(
     input: SellerSendConversationMessageInput!
@@ -118,6 +119,14 @@ type SellerConversationMessage {
   """
   bodyHtml: String
   """
+  이미지 URL. bodyFormat이 IMAGE면 채워진다(bodyText에는 대체 문구 '사진을 보냈습니다.').
+  """
+  imageUrl: String
+  """
+  주문 카드. bodyFormat이 ORDER_CARD(구매자가 보낸 카드)면 채워진다. orderId로 주문 상세를 연다.
+  """
+  orderCard: ConversationOrderCard
+  """
   발송 시각.
   """
   createdAt: DateTime!
@@ -152,7 +161,8 @@ type SellerConversationMessageConnection {
 input SellerSendConversationMessageInput {
   conversationId: ID!
   """
-  본문 형식. 이 값에 해당하는 본문 필드가 필수다(다른 쪽을 함께 넘기면 그대로 저장된다).
+  본문 형식. 이 값에 해당하는 본문 필드가 필수다(TEXT·HTML은 다른 쪽을 함께 넘기면 그대로 저장된다).
+  IMAGE는 imageUrl만 저장하고 본문은 대체 문구로 채운다. ORDER_CARD는 INVALID_BODY_FORMAT이다.
   """
   bodyFormat: ConversationBodyFormat!
   """
@@ -163,4 +173,9 @@ input SellerSendConversationMessageInput {
   서식 본문(최대 100000자). bodyFormat이 HTML이면 필수.
   """
   bodyHtml: String
+  """
+  이미지 URL. bodyFormat이 IMAGE면 필수(없으면 IMAGE_URL_REQUIRED)이고 sellerCreateUploadUrl(CONVERSATION_IMAGE)로
+  이 계정에 발급된 publicUrl이어야 한다(아니면 INVALID_IMAGE_URL). 다른 형식에서는 무시한다.
+  """
+  imageUrl: String
 }

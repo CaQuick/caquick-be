@@ -62,15 +62,21 @@ describe('StoreCatalogQueryRepository (real DB)', () => {
         id: store.id,
         store_name: '문의 매장',
         greeting_message: '{nickname}님 환영',
+        is_active: true,
       });
       expect(row!.business_hours.map((h) => h.day_of_week)).toEqual([1, 3]);
     });
 
-    it.each([
-      ['비활성 매장', { is_active: false }],
-      ['삭제된 매장', { deleted_at: new Date() }],
-    ])('%s은 null', async (_label, overrides) => {
-      const store = await createStore(prisma, overrides);
+    it('숨김 매장도 is_active=false로 돌려준다', async () => {
+      const store = await createStore(prisma, { is_active: false });
+      expect(await repo.findInquiryStore(store.id)).toMatchObject({
+        id: store.id,
+        is_active: false,
+      });
+    });
+
+    it('삭제된 매장은 null', async () => {
+      const store = await createStore(prisma, { deleted_at: new Date() });
       expect(await repo.findInquiryStore(store.id)).toBeNull();
     });
   });

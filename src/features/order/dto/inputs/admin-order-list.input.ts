@@ -1,11 +1,15 @@
-import { IsDate, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsDate,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 import { MAX_KEYWORD_LENGTH } from '@/common/constants/list-search.constants';
 import { CursorInput } from '@/common/dto/inputs/cursor.input';
-import {
-  ORDER_STATUSES,
-  type OrderStatusValue,
-} from '@/features/order/constants/order-admin.constants';
+import { OrderStatus } from '@/generated/prisma/client';
 
 export class AdminOrderListInput extends CursorInput {
   @IsOptional()
@@ -14,8 +18,12 @@ export class AdminOrderListInput extends CursorInput {
   keyword?: string;
 
   @IsOptional()
-  @IsIn(ORDER_STATUSES)
-  status?: OrderStatusValue;
+  @IsEnum(OrderStatus)
+  status?: OrderStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  inProgress?: boolean;
 
   @IsOptional()
   @IsString()

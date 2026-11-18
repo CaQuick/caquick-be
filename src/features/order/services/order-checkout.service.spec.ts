@@ -6,11 +6,16 @@ import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.input';
 import {
-  ORDER_SUBMITTED,
-  parseOrderSubmittedPayload,
-} from '@/features/order/events/order-submitted.event';
+  ORDER_PAYMENT_PENDING,
+  parseOrderPaymentPendingPayload,
+} from '@/features/order/events/order-payment-pending.event';
+import { ORDER_SUBMITTED } from '@/features/order/events/order-submitted.event';
+import { OrderCustomUploadRepository } from '@/features/order/repositories/order-custom-upload.repository';
+import { pendingPaymentLockName } from '@/features/order/repositories/order-pending-payment-lock.helper';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { OrderCustomizationService } from '@/features/order/services/order-customization.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
@@ -29,6 +34,7 @@ import {
   createAccount,
   createOrder as createOrderRow,
   createOrderItem,
+  createPaymentSetting,
   createProduct,
   createRegion,
   createStore,
@@ -38,6 +44,11 @@ import {
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
 import { collectTopic } from '@/test/pubsub';
+import { s3TestProviders, TEST_S3_CONFIG } from '@/test/storage/s3-test.helper';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
+}));
 
 // 2026-09-16(수) 16:00 KST 고정
 const NOW = new Date('2026-09-16T07:00:00.000Z');
@@ -47,6 +58,7 @@ const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
 describe('OrderCheckoutService (real DB)', () => {
   let service: OrderCheckoutService;
   let orderRepo: OrderRepository;
+  let pickupSchedule: StorePickupScheduleService;
   let clock: ClockService;
   let random: RandomService;
   let pubSub: PubSub;
@@ -56,15 +68,19 @@ describe('OrderCheckoutService (real DB)', () => {
     const { module, prisma: p } = await createTestingModuleWithRealDb({
       providers: [
         OrderCheckoutService,
+        OrderCustomizationService,
         OrderRepository,
+        OrderCustomUploadRepository,
+        ...s3TestProviders(),
+        PaymentSettingRepository,
         ProductRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
         RandomService,
+        // 생성은 판매자 토픽에 발행하지 않는다 — 발행 수단을 열어 두고 미발행을 확인한다(in-memory)
         OrderEventsService,
-        // 발행-구독 왕복은 실 Redis spec(events service) 담당 — 여기선 in-memory
         { provide: PUB_SUB, useValue: new PubSub() },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders({ clock: true }),
@@ -73,6 +89,7 @@ describe('OrderCheckoutService (real DB)', () => {
     });
     service = module.get(OrderCheckoutService);
     orderRepo = module.get(OrderRepository);
+    pickupSchedule = module.get(StorePickupScheduleService);
     clock = module.get(ClockService);
     random = module.get(RandomService);
     pubSub = module.get(PUB_SUB);
@@ -86,6 +103,8 @@ describe('OrderCheckoutService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+    // truncateAll이 마이그레이션이 넣은 결제 설정 행까지 지운다
+    await createPaymentSetting(prisma);
     jest.spyOn(clock, 'now').mockReturnValue(NOW);
   });
 
@@ -182,7 +201,8 @@ describe('OrderCheckoutService (real DB)', () => {
   }
 
   // 호출마다 새 키 — 한 케이스에서 createOrder를 여러 번 부를 때 의도치 않은
-  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다
+  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다.
+  // 기대 금액 기본값은 factory 기본 상품(정가 10000·판매가 없음·옵션 없음) 기준이다.
   let idemSeq = 0;
   function baseInput(overrides: Partial<CreateOrderInput>): CreateOrderInput {
     idemSeq += 1;
@@ -191,9 +211,87 @@ describe('OrderCheckoutService (real DB)', () => {
       productId: '0',
       optionItemIds: [],
       pickupAt: VALID_PICKUP_AT,
+      expectedTotalPrice: 10_000 * (overrides.quantity ?? 1),
       ...overrides,
     };
   }
+
+  describe('createOrderCustomUploadUrl', () => {
+    async function buyer(): Promise<Account> {
+      const account = await createAccount(prisma, { account_type: 'USER' });
+      await createUserProfile(prisma, { account_id: account.id });
+      return account;
+    }
+
+    it.each([
+      ['RENDER', 'order-custom/renders'],
+      ['COMPOSITE', 'order-custom/composites'],
+      ['REFERENCE', 'order-custom/references'],
+    ] as const)(
+      '%s 용도는 %s/{accountId}/ 아래로 발급하고 PENDING으로 기록한다',
+      async (purpose, prefix) => {
+        const account = await buyer();
+
+        const result = await service.createOrderCustomUploadUrl(account.id, {
+          purpose,
+          contentType: 'image/webp',
+          contentLength: 10 * 1024 * 1024,
+        });
+
+        expect(result.key).toMatch(
+          new RegExp(
+            `^${prefix}/${account.id}/\\d{4}-\\d{2}-\\d{2}/[a-f0-9-]+\\.webp$`,
+          ),
+        );
+        expect(result.publicUrl).toBe(
+          `https://${TEST_S3_CONFIG.bucket}.s3.${TEST_S3_CONFIG.region}.amazonaws.com/${result.key}`,
+        );
+        expect(await prisma.orderCustomUpload.findMany()).toEqual([
+          expect.objectContaining({
+            account_id: account.id,
+            purpose,
+            object_key: result.key,
+            content_type: 'image/webp',
+            content_length: 10 * 1024 * 1024,
+            status: 'PENDING',
+            attached_at: null,
+            purge_started_at: null,
+          }),
+        ]);
+      },
+    );
+
+    it.each([
+      ['형식이 이미지가 아님', 'video/mp4', 1024, 'INVALID_CONTENT_TYPE'],
+      ['10MB 초과', 'image/png', 10 * 1024 * 1024 + 1, 'FILE_TOO_LARGE'],
+      ['크기 0', 'image/png', 0, 'INVALID_CONTENT_LENGTH'],
+    ] as const)(
+      '%s이면 %s이고 기록하지 않는다',
+      async (_case, contentType, contentLength, code) => {
+        const account = await buyer();
+        await expect(
+          service.createOrderCustomUploadUrl(account.id, {
+            purpose: 'RENDER',
+            contentType,
+            contentLength,
+          }),
+        ).rejects.toThrowDomain(code);
+        expect(await prisma.orderCustomUpload.count()).toBe(0);
+      },
+    );
+
+    it('구매자 계정이 아니면 USER_ONLY이고 기록하지 않는다', async () => {
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      await expect(
+        service.createOrderCustomUploadUrl(seller.id, {
+          purpose: 'RENDER',
+          contentType: 'image/png',
+          contentLength: 1024,
+        }),
+      ).rejects.toThrowDomain('USER_ONLY');
+      expect(await prisma.orderCustomUpload.count()).toBe(0);
+    });
+  });
 
   describe('createOrder', () => {
     it('주문을 생성하고 가격·옵션·상태 히스토리를 스냅샷한다', async () => {
@@ -224,12 +322,13 @@ describe('OrderCheckoutService (real DB)', () => {
           quantity: 2,
           buyerName: '차차',
           buyerPhone: '010-0000-1111',
+          expectedTotalPrice: 56000,
         }),
       );
 
       // (25000 + 2000 + 1000) × 2
       expect(result.totalPrice).toBe(56000);
-      expect(result.status).toBe('SUBMITTED');
+      expect(result.status).toBe('PENDING_PAYMENT');
       expect(result.pickupAt).toEqual(VALID_PICKUP_AT);
       expect(result.orderNumber).toMatch(/^ORD-20260916-[A-HJ-NP-Z2-9]{6}$/);
 
@@ -240,8 +339,8 @@ describe('OrderCheckoutService (real DB)', () => {
           status_histories: true,
         },
       });
-      expect(saved.status).toBe('SUBMITTED');
-      expect(saved.submitted_at).toEqual(NOW);
+      expect(saved.status).toBe('PENDING_PAYMENT');
+      expect(saved.submitted_at).toBeNull();
       expect(saved.buyer_name).toBe('차차');
       expect(saved.buyer_phone).toBe('010-0000-1111');
       expect(saved.subtotal_price).toBe(66000); // (30000+3000)×2
@@ -266,7 +365,8 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(saved.status_histories).toHaveLength(1);
       expect(saved.status_histories[0]).toMatchObject({
         from_status: null,
-        to_status: 'SUBMITTED',
+        to_status: 'PENDING_PAYMENT',
+        actor_type: 'BUYER',
       });
     });
 
@@ -281,7 +381,10 @@ describe('OrderCheckoutService (real DB)', () => {
 
       const result = await service.createOrder(
         buyer.id,
-        baseInput({ productId: product.id.toString() }),
+        baseInput({
+          productId: product.id.toString(),
+          expectedTotalPrice: 20000,
+        }),
       );
 
       expect(result.totalPrice).toBe(20000);
@@ -402,42 +505,6 @@ describe('OrderCheckoutService (real DB)', () => {
           }),
         ),
       ).rejects.toThrowDomain(400);
-    });
-
-    it('설명/이미지 필수 옵션 선택은 커스텀 확장 전까지 거절한다', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const group = await prisma.productOptionGroup.create({
-        data: {
-          product_id: product.id,
-          name: '레터링',
-          is_required: false,
-          min_select: 1,
-          max_select: 1,
-          option_requires_description: true,
-        },
-      });
-      const item = await prisma.productOptionItem.create({
-        data: { option_group_id: group.id, title: '문구 입력', price_delta: 0 },
-      });
-      const buyer = await makeBuyer();
-
-      await expect(
-        service.createOrder(
-          buyer.id,
-          baseInput({
-            productId: product.id.toString(),
-            optionItemIds: [item.id.toString()],
-          }),
-        ),
-      ).rejects.toThrowDomain(400);
-
-      // 해당 그룹을 선택하지 않으면 주문 가능(선택 그룹이므로)
-      const ok = await service.createOrder(
-        buyer.id,
-        baseInput({ productId: product.id.toString() }),
-      );
-      expect(ok.status).toBe('SUBMITTED');
     });
 
     it('없거나 비활성 상품·비활성 매장 상품은 NOT_FOUND다', async () => {
@@ -573,7 +640,7 @@ describe('OrderCheckoutService (real DB)', () => {
         buyer.id,
         baseInput({ productId: product.id.toString(), quantity: 1 }),
       );
-      expect(ok.status).toBe('SUBMITTED');
+      expect(ok.status).toBe('PENDING_PAYMENT');
     });
 
     it('SELLER 계정·프로필 없는 계정은 주문할 수 없다', async () => {
@@ -619,7 +686,7 @@ describe('OrderCheckoutService (real DB)', () => {
         buyer.id,
         baseInput({ productId: product.id.toString() }),
       );
-      expect(ok.status).toBe('SUBMITTED');
+      expect(ok.status).toBe('PENDING_PAYMENT');
     });
 
     it('KRW가 아닌 통화 상품은 거절한다', async () => {
@@ -702,7 +769,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString(), quantity: 5 }),
         ),
-      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+      ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
     });
 
     it('반증: 복제 지연 — catalog 기준으로는 이미 소진이어도 복제본이 없으면 받는다', async () => {
@@ -731,7 +798,7 @@ describe('OrderCheckoutService (real DB)', () => {
           buyer.id,
           baseInput({ productId: product.id.toString() }),
         ),
-      ).resolves.toMatchObject({ status: 'SUBMITTED' });
+      ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
     });
 
     it('반증: 설정 삭제가 아직 복제되지 않았으면 기존 제한이 유지된다', async () => {
@@ -785,10 +852,14 @@ describe('OrderCheckoutService (real DB)', () => {
       const rejected = results.filter((r) => r.status === 'rejected');
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
-      const submittedCount = await prisma.order.count({
-        where: { status: 'SUBMITTED', deleted_at: null },
+      // 교착 등 다른 실패로 한 건이 떨어진 것이 아니다
+      expect(rejected[0].reason).toMatchObject({
+        code: 'PICKUP_NOT_AVAILABLE',
       });
-      expect(submittedCount).toBe(1);
+      const createdCount = await prisma.order.count({
+        where: { status: 'PENDING_PAYMENT', deleted_at: null },
+      });
+      expect(createdCount).toBe(1);
     });
 
     it('주문번호 충돌 시 새 번호로 재시도하고, 계속 충돌하면 실패한다', async () => {
@@ -829,34 +900,6 @@ describe('OrderCheckoutService (real DB)', () => {
       const replayed = await service.createOrder(buyer.id, input);
 
       expect(replayed).toEqual(first);
-      expect(await prisma.order.count()).toBe(1);
-    });
-
-    it('같은 키면 입력이 달라도 기존 주문을 반환한다(입력 비교 없음)', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-
-      const first = await service.createOrder(
-        buyer.id,
-        baseInput({
-          idempotencyKey: 'fixed-idem-key-02',
-          productId: product.id.toString(),
-          quantity: 1,
-        }),
-      );
-      const replayed = await service.createOrder(
-        buyer.id,
-        baseInput({
-          idempotencyKey: 'fixed-idem-key-02',
-          productId: product.id.toString(),
-          quantity: 3,
-        }),
-      );
-
-      // 수량 3의 새 주문이 아니라 수량 1로 만든 기존 주문의 결과가 그대로 온다
-      expect(replayed.orderId).toBe(first.orderId);
-      expect(replayed.totalPrice).toBe(first.totalPrice);
       expect(await prisma.order.count()).toBe(1);
     });
 
@@ -1014,57 +1057,292 @@ describe('OrderCheckoutService (real DB)', () => {
           productId: product.id.toString(),
         }),
       );
-      expect(retried.status).toBe('SUBMITTED');
+      expect(retried.status).toBe('PENDING_PAYMENT');
       expect(await prisma.order.count()).toBe(1);
     });
   });
 
-  describe('createOrder — 접수 이벤트(order.submitted)', () => {
-    async function submittedEvents() {
-      return prisma.outbox.findMany({
-        where: { event_type: ORDER_SUBMITTED },
-        orderBy: { id: 'asc' },
-      });
-    }
+  describe('createOrder — 기대 금액·요청 사항', () => {
+    it.each([-1, 1])(
+      '기대 금액이 서버 계산과 %i원 다르면 ORDER_PRICE_CHANGED이고 키를 소모하지 않는다',
+      async (diff) => {
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, { store_id: store.id });
+        const buyer = await makeBuyer();
+        const input = baseInput({
+          productId: product.id.toString(),
+          expectedTotalPrice: 10_000 + diff,
+        });
 
-    it('생성과 같은 tx에 1건 남기고 payload는 생성 시점 스냅샷이다', async () => {
+        await expect(
+          service.createOrder(buyer.id, input),
+        ).rejects.toThrowDomain('ORDER_PRICE_CHANGED');
+        expect(await prisma.order.count()).toBe(0);
+
+        const ok = await service.createOrder(buyer.id, {
+          ...input,
+          expectedTotalPrice: 10_000,
+        });
+        expect(ok.totalPrice).toBe(10_000);
+      },
+    );
+
+    it.each<[string, string | undefined, string | null]>([
+      ['앞뒤 공백은 지운다', '  초는 빼 주세요 ', '초는 빼 주세요'],
+      ['공백만 보내면 없음', '   ', null],
+      ['안 보내면 없음', undefined, null],
+    ])('요청 사항을 저장한다 — %s', async (_case, requestNote, expected) => {
       const store = await makeOpenStore();
-      const { product, sizeSmallId } = await makeProductWithOptions(store.id);
+      const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
 
       const result = await service.createOrder(
         buyer.id,
-        baseInput({
+        baseInput({ productId: product.id.toString(), requestNote }),
+      );
+
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(result.orderId) },
+      });
+      expect(saved.request_note).toBe(expected);
+    });
+  });
+
+  describe('createOrder — 픽업 판정이 달력과 같다', () => {
+    // 9/17 10:00~19:30(30분 간격) 전 슬롯. 지금(9/16 16:00) + 제작 26시간 = 9/17 18:00이
+    // 매장 리드타임(60분)보다 늦어 하한이 된다
+    const DAY_SLOTS = Array.from({ length: 20 }, (_, index) => {
+      const minutes = 10 * 60 + index * 30;
+      const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+      return [time, minutes >= 18 * 60] as const;
+    });
+
+    it.each(DAY_SLOTS)(
+      '%s 슬롯: available=%s ⇔ createOrder 성공',
+      async (time, expectedAvailable) => {
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, {
+          store_id: store.id,
+          preparation_time_minutes: 26 * 60,
+        });
+        const buyer = await makeBuyer();
+
+        const slots = await pickupSchedule.pickupTimeSlots(
+          store.id,
+          '2026-09-17',
+          product.id,
+        );
+        const daySlots = [...slots.morning, ...slots.afternoon];
+        expect(daySlots).toHaveLength(DAY_SLOTS.length);
+        const slot = daySlots.find((candidate) => candidate.time === time);
+        expect(slot?.available).toBe(expectedAvailable);
+
+        const attempt = service.createOrder(
+          buyer.id,
+          baseInput({
+            productId: product.id.toString(),
+            pickupAt: new Date(`2026-09-17T${time}:00+09:00`),
+          }),
+        );
+        if (slot?.available) {
+          await expect(attempt).resolves.toMatchObject({
+            status: 'PENDING_PAYMENT',
+          });
+        } else {
+          await expect(attempt).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+        }
+      },
+    );
+  });
+
+  describe('createOrder — 멱등 입력 해시', () => {
+    async function setup() {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      return { store, product, buyer };
+    }
+
+    it('같은 키·같은 입력이면 기존 주문을 돌려주고 해시를 저장해 둔다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'hash-same-key',
+        productId: product.id.toString(),
+        requestNote: '메모',
+      });
+
+      const first = await service.createOrder(buyer.id, input);
+      const replayed = await service.createOrder(buyer.id, { ...input });
+
+      expect(replayed).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(first.orderId) },
+      });
+      expect(saved.idempotency_input_hash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it.each<[string, Partial<CreateOrderInput>]>([
+      ['수량', { quantity: 2, expectedTotalPrice: 20_000 }],
+      ['픽업 일시', { pickupAt: new Date('2026-09-18T05:30:00.000Z') }],
+      ['주문자 이름', { buyerName: '다른 이름' }],
+      ['주문자 연락처', { buyerPhone: '010-9999-9999' }],
+      ['입금자명', { depositorName: '다른 입금자' }],
+      ['요청 사항', { requestNote: '다른 메모' }],
+      ['기대 금액', { expectedTotalPrice: 9_999 }],
+    ])(
+      '같은 키로 %s만 달라도 IDEMPOTENCY_KEY_INPUT_MISMATCH다',
+      async (_field, change) => {
+        const { product, buyer } = await setup();
+        const input = baseInput({
+          idempotencyKey: 'hash-mismatch-key',
           productId: product.id.toString(),
-          optionItemIds: [sizeSmallId.toString()],
-          quantity: 2,
+        });
+        await service.createOrder(buyer.id, input);
+
+        await expect(
+          service.createOrder(buyer.id, { ...input, ...change }),
+        ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+        expect(await prisma.order.count()).toBe(1);
+      },
+    );
+
+    it('해시가 없는 기존 주문(도입 전)은 입력이 달라도 비교 없이 돌려준다', async () => {
+      const { product, buyer } = await setup();
+      const legacy = await createOrderRow(prisma, {
+        account_id: buyer.id,
+        idempotency_key: 'legacy-hashless-key',
+      });
+
+      const replayed = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'legacy-hashless-key',
+          productId: product.id.toString(),
+          quantity: 5,
         }),
       );
 
-      const events = await submittedEvents();
+      expect(replayed.orderId).toBe(legacy.id.toString());
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('quantity를 생략하면 1을 보낸 것과 같은 입력이다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'hash-quantity-key',
+        productId: product.id.toString(),
+      });
+
+      const first = await service.createOrder(buyer.id, {
+        ...input,
+        quantity: 1,
+      });
+      expect(input.quantity).toBeUndefined();
+      await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+        first,
+      );
+    });
+
+    it.each([
+      ['tx 밖 사전 검사', false],
+      ['tx 안 잠금 재검사', true],
+    ])(
+      'capacity 거절 뒤 replay도 입력을 비교한다 — %s',
+      async (_path, bypassPrecheck) => {
+        const { store, product, buyer } = await setup();
+        await createStoreDailyCapacity(prisma, {
+          store_id: store.id,
+          capacity_date: new Date(Date.UTC(2026, 8, 18)),
+          capacity: 1,
+        });
+        const input = baseInput({
+          idempotencyKey: 'capacity-hash-key',
+          productId: product.id.toString(),
+        });
+        const first = await service.createOrder(buyer.id, input);
+
+        const raceOnce = () => {
+          jest
+            .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+            .mockResolvedValueOnce(null);
+          if (bypassPrecheck) {
+            jest
+              .spyOn(orderRepo, 'isDailyCapacityExceeded')
+              .mockResolvedValueOnce(false);
+          }
+        };
+        raceOnce();
+        await expect(
+          service.createOrder(buyer.id, { ...input, requestNote: '다른 메모' }),
+        ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+        raceOnce();
+        await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+          first,
+        );
+        expect(await prisma.order.count()).toBe(1);
+      },
+    );
+
+    it('멱등 키 unique 경합(P2002) 뒤 replay도 입력을 비교한다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'p2002-hash-key',
+        productId: product.id.toString(),
+      });
+      await service.createOrder(buyer.id, input);
+
+      // 사전 조회를 놓친 동시 제출 — INSERT가 키 unique에 걸린 뒤 기존 주문을 다시 읽는다
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      const insert = jest.spyOn(orderRepo, 'createPendingPaymentOrder');
+      await expect(
+        service.createOrder(buyer.id, { ...input, requestNote: '다른 메모' }),
+      ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(await prisma.order.count()).toBe(1);
+    });
+  });
+
+  describe('createOrder — 입금 대기 이벤트(order.payment_pending)', () => {
+    async function pendingEvents() {
+      return prisma.outbox.findMany({
+        where: { event_type: ORDER_PAYMENT_PENDING },
+        orderBy: { id: 'asc' },
+      });
+    }
+
+    it('생성과 같은 tx에 1건 남기고, 판매자 새 주문(order.submitted)은 남기지 않는다', async () => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer('010-1234-5678', '차차');
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+
+      const events = await pendingEvents();
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
-        aggregate_type: 'order',
         aggregate_id: result.orderId,
         occurred_at: NOW,
         actor_account_id: buyer.id,
       });
-      expect(parseOrderSubmittedPayload(events[0].payload_json)).toEqual({
+      expect(parseOrderPaymentPendingPayload(events[0].payload_json)).toEqual({
         orderId: result.orderId,
         orderNumber: result.orderNumber,
-        buyerAccountId: buyer.id.toString(),
-        storeId: store.id.toString(),
-        storeName: store.store_name,
-        productId: product.id.toString(),
-        productName: product.name,
-        quantity: 2,
-        pickupAt: VALID_PICKUP_AT.toISOString(),
-        // (25000 + 2000) × 2
-        totalPrice: 54000,
+        amount: 10_000,
+        depositorName: '차차',
+        expiresAt: new Date(NOW.getTime() + 60 * 60_000).toISOString(),
       });
+      expect(
+        await prisma.outbox.count({ where: { event_type: ORDER_SUBMITTED } }),
+      ).toBe(0);
     });
 
-    it('반증: capacity 거절은 이벤트를 남기지 않는다', async () => {
+    it('반증: capacity 거절과 같은 키 replay는 이벤트를 남기지 않는다', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
@@ -1073,31 +1351,18 @@ describe('OrderCheckoutService (real DB)', () => {
         capacity_date: new Date(Date.UTC(2026, 8, 18)),
         capacity: 1,
       });
-
       await expect(
         service.createOrder(
           buyer.id,
           baseInput({ productId: product.id.toString(), quantity: 2 }),
         ),
-      ).rejects.toThrowDomain(400);
+      ).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+      expect(await pendingEvents()).toHaveLength(0);
 
-      expect(await submittedEvents()).toHaveLength(0);
-    });
-
-    it('반증: 같은 키 replay(재요청·capacity race)는 이벤트를 추가하지 않는다', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-      await createStoreDailyCapacity(prisma, {
-        store_id: store.id,
-        capacity_date: new Date(Date.UTC(2026, 8, 18)),
-        capacity: 1,
-      });
       const input = baseInput({
         idempotencyKey: 'replay-idem-key',
         productId: product.id.toString(),
       });
-
       const first = await service.createOrder(buyer.id, input);
       expect(await service.createOrder(buyer.id, input)).toEqual(first);
       // 사전 조회 miss → tx 안 capacity 거절 → replay 경로
@@ -1106,119 +1371,379 @@ describe('OrderCheckoutService (real DB)', () => {
         .mockResolvedValueOnce(null);
       expect(await service.createOrder(buyer.id, input)).toEqual(first);
 
-      const events = await submittedEvents();
+      const events = await pendingEvents();
       expect(events).toHaveLength(1);
       expect(events[0].aggregate_id).toBe(first.orderId);
     });
-  });
 
-  describe('sellerOrderUpdated 발행', () => {
-    it('주문 생성 시 매장 토픽에 1건 — 커밋된 주문 행(updated_at)의 스냅샷을 싣는다', async () => {
+    it('판매자 주문 구독에는 아무것도 발행하지 않는다(입금 확인 뒤에 보인다)', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
       const buyer = await makeBuyer();
       const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
 
-      const result = await service.createOrder(
+      await service.createOrder(
         buyer.id,
-        baseInput({ productId: product.id.toString(), buyerName: '차차' }),
+        baseInput({ productId: product.id.toString() }),
       );
 
-      const saved = await prisma.order.findUniqueOrThrow({
-        where: { id: BigInt(result.orderId) },
-      });
-      expect(topic.received).toEqual([
-        {
-          orderId: result.orderId,
-          orderNumber: result.orderNumber,
-          status: 'SUBMITTED',
-          pickupAt: VALID_PICKUP_AT.toISOString(),
-          buyerName: '차차',
-          totalPrice: result.totalPrice,
-          productName: product.name,
-          updatedAt: saved.updated_at.toISOString(),
-        },
-      ]);
-      topic.stop();
-    });
-
-    it('반증: 멱등 replay(사전 조회·P2002 경합)는 발행하지 않는다', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
-      const input = baseInput({
-        idempotencyKey: 'replay-no-event',
-        productId: product.id.toString(),
-      });
-
-      await service.createOrder(buyer.id, input);
-      await service.createOrder(buyer.id, input);
-      // 사전 조회를 놓친 동시 제출 — 멱등 키 unique 충돌 뒤 기존 주문을 replay한다
-      jest
-        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
-        .mockResolvedValueOnce(null);
-      await service.createOrder(buyer.id, input);
-
       expect(await prisma.order.count()).toBe(1);
-      expect(topic.received).toHaveLength(1);
+      expect(topic.received).toEqual([]);
       topic.stop();
     });
+  });
 
-    it('반증: capacity 거절·tx 안 capacity replay는 발행하지 않는다', async () => {
+  describe('createOrder — 결제(입금 안내)', () => {
+    it('결제를 입금 대기로 만들고 계좌·기한(1시간)·수수료율을 주문 시점 값으로 스냅샷한다', async () => {
+      await createPaymentSetting(prisma, {
+        commission_rate_bps: 550,
+        deposit_bank_code: '088',
+        deposit_account_number: '110123456789',
+        deposit_account_holder: '케이퀵 주식회사',
+      });
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-      await createStoreDailyCapacity(prisma, {
-        store_id: store.id,
-        capacity_date: new Date(Date.UTC(2026, 8, 18)),
-        capacity: 1,
-      });
-      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
-      const input = baseInput({
-        idempotencyKey: 'capacity-replay-no-event',
-        productId: product.id.toString(),
-      });
-
-      await service.createOrder(buyer.id, input);
-      await expect(
-        service.createOrder(
-          buyer.id,
-          baseInput({ productId: product.id.toString() }),
-        ),
-      ).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
-      // 사전 조회·사전 capacity 검사를 모두 놓친 동시 재시도 — 잠금 재검사가 거절하고 내 주문을 replay한다
-      jest
-        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
-        .mockResolvedValueOnce(null);
-      jest
-        .spyOn(orderRepo, 'isDailyCapacityExceeded')
-        .mockResolvedValueOnce(false);
-      await service.createOrder(buyer.id, input);
-
-      expect(await prisma.order.count()).toBe(1);
-      expect(topic.received).toHaveLength(1);
-      topic.stop();
-    });
-
-    it('PubSub 발행이 실패해도 주문은 성공하고 이벤트만 빠진다', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
-      jest
-        .spyOn(pubSub, 'publish')
-        .mockRejectedValueOnce(new Error('redis down'));
+      const buyer = await makeBuyer('010-1234-5678', '차차');
 
       const result = await service.createOrder(
         buyer.id,
         baseInput({ productId: product.id.toString() }),
       );
 
-      expect(result.status).toBe('SUBMITTED');
-      expect(await prisma.order.count()).toBe(1);
-      expect(topic.received).toHaveLength(0);
-      topic.stop();
+      const expiresAt = new Date(NOW.getTime() + 60 * 60_000);
+      expect(result.payment).toEqual({
+        method: 'BANK_TRANSFER',
+        status: 'PENDING',
+        amount: 10_000,
+        depositorName: '차차',
+        depositBank: { code: '088', name: '신한은행' },
+        depositAccountNumber: '110123456789',
+        depositAccountHolder: '케이퀵 주식회사',
+        expiresAt,
+        buyerClaimedAt: null,
+        confirmedAt: null,
+        confirmSource: null,
+      });
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(result.orderId) },
+        include: { payment: true },
+      });
+      expect(saved.commission_rate_bps).toBe(550);
+      expect(saved.payment).toMatchObject({
+        amount: 10_000,
+        expires_at: expiresAt,
+      });
+
+      // 설정이 바뀌어도 만들어진 주문의 안내·수수료율은 그대로다(replay)
+      await createPaymentSetting(prisma, { commission_rate_bps: 0 });
+      const input = baseInput({
+        idempotencyKey: 'snapshot-key',
+        productId: product.id.toString(),
+      });
+      const first = await service.createOrder(buyer.id, input);
+      await createPaymentSetting(prisma, { deposit_bank_code: '004' });
+      await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+        first,
+      );
+    });
+
+    it.each<[string, string | undefined, string]>([
+      ['생략하면 주문자 이름', undefined, '주문자'],
+      ['공백만 보내면 주문자 이름', '   ', '주문자'],
+      ['입력값은 앞뒤 공백을 뗀다', ' 입금자 ', '입금자'],
+      [
+        '20자(코드 포인트, 이모지 포함)',
+        `${'가'.repeat(18)}🎂🎂`,
+        `${'가'.repeat(18)}🎂🎂`,
+      ],
+    ])('입금자명: %s', async (_case, depositorName, expected) => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({
+          productId: product.id.toString(),
+          buyerName: '주문자',
+          depositorName,
+        }),
+      );
+
+      expect(result.payment?.depositorName).toBe(expected);
+    });
+
+    it.each<[string, Partial<CreateOrderInput>]>([
+      ['입력 21자', { depositorName: '가'.repeat(21) }],
+      // 잘라 쓰면 은행 입금자명과 어긋나 오확인을 부른다
+      ['생략했는데 주문자 이름이 21자', { buyerName: '가'.repeat(21) }],
+    ])(
+      '입금자명이 20자를 넘으면 DEPOSITOR_NAME_INVALID다 — %s',
+      async (_case, change) => {
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, { store_id: store.id });
+        const buyer = await makeBuyer();
+
+        await expect(
+          service.createOrder(
+            buyer.id,
+            baseInput({ productId: product.id.toString(), ...change }),
+          ),
+        ).rejects.toThrowDomain('DEPOSITOR_NAME_INVALID');
+        expect(await prisma.order.count()).toBe(0);
+      },
+    );
+
+    it.each<[string, Parameters<typeof createPaymentSetting>[1] | null]>([
+      ['설정 행 없음', null],
+      ['은행 없음', { deposit_bank_code: null }],
+      ['계좌번호 없음', { deposit_account_number: null }],
+      ['예금주 없음', { deposit_account_holder: null }],
+    ])(
+      '입금 계좌가 다 채워지지 않았으면 PAYMENT_ACCOUNT_NOT_CONFIGURED다 — %s',
+      async (_case, overrides) => {
+        if (overrides === null) {
+          await prisma.paymentSetting.deleteMany();
+        } else {
+          await createPaymentSetting(prisma, overrides);
+        }
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, { store_id: store.id });
+        const buyer = await makeBuyer();
+
+        await expect(
+          service.createOrder(
+            buyer.id,
+            baseInput({ productId: product.id.toString() }),
+          ),
+        ).rejects.toThrowDomain('PAYMENT_ACCOUNT_NOT_CONFIGURED');
+        expect(await prisma.order.count()).toBe(0);
+      },
+    );
+  });
+
+  describe('createOrder — 계정당 입금 대기 2건', () => {
+    async function setup() {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      return { store, product, buyer };
+    }
+
+    function pendingOrder(accountId: bigint, overrides = {}) {
+      return createOrderRow(prisma, {
+        account_id: accountId,
+        status: 'PENDING_PAYMENT',
+        ...overrides,
+      });
+    }
+
+    function sleep(ms: number) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    it('입금 대기가 1건이면 받고, 2건이면 PENDING_PAYMENT_LIMIT_EXCEEDED다', async () => {
+      const { product, buyer } = await setup();
+      await pendingOrder(buyer.id);
+
+      const second = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+      expect(second.status).toBe('PENDING_PAYMENT');
+
+      await expect(
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ).rejects.toThrowDomain('PENDING_PAYMENT_LIMIT_EXCEEDED');
+      expect(
+        await prisma.order.count({ where: { account_id: buyer.id } }),
+      ).toBe(2);
+    });
+
+    it('다른 상태·삭제된 입금 대기·다른 계정의 입금 대기는 세지 않는다', async () => {
+      const { product, buyer } = await setup();
+      const other = await makeBuyer();
+      await pendingOrder(buyer.id, { deleted_at: NOW });
+      await createOrderRow(prisma, {
+        account_id: buyer.id,
+        status: 'SUBMITTED',
+      });
+      await createOrderRow(prisma, {
+        account_id: buyer.id,
+        status: 'CANCELED',
+      });
+      await pendingOrder(other.id);
+      await pendingOrder(other.id);
+
+      for (let i = 0; i < 2; i += 1) {
+        await service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        );
+      }
+      expect(
+        await prisma.order.count({
+          where: { account_id: buyer.id, status: 'PENDING_PAYMENT' },
+        }),
+      ).toBe(2);
+    });
+
+    it('상한에 걸려도 같은 키 재요청은 기존 주문을 돌려준다', async () => {
+      const { product, buyer } = await setup();
+      await pendingOrder(buyer.id);
+      const input = baseInput({
+        idempotencyKey: 'limit-replay-key',
+        productId: product.id.toString(),
+      });
+      const first = await service.createOrder(buyer.id, input);
+
+      // 사전 조회를 놓친 재시도 — tx 안 건수 거절 뒤 내 주문을 찾아 replay한다
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+        first,
+      );
+      expect(await prisma.order.count()).toBe(2);
+    });
+
+    it('동시 2요청은 하나만 받는다(입금 대기 1건에서 시작)', async () => {
+      const { product, buyer } = await setup();
+      await pendingOrder(buyer.id);
+
+      const results = await Promise.allSettled([
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+        service.createOrder(
+          buyer.id,
+          baseInput({ productId: product.id.toString() }),
+        ),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.filter((r) => r.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toMatchObject({
+        code: 'PENDING_PAYMENT_LIMIT_EXCEEDED',
+      });
+      expect(
+        await prisma.order.count({ where: { status: 'PENDING_PAYMENT' } }),
+      ).toBe(2);
+    });
+
+    it('앞 요청의 입금 대기 행이 커밋되기 전이면 기다렸다가 커밋된 건수로 거절한다', async () => {
+      const { product, buyer } = await setup();
+      await pendingOrder(buyer.id);
+      let commit!: () => void;
+      const gate = new Promise<void>((resolve) => (commit = resolve));
+      let inserted!: () => void;
+      const insertedSignal = new Promise<void>(
+        (resolve) => (inserted = resolve),
+      );
+      // 계정 잠금 없이 같은 계정 입금 대기 행을 미커밋으로 잡아 둔다
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await tx.order.create({
+            data: {
+              account_id: buyer.id,
+              order_number: 'ORD-UNCOMMITTED-1',
+              status: 'PENDING_PAYMENT',
+              pickup_at: VALID_PICKUP_AT,
+              buyer_name: '차차',
+              buyer_phone: '010-0000-0000',
+            },
+          });
+          inserted();
+          await gate;
+        },
+        { timeout: 20_000 },
+      );
+      await insertedSignal;
+
+      const attempt = service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString() }),
+      );
+      const settled = attempt.then(
+        () => 'settled',
+        () => 'settled',
+      );
+      await expect(
+        Promise.race([settled, sleep(500).then(() => 'waiting')]),
+      ).resolves.toBe('waiting');
+
+      commit();
+      await holder;
+      await expect(attempt).rejects.toThrowDomain(
+        'PENDING_PAYMENT_LIMIT_EXCEEDED',
+      );
+      expect(
+        await prisma.order.count({ where: { account_id: buyer.id } }),
+      ).toBe(2);
+    });
+
+    it('같은 계정 요청이 3초 안에 계정 잠금을 얻지 못하면 CONCURRENT_REQUEST다', async () => {
+      const { product, buyer } = await setup();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let locked!: () => void;
+      const lockedSignal = new Promise<void>((resolve) => (locked = resolve));
+      const name = pendingPaymentLockName(buyer.id);
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT GET_LOCK(${name}, 0)`;
+          locked();
+          await gate;
+          await tx.$queryRaw`SELECT RELEASE_LOCK(${name})`;
+        },
+        { timeout: 20_000 },
+      );
+      await lockedSignal;
+
+      try {
+        await expect(
+          service.createOrder(
+            buyer.id,
+            baseInput({ productId: product.id.toString() }),
+          ),
+        ).rejects.toThrowDomain('CONCURRENT_REQUEST');
+        expect(await prisma.order.count()).toBe(0);
+      } finally {
+        release();
+        await holder;
+      }
+    });
+
+    it('다른 계정끼리는 같은 매장·날짜(capacity 잠금)로 동시에 주문해도 교착 없이 둘 다 받는다', async () => {
+      const { store, product } = await setup();
+      await createStoreDailyCapacity(prisma, {
+        store_id: store.id,
+        capacity_date: new Date(Date.UTC(2026, 8, 18)),
+        capacity: 10,
+      });
+      const buyers = [await makeBuyer(), await makeBuyer()];
+
+      for (let round = 0; round < 5; round += 1) {
+        const results = await Promise.allSettled(
+          buyers.map((buyer) =>
+            service.createOrder(
+              buyer.id,
+              baseInput({ productId: product.id.toString() }),
+            ),
+          ),
+        );
+        expect(results.map((r) => r.status)).toEqual([
+          'fulfilled',
+          'fulfilled',
+        ]);
+        // 다음 라운드도 상한에 걸리지 않게 입금 대기를 비운다
+        await prisma.order.updateMany({ data: { status: 'CANCELED' } });
+      }
     });
   });
 });

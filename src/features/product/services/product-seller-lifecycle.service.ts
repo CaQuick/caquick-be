@@ -55,20 +55,9 @@ export class SellerProductLifecycleService extends SellerBaseService {
 
     this.validateProductPrices(input.regularPrice, input.salePrice);
 
-    const baseDesignImageUrl = cleanNullableText(
-      input.baseDesignImageUrl,
-      MAX_URL_LENGTH,
-    );
     const initialImageUrl = cleanRequiredText(
       input.initialImageUrl,
       MAX_URL_LENGTH,
-    );
-    assertOwnedUploadUrl(
-      this.s3,
-      baseDesignImageUrl,
-      'PRODUCT_IMAGE',
-      ctx.accountId,
-      'INVALID_IMAGE_URL',
     );
     assertOwnedUploadUrl(
       this.s3,
@@ -96,7 +85,6 @@ export class SellerProductLifecycleService extends SellerBaseService {
           regular_price: input.regularPrice,
           sale_price: input.salePrice ?? null,
           currency: this.cleanCurrency(input.currency),
-          base_design_image_url: baseDesignImageUrl,
           preparation_time_minutes:
             input.preparationTimeMinutes ?? DEFAULT_PREPARATION_TIME_MINUTES,
           is_active: input.isActive ?? true,
@@ -139,15 +127,6 @@ export class SellerProductLifecycleService extends SellerBaseService {
     if (!current) throw new DomainException('PRODUCT_NOT_FOUND');
 
     const data = this.buildProductUpdateData(input);
-    if (typeof data.base_design_image_url === 'string') {
-      assertOwnedUploadUrl(
-        this.s3,
-        data.base_design_image_url,
-        'PRODUCT_IMAGE',
-        ctx.accountId,
-        'INVALID_IMAGE_URL',
-      );
-    }
     const nextRegularPrice = input.regularPrice ?? current.regular_price;
     const nextSalePrice =
       input.salePrice !== undefined ? input.salePrice : current.sale_price;
@@ -306,14 +285,6 @@ export class SellerProductLifecycleService extends SellerBaseService {
       ...(input.salePrice !== undefined ? { sale_price: input.salePrice } : {}),
       ...(input.currency !== undefined
         ? { currency: this.cleanCurrency(input.currency) }
-        : {}),
-      ...(input.baseDesignImageUrl !== undefined
-        ? {
-            base_design_image_url: cleanNullableText(
-              input.baseDesignImageUrl,
-              MAX_URL_LENGTH,
-            ),
-          }
         : {}),
       ...(input.preparationTimeMinutes !== undefined &&
       input.preparationTimeMinutes !== null

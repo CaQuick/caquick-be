@@ -113,21 +113,40 @@ extend type Mutation {
   ): [SellerOptionItem!]!
 
   """
-  상품 커스텀 템플릿을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  상품 커스텀 방식을 바꾼다. 바꿀 방식의 준비가 끝나지 않았으면(SellerProduct.customReadiness의 issues가 있으면)
+  CUSTOM_PRODUCT_NOT_READY. 지금과 같은 방식이면 아무것도 바꾸지 않고 그대로 돌려준다.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않거나 내 상품이 아니면 NOT_FOUND.
+  """
+  sellerSetProductCustomMode(
+    productId: ID!
+    """
+    바꿀 커스텀 방식.
+    """
+    customMode: CustomModeType!
+  ): SellerProduct!
+  """
+  3D 기본 세트를 불러온다. 3D 항목 그룹이 없는 카테고리(크기·맛·모양·디자인)마다 단일 선택 그룹을 만들고
+  선택 가능한 카탈로그 선택지 전부를 기본 가격으로 넣는다. 크기·맛·모양은 필수, 디자인은 고르지 않아도 되는 그룹이다.
+  이미 그룹이 있는 카테고리는 건드리지 않아 여러 번 불러도 결과가 같다(새로 만든 그룹이 없으면 감사 기록도 없다).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않거나 내 상품이 아니면 NOT_FOUND.
+  """
+  sellerApplyThreeDOptionPreset(productId: ID!): SellerProduct!
+  """
+  상품 커스텀 템플릿(슬롯형 바탕)을 등록 또는 수정한다. 수정하면 revision이 1 오른다.
+  바탕 이미지가 바뀔 때만 서버가 이미지를 읽어 정사각(가로·세로 차이 1px 이하)인지 확인한다:
+  아니면 CUSTOM_BASE_IMAGE_NOT_SQUARE, 이미지로 읽을 수 없으면 CUSTOM_BASE_IMAGE_UNREADABLE, 저장소를 읽지 못하면 S3_READ_FAILED(503).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerUpsertProductCustomTemplate(
     input: SellerUpsertProductCustomTemplateInput!
   ): SellerCustomTemplate!
   """
-  상품 커스텀 템플릿 활성 상태를 변경한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
-  """
-  sellerSetProductCustomTemplateActive(
-    input: SellerSetProductCustomTemplateActiveInput!
-  ): SellerCustomTemplate!
-  """
-  커스텀 텍스트 토큰을 등록 또는 수정한다. 판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  커스텀 텍스트 토큰(문구 자리)을 등록 또는 수정한다. 등록·수정·삭제·순서 변경마다 템플릿 revision이 1 오른다.
   등록 시 같은 템플릿에 같은 tokenKey의 삭제된 슬롯이 있으면 그 슬롯(같은 id)을 복구해 입력값으로 갱신한다.
   활성 슬롯과 tokenKey가 겹치면(수정으로 삭제된 슬롯의 키로 바꾸는 경우 포함) CUSTOM_TEXT_TOKEN_KEY_TAKEN.
+  검증: tokenKey 형식 CUSTOM_TOKEN_KEY_INVALID, maxLength 1~50 FIELD_OUT_OF_RANGE, 기본 문구가 maxLength 초과면 CUSTOM_TEXT_DEFAULT_TOO_LONG,
+  좌표가 바탕 밖이면 CUSTOM_AREA_OUT_OF_BOUNDS, 글자색 형식 INVALID_COLOR_FORMAT.
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerUpsertProductCustomTextToken(
     input: SellerUpsertProductCustomTextTokenInput!
@@ -230,6 +249,10 @@ type SellerOptionItem {
   노출 여부. false면 구매자가 고를 수 없다.
   """
   isActive: Boolean!
+  """
+  이어진 3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key). 없으면 null.
+  """
+  threeDKey: String
 }
 
 """
@@ -260,17 +283,6 @@ type SellerOptionGroup {
   """
   maxSelect: Int!
   """
-  선택지에 구매자 커스텀 입력(설명)이 필요한 그룹인지.
-  현재는 커스텀 체크아웃이 확장되기 전이라, 이 값이 true인 그룹의 옵션을 고르면
-  주문이 거절된다(잠정 가드). 켜기 전에 주문 가능 여부를 확인해야 한다.
-  """
-  optionRequiresDescription: Boolean!
-  """
-  선택지에 구매자 커스텀 입력(이미지)이 필요한 그룹인지.
-  optionRequiresDescription과 마찬가지로 현재는 true인 그룹의 옵션 선택이 거절된다.
-  """
-  optionRequiresImage: Boolean!
-  """
   상품 안에서의 그룹 노출 순서. 오름차순.
   """
   sortOrder: Int!
@@ -278,6 +290,10 @@ type SellerOptionGroup {
   노출 여부. false면 구매자에게 그룹 자체가 보이지 않는다.
   """
   isActive: Boolean!
+  """
+  활성 선택지의 threeDKey로 정해지는 3D 카테고리. 이어진 키가 없거나 종류가 섞였으면 null.
+  """
+  threeDCategory: ThreeDOptionCategoryType
   """
   이 그룹의 선택지. sortOrder 오름차순.
   """
@@ -295,11 +311,15 @@ type SellerCustomTextToken {
   """
   tokenKey: String!
   """
+  표시 이름(구매자 입력 화면 라벨). 주문에 스냅샷으로 남는다.
+  """
+  label: String!
+  """
   구매자가 입력하지 않았을 때 쓸 기본 문구.
   """
   defaultText: String!
   """
-  입력 가능한 최대 글자 수.
+  입력 가능한 최대 글자 수(코드 포인트, 1~50).
   """
   maxLength: Int!
   """
@@ -311,39 +331,50 @@ type SellerCustomTextToken {
   """
   isRequired: Boolean!
   """
-  문구 영역 왼쪽 위 모서리의 가로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000)이고 서버는 범위를 검사하지 않는다.
-  미지정 시 null이고 배치는 클라이언트가 정한다.
+  문구 영역 왼쪽 위 모서리의 가로 위치. 바탕 이미지 한 변을 10000으로 본 정수 비율(0~10000), 원점은 왼쪽 위.
   """
-  posX: Int
+  posX: Int!
   """
-  문구 영역 왼쪽 위 모서리의 세로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000). 미지정 시 null.
+  문구 영역 왼쪽 위 모서리의 세로 위치(0~10000).
   """
-  posY: Int
+  posY: Int!
   """
-  문구 영역 너비. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000). 미지정 시 null.
+  문구 영역 너비(1~10000, posX + width ≤ 10000).
   """
-  width: Int
+  width: Int!
   """
-  문구 영역 높이. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000). 미지정 시 null.
+  문구 영역 높이(1~10000, posY + height ≤ 10000).
   """
-  height: Int
+  height: Int!
+  """
+  글자색(#RRGGBB 대문자).
+  """
+  textColor: String!
+  """
+  자리 안 글자 정렬.
+  """
+  textAlign: CustomTextAlignType!
 }
 
 """
-상품 커스텀 템플릿. 베이스 이미지 위에 문구 슬롯을 올려 구매자가 문구를 넣게 한다.
-상품당 1개다.
+상품 커스텀 템플릿(슬롯형). 정사각 바탕 이미지 위에 문구 슬롯을 올려 구매자가 문구를 넣게 한다.
+상품당 1개다. 구매자에게 열리는지는 템플릿이 아니라 SellerProduct.customMode(SLOT)로 정한다.
 """
 type SellerCustomTemplate {
   id: ID!
   productId: ID!
   """
-  문구를 올릴 바탕 이미지 URL.
+  문구를 올릴 바탕 이미지 URL(정사각).
   """
   baseImageUrl: String!
   """
-  활성 여부. false면 구매자 화면에 커스텀 입력이 열리지 않는다.
+  자유 편집(바탕 위 영역 지정 + 요청 문구·참고 사진) 허용 여부.
   """
-  isActive: Boolean!
+  freeEditEnabled: Boolean!
+  """
+  설정 버전. 템플릿·문구 슬롯이 바뀔 때마다 1 오른다.
+  """
+  revision: Int!
   """
   문구 슬롯. sortOrder 오름차순.
   """
@@ -381,13 +412,18 @@ type SellerProduct {
   """
   currency: String!
   """
-  커스텀 도안의 바탕 이미지 URL. 커스텀을 쓰지 않으면 null.
-  """
-  baseDesignImageUrl: String
-  """
   제작 소요 시간(분). 픽업 가능 시각 계산의 리드타임에 반영된다.
   """
   preparationTimeMinutes: Int!
+  """
+  커스텀 방식. 바꾸려면 sellerSetProductCustomMode.
+  """
+  customMode: CustomModeType!
+  """
+  커스텀 방식별 준비 상태(NONE·SLOT·THREE_D 순). 준비 이슈가 있는 방식으로는 바꿀 수 없고,
+  지금 방식에 이슈가 생기면 구매자 주문이 거절된다.
+  """
+  customReadiness: [SellerCustomReadiness!]!
   """
   노출 여부. false면 구매자 화면에 나오지 않는다.
   """
@@ -414,6 +450,47 @@ type SellerProduct {
   customTemplate: SellerCustomTemplate
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+"""
+커스텀 방식 하나의 준비 상태.
+"""
+type SellerCustomReadiness {
+  """
+  대상 커스텀 방식.
+  """
+  mode: CustomModeType!
+  """
+  issues가 비어 있으면 true.
+  """
+  ready: Boolean!
+  """
+  준비 이슈. 판매자에게 그대로 보여 줄 메시지를 담는다.
+  """
+  issues: [SellerCustomReadinessIssue!]!
+}
+
+"""
+커스텀 준비 이슈 1건.
+"""
+type SellerCustomReadinessIssue {
+  """
+  이슈 코드. 값이 늘 수 있어 문자열이다.
+  슬롯형: SLOT_TEMPLATE_MISSING(바탕 없음), SLOT_NOTHING_TO_EDIT(문구 자리 0개이고 자유 편집 꺼짐).
+  3D: THREE_D_GROUP_MISSING(모양·크기 그룹 없음), THREE_D_GROUP_DUPLICATED(같은 카테고리 그룹이 둘 이상),
+  THREE_D_GROUP_MIXED(한 그룹에 카테고리가 섞였거나 3D 항목 미지정 선택지가 있음),
+  THREE_D_GROUP_NOT_SINGLE_SELECT(모양·크기는 필수·1개 선택, 맛·디자인은 최대 1개 선택이 아님),
+  THREE_D_KEY_DUPLICATED(같은 키가 둘 이상), THREE_D_KEY_UNAVAILABLE(카탈로그에 없거나 퇴역한 키).
+  """
+  code: String!
+  """
+  판매자에게 보여 줄 안내 문장.
+  """
+  message: String!
+  """
+  이슈가 걸린 옵션 그룹. 그룹과 무관하면 null.
+  """
+  optionGroupId: ID
 }
 
 """
@@ -498,10 +575,6 @@ input SellerCreateProductInput {
   """
   currency: String = "KRW"
   """
-  커스텀 도안의 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT.
-  """
-  baseDesignImageUrl: String
-  """
   제작 소요 시간(분). 기본 180.
   """
   preparationTimeMinutes: Int = 180
@@ -540,10 +613,6 @@ input SellerUpdateProductInput {
   통화 코드(ISO 4217, 대문자 3자). KRW 외에는 구매자 주문이 거절된다.
   """
   currency: String
-  """
-  커스텀 도안의 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT.
-  """
-  baseDesignImageUrl: String
   """
   제작 소요 시간(분).
   """
@@ -663,14 +732,6 @@ input SellerCreateOptionGroupInput {
   """
   maxSelect: Int = 1
   """
-  구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다. 기본 false. 현재는 켜면 해당 옵션 주문이 거절된다.
-  """
-  optionRequiresDescription: Boolean = false
-  """
-  구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다. 기본 false. 현재는 켜면 해당 옵션 주문이 거절된다.
-  """
-  optionRequiresImage: Boolean = false
-  """
   노출 순서. 오름차순이고 동률의 순서는 보장하지 않는다. 미지정 시 0.
   """
   sortOrder: Int
@@ -705,14 +766,6 @@ input SellerUpdateOptionGroupInput {
   최대 선택 개수.
   """
   maxSelect: Int
-  """
-  구매자 커스텀 입력(설명)이 필요한 그룹으로 표시한다. 현재는 켜면 해당 옵션 주문이 거절된다.
-  """
-  optionRequiresDescription: Boolean
-  """
-  구매자 커스텀 입력(이미지)이 필요한 그룹으로 표시한다. 현재는 켜면 해당 옵션 주문이 거절된다.
-  """
-  optionRequiresImage: Boolean
   """
   노출 순서.
   """
@@ -764,6 +817,11 @@ input SellerCreateOptionItemInput {
   노출 여부. 기본 true.
   """
   isActive: Boolean = true
+  """
+  3D 카탈로그 선택지 키(customThreeDCatalog.optionChoices.key, 40자 이하). 생략하거나 빈 문자열이면 연결하지 않는다.
+  카탈로그에 없거나 퇴역한 키도 저장되지만 3D 준비 이슈(THREE_D_KEY_UNAVAILABLE)가 되어 3D 주문을 받을 수 없다.
+  """
+  threeDKey: String
 }
 
 """
@@ -795,6 +853,10 @@ input SellerUpdateOptionItemInput {
   노출 여부.
   """
   isActive: Boolean
+  """
+  3D 카탈로그 선택지 키(40자 이하). null이나 빈 문자열이면 연결을 끊고, 생략하면 그대로 둔다.
+  """
+  threeDKey: String
 }
 
 """
@@ -815,24 +877,13 @@ input SellerReorderOptionItemsInput {
 input SellerUpsertProductCustomTemplateInput {
   productId: ID!
   """
-  문구를 올릴 바탕 이미지 URL. sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 BAD_USER_INPUT.
+  문구를 올릴 바탕 이미지 URL(정사각). sellerCreateUploadUrl(PRODUCT_IMAGE)로 이 계정에 발급된 publicUrl만 허용, 아니면 INVALID_IMAGE_URL.
   """
   baseImageUrl: String!
   """
-  활성 여부. 기본 true.
+  자유 편집 허용 여부. 생략하면 새 템플릿은 false, 기존 템플릿은 지금 값을 둔다.
   """
-  isActive: Boolean = true
-}
-
-"""
-커스텀 템플릿 활성 상태 변경 입력.
-"""
-input SellerSetProductCustomTemplateActiveInput {
-  templateId: ID!
-  """
-  true면 구매자 화면에 커스텀 입력이 열린다.
-  """
-  isActive: Boolean!
+  freeEditEnabled: Boolean
 }
 
 """
@@ -845,17 +896,21 @@ input SellerUpsertProductCustomTextTokenInput {
   tokenId: ID
   templateId: ID!
   """
-  슬롯 식별 키. 주문 스냅샷에 그대로 남는다.
+  슬롯 식별 키. 영문 소문자·숫자 1~60자(이 규칙 전에 만든 키는 바꾸지 않는 한 그대로 쓸 수 있다). 주문 스냅샷에 그대로 남는다.
   """
   tokenKey: String!
   """
-  구매자가 입력하지 않았을 때 쓸 기본 문구.
+  표시 이름(1~30자). 생략하면 수정은 지금 값을 두고, 등록은 tokenKey 앞 30자로 채운다.
+  """
+  label: String
+  """
+  구매자가 입력하지 않았을 때 쓸 기본 문구. maxLength 이하(코드 포인트).
   """
   defaultText: String!
   """
-  입력 가능한 최대 글자 수. 기본 30.
+  입력 가능한 최대 글자 수(코드 포인트, 1~50). 기본 20.
   """
-  maxLength: Int = 30
+  maxLength: Int = 20
   """
   입력 화면 노출 순서. 오름차순이고 동률의 순서는 보장하지 않는다. 미지정 시 0.
   """
@@ -865,22 +920,29 @@ input SellerUpsertProductCustomTextTokenInput {
   """
   isRequired: Boolean = true
   """
-  문구 영역 왼쪽 위 모서리의 가로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000)이고 서버는 범위를 검사하지 않는다.
-  생략 시 배치를 클라이언트가 정한다.
+  문구 영역 왼쪽 위 모서리의 가로 위치. 바탕 이미지 한 변을 10000으로 본 정수 비율(0~10000), 원점은 왼쪽 위.
   """
-  posX: Int
+  posX: Int!
   """
-  문구 영역 왼쪽 위 모서리의 세로 위치. 베이스 이미지 한 변을 10000으로 본 정수 비율(0~10000).
+  문구 영역 왼쪽 위 모서리의 세로 위치(0~10000).
   """
-  posY: Int
+  posY: Int!
   """
-  문구 영역 너비. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000).
+  문구 영역 너비(1 이상, posX + width ≤ 10000).
   """
-  width: Int
+  width: Int!
   """
-  문구 영역 높이. 베이스 이미지 한 변을 10000으로 본 정수 비율(1~10000).
+  문구 영역 높이(1 이상, posY + height ≤ 10000).
   """
-  height: Int
+  height: Int!
+  """
+  글자색 #RRGGBB(대소문자 무관, 대문자로 저장). 생략하면 수정은 지금 값을 두고, 등록은 #000000.
+  """
+  textColor: String
+  """
+  자리 안 글자 정렬. 생략하면 수정은 지금 값을 두고, 등록은 CENTER.
+  """
+  textAlign: CustomTextAlignType
 }
 
 """

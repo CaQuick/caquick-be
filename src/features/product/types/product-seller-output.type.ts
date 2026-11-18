@@ -1,3 +1,7 @@
+import type { ThreeDOptionCategory } from '@/features/product/constants/custom-3d-catalog.constants';
+import type { ProductCustomIssue } from '@/features/product/services/product-custom-readiness.helper';
+import type { CustomMode, CustomTextAlign } from '@/generated/prisma/client';
+
 export interface SellerCategoryOutput {
   id: string;
   name: string;
@@ -30,6 +34,7 @@ export interface SellerOptionItemOutput {
   priceDelta: number;
   sortOrder: number;
   isActive: boolean;
+  threeDKey: string | null;
 }
 
 export interface SellerOptionGroupOutput {
@@ -40,10 +45,9 @@ export interface SellerOptionGroupOutput {
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
-  optionRequiresDescription: boolean;
-  optionRequiresImage: boolean;
   sortOrder: number;
   isActive: boolean;
+  threeDCategory: ThreeDOptionCategory | null;
   optionItems: SellerOptionItemOutput[];
 }
 
@@ -51,22 +55,32 @@ export interface SellerCustomTextTokenOutput {
   id: string;
   templateId: string;
   tokenKey: string;
+  label: string;
   defaultText: string;
   maxLength: number;
   sortOrder: number;
   isRequired: boolean;
-  posX: number | null;
-  posY: number | null;
-  width: number | null;
-  height: number | null;
+  posX: number;
+  posY: number;
+  width: number;
+  height: number;
+  textColor: string;
+  textAlign: CustomTextAlign;
 }
 
 export interface SellerCustomTemplateOutput {
   id: string;
   productId: string;
   baseImageUrl: string;
-  isActive: boolean;
+  freeEditEnabled: boolean;
+  revision: number;
   textTokens: SellerCustomTextTokenOutput[];
+}
+
+export interface SellerCustomReadinessOutput {
+  mode: CustomMode;
+  ready: boolean;
+  issues: ProductCustomIssue[];
 }
 
 export interface SellerProductOutput {
@@ -78,8 +92,9 @@ export interface SellerProductOutput {
   regularPrice: number;
   salePrice: number | null;
   currency: string;
-  baseDesignImageUrl: string | null;
   preparationTimeMinutes: number;
+  customMode: CustomMode;
+  customReadiness: SellerCustomReadinessOutput[];
   isActive: boolean;
   images: SellerProductImageOutput[];
   categories: SellerCategoryOutput[];

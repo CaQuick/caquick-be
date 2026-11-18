@@ -30,15 +30,15 @@ type SellerDashboard {
   """
   asOf: DateTime!
   """
-  접수(SUBMITTED) 상태로 남아 있는 주문 수. 날짜와 무관하게 전체를 센다.
+  접수(SUBMITTED) 상태로 남아 있는 주문 수. 날짜와 무관하게 전체를 센다. 입금 대기 주문은 세지 않는다.
   """
   newOrderCount: Int!
   """
-  기준일에 픽업 예정인 주문의 건수·금액. 취소 주문은 제외. 시안의 '오늘 매출 / 정산예정'에 해당한다.
+  기준일에 픽업 예정인 주문의 건수·금액. 입금 대기·취소 주문은 제외. 시안의 '오늘 매출 / 정산예정'에 해당한다.
   """
   pickupDay: SellerDashboardOrderMetrics!
   """
-  기준일에 생성된 주문의 건수·금액. 취소 주문은 제외. 접수 추세 표기('+N')용.
+  기준일에 접수(입금 확인)된 주문의 건수·금액. 취소 주문은 제외. 접수 추세 표기('+N')용.
   """
   createdDay: SellerDashboardOrderMetrics!
   """
@@ -51,9 +51,13 @@ type SellerDashboard {
   """
   remainingCapacity: Int
   """
-  기준일 픽업 주문의 제작 수량 합(취소 제외). capacity 유무와 무관하게 센다.
+  기준일 픽업 주문의 제작 수량 합(취소 제외, 입금 대기 포함). capacity 유무와 무관하게 센다.
   """
   bookedQuantity: Int!
+  """
+  bookedQuantity 중 입금 대기 주문의 수량. 입금 대기 주문은 판매자에게 보이지 않지만 제작 수량을 차지한다('입금 대기 n개 포함' 표기용).
+  """
+  pendingPaymentQuantity: Int!
   """
   노출 중(is_active)인 내 상품 수. 매장 노출 여부와 무관하다.
   """

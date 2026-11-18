@@ -1,5 +1,9 @@
-import type { SellerOrderUpdateEvent } from '@/features/order/types/order-seller-output.type';
-import type { Order } from '@/generated/prisma/client';
+import { isCustomOrderItem } from '@/features/order/services/order-output-mappers.helper';
+import type {
+  SellerOrderUpdateEvent,
+  SellerOrderUpdateKind,
+} from '@/features/order/types/order-seller-output.type';
+import type { Order, OrderItem } from '@/generated/prisma/client';
 
 export type SellerOrderUpdateRow = Pick<
   Order,
@@ -10,20 +14,26 @@ export type SellerOrderUpdateRow = Pick<
   | 'buyer_name'
   | 'total_price'
   | 'updated_at'
->;
+> & {
+  /** 첫 품목이 상품명·커스텀 여부를 정한다 */
+  items: Pick<OrderItem, 'product_name_snapshot' | 'custom_mode_snapshot'>[];
+};
 
 export function toSellerOrderUpdateEvent(
+  kind: SellerOrderUpdateKind,
   row: SellerOrderUpdateRow,
-  productName: string,
 ): SellerOrderUpdateEvent {
+  const [firstItem] = row.items;
   return {
+    kind,
     orderId: row.id.toString(),
     orderNumber: row.order_number,
     status: row.status,
     pickupAt: row.pickup_at.toISOString(),
     buyerName: row.buyer_name,
     totalPrice: row.total_price,
-    productName,
+    productName: firstItem?.product_name_snapshot ?? '',
+    hasCustom: isCustomOrderItem(firstItem),
     updatedAt: row.updated_at.toISOString(),
   };
 }

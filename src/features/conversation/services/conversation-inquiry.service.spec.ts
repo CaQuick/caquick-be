@@ -10,19 +10,32 @@ import {
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
+import { OrderInquiryRepository } from '@/features/order';
 import { CATALOG_QUERY } from '@/features/store';
 import { StoreCatalogQueryRepository } from '@/features/store/repositories/store-catalog-query.repository';
-import type { PrismaClient } from '@/generated/prisma/client';
+import type { OrderStatus, PrismaClient } from '@/generated/prisma/client';
 import { PUB_SUB } from '@/global/pubsub';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createAccount,
+  createOrder,
+  createOrderItem,
   createStore,
   createUserProfile,
 } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import {
+  FOREIGN_UPLOAD_URL,
+  ownedUploadUrl,
+  s3TestProviders,
+  TEST_S3_CONFIG,
+} from '@/test/storage/s3-test.helper';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://mock-presigned-url.com'),
+}));
 
 describe('ConversationInquiryService (real DB)', () => {
   let service: ConversationInquiryService;
@@ -37,6 +50,8 @@ describe('ConversationInquiryService (real DB)', () => {
         // 발행 repository가 OutboxPublisher를 주입받는다
         ...outboxPublisherProviders(),
         ConversationEventsService,
+        OrderInquiryRepository,
+        ...s3TestProviders(),
         AccountUserRepository,
         { provide: CATALOG_QUERY, useClass: StoreCatalogQueryRepository },
         // 발행 경로 실검증은 events service spec(실 Redis) 담당 — 여기선 in-memory
@@ -506,6 +521,347 @@ describe('ConversationInquiryService (real DB)', () => {
         messageId: result.messages[1].id,
         preview: '케이크 보관 방법',
       });
+    });
+  });
+
+  /** 매장의 상품 1개짜리 주문. 주문 1건 = 상품 1개 = 매장 1곳. */
+  async function orderAt(
+    accountId: bigint,
+    storeId: bigint,
+    overrides: {
+      status?: OrderStatus;
+      submitted_at?: Date | null;
+      product_name_snapshot?: string;
+      product_thumbnail_url_snapshot?: string | null;
+      custom_preview_image_url?: string | null;
+    } = {},
+  ) {
+    const { status, submitted_at, ...item } = overrides;
+    const order = await createOrder(prisma, {
+      account_id: accountId,
+      ...(status ? { status } : {}),
+      ...(submitted_at !== undefined ? { submitted_at } : {}),
+    });
+    await createOrderItem(prisma, {
+      order_id: order.id,
+      store_id: storeId,
+      ...item,
+    });
+    return order;
+  }
+
+  describe('숨김 매장 문의(그 매장에 진행 중인 주문이 있는 구매자만)', () => {
+    it('진행 중인 주문이 있으면 문의 컨텍스트 조회·텍스트·FAQ·이미지 전송을 허용한다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma, { is_active: false });
+      const faq = await createFaq(store.id);
+      await orderAt(buyer.id, store.id, { status: 'CONFIRMED' });
+
+      await expect(
+        service.storeInquiryContext(buyer.id, store.id.toString()),
+      ).resolves.toMatchObject({ storeId: store.id.toString() });
+      await service.sendConversationMessage(buyer.id, {
+        storeId: store.id.toString(),
+        bodyText: '정지됐다는데 케이크는 받을 수 있나요?',
+      });
+      const faqResult = await service.sendConversationFaqMessage(buyer.id, {
+        storeId: store.id.toString(),
+        faqTopicId: faq.id.toString(),
+      });
+      expect(faqResult.messages).toHaveLength(2);
+      const imageResult = await service.sendConversationImageMessage(buyer.id, {
+        storeId: store.id.toString(),
+        imageUrl: ownedUploadUrl('CONVERSATION_IMAGE', buyer.id),
+      });
+      expect(imageResult.messages.map((m) => m.bodyFormat)).toEqual(['IMAGE']);
+    });
+
+    it.each([
+      ['끝난 주문만 있음', 'PICKED_UP'],
+      ['취소된 주문만 있음', 'CANCELED'],
+    ] as const)('%s이면 STORE_NOT_FOUND', async (_label, status) => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma, { is_active: false });
+      const faq = await createFaq(store.id);
+      await orderAt(buyer.id, store.id, { status });
+      const storeId = store.id.toString();
+
+      await expect(
+        service.storeInquiryContext(buyer.id, storeId),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.sendConversationMessage(buyer.id, {
+          storeId,
+          bodyText: '문의',
+        }),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.sendConversationFaqMessage(buyer.id, {
+          storeId,
+          faqTopicId: faq.id.toString(),
+        }),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      await expect(
+        service.sendConversationImageMessage(buyer.id, {
+          storeId,
+          imageUrl: ownedUploadUrl('CONVERSATION_IMAGE', buyer.id),
+        }),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      expect(await prisma.storeConversationMessage.count()).toBe(0);
+    });
+
+    it('다른 구매자·다른 매장의 진행 주문은 허용 근거가 아니고, 삭제된 매장은 진행 주문이 있어도 거절한다', async () => {
+      const buyer = await setupBuyer();
+      const other = await setupBuyer('다른 구매자');
+      const hidden = await createStore(prisma, { is_active: false });
+      const elsewhere = await createStore(prisma);
+      const deleted = await createStore(prisma, { deleted_at: new Date() });
+      await orderAt(other.id, hidden.id, { status: 'SUBMITTED' });
+      await orderAt(buyer.id, elsewhere.id, { status: 'SUBMITTED' });
+      await orderAt(buyer.id, deleted.id, { status: 'SUBMITTED' });
+
+      for (const store of [hidden, deleted]) {
+        await expect(
+          service.storeInquiryContext(buyer.id, store.id.toString()),
+        ).rejects.toThrowDomain('STORE_NOT_FOUND');
+      }
+    });
+  });
+
+  describe('createConversationImageUploadUrl', () => {
+    it('conversation-images/{accountId}/ 아래로 10MB까지 발급한다', async () => {
+      const buyer = await setupBuyer();
+
+      const result = await service.createConversationImageUploadUrl(buyer.id, {
+        contentType: 'image/png',
+        contentLength: 10 * 1024 * 1024,
+      });
+
+      expect(result.key).toMatch(
+        new RegExp(
+          `^conversation-images/${buyer.id}/\\d{4}-\\d{2}-\\d{2}/[a-f0-9-]+\\.png$`,
+        ),
+      );
+      expect(result.publicUrl).toBe(
+        `https://${TEST_S3_CONFIG.bucket}.s3.${TEST_S3_CONFIG.region}.amazonaws.com/${result.key}`,
+      );
+    });
+
+    it.each([
+      ['10MB 초과', 'image/png', 10 * 1024 * 1024 + 1, 'FILE_TOO_LARGE'],
+      ['0바이트', 'image/png', 0, 'INVALID_CONTENT_LENGTH'],
+      ['이미지가 아닌 형식', 'video/mp4', 1, 'INVALID_CONTENT_TYPE'],
+    ] as const)('%s는 %s', async (_label, contentType, contentLength, code) => {
+      const buyer = await setupBuyer();
+      await expect(
+        service.createConversationImageUploadUrl(buyer.id, {
+          contentType,
+          contentLength,
+        }),
+      ).rejects.toThrowDomain(code);
+    });
+
+    it('구매자 계정이 아니면 USER_ONLY', async () => {
+      const seller = await createAccount(prisma, { account_type: 'SELLER' });
+      await expect(
+        service.createConversationImageUploadUrl(seller.id, {
+          contentType: 'image/png',
+          contentLength: 1,
+        }),
+      ).rejects.toThrowDomain('USER_ONLY');
+    });
+  });
+
+  describe('sendConversationImageMessage', () => {
+    it('첫 전송이면 인사말 → 이미지 메시지를 저장하고 본문·푸시 미리보기는 대체 문구다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const imageUrl = ownedUploadUrl('CONVERSATION_IMAGE', buyer.id);
+
+      const result = await service.sendConversationImageMessage(buyer.id, {
+        storeId: store.id.toString(),
+        imageUrl,
+      });
+
+      expect(result.messages.map((m) => m.bodyFormat)).toEqual([
+        'TEXT',
+        'IMAGE',
+      ]);
+      expect(result.messages[1]).toMatchObject({
+        senderType: 'USER',
+        bodyText: '사진을 보냈습니다.',
+        bodyHtml: null,
+        imageUrl,
+        orderCard: null,
+      });
+      const rows = await messagesOf(BigInt(result.conversationId));
+      expect(rows[1]).toMatchObject({
+        body_format: 'IMAGE',
+        image_url: imageUrl,
+      });
+      const [event] = await prisma.outbox.findMany();
+      expect(
+        parseConversationBuyerMessageSentPayload(event.payload_json).preview,
+      ).toBe('사진을 보냈습니다.');
+    });
+
+    const HOST = `${TEST_S3_CONFIG.bucket}.s3.${TEST_S3_CONFIG.region}.amazonaws.com`;
+    it.each([
+      [
+        '다른 계정 경로',
+        (_me: bigint, other: bigint) =>
+          ownedUploadUrl('CONVERSATION_IMAGE', other),
+      ],
+      ['다른 용도 경로', (me: bigint) => ownedUploadUrl('REVIEW_IMAGE', me)],
+      [
+        '인코딩된 dot(%2e) 우회',
+        (me: bigint, other: bigint) =>
+          `https://${HOST}/conversation-images/${me}/%2e%2e/${other}/a.jpg`,
+      ],
+      ['외부 URL', () => FOREIGN_UPLOAD_URL],
+      [
+        '2048자 초과',
+        (me: bigint) =>
+          ownedUploadUrl('CONVERSATION_IMAGE', me, `${'a'.repeat(2048)}.jpg`),
+      ],
+    ])('%s는 INVALID_IMAGE_URL', async (_label, urlOf) => {
+      const buyer = await setupBuyer();
+      const other = await setupBuyer('다른 구매자');
+      const store = await createStore(prisma);
+
+      await expect(
+        service.sendConversationImageMessage(buyer.id, {
+          storeId: store.id.toString(),
+          imageUrl: urlOf(buyer.id, other.id),
+        }),
+      ).rejects.toThrowDomain('INVALID_IMAGE_URL');
+      expect(await prisma.storeConversationMessage.count()).toBe(0);
+    });
+
+    it('공백 URL은 IMAGE_URL_REQUIRED', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      await expect(
+        service.sendConversationImageMessage(buyer.id, {
+          storeId: store.id.toString(),
+          imageUrl: '   ',
+        }),
+      ).rejects.toThrowDomain('IMAGE_URL_REQUIRED');
+    });
+  });
+
+  describe('sendConversationOrderCard', () => {
+    it('주문 매장 대화에 보낸 시점 카드(커스텀 대표 이미지 우선)와 대체 문구를 저장한다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const order = await orderAt(buyer.id, store.id, {
+        status: 'SUBMITTED',
+        product_name_snapshot: '딸기 케이크',
+        product_thumbnail_url_snapshot: 'https://cdn.example.com/product.jpg',
+        custom_preview_image_url: 'https://cdn.example.com/custom.jpg',
+      });
+      const altText = `주문 문의: 딸기 케이크 (${order.order_number})`;
+
+      const result = await service.sendConversationOrderCard(
+        buyer.id,
+        order.id.toString(),
+      );
+
+      const conversation = await prisma.storeConversation.findFirstOrThrow({
+        where: { account_id: buyer.id },
+      });
+      expect(conversation.store_id).toBe(store.id);
+      expect(result.messages[1]).toMatchObject({
+        senderType: 'USER',
+        bodyFormat: 'ORDER_CARD',
+        bodyText: altText,
+        imageUrl: null,
+        orderCard: {
+          orderId: order.id.toString(),
+          orderNumber: order.order_number,
+          productName: '딸기 케이크',
+          thumbnailUrl: 'https://cdn.example.com/custom.jpg',
+          pickupAt: order.pickup_at,
+        },
+      });
+      const [event] = await prisma.outbox.findMany();
+      expect(
+        parseConversationBuyerMessageSentPayload(event.payload_json).preview,
+      ).toBe(altText);
+    });
+
+    it('입금 확인 뒤 취소된 주문도 판매자가 볼 수 있어 보낼 수 있다', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma);
+      const order = await orderAt(buyer.id, store.id, {
+        status: 'CANCELED',
+        submitted_at: new Date(),
+      });
+
+      const result = await service.sendConversationOrderCard(
+        buyer.id,
+        order.id.toString(),
+      );
+      expect(result.messages.at(-1)?.bodyFormat).toBe('ORDER_CARD');
+    });
+
+    it('다른 구매자의 주문·삭제된 주문·없는 주문은 ORDER_NOT_FOUND', async () => {
+      const buyer = await setupBuyer();
+      const other = await setupBuyer('다른 구매자');
+      const store = await createStore(prisma);
+      const others = await orderAt(other.id, store.id);
+      const deleted = await orderAt(buyer.id, store.id);
+      await prisma.order.update({
+        where: { id: deleted.id },
+        data: { deleted_at: new Date() },
+      });
+
+      for (const id of [others.id.toString(), deleted.id.toString(), '0']) {
+        await expect(
+          service.sendConversationOrderCard(buyer.id, id),
+        ).rejects.toThrowDomain('ORDER_NOT_FOUND');
+      }
+    });
+
+    it.each([
+      ['입금 대기', 'PENDING_PAYMENT'],
+      ['입금 전 취소', 'CANCELED'],
+    ] as const)(
+      '%s 주문(입금 확인 전)은 ORDER_INQUIRY_NOT_AVAILABLE',
+      async (_label, status) => {
+        const buyer = await setupBuyer();
+        const store = await createStore(prisma);
+        const order = await orderAt(buyer.id, store.id, {
+          status,
+          submitted_at: null,
+        });
+
+        await expect(
+          service.sendConversationOrderCard(buyer.id, order.id.toString()),
+        ).rejects.toThrowDomain('ORDER_INQUIRY_NOT_AVAILABLE');
+        expect(await prisma.storeConversationMessage.count()).toBe(0);
+      },
+    );
+
+    it('숨김 매장은 카드 주문이 진행 중이면 보내고, 끝난 주문이면 STORE_NOT_FOUND', async () => {
+      const buyer = await setupBuyer();
+      const store = await createStore(prisma, { is_active: false });
+      const made = await orderAt(buyer.id, store.id, { status: 'MADE' });
+      const pickedUp = await orderAt(buyer.id, store.id, {
+        status: 'PICKED_UP',
+      });
+
+      await expect(
+        service.sendConversationOrderCard(buyer.id, pickedUp.id.toString()),
+      ).resolves.toMatchObject({ messages: expect.any(Array) });
+
+      await prisma.order.update({
+        where: { id: made.id },
+        data: { status: 'PICKED_UP' },
+      });
+      await expect(
+        service.sendConversationOrderCard(buyer.id, pickedUp.id.toString()),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
     });
   });
 });

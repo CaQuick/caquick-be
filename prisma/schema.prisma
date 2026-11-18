@@ -46,12 +46,114 @@ enum CategoryType {
   OTHER
 }
 
+enum CustomMode {
+  NONE
+  SLOT
+  THREE_D
+}
+
+enum CustomTextAlign {
+  LEFT
+  CENTER
+  RIGHT
+}
+
+// 주문 커스텀 이미지 종류. 3D는 윗면 + 옆면 앞·뒤·좌·우 렌더, 슬롯형은 '본 그대로' 합성 1장
+enum CustomImageKind {
+  THREE_D_TOP
+  THREE_D_FRONT
+  THREE_D_BACK
+  THREE_D_LEFT
+  THREE_D_RIGHT
+  SLOT_COMPOSITE
+}
+
+// 구매자 커스텀 이미지 선업로드 용도(3D 렌더·슬롯형 합성·자유 편집 참고 사진)
+enum OrderCustomUploadPurpose {
+  RENDER
+  COMPOSITE
+  REFERENCE
+}
+
+// 발급(PENDING) → 주문에 쓰임(ATTACHED, 보관) 또는 정리 중(PURGING, 주문에 붙일 수 없다)
+enum OrderCustomUploadStatus {
+  PENDING
+  ATTACHED
+  PURGING
+}
+
 enum OrderStatus {
   SUBMITTED
   CONFIRMED
   MADE
   PICKED_UP
   CANCELED
+  // 새 값은 끝에 덧붙인다(기존 값의 순번이 바뀌지 않아야 INSTANT ALTER)
+  PENDING_PAYMENT
+  NO_SHOW
+}
+
+// 주문 전이를 일으킨 주체
+enum OrderActor {
+  BUYER
+  SELLER
+  ADMIN
+  SYSTEM
+}
+
+enum OrderCancelReason {
+  DESIGN_NOT_FEASIBLE
+  OUT_OF_MATERIALS
+  SCHEDULE_UNAVAILABLE
+  INAPPROPRIATE_REQUEST
+  BUYER_REQUEST
+  OTHER
+  PAYMENT_NOT_RECEIVED
+  CONFIRM_TIMEOUT
+}
+
+// 확정 뒤 취소의 귀책. 환불액 규칙이 갈린다
+enum OrderCancelFault {
+  SELLER
+  BUYER
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  TOSS
+}
+
+// CANCELED는 PENDING에서만 간다. 확인된 결제는 주문이 취소돼도 CONFIRMED로 남고 환불은 Refund가 맡는다
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}
+
+enum PaymentConfirmSource {
+  AUTO
+  ADMIN
+}
+
+enum RefundKind {
+  CANCEL
+  DEPOSIT_RETURN
+}
+
+enum RefundStatus {
+  AWAITING_ACCOUNT
+  AWAITING_TRANSFER
+  COMPLETED
+}
+
+enum DepositRecordKind {
+  RETURN
+  UNIDENTIFIED
+}
+
+enum SettlementStatus {
+  PENDING
+  PAID
 }
 
 enum NotificationType {
@@ -75,6 +177,8 @@ enum ConversationSenderType {
 enum ConversationBodyFormat {
   TEXT
   HTML
+  IMAGE
+  ORDER_CARD
 }
 
 enum ReviewMediaType {
@@ -104,6 +208,12 @@ enum NotificationEvent {
   ORDER_MADE
   ORDER_PICKED_UP
   ORDER_CANCELED
+  ORDER_PAYMENT_CONFIRMED
+  ORDER_PAYMENT_EXPIRED
+  ORDER_NO_SHOW
+  ORDER_PICKUP_RESCHEDULED
+  REFUND_ACCOUNT_REQUESTED
+  REFUND_COMPLETED
 }
 
 enum PushPlatform {
@@ -127,7 +237,7 @@ enum AuditTargetType {
   ORDER
   CONVERSATION
   CHANGE_PASSWORD
-  // 이하 관리자 조작 대상. 판매자 감사 로그 조회는 위 5종만 보여준다.
+  // 이하 관리자 조작 대상. 판매자 감사 로그 조회는 위 5종과 SETTLEMENT_ACCOUNT만 보여준다.
   ACCOUNT
   BANNER
   CATEGORY
@@ -138,6 +248,11 @@ enum AuditTargetType {
   REVIEW_REPORT
   NOTIFICATION
   SEARCH_KEYWORD_CHIP
+  PAYMENT_SETTING
+  SETTLEMENT_ACCOUNT
+  SETTLEMENT
+  REFUND
+  DEPOSIT_RECORD
 }
 
 enum AuditActionType {
@@ -458,6 +573,8 @@ model Store {
   conversations        StoreConversation[]
   faq_topics           StoreFaqTopic[]
   daily_capacities     StoreDailyCapacity[]
+  settlements          Settlement[]
+  settlement_account   StoreSettlementAccount?
 
   @@index([seller_account_id], map: "idx_store_seller")
   @@index([store_name], map: "idx_store_name")
@@ -580,8 +697,8 @@ model Product {
 
   currency String @default("KRW") @db.Char(3)
 
-  base_design_image_url    String? @db.VarChar(2048)
-  preparation_time_minutes Int     @default(180) @db.UnsignedInt
+  preparation_time_minutes Int        @default(180) @db.UnsignedInt
+  custom_mode              CustomMode @default(NONE)
 
   is_active Boolean @default(true) @db.TinyInt
 
@@ -682,9 +799,6 @@ model ProductOptionGroup {
   min_select  Int     @default(1) @db.UnsignedSmallInt
   max_select  Int     @default(1) @db.UnsignedSmallInt
 
-  option_requires_description Boolean @default(false) @db.TinyInt
-  option_requires_image       Boolean @default(false) @db.TinyInt
-
   sort_order Int     @default(0)
   is_active  Boolean @default(true) @db.TinyInt
 
@@ -713,6 +827,8 @@ model ProductOptionItem {
   price_delta Int     @default(0)
   sort_order  Int     @default(0)
   is_active   Boolean @default(true) @db.TinyInt
+  // 3D 카탈로그 선택지 키. 3D 상품의 모양·크기·맛·디자인 옵션을 렌더 값에 잇는다
+  three_d_key String? @db.VarChar(40)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -737,8 +853,10 @@ model ProductCustomTemplate {
   id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   product_id BigInt @unique @db.UnsignedBigInt
 
-  base_image_url String  @db.VarChar(2048)
-  is_active      Boolean @default(true) @db.TinyInt
+  base_image_url    String  @db.VarChar(2048)
+  free_edit_enabled Boolean @default(false) @db.TinyInt
+  // 템플릿·슬롯이 바뀔 때마다 1 올린다. 구매자가 꾸민 기준과 주문 시점 설정이 같은지 대조한다
+  revision          Int     @default(1) @db.UnsignedInt
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -757,15 +875,20 @@ model ProductCustomTextToken {
   template_id BigInt @db.UnsignedBigInt
 
   token_key    String  @db.VarChar(60)
+  label        String  @db.VarChar(30)
   default_text String  @db.VarChar(200)
-  max_length   Int     @default(30) @db.UnsignedSmallInt
+  max_length   Int     @default(20) @db.UnsignedSmallInt
   sort_order   Int     @default(0)
   is_required  Boolean @default(true) @db.TinyInt
 
-  pos_x  Int?
-  pos_y  Int?
-  width  Int?
-  height Int?
+  // 바탕 이미지 한 변을 10000으로 본 정수 비율, 원점은 왼쪽 위
+  pos_x  Int
+  pos_y  Int
+  width  Int
+  height Int
+
+  text_color String          @default("#000000") @db.Char(7)
+  text_align CustomTextAlign @default(CENTER)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -814,7 +937,7 @@ model Order {
 
   account_id BigInt @db.UnsignedBigInt
 
-  status    OrderStatus @default(SUBMITTED)
+  status    OrderStatus @default(PENDING_PAYMENT)
   pickup_at DateTime    @db.DateTime(3)
 
   buyer_name  String @db.VarChar(100)
@@ -832,23 +955,49 @@ model Order {
 
   // 클라이언트 재시도 중복 생성 방지 키(이슈 #212). 기존 row 호환을 위해 nullable
   // (MySQL unique는 NULL 중복 허용) — 신규 주문은 항상 저장한다.
-  idempotency_key String? @db.VarChar(64)
+  idempotency_key        String? @db.VarChar(64)
+  // 같은 멱등 키 재요청이 같은 입력인지 가리는 sha256(hex). 해시 도입 전 주문은 null이고 비교를 건너뛴다
+  idempotency_input_hash String? @db.Char(64)
+
+  request_note String? @db.VarChar(500)
+
+  // 생성 시점 수수료율 스냅샷(1bp = 0.01%). 설정이 바뀌어도 이 주문의 정산은 그대로다
+  commission_rate_bps     Int       @default(0) @db.UnsignedSmallInt
+  // 정산 확정(픽업 완료·노쇼·구매자 사정 부분 환불 취소) 때 채운다. 확인된 결제가 없는 주문은 끝까지 null
+  settlement_base_amount  Int?      @db.UnsignedInt
+  commission_amount       Int?      @db.UnsignedInt
+  settlement_finalized_at DateTime? @db.DateTime(3)
+  settlement_id           BigInt?   @db.UnsignedBigInt
+
+  confirm_deadline_at      DateTime? @db.DateTime(3)
+  confirm_reminder_sent_at DateTime? @db.DateTime(3)
+  no_show_at               DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
 
-  account Account @relation(fields: [account_id], references: [id])
+  account    Account     @relation(fields: [account_id], references: [id])
+  settlement Settlement? @relation(fields: [settlement_id], references: [id], onDelete: Restrict)
 
   status_histories OrderStatusHistory[]
   items            OrderItem[]
   notifications    Notification[]
+  payment          Payment?
+  refunds          Refund[]
+  deposit_records  DepositRecord[]
+  pickup_changes   OrderPickupChange[]
 
   @@unique([account_id, idempotency_key], map: "uk_order_account_idempotency")
   @@index([account_id], map: "idx_order_account")
   @@index([status, created_at], map: "idx_order_status")
   @@index([pickup_at], map: "idx_order_pickup_at")
   @@index([deleted_at], map: "idx_order_deleted_at")
+  @@index([status, confirm_deadline_at], map: "idx_order_status_confirm_deadline")
+  @@index([status, pickup_at], map: "idx_order_status_pickup")
+  @@index([settlement_id, settlement_finalized_at], map: "idx_order_settlement")
+  // 계정당 입금 대기 건수를 잠금 읽기로 센다
+  @@index([account_id, status], map: "idx_order_account_status")
   @@map("order")
 }
 
@@ -859,6 +1008,14 @@ model OrderStatusHistory {
   from_status OrderStatus?
   to_status   OrderStatus
   changed_at  DateTime     @default(now()) @db.DateTime(3)
+
+  actor_type       OrderActor
+  // 시스템 전이는 null
+  actor_account_id BigInt?            @db.UnsignedBigInt
+  cancel_reason    OrderCancelReason?
+  cancel_fault     OrderCancelFault?
+  // 취소 전이의 환불액(원). 취소가 아니면 null
+  refund_amount    Int?               @db.UnsignedInt
 
   note String? @db.VarChar(500)
 
@@ -891,6 +1048,11 @@ model OrderItem {
   quantity            Int @default(1) @db.UnsignedSmallInt
   item_subtotal_price Int @default(0) @db.UnsignedInt
 
+  custom_mode_snapshot           CustomMode @default(NONE)
+  // 슬롯형 바탕 이미지. 문구 자리·자유 편집 영역 좌표의 기준이다
+  custom_base_image_url_snapshot String?    @db.VarChar(2048)
+  // 커스텀 대표 이미지(3D 윗면 렌더·슬롯형 합성). 목록 썸네일과 리뷰 Before의 원천이다
+  custom_preview_image_url       String?    @db.VarChar(2048)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -903,6 +1065,8 @@ model OrderItem {
   option_items  OrderItemOptionItem[]
   custom_texts  OrderItemCustomText[]
   free_edits    OrderItemCustomFreeEdit[]
+  custom_design OrderItemCustomDesign?
+  custom_images OrderItemCustomImage[]
   notifications Notification[]
 
   review Review?
@@ -941,10 +1105,22 @@ model OrderItemCustomText {
   id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
-  token_key_snapshot    String @db.VarChar(60)
-  default_text_snapshot String @db.VarChar(200)
-  value_text            String @db.VarChar(200)
-  sort_order            Int    @default(0)
+  // 원본 문구 자리. 자리가 바뀌거나 지워져도 스냅샷은 그대로라 FK를 두지 않는다. 자리 지정 전 주문은 null
+  token_id              BigInt? @db.UnsignedBigInt
+  token_key_snapshot    String  @db.VarChar(60)
+  label_snapshot        String  @db.VarChar(30)
+  default_text_snapshot String  @db.VarChar(200)
+  // 선택 자리를 지운 '문구 없음'은 null
+  value_text            String? @db.VarChar(200)
+  sort_order            Int     @default(0)
+
+  // 바탕 이미지 한 변을 10000으로 본 정수 비율, 원점은 왼쪽 위
+  pos_x      Int
+  pos_y      Int
+  width      Int
+  height     Int
+  text_color String          @db.Char(7)
+  text_align CustomTextAlign
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   updated_at DateTime  @updatedAt @db.DateTime(3)
@@ -961,7 +1137,11 @@ model OrderItemCustomFreeEdit {
   id            BigInt @id @default(autoincrement()) @db.UnsignedBigInt
   order_item_id BigInt @db.UnsignedBigInt
 
-  crop_image_url   String @db.VarChar(2048)
+  // 바탕 이미지 위 요청 영역(문구 자리와 같은 좌표계)
+  pos_x            Int
+  pos_y            Int
+  width            Int
+  height           Int
   description_text String @db.VarChar(2000)
   sort_order       Int    @default(0)
 
@@ -993,6 +1173,240 @@ model OrderItemCustomFreeEditAttachment {
   @@index([free_edit_id, sort_order], map: "idx_order_item_custom_free_edit_attachment")
   @@index([deleted_at], map: "idx_order_item_custom_free_edit_attachment_deleted_at")
   @@map("order_item_custom_free_edit_attachment")
+}
+
+// 3D 디자인 JSON(스키마 버전 동반). 주문과 함께 한 번만 쓰고 단독 삭제 경로가 없어 deleted_at을 두지 않는다 — 가시성은 order_item을 따른다
+model OrderItemCustomDesign {
+  id             BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id  BigInt @unique(map: "uk_order_item_custom_design_item") @db.UnsignedBigInt
+  schema_version Int    @db.UnsignedSmallInt
+  design_json    Json
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+
+  @@map("order_item_custom_design")
+}
+
+// 커스텀 이미지(3D 렌더 5장·슬롯형 합성). 종류당 1장이고 디자인과 같은 이유로 deleted_at이 없다
+model OrderItemCustomImage {
+  id            BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  order_item_id BigInt          @db.UnsignedBigInt
+  kind          CustomImageKind
+  image_url     String          @db.VarChar(2048)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  order_item OrderItem @relation(fields: [order_item_id], references: [id])
+
+  @@unique([order_item_id, kind], map: "uk_order_item_custom_image_kind")
+  @@map("order_item_custom_image")
+}
+
+// 커스텀 이미지 presign 발급 기록. 주문에 쓰이지 않은 객체는 정리 크론이 S3에서 지우고 행도 지운다(주문된 파일은 보관)
+model OrderCustomUpload {
+  id               BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  account_id       BigInt                   @db.UnsignedBigInt
+  purpose          OrderCustomUploadPurpose
+  object_key       String                   @unique(map: "uk_order_custom_upload_key") @db.VarChar(512)
+  content_type     String                   @db.VarChar(50)
+  content_length   Int                      @db.UnsignedInt
+  status           OrderCustomUploadStatus  @default(PENDING)
+  attached_at      DateTime?                @db.DateTime(3)
+  purge_started_at DateTime?                @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  @@index([status, created_at], map: "idx_order_custom_upload_status_created")
+  @@index([status, purge_started_at], map: "idx_order_custom_upload_status_purge")
+  @@index([account_id], map: "idx_order_custom_upload_account")
+  @@map("order_custom_upload")
+}
+
+// 주문 1건의 결제. 계좌이체는 PENDING으로 만들고 입금 확인(관리자, 후속 연동은 AUTO) 때 CONFIRMED가 된다.
+model Payment {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id BigInt @unique(map: "uk_payment_order") @db.UnsignedBigInt
+
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  amount         Int           @db.UnsignedInt
+  // 은행 앱의 입금자명과 대조하는 값
+  depositor_name String        @db.VarChar(20)
+
+  // 안내한 플랫폼 입금 계좌 스냅샷 — 설정이 바뀌어도 이 주문의 안내는 그대로다
+  deposit_bank_code      String @db.Char(3)
+  deposit_account_number String @db.VarChar(30)
+  deposit_account_holder String @db.VarChar(50)
+
+  expires_at                  DateTime              @db.DateTime(3)
+  // 구매자 '입금했어요' 시각. 있으면 미입금 자동 취소에서 빠진다
+  buyer_claimed_at            DateTime?             @db.DateTime(3)
+  confirmed_at                DateTime?             @db.DateTime(3)
+  confirm_source              PaymentConfirmSource?
+  confirmed_by_account_id     BigInt?               @db.UnsignedBigInt
+  confirmed_by_label_snapshot String?               @db.VarChar(200)
+  confirm_note                String?               @db.VarChar(500)
+  canceled_at                 DateTime?             @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  order Order @relation(fields: [order_id], references: [id])
+
+  @@index([status, buyer_claimed_at, expires_at], map: "idx_payment_status_claimed_expires")
+  @@index([status, amount], map: "idx_payment_status_amount")
+  @@map("payment")
+}
+
+// 구매자에게 돌려줄 돈. 취소 환불(CANCEL)과 반환 대상으로 연결한 입금(DEPOSIT_RETURN)이 같은 처리 흐름을 탄다.
+model Refund {
+  id                BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id          BigInt     @db.UnsignedBigInt
+  kind              RefundKind
+  // kind=CANCEL이면 order_id — 주문당 취소 환불 1건을 DB가 보장한다(NULL은 중복 허용)
+  cancel_order_id   BigInt?    @unique(map: "uk_refund_cancel_order") @db.UnsignedBigInt
+  deposit_record_id BigInt?    @unique(map: "uk_refund_deposit_record") @db.UnsignedBigInt
+
+  amount Int          @db.UnsignedInt
+  status RefundStatus @default(AWAITING_ACCOUNT)
+
+  // 구매자 환불 계좌. 계좌번호는 암호문과 표시용 끝 4자리만 둔다
+  bank_code            String?   @db.Char(3)
+  account_holder       String?   @db.VarChar(50)
+  account_number_enc   String?   @db.VarChar(255)
+  account_number_last4 String?   @db.Char(4)
+  account_submitted_at DateTime? @db.DateTime(3)
+
+  requested_at                DateTime  @db.DateTime(3)
+  completed_at                DateTime? @db.DateTime(3)
+  completed_by_account_id     BigInt?   @db.UnsignedBigInt
+  completed_by_label_snapshot String?   @db.VarChar(200)
+  complete_note               String?   @db.VarChar(500)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  order          Order          @relation(fields: [order_id], references: [id])
+  deposit_record DepositRecord? @relation(fields: [deposit_record_id], references: [id], onDelete: Restrict)
+
+  @@index([order_id], map: "idx_refund_order")
+  @@map("refund")
+}
+
+// 관리자가 은행 앱에서 본 입금 중 주문 결제로 확인하지 않은 것. RETURN은 주문에 연결해 돌려주고, UNIDENTIFIED는 메모로 종결한다.
+model DepositRecord {
+  id             BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  kind           DepositRecordKind
+  // RETURN만 주문을 가리킨다
+  order_id       BigInt?           @db.UnsignedBigInt
+  amount         Int               @db.UnsignedInt
+  depositor_name String            @db.VarChar(50)
+  deposited_at   DateTime?         @db.DateTime(3)
+  note           String?           @db.VarChar(500)
+
+  recorded_by_account_id     BigInt  @db.UnsignedBigInt
+  // 처리자 표시 라벨. 라벨을 만들 수 없는 계정이면 null
+  recorded_by_label_snapshot String? @db.VarChar(200)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  order  Order?  @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  refund Refund?
+
+  @@index([kind, created_at], map: "idx_deposit_record_kind_created")
+  @@index([order_id], map: "idx_deposit_record_order")
+  @@map("deposit_record")
+}
+
+// 매장별 주간 정산(월~일, KST). 정산 확정된 주문을 묶고 관리자가 송금한 뒤 PAID로 바꾼다.
+model Settlement {
+  id                  BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id            BigInt @db.UnsignedBigInt
+  store_name_snapshot String @db.VarChar(200)
+
+  period_start DateTime @db.Date
+  period_end   DateTime @db.Date
+
+  order_count            Int @db.UnsignedInt
+  settlement_base_amount Int @db.UnsignedInt
+  commission_amount      Int @db.UnsignedInt
+  payout_amount          Int @db.UnsignedInt
+
+  status                  SettlementStatus @default(PENDING)
+  paid_at                 DateTime?        @db.DateTime(3)
+  paid_by_account_id      BigInt?          @db.UnsignedBigInt
+  paid_by_label_snapshot  String?          @db.VarChar(200)
+  paid_note               String?          @db.VarChar(500)
+  // 송금 시점 정산 계좌 스냅샷
+  paid_bank_code          String?          @db.Char(3)
+  paid_account_holder     String?          @db.VarChar(50)
+  paid_account_number_enc String?          @db.VarChar(255)
+  paid_account_last4      String?          @db.Char(4)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  store  Store   @relation(fields: [store_id], references: [id])
+  orders Order[]
+
+  @@unique([store_id, period_start], map: "uk_settlement_store_period")
+  @@map("settlement")
+}
+
+model StoreSettlementAccount {
+  id                    BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  store_id              BigInt     @unique(map: "uk_store_settlement_account_store") @db.UnsignedBigInt
+  bank_code             String     @db.Char(3)
+  account_holder        String     @db.VarChar(50)
+  account_number_enc    String     @db.VarChar(255)
+  account_number_last4  String     @db.Char(4)
+  updated_by_account_id BigInt     @db.UnsignedBigInt
+  // 판매자 본인(SELLER)과 관리자 대리 수정(ADMIN)을 가른다
+  updated_by_role       OrderActor
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  store Store @relation(fields: [store_id], references: [id])
+
+  @@map("store_settlement_account")
+}
+
+// 플랫폼 결제 설정 단일 행(id=1). 행이 없으면 기본값(수수료 0, 입금 계좌 없음)으로 읽는다.
+model PaymentSetting {
+  id                     Int     @id
+  commission_rate_bps    Int     @default(0) @db.UnsignedSmallInt
+  deposit_bank_code      String? @db.Char(3)
+  deposit_account_number String? @db.VarChar(30)
+  deposit_account_holder String? @db.VarChar(50)
+  updated_by_account_id  BigInt? @db.UnsignedBigInt
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+  updated_at DateTime @updatedAt @db.DateTime(3)
+
+  @@map("payment_setting")
+}
+
+// 판매자 픽업 일시 변경 이력
+model OrderPickupChange {
+  id                    BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id              BigInt   @db.UnsignedBigInt
+  from_pickup_at        DateTime @db.DateTime(3)
+  to_pickup_at          DateTime @db.DateTime(3)
+  changed_by_account_id BigInt   @db.UnsignedBigInt
+  note                  String?  @db.VarChar(500)
+  changed_at            DateTime @db.DateTime(3)
+
+  created_at DateTime @default(now()) @db.DateTime(3)
+
+  order Order @relation(fields: [order_id], references: [id])
+
+  @@index([order_id, changed_at], map: "idx_order_pickup_change_order")
+  @@map("order_pickup_change")
 }
 
 /**
@@ -1446,8 +1860,17 @@ model StoreConversationMessage {
   sender_account_id BigInt?                @db.UnsignedBigInt
 
   body_format ConversationBodyFormat @default(TEXT)
+  // IMAGE·ORDER_CARD는 목록 미리보기·푸시에 쓰는 대체 문구를 담는다
   body_text   String?                @db.Text
   body_html   String?                @db.Text
+  image_url   String?                @db.VarChar(2048)
+
+  // 주문 카드는 보낸 시점 값으로 남긴다. 주문이 바뀌거나 지워져도 대화 이력이 그대로 보이게 FK를 두지 않는다
+  order_card_order_id      BigInt?   @db.UnsignedBigInt
+  order_card_order_number  String?   @db.VarChar(30)
+  order_card_product_name  String?   @db.VarChar(200)
+  order_card_thumbnail_url String?   @db.VarChar(2048)
+  order_card_pickup_at     DateTime? @db.DateTime(3)
 
   created_at DateTime  @default(now()) @db.DateTime(3)
   deleted_at DateTime? @db.DateTime(3)
