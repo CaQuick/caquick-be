@@ -105,6 +105,8 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
       productId: product.id.toString(),
       optionItemIds: [],
       pickupAt: new Date('2026-09-18T05:00:00.000Z'), // 9/18(금) 14:00 KST
+      expectedTotalPrice: 20000,
+      requestNote: '초는 빼 주세요',
     });
 
     expect(result.status).toBe('SUBMITTED');
@@ -113,5 +115,6 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
       where: { id: BigInt(result.orderId) },
     });
     expect(saved.account_id).toBe(account.id);
+    expect(saved.request_note).toBe('초는 빼 주세요');
   });
 });

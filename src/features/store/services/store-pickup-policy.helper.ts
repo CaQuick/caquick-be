@@ -47,6 +47,14 @@ export interface PickupPolicyStore {
   max_days_ahead: number;
 }
 
+/** 픽업 하한은 지금 + 이 값이다. 매장 리드타임과 상품 제작 시간 중 긴 쪽을 따른다. */
+export function effectiveLeadTimeMinutes(
+  storeLeadTimeMinutes: number,
+  preparationTimeMinutes: number,
+): number {
+  return Math.max(storeLeadTimeMinutes, preparationTimeMinutes);
+}
+
 export interface PickupBusinessHour {
   is_closed: boolean;
   open_time: Date | null;

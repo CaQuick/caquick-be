@@ -14,10 +14,11 @@ const VALID = {
   productId: '1',
   optionItemIds: ['10', '11'],
   pickupAt: new Date('2026-09-18T05:00:00.000Z'),
+  expectedTotalPrice: 25000,
 };
 
 describe('CreateOrderInput', () => {
-  it('필수 필드만으로 통과한다 (quantity/buyer는 optional)', async () => {
+  it('필수 필드만으로 통과한다 (quantity/buyer/requestNote는 optional)', async () => {
     expect(await validate(build(VALID))).toHaveLength(0);
   });
 
@@ -83,5 +84,31 @@ describe('CreateOrderInput', () => {
     expect(
       await validate(build({ ...VALID, buyerPhone: '010-0000-1111' })),
     ).toHaveLength(0);
+  });
+
+  it.each<[string, unknown]>([
+    ['누락', undefined],
+    ['음수', -1],
+    ['소수', 100.5],
+    ['문자열', '25000'],
+  ])('expectedTotalPrice %s는 거절한다', async (_case, expectedTotalPrice) => {
+    const errors = await validate(build({ ...VALID, expectedTotalPrice }));
+    expect(errors.map((e) => e.property)).toEqual(['expectedTotalPrice']);
+  });
+
+  it('expectedTotalPrice 0은 통과한다', async () => {
+    expect(
+      await validate(build({ ...VALID, expectedTotalPrice: 0 })),
+    ).toHaveLength(0);
+  });
+
+  it('requestNote는 500자까지 허용하고 501자는 거절한다', async () => {
+    expect(
+      await validate(build({ ...VALID, requestNote: '가'.repeat(500) })),
+    ).toHaveLength(0);
+    const errors = await validate(
+      build({ ...VALID, requestNote: '가'.repeat(501) }),
+    );
+    expect(errors.map((e) => e.property)).toEqual(['requestNote']);
   });
 });

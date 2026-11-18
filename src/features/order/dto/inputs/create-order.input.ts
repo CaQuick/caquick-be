@@ -50,4 +50,13 @@ export class CreateOrderInput {
   // 검증된 프로필 값을 덮어쓰지 못하게 형식을 강제한다
   @Matches(PHONE_REGEX)
   buyerPhone?: string;
+
+  @IsInt()
+  @Min(0)
+  expectedTotalPrice!: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  requestNote?: string;
 }

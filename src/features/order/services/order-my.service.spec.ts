@@ -386,10 +386,15 @@ describe('UserOrderService (real DB)', () => {
         regular_price_snapshot: 30000,
         sale_price_snapshot: 25000,
       });
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { request_note: '초는 빼 주세요' },
+      });
 
       const result = await service.getMyOrder(account.id, order.id);
 
       expect(result.orderId).toBe(order.id.toString());
+      expect(result.requestNote).toBe('초는 빼 주세요');
       expect(result.items).toHaveLength(1);
       expect(result.items[0]).toMatchObject({
         item: {

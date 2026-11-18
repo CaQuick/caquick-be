@@ -343,6 +343,10 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message: '주문 금액이 처리 가능한 범위를 벗어났습니다.',
   },
+  ORDER_PRICE_CHANGED: {
+    status: HttpStatus.CONFLICT,
+    message: '가격이 바뀌었어요. 금액을 다시 확인해 주세요.',
+  },
   UNSUPPORTED_CURRENCY: {
     status: HttpStatus.BAD_REQUEST,
     message: 'KRW 상품만 주문할 수 있습니다.',
@@ -356,6 +360,11 @@ export const ERROR_CATALOG = {
     status: HttpStatus.BAD_REQUEST,
     message:
       '이 요청 키로는 주문을 만들 수 없습니다. 주문서를 새로 열어 다시 시도해 주세요.',
+  },
+  IDEMPOTENCY_KEY_INPUT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '같은 요청 키로 다른 주문 내용이 들어왔습니다. 주문서를 새로 열어 다시 시도해 주세요.',
   },
   IDEMPOTENT_REPLAY_FAILED: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,

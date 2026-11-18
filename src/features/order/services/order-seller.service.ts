@@ -171,6 +171,7 @@ export class SellerOrderService extends SellerBaseService {
     pickup_at: Date;
     buyer_name: string;
     buyer_phone: string;
+    request_note: string | null;
     subtotal_price: number;
     discount_price: number;
     total_price: number;
@@ -192,6 +193,7 @@ export class SellerOrderService extends SellerBaseService {
       pickupAt: row.pickup_at,
       buyerName: row.buyer_name,
       buyerPhone: row.buyer_phone,
+      requestNote: row.request_note,
       subtotalPrice: row.subtotal_price,
       discountPrice: row.discount_price,
       totalPrice: row.total_price,

@@ -13,6 +13,7 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import {
   createOrder,
   createOrderItem,
+  createProduct,
   createStore,
   createStoreDailyCapacity,
 } from '@/test/factories';
@@ -306,6 +307,41 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).rejects.toThrowDomain(400);
     });
 
+    it('productId를 주면 매장 리드타임과 상품 제작 시간 중 긴 쪽을 하한으로 쓴다', async () => {
+      // 리드 60분, 제작 3일 → 현재(9/16 16:00) 기준 9/19 16:00 이전은 마감
+      const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+      await openAllWeek(store);
+      const slow = await createProduct(prisma, {
+        store_id: store.id,
+        preparation_time_minutes: 3 * 24 * 60,
+      });
+      const quick = await createProduct(prisma, {
+        store_id: store.id,
+        preparation_time_minutes: 30,
+      });
+
+      const withSlow = await service.pickupCalendar(
+        store.id,
+        '2026-09',
+        slow.id,
+      );
+      expect(dayOf(withSlow, '2026-09-18')).toMatchObject({
+        selectable: false,
+        reason: 'CLOSED',
+      });
+      expect(dayOf(withSlow, '2026-09-19').selectable).toBe(true);
+
+      // 상품이 없거나 제작 시간이 리드타임보다 짧으면 매장 리드타임 그대로다
+      for (const productId of [null, quick.id]) {
+        const calendar = await service.pickupCalendar(
+          store.id,
+          '2026-09',
+          productId,
+        );
+        expect(dayOf(calendar, '2026-09-17').selectable).toBe(true);
+      }
+    });
+
     it('없거나 비활성 매장은 NOT_FOUND다', async () => {
       const inactive = await createStore(prisma, { is_active: false });
 
@@ -342,6 +378,40 @@ describe('StorePickupScheduleService (real DB)', () => {
         { time: '16:00', available: false },
         { time: '17:00', available: true },
       ]);
+    });
+
+    it('productId를 주면 상품 제작 시간 이전 슬롯을 마감한다', async () => {
+      // 리드 60분, 제작 26시간 → 현재(9/16 16:00) 기준 9/17 18:00부터 가능
+      const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+      await openAllWeek(store, 16, 20);
+      const product = await createProduct(prisma, {
+        store_id: store.id,
+        preparation_time_minutes: 26 * 60,
+      });
+
+      const withProduct = await service.pickupTimeSlots(
+        store.id,
+        '2026-09-17',
+        product.id,
+      );
+      const withoutProduct = await service.pickupTimeSlots(
+        store.id,
+        '2026-09-17',
+      );
+
+      expect(withProduct.afternoon).toEqual([
+        { time: '16:00', available: false },
+        { time: '16:30', available: false },
+        { time: '17:00', available: false },
+        { time: '17:30', available: false },
+        { time: '18:00', available: true },
+        { time: '18:30', available: true },
+        { time: '19:00', available: true },
+        { time: '19:30', available: true },
+      ]);
+      expect(withoutProduct.afternoon.every((slot) => slot.available)).toBe(
+        true,
+      );
     });
 
     it('미래 날짜는 전 슬롯 가용이고 12:00 기준으로 오전/오후를 나눈다', async () => {
@@ -457,6 +527,41 @@ describe('StorePickupScheduleService (real DB)', () => {
     });
   });
 
+  describe('productId 검증', () => {
+    it('그 매장의 판매 중 상품이 아니면 달력·슬롯 모두 PRODUCT_NOT_FOUND다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+      const candidates = [
+        await createProduct(prisma), // 다른 매장 상품
+        await createProduct(prisma, { store_id: store.id, is_active: false }),
+        await createProduct(prisma, {
+          store_id: store.id,
+          deleted_at: new Date('2026-09-01T00:00:00.000Z'),
+        }),
+      ];
+
+      for (const product of candidates) {
+        await expect(
+          service.pickupCalendar(store.id, '2026-09', product.id),
+        ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+        await expect(
+          service.pickupTimeSlots(store.id, '2026-09-18', product.id),
+        ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+      }
+      await expect(
+        service.pickupCalendar(store.id, '2026-09', 999999n),
+      ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+    });
+
+    it('매장이 없으면 상품보다 매장을 먼저 거절한다', async () => {
+      const product = await createProduct(prisma);
+
+      await expect(
+        service.pickupTimeSlots(999999n, '2026-09-18', product.id),
+      ).rejects.toThrowDomain('STORE_NOT_FOUND');
+    });
+  });
+
   describe('isPickupSlotAvailable', () => {
     /** 9/18(금) 14:00 KST — 전 요일 10~20시 영업 기준 유효 슬롯. */
     const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
@@ -469,6 +574,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: VALID_PICKUP_AT,
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(true);
     });
@@ -481,12 +587,14 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-18T05:00:30.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       await expect(
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-18T05:10:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       // 영업시간 밖(21:00 KST)
@@ -494,6 +602,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-18T12:00:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
     });
@@ -513,6 +622,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-16T07:30:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       // 오늘 17:00 KST — 리드타임 충족
@@ -520,6 +630,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-16T08:00:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(true);
       // 휴무일(9/18)
@@ -527,6 +638,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: VALID_PICKUP_AT,
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
     });
@@ -543,6 +655,7 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-18T05:00:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       // 9/19 14:00 — 여전히 미달, 9/19 16:00 — 충족
@@ -550,12 +663,14 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-19T05:00:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       await expect(
         service.isPickupSlotAvailable({
           storeId: store.id,
           pickupAt: new Date('2026-09-19T07:00:00.000Z'),
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(true);
 
@@ -577,6 +692,26 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).toBe(true);
     });
 
+    it('제작 시간이 리드타임보다 길면 제작 시간을 하한으로 쓴다', async () => {
+      const store = await createStore(prisma, { min_lead_time_minutes: 60 });
+      await openAllWeek(store);
+      const at = (iso: string, preparationTimeMinutes: number) =>
+        service.isPickupSlotAvailable({
+          storeId: store.id,
+          pickupAt: new Date(iso),
+          preparationTimeMinutes,
+        });
+
+      // 제작 26시간 → 9/17 18:00 KST부터 가능
+      await expect(at('2026-09-17T08:30:00.000Z', 26 * 60)).resolves.toBe(
+        false,
+      );
+      await expect(at('2026-09-17T09:00:00.000Z', 26 * 60)).resolves.toBe(true);
+      // 제작 30분은 리드 60분보다 짧아 오늘 16:30은 여전히 불가, 17:00은 가능
+      await expect(at('2026-09-16T07:30:00.000Z', 30)).resolves.toBe(false);
+      await expect(at('2026-09-16T08:00:00.000Z', 30)).resolves.toBe(true);
+    });
+
     it('없거나 비활성 매장은 불가하다', async () => {
       const inactive = await createStore(prisma, { is_active: false });
       await openAllWeek(inactive);
@@ -585,12 +720,14 @@ describe('StorePickupScheduleService (real DB)', () => {
         service.isPickupSlotAvailable({
           storeId: 999999n,
           pickupAt: VALID_PICKUP_AT,
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
       await expect(
         service.isPickupSlotAvailable({
           storeId: inactive.id,
           pickupAt: VALID_PICKUP_AT,
+          preparationTimeMinutes: 0,
         }),
       ).resolves.toBe(false);
     });

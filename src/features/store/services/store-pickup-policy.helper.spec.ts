@@ -2,6 +2,7 @@ import { kstMidnightUtc } from '@/common/utils/kst-time';
 import {
   buildPickupDaySlots,
   buildTodaySlots,
+  effectiveLeadTimeMinutes,
   evaluatePickupDay,
   timeColumnToMinutes,
   type PickupDayInput,
@@ -232,5 +233,20 @@ describe('store-pickup-policy.helper', () => {
       expect(timeColumnToMinutes(new Date('1970-01-01T10:30:00Z'))).toBe(630);
       expect(timeColumnToMinutes(new Date('1970-01-01T00:00:00Z'))).toBe(0);
     });
+  });
+
+  describe('effectiveLeadTimeMinutes', () => {
+    it.each([
+      [60, 0, 60],
+      [60, 59, 60],
+      [60, 60, 60],
+      [60, 61, 61],
+      [0, 26 * 60, 26 * 60],
+    ])(
+      '매장 리드타임 %i분·제작 시간 %i분이면 하한은 %i분이다',
+      (store, preparation, expected) => {
+        expect(effectiveLeadTimeMinutes(store, preparation)).toBe(expected);
+      },
+    );
   });
 });

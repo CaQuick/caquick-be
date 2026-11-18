@@ -39,6 +39,7 @@ export interface AdminOrderDetailOutput {
   pickupAt: Date;
   buyerName: string;
   buyerPhone: string;
+  requestNote: string | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;

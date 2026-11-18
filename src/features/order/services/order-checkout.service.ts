@@ -12,6 +12,7 @@ import type { CreateOrderInput } from '@/features/order/dto/inputs/create-order.
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { toSellerOrderUpdateEvent } from '@/features/order/services/order-events-mappers.helper';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
+import { hashCreateOrderInput } from '@/features/order/services/order-input-hash.helper';
 import type { CreateOrderOutput } from '@/features/order/types/create-order-output.type';
 import { ProductRepository, type ProductDetailRow } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
@@ -54,6 +55,11 @@ export class OrderCheckoutService {
     const productId = parseId(input.productId);
     const optionItemIds = input.optionItemIds.map((id) => parseId(id));
     const quantity = input.quantity ?? 1;
+    const inputHash = hashCreateOrderInput({
+      ...input,
+      productId,
+      optionItemIds,
+    });
 
     // 멱등 replay: 같은 (계정, 키)의 주문이 있으면 검증·생성 없이 그 결과를 반환한다 — 원 요청 시점의 검증을 이미 통과한 주문이다.
     const replayed = await this.orderRepo.findOrderByIdempotencyKey(
@@ -61,6 +67,7 @@ export class OrderCheckoutService {
       input.idempotencyKey,
     );
     if (replayed) {
+      assertReplayInputMatches(replayed, inputHash);
       return this.toCreateOrderOutput(replayed);
     }
 
@@ -79,19 +86,16 @@ export class OrderCheckoutService {
     const buyer = this.resolveBuyerInfo(buyerProfile, input);
 
     const now = this.clock.now();
-    // 상품별 제작 소요시간은 매장 리드타임과 별개 조건 — 둘 다 충족해야 한다
-    const preparationDeadlineMs =
-      now.getTime() + product.preparation_time_minutes * 60_000;
-    // 영업일·슬롯 정합은 catalog가, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
+    // 영업일·슬롯·하한(리드타임과 제작 시간 중 긴 쪽)은 달력과 같은 catalog 판정, 주문 수량까지 더한 capacity 잔여는 order 복제본이 판정한다
     const capacityGuard = this.buildCapacityGuard(
       product.store_id,
       input.pickupAt,
     );
     const pickupAvailable =
-      input.pickupAt.getTime() >= preparationDeadlineMs &&
       (await this.pickupSchedule.isPickupSlotAvailable({
         storeId: product.store_id,
         pickupAt: input.pickupAt,
+        preparationTimeMinutes: product.preparation_time_minutes,
       })) &&
       !(await this.orderRepo.isDailyCapacityExceeded(capacityGuard, quantity));
     if (!pickupAvailable) {
@@ -100,6 +104,7 @@ export class OrderCheckoutService {
       const raced = await this.replayAfterCapacityReject(
         accountId,
         input.idempotencyKey,
+        inputHash,
       );
       return this.toCreateOrderOutput(raced);
     }
@@ -125,14 +130,20 @@ export class OrderCheckoutService {
         throw new DomainException('ORDER_AMOUNT_OUT_OF_RANGE');
       }
     }
+    // 구매자가 본 금액과 다르면 바뀐 가격으로 주문을 만들지 않는다
+    if (itemSubtotalPrice !== input.expectedTotalPrice) {
+      throw new DomainException('ORDER_PRICE_CHANGED');
+    }
 
     const submittedAt = now;
     const created = await this.createWithOrderNumberRetry({
       accountId,
       idempotencyKey: input.idempotencyKey,
+      idempotencyInputHash: inputHash,
       pickupAt: input.pickupAt,
       buyerName: buyer.name,
       buyerPhone: buyer.phone,
+      requestNote: input.requestNote?.trim() || null,
       subtotalPrice,
       discountPrice,
       totalPrice: itemSubtotalPrice,
@@ -287,6 +298,7 @@ export class OrderCheckoutService {
           return this.replayAfterCapacityReject(
             args.accountId,
             args.idempotencyKey,
+            args.idempotencyInputHash,
           );
         }
         // 커밋된 새 주문만 발행한다 — replay(멱등 키·capacity·P2002)는 이미 발행된 주문이다
@@ -305,7 +317,10 @@ export class OrderCheckoutService {
             args.accountId,
             args.idempotencyKey,
           );
-          if (existing) return existing;
+          if (existing) {
+            assertReplayInputMatches(existing, args.idempotencyInputHash);
+            return existing;
+          }
           // 활성 주문이 없는데 키 unique가 충돌했다면 soft-delete된 주문이 키를 점유한 경우다 — MySQL unique는
           // deleted_at을 보지 않는다. 같은 키로는 몇 번을 재시도해도 동일하게 실패하므로 새 주문서(새 키)로 유도한다.
           const heldByDeleted =
@@ -335,13 +350,15 @@ export class OrderCheckoutService {
   private async replayAfterCapacityReject(
     accountId: bigint,
     idempotencyKey: string,
+    inputHash: string,
   ) {
     const existing = await this.orderRepo.findOrderByIdempotencyKey(
       accountId,
       idempotencyKey,
     );
-    if (existing) return existing;
-    throw new DomainException('PICKUP_NOT_AVAILABLE');
+    if (!existing) throw new DomainException('PICKUP_NOT_AVAILABLE');
+    assertReplayInputMatches(existing, inputHash);
+    return existing;
   }
 
   /** 그 외 P2002(주문번호 등)는 재시도 대상이라 구분한다. */
@@ -360,5 +377,18 @@ export class OrderCheckoutService {
       );
     }
     return `ORD-${datePart}-${randomPart}`;
+  }
+}
+
+/** 해시 도입 전 주문(null)은 비교하지 않는다. */
+function assertReplayInputMatches(
+  existing: { idempotency_input_hash: string | null },
+  inputHash: string,
+): void {
+  if (
+    existing.idempotency_input_hash !== null &&
+    existing.idempotency_input_hash !== inputHash
+  ) {
+    throw new DomainException('IDEMPOTENCY_KEY_INPUT_MISMATCH');
   }
 }

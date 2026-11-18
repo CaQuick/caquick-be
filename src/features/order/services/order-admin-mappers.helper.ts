@@ -51,6 +51,7 @@ export function toAdminOrderDetailOutput(
     pickupAt: row.pickup_at,
     buyerName: row.buyer_name,
     buyerPhone: row.buyer_phone,
+    requestNote: row.request_note,
     subtotalPrice: row.subtotal_price,
     discountPrice: row.discount_price,
     totalPrice: row.total_price,

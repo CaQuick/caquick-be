@@ -48,6 +48,7 @@ const VALID_PICKUP_AT = new Date('2026-09-18T05:00:00.000Z');
 describe('OrderCheckoutService (real DB)', () => {
   let service: OrderCheckoutService;
   let orderRepo: OrderRepository;
+  let pickupSchedule: StorePickupScheduleService;
   let clock: ClockService;
   let random: RandomService;
   let pubSub: PubSub;
@@ -74,6 +75,7 @@ describe('OrderCheckoutService (real DB)', () => {
     });
     service = module.get(OrderCheckoutService);
     orderRepo = module.get(OrderRepository);
+    pickupSchedule = module.get(StorePickupScheduleService);
     clock = module.get(ClockService);
     random = module.get(RandomService);
     pubSub = module.get(PUB_SUB);
@@ -185,7 +187,8 @@ describe('OrderCheckoutService (real DB)', () => {
   }
 
   // 호출마다 새 키 — 한 케이스에서 createOrder를 여러 번 부를 때 의도치 않은
-  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다
+  // 멱등 replay로 두 번째 생성이 생략되는 것을 막는다.
+  // 기대 금액 기본값은 factory 기본 상품(정가 10000·판매가 없음·옵션 없음) 기준이다.
   let idemSeq = 0;
   function baseInput(overrides: Partial<CreateOrderInput>): CreateOrderInput {
     idemSeq += 1;
@@ -194,6 +197,7 @@ describe('OrderCheckoutService (real DB)', () => {
       productId: '0',
       optionItemIds: [],
       pickupAt: VALID_PICKUP_AT,
+      expectedTotalPrice: 10_000 * (overrides.quantity ?? 1),
       ...overrides,
     };
   }
@@ -227,6 +231,7 @@ describe('OrderCheckoutService (real DB)', () => {
           quantity: 2,
           buyerName: '차차',
           buyerPhone: '010-0000-1111',
+          expectedTotalPrice: 56000,
         }),
       );
 
@@ -285,7 +290,10 @@ describe('OrderCheckoutService (real DB)', () => {
 
       const result = await service.createOrder(
         buyer.id,
-        baseInput({ productId: product.id.toString() }),
+        baseInput({
+          productId: product.id.toString(),
+          expectedTotalPrice: 20000,
+        }),
       );
 
       expect(result.totalPrice).toBe(20000);
@@ -836,34 +844,6 @@ describe('OrderCheckoutService (real DB)', () => {
       expect(await prisma.order.count()).toBe(1);
     });
 
-    it('같은 키면 입력이 달라도 기존 주문을 반환한다(입력 비교 없음)', async () => {
-      const store = await makeOpenStore();
-      const product = await createProduct(prisma, { store_id: store.id });
-      const buyer = await makeBuyer();
-
-      const first = await service.createOrder(
-        buyer.id,
-        baseInput({
-          idempotencyKey: 'fixed-idem-key-02',
-          productId: product.id.toString(),
-          quantity: 1,
-        }),
-      );
-      const replayed = await service.createOrder(
-        buyer.id,
-        baseInput({
-          idempotencyKey: 'fixed-idem-key-02',
-          productId: product.id.toString(),
-          quantity: 3,
-        }),
-      );
-
-      // 수량 3의 새 주문이 아니라 수량 1로 만든 기존 주문의 결과가 그대로 온다
-      expect(replayed.orderId).toBe(first.orderId);
-      expect(replayed.totalPrice).toBe(first.totalPrice);
-      expect(await prisma.order.count()).toBe(1);
-    });
-
     it('다른 계정의 같은 키는 서로 간섭하지 않는다', async () => {
       const store = await makeOpenStore();
       const product = await createProduct(prisma, { store_id: store.id });
@@ -1023,6 +1003,246 @@ describe('OrderCheckoutService (real DB)', () => {
     });
   });
 
+  describe('createOrder — 기대 금액·요청 사항', () => {
+    it.each([-1, 1])(
+      '기대 금액이 서버 계산과 %i원 다르면 ORDER_PRICE_CHANGED이고 키를 소모하지 않는다',
+      async (diff) => {
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, { store_id: store.id });
+        const buyer = await makeBuyer();
+        const input = baseInput({
+          productId: product.id.toString(),
+          expectedTotalPrice: 10_000 + diff,
+        });
+
+        await expect(
+          service.createOrder(buyer.id, input),
+        ).rejects.toThrowDomain('ORDER_PRICE_CHANGED');
+        expect(await prisma.order.count()).toBe(0);
+
+        const ok = await service.createOrder(buyer.id, {
+          ...input,
+          expectedTotalPrice: 10_000,
+        });
+        expect(ok.totalPrice).toBe(10_000);
+      },
+    );
+
+    it.each<[string, string | undefined, string | null]>([
+      ['앞뒤 공백은 지운다', '  초는 빼 주세요 ', '초는 빼 주세요'],
+      ['공백만 보내면 없음', '   ', null],
+      ['안 보내면 없음', undefined, null],
+    ])('요청 사항을 저장한다 — %s', async (_case, requestNote, expected) => {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+
+      const result = await service.createOrder(
+        buyer.id,
+        baseInput({ productId: product.id.toString(), requestNote }),
+      );
+
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(result.orderId) },
+      });
+      expect(saved.request_note).toBe(expected);
+    });
+  });
+
+  describe('createOrder — 픽업 판정이 달력과 같다', () => {
+    // 9/17 10:00~19:30(30분 간격) 전 슬롯. 지금(9/16 16:00) + 제작 26시간 = 9/17 18:00이
+    // 매장 리드타임(60분)보다 늦어 하한이 된다
+    const DAY_SLOTS = Array.from({ length: 20 }, (_, index) => {
+      const minutes = 10 * 60 + index * 30;
+      const time = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+      return [time, minutes >= 18 * 60] as const;
+    });
+
+    it.each(DAY_SLOTS)(
+      '%s 슬롯: available=%s ⇔ createOrder 성공',
+      async (time, expectedAvailable) => {
+        const store = await makeOpenStore();
+        const product = await createProduct(prisma, {
+          store_id: store.id,
+          preparation_time_minutes: 26 * 60,
+        });
+        const buyer = await makeBuyer();
+
+        const slots = await pickupSchedule.pickupTimeSlots(
+          store.id,
+          '2026-09-17',
+          product.id,
+        );
+        const daySlots = [...slots.morning, ...slots.afternoon];
+        expect(daySlots).toHaveLength(DAY_SLOTS.length);
+        const slot = daySlots.find((candidate) => candidate.time === time);
+        expect(slot?.available).toBe(expectedAvailable);
+
+        const attempt = service.createOrder(
+          buyer.id,
+          baseInput({
+            productId: product.id.toString(),
+            pickupAt: new Date(`2026-09-17T${time}:00+09:00`),
+          }),
+        );
+        if (slot?.available) {
+          await expect(attempt).resolves.toMatchObject({ status: 'SUBMITTED' });
+        } else {
+          await expect(attempt).rejects.toThrowDomain('PICKUP_NOT_AVAILABLE');
+        }
+      },
+    );
+  });
+
+  describe('createOrder — 멱등 입력 해시', () => {
+    async function setup() {
+      const store = await makeOpenStore();
+      const product = await createProduct(prisma, { store_id: store.id });
+      const buyer = await makeBuyer();
+      return { store, product, buyer };
+    }
+
+    it('같은 키·같은 입력이면 기존 주문을 돌려주고 해시를 저장해 둔다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'hash-same-key',
+        productId: product.id.toString(),
+        requestNote: '메모',
+      });
+
+      const first = await service.createOrder(buyer.id, input);
+      const replayed = await service.createOrder(buyer.id, { ...input });
+
+      expect(replayed).toEqual(first);
+      expect(await prisma.order.count()).toBe(1);
+      const saved = await prisma.order.findUniqueOrThrow({
+        where: { id: BigInt(first.orderId) },
+      });
+      expect(saved.idempotency_input_hash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it.each<[string, Partial<CreateOrderInput>]>([
+      ['수량', { quantity: 2, expectedTotalPrice: 20_000 }],
+      ['픽업 일시', { pickupAt: new Date('2026-09-18T05:30:00.000Z') }],
+      ['주문자 이름', { buyerName: '다른 이름' }],
+      ['주문자 연락처', { buyerPhone: '010-9999-9999' }],
+      ['요청 사항', { requestNote: '다른 메모' }],
+      ['기대 금액', { expectedTotalPrice: 9_999 }],
+    ])(
+      '같은 키로 %s만 달라도 IDEMPOTENCY_KEY_INPUT_MISMATCH다',
+      async (_field, change) => {
+        const { product, buyer } = await setup();
+        const input = baseInput({
+          idempotencyKey: 'hash-mismatch-key',
+          productId: product.id.toString(),
+        });
+        await service.createOrder(buyer.id, input);
+
+        await expect(
+          service.createOrder(buyer.id, { ...input, ...change }),
+        ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+        expect(await prisma.order.count()).toBe(1);
+      },
+    );
+
+    it('해시가 없는 기존 주문(도입 전)은 입력이 달라도 비교 없이 돌려준다', async () => {
+      const { product, buyer } = await setup();
+      const legacy = await createOrderRow(prisma, {
+        account_id: buyer.id,
+        idempotency_key: 'legacy-hashless-key',
+      });
+
+      const replayed = await service.createOrder(
+        buyer.id,
+        baseInput({
+          idempotencyKey: 'legacy-hashless-key',
+          productId: product.id.toString(),
+          quantity: 5,
+        }),
+      );
+
+      expect(replayed.orderId).toBe(legacy.id.toString());
+      expect(await prisma.order.count()).toBe(1);
+    });
+
+    it('quantity를 생략하면 1을 보낸 것과 같은 입력이다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'hash-quantity-key',
+        productId: product.id.toString(),
+      });
+
+      const first = await service.createOrder(buyer.id, {
+        ...input,
+        quantity: 1,
+      });
+      expect(input.quantity).toBeUndefined();
+      await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+        first,
+      );
+    });
+
+    it.each([
+      ['tx 밖 사전 검사', false],
+      ['tx 안 잠금 재검사', true],
+    ])(
+      'capacity 거절 뒤 replay도 입력을 비교한다 — %s',
+      async (_path, bypassPrecheck) => {
+        const { store, product, buyer } = await setup();
+        await createStoreDailyCapacity(prisma, {
+          store_id: store.id,
+          capacity_date: new Date(Date.UTC(2026, 8, 18)),
+          capacity: 1,
+        });
+        const input = baseInput({
+          idempotencyKey: 'capacity-hash-key',
+          productId: product.id.toString(),
+        });
+        const first = await service.createOrder(buyer.id, input);
+
+        const raceOnce = () => {
+          jest
+            .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+            .mockResolvedValueOnce(null);
+          if (bypassPrecheck) {
+            jest
+              .spyOn(orderRepo, 'isDailyCapacityExceeded')
+              .mockResolvedValueOnce(false);
+          }
+        };
+        raceOnce();
+        await expect(
+          service.createOrder(buyer.id, { ...input, requestNote: '다른 메모' }),
+        ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+        raceOnce();
+        await expect(service.createOrder(buyer.id, input)).resolves.toEqual(
+          first,
+        );
+        expect(await prisma.order.count()).toBe(1);
+      },
+    );
+
+    it('멱등 키 unique 경합(P2002) 뒤 replay도 입력을 비교한다', async () => {
+      const { product, buyer } = await setup();
+      const input = baseInput({
+        idempotencyKey: 'p2002-hash-key',
+        productId: product.id.toString(),
+      });
+      await service.createOrder(buyer.id, input);
+
+      // 사전 조회를 놓친 동시 제출 — INSERT가 키 unique에 걸린 뒤 기존 주문을 다시 읽는다
+      jest
+        .spyOn(orderRepo, 'findOrderByIdempotencyKey')
+        .mockResolvedValueOnce(null);
+      const insert = jest.spyOn(orderRepo, 'createSubmittedOrder');
+      await expect(
+        service.createOrder(buyer.id, { ...input, requestNote: '다른 메모' }),
+      ).rejects.toThrowDomain('IDEMPOTENCY_KEY_INPUT_MISMATCH');
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(await prisma.order.count()).toBe(1);
+    });
+  });
+
   describe('createOrder — 접수 이벤트(order.submitted)', () => {
     async function submittedEvents() {
       return prisma.outbox.findMany({
@@ -1042,6 +1262,7 @@ describe('OrderCheckoutService (real DB)', () => {
           productId: product.id.toString(),
           optionItemIds: [sizeSmallId.toString()],
           quantity: 2,
+          expectedTotalPrice: 54000,
         }),
       );
 

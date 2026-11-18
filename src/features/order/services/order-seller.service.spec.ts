@@ -327,10 +327,15 @@ describe('SellerOrderService (real DB)', () => {
           note: '접수 확정',
         },
       });
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { request_note: '초는 빼 주세요' },
+      });
 
       const result = await service.sellerOrder(account.id, order.id);
       expect(result.id).toBe(order.id.toString());
       expect(result.status).toBe('CONFIRMED');
+      expect(result.requestNote).toBe('초는 빼 주세요');
       expect(result.items).toHaveLength(1);
       expect(result.statusHistories).toHaveLength(1);
       expect(result.statusHistories[0].toStatus).toBe('CONFIRMED');
