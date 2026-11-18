@@ -19,6 +19,7 @@ import { OrderRepository } from '@/features/order/repositories/order.repository'
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { RefundRepository } from '@/features/order/repositories/refund.repository';
+import { SettlementRepository } from '@/features/order/repositories/settlement.repository';
 import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
@@ -36,6 +37,8 @@ import { SellerOrderMutationResolver } from '@/features/order/resolvers/order-se
 import { SellerOrderPickupMutationResolver } from '@/features/order/resolvers/order-seller-pickup-mutation.resolver';
 import { SellerOrderPickupQueryResolver } from '@/features/order/resolvers/order-seller-pickup-query.resolver';
 import { SellerOrderQueryResolver } from '@/features/order/resolvers/order-seller-query.resolver';
+import { AdminSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-admin-mutation.resolver';
+import { AdminSettlementQueryResolver } from '@/features/order/resolvers/order-settlement-admin-query.resolver';
 import { SellerSettlementMutationResolver } from '@/features/order/resolvers/order-settlement-seller-mutation.resolver';
 import { SellerSettlementQueryResolver } from '@/features/order/resolvers/order-settlement-seller-query.resolver';
 import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subscription.resolver';
@@ -52,7 +55,9 @@ import { AdminPaymentService } from '@/features/order/services/order-payment-adm
 import { AdminRefundService } from '@/features/order/services/order-refund-admin.service';
 import { SellerOrderPickupService } from '@/features/order/services/order-seller-pickup.service';
 import { SellerOrderService } from '@/features/order/services/order-seller.service';
+import { AdminSettlementService } from '@/features/order/services/order-settlement-admin.service';
 import { SellerSettlementService } from '@/features/order/services/order-settlement-seller.service';
+import { SettlementScheduler } from '@/features/order/services/order-settlement.scheduler';
 import { OrderStoreDailyLimitConsumer } from '@/features/order/services/order-store-daily-limit.consumer';
 import { OrderSubscriptionService } from '@/features/order/services/order-subscription.service';
 import { OutboxModule } from '@/features/outbox';
@@ -127,7 +132,7 @@ import { StoreModule } from '@/features/store';
       provide: WithdrawalBlockingOrderQuery,
       useClass: OrderWithdrawalBlockingRepository,
     },
-    // 입금 대기·'입금했어요'·환불 송금 대기 관리자 디스코드 알림(worker 소비자)
+    // 입금 대기·'입금했어요'·환불 송금 대기·주간 정산 관리자 디스코드 알림(worker 소비자)
     OrderAdminAlertConsumer,
     // 결제 설정·매장 정산 계좌(계좌번호는 global AccountCipher로 암호화)
     PaymentSettingRepository,
@@ -141,6 +146,12 @@ import { StoreModule } from '@/features/store';
     SellerSettlementMutationResolver,
     // 채팅 주문 카드·숨김 매장 문의 판정(conversation)
     OrderInquiryRepository,
+    // 주간 정산(worker 크론·부팅 1회)과 관리자 송금 완료·월 수수료, 판매자 정산 내역
+    SettlementRepository,
+    SettlementScheduler,
+    AdminSettlementService,
+    AdminSettlementQueryResolver,
+    AdminSettlementMutationResolver,
   ],
   exports: [
     OrderRepository,

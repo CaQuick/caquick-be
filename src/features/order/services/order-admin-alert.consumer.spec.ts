@@ -7,6 +7,7 @@ import { ORDER_PAYMENT_PENDING } from '@/features/order/events/order-payment-pen
 import { PAYMENT_DEPOSIT_CLAIMED } from '@/features/order/events/payment-deposit-claimed.event';
 import { REFUND_ACCOUNT_SUBMITTED } from '@/features/order/events/refund-account-submitted.event';
 import { REFUND_REQUESTED } from '@/features/order/events/refund-requested.event';
+import { SETTLEMENT_CREATED } from '@/features/order/events/settlement-created.event';
 import { OrderAdminAlertConsumer } from '@/features/order/services/order-admin-alert.consumer';
 import type { OutboxEvent } from '@/features/outbox';
 import { AlertService } from '@/global/alerting';
@@ -37,6 +38,18 @@ const REFUND = {
   storeName: '케이크샵',
   productId: '5',
   productName: '레터링 케이크',
+};
+
+const SETTLED = {
+  settlementId: '5',
+  storeId: '9',
+  storeName: '해즈 케이크',
+  periodStart: '2026-11-09',
+  periodEnd: '2026-11-15',
+  orderCount: 3,
+  settlementBaseAmount: 90_000,
+  commissionAmount: 4_995,
+  payoutAmount: 85_005,
 };
 
 function event(
@@ -164,6 +177,51 @@ describe('OrderAdminAlertConsumer', () => {
     ).toEqual(['deposit-pending:42', 'deposit-claim:42', 'deposit-pending:44']);
   });
 
+  it('주간 정산 생성: info, 주 단위 key, 기간·처리 화면 링크(periodStart)', async () => {
+    const consumer = build({ baseUrl: 'https://admin.caquick.com' });
+
+    await consumer.handle(event(SETTLEMENT_CREATED, SETTLED));
+
+    expect(transport).toHaveBeenCalledWith(
+      expect.any(String),
+      {
+        level: 'info',
+        title: '주간 정산 생성',
+        key: 'settlement-week:2026-11-09',
+        detail: [
+          '2026-11-09 ~ 2026-11-15 정산이 생성됐어요. 매장별 정산을 확인하고 송금해 주세요.',
+          'https://admin.caquick.com/tasks/settlements?periodStart=2026-11-09',
+        ].join('\n'),
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('같은 주의 매장별 정산 이벤트는 억제 창 안에서 한 번만 보내고, 다른 주는 따로 보낸다', async () => {
+    const consumer = build({ baseUrl: null });
+
+    await consumer.handle(event(SETTLEMENT_CREATED, SETTLED));
+    await consumer.handle(
+      event(SETTLEMENT_CREATED, {
+        ...SETTLED,
+        settlementId: '6',
+        storeId: '10',
+      }),
+    );
+    await consumer.handle(
+      event(SETTLEMENT_CREATED, {
+        ...SETTLED,
+        settlementId: '7',
+        periodStart: '2026-11-16',
+        periodEnd: '2026-11-22',
+      }),
+    );
+
+    expect(
+      transport.mock.calls.map(([, m]) => (m as { key: string }).key),
+    ).toEqual(['settlement-week:2026-11-09', 'settlement-week:2026-11-16']);
+  });
+
   it.each([
     [
       '취소와 함께 계좌 입력',
@@ -234,6 +292,7 @@ describe('OrderAdminAlertConsumer', () => {
   it.each([
     [REFUND_REQUESTED, { ...REFUND, kind: 'CHARGEBACK' }],
     [REFUND_ACCOUNT_SUBMITTED, { ...REFUND, amount: '30000' }],
+    [SETTLEMENT_CREATED, { ...SETTLED, periodStart: 20261109 }],
     [ORDER_PAYMENT_PENDING, { ...PENDING, amount: '56000' }],
     [ORDER_PAYMENT_PENDING, { ...PENDING, expiresAt: 'not-a-date' }],
     [PAYMENT_DEPOSIT_CLAIMED, { ...CLAIMED, orderId: 43 }],

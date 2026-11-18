@@ -13,6 +13,7 @@ import {
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
 import { toAdminOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
+import { toOrderSettlementFields } from '@/features/order/services/order-settlement-mappers.helper';
 import type {
   AdminOrderCancelOptionsOutput,
   AdminOrderDetailOutput,
@@ -79,5 +80,8 @@ export function toAdminOrderDetailOutput(
     cancelOptions,
     ...toOrderAutoTransitionTimes(row),
     pickupChanges: row.pickup_changes.map(toOrderPickupChange),
+    ...toOrderSettlementFields(row),
+    settlementFinalizedAt: row.settlement_finalized_at,
+    settlementId: row.settlement_id?.toString() ?? null,
   };
 }

@@ -4,6 +4,140 @@ extend type Query {
   판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
   """
   sellerSettlementAccount: SellerSettlementAccount
+  """
+  내 매장 주간 정산 내역. 최근 생성 순(매주 월요일에 지난주분이 생긴다).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerSettlements(input: SellerSettlementListInput): SellerSettlementConnection!
+  """
+  내 매장 주간 정산 1건과 포함 주문. 다른 매장 정산이거나 없으면 NOT_FOUND(SETTLEMENT_NOT_FOUND).
+  판매자 로그인 필수. SELLER 계정이 아니면 FORBIDDEN, 매장을 보유하지 않으면 NOT_FOUND.
+  """
+  sellerSettlement(settlementId: ID!): SellerSettlementDetail!
+}
+
+"""
+주간 정산 목록 조회 조건.
+"""
+input SellerSettlementListInput {
+  """
+  한 번에 가져올 개수. 기본 20, 1~100만 허용하며 벗어나면 BAD_USER_INPUT.
+  """
+  limit: Int = 20
+  """
+  이전 응답의 nextCursor. 첫 페이지는 생략한다.
+  """
+  cursor: String
+}
+
+"""
+주간 정산 1건(판매자 시점). 월~일(KST) 동안 정산이 확정된 주문(그 전에 빠진 주문 포함)을 묶는다.
+"""
+type SellerSettlementSummary {
+  id: ID!
+  """
+  정산 기간 시작일(월요일, KST). YYYY-MM-DD.
+  """
+  periodStart: String!
+  """
+  정산 기간 마지막 날(일요일, KST). YYYY-MM-DD.
+  """
+  periodEnd: String!
+  """
+  포함 주문 수.
+  """
+  orderCount: Int!
+  """
+  수수료 기준액 합계(원).
+  """
+  settlementBaseAmount: Int!
+  """
+  수수료 합계(원).
+  """
+  commissionAmount: Int!
+  """
+  정산 금액(원) = 기준액 합계 − 수수료 합계. 케이퀵이 매장 정산 계좌로 보내는 금액이다.
+  """
+  payoutAmount: Int!
+  """
+  송금 여부. PENDING이면 송금 대기, PAID면 송금 완료.
+  """
+  status: SettlementStatusType!
+  """
+  송금 완료 시각. 송금 전이면 null.
+  """
+  paidAt: DateTime
+  createdAt: DateTime!
+}
+
+"""
+주간 정산 목록 페이지.
+"""
+type SellerSettlementConnection {
+  """
+  주간 정산. 최근 생성 순.
+  """
+  items: [SellerSettlementSummary!]!
+  """
+  전체 건수(현재 페이지와 무관).
+  """
+  totalCount: Int!
+  """
+  다음 페이지 존재 여부.
+  """
+  hasMore: Boolean!
+  """
+  다음 페이지 커서. null이면 마지막 페이지다.
+  """
+  nextCursor: String
+}
+
+"""
+주간 정산 상세(판매자 시점).
+"""
+type SellerSettlementDetail {
+  id: ID!
+  """
+  정산 기간 시작일(월요일, KST). YYYY-MM-DD.
+  """
+  periodStart: String!
+  """
+  정산 기간 마지막 날(일요일, KST). YYYY-MM-DD.
+  """
+  periodEnd: String!
+  """
+  포함 주문 수.
+  """
+  orderCount: Int!
+  """
+  수수료 기준액 합계(원).
+  """
+  settlementBaseAmount: Int!
+  """
+  수수료 합계(원).
+  """
+  commissionAmount: Int!
+  """
+  정산 금액(원) = 기준액 합계 − 수수료 합계.
+  """
+  payoutAmount: Int!
+  """
+  송금 여부.
+  """
+  status: SettlementStatusType!
+  """
+  송금 완료 시각. 송금 전이면 null.
+  """
+  paidAt: DateTime
+  createdAt: DateTime!
+  """
+  송금한 계좌(송금 시점 스냅샷, 끝 4자리만). 송금 전이면 null.
+  """
+  paidAccount: SettlementPaidAccount
+  """
+  포함 주문. 주문 id 순.
+  """
+  orders: [SettlementOrder!]!
 }
 
 extend type Mutation {

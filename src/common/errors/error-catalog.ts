@@ -485,6 +485,19 @@ export const ERROR_CATALOG = {
     status: HttpStatus.CONFLICT,
     message: '이미 반환 대상으로 연결된 입금 기록입니다.',
   },
+  SETTLEMENT_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    message: '정산 내역을 찾을 수 없어요.',
+  },
+  SETTLEMENT_ALREADY_PAID: {
+    status: HttpStatus.CONFLICT,
+    message: '이미 송금 완료로 처리된 정산이에요.',
+  },
+  SETTLEMENT_ACCOUNT_REQUIRED: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '매장 정산 계좌가 등록되지 않아 송금 완료로 처리할 수 없어요. 정산 계좌를 먼저 등록해 주세요.',
+  },
   // ── 판매자
   SELLER_ONLY: {
     status: HttpStatus.FORBIDDEN,

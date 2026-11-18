@@ -8,6 +8,7 @@ import type {
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
 import type { AdminOrderPaymentOutput } from '@/features/order/types/order-payment-output.type';
+import type { OrderSettlementFieldsOutput } from '@/features/order/types/order-settlement-output.type';
 import type {
   AccountStatus,
   OrderCancelReason,
@@ -38,7 +39,8 @@ export interface AdminStoreInProgressOrderSummaryOutput {
   byStatus: { status: OrderStatus; count: number }[];
 }
 
-export interface AdminOrderDetailOutput extends OrderAutoTransitionTimes {
+export interface AdminOrderDetailOutput
+  extends OrderAutoTransitionTimes, OrderSettlementFieldsOutput {
   id: string;
   orderNumber: string;
   buyer: {
@@ -69,6 +71,8 @@ export interface AdminOrderDetailOutput extends OrderAutoTransitionTimes {
   cancellation: OrderCancellationOutput | null;
   cancelOptions: AdminOrderCancelOptionsOutput;
   pickupChanges: OrderPickupChangeOutput[];
+  settlementFinalizedAt: Date | null;
+  settlementId: string | null;
 }
 
 export interface AdminOrderCancelOptionsOutput {

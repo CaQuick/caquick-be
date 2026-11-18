@@ -35,6 +35,7 @@ import {
   type OrderStatusHistoryRow,
 } from '@/features/order/services/order-output-mappers.helper';
 import { toSellerOrderSummaryOutput } from '@/features/order/services/order-seller-mappers.helper';
+import { toOrderSettlementFields } from '@/features/order/services/order-settlement-mappers.helper';
 import type {
   SellerOrderDetailOutput,
   SellerOrderSummaryOutput,
@@ -203,7 +204,14 @@ export class SellerOrderService extends SellerBaseService {
     buyer_name: string;
     buyer_phone: string;
     request_note: string | null;
-    payment: { method: PaymentMethod } | null;
+    payment: {
+      method: PaymentMethod;
+      amount: number;
+      confirmed_at: Date | null;
+    } | null;
+    commission_rate_bps: number;
+    settlement_base_amount: number | null;
+    commission_amount: number | null;
     subtotal_price: number;
     discount_price: number;
     total_price: number;
@@ -260,6 +268,7 @@ export class SellerOrderService extends SellerBaseService {
         pickupAt: row.pickup_at,
       }),
       pickupChanges: row.pickup_changes.map(toOrderPickupChange),
+      ...toOrderSettlementFields(row),
     };
   }
 }

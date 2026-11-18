@@ -863,7 +863,7 @@ export class OrderRepository {
       },
       // 유저측 상세(findOrderDetailByUser)와 동일하게 soft-delete 자식을 가드한다
       include: {
-        payment: { select: { method: true } },
+        payment: { select: { method: true, amount: true, confirmed_at: true } },
         // 입금 반환은 구매자와 플랫폼 사이 일이라 취소 환불만 본다
         refunds: { where: { kind: RefundKind.CANCEL } },
         pickup_changes: pickupChangesInclude,

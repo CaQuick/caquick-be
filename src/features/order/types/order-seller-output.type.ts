@@ -5,6 +5,7 @@ import type {
   OrderPickupChangeOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { OrderSettlementFieldsOutput } from '@/features/order/types/order-settlement-output.type';
 import type { OrderStatus, PaymentMethod } from '@/generated/prisma/client';
 
 export interface SellerOrderSummaryOutput {
@@ -23,7 +24,8 @@ export interface SellerOrderSummaryOutput {
   confirmDeadlineAt: Date | null;
 }
 
-export interface SellerOrderDetailOutput extends OrderAutoTransitionTimes {
+export interface SellerOrderDetailOutput
+  extends OrderAutoTransitionTimes, OrderSettlementFieldsOutput {
   id: string;
   orderNumber: string;
   accountId: string;

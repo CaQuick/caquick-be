@@ -15,11 +15,13 @@ import type {
   Refund,
   RefundKind,
   RefundStatus,
+  Settlement,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
 import { createAccount } from '@/test/factories/account.factory';
 import { createProduct } from '@/test/factories/product.factory';
 import { nextSeq } from '@/test/factories/sequence';
+import { createStore } from '@/test/factories/store.factory';
 
 export interface OrderOverrides {
   account_id?: bigint;
@@ -371,6 +373,95 @@ export async function createOrderCustomUpload(
       content_length: 1024,
       ...overrides,
       account_id: accountId,
+    },
+  });
+}
+
+export interface FinalizedOrderArgs {
+  store_id: bigint;
+  finalized_at: Date;
+  /** 기본 10000. 결제액도 같은 값이다 */
+  base_amount?: number;
+  commission_rate_bps?: number;
+  status?: OrderStatus;
+  store_name_snapshot?: string;
+  product_name_snapshot?: string;
+}
+
+/** 정산이 확정된 주문(확인된 결제·품목 포함). 수수료는 확정 규칙과 같이 원 미만 버림. */
+export async function createFinalizedOrder(
+  prisma: PrismaClient,
+  args: FinalizedOrderArgs,
+): Promise<Order> {
+  const base = args.base_amount ?? 10000;
+  const bps = args.commission_rate_bps ?? 0;
+  const order = await createOrder(prisma, {
+    status: args.status ?? 'PICKED_UP',
+    total_price: base,
+    commission_rate_bps: bps,
+  });
+  await createOrderItem(prisma, {
+    order_id: order.id,
+    store_id: args.store_id,
+    ...(args.store_name_snapshot
+      ? { store_name_snapshot: args.store_name_snapshot }
+      : {}),
+    ...(args.product_name_snapshot
+      ? { product_name_snapshot: args.product_name_snapshot }
+      : {}),
+  });
+  await createPayment(prisma, {
+    order_id: order.id,
+    status: 'CONFIRMED',
+    confirmed_at: order.created_at,
+  });
+  return prisma.order.update({
+    where: { id: order.id },
+    data: {
+      settlement_base_amount: base,
+      commission_amount: Math.floor((base * bps) / 10000),
+      settlement_finalized_at: args.finalized_at,
+    },
+  });
+}
+
+export type SettlementOverrides = Partial<
+  Pick<
+    Settlement,
+    | 'store_id'
+    | 'store_name_snapshot'
+    | 'period_start'
+    | 'period_end'
+    | 'order_count'
+    | 'settlement_base_amount'
+    | 'commission_amount'
+    | 'payout_amount'
+    | 'status'
+    | 'paid_at'
+  >
+>;
+
+/** 주간 정산 행. 기간을 안 주면 겹치지 않는 주(월~일)를 고른다. */
+export async function createSettlement(
+  prisma: PrismaClient,
+  overrides: SettlementOverrides = {},
+): Promise<Settlement> {
+  const storeId = overrides.store_id ?? (await createStore(prisma)).id;
+  // 2030-01-07(월)부터 시퀀스만큼 뒤 주 — spec이 직접 고르는 기간과 겹치지 않게 멀리 둔다
+  const periodStart =
+    overrides.period_start ??
+    new Date(Date.UTC(2030, 0, 7) + nextSeq() * 7 * DAY_MS);
+  return prisma.settlement.create({
+    data: {
+      store_name_snapshot: 'Store snapshot',
+      period_end: new Date(periodStart.getTime() + 6 * DAY_MS),
+      order_count: 1,
+      settlement_base_amount: 10000,
+      commission_amount: 0,
+      payout_amount: 10000,
+      ...overrides,
+      store_id: storeId,
+      period_start: periodStart,
     },
   });
 }

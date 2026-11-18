@@ -19,9 +19,14 @@ import {
   REFUND_REQUESTED,
 } from '@/features/order/events/refund-requested.event';
 import {
+  parseSettlementCreatedPayload,
+  SETTLEMENT_CREATED,
+} from '@/features/order/events/settlement-created.event';
+import {
   buildDepositClaimedAlert,
   buildDepositPendingAlert,
   buildRefundReadyAlert,
+  buildSettlementCreatedAlert,
 } from '@/features/order/services/order-admin-alert-messages.helper';
 import {
   type OutboxConsumer,
@@ -40,6 +45,7 @@ import { AlertService, type AlertMessage } from '@/global/alerting';
   PAYMENT_DEPOSIT_CLAIMED,
   REFUND_REQUESTED,
   REFUND_ACCOUNT_SUBMITTED,
+  SETTLEMENT_CREATED,
 )
 export class OrderAdminAlertConsumer implements OutboxConsumer {
   constructor(
@@ -73,6 +79,11 @@ export class OrderAdminAlertConsumer implements OutboxConsumer {
       case REFUND_ACCOUNT_SUBMITTED:
         return buildRefundReadyAlert(
           parseRefundAccountSubmittedPayload(event.payload),
+          baseUrl,
+        );
+      case SETTLEMENT_CREATED:
+        return buildSettlementCreatedAlert(
+          parseSettlementCreatedPayload(event.payload),
           baseUrl,
         );
       default:

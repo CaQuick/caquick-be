@@ -71,4 +71,5 @@ export interface AdminTaskCountsOutput {
   pendingPayments: number;
   refundsAwaitingAccount: number;
   refundsAwaitingTransfer: number;
+  pendingSettlements: number;
 }
