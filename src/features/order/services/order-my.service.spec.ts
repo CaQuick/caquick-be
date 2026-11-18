@@ -1,6 +1,10 @@
 import { ClockService } from '@/common/providers/clock.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
+import {
+  parsePaymentDepositClaimedPayload,
+  PAYMENT_DEPOSIT_CLAIMED,
+} from '@/features/order/events/payment-deposit-claimed.event';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { UserOrderService } from '@/features/order/services/order-my.service';
@@ -608,8 +612,12 @@ describe('UserOrderService (real DB)', () => {
 
     const claimedCount = () =>
       prisma.payment.count({ where: { buyer_claimed_at: { not: null } } });
+    const claimEvents = () =>
+      prisma.outbox.findMany({
+        where: { event_type: PAYMENT_DEPOSIT_CLAIMED },
+      });
 
-    it('기한 전 첫 누름은 시각을 기록한다', async () => {
+    it('기한 전 첫 누름은 시각을 기록하고 확인 요청 이벤트를 남긴다', async () => {
       const account = await setupUser();
       const order = await pendingOrder(account.id);
       jest.spyOn(clock, 'now').mockReturnValue(NOW);
@@ -620,6 +628,21 @@ describe('UserOrderService (real DB)', () => {
       await expect(
         prisma.payment.findUniqueOrThrow({ where: { order_id: order.id } }),
       ).resolves.toMatchObject({ buyer_claimed_at: NOW, status: 'PENDING' });
+      const events = await claimEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        aggregate_id: order.id.toString(),
+        actor_account_id: account.id,
+        occurred_at: NOW,
+      });
+      expect(parsePaymentDepositClaimedPayload(events[0].payload_json)).toEqual(
+        {
+          orderId: order.id.toString(),
+          orderNumber: order.order_number,
+          amount: order.total_price,
+          depositorName: '차차맘',
+        },
+      );
     });
 
     it('다시 누르면 기한이 지났어도 바꾸지 않고 그대로 돌려준다(멱등)', async () => {
@@ -634,6 +657,7 @@ describe('UserOrderService (real DB)', () => {
       const again = await service.markMyOrderDepositSent(account.id, order.id);
 
       expect(again.payment).toMatchObject({ buyerClaimedAt: NOW });
+      expect(await claimEvents()).toHaveLength(1);
     });
 
     it.each([
@@ -650,6 +674,7 @@ describe('UserOrderService (real DB)', () => {
           service.markMyOrderDepositSent(account.id, order.id),
         ).rejects.toThrowDomain('PAYMENT_DEADLINE_PASSED');
         expect(await claimedCount()).toBe(0);
+        expect(await claimEvents()).toHaveLength(0);
       },
     );
 
@@ -707,6 +732,7 @@ describe('UserOrderService (real DB)', () => {
         ).rejects.toThrowDomain('ORDER_NOT_FOUND');
       }
       expect(await claimedCount()).toBe(0);
+      expect(await claimEvents()).toHaveLength(0);
     });
   });
 });

@@ -17,7 +17,7 @@ export type AlertOutcome = 'sent' | 'suppressed' | 'skipped' | 'failed';
 export const ALERT_RETRY_DELAY_MS = 5_000;
 
 /**
- * 운영 경보의 단일 출구. 절대 던지지 않고 결과만 돌려준다 — 경보 때문에 본 작업이 실패하면 안 된다.
+ * 운영 경보·업무 알림의 단일 출구. 절대 던지지 않고 결과만 돌려준다 — 경보 때문에 본 작업이 실패하면 안 된다.
  * 웹훅이 없으면 로그로만 남기고, 같은 key는 억제 창 안에서 한 번만 보낸다.
  */
 @Injectable()
@@ -36,6 +36,7 @@ export class AlertService {
       this.config.getOrThrow<AlertingConfig>('alerting');
     const key = message.key ?? message.title;
     const now = this.clock.nowMs();
+    this.forgetExpired(now, dedupeWindowMs);
     const last = this.lastSentAt.get(key);
     if (last !== undefined && now - last < dedupeWindowMs) return 'suppressed';
 
@@ -43,7 +44,8 @@ export class AlertService {
     this.lastSentAt.set(key, now);
     const line = `[alert:${message.level}] ${message.title}`;
     if (!discordWebhookUrl) {
-      this.logger.warn(line, { detail: message.detail, delivered: false });
+      const log = message.level === 'info' ? 'log' : 'warn';
+      this.logger[log](line, { detail: message.detail, delivered: false });
       return 'skipped';
     }
     const origin = {
@@ -64,6 +66,13 @@ export class AlertService {
     return 'sent';
   }
 
+  /** 주문·환불 건별 key가 쌓이지 않게 억제 창이 지난 key를 지운다. */
+  private forgetExpired(now: number, windowMs: number): void {
+    for (const [key, at] of this.lastSentAt) {
+      if (now - at >= windowMs) this.lastSentAt.delete(key);
+    }
+  }
+
   /**
    * 일회성 사건(outbox FAILED 1건 등)의 유일한 경보가 잠깐의 웹훅 장애로 사라지지 않게 1회만 뒤늦게 다시 보낸다.
    * 억제 창은 첫 시도가 열었으므로 재전송은 창과 무관하다. 그래도 실패하면 창이 지난 다음 발생 때 다시.
@@ -77,8 +86,10 @@ export class AlertService {
     attemptedAt: number,
   ): void {
     const timer = setTimeout(() => {
-      // 그 사이 같은 키로 더 새 시도가 있었으면(억제 창이 재전송 간격보다 짧을 때) 묵은 경보는 보내지 않는다
-      if (this.lastSentAt.get(key) !== attemptedAt) return;
+      // 그 사이 같은 키로 더 새 시도가 있었으면(억제 창이 재전송 간격보다 짧을 때) 묵은 경보는 보내지 않는다.
+      // 창이 지나 key가 지워졌을 뿐이면 새 시도가 없었던 것이다
+      const latest = this.lastSentAt.get(key);
+      if (latest !== undefined && latest !== attemptedAt) return;
       void this.transport(url, message, origin).then((ok) => {
         if (!ok) {
           this.logger.warn(`${line} — 재전송도 실패`, {

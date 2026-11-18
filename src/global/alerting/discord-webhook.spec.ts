@@ -42,6 +42,21 @@ describe('buildDiscordPayload', () => {
     expect(payload.embeds[0].description).toHaveLength(1_800);
     expect(payload.embeds[0].color).toBe(0xf59e0b);
   });
+
+  // 업무 알림과 장애 경보가 같은 채널이라 색으로 가른다
+  it.each([
+    ['info', 0x3b82f6],
+    ['warn', 0xf59e0b],
+    ['error', 0xef4444],
+  ] as const)('%s 색은 %s다', (level, color) => {
+    const payload = buildDiscordPayload(
+      { level, title: 't' },
+      { role: 'worker', env: 'test' },
+      at,
+    ) as { embeds: Array<{ title: string; color: number }> };
+
+    expect(payload.embeds[0]).toMatchObject({ title: `[${level}] t`, color });
+  });
 });
 
 describe('postDiscordAlert (real http)', () => {

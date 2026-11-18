@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
 import type { TimestampIdCursor } from '@/common/utils/keyset-cursor';
+import { paymentDepositClaimedEvent } from '@/features/order/events/payment-deposit-claimed.event';
+import { OutboxPublisher } from '@/features/outbox';
 import {
   OrderStatus,
   PaymentStatus,
@@ -71,7 +73,10 @@ export type DepositClaimResult =
 
 @Injectable()
 export class PaymentRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxPublisher,
+  ) {}
 
   private pendingScopeWhere(
     filter: PendingPaymentFilter,
@@ -124,7 +129,7 @@ export class PaymentRepository {
   }
 
   /**
-   * 마감 전 첫 누름만 기록한다. 다시 누르면 아무것도 바꾸지 않는다(멱등).
+   * 마감 전 첫 누름만 기록하고 경보 이벤트를 남긴다. 다시 누르면 아무것도 바꾸지 않는다(멱등).
    * 잠금 순서는 주문 → 결제(입금 확인과 같다).
    */
   async markDepositClaimed(args: {
@@ -133,8 +138,10 @@ export class PaymentRepository {
     now: Date;
   }): Promise<DepositClaimResult> {
     return this.prisma.$transaction(async (tx) => {
-      const [order] = await tx.$queryRaw<{ id: bigint; status: OrderStatus }[]>`
-        SELECT id, status FROM \`order\`
+      const [order] = await tx.$queryRaw<
+        { id: bigint; status: OrderStatus; order_number: string }[]
+      >`
+        SELECT id, status, order_number FROM \`order\`
         WHERE id = ${args.orderId} AND account_id = ${args.accountId} AND deleted_at IS NULL
         FOR UPDATE`;
       if (!order) return 'not-found';
@@ -155,6 +162,17 @@ export class PaymentRepository {
         where: { id: payment.id },
         data: { buyer_claimed_at: args.now },
       });
+      await this.outbox.publish(
+        tx,
+        paymentDepositClaimedEvent({
+          orderId: order.id,
+          orderNumber: order.order_number,
+          buyerAccountId: args.accountId,
+          amount: payment.amount,
+          depositorName: payment.depositor_name,
+          occurredAt: args.now,
+        }),
+      );
       return 'claimed';
     });
   }

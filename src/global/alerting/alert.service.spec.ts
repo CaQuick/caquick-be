@@ -11,7 +11,15 @@ import type { CustomLoggerService } from '@/global/logger/custom-logger.service'
 describe('AlertService', () => {
   const START = 1_000_000;
   let nowMs = START;
-  const logger = { warn: jest.fn() } as unknown as CustomLoggerService;
+  const logger = {
+    warn: jest.fn(),
+    log: jest.fn(),
+  } as unknown as CustomLoggerService;
+  const trackedKeys = (service: AlertService) => [
+    ...(
+      service as unknown as { lastSentAt: Map<string, number> }
+    ).lastSentAt.keys(),
+  ];
 
   function build(
     config: Partial<AlertingConfig> = {},
@@ -91,6 +99,37 @@ describe('AlertService', () => {
     });
   });
 
+  it('웹훅 미설정이면 info(업무 알림)는 경고가 아닌 일반 로그로 남긴다', async () => {
+    const { service } = build({ discordWebhookUrl: null });
+
+    await service.notify({ level: 'info', title: '입금 확인 요청', key: 'k' });
+
+    expect(logger.log).toHaveBeenCalledWith('[alert:info] 입금 확인 요청', {
+      detail: undefined,
+      delivered: false,
+    });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('건별 key가 쌓이지 않게 억제 창이 지난 key는 다음 notify 때 지운다', async () => {
+    const { service } = build({ dedupeWindowMs: 5_000 });
+
+    await service.notify({ level: 'info', title: 't', key: 'deposit-claim:1' });
+    nowMs += 1_000;
+    await service.notify({ level: 'info', title: 't', key: 'deposit-claim:2' });
+    expect(trackedKeys(service)).toEqual([
+      'deposit-claim:1',
+      'deposit-claim:2',
+    ]);
+
+    nowMs += 4_000; // 1번은 창(5초)이 정확히 지났고 2번은 남았다
+    await service.notify({ level: 'info', title: 't', key: 'deposit-claim:3' });
+    expect(trackedKeys(service)).toEqual([
+      'deposit-claim:2',
+      'deposit-claim:3',
+    ]);
+  });
+
   it('반증: 전송 실패는 failed로 돌려줄 뿐 던지지 않고, 실패도 억제 창을 열되 1회는 뒤늦게 재전송한다', async () => {
     jest.useFakeTimers();
     try {
@@ -139,6 +178,30 @@ describe('AlertService', () => {
 
       await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
       expect(transport).toHaveBeenCalledTimes(2); // 옛 경보의 재전송은 건너뛴다
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('억제 창이 지나 key가 지워졌어도(새 시도 없음) 실패한 경보는 재전송한다', async () => {
+    jest.useFakeTimers();
+    try {
+      const { service, transport } = build(
+        { dedupeWindowMs: 1_000 },
+        jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+      );
+      await service.notify({ level: 'error', title: 't', key: 'a' });
+      nowMs += 2_000; // 다른 key 알림이 a를 지운다
+      await service.notify({ level: 'error', title: 'u', key: 'b' });
+      expect(trackedKeys(service)).toEqual(['b']);
+
+      await jest.advanceTimersByTimeAsync(ALERT_RETRY_DELAY_MS);
+      expect(transport).toHaveBeenCalledTimes(3);
+      expect(transport).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ key: 'a' }),
+        expect.any(Object),
+      );
     } finally {
       jest.useRealTimers();
     }
