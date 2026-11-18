@@ -72,11 +72,12 @@ function s3Error(status: number, name: string) {
 
 describe('S3Service.readImageSize', () => {
   let service: S3Service;
-  const logger = { error: jest.fn() };
+  const logger = { error: jest.fn(), warn: jest.fn() };
 
   beforeEach(async () => {
     mockSend.mockReset();
     logger.error.mockClear();
+    logger.warn.mockClear();
     const moduleRef = await Test.createTestingModule({
       providers: [
         S3Service,
@@ -152,9 +153,20 @@ describe('S3Service.readImageSize', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it('ListBucket 권한이 없어 없는 키가 403 AccessDenied로 오면 null이고 경고만 남긴다', async () => {
+    mockSend.mockRejectedValue(s3Error(403, 'AccessDenied'));
+
+    await expect(service.readImageSize(URL_)).resolves.toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'S3 객체 접근 거부 — 없는 객체로 본다',
+      expect.objectContaining({ key: KEY }),
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['S3 5xx', s3Error(503, 'SlowDown')],
-    ['권한 거부', s3Error(403, 'AccessDenied')],
+    ['403 서명 오류', s3Error(403, 'SignatureDoesNotMatch')],
     ['네트워크 오류', new Error('socket hang up')],
   ])('%s면 S3_READ_FAILED(503)이고 원인을 남긴다', async (_label, error) => {
     mockSend.mockRejectedValue(error);

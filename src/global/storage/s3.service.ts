@@ -152,7 +152,7 @@ export class S3Service {
 
   /**
    * 이 버킷의 공개 URL이 가리키는 이미지의 가로·세로(px)를 헤더만 읽어 구한다. 이미지가 아니거나 객체가 없으면 null,
-   * S3 호출 자체가 실패하면 S3_READ_FAILED다. 호출부가 URL 소유를 먼저 검증한다.
+   * S3 호출 자체가 실패하면 S3_READ_FAILED다. 호출부가 URL 소유를 먼저 검증한다(403을 없는 객체로 보는 전제).
    */
   async readImageSize(url: string): Promise<ImageDimensions | null> {
     const key = this.keyOfPublicUrl(url);
@@ -199,11 +199,18 @@ export class S3Service {
         totalBytes: Number.isFinite(total) ? total : bytes.length,
       };
     } catch (error) {
-      if (
-        error instanceof S3ServiceException &&
-        UNREADABLE_OBJECT_STATUS.has(error.$metadata.httpStatusCode ?? 0)
-      ) {
-        return null;
+      if (error instanceof S3ServiceException) {
+        const status = error.$metadata.httpStatusCode ?? 0;
+        if (UNREADABLE_OBJECT_STATUS.has(status)) return null;
+        // 앱에 ListBucket 권한이 없어 S3는 없는 키를 404 대신 403 AccessDenied로 준다.
+        // 권한이 빠진 경우와 구별할 수 없어 경고는 남긴다.
+        if (status === 403 && error.name === 'AccessDenied') {
+          this.logger.warn('S3 객체 접근 거부 — 없는 객체로 본다', {
+            bucket: this.bucket,
+            key,
+          });
+          return null;
+        }
       }
       this.logger.error('S3 객체 읽기 실패', {
         bucket: this.bucket,
