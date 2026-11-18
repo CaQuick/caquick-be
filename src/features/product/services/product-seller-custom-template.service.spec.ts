@@ -238,12 +238,177 @@ describe('SellerCustomTemplateService (real DB)', () => {
         {
           mode: 'THREE_D',
           ready: false,
-          issues: [expect.objectContaining({ code: 'THREE_D_GROUP_MISSING' })],
+          issues: [
+            expect.objectContaining({ code: 'THREE_D_GROUP_MISSING' }),
+            expect.objectContaining({ code: 'THREE_D_GROUP_MISSING' }),
+          ],
         },
       ]);
       expect(
         await prisma.auditLog.count({ where: { store_id: storeId } }),
       ).toBe(0);
+    });
+  });
+
+  describe('sellerApplyThreeDOptionPreset', () => {
+    const groupsOf = (productId: bigint) =>
+      prisma.productOptionGroup.findMany({
+        where: { product_id: productId },
+        orderBy: { sort_order: 'asc' },
+        include: { option_items: { orderBy: { sort_order: 'asc' } } },
+      });
+
+    it('다른 매장 상품이면 404이고 아무것도 만들지 않는다', async () => {
+      const me = await setupSellerWithProduct();
+      const other = await setupSellerWithProduct();
+
+      await expect(
+        service.sellerApplyThreeDOptionPreset(me.accountId, other.product.id),
+      ).rejects.toThrowDomain('PRODUCT_NOT_FOUND');
+      expect(await groupsOf(other.product.id)).toEqual([]);
+    });
+
+    it('빈 카테고리마다 단일 선택 그룹을 기존 그룹 뒤에 만들고, 3D 방식으로 바꿀 수 있게 된다', async () => {
+      const { accountId, storeId, product } = await setupSellerWithProduct();
+      await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '초', sort_order: 4 },
+      });
+
+      const result = await service.sellerApplyThreeDOptionPreset(
+        accountId,
+        product.id,
+      );
+
+      const groups = await groupsOf(product.id);
+      expect(
+        groups.map((g) => [
+          g.name,
+          g.sort_order,
+          g.is_required,
+          g.min_select,
+          g.max_select,
+        ]),
+      ).toEqual([
+        ['초', 4, true, 1, 1],
+        ['크기', 5, true, 1, 1],
+        ['맛', 6, true, 1, 1],
+        ['모양', 7, true, 1, 1],
+        ['디자인', 8, false, 0, 1],
+      ]);
+      expect(
+        groups[1].option_items.map((i) => [
+          i.title,
+          i.price_delta,
+          i.three_d_key,
+          i.sort_order,
+        ]),
+      ).toEqual([
+        ['도시락 (1~2인)', 0, 'size.lunchbox', 0],
+        ['미니 (1~2인)', 0, 'size.mini', 1],
+        ['1호 (2~3인)', 5000, 'size.no1', 2],
+      ]);
+      expect(groups.slice(1).map((g) => g.option_items.length)).toEqual([
+        3, 3, 8, 5,
+      ]);
+      expect(result.optionGroups.map((g) => g.threeDCategory)).toEqual([
+        null,
+        'SIZE',
+        'FLAVOR',
+        'SHAPE',
+        'DESIGN',
+      ]);
+      expect(result.customReadiness.find((r) => r.mode === 'THREE_D')).toEqual({
+        mode: 'THREE_D',
+        ready: true,
+        issues: [],
+      });
+
+      const audits = await prisma.auditLog.findMany({
+        where: { store_id: storeId },
+      });
+      expect(audits.map((a) => [a.action, a.after_json])).toEqual([
+        [
+          'CREATE',
+          {
+            threeDOptionPreset: true,
+            optionGroupIds: groups.slice(1).map((g) => g.id.toString()),
+          },
+        ],
+      ]);
+      await expect(
+        service.sellerSetProductCustomMode(accountId, product.id, 'THREE_D'),
+      ).resolves.toMatchObject({ customMode: 'THREE_D' });
+    });
+
+    it('다시 불러도 아무것도 만들지 않고 감사도 남기지 않는다', async () => {
+      const { accountId, storeId, product } = await setupSellerWithProduct();
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+      const before = await groupsOf(product.id);
+
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+
+      expect(await groupsOf(product.id)).toEqual(before);
+      expect(
+        await prisma.auditLog.count({ where: { store_id: storeId } }),
+      ).toBe(1);
+    });
+
+    it('3D 항목 그룹이 이미 있는 카테고리는 건드리지 않고, 숨긴 그룹의 카테고리는 다시 만든다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+      const shape = await prisma.productOptionGroup.create({
+        data: { product_id: product.id, name: '하트만', sort_order: 0 },
+      });
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: shape.id,
+          title: '하트',
+          price_delta: 3000,
+          three_d_key: 'shape.heart',
+        },
+      });
+      const hiddenSize = await prisma.productOptionGroup.create({
+        data: {
+          product_id: product.id,
+          name: '숨긴 크기',
+          sort_order: 1,
+          is_active: false,
+        },
+      });
+      await prisma.productOptionItem.create({
+        data: {
+          option_group_id: hiddenSize.id,
+          title: '미니',
+          three_d_key: 'size.mini',
+        },
+      });
+
+      await service.sellerApplyThreeDOptionPreset(accountId, product.id);
+
+      const groups = await groupsOf(product.id);
+      expect(groups.map((g) => g.name)).toEqual([
+        '하트만',
+        '숨긴 크기',
+        '크기',
+        '맛',
+        '디자인',
+      ]);
+      expect(groups[0].option_items.map((i) => i.price_delta)).toEqual([3000]);
+    });
+
+    it('동시에 두 번 불러도 카테고리마다 그룹은 하나다', async () => {
+      const { accountId, product } = await setupSellerWithProduct();
+
+      await Promise.all([
+        service.sellerApplyThreeDOptionPreset(accountId, product.id),
+        service.sellerApplyThreeDOptionPreset(accountId, product.id),
+      ]);
+
+      expect((await groupsOf(product.id)).map((g) => g.name)).toEqual([
+        '크기',
+        '맛',
+        '모양',
+        '디자인',
+      ]);
     });
   });
 

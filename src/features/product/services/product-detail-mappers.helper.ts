@@ -1,5 +1,6 @@
 import { calcDiscountRate } from '@/common/utils/discount-rate';
 import type { ProductDetailRow } from '@/features/product/repositories/product.repository';
+import { threeDCategoryOf } from '@/features/product/services/product-custom-readiness.helper';
 import type {
   ProductDetail,
   ProductDetailCustomTemplate,
@@ -61,6 +62,7 @@ export function toProductDetail(
       minSelect: group.min_select,
       maxSelect: group.max_select,
       sortOrder: group.sort_order,
+      threeDCategory: threeDCategoryOf(group),
       items: group.option_items.map((item) => ({
         id: item.id.toString(),
         title: item.title,
@@ -68,6 +70,7 @@ export function toProductDetail(
         imageUrl: item.image_url,
         priceDelta: item.price_delta,
         sortOrder: item.sort_order,
+        threeDKey: item.three_d_key,
       })),
     })),
     customMode: row.custom_mode,
