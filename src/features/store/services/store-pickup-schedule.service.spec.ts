@@ -847,6 +847,31 @@ describe('StorePickupScheduleService (real DB)', () => {
       ).toBe('CAPACITY_FULL');
     });
 
+    it('옮길 주문의 수량 전체가 들어가지 않는 날짜는 소진으로 본다', async () => {
+      const store = await createStore(prisma);
+      await openAllWeek(store);
+      await setCapacity(store, new Date(Date.UTC(2026, 8, 18)), 2);
+      await setCapacity(store, new Date(Date.UTC(2026, 8, 19)), 3);
+      await book(store, new Date('2026-09-18T05:00:00.000Z'), 1);
+      await book(store, new Date('2026-09-19T05:00:00.000Z'), 1);
+      const adjustment = { date: '2026-09-20', quantity: 2 };
+
+      const calendar = await service.rescheduleCalendar(
+        store.id,
+        '2026-09',
+        adjustment,
+      );
+      const full = await service.rescheduleTimeSlots(
+        store.id,
+        '2026-09-18',
+        adjustment,
+      );
+
+      expect(dayOf(calendar, '2026-09-18').reason).toBe('CAPACITY_FULL');
+      expect(dayOf(calendar, '2026-09-19').selectable).toBe(true);
+      expect(full.afternoon.every((slot) => !slot.available)).toBe(true);
+    });
+
     it('없는 매장과 형식 오류는 거절한다', async () => {
       await expect(
         service.rescheduleCalendar(999999n, '2026-09', ADJUST_NONE),

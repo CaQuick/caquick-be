@@ -42,6 +42,7 @@ interface ScheduleContext {
   closureDates: Set<string>;
   capacities: Map<string, number>;
   bookedByDate: Map<string, number>;
+  required: number;
 }
 
 /** 픽업 변경 달력에서 옮길 주문이 지금 점유한 수량. 그 날짜(KST 'YYYY-MM-DD') 예약 수량에서 뺀다. */
@@ -305,6 +306,8 @@ export class StorePickupScheduleService {
       closureDates,
       capacities,
       bookedByDate,
+      // 옮길 주문은 수량 전체가 들어가야 한다
+      required: Math.max(1, adjustment?.quantity ?? 1),
     };
   }
 
@@ -325,6 +328,7 @@ export class StorePickupScheduleService {
       isSpecialClosure: ctx.closureDates.has(dateKey),
       capacity: ctx.capacities.get(dateKey),
       booked: ctx.bookedByDate.get(dateKey) ?? 0,
+      required: ctx.required,
       now,
       dayStartUtc: kstMidnightUtc(year, month, day),
     };
