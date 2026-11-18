@@ -158,7 +158,11 @@ export class AdminOrderService extends AdminBaseService {
     if (firstItem && updated.submitted_at) {
       await this.events.publishSellerOrderUpdate(
         firstItem.store_id,
-        toSellerOrderUpdateEvent(updated, firstItem.product_name_snapshot),
+        toSellerOrderUpdateEvent(
+          'STATUS_CHANGED',
+          updated,
+          firstItem.product_name_snapshot,
+        ),
       );
     }
     return toAdminOrderSummaryOutput(updated);

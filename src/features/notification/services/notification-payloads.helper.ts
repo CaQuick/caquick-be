@@ -24,13 +24,15 @@ export interface NotificationPayload {
 const ORDER_STATUS_NOTIFICATION_EVENTS: Partial<
   Record<OrderStatus, NotificationEvent>
 > = {
+  // 접수는 관리자 입금 확인으로만 일어난다(주문 생성은 입금 대기)
+  [OrderStatus.SUBMITTED]: NotificationEvent.ORDER_PAYMENT_CONFIRMED,
   [OrderStatus.CONFIRMED]: NotificationEvent.ORDER_CONFIRMED,
   [OrderStatus.MADE]: NotificationEvent.ORDER_MADE,
   [OrderStatus.PICKED_UP]: NotificationEvent.ORDER_PICKED_UP,
   [OrderStatus.CANCELED]: NotificationEvent.ORDER_CANCELED,
 };
 
-/** SUBMITTED는 구매자 본인의 행위라 알림 없음(null). */
+/** 매핑에 없는 상태는 알림 없음(null). */
 export function buildOrderStatusNotification(
   orderNumber: string,
   toStatus: OrderStatus,

@@ -158,6 +158,10 @@ type AdminOrderDetail {
   """
   requestNote: String
   """
+  결제와 입금 확인 기록. 결제 도입 전 주문이면 null.
+  """
+  payment: AdminOrderPayment
+  """
   할인 전 품목 합계(원).
   """
   subtotalPrice: Int!

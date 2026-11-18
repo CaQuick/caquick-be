@@ -11,6 +11,7 @@ import { redisTestContainer } from '@/test/containers';
 jest.setTimeout(180_000);
 
 const EVENT: SellerOrderUpdateEvent = {
+  kind: 'SUBMITTED',
   orderId: '1',
   orderNumber: 'ORD-20260916-ABC234',
   status: 'SUBMITTED',

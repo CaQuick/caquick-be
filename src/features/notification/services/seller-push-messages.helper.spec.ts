@@ -15,25 +15,43 @@ describe('seller-push-messages.helper', () => {
     expect(formatKstPickupAt(new Date(iso))).toBe(expected);
   });
 
+  const SUBMITTED = {
+    orderId: '42',
+    orderNumber: 'ORD-1',
+    buyerAccountId: '7',
+    storeId: '3',
+    storeName: '케이크샵',
+    productId: '9',
+    productName: '레터링 케이크',
+    quantity: 2,
+    pickupAt: '2026-10-05T03:05:00.000Z',
+    totalPrice: 50000,
+    // 접수 10/4 12:00 KST + 24시간
+    confirmDeadlineAt: '2026-10-05T03:00:00.000Z',
+  };
+  const SUBMITTED_AT = new Date('2026-10-04T03:00:00.000Z');
+
   it('주문 접수: 상품명·수량·픽업 시각(KST) 본문, 딥링크 data는 kind·orderId', () => {
-    expect(
-      buildOrderSubmittedPush({
-        orderId: '42',
-        orderNumber: 'ORD-1',
-        buyerAccountId: '7',
-        storeId: '3',
-        storeName: '케이크샵',
-        productId: '9',
-        productName: '레터링 케이크',
-        quantity: 2,
-        pickupAt: '2026-10-05T03:05:00.000Z',
-        totalPrice: 50000,
-      }),
-    ).toEqual({
+    expect(buildOrderSubmittedPush(SUBMITTED, SUBMITTED_AT)).toEqual({
       title: '새 주문',
       body: '레터링 케이크 2개 · 픽업 10/5 12:05',
       data: { kind: 'ORDER_SUBMITTED', orderId: '42' },
     });
+  });
+
+  // 마감 2시간 전 미리 알림을 받을 수 없는 접수(마감 − 2시간 ≤ 접수)만 마감 시각을 싣는다
+  it.each<[string, string | null, string]>([
+    ['마감까지 2시간 1ms', '2026-10-04T05:00:00.001Z', ''],
+    ['마감까지 정확히 2시간', '2026-10-04T05:00:00.000Z', ' · 14:00까지 확정'],
+    ['마감까지 30분', '2026-10-04T03:30:00.000Z', ' · 12:30까지 확정'],
+    ['마감 없음(옛 이벤트)', null, ''],
+  ])('%s → 본문 꼬리 %p', (_case, deadline, suffix) => {
+    expect(
+      buildOrderSubmittedPush(
+        { ...SUBMITTED, confirmDeadlineAt: deadline },
+        SUBMITTED_AT,
+      ).body,
+    ).toBe(`레터링 케이크 2개 · 픽업 10/5 12:05${suffix}`);
   });
 
   it('구매자 문의: 본문은 preview 그대로, data는 kind·conversationId', () => {

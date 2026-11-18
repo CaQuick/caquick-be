@@ -16,10 +16,11 @@ const VALID = {
   quantity: 2,
   pickupAt: '2026-09-18T05:00:00.000Z',
   totalPrice: 56000,
+  confirmDeadlineAt: '2026-09-17T07:00:00.000Z',
 };
 
 describe('order.submitted 이벤트', () => {
-  it('bigint·Date를 문자열로 싣고 order aggregate(상태 전이와 같은 파티션)에 묶는다', () => {
+  it('bigint·Date를 문자열로 싣고 order aggregate(상태 전이와 같은 파티션)에 묶고 행위자는 입금 확인자다', () => {
     const occurredAt = new Date('2026-09-16T07:00:00.000Z');
     const event = orderSubmittedEvent({
       orderId: 7n,
@@ -32,7 +33,9 @@ describe('order.submitted 이벤트', () => {
       quantity: 2,
       pickupAt: new Date(VALID.pickupAt),
       totalPrice: 56000,
+      confirmDeadlineAt: new Date(VALID.confirmDeadlineAt),
       occurredAt,
+      actorAccountId: 11n,
     });
 
     expect(event).toEqual({
@@ -41,11 +44,24 @@ describe('order.submitted 이벤트', () => {
       eventType: ORDER_SUBMITTED,
       payload: VALID,
       occurredAt,
-      actorAccountId: 3n,
+      actorAccountId: 11n,
     });
     expect(
       parseOrderSubmittedPayload(event.payload as Prisma.JsonValue),
     ).toEqual(VALID);
+  });
+
+  it.each([
+    ['누락', undefined],
+    ['비ISO', 'not-a-date'],
+    ['숫자', 1_700_000_000],
+  ])('확정 마감이 %s이면 null로 읽는다(옛 이벤트 호환)', (_label, value) => {
+    expect(
+      parseOrderSubmittedPayload({
+        ...VALID,
+        confirmDeadlineAt: value,
+      }).confirmDeadlineAt,
+    ).toBeNull();
   });
 
   it.each([

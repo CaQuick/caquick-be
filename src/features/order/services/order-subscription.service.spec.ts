@@ -53,6 +53,7 @@ describe('OrderSubscriptionService (real DB)', () => {
   }
 
   const event: SellerOrderUpdateEvent = {
+    kind: 'SUBMITTED',
     orderId: '1',
     orderNumber: 'ORD-1',
     status: 'SUBMITTED',

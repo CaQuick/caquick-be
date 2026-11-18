@@ -2,6 +2,7 @@ import type {
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { AdminOrderPaymentOutput } from '@/features/order/types/order-payment-output.type';
 import type { AccountStatus, OrderStatus } from '@/generated/prisma/client';
 
 export interface AdminOrderSummaryOutput {
@@ -40,6 +41,7 @@ export interface AdminOrderDetailOutput {
   buyerName: string;
   buyerPhone: string;
   requestNote: string | null;
+  payment: AdminOrderPaymentOutput | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;

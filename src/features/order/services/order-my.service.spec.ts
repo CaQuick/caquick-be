@@ -1,6 +1,8 @@
+import { ClockService } from '@/common/providers/clock.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
@@ -9,6 +11,7 @@ import {
   createAccount,
   createOrder,
   createOrderItem,
+  createPayment,
   createProduct,
   createReview,
   createStore,
@@ -19,6 +22,7 @@ import { outboxPublisherProviders } from '@/test/outbox';
 
 describe('UserOrderService (real DB)', () => {
   let service: UserOrderService;
+  let clock: ClockService;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
@@ -26,12 +30,14 @@ describe('UserOrderService (real DB)', () => {
       providers: [
         UserOrderService,
         OrderRepository,
+        PaymentRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders(),
       ],
     });
     service = module.get(UserOrderService);
+    clock = module.get(ClockService);
     prisma = p;
   });
 
@@ -42,6 +48,10 @@ describe('UserOrderService (real DB)', () => {
 
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   async function setupUser() {
@@ -517,6 +527,186 @@ describe('UserOrderService (real DB)', () => {
         toStatus: 'CONFIRMED',
         note: '접수 확정',
       });
+    });
+  });
+
+  describe('결제 출력', () => {
+    it('상세는 입금 안내를, 목록은 결제 대기일 때만 입금 기한을 싣는다', async () => {
+      const account = await setupUser();
+      const expiresAt = new Date('2026-09-16T08:00:00.000Z');
+      const pending = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'PENDING_PAYMENT',
+      });
+      await createPayment(prisma, {
+        order_id: pending.id,
+        depositor_name: '차차맘',
+        expires_at: expiresAt,
+      });
+      const confirmed = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+      await createPayment(prisma, {
+        order_id: confirmed.id,
+        status: 'CONFIRMED',
+        confirmed_at: expiresAt,
+      });
+      const legacy = await createOrder(prisma, {
+        account_id: account.id,
+        status: 'SUBMITTED',
+      });
+
+      const detail = await service.getMyOrder(account.id, pending.id);
+      expect(detail.payment).toEqual({
+        method: 'BANK_TRANSFER',
+        status: 'PENDING',
+        amount: pending.total_price,
+        depositorName: '차차맘',
+        depositBank: { code: '004', name: 'KB국민은행' },
+        depositAccountNumber: '12345678901234',
+        depositAccountHolder: '케이퀵',
+        expiresAt,
+        buyerClaimedAt: null,
+        confirmedAt: null,
+        confirmSource: null,
+      });
+      expect((await service.getMyOrder(account.id, legacy.id)).payment).toBe(
+        null,
+      );
+
+      const list = await service.listMyOrders(account.id);
+      const expiresById = new Map(
+        list.items.map((item) => [item.orderId, item.paymentExpiresAt]),
+      );
+      expect(expiresById).toEqual(
+        new Map([
+          [pending.id.toString(), expiresAt],
+          [confirmed.id.toString(), null],
+          [legacy.id.toString(), null],
+        ]),
+      );
+    });
+  });
+
+  describe('markMyOrderDepositSent', () => {
+    const NOW = new Date('2026-09-16T07:30:00.000Z');
+    const EXPIRES_AT = new Date('2026-09-16T08:00:00.000Z');
+
+    async function pendingOrder(accountId: bigint) {
+      const order = await createOrder(prisma, {
+        account_id: accountId,
+        status: 'PENDING_PAYMENT',
+      });
+      await createPayment(prisma, {
+        order_id: order.id,
+        depositor_name: '차차맘',
+        expires_at: EXPIRES_AT,
+      });
+      return order;
+    }
+
+    const claimedCount = () =>
+      prisma.payment.count({ where: { buyer_claimed_at: { not: null } } });
+
+    it('기한 전 첫 누름은 시각을 기록한다', async () => {
+      const account = await setupUser();
+      const order = await pendingOrder(account.id);
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+
+      const result = await service.markMyOrderDepositSent(account.id, order.id);
+
+      expect(result.payment).toMatchObject({ buyerClaimedAt: NOW });
+      await expect(
+        prisma.payment.findUniqueOrThrow({ where: { order_id: order.id } }),
+      ).resolves.toMatchObject({ buyer_claimed_at: NOW, status: 'PENDING' });
+    });
+
+    it('다시 누르면 기한이 지났어도 바꾸지 않고 그대로 돌려준다(멱등)', async () => {
+      const account = await setupUser();
+      const order = await pendingOrder(account.id);
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+      await service.markMyOrderDepositSent(account.id, order.id);
+
+      jest
+        .spyOn(clock, 'now')
+        .mockReturnValue(new Date('2026-09-16T09:00:00Z'));
+      const again = await service.markMyOrderDepositSent(account.id, order.id);
+
+      expect(again.payment).toMatchObject({ buyerClaimedAt: NOW });
+    });
+
+    it.each([
+      ['기한 정각', EXPIRES_AT],
+      ['기한 뒤', new Date(EXPIRES_AT.getTime() + 1)],
+    ])(
+      '누르지 않은 채 %s이면 PAYMENT_DEADLINE_PASSED다',
+      async (_case, now) => {
+        const account = await setupUser();
+        const order = await pendingOrder(account.id);
+        jest.spyOn(clock, 'now').mockReturnValue(now);
+
+        await expect(
+          service.markMyOrderDepositSent(account.id, order.id),
+        ).rejects.toThrowDomain('PAYMENT_DEADLINE_PASSED');
+        expect(await claimedCount()).toBe(0);
+      },
+    );
+
+    it('기한 1ms 전이면 받는다', async () => {
+      const account = await setupUser();
+      const order = await pendingOrder(account.id);
+      jest
+        .spyOn(clock, 'now')
+        .mockReturnValue(new Date(EXPIRES_AT.getTime() - 1));
+
+      await expect(
+        service.markMyOrderDepositSent(account.id, order.id),
+      ).resolves.toMatchObject({ status: 'PENDING_PAYMENT' });
+    });
+
+    it.each<
+      [string, 'SUBMITTED' | 'CANCELED', 'CONFIRMED' | 'CANCELED' | null]
+    >([
+      ['입금 확인된 주문', 'SUBMITTED', 'CONFIRMED'],
+      ['입금 전 취소된 주문', 'CANCELED', 'CANCELED'],
+      ['결제 기록이 없는 주문', 'SUBMITTED', null],
+    ])('%s은 PAYMENT_NOT_PENDING이다', async (_case, status, paymentStatus) => {
+      const account = await setupUser();
+      const order = await createOrder(prisma, {
+        account_id: account.id,
+        status,
+      });
+      if (paymentStatus) {
+        await createPayment(prisma, {
+          order_id: order.id,
+          status: paymentStatus,
+        });
+      }
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+
+      await expect(
+        service.markMyOrderDepositSent(account.id, order.id),
+      ).rejects.toThrowDomain('PAYMENT_NOT_PENDING');
+    });
+
+    it('다른 계정·삭제된 주문은 ORDER_NOT_FOUND다', async () => {
+      const account = await setupUser();
+      const other = await setupUser();
+      const order = await pendingOrder(other.id);
+      const deleted = await pendingOrder(account.id);
+      await prisma.order.update({
+        where: { id: deleted.id },
+        data: { deleted_at: NOW },
+      });
+      jest.spyOn(clock, 'now').mockReturnValue(NOW);
+
+      for (const id of [order.id, deleted.id]) {
+        await expect(
+          service.markMyOrderDepositSent(account.id, id),
+        ).rejects.toThrowDomain('ORDER_NOT_FOUND');
+      }
+      expect(await claimedCount()).toBe(0);
     });
   });
 });

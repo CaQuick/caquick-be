@@ -4,7 +4,7 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { StoreSellerRepository } from '@/features/store';
 
-/** 이벤트 발행은 각 쓰기 서비스(체크아웃·판매자 상태 변경·관리자 취소)가 담당한다. */
+/** 이벤트 발행은 각 쓰기 서비스(입금 확인·판매자 상태 변경·관리자 취소)가 담당한다. */
 @Injectable()
 export class OrderSubscriptionService {
   constructor(

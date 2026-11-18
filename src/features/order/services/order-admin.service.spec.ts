@@ -20,6 +20,7 @@ import {
   createAccount,
   createOrder,
   createOrderItem,
+  createPayment,
   createStore,
   createUserProfile,
 } from '@/test/factories';
@@ -385,6 +386,43 @@ describe('AdminOrderService (real DB)', () => {
       });
       expect(result.items.map((i) => i.id)).toEqual([item.id.toString()]);
       expect(result.statusHistories).toHaveLength(1);
+      expect(result.payment).toBeNull();
+    });
+
+    it('결제와 입금 확인 처리자·메모를 준다', async () => {
+      const { order } = await orderWithItem();
+      const confirmedAt = new Date('2026-09-16T07:00:00.000Z');
+      const payment = await createPayment(prisma, {
+        order_id: order.id,
+        status: 'CONFIRMED',
+        confirmed_at: confirmedAt,
+      });
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          confirm_source: 'ADMIN',
+          confirmed_by_label_snapshot: '김운영(admin1)',
+          confirm_note: '국민 입금',
+        },
+      });
+
+      const result = await service.adminOrder(await admin(), order.id);
+
+      expect(result.payment).toEqual({
+        method: 'BANK_TRANSFER',
+        status: 'CONFIRMED',
+        amount: order.total_price,
+        depositorName: payment.depositor_name,
+        depositBank: { code: '004', name: 'KB국민은행' },
+        depositAccountNumber: '12345678901234',
+        depositAccountHolder: '케이퀵',
+        expiresAt: payment.expires_at,
+        buyerClaimedAt: null,
+        confirmedAt,
+        confirmSource: 'ADMIN',
+        confirmedByLabel: '김운영(admin1)',
+        confirmNote: '국민 입금',
+      });
     });
 
     it('없거나 삭제된 주문이면 404', async () => {
@@ -593,6 +631,7 @@ describe('AdminOrderService (real DB)', () => {
       });
       expect(topic.received).toEqual([
         {
+          kind: 'STATUS_CHANGED',
           orderId: order.id.toString(),
           orderNumber: order.order_number,
           status: 'CANCELED',

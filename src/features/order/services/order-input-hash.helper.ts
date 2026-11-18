@@ -7,6 +7,7 @@ export interface CreateOrderHashInput {
   quantity?: number | null;
   buyerName?: string | null;
   buyerPhone?: string | null;
+  depositorName?: string | null;
   requestNote?: string | null;
   expectedTotalPrice: number;
 }
@@ -21,6 +22,7 @@ export function hashCreateOrderInput(input: CreateOrderHashInput): string {
       quantity: input.quantity ?? 1,
       buyerName: input.buyerName,
       buyerPhone: input.buyerPhone,
+      depositorName: input.depositorName,
       requestNote: input.requestNote,
       expectedTotalPrice: input.expectedTotalPrice,
     }),

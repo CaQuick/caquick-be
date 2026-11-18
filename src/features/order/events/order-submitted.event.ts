@@ -2,7 +2,7 @@ import type { OutboxEventInput } from '@/features/outbox';
 import type { Prisma } from '@/generated/prisma/client';
 
 /**
- * 주문 접수 이벤트(판매자 푸시 원천). order.status_changed와 같은 aggregate라 릴레이가 "접수 → 상태 전이" 순서를 지킨다.
+ * 주문 접수 이벤트(판매자 '새 주문' 푸시 원천). 입금 확인 때 발행한다.
  * payload는 생산 시점 스냅샷 — 소비자가 order·store·product를 다시 읽지 않는다.
  */
 export const ORDER_SUBMITTED = 'order.submitted';
@@ -19,6 +19,8 @@ export interface OrderSubmittedPayload {
   /** ISO 8601 */
   pickupAt: string;
   totalPrice: number;
+  /** ISO 8601. 확정 마감이 없던 옛 이벤트는 null */
+  confirmDeadlineAt: string | null;
 }
 
 export function orderSubmittedEvent(args: {
@@ -32,7 +34,9 @@ export function orderSubmittedEvent(args: {
   quantity: number;
   pickupAt: Date;
   totalPrice: number;
+  confirmDeadlineAt: Date;
   occurredAt: Date;
+  actorAccountId: bigint | null;
 }): OutboxEventInput {
   const payload: OrderSubmittedPayload = {
     orderId: args.orderId.toString(),
@@ -45,6 +49,7 @@ export function orderSubmittedEvent(args: {
     quantity: args.quantity,
     pickupAt: args.pickupAt.toISOString(),
     totalPrice: args.totalPrice,
+    confirmDeadlineAt: args.confirmDeadlineAt.toISOString(),
   };
   return {
     aggregateType: 'order',
@@ -52,7 +57,7 @@ export function orderSubmittedEvent(args: {
     eventType: ORDER_SUBMITTED,
     payload: { ...payload },
     occurredAt: args.occurredAt,
-    actorAccountId: args.buyerAccountId,
+    actorAccountId: args.actorAccountId,
   };
 }
 
@@ -90,5 +95,10 @@ export function parseOrderSubmittedPayload(
     quantity: p.quantity as number,
     pickupAt: p.pickupAt,
     totalPrice: p.totalPrice as number,
+    confirmDeadlineAt:
+      typeof p.confirmDeadlineAt === 'string' &&
+      !Number.isNaN(Date.parse(p.confirmDeadlineAt))
+        ? p.confirmDeadlineAt
+        : null,
   };
 }

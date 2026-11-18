@@ -34,7 +34,7 @@ import type {
   SellerOrderSummaryOutput,
 } from '@/features/order/types/order-seller-output.type';
 import { SellerBaseService, StoreSellerRepository } from '@/features/store';
-import { OrderStatus } from '@/generated/prisma/client';
+import { OrderStatus, type PaymentMethod } from '@/generated/prisma/client';
 
 @Injectable()
 export class SellerOrderService extends SellerBaseService {
@@ -140,6 +140,7 @@ export class SellerOrderService extends SellerBaseService {
     await this.events.publishSellerOrderUpdate(
       ctx.storeId,
       toSellerOrderUpdateEvent(
+        'STATUS_CHANGED',
         updated,
         updated.items[0]?.product_name_snapshot ?? '',
       ),
@@ -172,6 +173,7 @@ export class SellerOrderService extends SellerBaseService {
     buyer_name: string;
     buyer_phone: string;
     request_note: string | null;
+    payment: { method: PaymentMethod } | null;
     subtotal_price: number;
     discount_price: number;
     total_price: number;
@@ -194,6 +196,7 @@ export class SellerOrderService extends SellerBaseService {
       buyerName: row.buyer_name,
       buyerPhone: row.buyer_phone,
       requestNote: row.request_note,
+      paymentMethod: row.payment?.method ?? null,
       subtotalPrice: row.subtotal_price,
       discountPrice: row.discount_price,
       totalPrice: row.total_price,

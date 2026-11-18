@@ -11,6 +11,7 @@ const BASE: CreateOrderHashInput = {
   quantity: 2,
   buyerName: '차차',
   buyerPhone: '010-0000-1111',
+  depositorName: '차차맘',
   requestNote: '메모',
   expectedTotalPrice: 56000,
 };
@@ -23,7 +24,7 @@ describe('hashCreateOrderInput', () => {
   it('주문에 저장되는 값이라 정규화 형식을 고정한다(키 정렬·문자열 ID·ISO 시각)', () => {
     expect(hashCreateOrderInput(BASE)).toBe(
       sha256Hex(
-        '{"buyerName":"차차","buyerPhone":"010-0000-1111","expectedTotalPrice":56000,' +
+        '{"buyerName":"차차","buyerPhone":"010-0000-1111","depositorName":"차차맘","expectedTotalPrice":56000,' +
           '"optionItemIds":["10","11"],"pickupAt":"2026-09-18T05:00:00.000Z",' +
           '"productId":"1","quantity":2,"requestNote":"메모"}',
       ),
@@ -50,10 +51,16 @@ describe('hashCreateOrderInput', () => {
     const omitted = hashWith({
       buyerName: undefined,
       buyerPhone: undefined,
+      depositorName: undefined,
       requestNote: undefined,
     });
     expect(
-      hashWith({ buyerName: null, buyerPhone: null, requestNote: null }),
+      hashWith({
+        buyerName: null,
+        buyerPhone: null,
+        depositorName: null,
+        requestNote: null,
+      }),
     ).toBe(omitted);
   });
 
@@ -64,6 +71,7 @@ describe('hashCreateOrderInput', () => {
     ['quantity', { quantity: 3 }],
     ['buyerName', { buyerName: '다른 이름' }],
     ['buyerPhone', { buyerPhone: '010-9999-9999' }],
+    ['depositorName', { depositorName: '다른 입금자' }],
     ['requestNote', { requestNote: '다른 메모' }],
     ['expectedTotalPrice', { expectedTotalPrice: 56001 }],
   ])('%s가 다르면 해시가 다르다', (_field, change) => {

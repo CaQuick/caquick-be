@@ -4,7 +4,9 @@ import type {
   Order,
   OrderItem,
   OrderStatus,
+  Payment,
   PaymentSetting,
+  PaymentStatus,
   PrismaClient,
 } from '@/generated/prisma/client';
 import { activeWhere } from '@/prisma';
@@ -91,6 +93,47 @@ export async function createPaymentSetting(
     where: { id: 1 },
     create: { id: 1, ...data },
     update: data,
+  });
+}
+
+export interface PaymentOverrides {
+  /** 미지정 시 입금 대기 주문을 새로 만든다 */
+  order_id?: bigint;
+  status?: PaymentStatus;
+  /** 미지정 시 주문 total_price */
+  amount?: number;
+  depositor_name?: string;
+  expires_at?: Date;
+  buyer_claimed_at?: Date | null;
+  confirmed_at?: Date | null;
+}
+
+/** 계좌이체 결제. 계좌 스냅샷은 createPaymentSetting 기본값과 같다. */
+export async function createPayment(
+  prisma: PrismaClient,
+  overrides: PaymentOverrides = {},
+): Promise<Payment> {
+  const order = overrides.order_id
+    ? await prisma.order.findUniqueOrThrow({
+        where: { id: overrides.order_id },
+      })
+    : await createOrder(prisma, { status: 'PENDING_PAYMENT' });
+  return prisma.payment.create({
+    data: {
+      order_id: order.id,
+      method: 'BANK_TRANSFER',
+      status: overrides.status ?? 'PENDING',
+      amount: overrides.amount ?? order.total_price,
+      depositor_name: overrides.depositor_name ?? order.buyer_name.slice(0, 20),
+      deposit_bank_code: '004',
+      deposit_account_number: '12345678901234',
+      deposit_account_holder: '케이퀵',
+      expires_at:
+        overrides.expires_at ??
+        new Date(order.created_at.getTime() + 3_600_000),
+      buyer_claimed_at: overrides.buyer_claimed_at ?? null,
+      confirmed_at: overrides.confirmed_at ?? null,
+    },
   });
 }
 

@@ -3,6 +3,7 @@ import type {
   OrderItemDetailOutput,
   OrderStatusHistoryOutput,
 } from '@/features/order/types/order-output.type';
+import type { OrderPaymentOutput } from '@/features/order/types/order-payment-output.type';
 import type { OrderStatus } from '@/generated/prisma/client';
 
 export interface MyOrderSummary {
@@ -19,6 +20,7 @@ export interface MyOrderSummary {
   storeName: string;
   regionLabel: string | null;
   hasReviewableItem: boolean;
+  paymentExpiresAt: Date | null;
 }
 
 export type MyOrderConnection = OffsetConnection<MyOrderSummary>;
@@ -53,6 +55,7 @@ export interface MyOrderDetail {
   buyerName: string;
   buyerPhone: string;
   requestNote: string | null;
+  payment: OrderPaymentOutput | null;
   subtotalPrice: number;
   discountPrice: number;
   totalPrice: number;

@@ -37,7 +37,7 @@ function event(
   };
 }
 
-// 알림 생성의 단일 진입점 — payload 스냅샷 → 알림 컬럼 매핑, SUBMITTED 무시, 재전달 멱등, 형식 오류는 던진다.
+// 알림 생성의 단일 진입점 — payload 스냅샷 → 알림 컬럼 매핑, 대상 아닌 전이 무시, 재전달 멱등, 형식 오류는 던진다.
 describe('NotificationOutboxConsumer (real DB)', () => {
   let consumer: NotificationOutboxConsumer;
   let repo: NotificationRepository;
@@ -104,7 +104,34 @@ describe('NotificationOutboxConsumer (real DB)', () => {
       expect(row.body).toContain('ORD-77');
     });
 
-    it('SUBMITTED 전이는 알림 없이 정상 소비되고, 같은 이벤트 재전달은 중복을 만들지 않는다', async () => {
+    it('입금 확인(PENDING_PAYMENT → SUBMITTED)은 구매자에게 ORDER_PAYMENT_CONFIRMED 알림을 만든다', async () => {
+      const buyer = await createAccount(prisma, { account_type: 'USER' });
+      const order = await createOrder(prisma, { account_id: buyer.id });
+
+      await consumer.handle(
+        event('order.status_changed', {
+          orderId: order.id.toString(),
+          orderNumber: 'ORD-9',
+          buyerAccountId: buyer.id.toString(),
+          fromStatus: 'PENDING_PAYMENT',
+          toStatus: 'SUBMITTED',
+          storeId: null,
+          storeName: null,
+          productId: null,
+          productName: null,
+        }),
+      );
+
+      const row = await prisma.notification.findFirstOrThrow();
+      expect(row).toMatchObject({
+        account_id: buyer.id,
+        event: 'ORDER_PAYMENT_CONFIRMED',
+        title: '입금확인',
+        body: 'ORD-9 입금이 확인되어 주문이 접수되었어요.',
+      });
+    });
+
+    it('알림 대상이 아닌 전이는 알림 없이 정상 소비되고, 같은 이벤트 재전달은 중복을 만들지 않는다', async () => {
       const buyer = await createAccount(prisma, { account_type: 'USER' });
       const order = await createOrder(prisma, { account_id: buyer.id });
       const submitted = event('order.status_changed', {
@@ -112,7 +139,7 @@ describe('NotificationOutboxConsumer (real DB)', () => {
         orderNumber: 'ORD-1',
         buyerAccountId: buyer.id.toString(),
         fromStatus: 'SUBMITTED',
-        toStatus: 'SUBMITTED',
+        toStatus: 'PENDING_PAYMENT',
         storeId: null,
         storeName: null,
         productId: null,

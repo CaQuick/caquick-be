@@ -14,7 +14,7 @@ describe('접두 루트 필드 인가 커버리지', () => {
 
   describe.each([
     ['seller', 'SELLER', 58],
-    ['admin', 'ADMIN', 64],
+    ['admin', 'ADMIN', 67],
   ] as const)('%s 접두 → @Roles(%s)', (prefix, role, count) => {
     const fields = collectRootFieldsWithPrefix(prefix);
 

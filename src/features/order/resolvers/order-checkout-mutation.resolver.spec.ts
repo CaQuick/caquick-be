@@ -1,19 +1,16 @@
-import { PubSub } from 'graphql-subscriptions';
-
 import { ClockService } from '@/common/providers/clock.service';
 import { RandomService } from '@/common/providers/random.service';
 import { AUDIT_LOG_REPOSITORY } from '@/features/audit-log';
 import { AuditLogRepository } from '@/features/audit-log/repositories/audit-log.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
-import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { ProductRepository } from '@/features/product';
 import { StorePickupScheduleService } from '@/features/store';
 import { StoreRepository } from '@/features/store/repositories/store.repository';
 import type { PrismaClient } from '@/generated/prisma/client';
 import type { JwtUser } from '@/global/auth';
-import { PUB_SUB } from '@/global/pubsub';
 import { bookedQuantityProviders } from '@/test/booked-quantity';
 import { disconnectTestPrismaClient } from '@/test/db/prisma-test-client';
 import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
@@ -42,14 +39,13 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
         OrderCheckoutMutationResolver,
         OrderCheckoutService,
         OrderRepository,
+        PaymentSettingRepository,
         ProductRepository,
         { provide: AUDIT_LOG_REPOSITORY, useClass: AuditLogRepository },
         StorePickupScheduleService,
         StoreRepository,
         ClockService,
         RandomService,
-        OrderEventsService,
-        { provide: PUB_SUB, useValue: new PubSub() },
         // 발행 repository가 OutboxPublisher를 주입받는다(08b)
         ...outboxPublisherProviders({ clock: true }),
         ...bookedQuantityProviders(),
@@ -109,8 +105,9 @@ describe('OrderCheckout Mutation Resolver (real DB)', () => {
       requestNote: '초는 빼 주세요',
     });
 
-    expect(result.status).toBe('SUBMITTED');
+    expect(result.status).toBe('PENDING_PAYMENT');
     expect(result.totalPrice).toBe(20000);
+    expect(result.payment).toMatchObject({ amount: 20000, status: 'PENDING' });
     const saved = await prisma.order.findUniqueOrThrow({
       where: { id: BigInt(result.orderId) },
     });

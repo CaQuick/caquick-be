@@ -1,24 +1,51 @@
 import { Injectable } from '@nestjs/common';
 
 import { DomainException } from '@/common/errors/error-catalog';
+import { ClockService } from '@/common/providers/clock.service';
 import { calcDiscountRate } from '@/common/utils/discount-rate';
 import { sliceOverfetched } from '@/common/utils/pagination';
 import type { MyOrdersInput } from '@/features/order/dto/inputs/my-orders.input';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
+import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import {
   toOrderItemDetail,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
+import { toOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
 import type {
   MyOrderConnection,
   MyOrderDetail,
 } from '@/features/order/types/order-my-output.type';
 import { formatBusinessHours } from '@/features/store';
-import { OrderStatus } from '@/generated/prisma/client';
+import { OrderStatus, PaymentStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class UserOrderService {
-  constructor(private readonly orderRepository: OrderRepository) {}
+  constructor(
+    private readonly orderRepository: OrderRepository,
+    private readonly payments: PaymentRepository,
+    private readonly clock: ClockService,
+  ) {}
+
+  /** '입금했어요'. 마감 전 첫 누름만 기록해 미입금 자동 취소에서 빼고, 다시 누르면 그대로 돌려준다. */
+  async markMyOrderDepositSent(
+    accountId: bigint,
+    orderId: bigint,
+  ): Promise<MyOrderDetail> {
+    const result = await this.payments.markDepositClaimed({
+      orderId,
+      accountId,
+      now: this.clock.now(),
+    });
+    if (result === 'not-found') throw new DomainException('ORDER_NOT_FOUND');
+    if (result === 'not-pending') {
+      throw new DomainException('PAYMENT_NOT_PENDING');
+    }
+    if (result === 'deadline-passed') {
+      throw new DomainException('PAYMENT_DEADLINE_PASSED');
+    }
+    return this.getMyOrder(accountId, orderId);
+  }
 
   async listMyOrders(
     accountId: bigint,
@@ -75,6 +102,10 @@ export class UserOrderService {
           storeName: firstItem?.store_name_snapshot ?? '매장 정보 없음',
           regionLabel: firstItem?.store_region_label_snapshot ?? null,
           hasReviewableItem: reviewableOrderIds.has(order.id.toString()),
+          paymentExpiresAt:
+            order.payment?.status === PaymentStatus.PENDING
+              ? order.payment.expires_at
+              : null,
         };
       }),
       totalCount,
@@ -105,6 +136,7 @@ export class UserOrderService {
       buyerName: order.buyer_name,
       buyerPhone: order.buyer_phone,
       requestNote: order.request_note,
+      payment: order.payment ? toOrderPaymentOutput(order.payment) : null,
       subtotalPrice: order.subtotal_price,
       discountPrice: order.discount_price,
       totalPrice: order.total_price,
