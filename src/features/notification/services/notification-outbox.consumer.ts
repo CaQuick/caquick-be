@@ -61,7 +61,7 @@ export class NotificationOutboxConsumer implements OutboxConsumer {
 
   private async onOrderStatusChanged(event: OutboxEvent): Promise<void> {
     const p = parseOrderStatusChangedPayload(event.payload);
-    // SUBMITTED 등 알림 대상이 아닌 전이는 payload가 null — 이벤트는 정상 소비된다
+    // 알림 대상이 아닌 전이는 payload가 null — 이벤트는 정상 소비된다
     const payload = buildOrderStatusNotification(p.orderNumber, p.toStatus);
     if (!payload) return;
     await this.repo.createFromEvent(event.eventId, [

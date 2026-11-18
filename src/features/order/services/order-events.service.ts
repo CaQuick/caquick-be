@@ -4,7 +4,7 @@ import type { PubSubEngine } from 'graphql-subscriptions';
 import type { SellerOrderUpdateEvent } from '@/features/order/types/order-seller-output.type';
 import { PUB_SUB } from '@/global/pubsub';
 
-/** 토픽 문자열은 여기서만 조립한다 — 발행자(체크아웃·판매자 상태 변경·관리자 취소)와 구독 리졸버가 같은 토픽을 보는 단일 소스. */
+/** 토픽 문자열은 여기서만 조립한다 — 발행자(입금 확인·판매자 상태 변경·관리자 취소)와 구독 리졸버가 같은 토픽을 보는 단일 소스. */
 @Injectable()
 export class OrderEventsService {
   private readonly logger = new Logger(OrderEventsService.name);

@@ -9,6 +9,15 @@ extend type Query {
   myOrder(orderId: ID!): MyOrderDetail!
 }
 
+extend type Mutation {
+  """
+  '입금했어요'. 입금 기한 전에 누르면 미입금 자동 취소에서 빠지고 관리자에게 확인 요청이 간다(입금이 없으면 관리자가 취소한다).
+  이미 눌렀으면 아무것도 바꾸지 않고 그대로 돌려준다. 입금 대기가 아니면(확인·취소됨) PAYMENT_NOT_PENDING(CONFLICT),
+  기한이 지났으면 PAYMENT_DEADLINE_PASSED(BAD_USER_INPUT). 로그인 필수. 본인 주문이 아니면 NOT_FOUND.
+  """
+  markMyOrderDepositSent(orderId: ID!): MyOrderDetail!
+}
+
 """
 내 주문 조회 입력
 """
@@ -99,6 +108,10 @@ type MyOrderSummary {
   주문 내 OrderItem 중 리뷰 작성 가능한 것이 1건이라도 있는지 (PICKED_UP + 활성 리뷰 미존재)
   """
   hasReviewableItem: Boolean!
+  """
+  입금 기한. 입금을 기다리는 주문(결제 대기)만 값이 있고 그 밖은 null.
+  """
+  paymentExpiresAt: DateTime
 }
 
 """
@@ -135,6 +148,10 @@ type MyOrderDetail {
   구매자가 남긴 요청 사항. 없으면 null.
   """
   requestNote: String
+  """
+  결제(입금 안내·진행 상태). 결제 도입 전 주문이면 null.
+  """
+  payment: OrderPayment
 
   """
   할인 전 품목 합계(원).

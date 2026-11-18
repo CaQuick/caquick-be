@@ -6,12 +6,17 @@ import { AuthModule } from '@/features/auth';
 import { OrderStatusTransitionPolicy } from '@/features/order/policies/order-status-transition.policy';
 import { OrderBookedRepository } from '@/features/order/repositories/order-booked.repository';
 import { OrderStoreDailyLimitRepository } from '@/features/order/repositories/order-store-daily-limit.repository';
+import { OrderTransitionRepository } from '@/features/order/repositories/order-transition.repository';
 import { OrderRepository } from '@/features/order/repositories/order.repository';
 import { PaymentSettingRepository } from '@/features/order/repositories/payment-setting.repository';
+import { PaymentRepository } from '@/features/order/repositories/payment.repository';
 import { StoreSettlementAccountRepository } from '@/features/order/repositories/store-settlement-account.repository';
 import { AdminOrderMutationResolver } from '@/features/order/resolvers/order-admin-mutation.resolver';
 import { AdminOrderQueryResolver } from '@/features/order/resolvers/order-admin-query.resolver';
 import { OrderCheckoutMutationResolver } from '@/features/order/resolvers/order-checkout-mutation.resolver';
+import { AdminDepositMutationResolver } from '@/features/order/resolvers/order-deposit-admin-mutation.resolver';
+import { AdminDepositQueryResolver } from '@/features/order/resolvers/order-deposit-admin-query.resolver';
+import { UserOrderMutationResolver } from '@/features/order/resolvers/order-my-mutation.resolver';
 import { UserOrderQueryResolver } from '@/features/order/resolvers/order-my-query.resolver';
 import { AdminPaymentMutationResolver } from '@/features/order/resolvers/order-payment-admin-mutation.resolver';
 import { AdminPaymentQueryResolver } from '@/features/order/resolvers/order-payment-admin-query.resolver';
@@ -23,6 +28,7 @@ import { SellerSettlementQueryResolver } from '@/features/order/resolvers/order-
 import { OrderSubscriptionResolver } from '@/features/order/resolvers/order-subscription.resolver';
 import { AdminOrderService } from '@/features/order/services/order-admin.service';
 import { OrderCheckoutService } from '@/features/order/services/order-checkout.service';
+import { AdminDepositService } from '@/features/order/services/order-deposit-admin.service';
 import { OrderEventsService } from '@/features/order/services/order-events.service';
 import { UserOrderService } from '@/features/order/services/order-my.service';
 import { AdminPaymentService } from '@/features/order/services/order-payment-admin.service';
@@ -52,7 +58,7 @@ import { StoreModule } from '@/features/store';
     OrderStoreDailyLimitRepository,
     OrderStoreDailyLimitConsumer,
     OrderStatusTransitionPolicy,
-    // 판매자 주문 구독(Redis PubSub) — 발행은 체크아웃·판매자 상태 변경·관리자 취소 서비스가 커밋 뒤 직접
+    // 판매자 주문 구독(Redis PubSub) — 발행은 입금 확인·판매자 상태 변경·관리자 취소 서비스가 커밋 뒤 직접
     OrderEventsService,
     OrderSubscriptionService,
     OrderSubscriptionResolver,
@@ -66,9 +72,16 @@ import { StoreModule } from '@/features/store';
     AdminOrderService,
     AdminOrderQueryResolver,
     AdminOrderMutationResolver,
-    // 구매자 주문 목록·상세
+    // 구매자 주문 목록·상세·'입금했어요'
     UserOrderService,
     UserOrderQueryResolver,
+    UserOrderMutationResolver,
+    // 결제(입금 대기)와 상태 전이 잠금 단위, 관리자 입금 확인
+    PaymentRepository,
+    OrderTransitionRepository,
+    AdminDepositService,
+    AdminDepositQueryResolver,
+    AdminDepositMutationResolver,
     // 결제 설정·매장 정산 계좌(계좌번호는 global AccountCipher로 암호화)
     PaymentSettingRepository,
     StoreSettlementAccountRepository,

@@ -158,7 +158,7 @@ export class SellerPushOutboxConsumer implements OutboxConsumer {
         const p = parseOrderSubmittedPayload(event.payload);
         return {
           storeId: parseId(p.storeId),
-          content: buildOrderSubmittedPush(p),
+          content: buildOrderSubmittedPush(p, event.occurredAt),
         };
       }
       case CONVERSATION_BUYER_MESSAGE_SENT: {

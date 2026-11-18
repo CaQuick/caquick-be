@@ -15,6 +15,7 @@ import {
   createAccount,
   createOrder,
   createOrderItem,
+  createPayment,
   createProduct,
   setupSellerWithStore,
 } from '@/test/factories';
@@ -339,6 +340,17 @@ describe('SellerOrderService (real DB)', () => {
       expect(result.items).toHaveLength(1);
       expect(result.statusHistories).toHaveLength(1);
       expect(result.statusHistories[0].toStatus).toBe('CONFIRMED');
+      // 결제 도입 전 주문은 결제 수단이 없다
+      expect(result.paymentMethod).toBeNull();
+    });
+
+    it('결제가 있으면 결제 수단을 준다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const order = await createStoreOrder(store.id, { status: 'SUBMITTED' });
+      await createPayment(prisma, { order_id: order.id, status: 'CONFIRMED' });
+
+      const result = await service.sellerOrder(account.id, order.id);
+      expect(result.paymentMethod).toBe('BANK_TRANSFER');
     });
 
     it('soft-delete된 아이템·상태 이력은 상세에서 제외한다', async () => {
@@ -598,6 +610,7 @@ describe('SellerOrderService (real DB)', () => {
       });
       expect(topic.received).toEqual([
         {
+          kind: 'STATUS_CHANGED',
           orderId: order.id.toString(),
           orderNumber: order.order_number,
           status: 'CONFIRMED',

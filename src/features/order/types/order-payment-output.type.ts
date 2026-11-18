@@ -1,4 +1,9 @@
-import type { OrderActor } from '@/generated/prisma/client';
+import type {
+  OrderActor,
+  PaymentConfirmSource,
+  PaymentMethod,
+  PaymentStatus,
+} from '@/generated/prisma/client';
 
 export interface BankOutput {
   code: string;
@@ -25,4 +30,43 @@ export interface AdminStoreSettlementAccountOutput extends SellerSettlementAccou
   storeId: string;
   /** 원문. 관리자 상세에서만 복호화해 내려준다. */
   accountNumber: string;
+}
+
+export interface OrderPaymentOutput {
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: number;
+  depositorName: string;
+  depositBank: BankOutput;
+  depositAccountNumber: string;
+  depositAccountHolder: string;
+  expiresAt: Date;
+  buyerClaimedAt: Date | null;
+  confirmedAt: Date | null;
+  confirmSource: PaymentConfirmSource | null;
+}
+
+export interface AdminOrderPaymentOutput extends OrderPaymentOutput {
+  confirmedByLabel: string | null;
+  confirmNote: string | null;
+}
+
+export interface AdminPendingPaymentOutput {
+  orderId: string;
+  orderNumber: string;
+  storeName: string | null;
+  productName: string | null;
+  amount: number;
+  depositorName: string;
+  buyerName: string;
+  buyerPhone: string;
+  createdAt: Date;
+  expiresAt: Date;
+  buyerClaimedAt: Date | null;
+  pickupAt: Date;
+}
+
+export interface AdminTaskCountsOutput {
+  claimedPayments: number;
+  pendingPayments: number;
 }

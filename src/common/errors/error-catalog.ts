@@ -375,6 +375,19 @@ export const ERROR_CATALOG = {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     message: '주문번호 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.',
   },
+  DEPOSITOR_NAME_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금자명을 20자 이내로 입력해 주세요.',
+  },
+  PENDING_PAYMENT_LIMIT_EXCEEDED: {
+    status: HttpStatus.CONFLICT,
+    message:
+      '입금 대기 중인 주문이 2건 있어요. 입금하거나 취소한 뒤 다시 주문해 주세요.',
+  },
+  CONCURRENT_REQUEST: {
+    status: HttpStatus.CONFLICT,
+    message: '같은 요청을 처리하고 있어요. 잠시 뒤 다시 시도해 주세요.',
+  },
   // ── 결제·정산
   INVALID_BANK_CODE: {
     status: HttpStatus.BAD_REQUEST,
@@ -387,6 +400,32 @@ export const ERROR_CATALOG = {
   INVALID_COMMISSION_RATE: {
     status: HttpStatus.BAD_REQUEST,
     message: '수수료율은 0~10000bp(0~100%) 사이 정수여야 합니다.',
+  },
+  PAYMENT_ACCOUNT_NOT_CONFIGURED: {
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    message: '지금은 주문을 받을 수 없습니다.',
+  },
+  PAYMENT_NOT_PENDING: {
+    status: HttpStatus.CONFLICT,
+    message: '입금 대기 중인 주문이 아닙니다. 이미 처리됐는지 확인해 주세요.',
+  },
+  PAYMENT_DEADLINE_PASSED: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금 기한이 지났어요.',
+  },
+  PAYMENT_PICKUP_PASSED: {
+    status: HttpStatus.CONFLICT,
+    message:
+      '픽업 시각이 지난 주문은 입금 확인할 수 없어요. 미입금 취소 뒤 반환 대상으로 연결해 주세요.',
+  },
+  DEPOSIT_AMOUNT_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    message: '입금액은 0원 이상의 정수로 입력해 주세요.',
+  },
+  DEPOSIT_AMOUNT_MISMATCH: {
+    status: HttpStatus.BAD_REQUEST,
+    message:
+      '입금액이 결제 금액과 달라 입금 확인할 수 없어요. 반환 대상으로 연결해 주세요.',
   },
   // ── 판매자
   SELLER_ONLY: {

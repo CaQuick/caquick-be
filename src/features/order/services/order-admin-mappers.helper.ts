@@ -7,6 +7,7 @@ import {
   toOrderItemDetail,
   toOrderStatusHistory,
 } from '@/features/order/services/order-output-mappers.helper';
+import { toAdminOrderPaymentOutput } from '@/features/order/services/order-payment-mappers.helper';
 import type {
   AdminOrderDetailOutput,
   AdminOrderSummaryOutput,
@@ -52,6 +53,7 @@ export function toAdminOrderDetailOutput(
     buyerName: row.buyer_name,
     buyerPhone: row.buyer_phone,
     requestNote: row.request_note,
+    payment: row.payment ? toAdminOrderPaymentOutput(row.payment) : null,
     subtotalPrice: row.subtotal_price,
     discountPrice: row.discount_price,
     totalPrice: row.total_price,

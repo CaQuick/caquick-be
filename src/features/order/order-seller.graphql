@@ -159,6 +159,10 @@ type SellerOrderDetail {
   """
   requestNote: String
   """
+  결제 수단. 결제 도입 전 주문이면 null. 값은 늘어날 수 있으니 모르는 값은 '기타'로 보여 준다.
+  """
+  paymentMethod: PaymentMethodType
+  """
   할인 전 품목 합계(원).
   """
   subtotalPrice: Int!

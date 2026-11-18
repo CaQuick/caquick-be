@@ -4,6 +4,7 @@ import { OrderStatus } from '@/generated/prisma/client';
 export const ORDER_STATUS_NOTIFICATION_TITLES: Partial<
   Record<OrderStatus, string>
 > = {
+  [OrderStatus.SUBMITTED]: '입금확인',
   [OrderStatus.CONFIRMED]: '주문확정',
   [OrderStatus.MADE]: '제작완료',
   [OrderStatus.PICKED_UP]: '픽업완료',
@@ -15,6 +16,7 @@ export const ORDER_STATUS_NOTIFICATION_TITLES: Partial<
 export const ORDER_STATUS_NOTIFICATION_BODIES: Partial<
   Record<OrderStatus, string>
 > = {
+  [OrderStatus.SUBMITTED]: '입금이 확인되어 주문이 접수되었어요.',
   [OrderStatus.CONFIRMED]: '주문이 확정되었어요.',
   [OrderStatus.MADE]: '주문하신 케이크 제작이 완료되었어요.',
   [OrderStatus.PICKED_UP]: '케이크 픽업이 완료되었어요.',

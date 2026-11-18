@@ -1,4 +1,7 @@
-import type { SellerOrderUpdateEvent } from '@/features/order/types/order-seller-output.type';
+import type {
+  SellerOrderUpdateEvent,
+  SellerOrderUpdateKind,
+} from '@/features/order/types/order-seller-output.type';
 import type { Order } from '@/generated/prisma/client';
 
 export type SellerOrderUpdateRow = Pick<
@@ -13,10 +16,12 @@ export type SellerOrderUpdateRow = Pick<
 >;
 
 export function toSellerOrderUpdateEvent(
+  kind: SellerOrderUpdateKind,
   row: SellerOrderUpdateRow,
   productName: string,
 ): SellerOrderUpdateEvent {
   return {
+    kind,
     orderId: row.id.toString(),
     orderNumber: row.order_number,
     status: row.status,

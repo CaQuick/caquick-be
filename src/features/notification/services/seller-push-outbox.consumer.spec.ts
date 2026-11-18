@@ -47,10 +47,15 @@ function event(
   };
 }
 
-function orderSubmitted(storeId: bigint, eventId = EVENT_ID): OutboxEvent {
+function orderSubmitted(
+  storeId: bigint,
+  eventId = EVENT_ID,
+  confirmDeadlineAt?: string,
+): OutboxEvent {
   return event(
     'order.submitted',
     {
+      ...(confirmDeadlineAt ? { confirmDeadlineAt } : {}),
       orderId: '42',
       orderNumber: 'ORD-1',
       buyerAccountId: '7',
@@ -177,6 +182,19 @@ describe('SellerPushOutboxConsumer (real DB)', () => {
         receipt_checked_at: null,
       });
       expect(await sendsCounter()).toEqual({ TICKET_OK: 2 });
+    });
+
+    it('접수 시각(occurredAt) 기준 확정 마감까지 2시간 미만이면 본문에 마감 시각을 싣는다', async () => {
+      const { storeId } = await storeWithDevices(1);
+
+      // NOW(10/5 21:00 KST) + 1시간
+      await consumer.handle(
+        orderSubmitted(storeId, EVENT_ID, '2026-10-05T13:00:00.000Z'),
+      );
+
+      expect(send.mock.calls[0][0][0].body).toBe(
+        '레터링 케이크 2개 · 픽업 10/5 12:05 · 22:00까지 확정',
+      );
     });
 
     it('해제된 디바이스와 다른 매장의 디바이스는 대상이 아니다', async () => {

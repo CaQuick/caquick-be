@@ -51,6 +51,11 @@ export class CreateOrderInput {
   @Matches(PHONE_REGEX)
   buyerPhone?: string;
 
+  // 길이(20자)는 생략 시 쓰는 주문자 이름과 같은 규칙으로 서비스가 DEPOSITOR_NAME_INVALID로 판정한다
+  @IsOptional()
+  @IsString()
+  depositorName?: string;
+
   @IsInt()
   @Min(0)
   expectedTotalPrice!: number;

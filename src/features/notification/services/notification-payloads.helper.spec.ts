@@ -49,9 +49,20 @@ describe('notification-payloads.helper', () => {
       });
     });
 
-    it('알림 대상이 아닌 상태(SUBMITTED)는 null을 반환한다', () => {
+    it('SUBMITTED(입금 확인으로만 도달)는 입금 확인 이벤트·문구로 매핑된다', () => {
       expect(
         buildOrderStatusNotification('ORD-5', OrderStatus.SUBMITTED),
+      ).toEqual({
+        type: NotificationType.ORDER_STATUS,
+        event: NotificationEvent.ORDER_PAYMENT_CONFIRMED,
+        title: '입금확인',
+        body: 'ORD-5 입금이 확인되어 주문이 접수되었어요.',
+      });
+    });
+
+    it('알림 대상이 아닌 상태(PENDING_PAYMENT)는 null을 반환한다', () => {
+      expect(
+        buildOrderStatusNotification('ORD-6', OrderStatus.PENDING_PAYMENT),
       ).toBeNull();
     });
   });
