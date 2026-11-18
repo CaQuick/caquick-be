@@ -3,6 +3,7 @@ extend type Query {
   문의 채팅 진입 컨텍스트(구매자). 매장 프로필·상담시간·치환 완료 인사말·질문 칩을
   한 번에 내려준다. 아직 대화가 없어도 조회 가능하며 그 경우 conversationId는 null.
   로그인 필수.
+  숨김 매장은 그 매장에 진행 중인 주문이 있는 구매자만 조회할 수 있다(아니면 STORE_NOT_FOUND). 문의 전송도 같다.
   """
   storeInquiryContext(storeId: ID!): StoreInquiryContext!
 }
@@ -20,6 +21,29 @@ extend type Mutation {
   로그인 필수.
   """
   sendConversationFaqMessage(input: SendConversationFaqMessageInput!): ConversationMessagesPayload!
+  """
+  채팅 이미지 업로드용 Presigned URL 발급(구매자). uploadUrl로 PUT한 뒤 publicUrl을 sendConversationImageMessage에 넣는다.
+  JPEG·PNG·WebP, 1바이트 이상 10MB 이하(아니면 INVALID_CONTENT_TYPE·INVALID_CONTENT_LENGTH·FILE_TOO_LARGE).
+  로그인 필수.
+  """
+  createConversationImageUploadUrl(
+    """파일 MIME 타입(image/jpeg·image/png·image/webp)."""
+    contentType: String!
+    """파일 크기(바이트, 1 이상 10MB 이하)."""
+    contentLength: Int!
+  ): UploadUrl!
+  """
+  구매자 이미지 메시지 전송(메시지당 1장). 대화가 없으면 sendConversationMessage처럼 생성하고 인사말을 먼저 저장한다.
+  imageUrl이 이 계정에 createConversationImageUploadUrl로 발급된 URL이 아니면 INVALID_IMAGE_URL, 공백이면
+  IMAGE_URL_REQUIRED다. 로그인 필수.
+  """
+  sendConversationImageMessage(input: SendConversationImageMessageInput!): ConversationMessagesPayload!
+  """
+  주문 카드 전송(구매자). 주문의 매장과의 대화에 보낸 시점의 주문 스냅샷을 카드로 남긴다(대화가 없으면 생성).
+  본인 주문이 아니면 ORDER_NOT_FOUND, 입금 확인 전(판매자가 볼 수 없는) 주문이면 ORDER_INQUIRY_NOT_AVAILABLE,
+  매장이 숨김이고 그 매장에 진행 중인 주문이 없으면 STORE_NOT_FOUND다. 로그인 필수.
+  """
+  sendConversationOrderCard(orderId: ID!): ConversationMessagesPayload!
 }
 
 """문의 채팅 진입 컨텍스트"""
@@ -66,10 +90,14 @@ type ConversationMessage {
   senderType: ConversationSenderType!
   """본문 형식. 읽어야 할 본문 필드를 가리킨다."""
   bodyFormat: ConversationBodyFormat!
-  """평문 본문. bodyFormat이 TEXT면 이 값을 쓴다."""
+  """평문 본문. bodyFormat이 TEXT면 이 값을 쓴다. IMAGE·ORDER_CARD는 대체 문구가 들어 있다."""
   bodyText: String
   """서식 본문. bodyFormat이 HTML이면 이 값을 쓴다."""
   bodyHtml: String
+  """이미지 URL. bodyFormat이 IMAGE면 채워진다."""
+  imageUrl: String
+  """주문 카드. bodyFormat이 ORDER_CARD면 채워진다."""
+  orderCard: ConversationOrderCard
   """발송 시각. 메시지 스트림 정렬은 id 기준이다."""
   createdAt: DateTime!
 }
@@ -88,6 +116,14 @@ input SendConversationMessageInput {
   storeId: ID!
   """보낼 평문 메시지."""
   bodyText: String!
+}
+
+"""구매자 이미지 메시지 전송 입력"""
+input SendConversationImageMessageInput {
+  """문의할 매장 ID. 대화방이 없으면 이 호출에서 생성된다."""
+  storeId: ID!
+  """createConversationImageUploadUrl이 이 계정에 발급한 publicUrl."""
+  imageUrl: String!
 }
 
 """질문 칩(FAQ) 전송 입력"""

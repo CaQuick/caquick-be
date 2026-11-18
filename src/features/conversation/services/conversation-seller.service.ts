@@ -21,14 +21,20 @@ import {
   type IAuditLogRepository,
 } from '@/features/audit-log';
 import {
+  CONVERSATION_IMAGE_ALT_TEXT,
   MAX_CONVERSATION_BODY_HTML_LENGTH,
   MAX_INQUIRY_BODY_TEXT_LENGTH,
 } from '@/features/conversation/constants/conversation.constants';
 import type { SellerSendConversationMessageInput } from '@/features/conversation/dto/inputs/seller-send-conversation-message.input';
 import { ConversationRepository } from '@/features/conversation/repositories/conversation.repository';
+import { requireOwnedConversationImageUrl } from '@/features/conversation/services/conversation-attachment.helper';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
 import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
 import { ConversationEventsService } from '@/features/conversation/services/conversation-events.service';
+import {
+  toConversationMessageOutput,
+  type ConversationMessageRow,
+} from '@/features/conversation/services/conversation-inquiry-mappers.helper';
 import type {
   SellerConversationMessageOutput,
   SellerConversationOutput,
@@ -39,6 +45,7 @@ import {
   AuditTargetType,
   ConversationBodyFormat,
 } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
 
 @Injectable()
 export class SellerConversationService extends SellerBaseService {
@@ -50,6 +57,7 @@ export class SellerConversationService extends SellerBaseService {
     auditLogs: IAuditLogRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly conversationEvents: ConversationEventsService,
+    private readonly s3: S3Service,
   ) {
     super(repo, auditLogs);
   }
@@ -154,33 +162,12 @@ export class SellerConversationService extends SellerBaseService {
       });
     if (!conversation) throw new DomainException('CONVERSATION_NOT_FOUND');
 
-    const bodyFormat = this.toConversationBodyFormat(input.bodyFormat);
-    const bodyText = cleanNullableText(
-      input.bodyText,
-      MAX_INQUIRY_BODY_TEXT_LENGTH,
-    );
-    const bodyHtml = cleanNullableText(
-      input.bodyHtml,
-      MAX_CONVERSATION_BODY_HTML_LENGTH,
-    );
-
-    if (bodyFormat === ConversationBodyFormat.TEXT && !bodyText) {
-      throw new DomainException('BODY_TEXT_REQUIRED');
-    }
-    if (bodyFormat === ConversationBodyFormat.HTML && !bodyHtml) {
-      throw new DomainException('BODY_HTML_REQUIRED');
-    }
+    const body = this.toSellerMessageBody(input, ctx.accountId);
 
     // 감사 기록은 repository가 메시지 저장과 같은 트랜잭션에서 남긴다
     const row =
       await this.conversationRepository.createSellerConversationMessage(
-        {
-          conversationId,
-          sellerAccountId: ctx.accountId,
-          bodyFormat,
-          bodyText,
-          bodyHtml,
-        },
+        { conversationId, sellerAccountId: ctx.accountId, ...body },
         (created) => ({
           actorAccountId: ctx.accountId,
           storeId: ctx.storeId,
@@ -234,15 +221,7 @@ export class SellerConversationService extends SellerBaseService {
     storeId: bigint;
     message: SellerConversationMessageOutput;
   }): Promise<void> {
-    const message = {
-      id: args.message.id,
-      conversationId: args.message.conversationId,
-      senderType: args.message.senderType,
-      bodyFormat: args.message.bodyFormat,
-      bodyText: args.message.bodyText,
-      bodyHtml: args.message.bodyHtml,
-      createdAt: args.message.createdAt,
-    };
+    const { message } = args;
     // 목록 이벤트는 발행 시점의 최신 커밋 상태를 단일 트랜잭션 스냅샷으로 조립한다 — 독립 조회로 쪼개면
     // 경쟁 커밋이 끼어들어 혼합 상태가 나갈 수 있다. 메시지 스트림은 id 정렬.
     const snapshot =
@@ -287,10 +266,54 @@ export class SellerConversationService extends SellerBaseService {
     );
   }
 
-  private toConversationBodyFormat(raw: string): ConversationBodyFormat {
-    if (raw === 'TEXT') return ConversationBodyFormat.TEXT;
-    if (raw === 'HTML') return ConversationBodyFormat.HTML;
-    throw new DomainException('INVALID_BODY_FORMAT');
+  /** IMAGE는 대체 문구만 본문으로 남긴다. 주문 카드는 구매자만 보낼 수 있다. */
+  private toSellerMessageBody(
+    input: SellerSendConversationMessageInput,
+    sellerAccountId: bigint,
+  ): {
+    bodyFormat: ConversationBodyFormat;
+    bodyText: string | null;
+    bodyHtml: string | null;
+    imageUrl: string | null;
+  } {
+    switch (input.bodyFormat) {
+      case ConversationBodyFormat.IMAGE:
+        return {
+          bodyFormat: input.bodyFormat,
+          bodyText: CONVERSATION_IMAGE_ALT_TEXT,
+          bodyHtml: null,
+          imageUrl: requireOwnedConversationImageUrl(
+            this.s3,
+            input.imageUrl,
+            sellerAccountId,
+          ),
+        };
+      case ConversationBodyFormat.TEXT:
+      case ConversationBodyFormat.HTML: {
+        const bodyText = cleanNullableText(
+          input.bodyText,
+          MAX_INQUIRY_BODY_TEXT_LENGTH,
+        );
+        const bodyHtml = cleanNullableText(
+          input.bodyHtml,
+          MAX_CONVERSATION_BODY_HTML_LENGTH,
+        );
+        if (input.bodyFormat === ConversationBodyFormat.TEXT && !bodyText) {
+          throw new DomainException('BODY_TEXT_REQUIRED');
+        }
+        if (input.bodyFormat === ConversationBodyFormat.HTML && !bodyHtml) {
+          throw new DomainException('BODY_HTML_REQUIRED');
+        }
+        return {
+          bodyFormat: input.bodyFormat,
+          bodyText,
+          bodyHtml,
+          imageUrl: null,
+        };
+      }
+      default:
+        throw new DomainException('INVALID_BODY_FORMAT');
+    }
   }
 
   private toConversationOutput(
@@ -323,25 +346,12 @@ export class SellerConversationService extends SellerBaseService {
     };
   }
 
-  private toConversationMessageOutput(row: {
-    id: bigint;
-    conversation_id: bigint;
-    sender_type: 'USER' | 'STORE' | 'SYSTEM';
-    sender_account_id: bigint | null;
-    body_format: 'TEXT' | 'HTML';
-    body_text: string | null;
-    body_html: string | null;
-    created_at: Date;
-  }): SellerConversationMessageOutput {
+  private toConversationMessageOutput(
+    row: ConversationMessageRow & { sender_account_id: bigint | null },
+  ): SellerConversationMessageOutput {
     return {
-      id: row.id.toString(),
-      conversationId: row.conversation_id.toString(),
-      senderType: row.sender_type,
+      ...toConversationMessageOutput(row),
       senderAccountId: row.sender_account_id?.toString() ?? null,
-      bodyFormat: row.body_format,
-      bodyText: row.body_text,
-      bodyHtml: row.body_html,
-      createdAt: row.created_at,
     };
   }
 }

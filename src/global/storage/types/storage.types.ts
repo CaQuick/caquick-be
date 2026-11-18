@@ -7,7 +7,8 @@ export type UploadPurpose =
   | 'BANNER_IMAGE'
   | 'ORDER_CUSTOM_RENDER'
   | 'ORDER_CUSTOM_COMPOSITE'
-  | 'ORDER_CUSTOM_REFERENCE';
+  | 'ORDER_CUSTOM_REFERENCE'
+  | 'CONVERSATION_IMAGE';
 
 export interface CreateUploadUrlInput {
   accountId: bigint;

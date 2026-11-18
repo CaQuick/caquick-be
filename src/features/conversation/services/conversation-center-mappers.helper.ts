@@ -1,3 +1,5 @@
+import type { ConversationBodyFormat } from '@/generated/prisma/client';
+
 /** 표시용 한 줄 미리보기라 완전한 HTML 파싱 대신 태그 제거 + 공백 정리로 충분하다(저장 원문은 그대로). */
 export function stripHtmlToPreview(html: string): string {
   return (
@@ -14,9 +16,10 @@ export function stripHtmlToPreview(html: string): string {
   );
 }
 
+/** IMAGE·ORDER_CARD는 body_text에 저장한 대체 문구가 미리보기다. */
 export function toLastMessagePreview(
   message: {
-    body_format: 'TEXT' | 'HTML';
+    body_format: ConversationBodyFormat;
     body_text: string | null;
     body_html: string | null;
   } | null,

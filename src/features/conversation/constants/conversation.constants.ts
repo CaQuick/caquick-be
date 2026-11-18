@@ -10,3 +10,8 @@ export const DEFAULT_GREETING_TEMPLATE =
 export const MAX_INQUIRY_BODY_TEXT_LENGTH = 2000;
 // store.greeting_message VARCHAR(500)과 동일 상한
 export const MAX_CONVERSATION_BODY_HTML_LENGTH = 100000;
+
+// 이미지 메시지 대체 문구. 목록 미리보기·판매자 푸시가 본문 대신 이 값을 쓴다.
+export const CONVERSATION_IMAGE_ALT_TEXT = '사진을 보냈습니다.';
+// image_url VARCHAR(2048)과 동일 상한
+export const MAX_CONVERSATION_IMAGE_URL_LENGTH = 2048;

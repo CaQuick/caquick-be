@@ -13,6 +13,11 @@ import { closeTruncateConnection, truncateAll } from '@/test/db/truncate';
 import { createAccount, setupSellerWithStore } from '@/test/factories';
 import { createTestingModuleWithRealDb } from '@/test/modules/testing-module.builder';
 import { outboxPublisherProviders } from '@/test/outbox';
+import {
+  ownedUploadUrl,
+  s3TestProviders,
+  TEST_S3_CONFIG,
+} from '@/test/storage/s3-test.helper';
 
 describe('SellerConversationService (real DB)', () => {
   let service: SellerConversationService;
@@ -28,6 +33,7 @@ describe('SellerConversationService (real DB)', () => {
         // 발행 repository가 OutboxPublisher를 주입받는다
         ...outboxPublisherProviders(),
         ConversationEventsService,
+        ...s3TestProviders(),
         { provide: PUB_SUB, useValue: new PubSub() },
         {
           provide: AUDIT_LOG_REPOSITORY,
@@ -421,6 +427,131 @@ describe('SellerConversationService (real DB)', () => {
       const systemMsg = result.items.find((m) => m.senderType === 'SYSTEM');
       expect(systemMsg).toBeDefined();
       expect(systemMsg!.senderAccountId).toBeNull();
+    });
+  });
+
+  describe('sellerSendConversationMessage IMAGE·ORDER_CARD', () => {
+    it('IMAGE는 판매자에게 발급된 URL을 저장하고 본문은 대체 문구다(다른 본문 무시, 감사 기록)', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      const imageUrl = ownedUploadUrl('CONVERSATION_IMAGE', account.id);
+
+      const result = await service.sellerSendConversationMessage(account.id, {
+        conversationId: conv.id.toString(),
+        bodyFormat: 'IMAGE',
+        bodyText: '무시되는 본문',
+        imageUrl: `  ${imageUrl}  `,
+      });
+
+      expect(result).toMatchObject({
+        bodyFormat: 'IMAGE',
+        bodyText: '사진을 보냈습니다.',
+        bodyHtml: null,
+        imageUrl,
+        orderCard: null,
+      });
+      const [row] = await prisma.storeConversationMessage.findMany({
+        where: { conversation_id: conv.id },
+      });
+      expect(row).toMatchObject({ body_format: 'IMAGE', image_url: imageUrl });
+      expect(
+        await prisma.auditLog.count({
+          where: { store_id: store.id, target_type: 'CONVERSATION' },
+        }),
+      ).toBe(1);
+    });
+
+    it.each([undefined, '   '])(
+      'IMAGE인데 imageUrl이 %p면 IMAGE_URL_REQUIRED',
+      async (imageUrl) => {
+        const { account, store } = await setupSellerWithStore(prisma);
+        const conv = await setupConversation(store.id);
+        await expect(
+          service.sellerSendConversationMessage(account.id, {
+            conversationId: conv.id.toString(),
+            bodyFormat: 'IMAGE',
+            imageUrl,
+          }),
+        ).rejects.toThrowDomain('IMAGE_URL_REQUIRED');
+      },
+    );
+
+    const HOST = `${TEST_S3_CONFIG.bucket}.s3.${TEST_S3_CONFIG.region}.amazonaws.com`;
+    it.each([
+      [
+        '구매자 계정 경로',
+        (_seller: bigint, buyer: bigint) =>
+          ownedUploadUrl('CONVERSATION_IMAGE', buyer),
+      ],
+      [
+        '다른 용도 경로',
+        (seller: bigint) => ownedUploadUrl('PRODUCT_IMAGE', seller),
+      ],
+      [
+        '인코딩된 dot(%2e) 우회',
+        (seller: bigint, buyer: bigint) =>
+          `https://${HOST}/conversation-images/${seller}/%2e%2e/${buyer}/a.jpg`,
+      ],
+    ])('%s는 INVALID_IMAGE_URL', async (_label, urlOf) => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      await expect(
+        service.sellerSendConversationMessage(account.id, {
+          conversationId: conv.id.toString(),
+          bodyFormat: 'IMAGE',
+          imageUrl: urlOf(account.id, conv.account_id),
+        }),
+      ).rejects.toThrowDomain('INVALID_IMAGE_URL');
+      expect(await prisma.storeConversationMessage.count()).toBe(0);
+    });
+
+    it('ORDER_CARD는 구매자만 보낼 수 있어 INVALID_BODY_FORMAT', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      await expect(
+        service.sellerSendConversationMessage(account.id, {
+          conversationId: conv.id.toString(),
+          bodyFormat: 'ORDER_CARD',
+          bodyText: '주문 문의',
+        }),
+      ).rejects.toThrowDomain('INVALID_BODY_FORMAT');
+    });
+
+    it('메시지 목록에 이미지·주문 카드 스냅샷이 실린다', async () => {
+      const { account, store } = await setupSellerWithStore(prisma);
+      const conv = await setupConversation(store.id);
+      const pickupAt = new Date('2026-08-03T03:00:00Z');
+      await prisma.storeConversationMessage.create({
+        data: {
+          conversation_id: conv.id,
+          sender_type: 'USER',
+          sender_account_id: conv.account_id,
+          body_format: 'ORDER_CARD',
+          body_text: '주문 문의: 케이크 (ORD-1)',
+          order_card_order_id: 77n,
+          order_card_order_number: 'ORD-1',
+          order_card_product_name: '케이크',
+          order_card_thumbnail_url: 'https://cdn.example.com/t.jpg',
+          order_card_pickup_at: pickupAt,
+        },
+      });
+
+      const result = await service.sellerConversationMessages(
+        account.id,
+        conv.id,
+      );
+
+      expect(result.items[0]).toMatchObject({
+        bodyFormat: 'ORDER_CARD',
+        imageUrl: null,
+        orderCard: {
+          orderId: '77',
+          orderNumber: 'ORD-1',
+          productName: '케이크',
+          thumbnailUrl: 'https://cdn.example.com/t.jpg',
+          pickupAt,
+        },
+      });
     });
   });
 });

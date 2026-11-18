@@ -23,18 +23,22 @@ describe('AdminCreateUploadUrlInput', () => {
   );
 
   // 판매자 전용·미정의 용도는 스키마 단계에서 막히지만 DTO도 같은 집합을 강제한다
-  it.each(['PRODUCT_IMAGE', 'PROFILE_IMAGE', 'REVIEW_VIDEO', '', undefined])(
-    'purpose %s 거절',
-    async (purpose) => {
-      const dto = build({
-        purpose,
-        contentType: 'image/png',
-        contentLength: 1,
-      });
-      const errors = await validate(dto);
-      expect(errors[0].property).toBe('purpose');
-    },
-  );
+  it.each([
+    'PRODUCT_IMAGE',
+    'CONVERSATION_IMAGE',
+    'PROFILE_IMAGE',
+    'REVIEW_VIDEO',
+    '',
+    undefined,
+  ])('purpose %s 거절', async (purpose) => {
+    const dto = build({
+      purpose,
+      contentType: 'image/png',
+      contentLength: 1,
+    });
+    const errors = await validate(dto);
+    expect(errors[0].property).toBe('purpose');
+  });
 
   it('contentLength 0 거절', async () => {
     const dto = build({

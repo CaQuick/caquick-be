@@ -202,6 +202,7 @@ describe('S3Service', () => {
       ['ORDER_CUSTOM_RENDER', 'order-custom/renders/'],
       ['ORDER_CUSTOM_COMPOSITE', 'order-custom/composites/'],
       ['ORDER_CUSTOM_REFERENCE', 'order-custom/references/'],
+      ['CONVERSATION_IMAGE', 'conversation-images/'],
     ] as const)('%s purpose', (purpose, prefix) => {
       const input = { ...baseInput, purpose };
 
@@ -339,6 +340,7 @@ describe('S3Service', () => {
       ['PROFILE_IMAGE', 'profile-images', 'review-media/images'],
       ['REVIEW_IMAGE', 'review-media/images', 'profile-images'],
       ['REVIEW_VIDEO', 'review-media/videos', 'review-media/images'],
+      ['CONVERSATION_IMAGE', 'conversation-images', 'product-images'],
     ] as const;
 
     describe.each(PURPOSES)('%s', (purpose, prefix, otherPrefix) => {

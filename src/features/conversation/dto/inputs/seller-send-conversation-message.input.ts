@@ -1,14 +1,16 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
-const BODY_FORMATS = ['TEXT', 'HTML'] as const;
-type ConversationBodyFormat = (typeof BODY_FORMATS)[number];
+import { ConversationBodyFormat } from '@/generated/prisma/client';
 
-/** bodyFormat에 따라 bodyText/bodyHtml 중 하나가 필수라는 invariant는 service에서 검증한다(class-validator로 표현하기 어렵다). */
+/**
+ * 형식별 필수 필드·판매자가 보낼 수 없는 형식(ORDER_CARD)은 service가 판정한다. DTO는 SDL enum 전체를 받아야
+ * ORDER_CARD가 VALIDATION_FAILED가 아니라 INVALID_BODY_FORMAT으로 거절된다.
+ */
 export class SellerSendConversationMessageInput {
   @IsString()
   conversationId!: string;
 
-  @IsIn(BODY_FORMATS)
+  @IsIn(Object.values(ConversationBodyFormat))
   bodyFormat!: ConversationBodyFormat;
 
   @IsOptional()
@@ -18,4 +20,8 @@ export class SellerSendConversationMessageInput {
   @IsOptional()
   @IsString()
   bodyHtml?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 }

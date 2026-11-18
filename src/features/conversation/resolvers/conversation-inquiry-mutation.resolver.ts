@@ -2,6 +2,7 @@ import { UseGuards } from '@nestjs/common';
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 
 import { SendConversationFaqMessageInput } from '@/features/conversation/dto/inputs/send-conversation-faq-message.input';
+import { SendConversationImageMessageInput } from '@/features/conversation/dto/inputs/send-conversation-image-message.input';
 import { SendConversationMessageInput } from '@/features/conversation/dto/inputs/send-conversation-message.input';
 import { ConversationInquiryService } from '@/features/conversation/services/conversation-inquiry.service';
 import type { ConversationMessagesPayload } from '@/features/conversation/types/conversation-output.type';
@@ -11,6 +12,7 @@ import {
   parseAccountId,
   type JwtUser,
 } from '@/global/auth';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Resolver('Mutation')
 @UseGuards(JwtAuthGuard)
@@ -33,5 +35,39 @@ export class ConversationInquiryMutationResolver {
   ): Promise<ConversationMessagesPayload> {
     const accountId = parseAccountId(user);
     return this.inquiryService.sendConversationFaqMessage(accountId, input);
+  }
+
+  @Mutation('createConversationImageUploadUrl')
+  createConversationImageUploadUrl(
+    @CurrentUser() user: JwtUser,
+    @Args('contentType') contentType: string,
+    @Args('contentLength') contentLength: number,
+  ): Promise<CreateUploadUrlOutput> {
+    return this.inquiryService.createConversationImageUploadUrl(
+      parseAccountId(user),
+      { contentType, contentLength },
+    );
+  }
+
+  @Mutation('sendConversationImageMessage')
+  sendConversationImageMessage(
+    @CurrentUser() user: JwtUser,
+    @Args('input') input: SendConversationImageMessageInput,
+  ): Promise<ConversationMessagesPayload> {
+    return this.inquiryService.sendConversationImageMessage(
+      parseAccountId(user),
+      input,
+    );
+  }
+
+  @Mutation('sendConversationOrderCard')
+  sendConversationOrderCard(
+    @CurrentUser() user: JwtUser,
+    @Args('orderId') orderId: string,
+  ): Promise<ConversationMessagesPayload> {
+    return this.inquiryService.sendConversationOrderCard(
+      parseAccountId(user),
+      orderId,
+    );
   }
 }

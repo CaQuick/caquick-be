@@ -19,6 +19,7 @@ import {
   RefundKind,
   RefundStatus,
 } from '@/generated/prisma/client';
+import { UPLOAD_POLICIES } from '@/global/storage/constants/storage.constants';
 
 /**
  * 응답에 그대로 실리는 Prisma enum·TS 상수 union은 SDL enum이 그 값을 모두 가져야 한다. 하나라도 빠지면
@@ -128,6 +129,12 @@ const INPUT_PAIRS: Array<
     Object.values(OrderCustomUploadPurpose),
     'src/features/order/order-checkout.graphql',
     'OrderCustomUploadPurpose',
+  ],
+  [
+    'UploadPurpose',
+    Object.keys(UPLOAD_POLICIES),
+    'src/features/product/product-upload.types.graphql',
+    'UploadPurpose',
   ],
 ];
 

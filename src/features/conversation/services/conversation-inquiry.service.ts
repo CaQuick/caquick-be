@@ -4,13 +4,21 @@ import { DomainException } from '@/common/errors/error-catalog';
 import { parseId } from '@/common/utils/id-parser';
 import { cleanRequiredText } from '@/common/utils/text-cleaner';
 import { AccountUserRepository } from '@/features/auth';
-import { MAX_INQUIRY_BODY_TEXT_LENGTH } from '@/features/conversation/constants/conversation.constants';
+import {
+  CONVERSATION_IMAGE_ALT_TEXT,
+  MAX_INQUIRY_BODY_TEXT_LENGTH,
+} from '@/features/conversation/constants/conversation.constants';
 import type { SendConversationFaqMessageInput } from '@/features/conversation/dto/inputs/send-conversation-faq-message.input';
+import type { SendConversationImageMessageInput } from '@/features/conversation/dto/inputs/send-conversation-image-message.input';
 import type { SendConversationMessageInput } from '@/features/conversation/dto/inputs/send-conversation-message.input';
 import {
   ConversationRepository,
   type ConversationMessageEntry,
 } from '@/features/conversation/repositories/conversation.repository';
+import {
+  orderCardAltText,
+  requireOwnedConversationImageUrl,
+} from '@/features/conversation/services/conversation-attachment.helper';
 import { ConversationBaseService } from '@/features/conversation/services/conversation-base.service';
 import { toLastMessagePreview } from '@/features/conversation/services/conversation-center-mappers.helper';
 import { toEventPreview } from '@/features/conversation/services/conversation-events-mappers.helper';
@@ -24,11 +32,14 @@ import type {
   ConversationMessagesPayload,
   StoreInquiryContextOutput,
 } from '@/features/conversation/types/conversation-output.type';
+import { OrderInquiryRepository } from '@/features/order';
 import { CATALOG_QUERY, type ICatalogQuery } from '@/features/store';
 import {
   ConversationBodyFormat,
   ConversationSenderType,
 } from '@/generated/prisma/client';
+import { S3Service } from '@/global/storage/s3.service';
+import type { CreateUploadUrlOutput } from '@/global/storage/types/storage.types';
 
 @Injectable()
 export class ConversationInquiryService extends ConversationBaseService {
@@ -39,6 +50,8 @@ export class ConversationInquiryService extends ConversationBaseService {
     accounts: AccountUserRepository,
     private readonly events: ConversationEventsService,
     @Inject(CATALOG_QUERY) private readonly catalog: ICatalogQuery,
+    private readonly orders: OrderInquiryRepository,
+    private readonly s3: S3Service,
   ) {
     super(repo, accounts);
   }
@@ -50,7 +63,7 @@ export class ConversationInquiryService extends ConversationBaseService {
     const { nickname } = await this.requireActiveUser(accountId);
     const storeId = parseId(storeIdRaw);
 
-    const store = await this.requireInquiryStore(storeId);
+    const store = await this.requireInquiryStore(accountId, storeId);
     const [faqTopics, conversation] = await Promise.all([
       this.catalog.listActiveFaqTopics(storeId),
       this.repo.findConversationByAccountAndStore({ accountId, storeId }),
@@ -79,7 +92,7 @@ export class ConversationInquiryService extends ConversationBaseService {
   ): Promise<ConversationMessagesPayload> {
     const { nickname } = await this.requireActiveUser(accountId);
     const storeId = parseId(input.storeId);
-    const store = await this.requireInquiryStore(storeId);
+    const store = await this.requireInquiryStore(accountId, storeId);
 
     const bodyText = cleanRequiredText(
       input.bodyText,
@@ -110,7 +123,7 @@ export class ConversationInquiryService extends ConversationBaseService {
   ): Promise<ConversationMessagesPayload> {
     const { nickname } = await this.requireActiveUser(accountId);
     const storeId = parseId(input.storeId);
-    const store = await this.requireInquiryStore(storeId);
+    const store = await this.requireInquiryStore(accountId, storeId);
 
     const topic = await this.catalog.findActiveFaqTopic({
       storeId,
@@ -141,6 +154,92 @@ export class ConversationInquiryService extends ConversationBaseService {
           bodyFormat: ConversationBodyFormat.HTML,
           bodyText: null,
           bodyHtml: topic.answer_html,
+        },
+      ],
+    });
+  }
+
+  async createConversationImageUploadUrl(
+    accountId: bigint,
+    input: { contentType: string; contentLength: number },
+  ): Promise<CreateUploadUrlOutput> {
+    await this.requireActiveUser(accountId);
+    return this.s3.createUploadUrl({
+      accountId,
+      purpose: 'CONVERSATION_IMAGE',
+      contentType: input.contentType,
+      contentLength: input.contentLength,
+    });
+  }
+
+  async sendConversationImageMessage(
+    accountId: bigint,
+    input: SendConversationImageMessageInput,
+  ): Promise<ConversationMessagesPayload> {
+    const { nickname } = await this.requireActiveUser(accountId);
+    const storeId = parseId(input.storeId);
+    const store = await this.requireInquiryStore(accountId, storeId);
+    const imageUrl = requireOwnedConversationImageUrl(
+      this.s3,
+      input.imageUrl,
+      accountId,
+    );
+
+    return this.saveBuyerMessages({
+      accountId,
+      storeId,
+      nickname,
+      storeName: store.store_name,
+      greetingTemplate: store.greeting_message,
+      entries: [
+        {
+          senderType: ConversationSenderType.USER,
+          senderAccountId: accountId,
+          bodyFormat: ConversationBodyFormat.IMAGE,
+          bodyText: CONVERSATION_IMAGE_ALT_TEXT,
+          bodyHtml: null,
+          imageUrl,
+        },
+      ],
+    });
+  }
+
+  /** 판매자가 볼 수 없는 입금 전 주문은 카드로 보낼 수 없다. 카드는 보낸 시점 값으로 남는다. */
+  async sendConversationOrderCard(
+    accountId: bigint,
+    orderIdRaw: string,
+  ): Promise<ConversationMessagesPayload> {
+    const { nickname } = await this.requireActiveUser(accountId);
+    const source = await this.orders.findOrderCardSource({
+      orderId: parseId(orderIdRaw),
+      accountId,
+    });
+    if (!source) throw new DomainException('ORDER_NOT_FOUND');
+    if (source.submittedAt === null) {
+      throw new DomainException('ORDER_INQUIRY_NOT_AVAILABLE');
+    }
+    const store = await this.requireInquiryStore(accountId, source.storeId);
+
+    return this.saveBuyerMessages({
+      accountId,
+      storeId: source.storeId,
+      nickname,
+      storeName: store.store_name,
+      greetingTemplate: store.greeting_message,
+      entries: [
+        {
+          senderType: ConversationSenderType.USER,
+          senderAccountId: accountId,
+          bodyFormat: ConversationBodyFormat.ORDER_CARD,
+          bodyText: orderCardAltText(source),
+          bodyHtml: null,
+          orderCard: {
+            orderId: source.orderId,
+            orderNumber: source.orderNumber,
+            productName: source.productName,
+            thumbnailUrl: source.thumbnailUrl,
+            pickupAt: source.pickupAt,
+          },
         },
       ],
     });
@@ -252,9 +351,17 @@ export class ConversationInquiryService extends ConversationBaseService {
     });
   }
 
-  private async requireInquiryStore(storeId: bigint) {
+  /** 숨김 매장은 진행 중인 주문이 있는 구매자만 문의할 수 있다(판매자 정지·매장 숨김 뒤에도 주문 문의 경로를 남긴다). */
+  private async requireInquiryStore(accountId: bigint, storeId: bigint) {
     const store = await this.catalog.findInquiryStore(storeId);
-    if (!store) {
+    if (
+      !store ||
+      (!store.is_active &&
+        !(await this.orders.existsInProgressOrderAtStore({
+          accountId,
+          storeId,
+        })))
+    ) {
       throw new DomainException('STORE_NOT_FOUND');
     }
     return store;

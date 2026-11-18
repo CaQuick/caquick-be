@@ -81,9 +81,17 @@ describe('ConversationEventsService (real Redis)', () => {
       id: '1',
       conversationId: '10',
       senderType: 'USER',
-      bodyFormat: 'TEXT',
-      bodyText: '픽업 문의',
+      bodyFormat: 'ORDER_CARD',
+      bodyText: '주문 문의: 케이크 (ORD-1)',
       bodyHtml: null,
+      imageUrl: null,
+      orderCard: {
+        orderId: '5',
+        orderNumber: 'ORD-1',
+        productName: '케이크',
+        thumbnailUrl: null,
+        pickupAt: new Date('2026-08-03T03:00:00Z'),
+      },
       createdAt: new Date('2026-08-01T12:00:00Z'),
     };
     await service.publishMessagesAdded([message]);
@@ -93,9 +101,17 @@ describe('ConversationEventsService (real Redis)', () => {
       id: '1',
       conversationId: '10',
       senderType: 'USER',
-      bodyFormat: 'TEXT',
-      bodyText: '픽업 문의',
+      bodyFormat: 'ORDER_CARD',
+      bodyText: '주문 문의: 케이크 (ORD-1)',
       bodyHtml: null,
+      imageUrl: null,
+      orderCard: {
+        orderId: '5',
+        orderNumber: 'ORD-1',
+        productName: '케이크',
+        thumbnailUrl: null,
+        pickupAt: '2026-08-03T03:00:00.000Z',
+      },
       createdAt: '2026-08-01T12:00:00.000Z',
     });
     expect(otherReceived).not.toHaveBeenCalled();
@@ -169,6 +185,8 @@ describe('ConversationEventsService (real Redis)', () => {
           bodyFormat: 'TEXT',
           bodyText: '문의',
           bodyHtml: null,
+          imageUrl: null,
+          orderCard: null,
           createdAt: new Date(),
         },
       ]),
