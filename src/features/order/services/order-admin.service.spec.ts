@@ -1258,6 +1258,7 @@ describe('AdminOrderService (real DB)', () => {
           totalPrice: order.total_price,
           productName: 'Product snapshot',
           hasCustom: false,
+          confirmDeadlineAt: null,
           updatedAt: row.updated_at.toISOString(),
         },
       ]);

@@ -62,6 +62,7 @@ describe('OrderSubscriptionService (real DB)', () => {
     totalPrice: 10000,
     productName: '케이크',
     hasCustom: false,
+    confirmDeadlineAt: null,
     updatedAt: '2026-09-16T07:00:00.000Z',
   };
 

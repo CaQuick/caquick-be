@@ -33,6 +33,10 @@ type SellerOrderUpdate {
   productName: String!
   """커스텀 주문 여부(첫 품목의 커스텀 방식이 NONE이 아니면 true)."""
   hasCustom: Boolean!
+  """
+  확정 마감 시각. 이때까지 확정하지 않으면 자동 취소된다. 접수(SUBMITTED) 상태가 아니거나 결제 도입 전 주문이면 null.
+  """
+  confirmDeadlineAt: DateTime
   """주문 행의 updated_at. 폐기 규칙의 비교 키다."""
   updatedAt: DateTime!
 }
