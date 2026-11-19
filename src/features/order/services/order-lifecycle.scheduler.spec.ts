@@ -326,8 +326,13 @@ describe('OrderLifecycleScheduler (real DB)', () => {
         'order.status_changed',
         'refund.requested',
       ]);
+      // 행에는 마감이 남지만 접수를 벗어났으므로 이벤트에는 싣지 않는다
       expect(topic.received).toEqual([
-        expect.objectContaining({ kind: 'STATUS_CHANGED', status: 'CANCELED' }),
+        expect.objectContaining({
+          kind: 'STATUS_CHANGED',
+          status: 'CANCELED',
+          confirmDeadlineAt: null,
+        }),
       ]);
       topic.stop();
     });

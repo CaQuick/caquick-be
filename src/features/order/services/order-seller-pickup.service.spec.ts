@@ -399,6 +399,7 @@ describe('SellerOrderPickupService (real DB)', () => {
       });
       // 접수 + 24h(9/17 15:00 KST)보다 이른 픽업 → 마감 = 새 픽업
       const earlier = new Date('2026-09-16T08:00:00.000Z');
+      const topic = await collectTopic(pubSub, `order.seller.${store.id}`);
 
       await reschedule(account.id, order.id, earlier);
 
@@ -406,6 +407,14 @@ describe('SellerOrderPickupService (real DB)', () => {
         confirm_deadline_at: earlier,
         confirm_reminder_sent_at: null,
       });
+      // 구독 이벤트도 다시 잰 마감을 싣는다
+      expect(topic.received).toEqual([
+        expect.objectContaining({
+          kind: 'PICKUP_RESCHEDULED',
+          confirmDeadlineAt: earlier.toISOString(),
+        }),
+      ]);
+      topic.stop();
       // 더 늦은 픽업이면 접수 + 24시간이 마감이다
       await reschedule(account.id, order.id, PICKUP_AT);
       expect((await orderRow(order.id)).confirm_deadline_at).toEqual(

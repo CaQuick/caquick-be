@@ -3,7 +3,11 @@ import type {
   SellerOrderUpdateEvent,
   SellerOrderUpdateKind,
 } from '@/features/order/types/order-seller-output.type';
-import type { Order, OrderItem } from '@/generated/prisma/client';
+import {
+  OrderStatus,
+  type Order,
+  type OrderItem,
+} from '@/generated/prisma/client';
 
 export type SellerOrderUpdateRow = Pick<
   Order,
@@ -13,6 +17,7 @@ export type SellerOrderUpdateRow = Pick<
   | 'pickup_at'
   | 'buyer_name'
   | 'total_price'
+  | 'confirm_deadline_at'
   | 'updated_at'
 > & {
   /** 첫 품목이 상품명·커스텀 여부를 정한다 */
@@ -34,6 +39,11 @@ export function toSellerOrderUpdateEvent(
     totalPrice: row.total_price,
     productName: firstItem?.product_name_snapshot ?? '',
     hasCustom: isCustomOrderItem(firstItem),
+    // 확정·취소 뒤에도 행에 값이 남으므로 접수 상태일 때만 낸다
+    confirmDeadlineAt:
+      row.status === OrderStatus.SUBMITTED && row.confirm_deadline_at
+        ? row.confirm_deadline_at.toISOString()
+        : null,
     updatedAt: row.updated_at.toISOString(),
   };
 }
