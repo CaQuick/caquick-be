@@ -67,5 +67,7 @@ export interface SellerOrderUpdateEvent {
   totalPrice: number;
   productName: string;
   hasCustom: boolean;
+  /** 접수 상태가 아니거나 결제 도입 전 주문이면 null. */
+  confirmDeadlineAt: string | null;
   updatedAt: string;
 }

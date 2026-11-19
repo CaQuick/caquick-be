@@ -1128,9 +1128,11 @@ describe('SellerOrderService (real DB)', () => {
   });
 
   describe('sellerOrderUpdated 발행', () => {
-    it('상태 변경 시 매장 토픽에 1건 — 첫 품목 상품명·커스텀 여부와 갱신된 updated_at을 싣는다', async () => {
+    it('상태 변경 시 매장 토픽에 1건 — 첫 품목 상품명·커스텀 여부와 갱신된 updated_at을 싣고, 접수를 벗어나면 확정 마감은 null이다', async () => {
       const { account, store } = await setupSellerWithStore(prisma);
-      const order = await createOrder(prisma);
+      const order = await createOrder(prisma, {
+        confirm_deadline_at: new Date(Date.now() + 60 * 60_000),
+      });
       await createOrderItem(prisma, {
         order_id: order.id,
         store_id: store.id,
@@ -1159,9 +1161,12 @@ describe('SellerOrderService (real DB)', () => {
           totalPrice: order.total_price,
           productName: '확정 품목',
           hasCustom: true,
+          confirmDeadlineAt: null,
           updatedAt: row.updated_at.toISOString(),
         },
       ]);
+      // 확정 뒤에도 행에는 마감이 남는다 — 이벤트가 상태로 가린다
+      expect(row.confirm_deadline_at).toEqual(order.confirm_deadline_at);
       expect(row.updated_at.getTime()).toBeGreaterThan(
         order.updated_at.getTime(),
       );

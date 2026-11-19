@@ -256,6 +256,7 @@ describe('AdminDepositService (real DB)', () => {
           status: 'SUBMITTED',
           productName: '딸기 케이크',
           hasCustom: false,
+          confirmDeadlineAt: new Date(NOW.getTime() + DAY_MS).toISOString(),
         }),
       ]);
       topic.stop();
